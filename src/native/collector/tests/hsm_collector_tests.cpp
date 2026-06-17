@@ -2964,6 +2964,117 @@ namespace
         Require(commands.DelayMs(200) == 120000, "lin clamps to 2min");
     }
 
+    // Concatenate every recorded payload so a test can assert which values survived the queue.
+    std::string AllSentPayloads(hsm_collector_t* collector)
+    {
+        std::string all;
+        const auto count = hsm_collector_sent_count(collector);
+        for (size_t index = 0; index < count; ++index)
+        {
+            all += SentJson(collector, index);
+            all += '\n';
+        }
+
+        return all;
+    }
+
+    // Build options with explicit pipeline limits (mirrors create_collector_with_limits): a
+    // recording sender, a small package size, and a short collect period for prompt dispatch.
+    hsm_collector_options_t LimitsOptions(int32_t max_queue_size, int32_t max_values_in_package, int32_t period_ms)
+    {
+        auto options = TestOptions();
+        options.max_queue_size = max_queue_size;
+        options.max_values_in_package = max_values_in_package;
+        options.package_collect_period_ms = period_ms;
+        return options;
+    }
+
+    // #1088 (retry meets a FULL buffer): a failed batch that comes back to an already-full queue is
+    // dropped — the retry is the oldest data, so it is dropped rather than evicting a queued value.
+    // This is the ONLY case a retry is ever dropped; below capacity the retry is always kept (see
+    // NativeRetryBelowCapacityIsAlwaysRedelivered).
+    //
+    // Deterministic staging via the hang seam: the send of the first batch hangs in flight, holding
+    // it "out" of the queue while the queue is refilled to capacity, then the hang is released as a
+    // failure so the batch re-enqueues into a full queue.
+    void NativeRetryMeetingFullQueueIsDroppedNotEvictingQueuedValues()
+    {
+        // queue cap 4, batch 2, short period. Values: 1,2 (first batch, hangs in flight) | 3,4 (left
+        // queued) | 5,6 (added while [1,2] hangs) -> buffer full at 4 when [1,2] comes back.
+        const auto options = LimitsOptions(/*max_queue_size=*/4, /*max_values_in_package=*/2, /*period_ms=*/20);
+        CollectorHandle collector = CreateCollector(options);
+        SensorHandle sensor = CreateIntSensor(collector.value, "pipeline/1088");
+
+        hsm_collector_set_send_hang(collector.value, true);
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        for (int value : { 1, 2, 3, 4 })
+            Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add failed");
+
+        // Generous barrier over the 20ms period: the worker has woken, popped [1,2], and is now
+        // hanging in flight. 3,4 remain queued.
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+        // Added while the first batch hangs -> these fill the queue back to capacity (4).
+        for (int value : { 5, 6 })
+            Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add failed");
+
+        // Release the hang AS A FAILURE so [1,2] re-enqueues into a FULL queue -> #1088 backstop
+        // drops both (they are the oldest data). Then 3,4,5,6 send cleanly.
+        hsm_collector_set_send_fail_next(collector.value, 1);
+        hsm_collector_set_send_hang(collector.value, false);
+
+        Require(WaitForSentCountEquals(collector.value, 4), "exactly the four survivors should be delivered");
+
+        const auto sent = AllSentPayloads(collector.value);
+        NotContains(sent, "\"Value\":1,");
+        NotContains(sent, "\"Value\":2,");
+        Contains(sent, "\"Value\":3,");
+        Contains(sent, "\"Value\":4,");
+        Contains(sent, "\"Value\":5,");
+        Contains(sent, "\"Value\":6,");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
+    // Monitoring-history contract: BELOW capacity a failed retry is NEVER dropped, even when fresher
+    // values arrived while its send was in flight. Every value is delivered (at-least-once); the only
+    // drop path is a full buffer (NativeRetryMeetingFullQueueIsDroppedNotEvictingQueuedValues).
+    void NativeRetryBelowCapacityIsAlwaysRedelivered()
+    {
+        // Huge cap (capacity never bites), batch 1 so value 1 is the lone in-flight retry. 2,3 arrive
+        // while 1's send hangs — under the old #1090 filter 1 would have been dropped; now it is kept.
+        const auto options = LimitsOptions(/*max_queue_size=*/20000, /*max_values_in_package=*/1, /*period_ms=*/20);
+        CollectorHandle collector = CreateCollector(options);
+        SensorHandle sensor = CreateIntSensor(collector.value, "pipeline/at-least-once");
+
+        hsm_collector_set_send_hang(collector.value, true);
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add failed");
+
+        // Barrier: the worker has popped [1] and is hanging in flight.
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+        // Fresher values arrive while 1 is in flight (and become the queue head).
+        for (int value : { 2, 3 })
+            Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add failed");
+
+        // Release as a failure: [1] re-enqueues. The buffer is far below capacity, so 1 is KEPT and
+        // retried — all three values are delivered, none dropped.
+        hsm_collector_set_send_fail_next(collector.value, 1);
+        hsm_collector_set_send_hang(collector.value, false);
+
+        Require(WaitForSentCountEquals(collector.value, 3), "all three values must be delivered (at-least-once)");
+
+        const auto sent = AllSentPayloads(collector.value);
+        Contains(sent, "\"Value\":1,");
+        Contains(sent, "\"Value\":2,");
+        Contains(sent, "\"Value\":3,");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
@@ -3018,6 +3129,8 @@ namespace
             { "native_double_negative_infinity_is_rejected_and_not_sent", [](const std::string&) { NativeDoubleNegativeInfinityIsRejectedAndNotSent(); } },
             { "native_invalid_status_on_instant_value_is_rejected_and_not_sent", [](const std::string&) { NativeInvalidStatusOnInstantValueIsRejectedAndNotSent(); } },
             { "native_invalid_status_on_last_value_preserves_previous_snapshot", [](const std::string&) { NativeInvalidStatusOnLastValuePreservesPreviousSnapshot(); } },
+            { "native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values", [](const std::string&) { NativeRetryMeetingFullQueueIsDroppedNotEvictingQueuedValues(); } },
+            { "native_retry_below_capacity_is_always_redelivered", [](const std::string&) { NativeRetryBelowCapacityIsAlwaysRedelivered(); } },
             { "conformance_instant_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_lifecycle_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_stress_int_contract", [](const std::string& path) { RunConformanceContract(path); } },

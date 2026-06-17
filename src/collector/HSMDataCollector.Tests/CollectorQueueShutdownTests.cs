@@ -334,20 +334,20 @@ namespace HSMDataCollector.Tests
             Assert.Equal(new[] { "fresh-0", "fresh-1", "fresh-2", "fresh-3", "fresh-4" }, contents);
         }
 
-        // Issue #1090: even below capacity, a retry whose BuildDate predates the FIFO head
-        // currently in queue must be dropped — otherwise the retry would sit at the tail with a
-        // stale BuildDate and survive a later normal-overflow that drops the fresher head.
+        // Monitoring-history contract: a failed retry is NEVER dropped below capacity — even when
+        // it is OLDER than the current FIFO head (fresher values arrived while its send was in
+        // flight). Every value is history and must be redelivered; the only drop is the full-buffer
+        // backstop. (Inverts the removed #1090 below-capacity head-drop.)
         [Fact]
-        public void ReEnqueue_below_capacity_drops_retry_older_than_queue_head()
+        public void ReEnqueue_below_capacity_keeps_retry_older_than_queue_head()
         {
             var sender = new SilentDataSender();
-            var options = CreateOptions(sender, "issue-1090-head");
+            var options = CreateOptions(sender, "issue-1090-removed");
             options.MaxQueueSize = 10;
 
             var queue = new CapacityTestQueueProcessor(options);
 
-            // Construct items with EXPLICIT BuildDates so the test is independent of platform
-            // DateTime.UtcNow resolution. The stale retry is older than the fresh enqueue.
+            // Construct items with EXPLICIT BuildDates: the retry is older than the fresh head.
             var t0 = DateTime.UtcNow.AddSeconds(-10);
             var t1 = DateTime.UtcNow;
 
@@ -355,8 +355,6 @@ namespace HSMDataCollector.Tests
             var staleRetry = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "stale-retry" }, t0);
 
             // Enqueue the fresh item via the normal path so the head BuildDate is t1.
-            // We can't go through InvokeEnqueueRaw because it would refresh BuildDate to UtcNow;
-            // instead reuse EnqueueCore directly via reflection.
             var enqueueCore = typeof(QueueProcessorBase<SensorValueBase>)
                 .GetMethod("EnqueueCore", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.NotNull(enqueueCore);
@@ -364,24 +362,20 @@ namespace HSMDataCollector.Tests
             Assert.Equal(EnqueueStatus.Accepted, freshResult.Status);
             Assert.Equal(1, queue.QueueCount);
 
-            // Try to re-enqueue the stale retry. Queue is far below MaxQueueSize=10, but the head
-            // BuildDate is t1 > t0 — so the retry must be dropped on the #1090 path.
+            // The retry is older than the head (t0 < t1) but the queue is far below MaxQueueSize=10
+            // — it must be KEPT and retried, not dropped.
             var result = queue.InvokeReEnqueue(staleRetry);
 
             Assert.Equal(EnqueueStatus.Accepted, result.Status);
-            Assert.Equal(1, result.DroppedCount);
-            Assert.Equal(1, queue.QueueCount);
+            Assert.Equal(0, result.DroppedCount);
+            Assert.Equal(2, queue.QueueCount);
 
             var contents = queue.DrainAll().Select(v => v.Comment).ToList();
-            Assert.Equal(new[] { "fresh" }, contents);
+            Assert.Equal(new[] { "fresh", "stale-retry" }, contents);
         }
 
-        // PR #1091 review (the WATERMARK regression): when a multi-item batch fails to send and
-        // gets re-enqueued into an EMPTY queue, every item must survive. The original watermark
-        // implementation dropped all-but-the-newest because the batch's own newest item raised
-        // the watermark above its older siblings, defeating the "preserve accepted work" contract.
-        // The mirror-of-FIFO-head approach makes this case work because the mirror is empty when
-        // the first retry arrives, then grows in BuildDate order as later siblings re-enqueue.
+        // A multi-item batch that fails to send and is re-enqueued into a below-capacity queue must
+        // keep every item — at-least-once preservation of accepted work under a transient failure.
         [Fact]
         public void ReEnqueueItems_preserves_full_multi_item_batch_below_capacity()
         {
@@ -413,48 +407,6 @@ namespace HSMDataCollector.Tests
 
             var contents = queue.DrainAll().Select(v => v.Comment).ToList();
             Assert.Equal(new[] { "A", "B", "C", "D" }, contents);
-        }
-
-        // Issue #1090 shutdown bypass: the retry filter must NOT fire once public writes are
-        // closed — at that point no fresh telemetry can compete with the retry, and a
-        // shutdown-cancelled in-flight send must still be preserved for the bounded flush.
-        // Regression guard for the CollectorStabilityTests.Accepted_file_payloads_are_flushed
-        // scenario that the initial #1090 implementation broke.
-        [Fact]
-        public void ReEnqueue_during_shutdown_bypasses_head_check()
-        {
-            var sender = new SilentDataSender();
-            var options = CreateOptions(sender, "issue-1090-shutdown-bypass");
-            options.MaxQueueSize = 10;
-
-            var queue = new CapacityTestQueueProcessor(options);
-
-            var t0 = DateTime.UtcNow.AddSeconds(-10);
-            var t1 = DateTime.UtcNow;
-
-            var fresh = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "fresh" }, t1);
-            var staleRetry = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "stale-cancel-retry" }, t0);
-
-            // Push the fresh item via EnqueueCore so the FIFO head is t1 — same path as the
-            // normal-mode #1090 test.
-            var enqueueCore = typeof(QueueProcessorBase<SensorValueBase>)
-                .GetMethod("EnqueueCore", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(enqueueCore);
-            enqueueCore.Invoke(queue, new object[] { fresh, /*isRetry*/ false });
-
-            // Simulate StopAsync closing public writes: flip _acceptingWritesFlag to 0.
-            var acceptingWritesField = typeof(QueueProcessorBase<SensorValueBase>)
-                .GetField("_acceptingWritesFlag", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(acceptingWritesField);
-            acceptingWritesField.SetValue(queue, 0);
-
-            // Re-enqueue the stale retry — without the shutdown bypass it would be dropped on
-            // the head-comparison check; with the bypass it must be preserved.
-            var result = queue.InvokeReEnqueue(staleRetry);
-
-            Assert.Equal(EnqueueStatus.Accepted, result.Status);
-            Assert.Equal(0, result.DroppedCount);
-            Assert.Equal(2, queue.QueueCount);
         }
 
         [Fact]

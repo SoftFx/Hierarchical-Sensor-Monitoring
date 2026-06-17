@@ -2123,10 +2123,26 @@ namespace
 
             queue_.push_back(std::move(json));
 
-            // Eviction happens on the enqueueing thread: oldest-first, newest value kept —
-            // same position-based FIFO policy as the C# QueueProcessorBase.
+            // This is the ONLY place a value is dropped: the (large) buffer is full. Monitoring
+            // history keeps every value until then; on overflow the oldest is evicted first
+            // (position-based FIFO, newest value kept) — same policy as the C# QueueProcessorBase.
             while (queue_.size() > static_cast<size_t>(max_queue_size_))
                 queue_.pop_front();
+        }
+
+        // Retry re-enqueue (caller holds queue_mutex_). A failed package rotates to the TAIL and is
+        // retried — for a monitoring-history buffer every value matters, so a retry is NEVER dropped
+        // below capacity. The single drop is the #1088 backstop: when the buffer is already FULL the
+        // retry is the oldest data (it was popped from the head, and everything still queued was
+        // enqueued behind it while its send was in flight), so it is dropped rather than evicting a
+        // queued value — never below capacity, matching normal overflow's newest-wins. No retry cap:
+        // a retry rides the tail until delivered or, under sustained overflow, FIFO-evicted.
+        void ReEnqueueLocked(std::string json)
+        {
+            if (queue_.size() >= static_cast<size_t>(max_queue_size_))
+                return;
+
+            queue_.push_back(std::move(json));
         }
 
         void StartWorker()
@@ -2266,10 +2282,11 @@ namespace
 
         // Pops and sends batches of up to max_values_in_package_ until the queue is empty or a
         // send fails. The lock is dropped around the send so enqueues never wait on dispatch.
-        // On failure the batch is re-enqueued at the TAIL (the C# re-enqueue contract: a retried
-        // package rotates behind later packages) — or, during the stop flush, everything left is
-        // dropped so shutdown cannot hang on a failing transport. Returns the number of values
-        // dropped (only non-zero on the clear-on-failure stop path).
+        // On failure the batch is re-enqueued at the TAIL (ReEnqueueLocked: kept unless the buffer
+        // is full, in which case the retry — the oldest data — is dropped by the #1088 backstop) —
+        // or, during the stop flush, everything left is dropped so shutdown cannot hang on a
+        // failing transport. Returns the number of values dropped (only non-zero on the
+        // clear-on-failure stop path).
         size_t DispatchQueuedLocked(std::unique_lock<std::mutex>& lock, bool clear_remainder_on_failure)
         {
             while (!queue_.empty())
@@ -2298,7 +2315,7 @@ namespace
                     }
 
                     for (auto& json : batch)
-                        queue_.push_back(std::move(json));
+                        ReEnqueueLocked(std::move(json));
 
                     return 0;
                 }

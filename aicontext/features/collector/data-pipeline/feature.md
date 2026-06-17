@@ -32,11 +32,10 @@ Rewritten in the #1071–#1075 lifecycle refactor (PR #1080) and hardened by #10
 
 ## Overflow & retry policy
 
-- **Overflow**: after a successful write, the head is dropped while `QueueCount > MaxQueueSize` (FIFO eviction, newest data wins). Counts surface via `QueueOverflowSensor`.
-- **Retry**: a failed send (exception or `PackageSendingInfo.Error != null`) re-enqueues the whole package via `ReEnqueueItems` and rethrows; the loop retries next cycle. There is **no retry cap** — overflow eviction is the only backstop; error logs are deduplicated (`AddQueueLoopError`).
-- **#1088**: a retry that meets an already-full queue is dropped instead of evicting the fresher FIFO head. Reported via `DataProcessor.ReportRequeueEviction` → `QueueOverflowSensor` (reporting lives in per-item `ReEnqueueItem`, so FileQueueProcessor's single-item retries are covered too).
-- **#1090**: `_buildDateMirror` (a `ConcurrentQueue<long>` of in-queue BuildDate ticks, updated alongside every channel enqueue/dequeue) lets the retry path compare against the **current FIFO head**: a retry strictly older than the head is dropped even below capacity. Comparing against the head (not an all-time max) is load-bearing — an earlier watermark implementation dropped almost every multi-item retry batch (PR #1091 review).
-- **Shutdown bypass**: both retry filters are skipped once `_acceptingWritesFlag == 0` — during shutdown there is no fresh telemetry to protect, and cancelled in-flight work must survive into the bounded flush.
+- **Overflow**: after a successful write, the head is dropped while `QueueCount > MaxQueueSize` (FIFO eviction, newest data wins). Counts surface via `QueueOverflowSensor`. This is the **only** place a value is dropped on the happy path — the queue is monitoring history and keeps every value until the buffer overflows.
+- **Retry**: a failed send (exception or `PackageSendingInfo.Error != null`) re-enqueues the whole package via `ReEnqueueItems` and rethrows; the loop retries next cycle. There is **no retry cap** — overflow eviction is the only backstop; error logs are deduplicated (`AddQueueLoopError`). A failed retry is **never dropped below capacity** (at-least-once).
+- **#1088 (the single retry-drop)**: a retry that meets an already-**full** queue is dropped instead of evicting a queued value via the tail-write + overflow path — the retry is the oldest data (newest-wins). Reported via `DataProcessor.ReportRequeueEviction` → `QueueOverflowSensor` (reporting lives in per-item `ReEnqueueItem`, so FileQueueProcessor's single-item retries are covered too).
+- **#1090 removed (2026-06):** the earlier below-capacity head-drop — a `_buildDateMirror` head comparison that dropped a retry older than the FIFO head even with room — was removed from **both** collectors. For a large history buffer it discarded values that did not need to be lost; the monitoring-history contract drops only on overflow. (`QueueItem.BuildDate` survives for `DataPackage` time-in-queue stats; the mirror and `IsOlderThanQueueHead` are gone.)
 - **Cancellation**: on `OperationCanceledException`, packages are re-enqueued only when the shutdown mode preserves them (`PreserveCanceledPackages` — GracefulStop yes, TerminalDispose no).
 
 ## Shutdown modes & drain order
@@ -60,7 +59,7 @@ Failure log honesty (#1087 A): `DispatchPackageAsync`'s failure exception says "
 | File | Purpose |
 |---|---|
 | `Core/DataProcessor.cs` | Orchestrator: queues, lifecycle gates, flush phases, diagnostics routing |
-| `SyncQueue/SpecificQueue/QueueProcessorBase.cs` | Channel, state machine, overflow, retry filters (#1088/#1090), flush |
+| `SyncQueue/SpecificQueue/QueueProcessorBase.cs` | Channel, state machine, overflow eviction, #1088 full-buffer retry backstop, flush |
 | `SyncQueue/SpecificQueue/DataQueueProcessor.cs` | Periodic batch dispatch |
 | `SyncQueue/SpecificQueue/PriorityDataQueueProcessor.cs` | Reactive batch dispatch |
 | `SyncQueue/SpecificQueue/FileQueueProcessor.cs` | Single-item file dispatch |
@@ -70,13 +69,30 @@ Failure log honesty (#1087 A): `DispatchPackageAsync`'s failure exception says "
 ## Invariants
 
 - FIFO per queue; at-least-once delivery; no cross-queue ordering guarantees.
-- "Keep the latest `MaxQueueSize` values": neither normal overflow nor any retry path may preserve older data at the expense of newer (#1088/#1090).
+- Monitoring history: every value is kept until the buffer overflows. A failed retry is re-enqueued and retried (at-least-once) and is dropped only when the buffer is already full (#1088) — never below capacity.
 - Graceful stop preserves accepted work via bounded flush; terminal dispose stays bounded even when the sender ignores cancellation.
 - Values are dropped (not queued) while the collector is stopped; values CAN be enqueued during Stopping (final flushes).
 
 ## Tests
 
 `src/collector/HSMDataCollector.Tests/CollectorQueueShutdownTests.cs` (lifecycle, #1088/#1090 regressions, flush wording), `CollectorStabilityTests.cs` (stop-race file flush), `CollectorTransportChaosTests.cs`, `CollectorStressTests.cs` (gated soak/stress).
+
+## Native port (C++) — #1097
+
+The native collector (`src/native/collector`) ports the **observable** pipeline behavior. It runs a single FIFO worker queue (`std::deque<QueuedItem>` + one dispatcher thread) rather than four `Channel`-backed processors, and reproduces the load-bearing invariants:
+
+- **Overflow**: position-based FIFO head-eviction on enqueue (`while size > MaxQueueSize: pop_front`) — identical newest-wins policy.
+- **Batching/dispatch**: pops up to `MaxValuesInPackage` per cycle, keeps draining while the queue is non-empty, waits `PackageCollectPeriod` (file enqueues kick the worker, mirroring the reactive file queue).
+- **Retry**: a failed send re-enqueues at the tail and retries next cycle, **no retry cap** — overflow eviction is the only backstop (same contract as `RunLoopAsync`).
+- **Monitoring-history retry policy (drop only on overflow)**: every value is history and must survive, so a failed retry is **never dropped below capacity** — it is re-enqueued at the tail (`ReEnqueueLocked`) and retried (at-least-once). The **single** drop path is the #1088 backstop: when the buffer is already **full**, the retry (the oldest data — it was popped from the head while everything queued behind it arrived during its send) is dropped rather than evicting a queued value, matching normal overflow's newest-wins. This matches the C# `QueueProcessorBase` exactly — #1097 also removed C#'s earlier #1090 below-capacity head-drop, so both collectors drop only on overflow.
+- **Bounded graceful stop**: `StopWorker` cancels in-flight sends (hang/transport abort) and `DrainQueueOnStop` flushes what it can, dropping the remainder on a dead transport — stop never blocks the host restart (the accepted data-loss-at-stop trade-off).
+
+**Coverage**: portable behavior is pinned by the shared corpus (`queue_overflow_contract`, `sender_retry_contract`, `flush_contract`). The retry policy is pinned by native **unit** tests that stage the in-flight window with the hang seam: `native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values` (the full-buffer #1088 backstop) and `native_retry_below_capacity_is_always_redelivered` (at-least-once below capacity — a failed value is redelivered even when fresher values arrived during its send). They stay native-only because they need control over enqueue/in-flight ordering, not just the value stream.
+
+**Deliberate simplifications (not gaps):**
+- One worker queue instead of the four `QueueProcessor`s — the Data/Priority/File/Command split is a C# QoS-internal structure, not observable in value delivery (File already dispatches reactively via the kick).
+- `EnqueueResult` statuses and the `ShutdownMode` (GracefulStop/TerminalDispose/StartRollback) timeout matrix are C#-internal; the only observable shutdown contract — "stop never hangs; may drop on a dead transport" — already holds via the bounded stop drain, and producers must not branch on rejection kind either way.
+- Time-in-queue diagnostics (`DataPackage` stats), the diagnostics-suppression boundary (#1075), and overflow telemetry (`QueueOverflowSensor`) all need the default **diagnostic sensors** → deferred to #1099, which adds them.
 
 ## Known Issues / Limitations
 
