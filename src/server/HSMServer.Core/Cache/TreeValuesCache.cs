@@ -1598,7 +1598,7 @@ namespace HSMServer.Core.Cache
             // policies — orphaning them after the template is purged on the next attempt (#1127).
             var targetEntity = sensor.ToEntity();
             targetEntity.Policies.RemoveAll(templatePolicyIds.Contains);
-            targetEntity.TTLPolicies.RemoveAll(p => p.TemplateId != null && new Guid(p.TemplateId) == request.TemplateId);
+            targetEntity.TTLPolicies.RemoveAll(p => p.TemplateId is { Length: 16 } && new Guid(p.TemplateId) == request.TemplateId);
 
             _database.UpdateSensor(targetEntity);
 
