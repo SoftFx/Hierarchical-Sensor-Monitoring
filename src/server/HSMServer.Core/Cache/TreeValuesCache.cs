@@ -1581,19 +1581,32 @@ namespace HSMServer.Core.Cache
             if (!TryGetSensorById(request.SensorId, out var sensor))
                 return;
 
-            var sensorTtls = sensor.Policies.TTLPolicies;
-            var hasTemplateTtl = sensorTtls.Any(t => t.TemplateId == request.TemplateId);
+            var templatePolicyIds = sensor.Policies
+                .Where(p => p.TemplateId == request.TemplateId)
+                .Select(p => p.Id.ToString())
+                .ToHashSet();
 
-            if (!hasTemplateTtl && !sensor.Policies.Any(p => p.TemplateId == request.TemplateId))
+            var hasTemplateTtl = sensor.Policies.TTLPolicies.Any(t => t.TemplateId == request.TemplateId);
+
+            if (templatePolicyIds.Count == 0 && !hasTemplateTtl)
                 return;
+
+            // Persist FIRST, mutate in-memory only on success. If UpdateSensor throws, the
+            // in-memory sensor keeps its template policies so a retry of RemoveAlertTemplateAsync
+            // still targets this sensor. Mutating in-memory before the DB write would leave the
+            // sensor invisible to retry while the DB row still references the now-missing
+            // policies — orphaning them after the template is purged on the next attempt (#1127).
+            var targetEntity = sensor.ToEntity();
+            targetEntity.Policies.RemoveAll(templatePolicyIds.Contains);
+            targetEntity.TTLPolicies.RemoveAll(p => p.TemplateId != null && new Guid(p.TemplateId) == request.TemplateId);
+
+            _database.UpdateSensor(targetEntity);
 
             foreach (var policy in sensor.Policies.Where(p => p.TemplateId == request.TemplateId).ToList())
                 sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
 
-            foreach (var ttl in sensorTtls.Where(t => t.TemplateId == request.TemplateId).ToList())
+            foreach (var ttl in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == request.TemplateId).ToList())
                 sensor.Policies.RemoveTTLPolicy(ttl.Id);
-
-            _database.UpdateSensor(sensor.ToEntity());
 
             sensor.Revalidate();
 

@@ -80,6 +80,36 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var dbTemplates = _databaseCoreManager.DatabaseCore.GetAllAlertTemplates();
             Assert.Contains(dbTemplates, t => new Guid(t.Id) == template.Id);
+
+            // Critical for retry semantics: the failing sensor must still hold its template
+            // policies in memory, otherwise a retry of RemoveAlertTemplateAsync won't find it
+            // in affectedSensors and the template will be purged while the DB row still
+            // references the now-missing policies (#1127 follow-up).
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductBId, sensorBPath, out var sensorBAfterFailure));
+            Assert.Contains(sensorBAfterFailure.Policies.TTLPolicies, p => p.TemplateId == template.Id);
+
+            // Product A's sensor had no failure and should already be cleaned.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorAPath, out var sensorAAfterFailure));
+            Assert.DoesNotContain(sensorAAfterFailure.Policies.TTLPolicies, p => p.TemplateId == template.Id);
+
+            // Retry after the DB recovers: the failing sensor is still targeted, the template
+            // is purged, and both sensors end up clean.
+            _failProductId = Guid.Empty;
+
+            var (retryOk, retryError) = await _valuesCache.RemoveAlertTemplateAsync(template.Id);
+            Assert.True(retryOk, retryError);
+            await Task.Delay(300);
+
+            Assert.Null(_valuesCache.GetAlertTemplate(template.Id));
+
+            var dbTemplatesAfterRetry = _databaseCoreManager.DatabaseCore.GetAllAlertTemplates();
+            Assert.DoesNotContain(dbTemplatesAfterRetry, t => new Guid(t.Id) == template.Id);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductBId, sensorBPath, out var sensorBAfterRetry));
+            Assert.DoesNotContain(sensorBAfterRetry.Policies.TTLPolicies, p => p.TemplateId == template.Id);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorAPath, out var sensorAAfterRetry));
+            Assert.DoesNotContain(sensorAAfterRetry.Policies.TTLPolicies, p => p.TemplateId == template.Id);
         }
 
 
