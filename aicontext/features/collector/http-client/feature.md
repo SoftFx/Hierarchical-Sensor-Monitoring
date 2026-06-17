@@ -69,7 +69,13 @@ The native collector (`src/native/collector`) emits the **byte-identical** wire 
 
 Routing + retry are pure headers compiled into the always-on core, so they are unit-tested in the default `/WX` lane (`native_http_endpoint_routing_matches_net`, `native_http_retry_policy_matches_net`); the transport is exercised by an in-proc capture-server E2E (`native_http_transport_posts_to_capture_server`) in the `HSM_COLLECTOR_HTTP` CI lane. The .NET side of the 5xx fix is pinned by `Retry5xxParityTests` against the fake server.
 
-**Remaining integration step:** the native live send path still records to an in-memory sender behind the test seam (`TrySendBatch`); swapping it to dispatch wire bytes through `HttpTransport` in production requires a staged/real HSM server for true request-parity E2E and is the final wiring task of the native port.
+### Live send-path wiring (#1097)
+
+`TrySendBatch` delegates to a **sender seam** (`sender_`, a `std::function<bool(std::vector<std::string>&)>`). The default records each batch into `sent_values_` so the behavior corpus and the `sent_count`/`get_sent_json` accessors keep working in both build lanes. In the `HSM_COLLECTOR_HTTP` build, `TestInstallHttpSender()` swaps in a real libcurl POST: the batch is joined into a JSON array and sent to the `/list` route with `Key`/`ClientName` headers, exercising the full `add → queue → worker → POST` pipeline. Installed before `Start` (same one-way contract as the clock seam — the worker only reads `sender_` after `Start`, so the swap needs no lock). `StopWorker` calls `HttpTransport::Cancel()` (aborting an in-flight POST so the join stays bounded) and `StartWorker` calls `ResetCancel()` to re-arm after a restart.
+
+Send semantics: **one POST attempt per batch**. A non-2xx or transport failure returns `false`, so the dispatcher re-enqueues the batch at the tail — the same durable-retry contract the C# queue uses (re-enqueue on `PackageSendingInfo.Error != null`, including 5xx and 4xx). The Polly-equivalent in-send exponential/linear backoff (`hsm_http_retry.hpp`, unit-tested separately) is a non-blocking refinement layered on later; doing it inline would block the single worker thread for up to the policy max-delay per batch. The end-to-end live path is pinned by `native_http_live_send_posts_to_capture_server` (drives a real int value through the collector and asserts the captured POST route/headers/body).
+
+**Remaining integration step:** the HTTP sender is currently reachable only through the test-install seam (the production default stays recording so the conformance corpus runs unchanged in the HTTP lane). Making the libcurl transport the production default in the `HSM_COLLECTOR_HTTP` build — with the corpus driver explicitly installing the recording sender — is the next step, alongside per-command error-dictionary parse and the in-send backoff (#1097 / public-API #1100).
 
 ## Known Issues / Limitations
 

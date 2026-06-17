@@ -30,6 +30,10 @@
 extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms);
 extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, int64_t delta_ms);
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
+#if defined(HSM_COLLECTOR_HTTP)
+// Live-path seam (#1097): swap the recording sender for the libcurl transport before Start.
+extern "C" void hsm_collector_test_install_http_sender(hsm_collector_t* collector);
+#endif
 // Real-wire serializers (#1096): exercised directly from the unit tests.
 extern "C" const char* hsm_collector_test_iso_from_unix_ms(int64_t unix_ms);
 extern "C" const char* hsm_collector_test_timespan_c_format(int64_t ticks);
@@ -2789,6 +2793,53 @@ namespace
         Contains(request.headers, "ClientName: test-client");
         Require(request.body == body, "captured body must be the exact wire bytes sent");
     }
+
+    // #1097: drive a value through the REAL collector pipeline (add -> queue -> worker -> sender)
+    // with the libcurl transport installed, and assert the capture server saw the live POST. This
+    // is the end-to-end proof that TestInstallHttpSender wires the transport into the live send
+    // path, not just that HttpTransport can POST in isolation (the test above).
+    void NativeHttpLiveSendPostsToCaptureServer()
+    {
+        hsm::test::HttpCaptureServer server(200);
+
+        hsm_collector_options_t options{};
+        options.access_key = "live-key";
+        // Explicit http:// scheme + AllowPlaintextTransport is what the collector requires for a
+        // plaintext target (a bare host defaults to https — MakeEndpoints/Endpoints parity).
+        options.server_address = "http://127.0.0.1";
+        options.port = server.Port();
+        options.client_name = "live-client";
+        // module/computer left null so JoinPathParts keeps the wire Path exactly "live/int".
+        options.allow_plaintext_transport = true; // the capture server is plaintext HTTP
+        options.max_values_in_package = 50;
+        options.package_collect_period_ms = 20; // fast dispatch so the worker flushes promptly
+
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_test_install_http_sender(collector.value);
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "live/int");
+        Require(
+            hsm_sensor_add_int(sensor.value, 42, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK,
+            "add int value failed");
+
+        for (int i = 0; i < 400 && !server.Request().received.load(std::memory_order_acquire); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        const auto& request = server.Request();
+        Require(request.received.load(std::memory_order_acquire), "the capture server must have received the live POST");
+        Require(request.method == "POST", "live send method must be POST");
+        Require(request.path == "/api/sensors/list", "live data batch must route to /list");
+        Contains(request.headers, "Key: live-key");
+        Contains(request.headers, "ClientName: live-client");
+        // The batch is a JSON array of wire values carrying the added int and its path.
+        Require(!request.body.empty() && request.body.front() == '[' && request.body.back() == ']', "live body must be a JSON array");
+        Contains(request.body, "\"Value\":42");
+        Contains(request.body, "\"Path\":\"live/int\"");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
 #endif
 
     void NativeWireTimeSpanAndVersionMatchNet()
@@ -2918,6 +2969,7 @@ namespace
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
 #if defined(HSM_COLLECTOR_HTTP)
             { "native_http_transport_posts_to_capture_server", [](const std::string&) { NativeHttpTransportPostsToCaptureServer(); } },
+            { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },
