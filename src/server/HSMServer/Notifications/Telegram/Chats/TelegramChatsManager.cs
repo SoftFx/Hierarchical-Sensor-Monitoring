@@ -141,7 +141,7 @@ namespace HSMServer.Notifications
                         await TryRemove(new(chatId, initiator));
                 }
 
-            _cache.RemoveChatsFromPolicies(folderId, chats, initiator);
+            await _cache.RemoveChatsFromPoliciesAsync(folderId, chats, initiator);
         }
 
         public void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator) =>
