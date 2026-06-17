@@ -2114,22 +2114,6 @@ namespace
             }
         }
 
-        // A queued payload plus the dispatch epoch it was enqueued in. The epoch is the native,
-        // deterministic realization of the C# QueueItem.BuildDate ordering token (#1088/#1090):
-        // it advances when a send goes in flight, so a value enqueued WHILE a send is in flight
-        // carries a strictly newer epoch than the batch being sent. The retry filters compare
-        // epochs instead of wall-clock time, so "fresher telemetry arrived during the send" is
-        // an exact, deterministic signal — unlike C#'s DateTime.UtcNow, which only avoids
-        // dropping a same-burst retry by virtue of its coarse (~15 ms) tick resolution and would
-        // be flaky at the millisecond resolution available here. Wall-clock time-in-queue
-        // diagnostics (DataPackage stats) are deferred to #1099, which adds the diagnostic sensors
-        // that would consume them.
-        struct QueuedItem
-        {
-            std::string json;
-            std::uint64_t epoch;
-        };
-
         // FIFO send queue. Lock discipline: `queue_mutex_` and `mutex_` are never held together —
         // the enqueue path locks mutex_ (state check) then queue_mutex_ sequentially, and the
         // dispatcher locks queue_mutex_ (pop) then mutex_ (record) sequentially.
@@ -2137,36 +2121,28 @@ namespace
         {
             std::lock_guard<std::mutex> guard(queue_mutex_);
 
-            // Stamp the current dispatch epoch (see QueuedItem): the value belongs to whatever
-            // epoch is in flight now; a later send bump makes subsequent arrivals strictly newer.
-            queue_.push_back(QueuedItem{ std::move(json), dispatch_epoch_ });
+            queue_.push_back(std::move(json));
 
-            // Eviction happens on the enqueueing thread: oldest-first, newest value kept —
-            // same position-based FIFO policy as the C# QueueProcessorBase.
+            // This is the ONLY place a value is dropped: the (large) buffer is full. Monitoring
+            // history keeps every value until then; on overflow the oldest is evicted first
+            // (position-based FIFO, newest value kept) — same policy as the C# QueueProcessorBase.
             while (queue_.size() > static_cast<size_t>(max_queue_size_))
                 queue_.pop_front();
         }
 
-        // Retry re-enqueue with the C# #1088/#1090 filters (caller holds queue_mutex_). A failed
-        // package rotates to the TAIL, but a retry is DROPPED rather than displace fresher
-        // telemetry — "keep the latest MaxQueueSize values; no retry path preserves older data at
-        // the expense of newer":
-        //   #1090 — its dispatch epoch predates the current FIFO head (fresher values arrived
-        //           while its send was in flight); dropped even below capacity. Mirrors the C#
-        //           build-date head check (IsOlderThanQueueHead).
-        //   #1088 — the queue is already full; the retry is dropped instead of evicting the
-        //           fresher head (the bug position-based eviction at the tail would re-create).
-        // No retry cap: a retry that passes both filters rides the tail until delivered or
-        // overflow-evicted, matching the C# re-enqueue-and-retry-forever contract.
-        void ReEnqueueLocked(QueuedItem item)
+        // Retry re-enqueue (caller holds queue_mutex_). A failed package rotates to the TAIL and is
+        // retried — for a monitoring-history buffer every value matters, so a retry is NEVER dropped
+        // below capacity. The single drop is the #1088 backstop: when the buffer is already FULL the
+        // retry is the oldest data (it was popped from the head, and everything still queued was
+        // enqueued behind it while its send was in flight), so it is dropped rather than evicting a
+        // queued value — never below capacity, matching normal overflow's newest-wins. No retry cap:
+        // a retry rides the tail until delivered or, under sustained overflow, FIFO-evicted.
+        void ReEnqueueLocked(std::string json)
         {
-            if (!queue_.empty() && item.epoch < queue_.front().epoch)
-                return;
-
             if (queue_.size() >= static_cast<size_t>(max_queue_size_))
                 return;
 
-            queue_.push_back(std::move(item));
+            queue_.push_back(std::move(json));
         }
 
         void StartWorker()
@@ -2306,16 +2282,16 @@ namespace
 
         // Pops and sends batches of up to max_values_in_package_ until the queue is empty or a
         // send fails. The lock is dropped around the send so enqueues never wait on dispatch.
-        // On failure the batch is re-enqueued at the TAIL through the #1088/#1090 retry filters
-        // (ReEnqueueLocked: a retry older than the head or meeting a full queue is dropped, never
-        // displacing fresher telemetry) — or, during the stop flush, everything left is dropped so
-        // shutdown cannot hang on a failing transport. Returns the number of values dropped (only
-        // non-zero on the clear-on-failure stop path).
+        // On failure the batch is re-enqueued at the TAIL (ReEnqueueLocked: kept unless the buffer
+        // is full, in which case the retry — the oldest data — is dropped by the #1088 backstop) —
+        // or, during the stop flush, everything left is dropped so shutdown cannot hang on a
+        // failing transport. Returns the number of values dropped (only non-zero on the
+        // clear-on-failure stop path).
         size_t DispatchQueuedLocked(std::unique_lock<std::mutex>& lock, bool clear_remainder_on_failure)
         {
             while (!queue_.empty())
             {
-                std::vector<QueuedItem> batch;
+                std::vector<std::string> batch;
                 const auto batch_size = std::min(queue_.size(), static_cast<size_t>(max_values_in_package_));
                 batch.reserve(batch_size);
 
@@ -2325,19 +2301,8 @@ namespace
                     queue_.pop_front();
                 }
 
-                // Dispatch-epoch boundary (#1090): values enqueued while THIS send is in flight
-                // belong to a newer epoch, so a failed re-enqueue of this batch is correctly seen
-                // as older than them and dropped (newest-data-wins) rather than evicting the
-                // fresher head. Bumped under the queue lock, before the send drops it.
-                ++dispatch_epoch_;
-
-                std::vector<std::string> payloads;
-                payloads.reserve(batch.size());
-                for (auto& item : batch)
-                    payloads.push_back(std::move(item.json));
-
                 lock.unlock();
-                const auto sent = TrySendBatch(payloads);
+                const auto sent = TrySendBatch(batch);
                 lock.lock();
 
                 if (!sent)
@@ -2349,13 +2314,8 @@ namespace
                         return dropped;
                     }
 
-                    // Restore the moved-out payloads and re-enqueue each through the retry filters
-                    // (epochs are preserved, so the head/capacity drops see the original ordering).
-                    for (size_t index = 0; index < batch.size(); ++index)
-                    {
-                        batch[index].json = std::move(payloads[index]);
-                        ReEnqueueLocked(std::move(batch[index]));
-                    }
+                    for (auto& json : batch)
+                        ReEnqueueLocked(std::move(json));
 
                     return 0;
                 }
@@ -2454,11 +2414,7 @@ namespace
 
         std::mutex queue_mutex_;
         std::condition_variable queue_cv_;
-        std::deque<QueuedItem> queue_;
-        // Monotonic dispatch epoch (guarded by queue_mutex_): stamped onto each enqueued item and
-        // bumped when a send goes in flight, so the #1088/#1090 retry filters can tell a same-burst
-        // retry (keep) from one displaced by fresher in-flight arrivals (drop). See QueuedItem.
-        std::uint64_t dispatch_epoch_ = 0;
+        std::deque<std::string> queue_;
         bool worker_stop_ = false;
         bool dispatch_kick_ = false;
         std::thread worker_;

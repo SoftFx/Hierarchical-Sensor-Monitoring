@@ -279,8 +279,8 @@ Details: [`data-pipeline/feature.md`](../../aicontext/features/collector/data-pi
 - [x] Enqueue rejection is silent to producers — native (#1097): enqueue is void + silent drop, matching "producers must not branch on rejection kind"; the `EnqueueResult` status enum is C#-internal test observability
 - [x] Overflow: FIFO head drop while `count > MaxQueueSize`; counts → QueueOverflowSensor (self-loop guard) — conformance: queue_overflow_contract:overflow_evicts_oldest_keeps_fifo_suffix, queue_overflow_contract:overflow_massive_burst_keeps_last_capacity
 - [x] Retry: failed send re-enqueues package, rethrows, retries next cycle; NO retry cap; deduped error logs — conformance: sender_retry_contract:send_failure_retries_until_success_in_order, sender_retry_contract:send_failure_multi_package_no_loss_no_duplicates
-- [x] #1088: retry at full queue dropped (never evicts fresher head) — native (#1097): `ReEnqueueLocked` capacity drop — native unit: native_retry_meeting_full_queue_is_dropped_not_evicting_fresher_head (non-portable to corpus, like the C# unit test)
-- [x] #1090: retry older than current FIFO head dropped even below capacity — native (#1097): dispatch-epoch head check (deterministic stand-in for the C# BuildDate mirror) — native unit: native_retry_older_than_queue_head_is_dropped_below_capacity
+- [x] #1088: retry at full queue dropped (never evicts a queued value) — native (#1097): `ReEnqueueLocked` capacity drop — native unit: native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values
+- [~] #1090: retry older than current FIFO head dropped below capacity — native (#1097): INTENTIONALLY NOT ported. Monitoring-history contract drops only on overflow, so a failed retry is kept below capacity (at-least-once) — native unit: native_retry_below_capacity_is_always_redelivered. C# still has the #1090 below-capacity drop; aligning C# is an open decision (see data-pipeline/feature.md).
 - [x] Retry filters bypassed once writes closed — native (#1097): the stop drain drops on failure, so no retry path runs during shutdown — the filters never apply post-stop (equivalent)
 - [x] Cancellation on OCE / stop — native (#1097): bounded stop drain flushes accepted work and drops the remainder on a dead transport; the per-mode preserve-canceled distinction is C#-internal (data-loss-at-stop is the accepted native contract)
 - [x] `ShutdownMode.GracefulStop`: flush, preserve-canceled, wait `RequestTimeout` — conformance: flush_contract:stop_flushes_all_pending_before_returning, flush_contract:stop_flushes_multiple_packages_in_order
@@ -376,7 +376,7 @@ Reference: `src/wrapper/include/` (C++/CLI wrapper as minimal-API oracle)
 - [x] All validation pre-enqueue — conformance: instant_mixed_contract:double_nan_is_rejected, value_int_contract:int_invalid_status_is_rejected
 - [ ] Bars never roll without confirmed send; UTC-aligned windows
 - [ ] Stale callbacks invalidated by lifecycle epoch
-- [x] FIFO at-least-once; retry-forever + overflow backstop; newest-data-wins (#1088/#1090) — native (#1097): dispatch-epoch retry filters — native unit: native_retry_meeting_full_queue_is_dropped_not_evicting_fresher_head, native_retry_older_than_queue_head_is_dropped_below_capacity
+- [x] FIFO at-least-once; retry-forever + overflow backstop — native (#1097): retry kept below capacity, dropped only when the buffer is full — native unit: native_retry_below_capacity_is_always_redelivered, native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values (native intentionally does NOT port the C# #1090 below-capacity drop)
 - [x] Graceful stop flushes accepted work; terminal dispose bounded under broken transport — conformance: flush_contract:stop_flushes_all_pending_before_returning, flush_contract:stop_with_hanging_sender_is_bounded_and_drops_pending
 - [ ] Diagnostics suppressed past drain boundary; overflow exempt
 - [ ] Scheduler loop never dies; errors to onError

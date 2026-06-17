@@ -2989,18 +2989,18 @@ namespace
         return options;
     }
 
-    // #1088 (retry meets a full queue): a failed batch whose head is NOT older than the queue head
-    // (same dispatch epoch) but that comes back to a FULL queue is dropped — it must never evict the
-    // fresher head by riding the tail. Distinct from #1090 below: here the head check passes and the
-    // CAPACITY check is what drops the retry.
+    // #1088 (retry meets a FULL buffer): a failed batch that comes back to an already-full queue is
+    // dropped — the retry is the oldest data, so it is dropped rather than evicting a queued value.
+    // This is the ONLY case a retry is ever dropped; below capacity the retry is always kept (see
+    // NativeRetryBelowCapacityIsAlwaysRedelivered).
     //
     // Deterministic staging via the hang seam: the send of the first batch hangs in flight, holding
     // it "out" of the queue while the queue is refilled to capacity, then the hang is released as a
     // failure so the batch re-enqueues into a full queue.
-    void NativeRetryMeetingFullQueueIsDroppedNotEvictingFresherHead()
+    void NativeRetryMeetingFullQueueIsDroppedNotEvictingQueuedValues()
     {
-        // queue cap 4, batch 2, short period. Values: 1,2 (first batch) | 3,4 (left queued) | 5,6
-        // (added while the first batch's send hangs — same-epoch head is 3, so #1090 cannot fire).
+        // queue cap 4, batch 2, short period. Values: 1,2 (first batch, hangs in flight) | 3,4 (left
+        // queued) | 5,6 (added while [1,2] hangs) -> buffer full at 4 when [1,2] comes back.
         const auto options = LimitsOptions(/*max_queue_size=*/4, /*max_values_in_package=*/2, /*period_ms=*/20);
         CollectorHandle collector = CreateCollector(options);
         SensorHandle sensor = CreateIntSensor(collector.value, "pipeline/1088");
@@ -3011,16 +3011,16 @@ namespace
         for (int value : { 1, 2, 3, 4 })
             Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add failed");
 
-        // Generous barrier over the 20ms period: the worker has woken, popped [1,2], bumped the
-        // dispatch epoch, and is now hanging in flight. 3,4 remain queued at the original epoch.
+        // Generous barrier over the 20ms period: the worker has woken, popped [1,2], and is now
+        // hanging in flight. 3,4 remain queued.
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
-        // Added during the in-flight send -> newer epoch, but they fill the queue to capacity (4).
+        // Added while the first batch hangs -> these fill the queue back to capacity (4).
         for (int value : { 5, 6 })
             Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add failed");
 
-        // Release the hang AS A FAILURE so [1,2] re-enqueues: head is 3 (same epoch -> head check
-        // passes), queue is full -> #1088 capacity drop fires for both. Then 3,4,5,6 send cleanly.
+        // Release the hang AS A FAILURE so [1,2] re-enqueues into a FULL queue -> #1088 backstop
+        // drops both (they are the oldest data). Then 3,4,5,6 send cleanly.
         hsm_collector_set_send_fail_next(collector.value, 1);
         hsm_collector_set_send_hang(collector.value, false);
 
@@ -3037,39 +3037,38 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
     }
 
-    // #1090 (retry older than the FIFO head): a failed batch whose dispatch epoch predates the
-    // current head — fresher telemetry arrived while its send was in flight — is dropped even though
-    // the queue is far below capacity. The native dispatch-epoch token is the deterministic stand-in
-    // for C#'s QueueItem.BuildDate head comparison (IsOlderThanQueueHead).
-    void NativeRetryOlderThanQueueHeadIsDroppedBelowCapacity()
+    // Monitoring-history contract: BELOW capacity a failed retry is NEVER dropped, even when fresher
+    // values arrived while its send was in flight. Every value is delivered (at-least-once); the only
+    // drop path is a full buffer (NativeRetryMeetingFullQueueIsDroppedNotEvictingQueuedValues).
+    void NativeRetryBelowCapacityIsAlwaysRedelivered()
     {
-        // Huge cap (capacity never bites), batch 1 so the single in-flight value is exactly the
-        // retry under test. Value 1 hangs in flight; 2,3 arrive at a newer epoch and become the head.
+        // Huge cap (capacity never bites), batch 1 so value 1 is the lone in-flight retry. 2,3 arrive
+        // while 1's send hangs — under the old #1090 filter 1 would have been dropped; now it is kept.
         const auto options = LimitsOptions(/*max_queue_size=*/20000, /*max_values_in_package=*/1, /*period_ms=*/20);
         CollectorHandle collector = CreateCollector(options);
-        SensorHandle sensor = CreateIntSensor(collector.value, "pipeline/1090");
+        SensorHandle sensor = CreateIntSensor(collector.value, "pipeline/at-least-once");
 
         hsm_collector_set_send_hang(collector.value, true);
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
 
         Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add failed");
 
-        // Barrier: the worker has popped [1], bumped the epoch, and is hanging in flight.
+        // Barrier: the worker has popped [1] and is hanging in flight.
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
-        // Newer epoch (enqueued during the in-flight send); these become the queue head.
+        // Fresher values arrive while 1 is in flight (and become the queue head).
         for (int value : { 2, 3 })
             Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add failed");
 
-        // Release as a failure: [1] re-enqueues but 1's epoch < head(2)'s epoch -> dropped even
-        // though the queue holds only two items. 2 and 3 then send cleanly.
+        // Release as a failure: [1] re-enqueues. The buffer is far below capacity, so 1 is KEPT and
+        // retried — all three values are delivered, none dropped.
         hsm_collector_set_send_fail_next(collector.value, 1);
         hsm_collector_set_send_hang(collector.value, false);
 
-        Require(WaitForSentCountEquals(collector.value, 2), "only the two newer values should be delivered");
+        Require(WaitForSentCountEquals(collector.value, 3), "all three values must be delivered (at-least-once)");
 
         const auto sent = AllSentPayloads(collector.value);
-        NotContains(sent, "\"Value\":1,");
+        Contains(sent, "\"Value\":1,");
         Contains(sent, "\"Value\":2,");
         Contains(sent, "\"Value\":3,");
 
@@ -3130,8 +3129,8 @@ namespace
             { "native_double_negative_infinity_is_rejected_and_not_sent", [](const std::string&) { NativeDoubleNegativeInfinityIsRejectedAndNotSent(); } },
             { "native_invalid_status_on_instant_value_is_rejected_and_not_sent", [](const std::string&) { NativeInvalidStatusOnInstantValueIsRejectedAndNotSent(); } },
             { "native_invalid_status_on_last_value_preserves_previous_snapshot", [](const std::string&) { NativeInvalidStatusOnLastValuePreservesPreviousSnapshot(); } },
-            { "native_retry_meeting_full_queue_is_dropped_not_evicting_fresher_head", [](const std::string&) { NativeRetryMeetingFullQueueIsDroppedNotEvictingFresherHead(); } },
-            { "native_retry_older_than_queue_head_is_dropped_below_capacity", [](const std::string&) { NativeRetryOlderThanQueueHeadIsDroppedBelowCapacity(); } },
+            { "native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values", [](const std::string&) { NativeRetryMeetingFullQueueIsDroppedNotEvictingQueuedValues(); } },
+            { "native_retry_below_capacity_is_always_redelivered", [](const std::string&) { NativeRetryBelowCapacityIsAlwaysRedelivered(); } },
             { "conformance_instant_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_lifecycle_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_stress_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
