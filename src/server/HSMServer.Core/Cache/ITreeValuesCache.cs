@@ -105,7 +105,7 @@ namespace HSMServer.Core.Cache
 
         Task SaveLastStateToDbAsync(CancellationToken token = default);
 
-        void RemoveChatsFromPolicies(Guid folderId, List<Guid> chats, InitiatorInfo initiator);
+        Task RemoveChatsFromPoliciesAsync(Guid folderId, List<Guid> chats, InitiatorInfo initiator);
 
         List<AlertTemplateModel> GetAlertTemplateModels();
 

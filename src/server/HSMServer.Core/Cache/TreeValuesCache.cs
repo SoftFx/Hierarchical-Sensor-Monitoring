@@ -1140,15 +1140,118 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public void RemoveChatsFromPolicies(Guid folderId, List<Guid> chats, InitiatorInfo initiator)
+        public async Task RemoveChatsFromPoliciesAsync(Guid folderId, List<Guid> chats, InitiatorInfo initiator)
         {
             if (chats.Count == 0)
                 return;
 
             var chatsHash = new HashSet<Guid>(chats);
+            var forceInitiator = InitiatorInfo.AsSystemForce("RemoveChatsFromPolicies");
 
-            foreach (var product in GetProducts().Where(p => p.FolderId == folderId))
-                RemoveChatsFromPolicies(product, chatsHash, initiator);
+            // Collect every product (including sub-products) and sensor in the folder.
+            // Mutations are dispatched to each entity's own queue so no sensor.Policies or
+            // product.Policies is touched from outside its queue thread.
+            var branchProducts = new List<ProductModel>();
+            var branchSensors = new List<BaseSensorModel>();
+
+            foreach (var rootProduct in GetProducts().Where(p => p.FolderId == folderId))
+                CollectBranch(rootProduct, branchProducts, branchSensors);
+
+            var productTasks = branchProducts
+                .Where(p => p.Policies.TTLPolicies.Any(t => CanRemoveChatsFromPolicy(t.Destination, chatsHash)))
+                .Select(product => Task.Run(async () =>
+                {
+                    var productTtlUpdates = new List<PolicyUpdate>();
+                    foreach (var ttl in product.Policies.TTLPolicies)
+                    {
+                        if (!TryGetPolicyUpdate(ttl, chatsHash, forceInitiator, out var ttlUpdate))
+                            ttlUpdate = new PolicyUpdate(ttl, forceInitiator);
+
+                        productTtlUpdates.Add(ttlUpdate);
+                    }
+
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        TTLPolicies = productTtlUpdates,
+                        Initiator = forceInitiator,
+                    };
+
+                    await ProcessRequestAsync(product.Id, update);
+                }));
+
+            var sensorTasks = branchSensors
+                .Select(sensor => ProcessRequestAsync(sensor.Root.Id, new RemoveChatsFromSensorRequest(sensor.Id, chatsHash, forceInitiator)));
+
+            try
+            {
+                await Task.WhenAll(productTasks.Concat(sensorTasks));
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"An error was occurred while removing chats {string.Join(',', chats)} from folder {folderId} policies", ex);
+            }
+        }
+
+        private static void CollectBranch(ProductModel product, List<ProductModel> products, List<BaseSensorModel> sensors)
+        {
+            products.Add(product);
+
+            foreach (var (_, sensor) in product.Sensors)
+                sensors.Add(sensor);
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                CollectBranch(subProduct, products, sensors);
+        }
+
+        private void RemoveChatsFromSensor(RemoveChatsFromSensorRequest request)
+        {
+            if (!TryGetSensorById(request.SensorId, out var sensor))
+                return;
+
+            var chats = request.Chats;
+            var initiator = request.Initiator;
+
+            List<PolicyUpdate> sensorTtlUpdates = null;
+            if (sensor.Policies.TTLPolicies.Any(t => CanRemoveChatsFromPolicy(t.Destination, chats)))
+            {
+                sensorTtlUpdates = new List<PolicyUpdate>(sensor.Policies.TTLPolicies.Count);
+
+                foreach (var ttl in sensor.Policies.TTLPolicies)
+                {
+                    if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
+                        ttlUpdate = new PolicyUpdate(ttl, initiator);
+
+                    sensorTtlUpdates.Add(ttlUpdate);
+                }
+            }
+
+            List<PolicyUpdate> policiesUpdate = null;
+            if (sensor.Policies.Any(p => CanRemoveChatsFromPolicy(p.Destination, chats)))
+            {
+                policiesUpdate = new List<PolicyUpdate>(sensor.Policies.Count());
+
+                foreach (var policy in sensor.Policies)
+                {
+                    if (!TryGetPolicyUpdate(policy, chats, initiator, out var policyUpdate))
+                        policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), initiator);
+
+                    policiesUpdate.Add(policyUpdate);
+                }
+            }
+
+            if (policiesUpdate is null && sensorTtlUpdates is null)
+                return;
+
+            var update = new SensorUpdate
+            {
+                Id = sensor.Id,
+                Policies = policiesUpdate,
+                TTLPolicies = sensorTtlUpdates,
+                Initiator = initiator,
+            };
+
+            TryUpdateSensor(update, out _);
         }
 
 
@@ -1169,8 +1272,13 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private void ApplyTemplateToSensor(BaseSensorModel sensor, AlertTemplateModel template)
+        private void ApplyTemplateToSensor(ApplyTemplateRequest request)
         {
+            if (!TryGetSensorById(request.SensorId, out var sensor))
+                return;
+
+            var template = request.AlertTemplateModel;
+
             // Categorize existing sensor policies by TemplateAlertId.
             // Only track the first policy per TemplateAlertId; extras become orphans to clean up.
             var existingPoliciesWithId = sensor.Policies
@@ -1361,49 +1469,45 @@ namespace HSMServer.Core.Cache
             if (products.Count == 0)
                 return (false, "No products found in the selected folder.");
 
-            var first = products.FirstOrDefault();
-
-            await Parallel.ForEachAsync(products, new ParallelOptions
-            {
-                MaxDegreeOfParallelism = Environment.ProcessorCount,
-                CancellationToken = token
-            }, async (product, ct) =>
-            {
-                var isPrimary = product == first;
-                var request = new AddAlertTemplateRequest(alertTemplateModel, product.Id, isPrimary);
-
-                await ProcessRequestAsync(product.Id, request, ct);
-            });
-
-            return (true, null);
-        }
-
-        private void AddAlertTemplate(AddAlertTemplateRequest request)
-        {
-            var alertTemplateModel = request.AlertTemplateModel;
+            // Persist the template once before dispatching per-sensor applications.
+            // This makes it visible to concurrent AddSensor calls and removes the previous
+            // reliance on a queue-thread "isPrimary" side effect.
+            _alertTemplates[alertTemplateModel.Id] = alertTemplateModel;
+            _database.AddAlertTemplate(alertTemplateModel.ToEntity());
 
             try
             {
                 var matchedSensors = new HashSet<BaseSensorModel>();
                 foreach (var path in alertTemplateModel.Paths.Where(p => !string.IsNullOrEmpty(p)))
                 {
-                    foreach (var sensor in GetSensorsByWildcard(path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, request.ProductId))
-                        matchedSensors.Add(sensor);
+                    foreach (var product in products)
+                    {
+                        foreach (var sensor in GetSensorsByWildcard(path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, product.Id))
+                            matchedSensors.Add(sensor);
+                    }
                 }
 
-                foreach (var sensor in matchedSensors)
-                    ApplyTemplateToSensor(sensor, alertTemplateModel);
-
-                if (request.IsPrimary)
+                // Each sensor's policies are mutated only on its own product queue thread.
+                await Parallel.ForEachAsync(matchedSensors, new ParallelOptions
                 {
-                    _alertTemplates[alertTemplateModel.Id] = alertTemplateModel;
-                    _database.AddAlertTemplate(alertTemplateModel.ToEntity());
-                }
+                    MaxDegreeOfParallelism = Environment.ProcessorCount,
+                    CancellationToken = token
+                }, async (sensor, ct) =>
+                {
+                    var request = new ApplyTemplateRequest(sensor.Id, alertTemplateModel);
+                    await ProcessRequestAsync(sensor.Root.Id, request, ct);
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 _logger.Error($"An error was occurred while adding alert template {alertTemplateModel}", ex);
             }
+
+            return (true, null);
         }
 
 
@@ -1419,18 +1523,33 @@ namespace HSMServer.Core.Cache
             if (templateModel == null)
                 return;
 
-            var products = GetProducts().Where(x => x.FolderId == templateModel.FolderId);
+            var products = GetProducts().Where(x => x.FolderId == templateModel.FolderId).ToList();
 
             try
             {
-                await Parallel.ForEachAsync(products, new ParallelOptions
+                // Collect all sensors (across products and their sub-products) that hold policies
+                // from this template, then dispatch a per-sensor removal request to each sensor's
+                // own product queue. This guarantees no sensor.Policies mutation happens outside
+                // the owning queue thread.
+                var affectedSensors = new List<BaseSensorModel>();
+                foreach (var product in products)
+                {
+                    foreach (var sensor in product.GetAllSensors())
+                    {
+                        var hasTemplateTtl = sensor.Policies.TTLPolicies.Any(t => t.TemplateId == id);
+                        if (hasTemplateTtl || sensor.Policies.Any(p => p.TemplateId == id))
+                            affectedSensors.Add(sensor);
+                    }
+                }
+
+                await Parallel.ForEachAsync(affectedSensors, new ParallelOptions
                 {
                     MaxDegreeOfParallelism = Environment.ProcessorCount,
                     CancellationToken = token
-                }, async (product, ct) =>
+                }, async (sensor, ct) =>
                 {
-                    var request = new RemoveAlertTemplateRequest(id, product.Id, false);
-                    await ProcessRequestAsync(product.Id, request, ct);
+                    var request = new RemoveTemplateFromSensorRequest(sensor.Id, id);
+                    await ProcessRequestAsync(sensor.Root.Id, request, ct);
                 });
             }
             catch (OperationCanceledException)
@@ -1447,33 +1566,28 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private void RemoveAlertTemplate(RemoveAlertTemplateRequest request)
+        private void RemoveTemplateFromSensor(RemoveTemplateFromSensorRequest request)
         {
-            var product = GetProduct(request.ProductId);
-
-            if (product == null)
+            if (!TryGetSensorById(request.SensorId, out var sensor))
                 return;
 
-            foreach (var sensor in product.GetAllSensors())
-            {
-                var sensorTtls = sensor.Policies.TTLPolicies;
-                var hasTemplateTtl = sensorTtls.Any(t => t.TemplateId == request.Id);
+            var sensorTtls = sensor.Policies.TTLPolicies;
+            var hasTemplateTtl = sensorTtls.Any(t => t.TemplateId == request.TemplateId);
 
-                if (hasTemplateTtl || sensor.Policies.Any(x => x.TemplateId == request.Id))
-                {
-                    foreach (var policy in sensor.Policies.Where(x => x.TemplateId == request.Id))
-                        sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
+            if (!hasTemplateTtl && !sensor.Policies.Any(p => p.TemplateId == request.TemplateId))
+                return;
 
-                    foreach (var ttl in sensorTtls.Where(t => t.TemplateId == request.Id).ToList())
-                        sensor.Policies.RemoveTTLPolicy(ttl.Id);
+            foreach (var policy in sensor.Policies.Where(p => p.TemplateId == request.TemplateId).ToList())
+                sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
 
-                    _database.UpdateSensor(sensor.ToEntity());
+            foreach (var ttl in sensorTtls.Where(t => t.TemplateId == request.TemplateId).ToList())
+                sensor.Policies.RemoveTTLPolicy(ttl.Id);
 
-                    sensor.Revalidate();
+            _database.UpdateSensor(sensor.ToEntity());
 
-                    SensorUpdateView(sensor);
-                }
-            }
+            sensor.Revalidate();
+
+            SensorUpdateView(sensor);
         }
 
         /// <summary>
@@ -1489,80 +1603,6 @@ namespace HSMServer.Core.Cache
                 .ThenBy(c => c.Operation)
                 .ThenBy(c => c.Target.Value)
                 .Select(c => $"{c.Property}:{c.Operation}:{c.Target}"));
-        }
-
-        private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats, InitiatorInfo initiator)
-        {
-            // Use force update so template-created policies are also updated
-            var forceInitiator = InitiatorInfo.AsSystemForce("RemoveChatsFromPolicies");
-
-            if (product.Policies.TTLPolicies.Any(t => CanRemoveChatsFromPolicy(t.Destination, chats)))
-            {
-                var productTtlUpdates = new List<PolicyUpdate>();
-                foreach (var ttl in product.Policies.TTLPolicies)
-                {
-                    if (!TryGetPolicyUpdate(ttl, chats, forceInitiator, out var ttlUpdate))
-                        ttlUpdate = new PolicyUpdate(ttl, forceInitiator);
-
-                    productTtlUpdates.Add(ttlUpdate);
-                }
-
-                var update = new ProductUpdate()
-                {
-                    Id = product.Id,
-                    TTLPolicies = productTtlUpdates,
-                    Initiator = forceInitiator,
-                };
-
-                UpdateProduct(update);
-            }
-
-            foreach (var (_, sensor) in product.Sensors)
-            {
-                List<PolicyUpdate> sensorTtlUpdates = null;
-                if (sensor.Policies.TTLPolicies.Any(t => CanRemoveChatsFromPolicy(t.Destination, chats)))
-                {
-                    sensorTtlUpdates = new List<PolicyUpdate>(sensor.Policies.TTLPolicies.Count);
-
-                    foreach (var ttl in sensor.Policies.TTLPolicies)
-                    {
-                        if (!TryGetPolicyUpdate(ttl, chats, forceInitiator, out var ttlUpdate))
-                            ttlUpdate = new PolicyUpdate(ttl, forceInitiator);
-
-                        sensorTtlUpdates.Add(ttlUpdate);
-                    }
-                }
-
-                List<PolicyUpdate> policiesUpdate = null;
-                if (sensor.Policies.Any(p => CanRemoveChatsFromPolicy(p.Destination, chats)))
-                {
-                    policiesUpdate = new(sensor.Policies.Count());
-
-                    foreach (var policy in sensor.Policies)
-                    {
-                        if (!TryGetPolicyUpdate(policy, chats, forceInitiator, out var policyUpdate))
-                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), forceInitiator);
-
-                        policiesUpdate.Add(policyUpdate);
-                    }
-                }
-
-                if (policiesUpdate is not null || sensorTtlUpdates is not null)
-                {
-                    var update = new SensorUpdate()
-                    {
-                        Id = sensor.Id,
-                        Policies = policiesUpdate,
-                        TTLPolicies = sensorTtlUpdates,
-                        Initiator = forceInitiator,
-                    };
-
-                    TryUpdateSensor(update, out _);
-                }
-            }
-
-            foreach (var (_, subProduct) in product.SubProducts)
-                RemoveChatsFromPolicies(subProduct, chats, initiator);
         }
 
         private static bool TryGetPolicyUpdate(Policy policy, HashSet<Guid> chats, InitiatorInfo initiator,
@@ -1716,11 +1756,14 @@ namespace HSMServer.Core.Cache
                 case RemoveSensorRequest request:
                     RemoveSensor(request.SensorId, request.InitiatoInfo, request.ParentId);
                     break;
-                case AddAlertTemplateRequest request:
-                    AddAlertTemplate(request);
+                case ApplyTemplateRequest request:
+                    ApplyTemplateToSensor(request);
                     break;
-                case RemoveAlertTemplateRequest request:
-                    RemoveAlertTemplate(request);
+                case RemoveTemplateFromSensorRequest request:
+                    RemoveTemplateFromSensor(request);
+                    break;
+                case RemoveChatsFromSensorRequest request:
+                    RemoveChatsFromSensor(request);
                     break;
                 case ClearHistoryRequest request:
                     ClearSensorHistory(request);
@@ -2212,7 +2255,7 @@ namespace HSMServer.Core.Cache
                 foreach (var template in _alertTemplates.Values)
                 {
                     if (template.IsMatch(sensor))
-                        ApplyTemplateToSensor(sensor, template);
+                        ApplyTemplateToSensor(new ApplyTemplateRequest(sensor.Id, template));
                 }
             }
             catch (Exception ex)
