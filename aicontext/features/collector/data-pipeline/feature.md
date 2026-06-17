@@ -78,6 +78,23 @@ Failure log honesty (#1087 A): `DispatchPackageAsync`'s failure exception says "
 
 `src/collector/HSMDataCollector.Tests/CollectorQueueShutdownTests.cs` (lifecycle, #1088/#1090 regressions, flush wording), `CollectorStabilityTests.cs` (stop-race file flush), `CollectorTransportChaosTests.cs`, `CollectorStressTests.cs` (gated soak/stress).
 
+## Native port (C++) — #1097
+
+The native collector (`src/native/collector`) ports the **observable** pipeline behavior. It runs a single FIFO worker queue (`std::deque<QueuedItem>` + one dispatcher thread) rather than four `Channel`-backed processors, and reproduces the load-bearing invariants:
+
+- **Overflow**: position-based FIFO head-eviction on enqueue (`while size > MaxQueueSize: pop_front`) — identical newest-wins policy.
+- **Batching/dispatch**: pops up to `MaxValuesInPackage` per cycle, keeps draining while the queue is non-empty, waits `PackageCollectPeriod` (file enqueues kick the worker, mirroring the reactive file queue).
+- **Retry**: a failed send re-enqueues at the tail and retries next cycle, **no retry cap** — overflow eviction is the only backstop (same contract as `RunLoopAsync`).
+- **#1088 / #1090 (newest-data-wins retry filters)**: each queued item carries a **dispatch epoch** (`dispatch_epoch_`), stamped at enqueue and bumped when a send goes in flight, so a value enqueued *during* an in-flight send carries a strictly newer epoch than the batch being sent. The retry re-enqueue (`ReEnqueueLocked`) drops a batch that is **older than the current FIFO head** (#1090) or that **meets a full queue** (#1088) instead of displacing fresher telemetry. The epoch is the deterministic native realization of C#'s `QueueItem.BuildDate` head comparison (`IsOlderThanQueueHead`): C# only avoids dropping a same-burst retry because `DateTime.UtcNow`'s tick is coarse (~15 ms); at millisecond resolution that would be flaky, so the epoch encodes "fresher arrived during the send" exactly rather than approximately.
+- **Bounded graceful stop**: `StopWorker` cancels in-flight sends (hang/transport abort) and `DrainQueueOnStop` flushes what it can, dropping the remainder on a dead transport — stop never blocks the host restart (the accepted data-loss-at-stop trade-off).
+
+**Coverage**: portable behavior is pinned by the shared corpus (`queue_overflow_contract`, `sender_retry_contract`, `flush_contract`). #1088/#1090 are pinned by native **unit** tests (`native_retry_meeting_full_queue_is_dropped_not_evicting_fresher_head`, `native_retry_older_than_queue_head_is_dropped_below_capacity`) that stage the in-flight window with the hang seam — kept out of the cross-language corpus for the same reason the C# side unit-tests them: the head comparison is non-portable through the action protocol (it needs control over enqueue ordering, not just the value stream).
+
+**Deliberate simplifications (not gaps):**
+- One worker queue instead of the four `QueueProcessor`s — the Data/Priority/File/Command split is a C# QoS-internal structure, not observable in value delivery (File already dispatches reactively via the kick).
+- `EnqueueResult` statuses and the `ShutdownMode` (GracefulStop/TerminalDispose/StartRollback) timeout matrix are C#-internal; the only observable shutdown contract — "stop never hangs; may drop on a dead transport" — already holds via the bounded stop drain, and producers must not branch on rejection kind either way.
+- Time-in-queue diagnostics (`DataPackage` stats), the diagnostics-suppression boundary (#1075), and overflow telemetry (`QueueOverflowSensor`) all need the default **diagnostic sensors** → deferred to #1099, which adds them.
+
 ## Known Issues / Limitations
 
 - No backpressure from HTTP to producers; a slow server fills queues until overflow.

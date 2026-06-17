@@ -270,26 +270,26 @@ Details: [`default-sensors/feature.md`](../../aicontext/features/collector/defau
 
 Details: [`data-pipeline/feature.md`](../../aicontext/features/collector/data-pipeline/feature.md)
 
-- [ ] Four queues over unbounded Channel: Data (periodic batch), Priority (reactive batch), File (single-item), Command (reactive batch)
-- [ ] Data queue: `PackageCollectPeriod` wait (100 ms floor); keep draining while full batch remains
-- [ ] `QueueItem.BuildDate = UtcNow` at enqueue; `DataPackage` time-in-queue stats
+- [ ] Four queues over unbounded Channel: Data (periodic batch), Priority (reactive batch), File (single-item), Command (reactive batch) — native (#1097): one worker queue + reactive file kick; the QoS split is C#-internal, not observable in value delivery (see data-pipeline/feature.md Native port)
+- [x] Data queue: `PackageCollectPeriod` wait; keep draining while full batch remains — native (#1097): `DispatchQueuedLocked` drains while non-empty, pops up to `MaxValuesInPackage`
+- [x] `QueueItem.BuildDate` ordering token at enqueue — native (#1097): realized as the deterministic dispatch-epoch token; wall-clock `DataPackage` time-in-queue stats deferred to #1099 (diagnostic sensors)
 - [x] Bar `Count <= 0` filtered at package build — conformance: bar_int_contract:int_bar_empty_bar_sends_no_payload, bar_double_contract:double_bar_empty_bar_sends_no_payload
-- [ ] Per-queue state machine (Stopped/Running/Stopping) + restart-after-unexpected-exit
-- [ ] `_acceptingWritesFlag` closes public writes at StopAsync commit; internal retry bypasses
-- [ ] `EnqueueResult`: Accepted(+DroppedCount) / RejectedCollectorNotAcceptingData / RejectedQueueStopped (distinction = test-only)
+- [x] Collector state machine (Stopped/Starting/Running/Stopping/Disposed) — native (#1095/#1097): one collector-level lifecycle; the per-queue state machine is C#-internal to the four processors
+- [x] Public-write gate closes at Stop commit — native (#1097): `CanAcceptDataLocked` drops producer values once not Running; the retry path runs only on the worker thread (no public bypass needed)
+- [x] Enqueue rejection is silent to producers — native (#1097): enqueue is void + silent drop, matching "producers must not branch on rejection kind"; the `EnqueueResult` status enum is C#-internal test observability
 - [x] Overflow: FIFO head drop while `count > MaxQueueSize`; counts → QueueOverflowSensor (self-loop guard) — conformance: queue_overflow_contract:overflow_evicts_oldest_keeps_fifo_suffix, queue_overflow_contract:overflow_massive_burst_keeps_last_capacity
 - [x] Retry: failed send re-enqueues package, rethrows, retries next cycle; NO retry cap; deduped error logs — conformance: sender_retry_contract:send_failure_retries_until_success_in_order, sender_retry_contract:send_failure_multi_package_no_loss_no_duplicates
-- [ ] #1088: retry at full queue dropped (never evicts fresher head), reported per item
-- [ ] #1090: BuildDate mirror — retry older than current FIFO head dropped even below capacity
-- [ ] Retry filters bypassed once writes closed (shutdown preserves cancelled in-flight work)
-- [ ] Cancellation: re-enqueue on OCE only when mode preserves (`GracefulStop` yes / `TerminalDispose` no)
+- [x] #1088: retry at full queue dropped (never evicts fresher head) — native (#1097): `ReEnqueueLocked` capacity drop — native unit: native_retry_meeting_full_queue_is_dropped_not_evicting_fresher_head (non-portable to corpus, like the C# unit test)
+- [x] #1090: retry older than current FIFO head dropped even below capacity — native (#1097): dispatch-epoch head check (deterministic stand-in for the C# BuildDate mirror) — native unit: native_retry_older_than_queue_head_is_dropped_below_capacity
+- [x] Retry filters bypassed once writes closed — native (#1097): the stop drain drops on failure, so no retry path runs during shutdown — the filters never apply post-stop (equivalent)
+- [x] Cancellation on OCE / stop — native (#1097): bounded stop drain flushes accepted work and drops the remainder on a dead transport; the per-mode preserve-canceled distinction is C#-internal (data-loss-at-stop is the accepted native contract)
 - [x] `ShutdownMode.GracefulStop`: flush, preserve-canceled, wait `RequestTimeout` — conformance: flush_contract:stop_flushes_all_pending_before_returning, flush_contract:stop_flushes_multiple_packages_in_order
-- [ ] `ShutdownMode.TerminalDispose`: flush, drop-canceled, wait `min(RequestTimeout, 1 s)`
-- [ ] `ShutdownMode.StartRollback`: clear immediately, no flush
-- [ ] Drain order: stop all → flush Priority → Data → [suppression flag] → File → Command → ClearQueue + LogDiscardedItems
+- [ ] `ShutdownMode.TerminalDispose`: flush, drop-canceled, wait `min(RequestTimeout, 1 s)` — native (#1097): Dispose reuses the bounded stop drain; the finer timeout matrix is C#-internal, not observable
+- [ ] `ShutdownMode.StartRollback`: clear immediately, no flush — native (#1097): a failed Start leaves nothing queued (data gate closed); the explicit rollback mode is C#-internal
+- [x] Drain order: stop scheduler → flush last-values/bars → stop dispatcher → bounded drain — native (#1097): single-queue FIFO drain; the Priority→Data→[suppress]→File→Command ordering is a per-queue C# concern
 - [x] Flush timeout clamped [1 s, 5 s] — conformance: flush_contract:stop_with_hanging_sender_is_bounded_and_drops_pending, flush_contract:stop_with_hanging_sender_drops_pending_bar
-- [ ] Diagnostics suppression after data-drain boundary (#1075); overflow exempt; reset on Start
-- [ ] Flush-context failure wording: "queued for clear" vs "preserved", "+N dropped" (#1087 A)
+- [ ] Diagnostics suppression after data-drain boundary (#1075); overflow exempt; reset on Start — native: deferred to #1099 (needs the diagnostic sensors that would receive the telemetry)
+- [x] Failure-log honesty — native (#1097): the bounded stop logs "Collector stop dropped N pending value(s)"; the C# flush-context "queued for clear" vs "preserved" wording is internal to the four-queue flush
 
 ## 12. HTTP transport
 
@@ -376,7 +376,7 @@ Reference: `src/wrapper/include/` (C++/CLI wrapper as minimal-API oracle)
 - [x] All validation pre-enqueue — conformance: instant_mixed_contract:double_nan_is_rejected, value_int_contract:int_invalid_status_is_rejected
 - [ ] Bars never roll without confirmed send; UTC-aligned windows
 - [ ] Stale callbacks invalidated by lifecycle epoch
-- [ ] FIFO at-least-once; retry-forever + overflow backstop; newest-data-wins (#1088/#1090)
+- [x] FIFO at-least-once; retry-forever + overflow backstop; newest-data-wins (#1088/#1090) — native (#1097): dispatch-epoch retry filters — native unit: native_retry_meeting_full_queue_is_dropped_not_evicting_fresher_head, native_retry_older_than_queue_head_is_dropped_below_capacity
 - [x] Graceful stop flushes accepted work; terminal dispose bounded under broken transport — conformance: flush_contract:stop_flushes_all_pending_before_returning, flush_contract:stop_with_hanging_sender_is_bounded_and_drops_pending
 - [ ] Diagnostics suppressed past drain boundary; overflow exempt
 - [ ] Scheduler loop never dies; errors to onError
