@@ -340,6 +340,24 @@ hsm_result_t hsm_collector_create_int_sensor_with_options(
     int32_t unit,
     const char* description,
     hsm_sensor_t** out_sensor);
+/* Service-commands sensor (CreateServiceCommandsSensor): a string sensor reporting fixed lifecycle
+   commands with an initiator comment. Registers at ".module/Service commands" with the managed
+   Description and an implicit alert (IfReceivedNewValue -> ThenSendNotification("[$product] $value -
+   $comment")). The send helpers post the exact managed command strings; the comment is always
+   "Initiator: <initiator>". send_update_version omits the "from <old>" clause when old_version is
+   NULL/empty ("Service update to <new>" vs "Service update from <old> to <new>"). */
+hsm_result_t hsm_collector_create_service_commands_sensor(hsm_collector_t* collector, hsm_sensor_t** out_sensor);
+hsm_result_t hsm_service_commands_send_custom(hsm_sensor_t* sensor, const char* command, const char* initiator);
+hsm_result_t hsm_service_commands_send_restart(hsm_sensor_t* sensor, const char* initiator);
+hsm_result_t hsm_service_commands_send_start(hsm_sensor_t* sensor, const char* initiator);
+hsm_result_t hsm_service_commands_send_stop(hsm_sensor_t* sensor, const char* initiator);
+hsm_result_t hsm_service_commands_send_update(hsm_sensor_t* sensor, const char* initiator);
+hsm_result_t hsm_service_commands_send_update_version(
+    hsm_sensor_t* sensor,
+    const char* initiator,
+    const char* new_version,
+    const char* old_version);
+
 hsm_result_t hsm_collector_create_enum_sensor_with_options(
     hsm_collector_t* collector,
     const char* path,

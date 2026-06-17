@@ -775,6 +775,53 @@ namespace
             return;
         }
 
+        if (action == "create_service_commands_sensor")
+        {
+            SensorHandle sensor;
+            Require(hsm_collector_create_service_commands_sensor(state.collector.value, &sensor.value) == HSM_RESULT_OK, "service-commands sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "service_send_custom" || action == "service_send_restart" || action == "service_send_start" ||
+            action == "service_send_stop" || action == "service_send_update" || action == "service_send_update_version")
+        {
+            Require(step.size() >= 3, "service_send_* requires sensor index and initiator");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            auto* sensor = state.sensors[sensor_index].value;
+
+            hsm_result_t result = HSM_RESULT_OK;
+            if (action == "service_send_custom")
+            {
+                const auto command = ExpandTextToken(step[2]);
+                const auto initiator = ExpandTextToken(step[3]);
+                result = hsm_service_commands_send_custom(sensor, command.c_str(), initiator.c_str());
+            }
+            else if (action == "service_send_update_version")
+            {
+                const auto initiator = ExpandTextToken(step[2]);
+                const auto new_version = ExpandTextToken(step[3]);
+                const bool has_old = step.size() >= 5;
+                const auto old_version = has_old ? ExpandTextToken(step[4]) : std::string{};
+                result = hsm_service_commands_send_update_version(sensor, initiator.c_str(), new_version.c_str(), has_old ? old_version.c_str() : nullptr);
+            }
+            else
+            {
+                const auto initiator = ExpandTextToken(step[2]);
+                if (action == "service_send_restart")
+                    result = hsm_service_commands_send_restart(sensor, initiator.c_str());
+                else if (action == "service_send_start")
+                    result = hsm_service_commands_send_start(sensor, initiator.c_str());
+                else if (action == "service_send_stop")
+                    result = hsm_service_commands_send_stop(sensor, initiator.c_str());
+                else
+                    result = hsm_service_commands_send_update(sensor, initiator.c_str());
+            }
+            Require(result == HSM_RESULT_OK, "service_send_* failed");
+            return;
+        }
+
         if (action == "create_timespan_sensor")
         {
             Require(step.size() >= 2, "create_timespan_sensor requires path");
@@ -3458,6 +3505,7 @@ namespace
             { "conformance_timespan_version_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_alert_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_options_surface_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_service_commands_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };

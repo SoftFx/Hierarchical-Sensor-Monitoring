@@ -919,6 +919,10 @@ namespace
     struct RegistrationOptions
     {
         int64_t ttl_ms = 0;
+        // Raw TTL ticks override (for sentinels like TimeSpan.MaxValue = Int64.MaxValue "never",
+        // which cannot be expressed as whole milliseconds). Takes precedence over ttl_ms.
+        bool has_ttl_ticks = false;
+        int64_t ttl_ticks = 0;
         int32_t unit = -1;
         bool has_description = false;
         std::string description;
@@ -975,6 +979,9 @@ namespace
     // (options.TtlAlerts?.Select(a => a.TtlValue?.Ticks) ?? options.TTLs). Else the plain TTL.
     std::string BuildTtlsText(const RegistrationOptions& options)
     {
+        if (options.has_ttl_ticks)
+            return "[" + std::to_string(options.ttl_ticks) + "]";
+
         if (!options.ttl_alerts.empty())
         {
             std::string text = "[";
@@ -2066,6 +2073,39 @@ namespace
             alert->kind = kind;
             alert_data_.push_back(alert);
             return alert.get();
+        }
+
+        // ServiceCommandsSensor: a string sensor at ".module/Service commands" (the CalculateSystemPath
+        // computer/module prefix is applied as for any sensor) with the managed Description and the
+        // implicit IfReceivedNewValue -> ThenSendNotification("[$product] $value - $comment") alert.
+        hsm_result_t CreateServiceCommandsSensor(std::shared_ptr<NativeSensor>& out_sensor)
+        {
+            RegistrationOptions registration = InstantRegistrationDefaults();
+            registration.description =
+                "This is a special sensor that sends information about various critical commands (Start, Stop, "
+                "Update, Restart, etc.) and information about the initiator.";
+            // Prototype defaults (InstantSensorOptionsPrototype): TTL = TimeSpan.MaxValue ("never") and
+            // EnableForGrafana = true; ServiceSensorOptions carries Statistics = None(0).
+            registration.has_ttl_ticks = true;
+            registration.ttl_ticks = (std::numeric_limits<int64_t>::max)();
+            registration.enable_grafana = TriBool::True;
+            registration.has_statistics = true;
+            registration.statistics = 0;
+
+            AlertData alert;
+            alert.kind = HSM_ALERT_KIND_INSTANT;
+            AlertConditionData received;
+            received.combination = HSM_ALERT_COMBINATION_AND;
+            received.property = HSM_ALERT_PROP_NEW_SENSOR_DATA;
+            received.operation = HSM_ALERT_OP_RECEIVED_NEW_VALUE;
+            received.target_type = HSM_ALERT_TARGET_LAST_VALUE;
+            received.target_is_null = true;
+            alert.conditions.push_back(received);
+            alert.has_template = true;
+            alert.template_text = "[$product] $value - $comment";
+            registration.alerts.push_back(std::move(alert));
+
+            return CreateSensor(".module/Service commands", HSM_SENSOR_TYPE_STRING, false, std::string{}, out_sensor, registration);
         }
 
         hsm_result_t AddValueJson(
@@ -4208,4 +4248,67 @@ extern "C" const char* hsm_alert_test_wire_json(hsm_alert_t* alert)
     static thread_local std::string buffer;
     buffer = alert != nullptr ? BuildAlertJson(*reinterpret_cast<AlertData*>(alert)) : std::string{};
     return buffer.c_str();
+}
+
+// ---- Service-commands sensor --------------------------------------------------------------------
+hsm_result_t hsm_collector_create_service_commands_sensor(hsm_collector_t* collector, hsm_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
+    if (collector == nullptr || out_sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    std::shared_ptr<NativeSensor> sensor;
+    const auto result = collector->impl->CreateServiceCommandsSensor(sensor);
+    if (result != HSM_RESULT_OK)
+        return result;
+
+    *out_sensor = new hsm_sensor_t{ std::move(sensor) };
+    return HSM_RESULT_OK;
+}
+
+// A command posts the command string as the value with "Initiator: <initiator>" as the comment
+// (SensorBase.SendValue default status Ok), matching ServiceCommandsSensor.SendCustomCommand.
+hsm_result_t hsm_service_commands_send_custom(hsm_sensor_t* sensor, const char* command, const char* initiator)
+{
+    if (sensor == nullptr || command == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const std::string comment = std::string("Initiator: ") + (initiator != nullptr ? initiator : "");
+    return sensor->impl->AddString(command, HSM_SENSOR_STATUS_OK, comment.c_str());
+}
+
+hsm_result_t hsm_service_commands_send_restart(hsm_sensor_t* sensor, const char* initiator)
+{
+    return hsm_service_commands_send_custom(sensor, "Service restart", initiator);
+}
+
+hsm_result_t hsm_service_commands_send_start(hsm_sensor_t* sensor, const char* initiator)
+{
+    return hsm_service_commands_send_custom(sensor, "Service start", initiator);
+}
+
+hsm_result_t hsm_service_commands_send_stop(hsm_sensor_t* sensor, const char* initiator)
+{
+    return hsm_service_commands_send_custom(sensor, "Service stop", initiator);
+}
+
+hsm_result_t hsm_service_commands_send_update(hsm_sensor_t* sensor, const char* initiator)
+{
+    return hsm_service_commands_send_custom(sensor, "Service update", initiator);
+}
+
+hsm_result_t hsm_service_commands_send_update_version(
+    hsm_sensor_t* sensor,
+    const char* initiator,
+    const char* new_version,
+    const char* old_version)
+{
+    const std::string new_text = new_version != nullptr ? new_version : "";
+    const bool has_old = old_version != nullptr && old_version[0] != '\0';
+    const std::string command = has_old
+                                    ? "Service update from " + std::string(old_version) + " to " + new_text
+                                    : "Service update to " + new_text;
+    return hsm_service_commands_send_custom(sensor, command.c_str(), initiator);
 }

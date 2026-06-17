@@ -225,6 +225,37 @@ namespace HSMDataCollector.Tests
                         }));
                     break;
 
+                case "create_service_commands_sensor":
+                    AddSensor(state, state.ServiceCommandsSensors, state.Collector.CreateServiceCommandsSensor());
+                    break;
+
+                case "service_send_custom":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendCustomCommand(ExpandTextToken(step.Arg(1)), ExpandTextToken(step.Arg(2)));
+                    break;
+
+                case "service_send_restart":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendRestart(ExpandTextToken(step.Arg(1)));
+                    break;
+
+                case "service_send_start":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendStart(ExpandTextToken(step.Arg(1)));
+                    break;
+
+                case "service_send_stop":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendStop(ExpandTextToken(step.Arg(1)));
+                    break;
+
+                case "service_send_update":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendUpdate(ExpandTextToken(step.Arg(1)));
+                    break;
+
+                case "service_send_update_version":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendUpdate(
+                        ExpandTextToken(step.Arg(1)),
+                        step.Arg(2),
+                        step.TryArg(3, out var oldVersion) ? oldVersion : null);
+                    break;
+
                 case "create_timespan_sensor":
                     AddSensor(state, state.TimeSpanSensors, state.Collector.CreateTimeSensor(ExpandTextToken(step.Arg(0))));
                     break;
@@ -1579,6 +1610,8 @@ namespace HSMDataCollector.Tests
             public List<IParamsFuncSensor<int, int>> ValuesFunctionSensors { get; } = new List<IParamsFuncSensor<int, int>>();
 
             public List<IFileSensor> FileSensors { get; } = new List<IFileSensor>();
+
+            public List<IServiceCommandsSensor> ServiceCommandsSensors { get; } = new List<IServiceCommandsSensor>();
         }
 
         // Accumulates an alert from the corpus verbs (explicit property/operation/target — the
