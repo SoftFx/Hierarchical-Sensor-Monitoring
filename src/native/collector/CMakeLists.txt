@@ -198,6 +198,8 @@ set(NATIVE_REGRESSION_TESTS
     native_scheduler_on_error_isolates_throwing_callback
     native_logger_deduplicates_repeated_errors_within_window
     native_logger_zero_window_logs_every_error
+    native_retry_meeting_full_queue_is_dropped_not_evicting_fresher_head
+    native_retry_older_than_queue_head_is_dropped_below_capacity
 )
 
 foreach(name IN LISTS NATIVE_REGRESSION_TESTS)
