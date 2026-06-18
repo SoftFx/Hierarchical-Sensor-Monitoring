@@ -3174,6 +3174,79 @@ namespace
             "version wire value");
     }
 
+    // Normalize a registration wire string for the cross-language all-catalog golden (#1099): the
+    // Description and Path are not part of the byte contract (machine-specific / volatile path
+    // segments), so blank them out — every other field is compared. Matches the C# DefaultSensorWire
+    // normalizer in WireFormatGoldenLockTests.
+    std::string NormalizeDefaultSensorWire(const std::string& wire)
+    {
+        std::string out = wire;
+        const auto desc = out.find("\"Description\":");
+        const auto chats = out.find(",\"DefaultChats\"");
+        if (desc != std::string::npos && chats != std::string::npos && chats > desc)
+            out.replace(desc, chats - desc, "\"Description\":_");
+        const auto path = out.find("\"Path\":");
+        if (path != std::string::npos)
+            out.replace(path, std::string::npos, "\"Path\":_}");
+        return out;
+    }
+
+    // Every catalog id, by stable name (mirrors DefaultSensorIdFromName / the C# BuildDefaultSensorRequest
+    // map). The all-catalog golden is keyed by name so both drivers map identically.
+    const char* const kAllDefaultSensorNames[] = {
+        "process_cpu", "process_memory", "process_thread_count", "process_threadpool_thread_count",
+        "total_cpu", "free_ram", "free_disk_space", "free_disk_space_prediction", "active_disk_time",
+        "disk_queue_length", "disk_write_speed", "windows_last_restart", "windows_install_date",
+        "windows_last_update", "windows_version", "windows_app_error_logs", "windows_sys_error_logs",
+        "windows_app_warning_logs", "windows_sys_warning_logs", "network_established", "network_failures",
+        "network_reset", "collector_alive", "collector_version", "collector_errors", "product_version",
+        "service_status", "queue_overflow", "queue_values_count", "queue_process_time", "queue_content_size"
+    };
+
+    std::string DefaultSensorWireByName(const std::string& name)
+    {
+        return std::string(hsm_collector_test_default_sensor_wire_json(
+            static_cast<int32_t>(DefaultSensorIdFromName(name)), nullptr, nullptr));
+    }
+
+    void DumpDefaultSensorsGolden()
+    {
+        for (const char* name : kAllDefaultSensorNames)
+            std::fprintf(stdout, "%s|%s\n", name, NormalizeDefaultSensorWire(DefaultSensorWireByName(name)).c_str());
+    }
+
+    // Data-driven all-catalog parity (#1099 review finding #1): assert the native wire of EVERY catalog
+    // sensor (normalized) matches the committed golden — the same golden the C# side reproduces from the
+    // real managed prototypes (WireFormatGoldenLockTests.All_default_sensor_registrations_match_the_golden).
+    // Closes the gap where ~20 of the hand-transcribed catalog rows had no permanent parity check.
+    void NativeDefaultSensorsWireGolden(const std::string& golden_path)
+    {
+        std::ifstream file(golden_path);
+        Require(file.is_open(), ("default-sensor golden not found: " + golden_path).c_str());
+
+        size_t checked = 0;
+        std::string line;
+        while (std::getline(file, line))
+        {
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+            if (line.empty() || line[0] == '#')
+                continue;
+
+            const auto bar = line.find('|');
+            Require(bar != std::string::npos, ("golden line missing '|': " + line).c_str());
+            const auto name = line.substr(0, bar);
+            const auto expected = line.substr(bar + 1);
+            Require(NormalizeDefaultSensorWire(DefaultSensorWireByName(name)) == expected,
+                    ("native wire mismatch vs golden for default sensor '" + name + "'").c_str());
+            ++checked;
+        }
+
+        const size_t total = sizeof(kAllDefaultSensorNames) / sizeof(kAllDefaultSensorNames[0]);
+        Require(checked == total,
+                ("golden covered " + std::to_string(checked) + " sensors, expected " + std::to_string(total)).c_str());
+    }
+
     // Wire registration of representative default sensors (#1099). Byte-identical to the real managed
     // prototypes (Prototypes/Collections/** -> ApiRequest -> HttpRequest) locked by
     // WireFormatGoldenLockTests.Default_sensor_registrations_match_the_native_golden_bytes. Covers every
@@ -3765,6 +3838,8 @@ namespace
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
             { "native_default_sensor_wire_matches_net", [](const std::string&) { NativeDefaultSensorWireMatchesNet(); } },
             { "native_default_sensor_group_composition", [](const std::string&) { NativeDefaultSensorGroupComposition(); } },
+            { "native_default_sensors_wire_golden", [](const std::string& path) { NativeDefaultSensorsWireGolden(path); } },
+            { "dump_default_sensors_golden", [](const std::string&) { DumpDefaultSensorsGolden(); } },
             { "native_metric_source_seam_lifecycle", [](const std::string&) { NativeMetricSourceSeamLifecycle(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },

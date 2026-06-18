@@ -267,6 +267,103 @@ namespace HSMDataCollector.IntegrationTests
             return WireCommand(options.ApiRequest);
         }
 
+        // Data-driven all-catalog parity (#1099): every default sensor's REAL managed-prototype
+        // registration, serialized through the real HttpRequest path and normalized (Description/Path
+        // blanked — not part of the byte contract), must match the committed golden that the native
+        // catalog reproduces (native native_default_sensors_wire_golden over the same file). This pins
+        // every catalog row — unit/statistics/keep-history/aggregate/display-unit/TTLs/alerts — against
+        // the managed source of truth, so a future managed-prototype change can't silently diverge.
+        [Fact]
+        public void All_default_sensor_registrations_match_the_golden()
+        {
+            var golden = ReadDefaultSensorGolden();
+            Assert.Equal(31, golden.Count);
+
+            foreach (var entry in golden)
+            {
+                var actual = NormalizeDefaultSensorWire(WireCommand(BuildDefaultRequestByName(entry.Key)));
+                Assert.True(actual == entry.Value,
+                    $"default sensor '{entry.Key}' diverged from the golden.\n  golden: {entry.Value}\n  actual: {actual}");
+            }
+        }
+
+        private static Dictionary<string, string> ReadDefaultSensorGolden()
+        {
+            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                var candidate = System.IO.Path.Combine(dir.FullName, "tests", "conformance", "collector", "golden", "default_sensors_wire.golden");
+                if (System.IO.File.Exists(candidate))
+                {
+                    var map = new Dictionary<string, string>();
+                    foreach (var line in System.IO.File.ReadAllLines(candidate))
+                    {
+                        if (line.Length == 0 || line[0] == '#')
+                            continue;
+                        var bar = line.IndexOf('|');
+                        map[line.Substring(0, bar)] = line.Substring(bar + 1);
+                    }
+                    return map;
+                }
+                dir = dir.Parent;
+            }
+            throw new System.IO.FileNotFoundException("default_sensors_wire.golden not found above " + AppContext.BaseDirectory);
+        }
+
+        // Mirrors the native NormalizeDefaultSensorWire: blank the non-pinned Description and Path.
+        private static string NormalizeDefaultSensorWire(string wire)
+        {
+            var d = wire.IndexOf("\"Description\":", StringComparison.Ordinal);
+            var c = wire.IndexOf(",\"DefaultChats\"", StringComparison.Ordinal);
+            if (d >= 0 && c > d)
+                wire = wire.Substring(0, d) + "\"Description\":_" + wire.Substring(c);
+            var p = wire.IndexOf("\"Path\":", StringComparison.Ordinal);
+            if (p >= 0)
+                wire = wire.Substring(0, p) + "\"Path\":_}";
+            return wire;
+        }
+
+        // Stable id name -> real managed-prototype registration request (same map as the native
+        // DefaultSensorIdFromName / the conformance driver's BuildDefaultSensorRequest).
+        private static AddOrUpdateSensorRequest BuildDefaultRequestByName(string name)
+        {
+            switch (name)
+            {
+                case "process_cpu": return new ProcessCpuPrototype().Get(null).ApiRequest;
+                case "process_memory": return new ProcessMemoryPrototype().Get(null).ApiRequest;
+                case "process_thread_count": return new ProcessThreadCountPrototype().Get(null).ApiRequest;
+                case "process_threadpool_thread_count": return new ProcessThreadPoolThreadCountPrototype().Get(null).ApiRequest;
+                case "total_cpu": return new TotalCPUPrototype().Get(null).ApiRequest;
+                case "free_ram": return new FreeRamMemoryPrototype().Get(null).ApiRequest;
+                case "free_disk_space": return new WindowsFreeSpaceOnDiskPrototype().Get(null).ApiRequest;
+                case "free_disk_space_prediction": return new WindowsFreeSpaceOnDiskPredictionPrototype().Get(null).ApiRequest;
+                case "active_disk_time": return new WindowsActiveTimeDiskPrototype().Get(null).ApiRequest;
+                case "disk_queue_length": return new WindowsDiskQueueLengthPrototype().Get(null).ApiRequest;
+                case "disk_write_speed": return new WindowsDiskWriteSpeedPrototype().Get(null).ApiRequest;
+                case "windows_last_restart": return new WindowsLastRestartPrototype().Get(null).ApiRequest;
+                case "windows_install_date": return new WindowsInstallDatePrototype().Get(null).ApiRequest;
+                case "windows_last_update": return new WindowsLastUpdatePrototype().Get(null).ApiRequest;
+                case "windows_version": return new WindowsVersionPrototype().Get(null).ApiRequest;
+                case "windows_app_error_logs": return new WindowsApplicationErrorLogsPrototype().Get(null).ApiRequest;
+                case "windows_sys_error_logs": return new WindowsSystemErrorLogsPrototype().Get(null).ApiRequest;
+                case "windows_app_warning_logs": return new WindowsApplicationWarningLogsPrototype().Get(null).ApiRequest;
+                case "windows_sys_warning_logs": return new WindowsSystemWarningLogsPrototype().Get(null).ApiRequest;
+                case "network_established": return new ConnectionsEstablishedCountPrototype().Get(null).ApiRequest;
+                case "network_failures": return new ConnectionsFailuresCountPrototype().Get(null).ApiRequest;
+                case "network_reset": return new ConnectionsResetCountPrototype().Get(null).ApiRequest;
+                case "collector_alive": return new ServiceAlivePrototype().Get(null).ApiRequest;
+                case "collector_version": return new CollectorVersionPrototype().Get(null).ApiRequest;
+                case "collector_errors": return new CollectorErrorsPrototype().Get(null).ApiRequest;
+                case "product_version": return new ProductVersionPrototype().Get(null).ApiRequest;
+                case "service_status": return new ServiceStatusPrototype().Get(new ServiceSensorOptions { IsHostService = true }).ApiRequest;
+                case "queue_overflow": return new QueueOverflowPrototype().Get(null).ApiRequest;
+                case "queue_values_count": return new PackageValuesCountPrototype().Get(null).ApiRequest;
+                case "queue_process_time": return new PackageProcessTimePrototype().Get(null).ApiRequest;
+                case "queue_content_size": return new PackageContentSizePrototype().Get(null).ApiRequest;
+                default: throw new ArgumentException("Unknown default sensor id name: " + name);
+            }
+        }
+
         [Fact]
         public void Default_sensor_registrations_match_the_native_golden_bytes()
         {

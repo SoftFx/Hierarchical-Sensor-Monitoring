@@ -251,6 +251,12 @@ add_conformance_test(conformance_options_surface_contract options_surface_contra
 add_conformance_test(conformance_service_commands_contract service_commands_contract.hsmtest)
 add_conformance_test(conformance_default_sensors_contract default_sensors_contract.hsmtest)
 
+add_test(
+    NAME native_default_sensors_wire_golden
+    COMMAND hsm_collector_tests native_default_sensors_wire_golden
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/golden/default_sensors_wire.golden
+)
+
 # Meta-suite ("test the tests"): must-FAIL fixtures with deliberately wrong
 # expectations; the meta_must_fail runner passes only when the driver detects
 # the failure. See tests/conformance/collector/meta/README.md.

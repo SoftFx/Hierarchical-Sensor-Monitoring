@@ -2615,7 +2615,9 @@ namespace
             const int created = factory(factory_user_data, sensor_path.c_str(), &read, &dispose, &source_user_data);
             if (created == 0 || read == nullptr)
             {
-                if (dispose != nullptr && source_user_data != nullptr)
+                // Dispose whatever the factory handed back so a half-constructed source can't leak,
+                // honoring "dispose is called exactly once" even on this partial-failure path.
+                if (dispose != nullptr)
                     dispose(source_user_data);
                 return nullptr;
             }

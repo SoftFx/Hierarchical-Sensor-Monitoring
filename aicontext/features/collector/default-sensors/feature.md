@@ -133,9 +133,18 @@ What is byte-pinned (cross-language): `Path` (category + name under `.computer`/
 `OriginalUnit`, `Statistics`, `KeepHistory`, `TTLs`, `AggregateData`/`EnableGrafana`/`IsSingletonSensor`,
 `EnumOptions`, and the default **alert(s)** (EMA scheduled-hourly, free-disk ArrowDown+SensorError,
 windows-info `IfValue` notification, service-status confirmation, service-alive TTL). Parity is locked
-both ways by `WireFormatGoldenLockTests.Default_sensor_registrations_match_the_native_golden_bytes`
-(the REAL managed prototype → `ApiRequest` → `HttpRequest` bytes) ↔ `NativeDefaultSensorWireMatchesNet`,
-and by the cross-driver `default_sensors_contract.hsmtest` corpus.
+**every catalog row** by the committed normalized golden `tests/conformance/collector/golden/default_sensors_wire.golden`:
+`WireFormatGoldenLockTests.All_default_sensor_registrations_match_the_golden` reproduces it from the REAL
+managed prototypes (`Get(null).ApiRequest` → `HttpRequest`) and native `native_default_sensors_wire_golden`
+reproduces it from the catalog — so a future managed-prototype change to any field diverges loudly. Seven
+representatives additionally carry full (Path+Description-inclusive) byte-locks
+(`Default_sensor_registrations_match_the_native_golden_bytes` ↔ `NativeDefaultSensorWireMatchesNet`), and
+the cross-driver `default_sensors_contract.hsmtest` corpus runs both drivers over the same substrings.
+
+`add_all_default_sensors` registers a **reduced set** vs the managed `AddAllDefaultSensors`: a single `C`
+disk (not the live `DriveInfo.GetDrives()` fan-out) and no GC sensors — so the native bulk is smaller by
+design today (group composition pinned by `native_default_sensor_group_composition`). The full per-drive
+enumeration is the live-value follow-up.
 
 Reproduced managed quirks: an alert-less default sensor emits `"Alerts":[]` (the prototype initializes
 the list — a user `CreateXSensor` with no alerts emits `null`); the `SpecialAlertCondition` TTL alert
