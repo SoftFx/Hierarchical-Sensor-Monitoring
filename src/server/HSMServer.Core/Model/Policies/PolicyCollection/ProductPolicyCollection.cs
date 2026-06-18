@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Cache;
+using HSMServer.Core.Model.NodeSettings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -12,6 +13,37 @@ namespace HSMServer.Core.Model.Policies
 
         private readonly ConcurrentDictionary<Guid, PolicyGroup> _groups = new();
         private readonly ConcurrentDictionary<Guid, Guid> _policyToGroup = new();
+
+        // Bounded view of the owning product's Settings.TTL: same CurValue, no parent chain.
+        // "From Parent" on a node-level TTL alert resolves against THIS node's own setting
+        // and stops here — Never if the node itself has no explicit TTL.
+        private readonly TimeIntervalSettingProperty _boundedTtl = new();
+
+
+        // Resolution source for node-level TTL policies with IsTTLFromParent == true.
+        // Refresh on every read so changes to the product's Settings.TTL are picked up
+        // without needing event subscriptions. This is not a hot path.
+        protected override TimeIntervalSettingProperty TTLParentSource
+        {
+            get
+            {
+                SyncBoundedTtl();
+                return _boundedTtl;
+            }
+        }
+
+        private void SyncBoundedTtl()
+        {
+            // TrySetValue no-ops when string representations match, so calling this
+            // on every TTLParentSource read is cheap and avoids event subscriptions.
+            _boundedTtl.TrySetValue(_model.Settings.TTL.CurValue);
+        }
+
+        internal override void Attach(BaseNodeModel model)
+        {
+            base.Attach(model);
+            SyncBoundedTtl();
+        }
 
 
         public PolicyExportGroup SaveStateToExportGroup(PolicyExportGroup exportGroup, string relativePath, Predicate<Guid> filter)
