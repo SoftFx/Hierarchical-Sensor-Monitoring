@@ -49,7 +49,7 @@ namespace HSMServer.Model.DataAlerts
                 {
                     // Node-level TTL alert: "From Parent" resolves against this node's own Settings.TTL
                     // (bounded — does not climb to the parent product/folder). Build the parent view
-                    // from the policy's resolved TTL so the UI matches the node's "Time to live" field.
+                    // from the policy's resolved TTL so the UI matches the node's "Time to sensor(s) live" field.
                     var resolved = policy.TTLInterval.UseTicks
                         ? new TimeIntervalModel(policy.TTLInterval.Ticks)
                         : policy.TTLInterval;
