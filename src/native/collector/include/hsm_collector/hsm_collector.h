@@ -388,6 +388,13 @@ typedef struct hsm_sensor_options_t
     int32_t sensor_location;
 } hsm_sensor_options_t;
 
+/* Returns an options value pre-filled with the managed defaults (every nullable field at its
+   "emit null / take default" sentinel: unit/display_unit/statistics = -1, the tri-states = -1,
+   numerics = 0, description = NULL, is_computer_sensor = false, sensor_location = Module). ALWAYS
+   start from this rather than zero-initializing — a `{0}` would wrongly set the tri-state bools to
+   false instead of null. Override the fields you care about, then pass to create_sensor_with_options. */
+hsm_sensor_options_t hsm_sensor_options_default(void);
+
 /* Generic instant-sensor create with the full options surface. `type` is any instant kind
    (bool/int/double/string/enum/timespan/version). The recorded registration reflects every option. */
 hsm_result_t hsm_collector_create_sensor_with_options(
@@ -415,9 +422,10 @@ hsm_result_t hsm_collector_create_alert(
     hsm_alert_kind_t kind,
     hsm_alert_t** out_alert);
 
-/* Append one condition. Conditions combine left-to-right with the given AND/OR combination
-   (the first condition's combination is ignored by the server, mirroring the managed builder which
-   always stamps And). target_value is the Const comparand as text (the managed DSL calls
+/* Append one condition with an explicit AND/OR combination. The managed fluent DSL always stamps
+   And on every condition; an Or combination only arises through the lower-level template builder
+   (which the conformance harness exercises), so this ABI honors an arbitrary per-condition value to
+   match the DTO contract. target_value is the Const comparand as text (the managed DSL calls
    value.ToString()); it is ignored — and may be NULL — when target_type is LAST_VALUE. */
 hsm_result_t hsm_alert_add_condition(
     hsm_alert_t* alert,

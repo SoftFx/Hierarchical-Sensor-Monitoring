@@ -936,9 +936,14 @@ namespace
         int64_t keep_history_ms = 0; // -> KeepHistory ticks
         bool has_self_destroy = false;
         int64_t self_destroy_ms = 0; // -> SelfDestroy ticks
-        bool has_display_unit = false;
+        // Statistics and DisplayUnit are emitted by EVERY managed registration, not as null:
+        // SensorOptions.Statistics is a non-nullable StatisticsOptions (default None=0), and the
+        // typed-DisplayUnit ToApi overload renders Convert.ToInt32((TDisplayUnit?)null) == 0. So the
+        // universal default here is 0 (not null). Bar/enum/service sensors override DisplayUnit to
+        // null (their EnumSensorOptions/BarSensorOptions ToApi overloads emit null).
+        bool has_display_unit = true;
         int32_t display_unit = 0;
-        bool has_statistics = false;
+        bool has_statistics = true;
         int32_t statistics = 0; // StatisticsOptions flags (EMA=1)
         TriBool aggregate_data = TriBool::Unset;
         TriBool enable_grafana = TriBool::Unset;
@@ -1027,6 +1032,15 @@ namespace
     {
         RegistrationOptions options;
         options.has_description = true;
+        return options;
+    }
+
+    // Enum sensors register through EnumSensorOptions, whose ToApi overload emits DisplayUnit=null
+    // (unlike the typed-instant overload's 0). Same instant Description default ("").
+    RegistrationOptions EnumRegistrationDefaults()
+    {
+        RegistrationOptions options = InstantRegistrationDefaults();
+        options.has_display_unit = false;
         return options;
     }
 
@@ -1997,7 +2011,9 @@ namespace
             }
 
             auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, bar_period_ms, precision);
-            RegisterSensorLocked(sensor, type, sensor_path, RegistrationOptions{});
+            RegistrationOptions bar_registration; // Statistics:0 default; bars emit DisplayUnit:null
+            bar_registration.has_display_unit = false;
+            RegisterSensorLocked(sensor, type, sensor_path, bar_registration);
             sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
@@ -2059,7 +2075,10 @@ namespace
             auto sensor = std::make_shared<NativeSensor>(
                 weak_from_this(), sensor_path, type, post_period_ms,
                 int_function, int_values_function, function_user_data, max_cache_size);
-            RegisterSensorLocked(sensor, type, sensor_path, RegistrationOptions{});
+            RegistrationOptions periodic_registration; // Statistics:0, DisplayUnit:0 (member defaults)
+            if (type == HSM_SENSOR_TYPE_RATE)
+                periodic_registration.unit = 3000; // RateSensorOptions default Unit = ValueInSecond
+            RegisterSensorLocked(sensor, type, sensor_path, periodic_registration);
             sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
@@ -2141,12 +2160,12 @@ namespace
                 "This is a special sensor that sends information about various critical commands (Start, Stop, "
                 "Update, Restart, etc.) and information about the initiator.";
             // Prototype defaults (InstantSensorOptionsPrototype): TTL = TimeSpan.MaxValue ("never") and
-            // EnableForGrafana = true; ServiceSensorOptions carries Statistics = None(0).
+            // EnableForGrafana = true. ServiceSensorOptions is an EnumSensorOptions -> DisplayUnit null
+            // (Statistics = None(0) is the universal default).
             registration.has_ttl_ticks = true;
             registration.ttl_ticks = (std::numeric_limits<int64_t>::max)();
             registration.enable_grafana = TriBool::True;
-            registration.has_statistics = true;
-            registration.statistics = 0;
+            registration.has_display_unit = false;
 
             AlertData alert;
             alert.kind = HSM_ALERT_KIND_INSTANT;
@@ -2161,7 +2180,10 @@ namespace
             alert.template_text = "[$product] $value - $comment";
             registration.alerts.push_back(std::move(alert));
 
-            return CreateSensor(".module/Service commands", HSM_SENSOR_TYPE_STRING, false, std::string{}, out_sensor, registration);
+            // ServiceCommandsPrototype: RevealDefaultPath(this, Category=null, SensorName) -> the
+            // ".module/Service commands" prototype path (then CalculateSystemPath adds the prefix).
+            const std::string prototype_path = RevealDefaultPath(std::string{}, "Service commands", false);
+            return CreateSensor(prototype_path.c_str(), HSM_SENSOR_TYPE_STRING, false, std::string{}, out_sensor, registration);
         }
 
         hsm_result_t AddValueJson(
@@ -3565,7 +3587,7 @@ hsm_result_t hsm_collector_create_enum_sensor(
     const char* path,
     hsm_sensor_t** out_sensor)
 {
-    return CreateSensor(collector, path, HSM_SENSOR_TYPE_ENUM, false, std::string{}, out_sensor);
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_ENUM, false, std::string{}, out_sensor, EnumRegistrationDefaults());
 }
 
 hsm_result_t hsm_collector_create_timespan_sensor(
@@ -3682,6 +3704,24 @@ hsm_result_t hsm_collector_create_int_sensor_with_options(
     return CreateSensor(collector, path, HSM_SENSOR_TYPE_INT, false, std::string{}, out_sensor, registration);
 }
 
+hsm_sensor_options_t hsm_sensor_options_default(void)
+{
+    hsm_sensor_options_t options{};
+    options.ttl_ms = 0;
+    options.unit = -1;
+    options.description = nullptr;
+    options.keep_history_ms = 0;
+    options.self_destroy_ms = 0;
+    options.display_unit = -1;
+    options.statistics = -1;
+    options.is_singleton = -1;
+    options.aggregate_data = -1;
+    options.enable_grafana = -1;
+    options.is_computer_sensor = false;
+    options.sensor_location = 0;
+    return options;
+}
+
 hsm_result_t hsm_collector_create_sensor_with_options(
     hsm_collector_t* collector,
     const char* path,
@@ -3744,7 +3784,7 @@ hsm_result_t hsm_collector_create_enum_sensor_with_options(
         return HSM_RESULT_INVALID_ARGUMENT;
     }
 
-    auto registration = InstantRegistrationDefaults();
+    auto registration = EnumRegistrationDefaults();
     registration.description = CopyString(description);
     registration.has_enum_options = true;
     registration.enum_options.reserve(enum_option_count);

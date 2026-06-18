@@ -67,3 +67,36 @@ restart_reregisters_sensor|expect_registration_count|1
 restart_reregisters_sensor|start
 restart_reregisters_sensor|stop
 restart_reregisters_sensor|expect_registration_count|2
+
+# Default Statistics/DisplayUnit/OriginalUnit per kind — the managed collector NEVER emits
+# Statistics:null (non-nullable StatisticsOptions, default None=0). DisplayUnit is 0 for typed-instant
+# kinds and null for enum/bar (their EnumSensorOptions/BarSensorOptions ToApi emit null). Rate
+# defaults OriginalUnit to ValueInSecond(3000). Locks native against the real collector cross-language.
+default_fields_int_sensor|create_collector
+default_fields_int_sensor|create_int_sensor|contract/registration/defaults/int
+default_fields_int_sensor|start
+default_fields_int_sensor|stop
+default_fields_int_sensor|expect_registration_contains|0|"Statistics":0
+default_fields_int_sensor|expect_registration_contains|0|"DisplayUnit":0
+
+default_fields_enum_sensor|create_collector
+default_fields_enum_sensor|create_enum_sensor|contract/registration/defaults/enum
+default_fields_enum_sensor|start
+default_fields_enum_sensor|stop
+default_fields_enum_sensor|expect_registration_contains|0|"Statistics":0
+default_fields_enum_sensor|expect_registration_contains|0|"DisplayUnit":null
+
+default_fields_bar_sensor|create_collector
+default_fields_bar_sensor|create_int_bar_sensor|contract/registration/defaults/bar|1000|0
+default_fields_bar_sensor|start
+default_fields_bar_sensor|stop
+default_fields_bar_sensor|expect_registration_contains|0|"Statistics":0
+default_fields_bar_sensor|expect_registration_contains|0|"DisplayUnit":null
+
+default_fields_rate_sensor|create_collector
+default_fields_rate_sensor|create_rate_sensor|contract/registration/defaults/rate|100
+default_fields_rate_sensor|start
+default_fields_rate_sensor|stop
+default_fields_rate_sensor|expect_registration_contains|0|"Statistics":0
+default_fields_rate_sensor|expect_registration_contains|0|"DisplayUnit":0
+default_fields_rate_sensor|expect_registration_contains|0|"OriginalUnit":3000

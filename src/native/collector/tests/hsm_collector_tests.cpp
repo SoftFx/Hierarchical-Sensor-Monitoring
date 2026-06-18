@@ -3115,8 +3115,8 @@ namespace
             std::string(hsm_collector_test_wire_registration_json(
                 1, 60000, 3, 1, "d", 1, 1, "v", "ed", -16711936, "p/int")) == "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\","
                                                                               "\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,"
-                                                                              "\"Statistics\":null,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
-                                                                              "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
+                                                                              "\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
+                                                                              "\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
                                                                               "\"EnumOptions\":[{\"Key\":1,\"Value\":\"v\",\"Description\":\"ed\",\"Color\":-16711936}],"
                                                                               "\"Key\":null,\"Path\":\"p/int\"}",
             "AddOrUpdateSensorRequest wire layout");
@@ -3167,8 +3167,8 @@ namespace
                 "\"TtlAlerts\":[{\"Conditions\":[],\"Status\":1,\"DestinationMode\":3,\"Template\":\"inactive\",\"Icon\":null,\"IsDisabled\":false,"
                 "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":null,\"ScheduledRepeatMode\":null,\"ScheduledInstantSend\":null}],"
                 "\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
-                "\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":null,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
-                "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
+                "\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
+                "\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
                 "\"Key\":null,\"Path\":\"p/alert\"}",
             "AddOrUpdateSensorRequest wire layout with alerts");
     }
@@ -3212,6 +3212,26 @@ namespace
                 "\"OriginalUnit\":3,\"DisplayUnit\":3,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
                 "\"Key\":null,\"Path\":\"comp/mod/full/opts\"}",
             "AddOrUpdateSensorRequest wire layout with full options");
+    }
+
+    // Scheduled-notification alert (ThenSendScheduledNotification) — ScheduledNotificationTime is
+    // ISO-8601-Z, ScheduledRepeatMode/InstantSend are emitted. Pinned against the .NET golden
+    // (WireFormatGoldenLockTests.Scheduled_notification_alert_matches_the_native_golden_bytes).
+    // NOTE: native always renders Z (UTC); the managed DateTime's Kind drives its suffix, so a
+    // non-UTC ScheduledNotificationTime would differ — the collector schedule API uses UTC.
+    void NativeAlertScheduledNotificationMatchesNet()
+    {
+        auto collector = CreateCollector();
+        hsm_alert_t* alert = nullptr;
+        Require(hsm_collector_create_alert(collector.value, HSM_ALERT_KIND_INSTANT, &alert) == HSM_RESULT_OK, "create alert");
+        Require(
+            hsm_alert_set_scheduled_notification(alert, "sched", 1500, HSM_ALERT_REPEAT_HOURLY, true, HSM_ALERT_DESTINATION_FROM_PARENT) == HSM_RESULT_OK,
+            "set scheduled notification");
+        Require(
+            std::string(hsm_alert_test_wire_json(alert)) ==
+                "{\"Conditions\":[],\"Status\":1,\"DestinationMode\":3,\"Template\":\"sched\",\"Icon\":null,\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"1970-01-01T00:00:01.5Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}",
+            "scheduled notification alert wire layout");
     }
 
     // Version.ToString() rules: trailing absent (-1) components are dropped, major.minor is the floor.
@@ -3464,6 +3484,7 @@ namespace
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
+            { "native_alert_scheduled_notification_matches_net", [](const std::string&) { NativeAlertScheduledNotificationMatchesNet(); } },
             { "native_prototype_merge_pins_identity_overrides_metadata", [](const std::string&) { NativePrototypeMergePinsIdentityOverridesMetadata(); } },
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },

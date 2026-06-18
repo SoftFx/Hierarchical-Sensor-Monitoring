@@ -117,13 +117,17 @@ namespace HSMDataCollector.IntegrationTests
                 TTLs = new List<long?> { 600000000 },
                 OriginalUnit = Unit.MB,
                 EnumOptions = new List<EnumOption> { new EnumOption { Key = 1, Value = "v", Description = "ed", Color = -16711936 } },
+                // A real int sensor's options: Statistics is non-nullable (None=0) and the typed
+                // DisplayUnit overload renders 0 — pin the values the collector actually emits.
+                Statistics = StatisticsOptions.None,
+                DisplayUnit = 0,
             };
 
             Assert.Equal(
                 "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\","
                 + "\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,"
-                + "\"Statistics\":null,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
-                + "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
+                + "\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
+                + "\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
                 + "\"EnumOptions\":[{\"Key\":1,\"Value\":\"v\",\"Description\":\"ed\",\"Color\":-16711936}],"
                 + "\"Key\":null,\"Path\":\"p/int\"}",
                 WireCommand(registration));
@@ -172,6 +176,8 @@ namespace HSMDataCollector.IntegrationTests
                     },
                 },
                 TTLs = new List<long?> { 600000000 },
+                Statistics = StatisticsOptions.None, // non-nullable on real options -> 0, not null
+                DisplayUnit = 0,
             };
 
             Assert.Equal(
@@ -182,8 +188,8 @@ namespace HSMDataCollector.IntegrationTests
                 + "\"TtlAlerts\":[{\"Conditions\":[],\"Status\":1,\"DestinationMode\":3,\"Template\":\"inactive\",\"Icon\":null,\"IsDisabled\":false,"
                 + "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":null,\"ScheduledRepeatMode\":null,\"ScheduledInstantSend\":null}],"
                 + "\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
-                + "\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":null,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
-                + "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
+                + "\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
+                + "\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
                 + "\"Key\":null,\"Path\":\"p/alert\"}",
                 WireCommand(registration));
         }
@@ -217,6 +223,28 @@ namespace HSMDataCollector.IntegrationTests
                 + "\"OriginalUnit\":3,\"DisplayUnit\":3,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
                 + "\"Key\":null,\"Path\":\"comp/mod/full/opts\"}",
                 WireCommand(registration));
+        }
+
+        // ThenSendScheduledNotification: ScheduledNotificationTime (ISO-8601-Z), ScheduledRepeatMode,
+        // ScheduledInstantSend. Same bytes as native NativeAlertScheduledNotificationMatchesNet.
+        [Fact]
+        public void Scheduled_notification_alert_matches_the_native_golden_bytes()
+        {
+            var alert = new AlertUpdateRequest
+            {
+                Conditions = new List<AlertConditionUpdate>(),
+                Status = SensorStatus.Ok,
+                DestinationMode = AlertDestinationMode.FromParent,
+                Template = "sched",
+                ScheduledNotificationTime = Epoch.AddMilliseconds(1500),
+                ScheduledRepeatMode = AlertRepeatMode.Hourly,
+                ScheduledInstantSend = true,
+            };
+
+            Assert.Equal(
+                "{\"Conditions\":[],\"Status\":1,\"DestinationMode\":3,\"Template\":\"sched\",\"Icon\":null,\"IsDisabled\":false,"
+                + "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"1970-01-01T00:00:01.5Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}",
+                System.Text.Json.JsonSerializer.Serialize(alert));
         }
     }
 }
