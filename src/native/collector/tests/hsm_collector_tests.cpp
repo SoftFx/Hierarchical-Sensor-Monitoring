@@ -81,6 +81,10 @@ extern "C" const char* hsm_collector_test_wire_registration_json(
     const char* path);
 extern "C" const char* hsm_sensor_test_wire_registration_json(hsm_sensor_t* sensor);
 extern "C" const char* hsm_alert_test_wire_json(hsm_alert_t* alert);
+extern "C" const char* hsm_collector_test_default_sensor_wire_json(
+    int32_t id,
+    const char* process_name,
+    const char* disk_letter);
 extern "C" const char* hsm_collector_test_merge_registration_json(
     int proto_is_computer,
     int64_t proto_ttl_ms,
@@ -3107,6 +3111,107 @@ namespace
             "version wire value");
     }
 
+    // Wire registration of representative default sensors (#1099). Byte-identical to the real managed
+    // prototypes (Prototypes/Collections/** -> ApiRequest -> HttpRequest) locked by
+    // WireFormatGoldenLockTests.Default_sensor_registrations_match_the_native_golden_bytes. Covers every
+    // alert shape (EMA scheduled-hourly, free-disk ArrowDown+SensorError, IfValue plain notification,
+    // service-status confirmation, service-alive TTL with null Conditions), the Statistics None/EMA
+    // split, DisplayUnit 0/null, the EnumOptions payload, and the empty "Alerts":[] rendering.
+    void NativeDefaultSensorWireMatchesNet()
+    {
+        const auto wire = [](int id) {
+            return std::string(hsm_collector_test_default_sensor_wire_json(id, nullptr, nullptr));
+        };
+
+        // Process memory (id 1): IfEmaMean(>,30720) InstantHourly + Warning; DoubleBar EMA.
+        Require(
+            wire(1) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":2,\"Property\":213,\"Target\":{\"Type\":0,\"Value\":\"30720\"}}],"
+                "\"Status\":1,\"DestinationMode\":3,\"Template\":\"[$product]$path $property $operation $target $unit\",\"Icon\":\"\\u26A0\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
+                "\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":5,\"Description\":\"Process RAM usage.\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[9223372036854775807],\"TTL\":null,\"Statistics\":1,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
+                "\"Path\":\".module/Process process/Process memory\"}",
+            "default process memory wire");
+
+        // Free RAM (id 11): prototype never sets Statistics -> None(0).
+        Require(
+            wire(11) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":1,\"Property\":213,\"Target\":{\"Type\":0,\"Value\":\"2\"}}],"
+                "\"Status\":1,\"DestinationMode\":3,\"Template\":\"[$product]$path $property $operation $target$unit\",\"Icon\":\"\\u26A0\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
+                "\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":5,\"Description\":\"Available host RAM.\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[9223372036854775807],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":true,\"AggregateData\":null,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
+                "\"Path\":\".computer/Free RAM memory\"}",
+            "default free ram wire");
+
+        // Free disk (id 20): IfEmaValue(<=,20480) InstantHourly + ArrowDown + SensorError; instant double DisplayUnit 0.
+        Require(
+            wire(20) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":0,\"Property\":210,\"Target\":{\"Type\":0,\"Value\":\"20480\"}}],"
+                "\"Status\":3,\"DestinationMode\":3,\"Template\":\"[$product] Free space on C disk is running out. Current free space is $value $unit\",\"Icon\":\"\\u2B07\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
+                "\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":2,\"Description\":\"Free disk space.\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[9223372036854775807],\"TTL\":null,\"Statistics\":1,\"IsSingletonSensor\":true,\"AggregateData\":null,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
+                "\"Path\":\".computer/Disks monitoring/Free space on C disk\"}",
+            "default free disk wire");
+
+        // Install date (id 31): IfValue(>,1460d) plain notification + Warning; TimeSpan target "1460.00:00:00".
+        Require(
+            wire(31) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":2,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"1460.00:00:00\"}}],"
+                "\"Status\":1,\"DestinationMode\":3,\"Template\":\"[$product] $sensor. Windows was installed more than $value ago\",\"Icon\":\"\\u26A0\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":null,\"ScheduledRepeatMode\":null,\"ScheduledInstantSend\":null}],"
+                "\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":7,\"Description\":\"Time since the OS install date.\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[9223372036854775807],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":true,\"AggregateData\":null,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":null,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
+                "\"Path\":\".computer/Windows OS info/Install date\"}",
+            "default install date wire");
+
+        // Service alive (id 60): TTL alert IfInactivityPeriodIs() InstantHourly + Clock + SensorError;
+        // Conditions:null (SpecialAlertAction), TTLs=[null], KeepHistory 180d, Alerts:[].
+        Require(
+            wire(60) ==
+                "{\"Type\":0,\"Alerts\":[],\"TtlAlerts\":[{\"Conditions\":null,\"Status\":3,\"DestinationMode\":3,\"Template\":\"[$product]$path\",\"Icon\":\"\\uD83D\\uDD50\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
+                "\"TtlAlert\":null,\"SensorType\":0,\"Description\":\"DataCollector heartbeat.\",\"DefaultChats\":null,\"KeepHistory\":155520000000000,\"SelfDestroy\":null,"
+                "\"TTLs\":[null],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":true,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":null,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
+                "\"Path\":\".module/Service alive\"}",
+            "default service alive wire");
+
+        // Service status (id 64): 7 EnumOptions + IfValue(!=,4) AndConfirmationPeriod(5m) InstantHourly; enum DisplayUnit null.
+        Require(
+            wire(64) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":5,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"4\"}}],"
+                "\"Status\":1,\"DestinationMode\":3,\"Template\":\"[$product]$path $operation Running\",\"Icon\":null,\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":3000000000,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
+                "\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":10,\"Description\":\"Windows service status.\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[9223372036854775807],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":true,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":null,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
+                "\"EnumOptions\":[{\"Key\":1,\"Value\":\"Stopped\",\"Description\":\"The service is stopped.\",\"Color\":16711680},"
+                "{\"Key\":2,\"Value\":\"StartPending\",\"Description\":\"The service start pending.\",\"Color\":12582847},"
+                "{\"Key\":3,\"Value\":\"StopPending\",\"Description\":\"The service stop pending.\",\"Color\":16606308},"
+                "{\"Key\":4,\"Value\":\"Running\",\"Description\":\"The service is running.\",\"Color\":65280},"
+                "{\"Key\":5,\"Value\":\"ContinuePending\",\"Description\":\"The service continue is pending\",\"Color\":16757763},"
+                "{\"Key\":6,\"Value\":\"PausePending\",\"Description\":\"The service pause is pending.\",\"Color\":8429311},"
+                "{\"Key\":7,\"Value\":\"Paused\",\"Description\":\"The service is paused.\",\"Color\":201983}],"
+                "\"Key\":null,\"Path\":\".module/Service status\"}",
+            "default service status wire");
+
+        // Collector version (id 61): Version sensor, KeepHistory 365*5+1 days, no alert (Alerts:[]).
+        Require(
+            wire(61) ==
+                "{\"Type\":0,\"Alerts\":[],\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":8,\"Description\":\"DataCollector version and start time.\","
+                "\"DefaultChats\":null,\"KeepHistory\":1577664000000000,\"SelfDestroy\":null,\"TTLs\":[9223372036854775807],\"TTL\":null,"
+                "\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":true,\"OriginalUnit\":null,\"DisplayUnit\":0,"
+                "\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,\"Path\":\".module/Collector version\"}",
+            "default collector version wire");
+    }
+
     void NativeWireRegistrationJsonMatchesNetByteLayout()
     {
         // SensorType IntSensor(1); ttl 60000ms -> 600000000 ticks; OriginalUnit MB(3);
@@ -3481,6 +3586,7 @@ namespace
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
+            { "native_default_sensor_wire_matches_net", [](const std::string&) { NativeDefaultSensorWireMatchesNet(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },

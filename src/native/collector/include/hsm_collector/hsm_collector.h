@@ -14,7 +14,7 @@ extern "C"
    appended); MAJOR for any breaking change (field reorder/removal, semantic
    change). hsm_collector_version() returns the packed value at runtime. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 3
+#define HSM_COLLECTOR_VERSION_MINOR 4
 #define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
@@ -357,6 +357,133 @@ hsm_result_t hsm_service_commands_send_update_version(
     const char* initiator,
     const char* new_version,
     const char* old_version);
+
+/* ---- Default-sensor catalog (#1099) --------------------------------------------------------
+   The built-in sensors of IWindowsCollection/IUnixCollection (Prototypes/Collections/**). Each
+   id maps 1:1 to a managed prototype and registers a byte-identical AddOrUpdateSensorRequest:
+   path (.computer/.module + category + name), SensorType, OriginalUnit, Statistics, KeepHistory,
+   TTLs, AggregateData/EnableGrafana/IsSingleton, EnumOptions, and the default alert(s). The
+   per-sensor Description is NOT part of the byte contract: the managed originals interpolate
+   machine-specific data (process name, readable periods) and are non-deterministic.
+
+   LIVE VALUES are out of scope here — a default sensor reads from the metric-source seam
+   (hsm_metric_source_*), whose production factory is a no-op; the real PDH/WMI/registry/EventLog
+   (Windows) and procfs (Linux) readers are the #1099 live-value follow-up. The .NET-specific
+   time-in-GC sensors are intentionally dropped (no managed GC in a native host). The Unix surface
+   is the managed parity subset (process / total CPU / free RAM / root free-disk + prediction). */
+typedef enum hsm_default_sensor_t HSM_ENUM_INT32
+{
+    /* Process (.module/Process <name>/...). DoubleBar; EMA except CPU. */
+    HSM_DEFAULT_PROCESS_CPU = 0,
+    HSM_DEFAULT_PROCESS_MEMORY = 1,
+    HSM_DEFAULT_PROCESS_THREAD_COUNT = 2,
+    HSM_DEFAULT_PROCESS_THREADPOOL_THREAD_COUNT = 3,
+    /* System (.computer/...). DoubleBar; EMA. */
+    HSM_DEFAULT_TOTAL_CPU = 10,
+    HSM_DEFAULT_FREE_RAM_MEMORY = 11,
+    /* Disks (.computer/Disks monitoring/...). disk_letter substitutes the {letter} segment. */
+    HSM_DEFAULT_FREE_DISK_SPACE = 20,
+    HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION = 21,
+    HSM_DEFAULT_ACTIVE_DISK_TIME = 22,
+    HSM_DEFAULT_DISK_QUEUE_LENGTH = 23,
+    HSM_DEFAULT_DISK_AVERAGE_WRITE_SPEED = 24,
+    /* Windows OS info (.computer/Windows OS info/..., 12 h). */
+    HSM_DEFAULT_WINDOWS_LAST_RESTART = 30,
+    HSM_DEFAULT_WINDOWS_INSTALL_DATE = 31,
+    HSM_DEFAULT_WINDOWS_LAST_UPDATE = 32,
+    HSM_DEFAULT_WINDOWS_VERSION = 33,
+    /* Windows event logs (.computer/Windows OS info/Windows <Status> Logs (<Category>)). */
+    HSM_DEFAULT_WINDOWS_APPLICATION_ERROR_LOGS = 40,
+    HSM_DEFAULT_WINDOWS_SYSTEM_ERROR_LOGS = 41,
+    HSM_DEFAULT_WINDOWS_APPLICATION_WARNING_LOGS = 42,
+    HSM_DEFAULT_WINDOWS_SYSTEM_WARNING_LOGS = 43,
+    /* Network (.computer/Network/..., 1 min, KeepHistory 90 d). */
+    HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED = 50,
+    HSM_DEFAULT_NETWORK_CONNECTION_FAILURES = 51,
+    HSM_DEFAULT_NETWORK_CONNECTIONS_RESET = 52,
+    /* Module info (.module/...). */
+    HSM_DEFAULT_COLLECTOR_ALIVE = 60,
+    HSM_DEFAULT_COLLECTOR_VERSION = 61,
+    HSM_DEFAULT_COLLECTOR_ERRORS = 62,
+    HSM_DEFAULT_PRODUCT_VERSION = 63,
+    HSM_DEFAULT_SERVICE_STATUS = 64,
+    /* Queue self-diagnostics (.module/Collector queue stats/..., priority). */
+    HSM_DEFAULT_QUEUE_OVERFLOW = 70,
+    HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT = 71,
+    HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME = 72,
+    HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE = 73
+} hsm_default_sensor_t;
+
+/* Deterministic substitutions for the volatile path/alert segments (the managed prototypes read
+   these from the live machine). All fields are optional: NULL/sentinel takes the documented
+   default. Start from hsm_default_sensor_params_default(). */
+typedef struct hsm_default_sensor_params_t
+{
+    const char* process_name;    /* "Process <name>" category; NULL => "process" */
+    const char* disk_letter;     /* the {letter} in a disk sensor name; NULL => "C" */
+    const char* service_name;    /* reserved for service-status resolution; NULL => "" */
+    int is_host_service;         /* service-status placement: 1 => .module, 0 => SensorPath; default 1 */
+    const char* product_version; /* product-version display value (not in registration); NULL => "" */
+} hsm_default_sensor_params_t;
+
+hsm_default_sensor_params_t hsm_default_sensor_params_default(void);
+
+/* Register one built-in sensor. `params` may be NULL (all defaults). The handle is owned by the
+   collector like any other sensor; out_sensor may be NULL if the caller does not need it. */
+hsm_result_t hsm_collector_add_default_sensor(
+    hsm_collector_t* collector,
+    hsm_default_sensor_t id,
+    const hsm_default_sensor_params_t* params,
+    hsm_sensor_t** out_sensor);
+
+/* Group helpers mirroring the managed AddAll* surface. The Windows-only categories (disk /
+   windows-info / network) are registered by add_all_computer_sensors on every platform here
+   because the registration payload is platform-agnostic text; the live readers gate per OS.
+   product_version may be NULL to skip the product-version sensor. */
+hsm_result_t hsm_collector_add_all_default_sensors(hsm_collector_t* collector, const char* product_version);
+hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_all_module_sensors(hsm_collector_t* collector, const char* product_version);
+hsm_result_t hsm_collector_add_process_monitoring_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_system_monitoring_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_disk_monitoring_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_windows_info_monitoring_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_all_network_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_all_queue_diagnostic_sensors(hsm_collector_t* collector);
+
+/* ---- Metric-source seam (#1099) ------------------------------------------------------------
+   The native equivalent of IPerformanceCounterFactory/IPerformanceCounter: the value source a
+   default monitoring sensor reads on each scheduled tick. A source returns a double sample or
+   signals "no value this tick"; on a read error the collector disposes and recreates it (managed
+   recreate-on-InvalidOperationException), and disposes it on stop. The DEFAULT factory is a no-op
+   that never yields a value — installing a real factory (or a fake, for tests) is what feeds live
+   data. Callbacks run on the scheduler thread outside any collector lock and must not throw across
+   the boundary or call a lifecycle method. */
+typedef enum hsm_metric_read_t HSM_ENUM_INT32
+{
+    HSM_METRIC_READ_OK = 0,       /* *out_value holds this tick's sample */
+    HSM_METRIC_READ_NO_VALUE = 1, /* no sample this tick (skip the post) */
+    HSM_METRIC_READ_ERROR = 2     /* read failed: the collector recreates the source */
+} hsm_metric_read_t;
+
+/* Create a source for `sensor_path` (the full registered path). Return NULL to leave the sensor
+   without a live source (it still registers). `factory_user_data` is the pointer registered with
+   the factory; `out_source_user_data` receives a per-source pointer handed back to read/dispose. */
+typedef hsm_metric_read_t (*hsm_metric_read_fn)(void* source_user_data, double* out_value);
+typedef void (*hsm_metric_dispose_fn)(void* source_user_data);
+typedef int (*hsm_metric_source_factory_fn)(
+    void* factory_user_data,
+    const char* sensor_path,
+    hsm_metric_read_fn* out_read,
+    hsm_metric_dispose_fn* out_dispose,
+    void** out_source_user_data);
+
+/* Install the metric-source factory (replaces the no-op default). Passing NULL restores the
+   no-op. Call before Start; existing default monitoring sensors pick the factory up on Start. */
+hsm_result_t hsm_collector_set_metric_source_factory(
+    hsm_collector_t* collector,
+    hsm_metric_source_factory_fn factory,
+    void* factory_user_data);
 
 hsm_result_t hsm_collector_create_enum_sensor_with_options(
     hsm_collector_t* collector,
