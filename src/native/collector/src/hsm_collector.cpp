@@ -5006,14 +5006,23 @@ namespace
         HSM_DEFAULT_FREE_DISK_SPACE, HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION,
         HSM_DEFAULT_ACTIVE_DISK_TIME, HSM_DEFAULT_DISK_QUEUE_LENGTH, HSM_DEFAULT_DISK_AVERAGE_WRITE_SPEED
     };
+    // Order mirrors the managed AddWindowsInfoMonitoringSensors: install/last-update/last-restart/
+    // version, then AddAllWindowsLogs (app-error, sys-error, app-warning, sys-warning). The 4 log
+    // sensors MUST be here — dropping them would make add_all_default_sensors register fewer sensors
+    // than the managed surface (registration is idempotent, so order itself is not wire-observable).
     constexpr hsm_default_sensor_t kWindowsInfoGroup[] = {
-        HSM_DEFAULT_WINDOWS_LAST_RESTART, HSM_DEFAULT_WINDOWS_INSTALL_DATE,
-        HSM_DEFAULT_WINDOWS_LAST_UPDATE, HSM_DEFAULT_WINDOWS_VERSION
+        HSM_DEFAULT_WINDOWS_INSTALL_DATE, HSM_DEFAULT_WINDOWS_LAST_UPDATE,
+        HSM_DEFAULT_WINDOWS_LAST_RESTART, HSM_DEFAULT_WINDOWS_VERSION,
+        HSM_DEFAULT_WINDOWS_APPLICATION_ERROR_LOGS, HSM_DEFAULT_WINDOWS_SYSTEM_ERROR_LOGS,
+        HSM_DEFAULT_WINDOWS_APPLICATION_WARNING_LOGS, HSM_DEFAULT_WINDOWS_SYSTEM_WARNING_LOGS
     };
+    // Managed AddAllNetworkSensors order: failures -> established -> reset.
     constexpr hsm_default_sensor_t kNetworkGroup[] = {
-        HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED, HSM_DEFAULT_NETWORK_CONNECTION_FAILURES,
+        HSM_DEFAULT_NETWORK_CONNECTION_FAILURES, HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED,
         HSM_DEFAULT_NETWORK_CONNECTIONS_RESET
     };
+    // service_status (64) is intentionally NOT in any group — it matches managed, where a host
+    // service status is subscribed separately, not via AddAll*. Reachable via add_default_sensor.
     constexpr hsm_default_sensor_t kCollectorGroup[] = {
         HSM_DEFAULT_COLLECTOR_ALIVE, HSM_DEFAULT_COLLECTOR_VERSION, HSM_DEFAULT_COLLECTOR_ERRORS
     };

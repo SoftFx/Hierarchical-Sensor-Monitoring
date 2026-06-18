@@ -3275,6 +3275,37 @@ namespace
             "default collector version wire");
     }
 
+    // The group helpers must register the SAME set the managed AddAll* surface does (#1099). Guards the
+    // composition — e.g. that AddWindowsInfoMonitoringSensors includes the 4 Windows event-log sensors,
+    // so add_all_default_sensors does not silently register fewer sensors than managed.
+    void NativeDefaultSensorGroupComposition()
+    {
+        const auto countAfter = [](std::function<void(hsm_collector_t*)> add) {
+            auto collector = CreateCollector();
+            Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+            add(collector.value);
+            const size_t n = hsm_collector_registration_count(collector.value);
+            hsm_collector_stop(collector.value);
+            return n;
+        };
+
+        // windows-info = 4 info + 4 event-log sensors.
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_windows_info_monitoring_sensors(c); }) == 8,
+                "windows-info group registers 8 (incl. 4 event-log sensors)");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_system_monitoring_sensors(c); }) == 2, "system group = 2");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_disk_monitoring_sensors(c); }) == 5, "disk group = 5 (single C)");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_network_sensors(c); }) == 3, "network group = 3");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_process_monitoring_sensors(c); }) == 4, "process group = 4");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_collector_monitoring_sensors(c); }) == 3, "collector group = 3");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_queue_diagnostic_sensors(c); }) == 4, "queue group = 4");
+
+        // computer = system(2) + disk(5) + windows-info(8) + network(3) = 18.
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_computer_sensors(c); }) == 18, "all-computer = 18");
+        // default = computer(18) + module[process(4)+collector(3)+queue(4)] (11) + product version (1) = 30.
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_default_sensors(c, "1.0.0"); }) == 30, "all-default with product version = 30");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_default_sensors(c, nullptr); }) == 29, "all-default without product version = 29");
+    }
+
     // Fake metric source for the seam smoke test (#1099): yields a fixed sequence of read outcomes,
     // and counts how many times the collector disposed it (recreate-on-error + dispose-on-stop).
     struct FakeMetricSource
@@ -3733,6 +3764,7 @@ namespace
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
             { "native_default_sensor_wire_matches_net", [](const std::string&) { NativeDefaultSensorWireMatchesNet(); } },
+            { "native_default_sensor_group_composition", [](const std::string&) { NativeDefaultSensorGroupComposition(); } },
             { "native_metric_source_seam_lifecycle", [](const std::string&) { NativeMetricSourceSeamLifecycle(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },

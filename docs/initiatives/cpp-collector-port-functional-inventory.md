@@ -243,7 +243,7 @@ Details: [`default-sensors/feature.md`](../../aicontext/features/collector/defau
 - [ ] `UnsubscribeWindowsServiceStatus`
 - [ ] ServiceCommands sensor: fixed strings "Service start/stop/restart", "Service update [from X] to Y" + implicit `IfReceivedNewValue → notification` alert
 - [ ] Perf-counter seam: `IPerformanceCounterFactory`/`IPerformanceCounter`, recreate on `InvalidOperationException`, dispose on stop
-- [ ] `AddAllComputerSensors()` / `AddAllModuleSensors(version)` / `AddAllDefaultSensors(version)` bulks
+- [ ] `AddAllComputerSensors()` / `AddAllModuleSensors(version)` / `AddAllDefaultSensors(version)` bulks — group composition (incl. the 4 event-log sensors in windows-info) — native unit: `native_default_sensor_group_composition`
 
 ## 9. Default sensors — Unix
 
