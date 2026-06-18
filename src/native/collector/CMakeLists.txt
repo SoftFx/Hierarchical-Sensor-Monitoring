@@ -192,6 +192,7 @@ set(NATIVE_REGRESSION_TESTS
     native_version_string_matches_net
     native_alert_scheduled_notification_matches_net
     native_default_sensor_wire_matches_net
+    native_metric_source_seam_lifecycle
     native_prototype_merge_pins_identity_overrides_metadata
     native_http_endpoint_routing_matches_net
     native_http_retry_policy_matches_net

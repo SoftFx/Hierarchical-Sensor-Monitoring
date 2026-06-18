@@ -1348,6 +1348,44 @@ namespace
         return reg;
     }
 
+    // ---- Metric-source seam (#1099) -----------------------------------------------------------
+    // The native IPerformanceCounter equivalent: an RAII wrapper over the C-callback source a
+    // default monitoring sensor reads on each scheduled tick. The production factory is a no-op;
+    // installing a real factory (or a fake, for tests) is what feeds live values. Dispose is called
+    // exactly once (managed StopAsync); ReadInto returns the read outcome verbatim so the caller can
+    // recreate the source on HSM_METRIC_READ_ERROR (managed recreate-on-InvalidOperationException).
+    struct MetricSource
+    {
+        hsm_metric_read_fn read = nullptr;
+        hsm_metric_dispose_fn dispose = nullptr;
+        void* user_data = nullptr;
+
+        MetricSource() = default;
+        MetricSource(hsm_metric_read_fn r, hsm_metric_dispose_fn d, void* ud)
+            : read(r), dispose(d), user_data(ud)
+        {
+        }
+        MetricSource(const MetricSource&) = delete;
+        MetricSource& operator=(const MetricSource&) = delete;
+        ~MetricSource() { Dispose(); }
+
+        hsm_metric_read_t ReadInto(double& out_value) const
+        {
+            if (read == nullptr)
+                return HSM_METRIC_READ_NO_VALUE;
+            return read(user_data, &out_value);
+        }
+
+        void Dispose()
+        {
+            if (dispose != nullptr)
+                dispose(user_data);
+            dispose = nullptr;
+            read = nullptr;
+            user_data = nullptr;
+        }
+    };
+
     // AddOrUpdate.TTLs (ticks). A TTL alert overrides the plain TTL: when ttl_alerts exist the list
     // is each alert's inactivity ticks (null where unset), mirroring ApiConverters
     // (options.TtlAlerts?.Select(a => a.TtlValue?.Ticks) ?? options.TTLs). Else the plain TTL.
@@ -2575,6 +2613,72 @@ namespace
             metric_source_factory_user_data_ = user_data;
         }
 
+        // Ask the installed factory for a source for `sensor_path`. Returns nullptr when no factory is
+        // installed or the factory declines (returns 0 / a null read). The returned source disposes
+        // itself when destroyed (or recreated). Caller runs on the scheduler thread.
+        std::unique_ptr<MetricSource> CreateMetricSource(const std::string& sensor_path)
+        {
+            hsm_metric_source_factory_fn factory = nullptr;
+            void* factory_user_data = nullptr;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                factory = metric_source_factory_;
+                factory_user_data = metric_source_factory_user_data_;
+            }
+
+            if (factory == nullptr)
+                return nullptr;
+
+            hsm_metric_read_fn read = nullptr;
+            hsm_metric_dispose_fn dispose = nullptr;
+            void* source_user_data = nullptr;
+            const int created = factory(factory_user_data, sensor_path.c_str(), &read, &dispose, &source_user_data);
+            if (created == 0 || read == nullptr)
+            {
+                if (dispose != nullptr && source_user_data != nullptr)
+                    dispose(source_user_data);
+                return nullptr;
+            }
+
+            return std::make_unique<MetricSource>(read, dispose, source_user_data);
+        }
+
+        // Test seam: create a source, read up to max_reads samples — disposing and recreating it on a
+        // READ_ERROR (managed recreate-on-error) and skipping NO_VALUE ticks — then dispose. Collects
+        // the OK samples into out_values (capacity max_reads) and reports how many recreations
+        // happened. Exercises the seam lifecycle with a fake factory.
+        int32_t TestDriveMetricSource(const std::string& sensor_path, int32_t max_reads, double* out_values, int32_t* out_recreated)
+        {
+            int32_t collected = 0;
+            int32_t recreated = 0;
+            auto source = CreateMetricSource(sensor_path);
+            for (int32_t i = 0; i < max_reads; ++i)
+            {
+                if (source == nullptr)
+                    break;
+
+                double value = 0.0;
+                const auto outcome = source->ReadInto(value);
+                if (outcome == HSM_METRIC_READ_OK)
+                {
+                    if (out_values != nullptr)
+                        out_values[collected] = value;
+                    ++collected;
+                }
+                else if (outcome == HSM_METRIC_READ_ERROR)
+                {
+                    source.reset(); // dispose the faulted source, then recreate
+                    source = CreateMetricSource(sensor_path);
+                    ++recreated;
+                }
+                // NO_VALUE: skip this tick, keep the source.
+            }
+
+            if (out_recreated != nullptr)
+                *out_recreated = recreated;
+            return collected;
+        }
+
         hsm_result_t AddValueJson(
             const std::string& path,
             hsm_sensor_type_t type,
@@ -3266,9 +3370,8 @@ namespace
         int32_t max_deduplicated_messages_;
         // Metric-source seam (#1099): the value provider a default monitoring sensor reads on each
         // tick. Null is the no-op production default (no live values until a real factory is set).
-        // (Read by the live-tick wiring; [[maybe_unused]] keeps the registration-only build green.)
-        [[maybe_unused]] hsm_metric_source_factory_fn metric_source_factory_ = nullptr;
-        [[maybe_unused]] void* metric_source_factory_user_data_ = nullptr;
+        hsm_metric_source_factory_fn metric_source_factory_ = nullptr;
+        void* metric_source_factory_user_data_ = nullptr;
     };
 
     hsm_result_t NativeSensor::AddInt(int32_t value, hsm_sensor_status_t status, const char* comment)
@@ -5035,4 +5138,19 @@ hsm_result_t hsm_collector_set_metric_source_factory(
 
     collector->impl->SetMetricSourceFactory(factory, factory_user_data);
     return HSM_RESULT_OK;
+}
+
+// Test hook: drive the metric-source seam lifecycle (create -> read with recreate-on-error -> dispose)
+// against the installed factory for `sensor_path`. Returns the number of OK samples written to
+// out_values; *out_recreated receives how many times a READ_ERROR forced a dispose+recreate.
+extern "C" int32_t hsm_collector_test_drive_metric_source(
+    hsm_collector_t* collector,
+    const char* sensor_path,
+    int32_t max_reads,
+    double* out_values,
+    int32_t* out_recreated)
+{
+    if (collector == nullptr || sensor_path == nullptr || max_reads < 0)
+        return 0;
+    return collector->impl->TestDriveMetricSource(sensor_path, max_reads, out_values, out_recreated);
 }

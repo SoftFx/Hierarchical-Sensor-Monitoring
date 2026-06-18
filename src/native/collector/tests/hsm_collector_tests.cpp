@@ -85,6 +85,12 @@ extern "C" const char* hsm_collector_test_default_sensor_wire_json(
     int32_t id,
     const char* process_name,
     const char* disk_letter);
+extern "C" int32_t hsm_collector_test_drive_metric_source(
+    hsm_collector_t* collector,
+    const char* sensor_path,
+    int32_t max_reads,
+    double* out_values,
+    int32_t* out_recreated);
 extern "C" const char* hsm_collector_test_merge_registration_json(
     int proto_is_computer,
     int64_t proto_ttl_ms,
@@ -3269,6 +3275,89 @@ namespace
             "default collector version wire");
     }
 
+    // Fake metric source for the seam smoke test (#1099): yields a fixed sequence of read outcomes,
+    // and counts how many times the collector disposed it (recreate-on-error + dispose-on-stop).
+    struct FakeMetricSource
+    {
+        std::vector<std::pair<hsm_metric_read_t, double>> script;
+        size_t cursor = 0;
+        int disposes = 0;
+        int creates = 0;
+    };
+
+    void NativeMetricSourceSeamLifecycle()
+    {
+        FakeMetricSource fake;
+        // OK 1.0, OK 2.0, ERROR (forces dispose+recreate), OK 3.0.
+        fake.script = {
+            { HSM_METRIC_READ_OK, 1.0 },
+            { HSM_METRIC_READ_OK, 2.0 },
+            { HSM_METRIC_READ_ERROR, 0.0 },
+            { HSM_METRIC_READ_OK, 3.0 },
+        };
+
+        struct Source
+        {
+            FakeMetricSource* fake;
+        };
+
+        auto read = [](void* ud, double* out) -> hsm_metric_read_t {
+            auto* self = static_cast<Source*>(ud);
+            auto& f = *self->fake;
+            if (f.cursor >= f.script.size())
+                return HSM_METRIC_READ_NO_VALUE;
+            const auto step = f.script[f.cursor++];
+            if (step.first == HSM_METRIC_READ_OK)
+                *out = step.second;
+            return step.first;
+        };
+        auto dispose = [](void* ud) {
+            auto* self = static_cast<Source*>(ud);
+            self->fake->disposes++;
+            delete self;
+        };
+
+        // Stateless lambdas convert to function pointers; capture-by-pointer goes through user_data.
+        hsm_metric_read_fn read_fn = read;
+        hsm_metric_dispose_fn dispose_fn = dispose;
+
+        struct FactoryCtx
+        {
+            FakeMetricSource* fake;
+            hsm_metric_read_fn read_fn;
+            hsm_metric_dispose_fn dispose_fn;
+        } ctx{ &fake, read_fn, dispose_fn };
+
+        auto real_factory = [](void* fud, const char*, hsm_metric_read_fn* out_read, hsm_metric_dispose_fn* out_dispose, void** out_ud) -> int {
+            auto* c = static_cast<FactoryCtx*>(fud);
+            c->fake->creates++;
+            auto* src = new Source{ c->fake };
+            *out_read = c->read_fn;
+            *out_dispose = c->dispose_fn;
+            *out_ud = src;
+            return 1;
+        };
+
+        auto collector = CreateCollector();
+        Require(hsm_collector_set_metric_source_factory(collector.value, real_factory, &ctx) == HSM_RESULT_OK, "set factory");
+
+        double values[8] = { 0 };
+        int32_t recreated = -1;
+        const int32_t collected = hsm_collector_test_drive_metric_source(collector.value, ".computer/Total CPU", 4, values, &recreated);
+
+        Require(collected == 3, "three OK samples (1.0, 2.0, 3.0)");
+        Require(values[0] == 1.0 && values[1] == 2.0 && values[2] == 3.0, "sample values in order");
+        Require(recreated == 1, "one recreate on READ_ERROR");
+        Require(fake.creates == 2, "factory created the source twice (initial + recreate)");
+        Require(fake.disposes == 2, "both sources disposed (recreate + end-of-drive)");
+
+        // No factory installed -> no source, no values.
+        auto bare = CreateCollector();
+        int32_t bareRecreated = -1;
+        Require(hsm_collector_test_drive_metric_source(bare.value, ".computer/Total CPU", 4, values, &bareRecreated) == 0, "no factory yields no samples");
+        Require(bareRecreated == 0, "no recreate without a factory");
+    }
+
     void NativeWireRegistrationJsonMatchesNetByteLayout()
     {
         // SensorType IntSensor(1); ttl 60000ms -> 600000000 ticks; OriginalUnit MB(3);
@@ -3644,6 +3733,7 @@ namespace
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
             { "native_default_sensor_wire_matches_net", [](const std::string&) { NativeDefaultSensorWireMatchesNet(); } },
+            { "native_metric_source_seam_lifecycle", [](const std::string&) { NativeMetricSourceSeamLifecycle(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
