@@ -247,6 +247,7 @@ add_conformance_test(conformance_timespan_version_contract timespan_version_cont
 add_conformance_test(conformance_alert_registration_contract alert_registration_contract.hsmtest)
 add_conformance_test(conformance_options_surface_contract options_surface_contract.hsmtest)
 add_conformance_test(conformance_service_commands_contract service_commands_contract.hsmtest)
+add_conformance_test(conformance_default_sensors_contract default_sensors_contract.hsmtest)
 
 # Meta-suite ("test the tests"): must-FAIL fixtures with deliberately wrong
 # expectations; the meta_must_fail runner passes only when the driver detects

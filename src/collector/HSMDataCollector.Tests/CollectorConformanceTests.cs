@@ -1,5 +1,9 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
+using HSMDataCollector.Prototypes;
+using HSMDataCollector.Prototypes.Collections;
+using HSMDataCollector.Prototypes.Collections.Disks;
+using HSMDataCollector.Prototypes.Collections.Network;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
@@ -227,6 +231,13 @@ namespace HSMDataCollector.Tests
 
                 case "create_service_commands_sensor":
                     AddSensor(state, state.ServiceCommandsSensors, state.Collector.CreateServiceCommandsSensor());
+                    break;
+
+                case "add_default_sensor":
+                    // Build the REAL default-sensor prototype's registration request (#1099) and record
+                    // it. The native driver registers the same id via hsm_collector_add_default_sensor;
+                    // both satisfy the fixture's expect_registration_contains substrings.
+                    state.Sender.RecordRegistration(BuildDefaultSensorRequest(step.Arg(0)));
                     break;
 
                 case "service_send_custom":
@@ -1221,6 +1232,49 @@ namespace HSMDataCollector.Tests
             Assert.Equal(enumCount, payloads.Count(payload => payload.Contains("\"Type\":10,")));
         }
 
+        // The default-sensor catalog (#1099): build a built-in sensor's REAL registration request from
+        // its managed prototype (Prototypes/Collections/**), the same source the production AddX path
+        // uses. The AddAll* path passes null to Get; service status needs a non-null host-service
+        // options object. Names mirror the native DefaultSensorIdFromName map.
+        private static AddOrUpdateSensorRequest BuildDefaultSensorRequest(string id)
+        {
+            switch (id)
+            {
+                case "process_cpu": return new ProcessCpuPrototype().Get(null).ApiRequest;
+                case "process_memory": return new ProcessMemoryPrototype().Get(null).ApiRequest;
+                case "process_thread_count": return new ProcessThreadCountPrototype().Get(null).ApiRequest;
+                case "process_threadpool_thread_count": return new ProcessThreadPoolThreadCountPrototype().Get(null).ApiRequest;
+                case "total_cpu": return new TotalCPUPrototype().Get(null).ApiRequest;
+                case "free_ram": return new FreeRamMemoryPrototype().Get(null).ApiRequest;
+                case "free_disk_space": return new WindowsFreeSpaceOnDiskPrototype().Get(null).ApiRequest;
+                case "free_disk_space_prediction": return new WindowsFreeSpaceOnDiskPredictionPrototype().Get(null).ApiRequest;
+                case "active_disk_time": return new WindowsActiveTimeDiskPrototype().Get(null).ApiRequest;
+                case "disk_queue_length": return new WindowsDiskQueueLengthPrototype().Get(null).ApiRequest;
+                case "disk_write_speed": return new WindowsDiskWriteSpeedPrototype().Get(null).ApiRequest;
+                case "windows_last_restart": return new WindowsLastRestartPrototype().Get(null).ApiRequest;
+                case "windows_install_date": return new WindowsInstallDatePrototype().Get(null).ApiRequest;
+                case "windows_last_update": return new WindowsLastUpdatePrototype().Get(null).ApiRequest;
+                case "windows_version": return new WindowsVersionPrototype().Get(null).ApiRequest;
+                case "windows_app_error_logs": return new WindowsApplicationErrorLogsPrototype().Get(null).ApiRequest;
+                case "windows_sys_error_logs": return new WindowsSystemErrorLogsPrototype().Get(null).ApiRequest;
+                case "windows_app_warning_logs": return new WindowsApplicationWarningLogsPrototype().Get(null).ApiRequest;
+                case "windows_sys_warning_logs": return new WindowsSystemWarningLogsPrototype().Get(null).ApiRequest;
+                case "network_established": return new ConnectionsEstablishedCountPrototype().Get(null).ApiRequest;
+                case "network_failures": return new ConnectionsFailuresCountPrototype().Get(null).ApiRequest;
+                case "network_reset": return new ConnectionsResetCountPrototype().Get(null).ApiRequest;
+                case "collector_alive": return new ServiceAlivePrototype().Get(null).ApiRequest;
+                case "collector_version": return new CollectorVersionPrototype().Get(null).ApiRequest;
+                case "collector_errors": return new CollectorErrorsPrototype().Get(null).ApiRequest;
+                case "product_version": return new ProductVersionPrototype().Get(null).ApiRequest;
+                case "service_status": return new ServiceStatusPrototype().Get(new ServiceSensorOptions { IsHostService = true }).ApiRequest;
+                case "queue_overflow": return new QueueOverflowPrototype().Get(null).ApiRequest;
+                case "queue_values_count": return new PackageValuesCountPrototype().Get(null).ApiRequest;
+                case "queue_process_time": return new PackageProcessTimePrototype().Get(null).ApiRequest;
+                case "queue_content_size": return new PackageContentSizePrototype().Get(null).ApiRequest;
+                default: throw new ArgumentException("Unknown default sensor id name: " + id);
+            }
+        }
+
         // Canonical cross-language registration (AddOrUpdateSensorRequest) text — fixed field
         // order; the portable subset plus Alerts/TtlAlerts. TTLTicks are .NET ticks (ttl_ms * 10000).
         // Alerts are serialized through the real System.Text.Json (default encoder, numeric enums),
@@ -1768,6 +1822,14 @@ namespace HSMDataCollector.Tests
                 }
 
                 return default;
+            }
+
+            // Record a registration built outside the live send path (#1099 default-sensor catalog:
+            // the prototype request, not a real platform sensor).
+            public void RecordRegistration(AddOrUpdateSensorRequest registration)
+            {
+                lock (_lock)
+                    _registrations.Add(registration);
             }
 
             public IReadOnlyList<AddOrUpdateSensorRequest> Registrations

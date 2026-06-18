@@ -612,6 +612,49 @@ namespace
         return cases;
     }
 
+    // Map a stable fixture id name to a hsm_default_sensor_t (#1099). The same names are used by the
+    // C# conformance driver so a default_sensors_*.hsmtest case runs against both.
+    hsm_default_sensor_t DefaultSensorIdFromName(const std::string& name)
+    {
+        static const std::map<std::string, hsm_default_sensor_t> ids = {
+            { "process_cpu", HSM_DEFAULT_PROCESS_CPU },
+            { "process_memory", HSM_DEFAULT_PROCESS_MEMORY },
+            { "process_thread_count", HSM_DEFAULT_PROCESS_THREAD_COUNT },
+            { "process_threadpool_thread_count", HSM_DEFAULT_PROCESS_THREADPOOL_THREAD_COUNT },
+            { "total_cpu", HSM_DEFAULT_TOTAL_CPU },
+            { "free_ram", HSM_DEFAULT_FREE_RAM_MEMORY },
+            { "free_disk_space", HSM_DEFAULT_FREE_DISK_SPACE },
+            { "free_disk_space_prediction", HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION },
+            { "active_disk_time", HSM_DEFAULT_ACTIVE_DISK_TIME },
+            { "disk_queue_length", HSM_DEFAULT_DISK_QUEUE_LENGTH },
+            { "disk_write_speed", HSM_DEFAULT_DISK_AVERAGE_WRITE_SPEED },
+            { "windows_last_restart", HSM_DEFAULT_WINDOWS_LAST_RESTART },
+            { "windows_install_date", HSM_DEFAULT_WINDOWS_INSTALL_DATE },
+            { "windows_last_update", HSM_DEFAULT_WINDOWS_LAST_UPDATE },
+            { "windows_version", HSM_DEFAULT_WINDOWS_VERSION },
+            { "windows_app_error_logs", HSM_DEFAULT_WINDOWS_APPLICATION_ERROR_LOGS },
+            { "windows_sys_error_logs", HSM_DEFAULT_WINDOWS_SYSTEM_ERROR_LOGS },
+            { "windows_app_warning_logs", HSM_DEFAULT_WINDOWS_APPLICATION_WARNING_LOGS },
+            { "windows_sys_warning_logs", HSM_DEFAULT_WINDOWS_SYSTEM_WARNING_LOGS },
+            { "network_established", HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED },
+            { "network_failures", HSM_DEFAULT_NETWORK_CONNECTION_FAILURES },
+            { "network_reset", HSM_DEFAULT_NETWORK_CONNECTIONS_RESET },
+            { "collector_alive", HSM_DEFAULT_COLLECTOR_ALIVE },
+            { "collector_version", HSM_DEFAULT_COLLECTOR_VERSION },
+            { "collector_errors", HSM_DEFAULT_COLLECTOR_ERRORS },
+            { "product_version", HSM_DEFAULT_PRODUCT_VERSION },
+            { "service_status", HSM_DEFAULT_SERVICE_STATUS },
+            { "queue_overflow", HSM_DEFAULT_QUEUE_OVERFLOW },
+            { "queue_values_count", HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT },
+            { "queue_process_time", HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME },
+            { "queue_content_size", HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE },
+        };
+        const auto it = ids.find(name);
+        if (it == ids.end())
+            throw std::runtime_error("Unknown default sensor id name: " + name);
+        return it->second;
+    }
+
     void ExecuteConformanceStep(ConformanceState& state, const std::vector<std::string>& step)
     {
         const auto& action = step[0];
@@ -791,6 +834,20 @@ namespace
         {
             SensorHandle sensor;
             Require(hsm_collector_create_service_commands_sensor(state.collector.value, &sensor.value) == HSM_RESULT_OK, "service-commands sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "add_default_sensor")
+        {
+            Require(step.size() >= 2, "add_default_sensor requires an id name");
+            auto params = hsm_default_sensor_params_default();
+            if (step.size() >= 3 && !step[2].empty())
+                params.disk_letter = step[2].c_str();
+            SensorHandle sensor;
+            Require(
+                hsm_collector_add_default_sensor(state.collector.value, DefaultSensorIdFromName(step[1]), &params, &sensor.value) == HSM_RESULT_OK,
+                "add_default_sensor failed");
             state.sensors.push_back(std::move(sensor));
             return;
         }
@@ -3662,6 +3719,7 @@ namespace
             { "conformance_alert_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_options_surface_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_service_commands_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };
