@@ -256,6 +256,8 @@ namespace HSMServer.ApiObjectsConverters
                 FileValue sv => sv.Convert(),
                 RateValue sv => sv.Convert(),
                 EnumValue sv => sv.Convert(),
+                TimeSpanValue sv => sv.Convert(),
+                VersionValue sv => sv.Convert(),
                 _ => null,
             };
 
