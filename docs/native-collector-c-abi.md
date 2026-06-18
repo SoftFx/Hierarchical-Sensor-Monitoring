@@ -150,6 +150,18 @@ from the public header and are linked only by the native test binary.
 
 Version history:
 
+- **0.4.0** (#1099) — additive default-sensor catalog: `hsm_default_sensor_t` (the
+  built-in IWindowsCollection/IUnixCollection prototypes) + `hsm_default_sensor_params_t`
+  + `hsm_collector_add_default_sensor` and the `add_all_*` / per-category bulk helpers;
+  each id registers a byte-identical `AddOrUpdateSensorRequest` (path/type/unit/statistics/
+  keep-history/TTLs/aggregate/grafana/singleton/EnumOptions + default alerts). Plus the
+  metric-source seam (`hsm_collector_set_metric_source_factory` + `hsm_metric_read_fn`/
+  `hsm_metric_dispose_fn`/`hsm_metric_source_factory_fn`): the IPerformanceCounter
+  equivalent a default monitoring sensor reads each tick, with recreate-on-error +
+  dispose-on-stop. The production factory is a no-op — the real PDH/WMI/registry/EventLog
+  (Windows) and procfs (Linux) readers, and the per-sensor scheduled-tick wiring, are the
+  #1099 live-value follow-up. GC-time sensors are intentionally dropped (no managed GC in a
+  native host); the Unix surface is the managed parity subset.
 - **0.3.0** (#1098) — additive sensor machinery: TimeSpan (type 7) / Version (type 8)
   instant sensors; the alert builder (`hsm_collector_create_alert` + `hsm_alert_*` +
   `hsm_sensor_attach_alert`); the full options surface

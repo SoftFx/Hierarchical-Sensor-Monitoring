@@ -201,15 +201,24 @@ Details: [`alerts/feature.md`](../../aicontext/features/collector/alerts/feature
 
 Details: [`default-sensors/feature.md`](../../aicontext/features/collector/default-sensors/feature.md)
 
-- [ ] `AddProcessCpu` (`Process \ % Processor Time`, instance = process)
+> **#1099 native port status:** the **registration payload** of every default sensor below is ported
+> and conformance-pinned (`hsm_collector_add_default_sensor` ↔ the real managed prototype) — corpus:
+> `default_sensors_contract:*`; byte goldens: `WireFormatGoldenLockTests.Default_sensor_registrations_match_*`
+> ↔ `NativeDefaultSensorWireMatchesNet`. The boxes below stay `[ ]` because their **live values**
+> (PDH/WMI/registry/EventLog reads) are the live-value follow-up under #1099 — per-platform smoke, not
+> the portable corpus. The metric-source seam (`IPerformanceCounterFactory` equivalent) is ported
+> (`hsm_collector_set_metric_source_factory`, recreate-on-error, dispose-on-stop) with a no-op production
+> factory — native unit: `native_metric_source_seam_lifecycle`.
+
+- [ ] `AddProcessCpu` (`Process \ % Processor Time`, instance = process) — registration: `default_sensors_contract:process_cpu_registers_empty_alerts`
 - [ ] `AddProcessMemory` (`Process \ Working set` → MB)
 - [ ] `AddProcessThreadCount` (`Process \ Thread Count`)
 - [ ] `AddProcessThreadPoolThreadCount` (ThreadPool API)
-- [ ] `AddProcessTimeInGC` (perf counter net472 / EventListener net6+)
+- [ ] `AddProcessTimeInGC` (perf counter net472 / EventListener net6+) — **DROPPED in the native port (#1099):** no managed GC in a native host
 - [ ] `AddProcessMonitoringSensors` bulk
 - [ ] `AddTotalCpu` (`Processor \ % Processor Time \ _Total`)
 - [ ] `AddFreeRamMemory` (`Memory \ Available MBytes`)
-- [ ] `AddGlobalTimeInGC` (`.NET CLR Memory \ % Time in GC \ _Global_`)
+- [ ] `AddGlobalTimeInGC` (`.NET CLR Memory \ % Time in GC \ _Global_`) — **DROPPED in the native port (#1099):** no managed GC in a native host
 - [ ] `AddSystemMonitoringSensors` bulk
 - [ ] `AddFreeDiskSpace` / `AddFreeDisksSpace` (DriveInfo, instant MB, 5 min)
 - [ ] `AddFreeDiskSpacePrediction` / `AddFreeDisksSpacePrediction` (EMA 0.9/0.1, 30 s sampling, calibration first 6 requests — `CalibrationRequests` default, OffTime on growth)
@@ -230,11 +239,11 @@ Details: [`default-sensors/feature.md`](../../aicontext/features/collector/defau
 - [ ] `AddNetworkConnectionFailures` / `AddNetworkConnectionsReset` (deltas)
 - [ ] `AddAllNetworkSensors` bulk
 - [ ] `SubscribeToWindowsServiceStatus(name | options)` (enum of `ServiceControllerStatus`, 5 s poll, send-on-change, alert ≠Running w/ 5 min confirmation, 1 h re-resolve backoff)
-- [ ] Service-status registration payload: `EnumOptions` for 7 `ServiceControllerStatus` members with fixed ARGB colors + generated markdown description; `IsHostService` placement
+- [x] Service-status registration payload: `EnumOptions` for 7 `ServiceControllerStatus` members with fixed ARGB colors + generated markdown description; `IsHostService` placement — conformance: default_sensors_contract:service_status_registers_enum_options
 - [ ] `UnsubscribeWindowsServiceStatus`
 - [ ] ServiceCommands sensor: fixed strings "Service start/stop/restart", "Service update [from X] to Y" + implicit `IfReceivedNewValue → notification` alert
 - [ ] Perf-counter seam: `IPerformanceCounterFactory`/`IPerformanceCounter`, recreate on `InvalidOperationException`, dispose on stop
-- [ ] `AddAllComputerSensors()` / `AddAllModuleSensors(version)` / `AddAllDefaultSensors(version)` bulks
+- [ ] `AddAllComputerSensors()` / `AddAllModuleSensors(version)` / `AddAllDefaultSensors(version)` bulks — group composition (incl. the 4 event-log sensors in windows-info) — native unit: `native_default_sensor_group_composition`
 
 ## 9. Default sensors — Unix
 
@@ -249,13 +258,21 @@ Details: [`default-sensors/feature.md`](../../aicontext/features/collector/defau
 - [ ] `AddFreeDiskSpace` + prediction (root `/` only, DriveInfo/statvfs)
 - [ ] Bulks: process / system / disk / computer / module / default
 - [ ] No external process spawning (kernel files + managed APIs only)
-- [ ] **[decide]** Unix gaps vs Windows: GC time, network, OS info, event logs, service status
+- [x] **[decide]** Unix gaps vs Windows: GC time, network, OS info, event logs, service status — **RESOLVED (#1099):** keep the managed parity subset (process / total CPU / free RAM / root free-disk + prediction); no native systemd/journald/network extensions
+
+> **#1099:** the Unix registration payloads (process/system/root-disk) share the same conformance-pinned
+> catalog rows as their Windows counterparts; the procfs/statvfs **live readers** are the live-value follow-up.
 
 ## 10. Module & diagnostic sensors (cross-platform)
 
 Details: [`default-sensors/feature.md`](../../aicontext/features/collector/default-sensors/feature.md)
 
-- [ ] `AddCollectorAlive` (bool heartbeat, 15 s, first=false, TTL 1 min, KeepHistory 180 d)
+> **#1099 native port status:** registration payloads ported and conformance-pinned
+> (`default_sensors_contract:*`, e.g. `collector_alive_registers_ttl_alert`, `collector_version_registers`,
+> `queue_overflow_registers`); the live feeds (heartbeat scheduler, `MessageDeduplicator` errors, the
+> queue-stats pipeline taps) are the live-value follow-up under #1099.
+
+- [ ] `AddCollectorAlive` (bool heartbeat, 15 s, first=false, TTL 1 min, KeepHistory 180 d) — registration: `default_sensors_contract:collector_alive_registers_ttl_alert`
 - [ ] `AddCollectorVersion` (assembly version + start time, KeepHistory ~5 y)
 - [ ] `AddCollectorErrors` (string, fed by MessageDeduplicator)
 - [ ] `AddProductVersion(VersionSensorOptions)`

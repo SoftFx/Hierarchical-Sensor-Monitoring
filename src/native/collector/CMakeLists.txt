@@ -191,6 +191,9 @@ set(NATIVE_REGRESSION_TESTS
     native_wire_registration_full_options_matches_net_byte_layout
     native_version_string_matches_net
     native_alert_scheduled_notification_matches_net
+    native_default_sensor_wire_matches_net
+    native_default_sensor_group_composition
+    native_metric_source_seam_lifecycle
     native_prototype_merge_pins_identity_overrides_metadata
     native_http_endpoint_routing_matches_net
     native_http_retry_policy_matches_net
@@ -246,6 +249,13 @@ add_conformance_test(conformance_timespan_version_contract timespan_version_cont
 add_conformance_test(conformance_alert_registration_contract alert_registration_contract.hsmtest)
 add_conformance_test(conformance_options_surface_contract options_surface_contract.hsmtest)
 add_conformance_test(conformance_service_commands_contract service_commands_contract.hsmtest)
+add_conformance_test(conformance_default_sensors_contract default_sensors_contract.hsmtest)
+
+add_test(
+    NAME native_default_sensors_wire_golden
+    COMMAND hsm_collector_tests native_default_sensors_wire_golden
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/golden/default_sensors_wire.golden
+)
 
 # Meta-suite ("test the tests"): must-FAIL fixtures with deliberately wrong
 # expectations; the meta_must_fail runner passes only when the driver detects

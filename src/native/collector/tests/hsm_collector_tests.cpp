@@ -81,6 +81,16 @@ extern "C" const char* hsm_collector_test_wire_registration_json(
     const char* path);
 extern "C" const char* hsm_sensor_test_wire_registration_json(hsm_sensor_t* sensor);
 extern "C" const char* hsm_alert_test_wire_json(hsm_alert_t* alert);
+extern "C" const char* hsm_collector_test_default_sensor_wire_json(
+    int32_t id,
+    const char* process_name,
+    const char* disk_letter);
+extern "C" int32_t hsm_collector_test_drive_metric_source(
+    hsm_collector_t* collector,
+    const char* sensor_path,
+    int32_t max_reads,
+    double* out_values,
+    int32_t* out_recreated);
 extern "C" const char* hsm_collector_test_merge_registration_json(
     int proto_is_computer,
     int64_t proto_ttl_ms,
@@ -608,6 +618,49 @@ namespace
         return cases;
     }
 
+    // Map a stable fixture id name to a hsm_default_sensor_t (#1099). The same names are used by the
+    // C# conformance driver so a default_sensors_*.hsmtest case runs against both.
+    hsm_default_sensor_t DefaultSensorIdFromName(const std::string& name)
+    {
+        static const std::map<std::string, hsm_default_sensor_t> ids = {
+            { "process_cpu", HSM_DEFAULT_PROCESS_CPU },
+            { "process_memory", HSM_DEFAULT_PROCESS_MEMORY },
+            { "process_thread_count", HSM_DEFAULT_PROCESS_THREAD_COUNT },
+            { "process_threadpool_thread_count", HSM_DEFAULT_PROCESS_THREADPOOL_THREAD_COUNT },
+            { "total_cpu", HSM_DEFAULT_TOTAL_CPU },
+            { "free_ram", HSM_DEFAULT_FREE_RAM_MEMORY },
+            { "free_disk_space", HSM_DEFAULT_FREE_DISK_SPACE },
+            { "free_disk_space_prediction", HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION },
+            { "active_disk_time", HSM_DEFAULT_ACTIVE_DISK_TIME },
+            { "disk_queue_length", HSM_DEFAULT_DISK_QUEUE_LENGTH },
+            { "disk_write_speed", HSM_DEFAULT_DISK_AVERAGE_WRITE_SPEED },
+            { "windows_last_restart", HSM_DEFAULT_WINDOWS_LAST_RESTART },
+            { "windows_install_date", HSM_DEFAULT_WINDOWS_INSTALL_DATE },
+            { "windows_last_update", HSM_DEFAULT_WINDOWS_LAST_UPDATE },
+            { "windows_version", HSM_DEFAULT_WINDOWS_VERSION },
+            { "windows_app_error_logs", HSM_DEFAULT_WINDOWS_APPLICATION_ERROR_LOGS },
+            { "windows_sys_error_logs", HSM_DEFAULT_WINDOWS_SYSTEM_ERROR_LOGS },
+            { "windows_app_warning_logs", HSM_DEFAULT_WINDOWS_APPLICATION_WARNING_LOGS },
+            { "windows_sys_warning_logs", HSM_DEFAULT_WINDOWS_SYSTEM_WARNING_LOGS },
+            { "network_established", HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED },
+            { "network_failures", HSM_DEFAULT_NETWORK_CONNECTION_FAILURES },
+            { "network_reset", HSM_DEFAULT_NETWORK_CONNECTIONS_RESET },
+            { "collector_alive", HSM_DEFAULT_COLLECTOR_ALIVE },
+            { "collector_version", HSM_DEFAULT_COLLECTOR_VERSION },
+            { "collector_errors", HSM_DEFAULT_COLLECTOR_ERRORS },
+            { "product_version", HSM_DEFAULT_PRODUCT_VERSION },
+            { "service_status", HSM_DEFAULT_SERVICE_STATUS },
+            { "queue_overflow", HSM_DEFAULT_QUEUE_OVERFLOW },
+            { "queue_values_count", HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT },
+            { "queue_process_time", HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME },
+            { "queue_content_size", HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE },
+        };
+        const auto it = ids.find(name);
+        if (it == ids.end())
+            throw std::runtime_error("Unknown default sensor id name: " + name);
+        return it->second;
+    }
+
     void ExecuteConformanceStep(ConformanceState& state, const std::vector<std::string>& step)
     {
         const auto& action = step[0];
@@ -787,6 +840,20 @@ namespace
         {
             SensorHandle sensor;
             Require(hsm_collector_create_service_commands_sensor(state.collector.value, &sensor.value) == HSM_RESULT_OK, "service-commands sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "add_default_sensor")
+        {
+            Require(step.size() >= 2, "add_default_sensor requires an id name");
+            auto params = hsm_default_sensor_params_default();
+            if (step.size() >= 3 && !step[2].empty())
+                params.disk_letter = step[2].c_str();
+            SensorHandle sensor;
+            Require(
+                hsm_collector_add_default_sensor(state.collector.value, DefaultSensorIdFromName(step[1]), &params, &sensor.value) == HSM_RESULT_OK,
+                "add_default_sensor failed");
             state.sensors.push_back(std::move(sensor));
             return;
         }
@@ -3107,6 +3174,294 @@ namespace
             "version wire value");
     }
 
+    // Normalize a registration wire string for the cross-language all-catalog golden (#1099): the
+    // Description and Path are not part of the byte contract (machine-specific / volatile path
+    // segments), so blank them out — every other field is compared. Matches the C# DefaultSensorWire
+    // normalizer in WireFormatGoldenLockTests.
+    std::string NormalizeDefaultSensorWire(const std::string& wire)
+    {
+        std::string out = wire;
+        const auto desc = out.find("\"Description\":");
+        const auto chats = out.find(",\"DefaultChats\"");
+        if (desc != std::string::npos && chats != std::string::npos && chats > desc)
+            out.replace(desc, chats - desc, "\"Description\":_");
+        const auto path = out.find("\"Path\":");
+        if (path != std::string::npos)
+            out.replace(path, std::string::npos, "\"Path\":_}");
+        return out;
+    }
+
+    // Every catalog id, by stable name (mirrors DefaultSensorIdFromName / the C# BuildDefaultSensorRequest
+    // map). The all-catalog golden is keyed by name so both drivers map identically.
+    const char* const kAllDefaultSensorNames[] = {
+        "process_cpu", "process_memory", "process_thread_count", "process_threadpool_thread_count",
+        "total_cpu", "free_ram", "free_disk_space", "free_disk_space_prediction", "active_disk_time",
+        "disk_queue_length", "disk_write_speed", "windows_last_restart", "windows_install_date",
+        "windows_last_update", "windows_version", "windows_app_error_logs", "windows_sys_error_logs",
+        "windows_app_warning_logs", "windows_sys_warning_logs", "network_established", "network_failures",
+        "network_reset", "collector_alive", "collector_version", "collector_errors", "product_version",
+        "service_status", "queue_overflow", "queue_values_count", "queue_process_time", "queue_content_size"
+    };
+
+    std::string DefaultSensorWireByName(const std::string& name)
+    {
+        return std::string(hsm_collector_test_default_sensor_wire_json(
+            static_cast<int32_t>(DefaultSensorIdFromName(name)), nullptr, nullptr));
+    }
+
+    void DumpDefaultSensorsGolden()
+    {
+        for (const char* name : kAllDefaultSensorNames)
+            std::fprintf(stdout, "%s|%s\n", name, NormalizeDefaultSensorWire(DefaultSensorWireByName(name)).c_str());
+    }
+
+    // Data-driven all-catalog parity (#1099 review finding #1): assert the native wire of EVERY catalog
+    // sensor (normalized) matches the committed golden — the same golden the C# side reproduces from the
+    // real managed prototypes (WireFormatGoldenLockTests.All_default_sensor_registrations_match_the_golden).
+    // Closes the gap where ~20 of the hand-transcribed catalog rows had no permanent parity check.
+    void NativeDefaultSensorsWireGolden(const std::string& golden_path)
+    {
+        std::ifstream file(golden_path);
+        Require(file.is_open(), ("default-sensor golden not found: " + golden_path).c_str());
+
+        size_t checked = 0;
+        std::string line;
+        while (std::getline(file, line))
+        {
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+            if (line.empty() || line[0] == '#')
+                continue;
+
+            const auto bar = line.find('|');
+            Require(bar != std::string::npos, ("golden line missing '|': " + line).c_str());
+            const auto name = line.substr(0, bar);
+            const auto expected = line.substr(bar + 1);
+            Require(NormalizeDefaultSensorWire(DefaultSensorWireByName(name)) == expected,
+                    ("native wire mismatch vs golden for default sensor '" + name + "'").c_str());
+            ++checked;
+        }
+
+        const size_t total = sizeof(kAllDefaultSensorNames) / sizeof(kAllDefaultSensorNames[0]);
+        Require(checked == total,
+                ("golden covered " + std::to_string(checked) + " sensors, expected " + std::to_string(total)).c_str());
+    }
+
+    // Wire registration of representative default sensors (#1099). Byte-identical to the real managed
+    // prototypes (Prototypes/Collections/** -> ApiRequest -> HttpRequest) locked by
+    // WireFormatGoldenLockTests.Default_sensor_registrations_match_the_native_golden_bytes. Covers every
+    // alert shape (EMA scheduled-hourly, free-disk ArrowDown+SensorError, IfValue plain notification,
+    // service-status confirmation, service-alive TTL with null Conditions), the Statistics None/EMA
+    // split, DisplayUnit 0/null, the EnumOptions payload, and the empty "Alerts":[] rendering.
+    void NativeDefaultSensorWireMatchesNet()
+    {
+        const auto wire = [](int id) {
+            return std::string(hsm_collector_test_default_sensor_wire_json(id, nullptr, nullptr));
+        };
+
+        // Process memory (id 1): IfEmaMean(>,30720) InstantHourly + Warning; DoubleBar EMA.
+        Require(
+            wire(1) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":2,\"Property\":213,\"Target\":{\"Type\":0,\"Value\":\"30720\"}}],"
+                "\"Status\":1,\"DestinationMode\":3,\"Template\":\"[$product]$path $property $operation $target $unit\",\"Icon\":\"\\u26A0\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
+                "\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":5,\"Description\":\"Process RAM usage.\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[9223372036854775807],\"TTL\":null,\"Statistics\":1,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
+                "\"Path\":\".module/Process process/Process memory\"}",
+            "default process memory wire");
+
+        // Free RAM (id 11): prototype never sets Statistics -> None(0).
+        Require(
+            wire(11) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":1,\"Property\":213,\"Target\":{\"Type\":0,\"Value\":\"2\"}}],"
+                "\"Status\":1,\"DestinationMode\":3,\"Template\":\"[$product]$path $property $operation $target$unit\",\"Icon\":\"\\u26A0\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
+                "\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":5,\"Description\":\"Available host RAM.\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[9223372036854775807],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":true,\"AggregateData\":null,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
+                "\"Path\":\".computer/Free RAM memory\"}",
+            "default free ram wire");
+
+        // Free disk (id 20): IfEmaValue(<=,20480) InstantHourly + ArrowDown + SensorError; instant double DisplayUnit 0.
+        Require(
+            wire(20) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":0,\"Property\":210,\"Target\":{\"Type\":0,\"Value\":\"20480\"}}],"
+                "\"Status\":3,\"DestinationMode\":3,\"Template\":\"[$product] Free space on C disk is running out. Current free space is $value $unit\",\"Icon\":\"\\u2B07\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
+                "\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":2,\"Description\":\"Free disk space.\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[9223372036854775807],\"TTL\":null,\"Statistics\":1,\"IsSingletonSensor\":true,\"AggregateData\":null,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
+                "\"Path\":\".computer/Disks monitoring/Free space on C disk\"}",
+            "default free disk wire");
+
+        // Install date (id 31): IfValue(>,1460d) plain notification + Warning; TimeSpan target "1460.00:00:00".
+        Require(
+            wire(31) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":2,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"1460.00:00:00\"}}],"
+                "\"Status\":1,\"DestinationMode\":3,\"Template\":\"[$product] $sensor. Windows was installed more than $value ago\",\"Icon\":\"\\u26A0\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":null,\"ScheduledRepeatMode\":null,\"ScheduledInstantSend\":null}],"
+                "\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":7,\"Description\":\"Time since the OS install date.\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[9223372036854775807],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":true,\"AggregateData\":null,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":null,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
+                "\"Path\":\".computer/Windows OS info/Install date\"}",
+            "default install date wire");
+
+        // Service alive (id 60): TTL alert IfInactivityPeriodIs() InstantHourly + Clock + SensorError;
+        // Conditions:null (SpecialAlertAction), TTLs=[null], KeepHistory 180d, Alerts:[].
+        Require(
+            wire(60) ==
+                "{\"Type\":0,\"Alerts\":[],\"TtlAlerts\":[{\"Conditions\":null,\"Status\":3,\"DestinationMode\":3,\"Template\":\"[$product]$path\",\"Icon\":\"\\uD83D\\uDD50\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
+                "\"TtlAlert\":null,\"SensorType\":0,\"Description\":\"DataCollector heartbeat.\",\"DefaultChats\":null,\"KeepHistory\":155520000000000,\"SelfDestroy\":null,"
+                "\"TTLs\":[null],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":true,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":null,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,"
+                "\"Path\":\".module/Service alive\"}",
+            "default service alive wire");
+
+        // Service status (id 64): 7 EnumOptions + IfValue(!=,4) AndConfirmationPeriod(5m) InstantHourly; enum DisplayUnit null.
+        Require(
+            wire(64) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":5,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"4\"}}],"
+                "\"Status\":1,\"DestinationMode\":3,\"Template\":\"[$product]$path $operation Running\",\"Icon\":null,\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":3000000000,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}],"
+                "\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":10,\"Description\":\"Windows service status.\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[9223372036854775807],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":true,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":null,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
+                "\"EnumOptions\":[{\"Key\":1,\"Value\":\"Stopped\",\"Description\":\"The service is stopped.\",\"Color\":16711680},"
+                "{\"Key\":2,\"Value\":\"StartPending\",\"Description\":\"The service start pending.\",\"Color\":12582847},"
+                "{\"Key\":3,\"Value\":\"StopPending\",\"Description\":\"The service stop pending.\",\"Color\":16606308},"
+                "{\"Key\":4,\"Value\":\"Running\",\"Description\":\"The service is running.\",\"Color\":65280},"
+                "{\"Key\":5,\"Value\":\"ContinuePending\",\"Description\":\"The service continue is pending\",\"Color\":16757763},"
+                "{\"Key\":6,\"Value\":\"PausePending\",\"Description\":\"The service pause is pending.\",\"Color\":8429311},"
+                "{\"Key\":7,\"Value\":\"Paused\",\"Description\":\"The service is paused.\",\"Color\":201983}],"
+                "\"Key\":null,\"Path\":\".module/Service status\"}",
+            "default service status wire");
+
+        // Collector version (id 61): Version sensor, KeepHistory 365*5+1 days, no alert (Alerts:[]).
+        Require(
+            wire(61) ==
+                "{\"Type\":0,\"Alerts\":[],\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":8,\"Description\":\"DataCollector version and start time.\","
+                "\"DefaultChats\":null,\"KeepHistory\":1577664000000000,\"SelfDestroy\":null,\"TTLs\":[9223372036854775807],\"TTL\":null,"
+                "\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":true,\"OriginalUnit\":null,\"DisplayUnit\":0,"
+                "\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,\"Key\":null,\"Path\":\".module/Collector version\"}",
+            "default collector version wire");
+    }
+
+    // The group helpers must register the SAME set the managed AddAll* surface does (#1099). Guards the
+    // composition — e.g. that AddWindowsInfoMonitoringSensors includes the 4 Windows event-log sensors,
+    // so add_all_default_sensors does not silently register fewer sensors than managed.
+    void NativeDefaultSensorGroupComposition()
+    {
+        const auto countAfter = [](std::function<void(hsm_collector_t*)> add) {
+            auto collector = CreateCollector();
+            Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+            add(collector.value);
+            const size_t n = hsm_collector_registration_count(collector.value);
+            hsm_collector_stop(collector.value);
+            return n;
+        };
+
+        // windows-info = 4 info + 4 event-log sensors.
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_windows_info_monitoring_sensors(c); }) == 8,
+                "windows-info group registers 8 (incl. 4 event-log sensors)");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_system_monitoring_sensors(c); }) == 2, "system group = 2");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_disk_monitoring_sensors(c); }) == 5, "disk group = 5 (single C)");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_network_sensors(c); }) == 3, "network group = 3");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_process_monitoring_sensors(c); }) == 4, "process group = 4");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_collector_monitoring_sensors(c); }) == 3, "collector group = 3");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_queue_diagnostic_sensors(c); }) == 4, "queue group = 4");
+
+        // computer = system(2) + disk(5) + windows-info(8) + network(3) = 18.
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_computer_sensors(c); }) == 18, "all-computer = 18");
+        // default = computer(18) + module[process(4)+collector(3)+queue(4)] (11) + product version (1) = 30.
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_default_sensors(c, "1.0.0"); }) == 30, "all-default with product version = 30");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_default_sensors(c, nullptr); }) == 29, "all-default without product version = 29");
+    }
+
+    // Fake metric source for the seam smoke test (#1099): yields a fixed sequence of read outcomes,
+    // and counts how many times the collector disposed it (recreate-on-error + dispose-on-stop).
+    struct FakeMetricSource
+    {
+        std::vector<std::pair<hsm_metric_read_t, double>> script;
+        size_t cursor = 0;
+        int disposes = 0;
+        int creates = 0;
+    };
+
+    void NativeMetricSourceSeamLifecycle()
+    {
+        FakeMetricSource fake;
+        // OK 1.0, OK 2.0, ERROR (forces dispose+recreate), OK 3.0.
+        fake.script = {
+            { HSM_METRIC_READ_OK, 1.0 },
+            { HSM_METRIC_READ_OK, 2.0 },
+            { HSM_METRIC_READ_ERROR, 0.0 },
+            { HSM_METRIC_READ_OK, 3.0 },
+        };
+
+        struct Source
+        {
+            FakeMetricSource* fake;
+        };
+
+        auto read = [](void* ud, double* out) -> hsm_metric_read_t {
+            auto* self = static_cast<Source*>(ud);
+            auto& f = *self->fake;
+            if (f.cursor >= f.script.size())
+                return HSM_METRIC_READ_NO_VALUE;
+            const auto step = f.script[f.cursor++];
+            if (step.first == HSM_METRIC_READ_OK)
+                *out = step.second;
+            return step.first;
+        };
+        auto dispose = [](void* ud) {
+            auto* self = static_cast<Source*>(ud);
+            self->fake->disposes++;
+            delete self;
+        };
+
+        // Stateless lambdas convert to function pointers; capture-by-pointer goes through user_data.
+        hsm_metric_read_fn read_fn = read;
+        hsm_metric_dispose_fn dispose_fn = dispose;
+
+        struct FactoryCtx
+        {
+            FakeMetricSource* fake;
+            hsm_metric_read_fn read_fn;
+            hsm_metric_dispose_fn dispose_fn;
+        } ctx{ &fake, read_fn, dispose_fn };
+
+        auto real_factory = [](void* fud, const char*, hsm_metric_read_fn* out_read, hsm_metric_dispose_fn* out_dispose, void** out_ud) -> int {
+            auto* c = static_cast<FactoryCtx*>(fud);
+            c->fake->creates++;
+            auto* src = new Source{ c->fake };
+            *out_read = c->read_fn;
+            *out_dispose = c->dispose_fn;
+            *out_ud = src;
+            return 1;
+        };
+
+        auto collector = CreateCollector();
+        Require(hsm_collector_set_metric_source_factory(collector.value, real_factory, &ctx) == HSM_RESULT_OK, "set factory");
+
+        double values[8] = { 0 };
+        int32_t recreated = -1;
+        const int32_t collected = hsm_collector_test_drive_metric_source(collector.value, ".computer/Total CPU", 4, values, &recreated);
+
+        Require(collected == 3, "three OK samples (1.0, 2.0, 3.0)");
+        Require(values[0] == 1.0 && values[1] == 2.0 && values[2] == 3.0, "sample values in order");
+        Require(recreated == 1, "one recreate on READ_ERROR");
+        Require(fake.creates == 2, "factory created the source twice (initial + recreate)");
+        Require(fake.disposes == 2, "both sources disposed (recreate + end-of-drive)");
+
+        // No factory installed -> no source, no values.
+        auto bare = CreateCollector();
+        int32_t bareRecreated = -1;
+        Require(hsm_collector_test_drive_metric_source(bare.value, ".computer/Total CPU", 4, values, &bareRecreated) == 0, "no factory yields no samples");
+        Require(bareRecreated == 0, "no recreate without a factory");
+    }
+
     void NativeWireRegistrationJsonMatchesNetByteLayout()
     {
         // SensorType IntSensor(1); ttl 60000ms -> 600000000 ticks; OriginalUnit MB(3);
@@ -3481,6 +3836,11 @@ namespace
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
+            { "native_default_sensor_wire_matches_net", [](const std::string&) { NativeDefaultSensorWireMatchesNet(); } },
+            { "native_default_sensor_group_composition", [](const std::string&) { NativeDefaultSensorGroupComposition(); } },
+            { "native_default_sensors_wire_golden", [](const std::string& path) { NativeDefaultSensorsWireGolden(path); } },
+            { "dump_default_sensors_golden", [](const std::string&) { DumpDefaultSensorsGolden(); } },
+            { "native_metric_source_seam_lifecycle", [](const std::string&) { NativeMetricSourceSeamLifecycle(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
@@ -3556,6 +3916,7 @@ namespace
             { "conformance_alert_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_options_surface_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_service_commands_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };
