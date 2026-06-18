@@ -1,0 +1,39 @@
+# HSM collector conformance — full SensorOptions registration surface + path model (#1098 §6).
+# create_int_sensor_full_options|path|ttl_ms|unit|keep_history_ms|self_destroy_ms|statistics|
+#     is_singleton|aggregate|grafana|is_computer|sensor_location|description
+#   tri-state (is_singleton/aggregate/grafana): -1 => null, 0 => false, 1 => true
+#   statistics: -1 => null, else StatisticsOptions flags (EMA=1)
+#   is_computer: true => path anchors at ComputerName node AND forces IsSingletonSensor=true
+#   sensor_location: 0 => Module (ComputerName/Module/Path), 1 => Product (bare Path)
+# Ticks on the wire = ms * 10000 (KeepHistory/SelfDestroy).
+
+full_options_register_in_payload|create_collector
+full_options_register_in_payload|create_int_sensor_full_options|contract/opts/full|60000|3|600000|1200000|1|1|1|1|false|0|opts
+full_options_register_in_payload|start
+full_options_register_in_payload|stop
+full_options_register_in_payload|expect_registration_count|1
+full_options_register_in_payload|expect_registration_contains|0|"TTLTicks":[600000000]
+full_options_register_in_payload|expect_registration_contains|0|"OriginalUnit":3,
+full_options_register_in_payload|expect_registration_contains|0|"KeepHistory":6000000000
+full_options_register_in_payload|expect_registration_contains|0|"SelfDestroy":12000000000
+full_options_register_in_payload|expect_registration_contains|0|"Statistics":1
+full_options_register_in_payload|expect_registration_contains|0|"IsSingletonSensor":true
+full_options_register_in_payload|expect_registration_contains|0|"AggregateData":true
+full_options_register_in_payload|expect_registration_contains|0|"EnableGrafana":true
+full_options_register_in_payload|expect_registration_contains|0|"Path":"conformance-host/conformance-module/contract/opts/full"
+
+computer_sensor_anchors_at_computer_node|create_collector
+computer_sensor_anchors_at_computer_node|create_int_sensor_full_options|contract/opts/computer|0|-1|0|0|1|-1|-1|-1|true|0|c
+computer_sensor_anchors_at_computer_node|start
+computer_sensor_anchors_at_computer_node|stop
+computer_sensor_anchors_at_computer_node|expect_registration_count|1
+computer_sensor_anchors_at_computer_node|expect_registration_contains|0|"Path":"conformance-host/contract/opts/computer"
+computer_sensor_anchors_at_computer_node|expect_registration_contains|0|"IsSingletonSensor":true
+
+product_sensor_anchors_at_root|create_collector
+product_sensor_anchors_at_root|create_int_sensor_full_options|contract/opts/product|0|-1|0|0|1|-1|-1|-1|false|1|p
+product_sensor_anchors_at_root|start
+product_sensor_anchors_at_root|stop
+product_sensor_anchors_at_root|expect_registration_count|1
+product_sensor_anchors_at_root|expect_registration_contains|0|"Path":"contract/opts/product"
+product_sensor_anchors_at_root|expect_registration_contains|0|"IsSingletonSensor":null

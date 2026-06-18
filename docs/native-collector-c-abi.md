@@ -144,6 +144,45 @@ Policy:
   result-code meaning, or changing a documented behavior.
 - **PATCH** — implementation-only fixes with no surface change.
 
-Test-only symbols prefixed `hsm_collector_test_*` are **not** part of the ABI;
-they are intentionally omitted from the public header and are linked only by the
-native test binary.
+Test-only symbols prefixed `hsm_collector_test_*` (and `hsm_sensor_test_*` /
+`hsm_alert_test_*`) are **not** part of the ABI; they are intentionally omitted
+from the public header and are linked only by the native test binary.
+
+Version history:
+
+- **0.4.0** (#1099) — additive default-sensor catalog: `hsm_default_sensor_t` (the
+  built-in IWindowsCollection/IUnixCollection prototypes) + `hsm_default_sensor_params_t`
+  + `hsm_collector_add_default_sensor` and the `add_all_*` / per-category bulk helpers;
+  each id registers a byte-identical `AddOrUpdateSensorRequest` (path/type/unit/statistics/
+  keep-history/TTLs/aggregate/grafana/singleton/EnumOptions + default alerts). Plus the
+  metric-source seam (`hsm_collector_set_metric_source_factory` + `hsm_metric_read_fn`/
+  `hsm_metric_dispose_fn`/`hsm_metric_source_factory_fn`): the IPerformanceCounter
+  equivalent a default monitoring sensor reads each tick, with recreate-on-error +
+  dispose-on-stop. The production factory is a no-op — the real PDH/WMI/registry/EventLog
+  (Windows) and procfs (Linux) readers, and the per-sensor scheduled-tick wiring, are the
+  #1099 live-value follow-up. GC-time sensors are intentionally dropped (no managed GC in a
+  native host); the Unix surface is the managed parity subset.
+- **0.3.0** (#1098) — additive sensor machinery: TimeSpan (type 7) / Version (type 8)
+  instant sensors; the alert builder (`hsm_collector_create_alert` + `hsm_alert_*` +
+  `hsm_sensor_attach_alert`); the full options surface
+  (`hsm_collector_create_sensor_with_options` + `hsm_sensor_options_t`: KeepHistory/
+  SelfDestroy/DisplayUnit/Statistics/IsSingletonSensor/AggregateData/EnableGrafana +
+  IsComputerSensor/SensorLocation path model); and the service-commands sensor
+  (`hsm_collector_create_service_commands_sensor` + `hsm_service_commands_send_*`).
+  `hsm_alert_t` is an opaque handle owned by the collector (freed at destroy, no
+  separate release); alerts must be attached before the registration is emitted
+  (pre-Start or pre-create-while-running) since attaching rebuilds the payload.
+- **0.2.0** (#1096) — HTTP transport options consumed; wire serialization.
+- **0.1.0** (#1095) — initial lifecycle, scheduler, logging, registration core.
+
+## Alerts (registration payload)
+
+The alert builder ports the managed `HSMDataCollector.Alerts` model at the
+**registration-payload** level. `hsm_alert_add_condition` takes the frozen numeric
+`property/operation/combination/target` enums directly (the C# `IfValue`/`IfMax`/…
+sugar that selects those values is not part of the ABI). `hsm_alert_set_icon` maps
+`hsm_alert_icon_t` to the same UTF-8 emoji as `IconExtensions.ToUtf8`; the wire
+serializer escapes it to `\uXXXX` exactly like System.Text.Json. A TTL alert
+(`HSM_ALERT_KIND_TTL` + `hsm_alert_set_inactivity_period`) lands in `TtlAlerts` and
+drives `TTLs` (ticks). Byte parity with .NET is pinned by the paired golden tests
+(`WireFormatGoldenLockTests` / `NativeWireRegistrationWithAlertsMatchesNetByteLayout`).

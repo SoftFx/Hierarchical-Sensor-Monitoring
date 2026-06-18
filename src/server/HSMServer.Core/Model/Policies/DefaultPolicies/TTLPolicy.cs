@@ -52,8 +52,9 @@ namespace HSMServer.Core.Model.Policies
         {
             if (entity?.TTL is not null and not long.MaxValue)
                 _ttl.TrySetValue(new TimeIntervalModel(entity.TTL.Value));
-            else if (node?.Settings?.TTL != null)
-                _ttl.SetParent(node.Settings.TTL);
+            // When entity.TTL is null, the policy stays in IsTTLFromParent state.
+            // The owning PolicyCollectionBase wires the parent via SetTTLParent(...)
+            // using its TTLParentSource (node-bounded for products, chain for sensors).
 
             Apply(entity ?? new PolicyEntity
             {

@@ -1,6 +1,6 @@
 # Feature: Sensor Types
 
-> Owner: collector | Last reviewed: 2026-06-10 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-06-17 | Canonical: yes
 > Scope: Collector - all sensor types, their value-flow mechanics, validation rules, and options/path model
 
 ---
@@ -97,6 +97,17 @@ C++ analogue: the native collector's bar sensors (`src/native/collector/src/hsm_
 | `Options/SensorOptions.cs`, `SpecialSensorOptions.cs`, `SensorLocation.cs` | Options hierarchy |
 | `Prototypes/Bases/DefaultPrototype.cs` | Merge, BuildPath, RevealDefaultPath |
 | `Extensions/SensorValueExtensions.cs`, `BarTimeExtensions.cs` | Validation, comment trim, bar time alignment |
+
+## Native port (C++) — #1098
+
+The native collector (`src/native/collector`) ports the user-facing **value mechanics and registration** for every instant kind: `bool/int/double/string/enum` (since #1094) plus `TimeSpan` (type 7) and `Version` (type 8) added here via `hsm_collector_create_timespan_sensor` / `hsm_collector_create_version_sensor` + `hsm_sensor_add_timespan(ticks, …)` / `hsm_sensor_add_version(major, minor, build, revision, …)`. Bars, rate, function, last-value, and file are already ported.
+
+- **TimeSpan** values serialize as the .NET `"c"` format (`TimeSpanCFormat`, 7-digit fraction); **Version** uses `Version.ToString()` rules (`VersionString` drops trailing absent components, `-1` = absent — a revision cannot exist without a build).
+- **Full options surface** via `hsm_collector_create_sensor_with_options` + `hsm_sensor_options_t`: KeepHistory/SelfDestroy (ticks), DisplayUnit, Statistics(EMA), IsSingletonSensor (`| IsComputerSensor`), AggregateData, EnableGrafana — wired into both the internal corpus text and the wire registration; C# `RegistrationText` mirrors the same fields.
+- **Path model**: `CalculateSystemPath` (IsComputerSensor → `ComputerName/Path`; else `SensorLocation` Module = `ComputerName/Module/Path`, Product = bare `Path`), `BuildPath` normalization (= `JoinPathParts`), `RevealDefaultPath` (`.computer`/`.module`/category/path). **Prototype merge** (`MergeRegistrationOptions`) pins the identity fields (IsComputerSensor/SensorLocation + collector-level Path/Type/ComputerName/Module) and takes every metadata field from custom-when-set-else-prototype.
+- **Service-commands sensor** (`hsm_collector_create_service_commands_sensor` + `hsm_service_commands_send_*`): a string sensor at `.module/Service commands` posting the fixed `Service restart/start/stop/update[…]` strings with `Initiator: <x>` comments, registered with the prototype defaults (TTL = `TimeSpan.MaxValue` "never", EnableForGrafana true) and the implicit `IfReceivedNewValue → ThenSendNotification("[$product] $value - $comment")` alert.
+- **Coverage**: `timespan_version_contract`, `options_surface_contract` (options + module/computer/product paths), `service_commands_contract` — all in both drivers; paired wire golden (`native_wire_registration_full_options_*`) + unit tests (`native_version_string_matches_net`, `native_prototype_merge_pins_identity_overrides_metadata`).
+- **Deferred to #1099 (default-sensor catalog):** the per-default-sensor option classes (`DiskSensorOptions`/`NetworkSensorOptions`/`WindowsInfoSensorOptions`/etc.) are pure configuration for the Windows/Unix metric sensors and ship with those sensors; the user-facing sensor machinery (every instant kind, service-commands, the generic option surface, the path/prototype model) is complete here.
 
 ## Known Issues / Limitations
 

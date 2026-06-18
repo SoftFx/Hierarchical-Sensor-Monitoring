@@ -1,5 +1,9 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
+using HSMDataCollector.Prototypes;
+using HSMDataCollector.Prototypes.Collections;
+using HSMDataCollector.Prototypes.Collections.Disks;
+using HSMDataCollector.Prototypes.Collections.Network;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
@@ -12,9 +16,12 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using HSMDataCollector.Alerts;
+using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Tests
 {
@@ -201,6 +208,131 @@ namespace HSMDataCollector.Tests
                             Description = ExpandTextToken(step.Arg(1)),
                             EnumOptions = ParseEnumOptions(step.Arg(2)),
                         }));
+                    break;
+
+                case "create_int_sensor_full_options":
+                    AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(
+                        ExpandTextToken(step.Arg(0)),
+                        new InstantSensorOptions
+                        {
+                            TTL = long.Parse(step.Arg(1)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))) : (TimeSpan?)null,
+                            SensorUnit = int.Parse(step.Arg(2)) >= 0 ? (Unit)int.Parse(step.Arg(2)) : (Unit?)null,
+                            KeepHistory = long.Parse(step.Arg(3)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(3))) : (TimeSpan?)null,
+                            SelfDestroy = long.Parse(step.Arg(4)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(4))) : (TimeSpan?)null,
+                            Statistics = int.Parse(step.Arg(5)) >= 0 ? (StatisticsOptions)int.Parse(step.Arg(5)) : StatisticsOptions.None,
+                            IsSingletonSensor = ParseTriBool(step.Arg(6)),
+                            AggregateData = ParseTriBool(step.Arg(7)),
+                            EnableForGrafana = ParseTriBool(step.Arg(8)),
+                            IsComputerSensor = bool.Parse(step.Arg(9)),
+                            SensorLocation = (SensorLocation)int.Parse(step.Arg(10)),
+                            Description = ExpandTextToken(step.Arg(11)),
+                        }));
+                    break;
+
+                case "create_service_commands_sensor":
+                    AddSensor(state, state.ServiceCommandsSensors, state.Collector.CreateServiceCommandsSensor());
+                    break;
+
+                case "add_default_sensor":
+                    // Build the REAL default-sensor prototype's registration request (#1099) and record
+                    // it. The native driver registers the same id via hsm_collector_add_default_sensor;
+                    // both satisfy the fixture's expect_registration_contains substrings.
+                    state.Sender.RecordRegistration(BuildDefaultSensorRequest(step.Arg(0)));
+                    break;
+
+                case "service_send_custom":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendCustomCommand(ExpandTextToken(step.Arg(1)), ExpandTextToken(step.Arg(2)));
+                    break;
+
+                case "service_send_restart":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendRestart(ExpandTextToken(step.Arg(1)));
+                    break;
+
+                case "service_send_start":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendStart(ExpandTextToken(step.Arg(1)));
+                    break;
+
+                case "service_send_stop":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendStop(ExpandTextToken(step.Arg(1)));
+                    break;
+
+                case "service_send_update":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendUpdate(ExpandTextToken(step.Arg(1)));
+                    break;
+
+                case "service_send_update_version":
+                    state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendUpdate(
+                        ExpandTextToken(step.Arg(1)),
+                        step.Arg(2),
+                        step.TryArg(3, out var oldVersion) ? oldVersion : null);
+                    break;
+
+                case "create_timespan_sensor":
+                    AddSensor(state, state.TimeSpanSensors, state.Collector.CreateTimeSensor(ExpandTextToken(step.Arg(0))));
+                    break;
+
+                case "create_version_sensor":
+                    AddSensor(state, state.VersionSensors, state.Collector.CreateVersionSensor(ExpandTextToken(step.Arg(0))));
+                    break;
+
+                case "add_timespan":
+                    state.TimeSpanSensors[int.Parse(step.Arg(0))]
+                        .AddValue(TimeSpan.FromTicks(long.Parse(step.Arg(1))), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                case "add_version":
+                    state.VersionSensors[int.Parse(step.Arg(0))]
+                        .AddValue(ParseVersion(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                // ---- Alert builder verbs (numeric enum args; see tests/conformance/README.md) ----
+                case "alert_new":
+                    state.CurrentAlert = new AlertBuilder { Kind = step.Arg(0) };
+                    break;
+
+                case "alert_condition":
+                    state.CurrentAlert.AddCondition(
+                        (AlertCombination)int.Parse(step.Arg(0)),
+                        (AlertProperty)int.Parse(step.Arg(1)),
+                        (AlertOperation)int.Parse(step.Arg(2)),
+                        (TargetType)int.Parse(step.Arg(3)),
+                        step.TryArg(4, out var conditionTarget) ? ExpandTextToken(conditionTarget) : null);
+                    break;
+
+                case "alert_notification":
+                    state.CurrentAlert.Template = ExpandTextToken(step.Arg(0));
+                    state.CurrentAlert.Destination = (AlertDestinationMode)int.Parse(step.Arg(1));
+                    break;
+
+                case "alert_icon":
+                    state.CurrentAlert.Icon = ((AlertIcon)int.Parse(step.Arg(0))).ToUtf8();
+                    break;
+
+                case "alert_sensor_error":
+                    state.CurrentAlert.Status = SensorStatus.Error;
+                    break;
+
+                case "alert_confirmation":
+                    state.CurrentAlert.ConfirmationTicks = TimeSpan.FromMilliseconds(long.Parse(step.Arg(0))).Ticks;
+                    break;
+
+                case "alert_inactivity":
+                    state.CurrentAlert.Inactivity = TimeSpan.FromMilliseconds(long.Parse(step.Arg(0)));
+                    break;
+
+                case "alert_disabled":
+                    state.CurrentAlert.IsDisabled = true;
+                    break;
+
+                case "alert_stage":
+                    state.PendingAlerts.Add(state.CurrentAlert);
+                    state.CurrentAlert = null;
+                    break;
+
+                case "create_int_sensor_with_alerts":
+                    AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(
+                        ExpandTextToken(step.Arg(0)),
+                        BuildInstantOptionsWithAlerts(state, long.Parse(step.Arg(1)), int.Parse(step.Arg(2)), ExpandTextToken(step.Arg(3)))));
                     break;
 
                 case "create_last_int_sensor":
@@ -1100,9 +1232,53 @@ namespace HSMDataCollector.Tests
             Assert.Equal(enumCount, payloads.Count(payload => payload.Contains("\"Type\":10,")));
         }
 
+        // The default-sensor catalog (#1099): build a built-in sensor's REAL registration request from
+        // its managed prototype (Prototypes/Collections/**), the same source the production AddX path
+        // uses. The AddAll* path passes null to Get; service status needs a non-null host-service
+        // options object. Names mirror the native DefaultSensorIdFromName map.
+        private static AddOrUpdateSensorRequest BuildDefaultSensorRequest(string id)
+        {
+            switch (id)
+            {
+                case "process_cpu": return new ProcessCpuPrototype().Get(null).ApiRequest;
+                case "process_memory": return new ProcessMemoryPrototype().Get(null).ApiRequest;
+                case "process_thread_count": return new ProcessThreadCountPrototype().Get(null).ApiRequest;
+                case "process_threadpool_thread_count": return new ProcessThreadPoolThreadCountPrototype().Get(null).ApiRequest;
+                case "total_cpu": return new TotalCPUPrototype().Get(null).ApiRequest;
+                case "free_ram": return new FreeRamMemoryPrototype().Get(null).ApiRequest;
+                case "free_disk_space": return new WindowsFreeSpaceOnDiskPrototype().Get(null).ApiRequest;
+                case "free_disk_space_prediction": return new WindowsFreeSpaceOnDiskPredictionPrototype().Get(null).ApiRequest;
+                case "active_disk_time": return new WindowsActiveTimeDiskPrototype().Get(null).ApiRequest;
+                case "disk_queue_length": return new WindowsDiskQueueLengthPrototype().Get(null).ApiRequest;
+                case "disk_write_speed": return new WindowsDiskWriteSpeedPrototype().Get(null).ApiRequest;
+                case "windows_last_restart": return new WindowsLastRestartPrototype().Get(null).ApiRequest;
+                case "windows_install_date": return new WindowsInstallDatePrototype().Get(null).ApiRequest;
+                case "windows_last_update": return new WindowsLastUpdatePrototype().Get(null).ApiRequest;
+                case "windows_version": return new WindowsVersionPrototype().Get(null).ApiRequest;
+                case "windows_app_error_logs": return new WindowsApplicationErrorLogsPrototype().Get(null).ApiRequest;
+                case "windows_sys_error_logs": return new WindowsSystemErrorLogsPrototype().Get(null).ApiRequest;
+                case "windows_app_warning_logs": return new WindowsApplicationWarningLogsPrototype().Get(null).ApiRequest;
+                case "windows_sys_warning_logs": return new WindowsSystemWarningLogsPrototype().Get(null).ApiRequest;
+                case "network_established": return new ConnectionsEstablishedCountPrototype().Get(null).ApiRequest;
+                case "network_failures": return new ConnectionsFailuresCountPrototype().Get(null).ApiRequest;
+                case "network_reset": return new ConnectionsResetCountPrototype().Get(null).ApiRequest;
+                case "collector_alive": return new ServiceAlivePrototype().Get(null).ApiRequest;
+                case "collector_version": return new CollectorVersionPrototype().Get(null).ApiRequest;
+                case "collector_errors": return new CollectorErrorsPrototype().Get(null).ApiRequest;
+                case "product_version": return new ProductVersionPrototype().Get(null).ApiRequest;
+                case "service_status": return new ServiceStatusPrototype().Get(new ServiceSensorOptions { IsHostService = true }).ApiRequest;
+                case "queue_overflow": return new QueueOverflowPrototype().Get(null).ApiRequest;
+                case "queue_values_count": return new PackageValuesCountPrototype().Get(null).ApiRequest;
+                case "queue_process_time": return new PackageProcessTimePrototype().Get(null).ApiRequest;
+                case "queue_content_size": return new PackageContentSizePrototype().Get(null).ApiRequest;
+                default: throw new ArgumentException("Unknown default sensor id name: " + id);
+            }
+        }
+
         // Canonical cross-language registration (AddOrUpdateSensorRequest) text — fixed field
-        // order; the portable subset only (alerts and managed-only flags are asserted by
-        // language-local tests). TTLTicks are .NET ticks (ttl_ms * 10000).
+        // order; the portable subset plus Alerts/TtlAlerts. TTLTicks are .NET ticks (ttl_ms * 10000).
+        // Alerts are serialized through the real System.Text.Json (default encoder, numeric enums),
+        // byte-identical to the native BuildAlertJson embedded in BuildRegistrationJson.
         private static string RegistrationText(AddOrUpdateSensorRequest request)
         {
             var ttls = request.TTLs == null
@@ -1114,6 +1290,13 @@ namespace HSMDataCollector.Tests
                 : "[" + string.Join(",", request.EnumOptions.Select(o =>
                     $"{{\"Key\":{o.Key},\"Value\":\"{EscapeJson(o.Value)}\",\"Color\":{o.Color},\"Description\":\"{EscapeJson(o.Description)}\"}}")) + "]";
 
+            var alerts = request.Alerts == null ? "null" : JsonSerializer.Serialize(request.Alerts);
+            var ttlAlerts = request.TtlAlerts == null ? "null" : JsonSerializer.Serialize(request.TtlAlerts);
+
+            string Long(long? v) => v?.ToString(CultureInfo.InvariantCulture) ?? "null";
+            string Int(int? v) => v?.ToString(CultureInfo.InvariantCulture) ?? "null";
+            string Bool(bool? v) => v.HasValue ? (v.Value ? "true" : "false") : "null";
+
             return "{" +
                    "\"Command\":\"AddOrUpdate\"," +
                    $"\"Path\":\"{EscapeJson(request.Path)}\"," +
@@ -1121,7 +1304,16 @@ namespace HSMDataCollector.Tests
                    $"\"TTLTicks\":{ttls}," +
                    $"\"OriginalUnit\":{(request.OriginalUnit.HasValue ? ((int)request.OriginalUnit.Value).ToString(CultureInfo.InvariantCulture) : "null")}," +
                    $"\"Description\":{(request.Description == null ? "null" : "\"" + EscapeJson(request.Description) + "\"")}," +
-                   $"\"EnumOptions\":{enums}" +
+                   $"\"EnumOptions\":{enums}," +
+                   $"\"Alerts\":{alerts}," +
+                   $"\"TtlAlerts\":{ttlAlerts}," +
+                   $"\"KeepHistory\":{Long(request.KeepHistory)}," +
+                   $"\"SelfDestroy\":{Long(request.SelfDestroy)}," +
+                   $"\"Statistics\":{Int(request.Statistics.HasValue ? (int)request.Statistics.Value : (int?)null)}," +
+                   $"\"DisplayUnit\":{Int(request.DisplayUnit)}," +
+                   $"\"IsSingletonSensor\":{Bool(request.IsSingletonSensor)}," +
+                   $"\"AggregateData\":{Bool(request.AggregateData)}," +
+                   $"\"EnableGrafana\":{Bool(request.EnableGrafana)}" +
                    "}";
         }
 
@@ -1243,6 +1435,13 @@ namespace HSMDataCollector.Tests
             if (value is StringSensorValue stringValue)
                 return "\"" + EscapeJson(stringValue.Value) + "\"";
 
+            // TimeSpan.ToString() is the "c" format; Version.ToString() drops trailing absent parts.
+            if (value is TimeSpanSensorValue timeSpanValue)
+                return "\"" + EscapeJson(timeSpanValue.Value.ToString()) + "\"";
+
+            if (value is VersionSensorValue versionValue)
+                return "\"" + EscapeJson(versionValue.Value.ToString()) + "\"";
+
             throw new InvalidOperationException($"Unsupported conformance payload type '{value.GetType().FullName}'.");
         }
 
@@ -1305,6 +1504,13 @@ namespace HSMDataCollector.Tests
         private static SensorStatus ParseStatus(string value)
         {
             return (SensorStatus)Enum.Parse(typeof(SensorStatus), value);
+        }
+
+        // Tri-state nullable bool from the corpus: -1 => null, 0 => false, else true.
+        private static bool? ParseTriBool(string value)
+        {
+            var v = int.Parse(value, CultureInfo.InvariantCulture);
+            return v < 0 ? (bool?)null : v != 0;
         }
 
         private static SensorStatus ParseRawStatus(string value) => (SensorStatus)int.Parse(value, CultureInfo.InvariantCulture);
@@ -1436,6 +1642,17 @@ namespace HSMDataCollector.Tests
 
             public List<IInstantValueSensor<int>> EnumSensors { get; } = new List<IInstantValueSensor<int>>();
 
+            public List<IInstantValueSensor<TimeSpan>> TimeSpanSensors { get; } = new List<IInstantValueSensor<TimeSpan>>();
+
+            public List<IInstantValueSensor<Version>> VersionSensors { get; } = new List<IInstantValueSensor<Version>>();
+
+            // Alert builder: alert_new starts CurrentAlert, the condition/action verbs mutate it,
+            // alert_stage finalizes it into PendingAlerts, and the next create_*_with_alerts verb
+            // consumes them as the sensor's options.Alerts/TtlAlerts.
+            public AlertBuilder CurrentAlert { get; set; }
+
+            public List<AlertBuilder> PendingAlerts { get; } = new List<AlertBuilder>();
+
             public List<IBarSensor<int>> IntBarSensors { get; } = new List<IBarSensor<int>>();
 
             public List<IBarSensor<double>> DoubleBarSensors { get; } = new List<IBarSensor<double>>();
@@ -1447,6 +1664,94 @@ namespace HSMDataCollector.Tests
             public List<IParamsFuncSensor<int, int>> ValuesFunctionSensors { get; } = new List<IParamsFuncSensor<int, int>>();
 
             public List<IFileSensor> FileSensors { get; } = new List<IFileSensor>();
+
+            public List<IServiceCommandsSensor> ServiceCommandsSensors { get; } = new List<IServiceCommandsSensor>();
+        }
+
+        // Accumulates an alert from the corpus verbs (explicit property/operation/target — the
+        // cross-language contract level; the C# DSL-sugar methods like IfValue are C#-only and
+        // tested separately). Kind selects which AlertBaseTemplate subclass it becomes.
+        private sealed class AlertBuilder
+        {
+            public string Kind = "instant";
+            public List<AlertConditionTemplate> Conditions { get; } = new List<AlertConditionTemplate>();
+            public AlertDestinationMode Destination { get; set; } = AlertDestinationMode.FromParent;
+            public SensorStatus Status { get; set; } = SensorStatus.Ok;
+            public string Template { get; set; }
+            public string Icon { get; set; }
+            public bool IsDisabled { get; set; }
+            public long? ConfirmationTicks { get; set; }
+            public TimeSpan? Inactivity { get; set; }
+
+            public void AddCondition(AlertCombination combination, AlertProperty property, AlertOperation operation, TargetType targetType, string value)
+            {
+                Conditions.Add(AlertConditionTemplate.Build(
+                    AlertTargetTemplate.Build(targetType, targetType == TargetType.LastValue ? null : value),
+                    combination,
+                    operation,
+                    property));
+            }
+        }
+
+        private static AlertBaseTemplate BuildAlertTemplate(AlertBuilder builder)
+        {
+            AlertBaseTemplate template;
+            switch (builder.Kind)
+            {
+                case "bar":
+                    template = new BarAlertTemplate();
+                    break;
+                case "ttl":
+                    template = new SpecialAlertTemplate { TtlValue = builder.Inactivity };
+                    break;
+                default:
+                    template = new InstantAlertTemplate();
+                    break;
+            }
+
+            template.Conditions = builder.Conditions;
+            template.DestinationMode = builder.Destination;
+            template.Status = builder.Status;
+            template.Template = builder.Template;
+            template.Icon = builder.Icon;
+            template.IsDisabled = builder.IsDisabled;
+            template.ConfirmationPeriod = builder.ConfirmationTicks.HasValue ? TimeSpan.FromTicks(builder.ConfirmationTicks.Value) : (TimeSpan?)null;
+            return template;
+        }
+
+        // Drain PendingAlerts into an InstantSensorOptions, partitioning by kind into the typed
+        // Alerts (instant) and TtlAlerts (TTL) lists the converter expects.
+        private static InstantSensorOptions BuildInstantOptionsWithAlerts(ContractState state, long ttlMs, int unit, string description)
+        {
+            var options = new InstantSensorOptions
+            {
+                TTL = ttlMs > 0 ? TimeSpan.FromMilliseconds(ttlMs) : (TimeSpan?)null,
+                SensorUnit = unit >= 0 ? (Unit)unit : (Unit?)null,
+                Description = description,
+            };
+
+            var instant = state.PendingAlerts.Where(a => a.Kind != "ttl").Select(a => (InstantAlertTemplate)BuildAlertTemplate(a)).ToList();
+            var ttl = state.PendingAlerts.Where(a => a.Kind == "ttl").Select(a => (SpecialAlertTemplate)BuildAlertTemplate(a)).ToList();
+
+            if (instant.Count > 0)
+                options.Alerts = instant;
+
+            if (ttl.Count > 0)
+                options.TtlAlerts = ttl;
+
+            state.PendingAlerts.Clear();
+            return options;
+        }
+
+        private static Version ParseVersion(string major)
+        {
+            var parts = major.Split('.');
+            switch (parts.Length)
+            {
+                case 2: return new Version(int.Parse(parts[0]), int.Parse(parts[1]));
+                case 3: return new Version(int.Parse(parts[0]), int.Parse(parts[1]), int.Parse(parts[2]));
+                default: return new Version(major);
+            }
         }
 
         private sealed class RecordingSender : IDataSender
@@ -1517,6 +1822,14 @@ namespace HSMDataCollector.Tests
                 }
 
                 return default;
+            }
+
+            // Record a registration built outside the live send path (#1099 default-sensor catalog:
+            // the prototype request, not a real platform sensor).
+            public void RecordRegistration(AddOrUpdateSensorRequest registration)
+            {
+                lock (_lock)
+                    _registrations.Add(registration);
             }
 
             public IReadOnlyList<AddOrUpdateSensorRequest> Registrations

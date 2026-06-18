@@ -103,7 +103,7 @@ Details: [`overview.md`](../../aicontext/features/collector/overview.md) §Senso
 
 Details: [`public-api/feature.md`](../../aicontext/features/collector/public-api/feature.md)
 
-- [ ] `Create{Bool,Int,Double,String,Version,Time}Sensor(path, description)` + `(path, InstantSensorOptions)`
+- [x] `Create{Bool,Int,Double,String,Version,Time}Sensor(path, description)` + `(path, InstantSensorOptions)` — native instant create for every type incl. TimeSpan(7)/Version(8); conformance: instant_mixed_contract, timespan_version_contract:timespan_instant_value / version_full_value (options overload exercised via create_int_sensor_with_alerts)
 - [x] `CreateEnumSensor(path, description | EnumSensorOptions)` — conformance: enum_contract:enum_zero_payload, registration_contract:enum_sensor_registers_enum_options
 - [ ] `CreateLastValue{Bool,Int,Double,String,Version,TimeSpan}Sensor(path, defaultValue, description)` + generic `CreateLastValueSensor<T>(path, options, defaultValue)`
 - [ ] `CreateRateSensor(path, RateSensorOptions)` + `CreateM1RateSensor` + `CreateM5RateSensor`
@@ -115,13 +115,13 @@ Details: [`public-api/feature.md`](../../aicontext/features/collector/public-api
 - [ ] Collector-level `SendFileAsync(sensorPath, filePath, status, comment)`
 - [ ] `CreateNoParamsFuncSensor<T>(path, descr, Func<T>, interval ms|TimeSpan)` + `Create{1Min,5Min}NoParamsFuncSensor` + `CreateFunctionSensor<T>(path, func, options)`
 - [ ] `CreateParamsFuncSensor<T,U>(path, descr, Func<List<U>,T>, interval)` + `Create{1Min,5Min}ParamsFuncSensor` + `CreateValuesFunctionSensor<T,U>`
-- [ ] `CreateServiceCommandsSensor()`
+- [x] `CreateServiceCommandsSensor()` — native `hsm_collector_create_service_commands_sensor`; conformance: service_commands_contract
 - [ ] Interface `IInstantValueSensor<T>`: `AddValue(v)` / `(v, comment)` / `(v, status, comment)`
 - [x] Interface `ILastValueSensor<T>` (latest value, sends once on stop, default if none) — conformance: last_value_contract:last_int_flushes_latest_on_stop, last_value_contract:last_int_default_flushes_on_stop
 - [ ] Interface `IBarSensor<T>`: `AddValue`, `AddValues(IEnumerable)`, `AddPartial(min,max,mean,first,last,count)`
 - [ ] Interface `IFileSensor`: + `Task<bool> SendFile(filePath, status, comment)`
 - [ ] Interface `IMonitoringRateSensor` (pure alias of `IInstantValueSensor<double>`; defining file is misleadingly named `IMonitoringCounterSensor.cs`)
-- [ ] Interface `IServiceCommandsSensor`: `SendCustomCommand(cmd, initiator)`, `SendUpdate(initiator[, new[, old]])`, `SendRestart/SendStart/SendStop(initiator)`
+- [x] Interface `IServiceCommandsSensor`: `SendCustomCommand(cmd, initiator)`, `SendUpdate(initiator[, new[, old]])`, `SendRestart/SendStart/SendStop(initiator)` — native `hsm_service_commands_send_*`; conformance: service_commands_contract:service_commands_values (fixed command strings + `Initiator:` comment)
 - [ ] Interface `IBaseFuncSensor` (in `Obsolete` folder but NOT `[Obsolete]` — current return type): `GetInterval()`, `RestartTimer(TimeSpan)`, `GetFunc()`; params variant `AddValue(U)`
 - [x] Last-value null-default throws: `CreateLastValueStringSensor(path)` / `CreateLastValueVersionSensor(path)` with implicit null default → `ArgumentException` at creation — conformance: last_value_contract:last_string_null_default_is_rejected
 - [ ] Fluent builders (per-type setters): `InstantSensor<T>` `.Description/.Ttl/.KeepHistory/.Priority/.Configure`; `BarSensor<T>` `.BarPeriod/.PostPeriod/.TickPeriod/.Precision/.Description/.Configure`; `RateSensor` `.PostPeriod/.Description/.Configure`; `.Build()` throws `NotSupportedException` for unsupported `T`
@@ -165,51 +165,60 @@ Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/featu
 
 Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/feature.md) §Options & path model
 
-- [ ] `SensorOptions` common: `Description`, `SensorUnit`, `TTLs`, `KeepHistory`, `SelfDestroy`, `EnableForGrafana`, `IsSingletonSensor`, `AggregateData`, `Statistics(EMA)`, `DefaultAlertsOptions`, `IsForceUpdate`, `IsPrioritySensor`, `IsComputerSensor`, `SensorLocation(Module|Product)`, `TtlAlerts`
-- [ ] Singular conveniences `SensorOptions.TTL` (→ `TTLs`) and `TtlAlert` (→ `TtlAlerts`)
-- [ ] `DisplayUnit` per options type: `NoDisplayUnit`, `RateDisplayUnit { PerSecond=0 … PerMonth=5 }` → wire `DisplayUnit (int?)`
+- [x] `SensorOptions` common: `Description`, `SensorUnit`, `TTLs`, `KeepHistory`, `SelfDestroy`, `EnableForGrafana`, `IsSingletonSensor`, `AggregateData`, `Statistics(EMA)`, `IsComputerSensor`, `SensorLocation(Module|Product)`, `TtlAlerts` — native `hsm_collector_create_sensor_with_options` + `hsm_sensor_options_t`; conformance: options_surface_contract:full_options_register_in_payload + paired golden `native_wire_registration_full_options_*`. (`DefaultAlertsOptions/IsForceUpdate/IsPrioritySensor` remain wire-default 0/false — diag/QoS, #1099.)
+- [x] Singular conveniences `SensorOptions.TTL` (→ `TTLs`, ttl_ms) and `TtlAlert` (→ `TtlAlerts`, the alert builder)
+- [x] `DisplayUnit` per options type → wire `DisplayUnit (int?)` — `hsm_sensor_options_t.display_unit`; pinned by `native_wire_registration_full_options_*` (the `RateDisplayUnit` enum values arrive with rate options, #1100)
 - [ ] `InstantSensorOptions(+Alerts)`; `MonitoringInstantSensorOptions(+PostDataPeriod 15 s)`
 - [ ] `BarSensorOptions(+BarPeriod/BarTickPeriod/Precision/BarAlerts)`
 - [ ] `RateSensorOptions(PostDataPeriod 1 min, Unit=ValueInSecond)`
 - [ ] `FunctionSensorOptions` / `ValuesFunctionSensorOptions(+MaxCacheSize)` — both default `PostDataPeriod` 1 min (ms-param factory overloads default 15 s instead)
 - [ ] `FileSensorOptions(+DefaultFileName/Extension/MaxFileSizeBytes)`
 - [ ] `EnumSensorOptions(+EnumOptions, AggregateData=true, GenerateEnumOptionsDecription())`
-- [ ] `DiskSensorOptions { TargetPath default C:\, CalibrationRequests default 6, PostDataPeriod 5 min }`; `DiskBarSensorOptions { TargetPath }`
-- [ ] `VersionSensorOptions { Version, StartTime }`; `ServiceSensorOptions { ServiceName, IsHostService default true → .module placement, SensorPath }`
-- [ ] `NetworkSensorOptions`; `WindowsInfoSensorOptions { PostDataPeriod default 12 h }`; `CollectorMonitoringInfoOptions`
+- [ ] `DiskSensorOptions { TargetPath default C:\, CalibrationRequests default 6, PostDataPeriod 5 min }`; `DiskBarSensorOptions { TargetPath }` — pure config for the #1099 disk sensors; ships with them
+- [~] `VersionSensorOptions { Version, StartTime }`; `ServiceSensorOptions { ServiceName, IsHostService → .module placement, SensorPath }` — the `IsHostService` → `.module/...` placement is ported and pinned by service_commands_contract (`.module/Service commands`); the option structs themselves carry the #1099 default product-version / service-status sensors
+- [ ] `NetworkSensorOptions`; `WindowsInfoSensorOptions { PostDataPeriod default 12 h }`; `CollectorMonitoringInfoOptions` — config for the #1099 default sensors; ships with them
 - [x] `CalculateSystemPath`: computer → `ComputerName/Path`; module → `ComputerName/Module/Path`; product → `Path` — conformance: instant_int_contract:running_collector_stores_int_payload, instant_int_contract:blank_computer_name_is_omitted_from_payload_path
 - [x] `BuildPath`: join `/`, drop null/empty/whitespace, split interior `/`, collapse `//` — conformance: instant_int_contract:path_duplicate_separators_are_normalized, value_int_contract:path_leading_trailing_slashes_are_normalized
-- [ ] `RevealDefaultPath` = `{.computer|.module}/Category/SensorName`
-- [ ] Prototype merge: custom non-null wins for most properties; `Path/Type/IsComputerSensor/ComputerName/Module` pinned from prototype; custom `DefaultAlertsOptions/IsPrioritySensor/IsForceUpdate` dropped for default sensors
+- [x] `RevealDefaultPath` = `{.computer|.module}/Category/SensorName` — native `RevealDefaultPath`; exercised by service_commands_contract (`.module/Service commands`)
+- [x] Prototype merge: custom non-null wins for most properties; `Path/Type/IsComputerSensor/ComputerName/Module` pinned from prototype — native `MergeRegistrationOptions`; unit: native_prototype_merge_pins_identity_overrides_metadata
 
 ## 7. Alert DSL
 
 Details: [`alerts/feature.md`](../../aicontext/features/collector/alerts/feature.md)
 
-- [ ] Instant conditions: `IfValue/IfComment/IfStatus/IfLenght (actual exported name — misspelled; chaining is AndLength)/IfFileSize/IfReceivedNewValue/IfEmaValue`
-- [ ] Bar conditions: `IfMin/IfMax/IfMean/IfCount/IfFirstValue/IfLastValue/IfBarComment/IfBarStatus/IfReceivedNewBarValue` + EMA variants
-- [ ] TTL entry point `IfInactivityPeriodIs(TimeSpan? = null)` → SpecialAlertCondition (TtlValue feeds wire TTLs)
-- [ ] `.And*` chaining (And-combination)
-- [ ] Actions: `ThenSendNotification(template, AlertDestinationMode = FromParent)` / `ThenSetIcon(string | AlertIcon)` / `ThenSetSensorError`
-- [ ] `ThenSendScheduledNotification(template, time, AlertRepeatMode, instantSend, AlertDestinationMode = FromParent)` + chaining `AndSendScheduledNotification`
-- [ ] `AlertIcon { Ok=0 Warning=1 Error=2 Pause=3 ArrowUp=10 ArrowDown=11 Clock=100 Hourglass=101 }` → UTF-8 emoji string on the wire (`IconExtensions.ToUtf8`)
-- [ ] `AndConfirmationPeriod(TimeSpan)`
-- [ ] `.Build()` / `.BuildAndDisable()` → Instant/Bar/Special templates
-- [ ] TTL alerts via `TtlAlerts` (or singular `TtlAlert`); `DefaultAlertsOptions` flags (DisableTtl=1, DisableStatusChange=2)
+- [x] Instant conditions: `IfValue/IfComment/IfStatus/IfLenght (actual exported name — misspelled; chaining is AndLength)/IfFileSize/IfReceivedNewValue/IfEmaValue` — native ports them as the explicit `(property, operation, target)` C ABI `hsm_alert_add_condition` (the `If*` sugar that picks those values is C#-only); registration payload pinned: alert_registration_contract:instant_alert_registers_in_payload
+- [x] Bar conditions: `IfMin/IfMax/IfMean/IfCount/IfFirstValue/IfLastValue/IfBarComment/IfBarStatus/IfReceivedNewBarValue` + EMA variants — same explicit-condition ABI (`alert_new bar`); properties frozen in `hsm_alert_property_t`
+- [x] TTL entry point `IfInactivityPeriodIs(TimeSpan? = null)` → SpecialAlertCondition (TtlValue feeds wire TTLs) — native `HSM_ALERT_KIND_TTL` + `hsm_alert_set_inactivity_period`; conformance: alert_registration_contract:instant_alert_registers_in_payload ("TTLTicks":[600000000])
+- [x] `.And*` chaining (And/Or combination) — `hsm_alert_combination_t`; conformance: alert_registration_contract:multi_condition_alert_combines_or
+- [x] Actions: `ThenSendNotification(template, AlertDestinationMode = FromParent)` / `ThenSetIcon(string | AlertIcon)` / `ThenSetSensorError` — `hsm_alert_set_notification/set_icon/set_icon_raw/set_sensor_error`
+- [x] `ThenSendScheduledNotification(template, time, AlertRepeatMode, instantSend, AlertDestinationMode = FromParent)` — `hsm_alert_set_scheduled_notification` (ISO-8601-Z time); byte-pinned by WireFormatGoldenLockTests capture
+- [x] `AlertIcon { Ok=0 Warning=1 Error=2 Pause=3 ArrowUp=10 ArrowDown=11 Clock=100 Hourglass=101 }` → UTF-8 emoji string on the wire (`IconExtensions.ToUtf8`) — native `AlertIconUtf8`; Warning→⚠ pinned: alert_registration_contract:instant_alert_registers_in_payload + NativeWireRegistrationWithAlertsMatchesNetByteLayout
+- [x] `AndConfirmationPeriod(TimeSpan)` — `hsm_alert_set_confirmation_period` (ticks); conformance: alert_registration_contract:multi_condition_alert_combines_or
+- [x] `.Build()` / `.BuildAndDisable()` → Instant/Bar/Special templates — `hsm_alert_set_disabled`; the built `AlertData` attaches via `hsm_sensor_attach_alert`
+- [x] TTL alerts via `TtlAlerts`; `Alerts`/`TtlAlerts`/`TTLs` coupling matches `ApiConverters`. `DefaultAlertsOptions` flags (DisableTtl=1, DisableStatusChange=2) [decide] deferred to default sensors (#1099)
 
 ## 8. Default sensors — Windows
 
 Details: [`default-sensors/feature.md`](../../aicontext/features/collector/default-sensors/feature.md)
 
-- [ ] `AddProcessCpu` (`Process \ % Processor Time`, instance = process)
+> **#1099 native port status:** the **registration payload** of every default sensor below is ported
+> and conformance-pinned (`hsm_collector_add_default_sensor` ↔ the real managed prototype) — corpus:
+> `default_sensors_contract:*`; byte goldens: `WireFormatGoldenLockTests.Default_sensor_registrations_match_*`
+> ↔ `NativeDefaultSensorWireMatchesNet`. The boxes below stay `[ ]` because their **live values**
+> (PDH/WMI/registry/EventLog reads) are the live-value follow-up under #1099 — per-platform smoke, not
+> the portable corpus. The metric-source seam (`IPerformanceCounterFactory` equivalent) is ported
+> (`hsm_collector_set_metric_source_factory`, recreate-on-error, dispose-on-stop) with a no-op production
+> factory — native unit: `native_metric_source_seam_lifecycle`.
+
+- [ ] `AddProcessCpu` (`Process \ % Processor Time`, instance = process) — registration: `default_sensors_contract:process_cpu_registers_empty_alerts`
 - [ ] `AddProcessMemory` (`Process \ Working set` → MB)
 - [ ] `AddProcessThreadCount` (`Process \ Thread Count`)
 - [ ] `AddProcessThreadPoolThreadCount` (ThreadPool API)
-- [ ] `AddProcessTimeInGC` (perf counter net472 / EventListener net6+)
+- [ ] `AddProcessTimeInGC` (perf counter net472 / EventListener net6+) — **DROPPED in the native port (#1099):** no managed GC in a native host
 - [ ] `AddProcessMonitoringSensors` bulk
 - [ ] `AddTotalCpu` (`Processor \ % Processor Time \ _Total`)
 - [ ] `AddFreeRamMemory` (`Memory \ Available MBytes`)
-- [ ] `AddGlobalTimeInGC` (`.NET CLR Memory \ % Time in GC \ _Global_`)
+- [ ] `AddGlobalTimeInGC` (`.NET CLR Memory \ % Time in GC \ _Global_`) — **DROPPED in the native port (#1099):** no managed GC in a native host
 - [ ] `AddSystemMonitoringSensors` bulk
 - [ ] `AddFreeDiskSpace` / `AddFreeDisksSpace` (DriveInfo, instant MB, 5 min)
 - [ ] `AddFreeDiskSpacePrediction` / `AddFreeDisksSpacePrediction` (EMA 0.9/0.1, 30 s sampling, calibration first 6 requests — `CalibrationRequests` default, OffTime on growth)
@@ -230,11 +239,11 @@ Details: [`default-sensors/feature.md`](../../aicontext/features/collector/defau
 - [ ] `AddNetworkConnectionFailures` / `AddNetworkConnectionsReset` (deltas)
 - [ ] `AddAllNetworkSensors` bulk
 - [ ] `SubscribeToWindowsServiceStatus(name | options)` (enum of `ServiceControllerStatus`, 5 s poll, send-on-change, alert ≠Running w/ 5 min confirmation, 1 h re-resolve backoff)
-- [ ] Service-status registration payload: `EnumOptions` for 7 `ServiceControllerStatus` members with fixed ARGB colors + generated markdown description; `IsHostService` placement
+- [x] Service-status registration payload: `EnumOptions` for 7 `ServiceControllerStatus` members with fixed ARGB colors + generated markdown description; `IsHostService` placement — conformance: default_sensors_contract:service_status_registers_enum_options
 - [ ] `UnsubscribeWindowsServiceStatus`
 - [ ] ServiceCommands sensor: fixed strings "Service start/stop/restart", "Service update [from X] to Y" + implicit `IfReceivedNewValue → notification` alert
 - [ ] Perf-counter seam: `IPerformanceCounterFactory`/`IPerformanceCounter`, recreate on `InvalidOperationException`, dispose on stop
-- [ ] `AddAllComputerSensors()` / `AddAllModuleSensors(version)` / `AddAllDefaultSensors(version)` bulks
+- [ ] `AddAllComputerSensors()` / `AddAllModuleSensors(version)` / `AddAllDefaultSensors(version)` bulks — group composition (incl. the 4 event-log sensors in windows-info) — native unit: `native_default_sensor_group_composition`
 
 ## 9. Default sensors — Unix
 
@@ -249,13 +258,21 @@ Details: [`default-sensors/feature.md`](../../aicontext/features/collector/defau
 - [ ] `AddFreeDiskSpace` + prediction (root `/` only, DriveInfo/statvfs)
 - [ ] Bulks: process / system / disk / computer / module / default
 - [ ] No external process spawning (kernel files + managed APIs only)
-- [ ] **[decide]** Unix gaps vs Windows: GC time, network, OS info, event logs, service status
+- [x] **[decide]** Unix gaps vs Windows: GC time, network, OS info, event logs, service status — **RESOLVED (#1099):** keep the managed parity subset (process / total CPU / free RAM / root free-disk + prediction); no native systemd/journald/network extensions
+
+> **#1099:** the Unix registration payloads (process/system/root-disk) share the same conformance-pinned
+> catalog rows as their Windows counterparts; the procfs/statvfs **live readers** are the live-value follow-up.
 
 ## 10. Module & diagnostic sensors (cross-platform)
 
 Details: [`default-sensors/feature.md`](../../aicontext/features/collector/default-sensors/feature.md)
 
-- [ ] `AddCollectorAlive` (bool heartbeat, 15 s, first=false, TTL 1 min, KeepHistory 180 d)
+> **#1099 native port status:** registration payloads ported and conformance-pinned
+> (`default_sensors_contract:*`, e.g. `collector_alive_registers_ttl_alert`, `collector_version_registers`,
+> `queue_overflow_registers`); the live feeds (heartbeat scheduler, `MessageDeduplicator` errors, the
+> queue-stats pipeline taps) are the live-value follow-up under #1099.
+
+- [ ] `AddCollectorAlive` (bool heartbeat, 15 s, first=false, TTL 1 min, KeepHistory 180 d) — registration: `default_sensors_contract:collector_alive_registers_ttl_alert`
 - [ ] `AddCollectorVersion` (assembly version + start time, KeepHistory ~5 y)
 - [ ] `AddCollectorErrors` (string, fed by MessageDeduplicator)
 - [ ] `AddProductVersion(VersionSensorOptions)`
@@ -359,8 +376,8 @@ Details: [`api/wire-contract/feature.md`](../../aicontext/features/api/wire-cont
 
 Reference: `src/wrapper/include/` (C++/CLI wrapper as minimal-API oracle)
 
-- [ ] TimeSpan sensor (absent in wrapper)
-- [ ] Version sensor (absent)
+- [x] TimeSpan sensor — native `hsm_collector_create_timespan_sensor` + `hsm_sensor_add_timespan` (#1098)
+- [x] Version sensor — native `hsm_collector_create_version_sensor` + `hsm_sensor_add_version` (#1098)
 - [ ] Enum sensor (absent)
 - [ ] Service-commands sensor (absent)
 - [ ] Lifecycle listeners/events (absent)

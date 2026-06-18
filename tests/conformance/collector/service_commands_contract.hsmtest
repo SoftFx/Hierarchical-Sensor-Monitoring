@@ -1,0 +1,44 @@
+# HSM collector conformance — service-commands sensor (#1098 §4/§7).
+# create_service_commands_sensor                              (no args; fixed prototype identity)
+# service_send_restart|idx|initiator    -> value "Service restart"
+# service_send_start|idx|initiator      -> value "Service start"
+# service_send_stop|idx|initiator       -> value "Service stop"
+# service_send_update|idx|initiator     -> value "Service update"
+# service_send_update_version|idx|initiator|new[|old]
+#       -> "Service update to <new>" / "Service update from <old> to <new>"
+# service_send_custom|idx|command|initiator
+# Every command posts the command string as the value with "Initiator: <initiator>" as the comment.
+# Registration: string sensor at ".module/Service commands" (computer/module prefixed), TTL = never
+# (Int64.MaxValue ticks), EnableGrafana true, and an implicit received-new-value notification alert.
+
+service_commands_values|create_collector
+service_commands_values|create_service_commands_sensor
+service_commands_values|start
+service_commands_values|service_send_restart|0|alice
+service_commands_values|service_send_start|0|alice
+service_commands_values|service_send_stop|0|alice
+service_commands_values|service_send_update|0|alice
+service_commands_values|service_send_update_version|0|alice|2.0
+service_commands_values|service_send_update_version|0|alice|2.0|1.0
+service_commands_values|service_send_custom|0|Custom maintenance|bob
+service_commands_values|expect_sent_count|7
+service_commands_values|expect_payload_contains|0|"Value":"Service restart"
+service_commands_values|expect_payload_contains|0|"Comment":"Initiator: alice"
+service_commands_values|expect_payload_contains|1|"Value":"Service start"
+service_commands_values|expect_payload_contains|2|"Value":"Service stop"
+service_commands_values|expect_payload_contains|3|"Value":"Service update"
+service_commands_values|expect_payload_contains|4|"Value":"Service update to 2.0"
+service_commands_values|expect_payload_contains|5|"Value":"Service update from 1.0 to 2.0"
+service_commands_values|expect_payload_contains|6|"Value":"Custom maintenance"
+service_commands_values|expect_payload_contains|6|"Comment":"Initiator: bob"
+
+service_commands_registration|create_collector
+service_commands_registration|create_service_commands_sensor
+service_commands_registration|start
+service_commands_registration|stop
+service_commands_registration|expect_registration_count|1
+service_commands_registration|expect_registration_contains|0|"SensorType":3,
+service_commands_registration|expect_registration_contains|0|"Path":"conformance-host/conformance-module/.module/Service commands"
+service_commands_registration|expect_registration_contains|0|"TTLTicks":[9223372036854775807]
+service_commands_registration|expect_registration_contains|0|"EnableGrafana":true
+service_commands_registration|expect_registration_contains|0|"Alerts":[{"Conditions":[{"Combination":0,"Operation":50,"Property":200,"Target":{"Type":1,"Value":null}}],"Status":1,"DestinationMode":3,"Template":"[$product] $value - $comment","Icon":null,"IsDisabled":false,"ConfirmationPeriod":null,"ScheduledNotificationTime":null,"ScheduledRepeatMode":null,"ScheduledInstantSend":null}]

@@ -121,6 +121,54 @@ Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySens
 | `Prototypes/Collections/*.cs` | Per-sensor defaults (paths, periods, alerts) |
 | `DefaultSensors/BaseTemplates/*.cs` | Disk space / prediction shared logic |
 
+## Native port (#1099, C++ collector — epic #1093)
+
+The native collector (`src/native/collector`) reproduces the **registration payloads** of the
+default-sensor catalog as a declarative table (`kDefaultSensorCatalog` in `hsm_collector.cpp`); each
+row maps 1:1 to a `Prototypes/Collections/**` prototype. `hsm_collector_add_default_sensor(id, params)`
+plus the `AddAll*`/per-category bulk helpers (C ABI 0.4.0) register the sensor; `params` pins the
+volatile path segments (process name → "Process &lt;name&gt;", disk letter → the `{letter}` slot).
+
+What is byte-pinned (cross-language): `Path` (category + name under `.computer`/`.module`), `SensorType`,
+`OriginalUnit`, `Statistics`, `KeepHistory`, `TTLs`, `AggregateData`/`EnableGrafana`/`IsSingletonSensor`,
+`EnumOptions`, and the default **alert(s)** (EMA scheduled-hourly, free-disk ArrowDown+SensorError,
+windows-info `IfValue` notification, service-status confirmation, service-alive TTL). Parity is locked
+**every catalog row** by the committed normalized golden `tests/conformance/collector/golden/default_sensors_wire.golden`:
+`WireFormatGoldenLockTests.All_default_sensor_registrations_match_the_golden` reproduces it from the REAL
+managed prototypes (`Get(null).ApiRequest` → `HttpRequest`) and native `native_default_sensors_wire_golden`
+reproduces it from the catalog — so a future managed-prototype change to any field diverges loudly. Seven
+representatives additionally carry full (Path+Description-inclusive) byte-locks
+(`Default_sensor_registrations_match_the_native_golden_bytes` ↔ `NativeDefaultSensorWireMatchesNet`), and
+the cross-driver `default_sensors_contract.hsmtest` corpus runs both drivers over the same substrings.
+
+`add_all_default_sensors` registers a **reduced set** vs the managed `AddAllDefaultSensors`: a single `C`
+disk (not the live `DriveInfo.GetDrives()` fan-out) and no GC sensors — so the native bulk is smaller by
+design today (group composition pinned by `native_default_sensor_group_composition`). The full per-drive
+enumeration is the live-value follow-up.
+
+Reproduced managed quirks: an alert-less default sensor emits `"Alerts":[]` (the prototype initializes
+the list — a user `CreateXSensor` with no alerts emits `null`); the `SpecialAlertCondition` TTL alert
+serializes `"Conditions":null`; `Free RAM memory` keeps `Statistics` `None` (it never sets EMA, and the
+production `AddAll*` path passes `null` to `Get`); the scheduled-notification stamp is
+`0001-01-01T12:00:00Z` (carried as a pre-formatted ISO string — it predates the unix epoch and cannot
+round-trip through `gmtime_s`).
+
+`Description` is **not** part of the byte contract — the managed originals interpolate machine-specific
+data (process name, readable periods) and are non-deterministic; the catalog emits a short deterministic
+line and the golden lane overrides the managed `Description` to match.
+
+**Metric-source seam** (the `IPerformanceCounterFactory`/`IPerformanceCounter` equivalent):
+`hsm_collector_set_metric_source_factory` installs a C-callback factory; the native `MetricSource` RAII
+wrapper reads a sample per tick, recreates the source on a read error, and disposes it on stop. The
+production factory is a no-op.
+
+**Out of scope here (live-value follow-up under #1099):** the real platform readers (Windows
+PDH/WMI/registry/EventLog; Linux `/proc/stat`, `/proc/meminfo`, `statvfs`), the per-sensor
+scheduled-tick wiring that pumps those readers, the disk fan-out over real fixed drives, and the
+free-space prediction EMA — all per-platform smoke-tested, not in the portable corpus. **Divergences:**
+the `.NET`-specific time-in-GC sensors are dropped (a native host has no managed GC); the Unix surface
+is the managed parity subset (no native systemd/journald/network extensions).
+
 ## Known Issues / Limitations
 
 - Unix surface is a strict subset of Windows (see gaps above).

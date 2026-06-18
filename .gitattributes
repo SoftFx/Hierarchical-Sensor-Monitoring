@@ -2,3 +2,4 @@
 # Conformance fixtures must be byte-identical on every platform: the corpus is
 # parsed by multiple language drivers, and CRLF checkouts broke the native one.
 *.hsmtest text eol=lf
+*.golden text eol=lf
