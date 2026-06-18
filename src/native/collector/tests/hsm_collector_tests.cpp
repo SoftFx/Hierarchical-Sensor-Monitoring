@@ -79,6 +79,16 @@ extern "C" const char* hsm_collector_test_wire_registration_json(
     const char* enum_description,
     int32_t enum_color,
     const char* path);
+extern "C" const char* hsm_sensor_test_wire_registration_json(hsm_sensor_t* sensor);
+extern "C" const char* hsm_alert_test_wire_json(hsm_alert_t* alert);
+extern "C" const char* hsm_collector_test_merge_registration_json(
+    int proto_is_computer,
+    int64_t proto_ttl_ms,
+    const char* proto_description,
+    int64_t custom_ttl_ms,
+    const char* custom_description,
+    int custom_has_description,
+    const char* path);
 
 namespace
 {
@@ -514,6 +524,11 @@ namespace
         // before these constants are freed. (TSan caught the reverse order as a use-after-free.)
         std::vector<std::unique_ptr<int32_t>> function_constants;
 
+        // Alert builder mirror (numeric enum args). The handles are owned by the collector, so
+        // these are non-owning raw pointers valid until the collector is destroyed.
+        hsm_alert_t* current_alert = nullptr;
+        std::vector<hsm_alert_t*> pending_alerts;
+
         CollectorHandle collector;
     };
 
@@ -735,6 +750,236 @@ namespace
                     state.collector.value, path.c_str(), description.c_str(),
                     options.data(), options.size(), &sensor.value) == HSM_RESULT_OK,
                 "enum sensor create with options failed");
+
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "create_int_sensor_full_options")
+        {
+            Require(step.size() >= 13, "create_int_sensor_full_options requires 12 args");
+            const auto path = ExpandTextToken(step[1]);
+            const auto description = ExpandTextToken(step[12]);
+
+            hsm_sensor_options_t options{};
+            options.ttl_ms = static_cast<int64_t>(std::stoll(step[2]));
+            options.unit = ToInt(step[3]);
+            options.description = description.c_str();
+            options.keep_history_ms = static_cast<int64_t>(std::stoll(step[4]));
+            options.self_destroy_ms = static_cast<int64_t>(std::stoll(step[5]));
+            options.display_unit = -1; // instant sensors carry no DisplayUnit
+            options.statistics = ToInt(step[6]);
+            options.is_singleton = ToInt(step[7]);
+            options.aggregate_data = ToInt(step[8]);
+            options.enable_grafana = ToInt(step[9]);
+            options.is_computer_sensor = ToBool(step[10]);
+            options.sensor_location = ToInt(step[11]);
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_sensor_with_options(state.collector.value, path.c_str(), HSM_SENSOR_TYPE_INT, &options, &sensor.value) == HSM_RESULT_OK,
+                "create_int_sensor_full_options failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "create_service_commands_sensor")
+        {
+            SensorHandle sensor;
+            Require(hsm_collector_create_service_commands_sensor(state.collector.value, &sensor.value) == HSM_RESULT_OK, "service-commands sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "service_send_custom" || action == "service_send_restart" || action == "service_send_start" ||
+            action == "service_send_stop" || action == "service_send_update" || action == "service_send_update_version")
+        {
+            Require(step.size() >= 3, "service_send_* requires sensor index and initiator");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            auto* sensor = state.sensors[sensor_index].value;
+
+            hsm_result_t result = HSM_RESULT_OK;
+            if (action == "service_send_custom")
+            {
+                const auto command = ExpandTextToken(step[2]);
+                const auto initiator = ExpandTextToken(step[3]);
+                result = hsm_service_commands_send_custom(sensor, command.c_str(), initiator.c_str());
+            }
+            else if (action == "service_send_update_version")
+            {
+                const auto initiator = ExpandTextToken(step[2]);
+                const auto new_version = ExpandTextToken(step[3]);
+                const bool has_old = step.size() >= 5;
+                const auto old_version = has_old ? ExpandTextToken(step[4]) : std::string{};
+                result = hsm_service_commands_send_update_version(sensor, initiator.c_str(), new_version.c_str(), has_old ? old_version.c_str() : nullptr);
+            }
+            else
+            {
+                const auto initiator = ExpandTextToken(step[2]);
+                if (action == "service_send_restart")
+                    result = hsm_service_commands_send_restart(sensor, initiator.c_str());
+                else if (action == "service_send_start")
+                    result = hsm_service_commands_send_start(sensor, initiator.c_str());
+                else if (action == "service_send_stop")
+                    result = hsm_service_commands_send_stop(sensor, initiator.c_str());
+                else
+                    result = hsm_service_commands_send_update(sensor, initiator.c_str());
+            }
+            Require(result == HSM_RESULT_OK, "service_send_* failed");
+            return;
+        }
+
+        if (action == "create_timespan_sensor")
+        {
+            Require(step.size() >= 2, "create_timespan_sensor requires path");
+            const auto path = ExpandTextToken(step[1]);
+            SensorHandle sensor;
+            Require(hsm_collector_create_timespan_sensor(state.collector.value, path.c_str(), &sensor.value) == HSM_RESULT_OK, "timespan sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "create_version_sensor")
+        {
+            Require(step.size() >= 2, "create_version_sensor requires path");
+            const auto path = ExpandTextToken(step[1]);
+            SensorHandle sensor;
+            Require(hsm_collector_create_version_sensor(state.collector.value, path.c_str(), &sensor.value) == HSM_RESULT_OK, "version sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "add_timespan")
+        {
+            Require(step.size() >= 5, "add_timespan requires sensor index, ticks, status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto comment = ExpandTextToken(step[4]);
+            Require(
+                hsm_sensor_add_timespan(state.sensors[sensor_index].value, static_cast<int64_t>(std::stoll(step[2])), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                "add_timespan failed");
+            return;
+        }
+
+        if (action == "add_version")
+        {
+            Require(step.size() >= 5, "add_version requires sensor index, version, status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto comment = ExpandTextToken(step[4]);
+
+            // "major.minor[.build[.revision]]" -> components, absent ones become -1.
+            const auto parts = SplitBy(step[2], '.');
+            Require(parts.size() >= 2, "version requires at least major.minor");
+            const int32_t major = ToInt(parts[0]);
+            const int32_t minor = ToInt(parts[1]);
+            const int32_t build = parts.size() >= 3 ? ToInt(parts[2]) : -1;
+            const int32_t revision = parts.size() >= 4 ? ToInt(parts[3]) : -1;
+            Require(
+                hsm_sensor_add_version(state.sensors[sensor_index].value, major, minor, build, revision, ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                "add_version failed");
+            return;
+        }
+
+        // ---- Alert builder verbs (numeric enum args; see tests/conformance/README.md) ----
+        if (action == "alert_new")
+        {
+            Require(step.size() >= 2, "alert_new requires kind");
+            hsm_alert_kind_t kind = HSM_ALERT_KIND_INSTANT;
+            if (step[1] == "bar")
+                kind = HSM_ALERT_KIND_BAR;
+            else if (step[1] == "ttl")
+                kind = HSM_ALERT_KIND_TTL;
+            Require(hsm_collector_create_alert(state.collector.value, kind, &state.current_alert) == HSM_RESULT_OK, "alert_new failed");
+            return;
+        }
+
+        if (action == "alert_condition")
+        {
+            Require(step.size() >= 5, "alert_condition requires combination, property, operation, target_type[, value]");
+            const bool has_value = step.size() >= 6;
+            const auto value = has_value ? ExpandTextToken(step[5]) : std::string{};
+            Require(
+                hsm_alert_add_condition(
+                    state.current_alert,
+                    static_cast<hsm_alert_combination_t>(ToInt(step[1])),
+                    static_cast<hsm_alert_property_t>(ToInt(step[2])),
+                    static_cast<hsm_alert_operation_t>(ToInt(step[3])),
+                    static_cast<hsm_alert_target_type_t>(ToInt(step[4])),
+                    has_value ? value.c_str() : nullptr) == HSM_RESULT_OK,
+                "alert_condition failed");
+            return;
+        }
+
+        if (action == "alert_notification")
+        {
+            Require(step.size() >= 3, "alert_notification requires template and destination");
+            const auto notification_template = ExpandTextToken(step[1]);
+            Require(
+                hsm_alert_set_notification(state.current_alert, notification_template.c_str(), static_cast<hsm_alert_destination_mode_t>(ToInt(step[2]))) == HSM_RESULT_OK,
+                "alert_notification failed");
+            return;
+        }
+
+        if (action == "alert_icon")
+        {
+            Require(step.size() >= 2, "alert_icon requires icon");
+            Require(hsm_alert_set_icon(state.current_alert, static_cast<hsm_alert_icon_t>(ToInt(step[1]))) == HSM_RESULT_OK, "alert_icon failed");
+            return;
+        }
+
+        if (action == "alert_sensor_error")
+        {
+            Require(hsm_alert_set_sensor_error(state.current_alert) == HSM_RESULT_OK, "alert_sensor_error failed");
+            return;
+        }
+
+        if (action == "alert_confirmation")
+        {
+            Require(step.size() >= 2, "alert_confirmation requires period ms");
+            Require(hsm_alert_set_confirmation_period(state.current_alert, static_cast<int64_t>(std::stoll(step[1]))) == HSM_RESULT_OK, "alert_confirmation failed");
+            return;
+        }
+
+        if (action == "alert_inactivity")
+        {
+            Require(step.size() >= 2, "alert_inactivity requires period ms");
+            Require(hsm_alert_set_inactivity_period(state.current_alert, static_cast<int64_t>(std::stoll(step[1]))) == HSM_RESULT_OK, "alert_inactivity failed");
+            return;
+        }
+
+        if (action == "alert_disabled")
+        {
+            Require(hsm_alert_set_disabled(state.current_alert, true) == HSM_RESULT_OK, "alert_disabled failed");
+            return;
+        }
+
+        if (action == "alert_stage")
+        {
+            Require(state.current_alert != nullptr, "alert_stage with no current alert");
+            state.pending_alerts.push_back(state.current_alert);
+            state.current_alert = nullptr;
+            return;
+        }
+
+        if (action == "create_int_sensor_with_alerts")
+        {
+            Require(step.size() >= 5, "create_int_sensor_with_alerts requires path, ttl_ms, unit, description");
+            const auto path = ExpandTextToken(step[1]);
+            const auto description = ExpandTextToken(step[4]);
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_int_sensor_with_options(
+                    state.collector.value, path.c_str(),
+                    static_cast<int64_t>(std::stoll(step[2])), ToInt(step[3]),
+                    description.c_str(), &sensor.value) == HSM_RESULT_OK,
+                "alert sensor create failed");
+
+            for (auto* alert : state.pending_alerts)
+                Require(hsm_sensor_attach_alert(sensor.value, alert) == HSM_RESULT_OK, "attach pending alert failed");
+            state.pending_alerts.clear();
 
             state.sensors.push_back(std::move(sensor));
             return;
@@ -2870,11 +3115,161 @@ namespace
             std::string(hsm_collector_test_wire_registration_json(
                 1, 60000, 3, 1, "d", 1, 1, "v", "ed", -16711936, "p/int")) == "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\","
                                                                               "\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,"
-                                                                              "\"Statistics\":null,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
-                                                                              "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
+                                                                              "\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
+                                                                              "\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
                                                                               "\"EnumOptions\":[{\"Key\":1,\"Value\":\"v\",\"Description\":\"ed\",\"Color\":-16711936}],"
                                                                               "\"Key\":null,\"Path\":\"p/int\"}",
             "AddOrUpdateSensorRequest wire layout");
+    }
+
+    // Build the canonical alert scenario through the C ABI and assert the sensor's wire
+    // registration is byte-identical to the .NET golden (WireFormatGoldenLockTests
+    // .Registration_with_alerts_matches_the_native_golden_bytes). Locks AlertUpdateRequest field
+    // order, numeric enums, the AlertIcon->emoji map escaped to ⚠, ConfirmationPeriod ticks,
+    // the LastValue target serialized null, and the TTL-alert -> TTLs coupling.
+    void NativeWireRegistrationWithAlertsMatchesNetByteLayout()
+    {
+        hsm_collector_options_t options{};
+        options.access_key = "test-key";
+        options.server_address = "https://localhost";
+        options.port = 443;
+        // Empty module/computer_name so the registered path is exactly "p/alert".
+        auto collector = CreateCollector(options);
+
+        SensorHandle sensor;
+        // Description "d", OriginalUnit MB(3), no plain TTL (the TTL alert drives TTLs).
+        Require(
+            hsm_collector_create_int_sensor_with_options(collector.value, "p/alert", 0, 3, "d", &sensor.value) == HSM_RESULT_OK,
+            "alert sensor create");
+
+        hsm_alert_t* data_alert = nullptr;
+        Require(hsm_collector_create_alert(collector.value, HSM_ALERT_KIND_INSTANT, &data_alert) == HSM_RESULT_OK, "data alert create");
+        hsm_alert_add_condition(data_alert, HSM_ALERT_COMBINATION_AND, HSM_ALERT_PROP_VALUE, HSM_ALERT_OP_GREATER_THAN, HSM_ALERT_TARGET_CONST, "42");
+        hsm_alert_add_condition(data_alert, HSM_ALERT_COMBINATION_OR, HSM_ALERT_PROP_STATUS, HSM_ALERT_OP_IS_OK, HSM_ALERT_TARGET_LAST_VALUE, nullptr);
+        hsm_alert_set_sensor_error(data_alert);
+        hsm_alert_set_notification(data_alert, "spike", HSM_ALERT_DESTINATION_ALL_CHATS);
+        hsm_alert_set_icon(data_alert, HSM_ALERT_ICON_WARNING);
+        hsm_alert_set_confirmation_period(data_alert, 300000); // 300000 ms -> 3000000000 ticks
+        Require(hsm_sensor_attach_alert(sensor.value, data_alert) == HSM_RESULT_OK, "attach data alert");
+
+        hsm_alert_t* ttl_alert = nullptr;
+        Require(hsm_collector_create_alert(collector.value, HSM_ALERT_KIND_TTL, &ttl_alert) == HSM_RESULT_OK, "ttl alert create");
+        hsm_alert_set_inactivity_period(ttl_alert, 60000); // 60000 ms -> TTLs [600000000]
+        hsm_alert_set_notification(ttl_alert, "inactive", HSM_ALERT_DESTINATION_FROM_PARENT);
+        Require(hsm_sensor_attach_alert(sensor.value, ttl_alert) == HSM_RESULT_OK, "attach ttl alert");
+
+        Require(
+            std::string(hsm_sensor_test_wire_registration_json(sensor.value)) ==
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":2,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"42\"}},"
+                "{\"Combination\":1,\"Operation\":22,\"Property\":0,\"Target\":{\"Type\":1,\"Value\":null}}],"
+                "\"Status\":3,\"DestinationMode\":200,\"Template\":\"spike\",\"Icon\":\"\\u26A0\",\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":3000000000,\"ScheduledNotificationTime\":null,\"ScheduledRepeatMode\":null,\"ScheduledInstantSend\":null}],"
+                "\"TtlAlerts\":[{\"Conditions\":[],\"Status\":1,\"DestinationMode\":3,\"Template\":\"inactive\",\"Icon\":null,\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":null,\"ScheduledRepeatMode\":null,\"ScheduledInstantSend\":null}],"
+                "\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                "\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":0,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
+                "\"OriginalUnit\":3,\"DisplayUnit\":0,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
+                "\"Key\":null,\"Path\":\"p/alert\"}",
+            "AddOrUpdateSensorRequest wire layout with alerts");
+    }
+
+    // Full SensorOptions surface (#1098 §6) through hsm_collector_create_sensor_with_options; the
+    // sensor's wire registration must be byte-identical to the .NET golden
+    // (WireFormatGoldenLockTests.Registration_full_options_match_the_native_golden_bytes).
+    void NativeWireRegistrationFullOptionsMatchesNetByteLayout()
+    {
+        hsm_collector_options_t collector_options{};
+        collector_options.access_key = "test-key";
+        collector_options.server_address = "https://localhost";
+        collector_options.port = 443;
+        // Empty module/computer so the path stays exactly "comp/mod/full/opts" (the bare user path).
+        auto collector = CreateCollector(collector_options);
+
+        hsm_sensor_options_t options{};
+        options.ttl_ms = 60000; // -> TTLs [600000000]
+        options.unit = 3;       // MB
+        options.description = "d";
+        options.keep_history_ms = 600000;  // -> KeepHistory 6000000000
+        options.self_destroy_ms = 1200000; // -> SelfDestroy 12000000000
+        options.display_unit = 3;
+        options.statistics = 1; // EMA
+        options.is_singleton = 1;
+        options.aggregate_data = 1;
+        options.enable_grafana = 1;
+        options.is_computer_sensor = false;
+        options.sensor_location = 0; // Module
+
+        SensorHandle sensor;
+        Require(
+            hsm_collector_create_sensor_with_options(collector.value, "comp/mod/full/opts", HSM_SENSOR_TYPE_INT, &options, &sensor.value) == HSM_RESULT_OK,
+            "full options sensor create");
+
+        Require(
+            std::string(hsm_sensor_test_wire_registration_json(sensor.value)) ==
+                "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\","
+                "\"DefaultChats\":null,\"KeepHistory\":6000000000,\"SelfDestroy\":12000000000,\"TTLs\":[600000000],\"TTL\":null,"
+                "\"Statistics\":1,\"IsSingletonSensor\":true,\"AggregateData\":true,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":3,\"DisplayUnit\":3,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
+                "\"Key\":null,\"Path\":\"comp/mod/full/opts\"}",
+            "AddOrUpdateSensorRequest wire layout with full options");
+    }
+
+    // Scheduled-notification alert (ThenSendScheduledNotification) — ScheduledNotificationTime is
+    // ISO-8601-Z, ScheduledRepeatMode/InstantSend are emitted. Pinned against the .NET golden
+    // (WireFormatGoldenLockTests.Scheduled_notification_alert_matches_the_native_golden_bytes).
+    // NOTE: native always renders Z (UTC); the managed DateTime's Kind drives its suffix, so a
+    // non-UTC ScheduledNotificationTime would differ — the collector schedule API uses UTC.
+    void NativeAlertScheduledNotificationMatchesNet()
+    {
+        auto collector = CreateCollector();
+        hsm_alert_t* alert = nullptr;
+        Require(hsm_collector_create_alert(collector.value, HSM_ALERT_KIND_INSTANT, &alert) == HSM_RESULT_OK, "create alert");
+        Require(
+            hsm_alert_set_scheduled_notification(alert, "sched", 1500, HSM_ALERT_REPEAT_HOURLY, true, HSM_ALERT_DESTINATION_FROM_PARENT) == HSM_RESULT_OK,
+            "set scheduled notification");
+        Require(
+            std::string(hsm_alert_test_wire_json(alert)) ==
+                "{\"Conditions\":[],\"Status\":1,\"DestinationMode\":3,\"Template\":\"sched\",\"Icon\":null,\"IsDisabled\":false,"
+                "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":\"1970-01-01T00:00:01.5Z\",\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}",
+            "scheduled notification alert wire layout");
+    }
+
+    // Version.ToString() rules: trailing absent (-1) components are dropped, major.minor is the floor.
+    void NativeVersionStringMatchesNet()
+    {
+        auto collector = CreateCollector();
+        SensorHandle sensor;
+        Require(hsm_collector_create_version_sensor(collector.value, "native/version/fmt", &sensor.value) == HSM_RESULT_OK, "version sensor create");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        Require(hsm_sensor_add_version(sensor.value, 1, 2, 3, 4, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add 1.2.3.4");
+        Require(hsm_sensor_add_version(sensor.value, 1, 2, -1, -1, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add 1.2");
+        Require(hsm_sensor_add_version(sensor.value, 2, 0, 5, -1, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add 2.0.5");
+        Require(WaitForSentCountEquals(collector.value, 3), "version values dispatched");
+
+        Require(SentJson(collector.value, 0).find("\"Value\":\"1.2.3.4\"") != std::string::npos, "1.2.3.4");
+        Require(SentJson(collector.value, 1).find("\"Value\":\"1.2\"") != std::string::npos, "1.2");
+        Require(SentJson(collector.value, 2).find("\"Value\":\"2.0.5\"") != std::string::npos, "2.0.5 (revision dropped)");
+    }
+
+    // Prototype merge (DefaultPrototype.Merge): identity (is_computer) is PINNED by the prototype;
+    // metadata (TTL, Description) takes the custom value when set, else the prototype default.
+    void NativePrototypeMergePinsIdentityOverridesMetadata()
+    {
+        // Custom overrides TTL (120000 ms -> 1200000000 ticks) and Description; prototype's
+        // is_computer (=> IsSingletonSensor:true) is pinned and cannot be overridden.
+        const std::string overridden =
+            hsm_collector_test_merge_registration_json(1, 60000, "proto", 120000, "custom", 1, "merge/test");
+        Require(overridden.find("\"TTLTicks\":[1200000000]") != std::string::npos, "custom TTL overrides prototype");
+        Require(overridden.find("\"Description\":\"custom\"") != std::string::npos, "custom description overrides prototype");
+        Require(overridden.find("\"IsSingletonSensor\":true") != std::string::npos, "prototype is_computer pinned");
+
+        // Custom leaves TTL (0) and Description unset -> both fall back to the prototype defaults.
+        const std::string fallback =
+            hsm_collector_test_merge_registration_json(1, 60000, "proto", 0, nullptr, 0, "merge/test");
+        Require(fallback.find("\"TTLTicks\":[600000000]") != std::string::npos, "prototype TTL retained when custom unset");
+        Require(fallback.find("\"Description\":\"proto\"") != std::string::npos, "prototype description retained when custom unset");
+        Require(fallback.find("\"IsSingletonSensor\":true") != std::string::npos, "prototype is_computer still pinned");
     }
 
     void NativeHttpEndpointRoutingMatchesNet()
@@ -3086,6 +3481,11 @@ namespace
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
+            { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
+            { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
+            { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
+            { "native_alert_scheduled_notification_matches_net", [](const std::string&) { NativeAlertScheduledNotificationMatchesNet(); } },
+            { "native_prototype_merge_pins_identity_overrides_metadata", [](const std::string&) { NativePrototypeMergePinsIdentityOverridesMetadata(); } },
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
             { "native_wire_bar_json_matches_net_byte_layout", [](const std::string&) { NativeWireBarJsonMatchesNetByteLayout(); } },
@@ -3152,6 +3552,10 @@ namespace
             { "conformance_file_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_number_format_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_timespan_version_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_alert_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_options_surface_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_service_commands_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };

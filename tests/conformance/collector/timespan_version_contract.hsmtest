@@ -1,0 +1,50 @@
+# HSM collector conformance — instant TimeSpan (type 7) and Version (type 8) sensors.
+# New verbs:
+# create_timespan_sensor|path
+# create_version_sensor|path
+# add_timespan|index|ticks|status|comment           (ticks = TimeSpan.Ticks, 100-ns units)
+# add_version|index|major.minor[.build[.revision]]|status|comment
+# Contract notes:
+# - TimeSpan value serializes as the .NET "c" format ("[d.]hh:mm:ss[.fffffff]", 7-digit fraction).
+# - Version value serializes as Version.ToString(): trailing absent components are dropped, so
+#   major.minor is the minimum (a revision cannot exist without a build).
+# - One sensor per case (index 0) keeps the flat native index aligned with the kind-relative C# one.
+
+timespan_instant_value|create_collector
+timespan_instant_value|create_timespan_sensor|contract/instant/timespan
+timespan_instant_value|start
+timespan_instant_value|add_timespan|0|937840050000|Ok|ts-note
+timespan_instant_value|expect_sent_count|1
+timespan_instant_value|expect_payload_contains|0|"Type":7
+timespan_instant_value|expect_payload_contains|0|"Value":"1.02:03:04.0050000"
+timespan_instant_value|expect_payload_contains|0|"Status":1
+
+timespan_zero_value|create_collector
+timespan_zero_value|create_timespan_sensor|contract/instant/timespan/zero
+timespan_zero_value|start
+timespan_zero_value|add_timespan|0|0|Ok|ts-zero
+timespan_zero_value|expect_sent_count|1
+timespan_zero_value|expect_payload_contains|0|"Value":"00:00:00"
+
+version_full_value|create_collector
+version_full_value|create_version_sensor|contract/instant/version/full
+version_full_value|start
+version_full_value|add_version|0|1.2.3.4|Ok|v-full
+version_full_value|expect_sent_count|1
+version_full_value|expect_payload_contains|0|"Type":8
+version_full_value|expect_payload_contains|0|"Value":"1.2.3.4"
+
+version_drops_trailing_components|create_collector
+version_drops_trailing_components|create_version_sensor|contract/instant/version/short
+version_drops_trailing_components|start
+version_drops_trailing_components|add_version|0|2.0.5|Ok|v-short
+version_drops_trailing_components|add_version|0|1.2|Warning|v-min
+version_drops_trailing_components|expect_sent_count|2
+version_drops_trailing_components|expect_payload_contains|0|"Value":"2.0.5"
+version_drops_trailing_components|expect_payload_contains|1|"Value":"1.2"
+version_drops_trailing_components|expect_payload_contains|1|"Status":2
+
+version_stopped_value_is_dropped|create_collector
+version_stopped_value_is_dropped|create_version_sensor|contract/instant/version/stopped
+version_stopped_value_is_dropped|add_version|0|9.9|Ok|dropped
+version_stopped_value_is_dropped|expect_sent_count|0

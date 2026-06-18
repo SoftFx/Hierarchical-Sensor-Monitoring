@@ -1,0 +1,61 @@
+# HSM collector conformance — alert registration (AddOrUpdateSensorRequest Alerts/TtlAlerts).
+# The alert builder is staged then consumed by a create_*_with_alerts verb (alerts must be known
+# at sensor creation). Enum args are the numeric values of the managed
+# AlertCombination/AlertProperty/AlertOperation/TargetType/AlertDestinationMode/AlertIcon enums.
+# New verbs:
+# alert_new|kind                                   (instant | bar | ttl)
+# alert_condition|combination|property|operation|target_type[|value]   (value omitted/ignored for LastValue=1)
+# alert_notification|template|destination_mode
+# alert_icon|icon                                  (managed AlertIcon -> UTF-8 emoji)
+# alert_sensor_error                               (raises alert Status to Error)
+# alert_confirmation|period_ms
+# alert_inactivity|period_ms                       (TTL alert: feeds TTLs/TtlAlerts)
+# alert_disabled
+# alert_stage                                      (finalize current alert into the pending list)
+# create_int_sensor_with_alerts|path|ttl_ms|unit|description    (consumes the pending alerts)
+# Contract notes:
+# - Alerts serialize as the real AlertUpdateRequest (numeric enums; AlertIcon.Warning -> the emoji
+#   escaped by the default encoder to \u26A0; ConfirmationPeriod in ticks; LastValue target Value is
+#   null). The bytes are also pinned by the paired WireFormatGoldenLockTests / native
+#   NativeWireRegistrationWithAlertsMatchesNetByteLayout.
+# - A TTL alert (IfInactivityPeriodIs) lands in TtlAlerts and its inactivity drives TTLTicks.
+
+instant_alert_registers_in_payload|create_collector
+instant_alert_registers_in_payload|alert_new|instant
+instant_alert_registers_in_payload|alert_condition|0|20|2|0|42
+instant_alert_registers_in_payload|alert_sensor_error
+instant_alert_registers_in_payload|alert_notification|spike|200
+instant_alert_registers_in_payload|alert_icon|1
+instant_alert_registers_in_payload|alert_stage
+instant_alert_registers_in_payload|alert_new|ttl
+instant_alert_registers_in_payload|alert_inactivity|60000
+instant_alert_registers_in_payload|alert_notification|inactive|3
+instant_alert_registers_in_payload|alert_stage
+instant_alert_registers_in_payload|create_int_sensor_with_alerts|contract/alert/basic|0|3|d
+instant_alert_registers_in_payload|start
+instant_alert_registers_in_payload|stop
+instant_alert_registers_in_payload|expect_registration_count|1
+instant_alert_registers_in_payload|expect_registration_contains|0|"Alerts":[{"Conditions":[{"Combination":0,"Operation":2,"Property":20,"Target":{"Type":0,"Value":"42"}}],"Status":3,"DestinationMode":200,"Template":"spike","Icon":"\u26A0","IsDisabled":false,"ConfirmationPeriod":null,"ScheduledNotificationTime":null,"ScheduledRepeatMode":null,"ScheduledInstantSend":null}]
+instant_alert_registers_in_payload|expect_registration_contains|0|"TtlAlerts":[{"Conditions":[],"Status":1,"DestinationMode":3,"Template":"inactive","Icon":null,"IsDisabled":false,"ConfirmationPeriod":null,"ScheduledNotificationTime":null,"ScheduledRepeatMode":null,"ScheduledInstantSend":null}]
+instant_alert_registers_in_payload|expect_registration_contains|0|"TTLTicks":[600000000]
+
+multi_condition_alert_combines_or|create_collector
+multi_condition_alert_combines_or|alert_new|instant
+multi_condition_alert_combines_or|alert_condition|0|20|2|0|10
+multi_condition_alert_combines_or|alert_condition|1|0|22|1
+multi_condition_alert_combines_or|alert_confirmation|300000
+multi_condition_alert_combines_or|alert_disabled
+multi_condition_alert_combines_or|alert_stage
+multi_condition_alert_combines_or|create_int_sensor_with_alerts|contract/alert/multi|0|-1|m
+multi_condition_alert_combines_or|start
+multi_condition_alert_combines_or|stop
+multi_condition_alert_combines_or|expect_registration_count|1
+multi_condition_alert_combines_or|expect_registration_contains|0|"Conditions":[{"Combination":0,"Operation":2,"Property":20,"Target":{"Type":0,"Value":"10"}},{"Combination":1,"Operation":22,"Property":0,"Target":{"Type":1,"Value":null}}]
+multi_condition_alert_combines_or|expect_registration_contains|0|"IsDisabled":true,"ConfirmationPeriod":3000000000
+
+sensor_without_alerts_has_null_alerts|create_collector
+sensor_without_alerts_has_null_alerts|create_int_sensor|contract/alert/none
+sensor_without_alerts_has_null_alerts|start
+sensor_without_alerts_has_null_alerts|stop
+sensor_without_alerts_has_null_alerts|expect_registration_count|1
+sensor_without_alerts_has_null_alerts|expect_registration_contains|0|"Alerts":null,"TtlAlerts":null

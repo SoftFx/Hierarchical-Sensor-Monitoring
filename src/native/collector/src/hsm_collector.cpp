@@ -390,6 +390,21 @@ namespace
         return result;
     }
 
+    // .NET Version.ToString(): "major.minor[.build[.revision]]". A trailing component is emitted
+    // only when present (>= 0) and only if every earlier optional component is present too — a
+    // revision without a build cannot exist (Version forbids it), so build < 0 drops revision.
+    std::string VersionString(int32_t major, int32_t minor, int32_t build, int32_t revision)
+    {
+        std::string text = std::to_string(major) + "." + std::to_string(minor);
+        if (build >= 0)
+        {
+            text += "." + std::to_string(build);
+            if (revision >= 0)
+                text += "." + std::to_string(revision);
+        }
+        return text;
+    }
+
     // .NET TimeSpan "c" (constant/invariant) format: "[-][d.]hh:mm:ss[.fffffff]". The day part is
     // omitted when zero; the fraction is present only when non-zero and is ALWAYS seven digits
     // (100-ns ticks, not trimmed — unlike the ISO time fraction). Input is .NET ticks (100 ns).
@@ -765,18 +780,253 @@ namespace
         std::string description;
     };
 
+    // ---- Alert model (mirrors HSMDataCollector.Alerts -> AlertUpdateRequest) -------------------
+    // One condition; Target.Value is omitted (serialized null) for a LastValue target.
+    struct AlertConditionData
+    {
+        hsm_alert_combination_t combination = HSM_ALERT_COMBINATION_AND;
+        hsm_alert_property_t property = HSM_ALERT_PROP_VALUE;
+        hsm_alert_operation_t operation = HSM_ALERT_OP_EQUAL;
+        hsm_alert_target_type_t target_type = HSM_ALERT_TARGET_CONST;
+        bool target_is_null = true;
+        std::string target_value;
+    };
+
+    // A built alert. Mirrors AlertUpdateRequest field-by-field. has_* flags distinguish an unset
+    // (null on the wire) value from a present one. inactivity is the TTL-alert window only (it is
+    // not an AlertUpdateRequest field; it feeds AddOrUpdate.TTLs in ticks).
+    struct AlertData
+    {
+        hsm_alert_kind_t kind = HSM_ALERT_KIND_INSTANT;
+        std::vector<AlertConditionData> conditions;
+        int status = HSM_SENSOR_STATUS_OK; // SensorStatus; managed AlertAction default is Ok
+        hsm_alert_destination_mode_t destination = HSM_ALERT_DESTINATION_FROM_PARENT;
+        bool has_template = false;
+        std::string template_text;
+        bool has_icon = false;
+        std::string icon; // raw UTF-8; EscapeJsonWire turns non-ASCII into \uXXXX like System.Text.Json
+        bool is_disabled = false;
+        bool has_confirmation = false;
+        int64_t confirmation_ms = 0;
+        bool has_scheduled_time = false;
+        int64_t scheduled_time_unix_ms = 0;
+        bool has_repeat = false;
+        hsm_alert_repeat_mode_t repeat = HSM_ALERT_REPEAT_HOURLY;
+        bool has_instant_send = false;
+        bool instant_send = false;
+        bool has_inactivity = false;
+        int64_t inactivity_ms = 0;
+    };
+
+    // Managed AlertIcon.ToUtf8() (IconExtensions.cs). Returns the raw UTF-8 emoji bytes; the wire
+    // serializer escapes non-ASCII to \uXXXX (astral icons become UTF-16 surrogate pairs).
+    std::string AlertIconUtf8(hsm_alert_icon_t icon)
+    {
+        switch (icon)
+        {
+        case HSM_ALERT_ICON_OK:
+            return "\xE2\x9C\x85"; // U+2705 white heavy check mark
+        case HSM_ALERT_ICON_WARNING:
+            return "\xE2\x9A\xA0"; // U+26A0 warning sign
+        case HSM_ALERT_ICON_ERROR:
+            return "\xE2\x9D\x8C"; // U+274C cross mark
+        case HSM_ALERT_ICON_PAUSE:
+            return "\xE2\x8F\xB8"; // U+23F8 pause
+        case HSM_ALERT_ICON_ARROW_UP:
+            return "\xE2\xAC\x86"; // U+2B06 upwards arrow
+        case HSM_ALERT_ICON_ARROW_DOWN:
+            return "\xE2\xAC\x87"; // U+2B07 downwards arrow
+        case HSM_ALERT_ICON_CLOCK:
+            return "\xF0\x9F\x95\x90"; // U+1F550 clock face one oclock
+        case HSM_ALERT_ICON_HOURGLASS:
+            return "\xE2\x8C\x9B"; // U+231B hourglass
+        default:
+            return std::string();
+        }
+    }
+
+    // Serialize one alert exactly as System.Text.Json renders AlertUpdateRequest (declaration
+    // order; numeric enums; default encoder via EscapeJsonWire; ConfirmationPeriod is ticks =
+    // ms*10000; ScheduledNotificationTime is ISO-8601-Z). The SAME text is embedded by both the
+    // internal corpus registration and the wire registration, so the two never drift.
+    std::string BuildAlertJson(const AlertData& alert)
+    {
+        std::ostringstream json;
+        json << "{\"Conditions\":[";
+        for (size_t i = 0; i < alert.conditions.size(); ++i)
+        {
+            const auto& cond = alert.conditions[i];
+            if (i > 0)
+                json << ",";
+            json << "{\"Combination\":" << static_cast<int>(cond.combination)
+                 << ",\"Operation\":" << static_cast<int>(cond.operation)
+                 << ",\"Property\":" << static_cast<int>(cond.property)
+                 << ",\"Target\":{\"Type\":" << static_cast<int>(cond.target_type)
+                 << ",\"Value\":" << (cond.target_is_null ? std::string("null") : ("\"" + EscapeJsonWire(cond.target_value) + "\""))
+                 << "}}";
+        }
+        json << "]"
+             << ",\"Status\":" << alert.status
+             << ",\"DestinationMode\":" << static_cast<int>(alert.destination)
+             << ",\"Template\":" << (alert.has_template ? ("\"" + EscapeJsonWire(alert.template_text) + "\"") : "null")
+             << ",\"Icon\":" << (alert.has_icon ? ("\"" + EscapeJsonWire(alert.icon) + "\"") : "null")
+             << ",\"IsDisabled\":" << (alert.is_disabled ? "true" : "false")
+             << ",\"ConfirmationPeriod\":" << (alert.has_confirmation ? std::to_string(alert.confirmation_ms * 10000) : "null")
+             << ",\"ScheduledNotificationTime\":" << (alert.has_scheduled_time ? ("\"" + IsoUtcFromUnixMs(alert.scheduled_time_unix_ms) + "\"") : "null")
+             << ",\"ScheduledRepeatMode\":" << (alert.has_repeat ? std::to_string(static_cast<int>(alert.repeat)) : "null")
+             << ",\"ScheduledInstantSend\":" << (alert.has_instant_send ? (alert.instant_send ? "true" : "false") : "null")
+             << "}";
+        return json.str();
+    }
+
+    // "[alert,alert,...]" or "null" when empty — matches a null vs populated List on the wire.
+    std::string BuildAlertArrayJson(const std::vector<AlertData>& alerts)
+    {
+        if (alerts.empty())
+            return "null";
+
+        std::string text = "[";
+        for (size_t i = 0; i < alerts.size(); ++i)
+        {
+            if (i > 0)
+                text += ",";
+            text += BuildAlertJson(alerts[i]);
+        }
+        text += "]";
+        return text;
+    }
+
     // Portable registration-option subset mirroring the managed sensor options
     // (registration_contract.hsmtest). has_description=false => "Description":null —
     // managed instant creates default to "", every other sensor family defaults to null.
+    // Tri-state for a nullable bool wire field: Unset => null, else true/false. Fixed underlying
+    // type so casting an untrusted ABI int (any value) is well-defined (-fsanitize=enum safe).
+    enum class TriBool : int32_t
+    {
+        Unset = -1,
+        False = 0,
+        True = 1
+    };
+
+    // Mirrors the managed SensorLocation: where a non-computer sensor's path is anchored
+    // (CalculateSystemPath). Module => ComputerName/Module/Path; Product => Path (root).
+    enum class SensorLocation : int32_t
+    {
+        Module = 0,
+        Product = 1
+    };
+
     struct RegistrationOptions
     {
         int64_t ttl_ms = 0;
+        // Raw TTL ticks override (for sentinels like TimeSpan.MaxValue = Int64.MaxValue "never",
+        // which cannot be expressed as whole milliseconds). Takes precedence over ttl_ms.
+        bool has_ttl_ticks = false;
+        int64_t ttl_ticks = 0;
         int32_t unit = -1;
         bool has_description = false;
         std::string description;
         bool has_enum_options = false;
         std::vector<EnumOptionData> enum_options;
+        std::vector<AlertData> alerts;     // AddOrUpdate.Alerts (instant/bar data alerts)
+        std::vector<AlertData> ttl_alerts; // AddOrUpdate.TtlAlerts (IfInactivityPeriodIs)
+
+        // Generic SensorOptions surface (#1098 §6). has_*/Unset distinguish "emit null" from a value.
+        bool has_keep_history = false;
+        int64_t keep_history_ms = 0; // -> KeepHistory ticks
+        bool has_self_destroy = false;
+        int64_t self_destroy_ms = 0; // -> SelfDestroy ticks
+        // Statistics and DisplayUnit are emitted by EVERY managed registration, not as null:
+        // SensorOptions.Statistics is a non-nullable StatisticsOptions (default None=0), and the
+        // typed-DisplayUnit ToApi overload renders Convert.ToInt32((TDisplayUnit?)null) == 0. So the
+        // universal default here is 0 (not null). Bar/enum/service sensors override DisplayUnit to
+        // null (their EnumSensorOptions/BarSensorOptions ToApi overloads emit null).
+        bool has_display_unit = true;
+        int32_t display_unit = 0;
+        bool has_statistics = true;
+        int32_t statistics = 0; // StatisticsOptions flags (EMA=1)
+        TriBool aggregate_data = TriBool::Unset;
+        TriBool enable_grafana = TriBool::Unset;
+        // IsSingletonSensor on the wire is `singleton | is_computer_sensor` (ApiConverters): a computer
+        // sensor always registers as a singleton. is_computer_sensor also drives CalculateSystemPath.
+        TriBool is_singleton = TriBool::Unset;
+        bool is_computer_sensor = false;
+        SensorLocation sensor_location = SensorLocation::Module;
     };
+
+    // Prototype merge (DefaultPrototype.Merge): the identity fields (IsComputerSensor / SensorLocation
+    // — and at the collector level Path / Type / ComputerName / Module) are PINNED by the prototype
+    // and cannot be overridden; every metadata field takes the custom value when the caller set it,
+    // else falls back to the prototype default (C# `custom?.X ?? prototype.X`). Returns the merged
+    // options the sensor registers with.
+    RegistrationOptions MergeRegistrationOptions(const RegistrationOptions& prototype, const RegistrationOptions& custom)
+    {
+        RegistrationOptions merged = prototype; // identity fields stay pinned to the prototype
+
+        if (custom.ttl_ms > 0 || custom.has_ttl_ticks)
+        {
+            merged.ttl_ms = custom.ttl_ms;
+            merged.has_ttl_ticks = custom.has_ttl_ticks;
+            merged.ttl_ticks = custom.ttl_ticks;
+        }
+        if (custom.unit >= 0)
+            merged.unit = custom.unit;
+        if (custom.has_description)
+        {
+            merged.has_description = true;
+            merged.description = custom.description;
+        }
+        if (custom.has_keep_history)
+        {
+            merged.has_keep_history = true;
+            merged.keep_history_ms = custom.keep_history_ms;
+        }
+        if (custom.has_self_destroy)
+        {
+            merged.has_self_destroy = true;
+            merged.self_destroy_ms = custom.self_destroy_ms;
+        }
+        if (custom.has_display_unit)
+        {
+            merged.has_display_unit = true;
+            merged.display_unit = custom.display_unit;
+        }
+        if (custom.has_statistics)
+        {
+            merged.has_statistics = true;
+            merged.statistics = custom.statistics;
+        }
+        if (custom.aggregate_data != TriBool::Unset)
+            merged.aggregate_data = custom.aggregate_data;
+        if (custom.enable_grafana != TriBool::Unset)
+            merged.enable_grafana = custom.enable_grafana;
+        if (custom.is_singleton != TriBool::Unset)
+            merged.is_singleton = custom.is_singleton;
+        if (!custom.alerts.empty())
+            merged.alerts = custom.alerts;
+        if (!custom.ttl_alerts.empty())
+            merged.ttl_alerts = custom.ttl_alerts;
+
+        return merged;
+    }
+
+    // IsSingletonSensor wire value = options.IsSingletonSensor | options.IsComputerSensor (nullable
+    // bool OR: null|true=true, null|false=null). Returns "true"/"false"/"null".
+    std::string SingletonWireText(const RegistrationOptions& options)
+    {
+        if (options.is_computer_sensor)
+            return "true";
+        if (options.is_singleton == TriBool::Unset)
+            return "null";
+        return options.is_singleton == TriBool::True ? "true" : "false";
+    }
+
+    std::string TriBoolWireText(TriBool value)
+    {
+        if (value == TriBool::Unset)
+            return "null";
+        return value == TriBool::True ? "true" : "false";
+    }
 
     RegistrationOptions InstantRegistrationDefaults()
     {
@@ -785,13 +1035,48 @@ namespace
         return options;
     }
 
+    // Enum sensors register through EnumSensorOptions, whose ToApi overload emits DisplayUnit=null
+    // (unlike the typed-instant overload's 0). Same instant Description default ("").
+    RegistrationOptions EnumRegistrationDefaults()
+    {
+        RegistrationOptions options = InstantRegistrationDefaults();
+        options.has_display_unit = false;
+        return options;
+    }
+
+    // AddOrUpdate.TTLs (ticks). A TTL alert overrides the plain TTL: when ttl_alerts exist the list
+    // is each alert's inactivity ticks (null where unset), mirroring ApiConverters
+    // (options.TtlAlerts?.Select(a => a.TtlValue?.Ticks) ?? options.TTLs). Else the plain TTL.
+    std::string BuildTtlsText(const RegistrationOptions& options)
+    {
+        if (options.has_ttl_ticks)
+            return "[" + std::to_string(options.ttl_ticks) + "]";
+
+        if (!options.ttl_alerts.empty())
+        {
+            std::string text = "[";
+            for (size_t i = 0; i < options.ttl_alerts.size(); ++i)
+            {
+                if (i > 0)
+                    text += ",";
+                const auto& alert = options.ttl_alerts[i];
+                text += alert.has_inactivity ? std::to_string(alert.inactivity_ms * 10000) : "null";
+            }
+            text += "]";
+            return text;
+        }
+
+        if (options.ttl_ms > 0)
+            return "[" + std::to_string(options.ttl_ms * 10000) + "]";
+
+        return "null";
+    }
+
     // Canonical cross-language registration text — must stay byte-identical to the C#
     // harness RegistrationText (fixed field order; TTL in .NET ticks = ms * 10000).
     std::string BuildRegistrationJson(const std::string& path, hsm_sensor_type_t type, const RegistrationOptions& options)
     {
-        std::string ttl_text = "null";
-        if (options.ttl_ms > 0)
-            ttl_text = "[" + std::to_string(options.ttl_ms * 10000) + "]";
+        const std::string ttl_text = BuildTtlsText(options);
 
         std::string enums_text = "null";
         if (options.has_enum_options)
@@ -815,7 +1100,16 @@ namespace
                ",\"TTLTicks\":" + ttl_text +
                ",\"OriginalUnit\":" + (options.unit >= 0 ? std::to_string(options.unit) : "null") +
                ",\"Description\":" + (options.has_description ? "\"" + EscapeJson(options.description) + "\"" : "null") +
-               ",\"EnumOptions\":" + enums_text + "}";
+               ",\"EnumOptions\":" + enums_text +
+               ",\"Alerts\":" + BuildAlertArrayJson(options.alerts) +
+               ",\"TtlAlerts\":" + BuildAlertArrayJson(options.ttl_alerts) +
+               ",\"KeepHistory\":" + (options.has_keep_history ? std::to_string(options.keep_history_ms * 10000) : "null") +
+               ",\"SelfDestroy\":" + (options.has_self_destroy ? std::to_string(options.self_destroy_ms * 10000) : "null") +
+               ",\"Statistics\":" + (options.has_statistics ? std::to_string(options.statistics) : "null") +
+               ",\"DisplayUnit\":" + (options.has_display_unit ? std::to_string(options.display_unit) : "null") +
+               ",\"IsSingletonSensor\":" + SingletonWireText(options) +
+               ",\"AggregateData\":" + TriBoolWireText(options.aggregate_data) +
+               ",\"EnableGrafana\":" + TriBoolWireText(options.enable_grafana) + "}";
     }
 
     // Real wire JSON for AddOrUpdateSensorRequest (#1096 §15) — byte-identical to net8
@@ -825,9 +1119,7 @@ namespace
     // text's Key,Value,Color,Description). The Command discriminator is Type:0.
     std::string BuildWireRegistrationJson(const std::string& path, hsm_sensor_type_t type, const RegistrationOptions& options)
     {
-        std::string ttls = "null";
-        if (options.ttl_ms > 0)
-            ttls = "[" + std::to_string(options.ttl_ms * 10000) + "]";
+        const std::string ttls = BuildTtlsText(options);
 
         std::string enums = "null";
         if (options.has_enum_options)
@@ -848,22 +1140,22 @@ namespace
 
         std::ostringstream json;
         json << "{\"Type\":0"
-             << ",\"Alerts\":null"
-             << ",\"TtlAlerts\":null"
+             << ",\"Alerts\":" << BuildAlertArrayJson(options.alerts)
+             << ",\"TtlAlerts\":" << BuildAlertArrayJson(options.ttl_alerts)
              << ",\"TtlAlert\":null"
              << ",\"SensorType\":" << static_cast<int>(type)
              << ",\"Description\":" << (options.has_description ? ("\"" + EscapeJsonWire(options.description) + "\"") : "null")
              << ",\"DefaultChats\":null"
-             << ",\"KeepHistory\":null"
-             << ",\"SelfDestroy\":null"
+             << ",\"KeepHistory\":" << (options.has_keep_history ? std::to_string(options.keep_history_ms * 10000) : "null")
+             << ",\"SelfDestroy\":" << (options.has_self_destroy ? std::to_string(options.self_destroy_ms * 10000) : "null")
              << ",\"TTLs\":" << ttls
              << ",\"TTL\":null"
-             << ",\"Statistics\":null"
-             << ",\"IsSingletonSensor\":null"
-             << ",\"AggregateData\":null"
-             << ",\"EnableGrafana\":null"
+             << ",\"Statistics\":" << (options.has_statistics ? std::to_string(options.statistics) : "null")
+             << ",\"IsSingletonSensor\":" << SingletonWireText(options)
+             << ",\"AggregateData\":" << TriBoolWireText(options.aggregate_data)
+             << ",\"EnableGrafana\":" << TriBoolWireText(options.enable_grafana)
              << ",\"OriginalUnit\":" << (options.unit >= 0 ? std::to_string(options.unit) : "null")
-             << ",\"DisplayUnit\":null"
+             << ",\"DisplayUnit\":" << (options.has_display_unit ? std::to_string(options.display_unit) : "null")
              << ",\"DefaultAlertsOptions\":0"
              << ",\"IsForceUpdate\":false"
              << ",\"EnumOptions\":" << enums
@@ -1214,6 +1506,8 @@ namespace
         hsm_result_t AddDouble(double value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddString(const char* value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddEnum(int32_t value, hsm_sensor_status_t status, const char* comment);
+        hsm_result_t AddTimeSpan(int64_t ticks, hsm_sensor_status_t status, const char* comment);
+        hsm_result_t AddVersion(int32_t major, int32_t minor, int32_t build, int32_t revision, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddBarInt(int32_t value);
         hsm_result_t AddBarDouble(double value);
         hsm_result_t AddBarIntPartial(int32_t min, int32_t max, int32_t mean, int32_t first, int32_t last, int32_t count);
@@ -1235,6 +1529,36 @@ namespace
         // without taking the sensor lock (the lock order stays one-way).
         void SetRegistrationJson(std::string json) { registration_json_ = std::move(json); }
         const std::string& RegistrationJson() const { return registration_json_; }
+
+        // Store the registration inputs (full sensor path + options) and build the internal
+        // registration text. Keeping the inputs lets AttachAlert rebuild the payload in place.
+        void SetRegistration(std::string sensor_path, hsm_sensor_type_t type, RegistrationOptions options)
+        {
+            registration_path_ = std::move(sensor_path);
+            registration_type_ = type;
+            registration_options_ = std::move(options);
+            registration_json_ = BuildRegistrationJson(registration_path_, registration_type_, registration_options_);
+        }
+
+        // Attach a built alert and rebuild the registration. Must run before the registration is
+        // emitted (pre-Start, or pre-create-while-running). A TTL alert (IfInactivityPeriodIs) goes
+        // to TtlAlerts and drives TTLs; every other alert goes to Alerts.
+        hsm_result_t AttachAlert(const AlertData& alert)
+        {
+            if (alert.kind == HSM_ALERT_KIND_TTL)
+                registration_options_.ttl_alerts.push_back(alert);
+            else
+                registration_options_.alerts.push_back(alert);
+
+            registration_json_ = BuildRegistrationJson(registration_path_, registration_type_, registration_options_);
+            return HSM_RESULT_OK;
+        }
+
+        // Real wire (System.Text.Json) registration payload, built on demand from the stored inputs.
+        std::string WireRegistrationJson() const
+        {
+            return BuildWireRegistrationJson(registration_path_, registration_type_, registration_options_);
+        }
 
         // Periodic scheduling clock (issue #1095 §13). Set under the collector lock at
         // registration; the periodic due-time and rate elapsed read through it so a test
@@ -1289,6 +1613,9 @@ namespace
         std::string file_extension_;
 
         std::string registration_json_;
+        std::string registration_path_;
+        hsm_sensor_type_t registration_type_ = HSM_SENSOR_TYPE_INT;
+        RegistrationOptions registration_options_;
     };
 
     class NativeCollector : public std::enable_shared_from_this<NativeCollector>
@@ -1596,7 +1923,7 @@ namespace
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
 
             std::lock_guard<std::mutex> guard(mutex_);
-            const auto sensor_path = BuildSensorPath(path);
+            const auto sensor_path = CalculateSystemPath(path, registration);
 
             // Registration is closed while Stopping/Disposed: reject without crashing the host
             // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
@@ -1684,7 +2011,9 @@ namespace
             }
 
             auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, bar_period_ms, precision);
-            RegisterSensorLocked(sensor, type, sensor_path, RegistrationOptions{});
+            RegistrationOptions bar_registration; // Statistics:0 default; bars emit DisplayUnit:null
+            bar_registration.has_display_unit = false;
+            RegisterSensorLocked(sensor, type, sensor_path, bar_registration);
             sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
@@ -1746,7 +2075,10 @@ namespace
             auto sensor = std::make_shared<NativeSensor>(
                 weak_from_this(), sensor_path, type, post_period_ms,
                 int_function, int_values_function, function_user_data, max_cache_size);
-            RegisterSensorLocked(sensor, type, sensor_path, RegistrationOptions{});
+            RegistrationOptions periodic_registration; // Statistics:0, DisplayUnit:0 (member defaults)
+            if (type == HSM_SENSOR_TYPE_RATE)
+                periodic_registration.unit = 3000; // RateSensorOptions default Unit = ValueInSecond
+            RegisterSensorLocked(sensor, type, sensor_path, periodic_registration);
             sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
@@ -1804,6 +2136,54 @@ namespace
 
             ClearError();
             return HSM_RESULT_OK;
+        }
+
+        // Allocate an alert owned by the collector; the returned pointer is stable for the
+        // collector's lifetime and is handed back as the opaque hsm_alert_t handle. Alerts are
+        // built single-threaded by the caller before attachment; the lock only guards the vector.
+        AlertData* CreateAlertData(hsm_alert_kind_t kind)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            auto alert = std::make_shared<AlertData>();
+            alert->kind = kind;
+            alert_data_.push_back(alert);
+            return alert.get();
+        }
+
+        // ServiceCommandsSensor: a string sensor at ".module/Service commands" (the CalculateSystemPath
+        // computer/module prefix is applied as for any sensor) with the managed Description and the
+        // implicit IfReceivedNewValue -> ThenSendNotification("[$product] $value - $comment") alert.
+        hsm_result_t CreateServiceCommandsSensor(std::shared_ptr<NativeSensor>& out_sensor)
+        {
+            RegistrationOptions registration = InstantRegistrationDefaults();
+            registration.description =
+                "This is a special sensor that sends information about various critical commands (Start, Stop, "
+                "Update, Restart, etc.) and information about the initiator.";
+            // Prototype defaults (InstantSensorOptionsPrototype): TTL = TimeSpan.MaxValue ("never") and
+            // EnableForGrafana = true. ServiceSensorOptions is an EnumSensorOptions -> DisplayUnit null
+            // (Statistics = None(0) is the universal default).
+            registration.has_ttl_ticks = true;
+            registration.ttl_ticks = (std::numeric_limits<int64_t>::max)();
+            registration.enable_grafana = TriBool::True;
+            registration.has_display_unit = false;
+
+            AlertData alert;
+            alert.kind = HSM_ALERT_KIND_INSTANT;
+            AlertConditionData received;
+            received.combination = HSM_ALERT_COMBINATION_AND;
+            received.property = HSM_ALERT_PROP_NEW_SENSOR_DATA;
+            received.operation = HSM_ALERT_OP_RECEIVED_NEW_VALUE;
+            received.target_type = HSM_ALERT_TARGET_LAST_VALUE;
+            received.target_is_null = true;
+            alert.conditions.push_back(received);
+            alert.has_template = true;
+            alert.template_text = "[$product] $value - $comment";
+            registration.alerts.push_back(std::move(alert));
+
+            // ServiceCommandsPrototype: RevealDefaultPath(this, Category=null, SensorName) -> the
+            // ".module/Service commands" prototype path (then CalculateSystemPath adds the prefix).
+            const std::string prototype_path = RevealDefaultPath(std::string{}, "Service commands", false);
+            return CreateSensor(prototype_path.c_str(), HSM_SENSOR_TYPE_STRING, false, std::string{}, out_sensor, registration);
         }
 
         hsm_result_t AddValueJson(
@@ -2091,6 +2471,24 @@ namespace
             return JoinPathParts({ computer_name_, module_, path });
         }
 
+        // CalculateSystemPath (SensorOptions.cs): a computer sensor anchors at ComputerName/Path; a
+        // module sensor at ComputerName/Module/Path; a product sensor at the bare Path (root).
+        std::string CalculateSystemPath(const std::string& path, const RegistrationOptions& options) const
+        {
+            if (options.is_computer_sensor)
+                return JoinPathParts({ computer_name_, path });
+            if (options.sensor_location == SensorLocation::Product)
+                return JoinPathParts({ path });
+            return JoinPathParts({ computer_name_, module_, path });
+        }
+
+        // RevealDefaultPath (DefaultPrototype.cs): default sensors live under the `.computer`/`.module`
+        // folder by category. `.computer` for a computer sensor, `.module` otherwise.
+        std::string RevealDefaultPath(const std::string& category, const std::string& path, bool is_computer_sensor) const
+        {
+            return JoinPathParts({ is_computer_sensor ? ".computer" : ".module", category, path });
+        }
+
         // Caller holds mutex_. New sensors register immediately when the collector can start
         // new sensors (Starting/Running — mirrors C# InitAsync on dynamic creation); sensors
         // created before Start are registered by the Start loop.
@@ -2101,7 +2499,7 @@ namespace
             const RegistrationOptions& registration)
         {
             sensor->SetClock(clock_);
-            sensor->SetRegistrationJson(BuildRegistrationJson(sensor_path, type, registration));
+            sensor->SetRegistration(sensor_path, type, registration);
 
             if (CanStartNewSensorsLocked())
             {
@@ -2408,6 +2806,7 @@ namespace
         mutable std::mutex mutex_;
         CollectorState state_ = CollectorState::Stopped;
         std::unordered_map<std::string, std::shared_ptr<NativeSensor>> sensors_;
+        std::vector<std::shared_ptr<AlertData>> alert_data_; // alert handles, owned for the collector's lifetime
         std::vector<std::string> sent_values_;
         std::vector<std::string> registrations_;
         mutable std::string last_error_;
@@ -2522,6 +2921,23 @@ namespace
             return HSM_RESULT_INVALID_ARGUMENT;
 
         return AddValueJson(std::to_string(value), status, comment);
+    }
+
+    hsm_result_t NativeSensor::AddTimeSpan(int64_t ticks, hsm_sensor_status_t status, const char* comment)
+    {
+        if (type_ != HSM_SENSOR_TYPE_TIMESPAN)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        // Value is the "c"-formatted TimeSpan as a JSON string (ASCII-only, so EscapeJson is a no-op).
+        return AddValueJson("\"" + EscapeJson(TimeSpanCFormat(ticks)) + "\"", status, comment);
+    }
+
+    hsm_result_t NativeSensor::AddVersion(int32_t major, int32_t minor, int32_t build, int32_t revision, hsm_sensor_status_t status, const char* comment)
+    {
+        if (type_ != HSM_SENSOR_TYPE_VERSION)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        return AddValueJson("\"" + EscapeJson(VersionString(major, minor, build, revision)) + "\"", status, comment);
     }
 
     hsm_result_t NativeSensor::AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment)
@@ -3171,7 +3587,23 @@ hsm_result_t hsm_collector_create_enum_sensor(
     const char* path,
     hsm_sensor_t** out_sensor)
 {
-    return CreateSensor(collector, path, HSM_SENSOR_TYPE_ENUM, false, std::string{}, out_sensor);
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_ENUM, false, std::string{}, out_sensor, EnumRegistrationDefaults());
+}
+
+hsm_result_t hsm_collector_create_timespan_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_TIMESPAN, false, std::string{}, out_sensor);
+}
+
+hsm_result_t hsm_collector_create_version_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_VERSION, false, std::string{}, out_sensor);
 }
 
 hsm_result_t hsm_collector_create_last_value_int_sensor(
@@ -3272,6 +3704,71 @@ hsm_result_t hsm_collector_create_int_sensor_with_options(
     return CreateSensor(collector, path, HSM_SENSOR_TYPE_INT, false, std::string{}, out_sensor, registration);
 }
 
+hsm_sensor_options_t hsm_sensor_options_default(void)
+{
+    hsm_sensor_options_t options{};
+    options.ttl_ms = 0;
+    options.unit = -1;
+    options.description = nullptr;
+    options.keep_history_ms = 0;
+    options.self_destroy_ms = 0;
+    options.display_unit = -1;
+    options.statistics = -1;
+    options.is_singleton = -1;
+    options.aggregate_data = -1;
+    options.enable_grafana = -1;
+    options.is_computer_sensor = false;
+    options.sensor_location = 0;
+    return options;
+}
+
+hsm_result_t hsm_collector_create_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_type_t type,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
+    if (options == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    auto registration = InstantRegistrationDefaults(); // has_description=true (instant default "")
+    registration.ttl_ms = options->ttl_ms;
+    registration.unit = options->unit;
+    registration.description = CopyString(options->description);
+
+    if (options->keep_history_ms > 0)
+    {
+        registration.has_keep_history = true;
+        registration.keep_history_ms = options->keep_history_ms;
+    }
+    if (options->self_destroy_ms > 0)
+    {
+        registration.has_self_destroy = true;
+        registration.self_destroy_ms = options->self_destroy_ms;
+    }
+    if (options->display_unit >= 0)
+    {
+        registration.has_display_unit = true;
+        registration.display_unit = options->display_unit;
+    }
+    if (options->statistics >= 0)
+    {
+        registration.has_statistics = true;
+        registration.statistics = options->statistics;
+    }
+    registration.is_singleton = static_cast<TriBool>(options->is_singleton);
+    registration.aggregate_data = static_cast<TriBool>(options->aggregate_data);
+    registration.enable_grafana = static_cast<TriBool>(options->enable_grafana);
+    registration.is_computer_sensor = options->is_computer_sensor;
+    registration.sensor_location = options->sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
+
+    return CreateSensor(collector, path, type, false, std::string{}, out_sensor, registration);
+}
+
 hsm_result_t hsm_collector_create_enum_sensor_with_options(
     hsm_collector_t* collector,
     const char* path,
@@ -3287,7 +3784,7 @@ hsm_result_t hsm_collector_create_enum_sensor_with_options(
         return HSM_RESULT_INVALID_ARGUMENT;
     }
 
-    auto registration = InstantRegistrationDefaults();
+    auto registration = EnumRegistrationDefaults();
     registration.description = CopyString(description);
     registration.has_enum_options = true;
     registration.enum_options.reserve(enum_option_count);
@@ -3536,6 +4033,33 @@ hsm_result_t hsm_sensor_add_enum(
     return sensor->impl->AddEnum(value, status, comment);
 }
 
+hsm_result_t hsm_sensor_add_timespan(
+    hsm_sensor_t* sensor,
+    int64_t ticks,
+    hsm_sensor_status_t status,
+    const char* comment)
+{
+    if (sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return sensor->impl->AddTimeSpan(ticks, status, comment);
+}
+
+hsm_result_t hsm_sensor_add_version(
+    hsm_sensor_t* sensor,
+    int32_t major,
+    int32_t minor,
+    int32_t build,
+    int32_t revision,
+    hsm_sensor_status_t status,
+    const char* comment)
+{
+    if (sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return sensor->impl->AddVersion(major, minor, build, revision, status, comment);
+}
+
 hsm_result_t hsm_sensor_add_bar_int(hsm_sensor_t* sensor, int32_t value)
 {
     if (sensor == nullptr)
@@ -3651,4 +4175,267 @@ const char* hsm_collector_last_error(const hsm_collector_t* collector)
         return "Collector handle is null.";
 
     return collector->impl->LastError();
+}
+
+// ---- Alert builders -----------------------------------------------------------------------------
+// hsm_alert_t is an opaque alias for the collector-owned AlertData; the handle stays valid for the
+// collector's lifetime (no separate release).
+hsm_result_t hsm_collector_create_alert(
+    hsm_collector_t* collector,
+    hsm_alert_kind_t kind,
+    hsm_alert_t** out_alert)
+{
+    if (out_alert != nullptr)
+        *out_alert = nullptr;
+
+    if (collector == nullptr || out_alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    *out_alert = reinterpret_cast<hsm_alert_t*>(collector->impl->CreateAlertData(kind));
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_alert_add_condition(
+    hsm_alert_t* alert,
+    hsm_alert_combination_t combination,
+    hsm_alert_property_t property,
+    hsm_alert_operation_t operation,
+    hsm_alert_target_type_t target_type,
+    const char* target_value)
+{
+    if (alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    AlertConditionData condition;
+    condition.combination = combination;
+    condition.property = property;
+    condition.operation = operation;
+    condition.target_type = target_type;
+    // A LastValue target carries no comparand (serialized null); a Const target without an explicit
+    // value also stays null (matches the managed DSL passing target?.ToString() == null).
+    condition.target_is_null = target_type == HSM_ALERT_TARGET_LAST_VALUE || target_value == nullptr;
+    condition.target_value = condition.target_is_null ? std::string{} : target_value;
+
+    reinterpret_cast<AlertData*>(alert)->conditions.push_back(std::move(condition));
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_alert_set_notification(
+    hsm_alert_t* alert,
+    const char* notification_template,
+    hsm_alert_destination_mode_t destination)
+{
+    if (alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    auto* data = reinterpret_cast<AlertData*>(alert);
+    data->has_template = notification_template != nullptr;
+    data->template_text = notification_template != nullptr ? notification_template : "";
+    data->destination = destination;
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_alert_set_scheduled_notification(
+    hsm_alert_t* alert,
+    const char* notification_template,
+    int64_t time_unix_ms,
+    hsm_alert_repeat_mode_t repeat_mode,
+    bool instant_send,
+    hsm_alert_destination_mode_t destination)
+{
+    if (alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    auto* data = reinterpret_cast<AlertData*>(alert);
+    data->has_template = notification_template != nullptr;
+    data->template_text = notification_template != nullptr ? notification_template : "";
+    data->destination = destination;
+    data->has_scheduled_time = true;
+    data->scheduled_time_unix_ms = time_unix_ms;
+    data->has_repeat = true;
+    data->repeat = repeat_mode;
+    data->has_instant_send = true;
+    data->instant_send = instant_send;
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_alert_set_icon(hsm_alert_t* alert, hsm_alert_icon_t icon)
+{
+    if (alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    auto* data = reinterpret_cast<AlertData*>(alert);
+    data->has_icon = true; // managed AndSetIcon always sets Icon (empty string for an unknown enum)
+    data->icon = AlertIconUtf8(icon);
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_alert_set_icon_raw(hsm_alert_t* alert, const char* utf8_icon)
+{
+    if (alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    auto* data = reinterpret_cast<AlertData*>(alert);
+    data->has_icon = utf8_icon != nullptr;
+    data->icon = utf8_icon != nullptr ? utf8_icon : "";
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_alert_set_sensor_error(hsm_alert_t* alert)
+{
+    if (alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    reinterpret_cast<AlertData*>(alert)->status = HSM_SENSOR_STATUS_ERROR;
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_alert_set_confirmation_period(hsm_alert_t* alert, int64_t period_ms)
+{
+    if (alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    auto* data = reinterpret_cast<AlertData*>(alert);
+    data->has_confirmation = true;
+    data->confirmation_ms = period_ms;
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_alert_set_disabled(hsm_alert_t* alert, bool disabled)
+{
+    if (alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    reinterpret_cast<AlertData*>(alert)->is_disabled = disabled;
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_alert_set_inactivity_period(hsm_alert_t* alert, int64_t period_ms)
+{
+    if (alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    auto* data = reinterpret_cast<AlertData*>(alert);
+    data->has_inactivity = true;
+    data->inactivity_ms = period_ms;
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert)
+{
+    if (sensor == nullptr || alert == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return sensor->impl->AttachAlert(*reinterpret_cast<AlertData*>(alert));
+}
+
+// Test-only: the wire (System.Text.Json) registration payload of a built sensor, including any
+// attached alerts — the byte source the native_wire_* unit tests pin against the .NET golden.
+extern "C" const char* hsm_sensor_test_wire_registration_json(hsm_sensor_t* sensor)
+{
+    static thread_local std::string buffer;
+    buffer = sensor != nullptr ? sensor->impl->WireRegistrationJson() : std::string{};
+    return buffer.c_str();
+}
+
+// Test-only: one alert serialized as System.Text.Json renders AlertUpdateRequest.
+extern "C" const char* hsm_alert_test_wire_json(hsm_alert_t* alert)
+{
+    static thread_local std::string buffer;
+    buffer = alert != nullptr ? BuildAlertJson(*reinterpret_cast<AlertData*>(alert)) : std::string{};
+    return buffer.c_str();
+}
+
+// Test-only: merge a prototype (identity is_computer + a TTL/description default) with custom
+// overrides and return the merged internal registration text — pins the prototype-merge contract.
+extern "C" const char* hsm_collector_test_merge_registration_json(
+    int proto_is_computer,
+    int64_t proto_ttl_ms,
+    const char* proto_description,
+    int64_t custom_ttl_ms,
+    const char* custom_description,
+    int custom_has_description,
+    const char* path)
+{
+    static thread_local std::string buffer;
+
+    RegistrationOptions prototype = InstantRegistrationDefaults();
+    prototype.is_computer_sensor = proto_is_computer != 0;
+    prototype.ttl_ms = proto_ttl_ms;
+    prototype.description = proto_description != nullptr ? proto_description : "";
+
+    RegistrationOptions custom; // a fresh "user options": has_description false unless set
+    custom.ttl_ms = custom_ttl_ms;
+    if (custom_has_description != 0)
+    {
+        custom.has_description = true;
+        custom.description = custom_description != nullptr ? custom_description : "";
+    }
+
+    const auto merged = MergeRegistrationOptions(prototype, custom);
+    buffer = BuildRegistrationJson(path != nullptr ? path : "", HSM_SENSOR_TYPE_INT, merged);
+    return buffer.c_str();
+}
+
+// ---- Service-commands sensor --------------------------------------------------------------------
+hsm_result_t hsm_collector_create_service_commands_sensor(hsm_collector_t* collector, hsm_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
+    if (collector == nullptr || out_sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    std::shared_ptr<NativeSensor> sensor;
+    const auto result = collector->impl->CreateServiceCommandsSensor(sensor);
+    if (result != HSM_RESULT_OK)
+        return result;
+
+    *out_sensor = new hsm_sensor_t{ std::move(sensor) };
+    return HSM_RESULT_OK;
+}
+
+// A command posts the command string as the value with "Initiator: <initiator>" as the comment
+// (SensorBase.SendValue default status Ok), matching ServiceCommandsSensor.SendCustomCommand.
+hsm_result_t hsm_service_commands_send_custom(hsm_sensor_t* sensor, const char* command, const char* initiator)
+{
+    if (sensor == nullptr || command == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const std::string comment = std::string("Initiator: ") + (initiator != nullptr ? initiator : "");
+    return sensor->impl->AddString(command, HSM_SENSOR_STATUS_OK, comment.c_str());
+}
+
+hsm_result_t hsm_service_commands_send_restart(hsm_sensor_t* sensor, const char* initiator)
+{
+    return hsm_service_commands_send_custom(sensor, "Service restart", initiator);
+}
+
+hsm_result_t hsm_service_commands_send_start(hsm_sensor_t* sensor, const char* initiator)
+{
+    return hsm_service_commands_send_custom(sensor, "Service start", initiator);
+}
+
+hsm_result_t hsm_service_commands_send_stop(hsm_sensor_t* sensor, const char* initiator)
+{
+    return hsm_service_commands_send_custom(sensor, "Service stop", initiator);
+}
+
+hsm_result_t hsm_service_commands_send_update(hsm_sensor_t* sensor, const char* initiator)
+{
+    return hsm_service_commands_send_custom(sensor, "Service update", initiator);
+}
+
+hsm_result_t hsm_service_commands_send_update_version(
+    hsm_sensor_t* sensor,
+    const char* initiator,
+    const char* new_version,
+    const char* old_version)
+{
+    const std::string new_text = new_version != nullptr ? new_version : "";
+    const bool has_old = old_version != nullptr && old_version[0] != '\0';
+    const std::string command = has_old
+                                    ? "Service update from " + std::string(old_version) + " to " + new_text
+                                    : "Service update to " + new_text;
+    return hsm_service_commands_send_custom(sensor, command.c_str(), initiator);
 }
