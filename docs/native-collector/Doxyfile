@@ -1,0 +1,27 @@
+# Doxygen configuration for the native collector public C++ API (#1100).
+# Run from the repository root:  doxygen docs/native-collector/Doxyfile
+# Output: build/doxygen/html. The CI "doxygen" lane runs this with WARN_AS_ERROR so malformed
+# doc-comments / broken references fail the build; it then uploads build/doxygen/html as an artifact.
+
+PROJECT_NAME           = "HSM Native Collector C++ API"
+PROJECT_NUMBER         = 0.4.0
+PROJECT_BRIEF          = "RAII C++ wrapper over the HSM collector C ABI"
+
+OUTPUT_DIRECTORY       = build/doxygen
+INPUT                  = src/native/collector/include/hsm_collector
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.hpp
+
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+JAVADOC_AUTOBRIEF      = YES
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+WARN_AS_ERROR          = YES

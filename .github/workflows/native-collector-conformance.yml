@@ -7,9 +7,13 @@ name: Native collector conformance
 #
 # Lanes (#1095 toolchain hardening):
 # - format-check : clang-format (pinned) must report no diff.
-# - native-conformance : MSVC + gcc, warnings-as-errors, the corpus via ctest.
+# - native-conformance : MSVC + gcc, warnings-as-errors, the corpus via ctest. Also builds the
+#   in-tree console example and runs the #1100 native_wrapper_* byte-equality tests.
 # - native-conformance-clang : the same on Linux clang (toolchain matrix).
 # - sanitizers : the suite under clang ASan+UBSan and TSan on Linux.
+# - install-consume (#1100) : install the package, then build+run the standalone find_package
+#   consumer against it (the clean-machine consumability proof).
+# - doxygen (#1100) : generate the public C++ API reference warning-clean and upload it.
 
 on:
   push:
@@ -17,6 +21,7 @@ on:
     paths:
       - 'src/native/**'
       - 'tests/conformance/**'
+      - 'docs/native-collector/**'
       - '.github/workflows/native-collector-conformance.yml'
   pull_request:
     # ready_for_review is required so tests run when a draft is marked ready
@@ -132,6 +137,61 @@ jobs:
       # Transport E2E (real libcurl against a loopback capture server), route table, retry policy.
       - name: Test (HTTP lane)
         run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http"
+
+  install-consume:
+    # Clean-machine consumability proof (#1100 "Done when"): build + install the package to a
+    # staging prefix, then configure/build/run the standalone example purely through
+    # find_package(hsm_collector) — it never sees the collector source tree.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S src/native/collector -B build/native-install -DHSM_COLLECTOR_WERROR=ON
+
+      - name: Build
+        run: cmake --build build/native-install --config Release --parallel
+
+      - name: Install to staging prefix
+        run: cmake --install build/native-install --config Release --prefix "${{ runner.temp }}/hsm-prefix"
+
+      - name: Configure standalone consumer (find_package)
+        run: >
+          cmake -S src/native/collector/examples/console/standalone
+          -B build/native-standalone
+          -DCMAKE_PREFIX_PATH="${{ runner.temp }}/hsm-prefix"
+
+      - name: Build standalone consumer
+        run: cmake --build build/native-standalone --config Release --parallel
+
+      - name: Run standalone consumer
+        shell: bash
+        run: |
+          bin=$(find build/native-standalone \( -name 'hsm_console_standalone' -o -name 'hsm_console_standalone.exe' \) -type f | head -1)
+          echo "running $bin"
+          "$bin"
+
+  doxygen:
+    # Generate the public C++ API reference; WARN_AS_ERROR in the Doxyfile fails the lane on a
+    # malformed doc-comment or broken reference. The HTML is uploaded as an artifact.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install doxygen
+        run: sudo apt-get update && sudo apt-get install -y doxygen
+      - name: Generate API reference (warning-clean)
+        run: doxygen docs/native-collector/Doxyfile
+      - name: Upload API reference
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-collector-api-docs
+          path: build/doxygen/html
 
   sanitizers:
     # ASan+UBSan and TSan on Linux clang. These exercise the multi-threaded
