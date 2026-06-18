@@ -166,7 +166,7 @@ namespace HSMServer.Core.Model.Policies
 
         public override string ToString()
         {
-            var sb = new StringBuilder($"If Inactivity period = {_ttl.Value}");
+            var sb = new StringBuilder($"If Inactivity Period = {_ttl.Value}");
 
             return ActionsToString(sb).ToString();
         }

@@ -12,7 +12,7 @@ public sealed class EditAlertsViewModel
     public List<Guid> SelectedNodes => string.IsNullOrEmpty(NodeIds) ? new() : NodeIds.Split(',').Select(x => x.ToGuid()).ToList();
 
 
-    [Display(Name = "Time to sensor(s) live")]
+    [Display(Name = "Inactivity Period")]
     [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
     public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new(PredefinedIntervals.ForFolderTimeout);
 

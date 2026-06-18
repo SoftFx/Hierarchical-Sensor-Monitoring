@@ -291,7 +291,7 @@ namespace HSMServer.Controllers
                     };
 
                     if (isExpectedFromParent)
-                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Time to sensor(s) live", TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Inactivity Period", TimeInterval.FromParent);
                     else
                     {
                         toastViewModel.AddItem(folder);
@@ -318,7 +318,7 @@ namespace HSMServer.Controllers
                     };
 
                     if (!expectedUpdate)
-                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to sensor(s) live", TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Inactivity Period", TimeInterval.FromParent);
                     else
                     {
                         toastViewModel.AddItem(product);
