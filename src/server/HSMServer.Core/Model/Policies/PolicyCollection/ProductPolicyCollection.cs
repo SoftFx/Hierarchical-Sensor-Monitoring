@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Cache;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model.NodeSettings;
 using System;
 using System.Collections.Concurrent;
@@ -17,32 +17,17 @@ namespace HSMServer.Core.Model.Policies
         // Bounded view of the owning product's Settings.TTL: same CurValue, no parent chain.
         // "From Parent" on a node-level TTL alert resolves against THIS node's own setting
         // and stops here — Never if the node itself has no explicit TTL.
-        private readonly TimeIntervalSettingProperty _boundedTtl = new();
+        // Reads through to the source on every access, so later changes to Settings.TTL
+        // are picked up without event subscriptions.
+        private readonly BoundedTtlSource _boundedTtl = new();
 
 
-        // Resolution source for node-level TTL policies with IsTTLFromParent == true.
-        // Refresh on every read so changes to the product's Settings.TTL are picked up
-        // without needing event subscriptions. This is not a hot path.
-        protected override TimeIntervalSettingProperty TTLParentSource
-        {
-            get
-            {
-                SyncBoundedTtl();
-                return _boundedTtl;
-            }
-        }
-
-        private void SyncBoundedTtl()
-        {
-            // TrySetValue no-ops when string representations match, so calling this
-            // on every TTLParentSource read is cheap and avoids event subscriptions.
-            _boundedTtl.TrySetValue(_model.Settings.TTL.CurValue);
-        }
+        protected override TimeIntervalSettingProperty TTLParentSource => _boundedTtl;
 
         internal override void Attach(BaseNodeModel model)
         {
             base.Attach(model);
-            SyncBoundedTtl();
+            _boundedTtl.SetSource(() => model.Settings.TTL.CurValue);
         }
 
 
@@ -114,6 +99,32 @@ namespace HSMServer.Core.Model.Policies
                     _templateToGroup.TryRemove(group.Template, out _);
                     _groups.Remove(groupId, out _);
                 }
+            }
+        }
+
+
+        // Self-bounded TTL source: behaves like a TimeIntervalSettingProperty whose CurValue
+        // is whatever the owning product's Settings.TTL holds, but with no parent chain —
+        // IsFromParent values fall through to EmptyValue (Never).
+        private sealed class BoundedTtlSource : TimeIntervalSettingProperty
+        {
+            private Func<TimeIntervalModel> _source;
+
+            internal void SetSource(Func<TimeIntervalModel> source) => _source = source;
+
+            private TimeIntervalModel Current => _source?.Invoke();
+
+            public override bool IsSet => Current is { } current && !current.IsFromParent;
+
+            public override TimeIntervalModel Value =>
+                Current is { } current && !current.IsFromParent ? current : EmptyValue;
+
+            public override string GetJournalValue(string customNone = null)
+            {
+                var current = Current;
+                if (current is null || current.IsNone)
+                    return customNone ?? EmptyValue.ToString();
+                return current.ToString();
             }
         }
     }
