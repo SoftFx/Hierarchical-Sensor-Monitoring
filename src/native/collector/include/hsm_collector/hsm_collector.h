@@ -416,14 +416,19 @@ typedef enum hsm_default_sensor_t HSM_ENUM_INT32
 
 /* Deterministic substitutions for the volatile path/alert segments (the managed prototypes read
    these from the live machine). All fields are optional: NULL/sentinel takes the documented
-   default. Start from hsm_default_sensor_params_default(). */
+   default. Start from hsm_default_sensor_params_default(). Only process_name and disk_letter affect
+   the registration today; the remaining fields are RESERVED for the #1099 live-value follow-up
+   (the readers + non-host service placement) and are currently ignored. */
 typedef struct hsm_default_sensor_params_t
 {
     const char* process_name;    /* "Process <name>" category; NULL => "process" */
     const char* disk_letter;     /* the {letter} in a disk sensor name; NULL => "C" */
-    const char* service_name;    /* reserved for service-status resolution; NULL => "" */
-    int is_host_service;         /* service-status placement: 1 => .module, 0 => SensorPath; default 1 */
-    const char* product_version; /* product-version display value (not in registration); NULL => "" */
+    const char* service_name;    /* RESERVED (not yet honored): service-status resolution */
+    int is_host_service;         /* RESERVED (not yet honored): service-status registers under .module
+                                    regardless — non-host placement lands with the live readers */
+    const char* product_version; /* RESERVED: only gates WHETHER the product-version sensor registers
+                                    (in hsm_collector_add_all_module_sensors); the value has no
+                                    destination until live values land */
 } hsm_default_sensor_params_t;
 
 hsm_default_sensor_params_t hsm_default_sensor_params_default(void);
@@ -478,8 +483,11 @@ typedef int (*hsm_metric_source_factory_fn)(
     hsm_metric_dispose_fn* out_dispose,
     void** out_source_user_data);
 
-/* Install the metric-source factory (replaces the no-op default). Passing NULL restores the
-   no-op. Call before Start; existing default monitoring sensors pick the factory up on Start. */
+/* Install the metric-source factory (replaces the no-op default). Passing NULL restores the no-op.
+   NOTE (#1099): this stores the factory and is exercised by the seam lifecycle, but no scheduled
+   default sensor reads it yet — the production factory is a no-op and the per-sensor scheduled-tick
+   wiring lands with the live readers (the live-value follow-up). Installing a real factory before
+   Start does NOT yet produce live values. */
 hsm_result_t hsm_collector_set_metric_source_factory(
     hsm_collector_t* collector,
     hsm_metric_source_factory_fn factory,

@@ -1115,8 +1115,11 @@ namespace
         int64_t keep_history_ms; // 0 => KeepHistory null
         bool ttl_never;          // TTLs = [Int64.MaxValue]
         int64_t ttl_ms;          // explicit TTL (0 => none); ignored when ttl_never or a TTL alert is present
+        // Scheduling/routing scaffolding — NOT consumed yet (the live-value follow-up): bar sensors
+        // register with the fixed kDefaultBarPeriodMs, and priority routing is not wired. Kept on the
+        // row so the follow-up has the per-sensor values in one place.
         bool is_priority;        // queue diagnostics (collector-internal routing, not a wire field)
-        int64_t post_period_ms;  // scheduling period (not a wire field)
+        int64_t post_period_ms;  // scheduled post period (not a wire field)
         const char* description; // short deterministic line (not byte-pinned)
         DefaultAlertSpec alert;
     };
@@ -2309,21 +2312,19 @@ namespace
             return HSM_RESULT_OK;
         }
 
-        hsm_result_t CreateBarSensor(
-            const char* path,
+        // Shared registration-cap/idempotency body for a bar sensor at an already-resolved sensor_path.
+        // Caller holds mutex_. Mirrors the managed CanRegisterSensors gate (reject inert while
+        // Stopping/Disposed), the duplicate-path-is-idempotent rule (same handle, not counted), and the
+        // MaxSensors cap. The plain and default-catalog bar creates differ only in how they compute
+        // sensor_path + registration; they share this block so the cap/idempotency logic lives once.
+        hsm_result_t RegisterBarSensorLocked(
+            const std::string& sensor_path,
             hsm_sensor_type_t type,
             int64_t bar_period_ms,
             int32_t precision,
+            const RegistrationOptions& registration,
             std::shared_ptr<NativeSensor>& out_sensor)
         {
-            if (!IsValidPath(path))
-                return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
-
-            std::lock_guard<std::mutex> guard(mutex_);
-            const auto sensor_path = BuildSensorPath(path);
-
-            // Registration is closed while Stopping/Disposed: reject without crashing the host
-            // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
             if (!CanRegisterSensorsLocked())
             {
                 out_sensor.reset();
@@ -2344,8 +2345,6 @@ namespace
                 return HSM_RESULT_OK;
             }
 
-            // A registered path returns its existing handle above (idempotent, not counted);
-            // a genuinely new sensor is capped at MaxSensors (managed registration cap).
             if (sensors_.size() >= static_cast<size_t>(max_sensors_))
             {
                 out_sensor.reset();
@@ -2353,14 +2352,28 @@ namespace
             }
 
             auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, bar_period_ms, precision);
-            RegistrationOptions bar_registration; // Statistics:0 default; bars emit DisplayUnit:null
-            bar_registration.has_display_unit = false;
-            RegisterSensorLocked(sensor, type, sensor_path, bar_registration);
+            RegisterSensorLocked(sensor, type, sensor_path, registration);
             sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
             ClearError();
             return HSM_RESULT_OK;
+        }
+
+        hsm_result_t CreateBarSensor(
+            const char* path,
+            hsm_sensor_type_t type,
+            int64_t bar_period_ms,
+            int32_t precision,
+            std::shared_ptr<NativeSensor>& out_sensor)
+        {
+            if (!IsValidPath(path))
+                return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            RegistrationOptions bar_registration; // Statistics:0 default; bars emit DisplayUnit:null
+            bar_registration.has_display_unit = false;
+            return RegisterBarSensorLocked(BuildSensorPath(path), type, bar_period_ms, precision, bar_registration, out_sensor);
         }
 
         hsm_result_t CreatePeriodicSensor(
@@ -2569,41 +2582,8 @@ namespace
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
 
             std::lock_guard<std::mutex> guard(mutex_);
-            const auto sensor_path = CalculateSystemPath(prototype_path, registration);
-
-            if (!CanRegisterSensorsLocked())
-            {
-                out_sensor.reset();
-                return SetError(HSM_RESULT_INVALID_STATE, "Collector is not accepting sensor registrations.");
-            }
-
-            const auto existing = sensors_.find(sensor_path);
-            if (existing != sensors_.end())
-            {
-                if (existing->second->Type() != type)
-                {
-                    out_sensor.reset();
-                    return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path is already registered with a different type.");
-                }
-
-                out_sensor = existing->second;
-                ClearError();
-                return HSM_RESULT_OK;
-            }
-
-            if (sensors_.size() >= static_cast<size_t>(max_sensors_))
-            {
-                out_sensor.reset();
-                return SetError(HSM_RESULT_LIMIT_EXCEEDED, "MaxSensors limit reached.");
-            }
-
-            auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, bar_period_ms, precision);
-            RegisterSensorLocked(sensor, type, sensor_path, registration);
-            sensors_.emplace(sensor_path, sensor);
-            out_sensor = std::move(sensor);
-
-            ClearError();
-            return HSM_RESULT_OK;
+            return RegisterBarSensorLocked(
+                CalculateSystemPath(prototype_path, registration), type, bar_period_ms, precision, registration, out_sensor);
         }
 
         void SetMetricSourceFactory(hsm_metric_source_factory_fn factory, void* user_data)
@@ -5061,6 +5041,9 @@ hsm_result_t hsm_collector_add_system_monitoring_sensors(hsm_collector_t* collec
 
 hsm_result_t hsm_collector_add_disk_monitoring_sensors(hsm_collector_t* collector)
 {
+    // Registers the single default disk ("C"), not the managed per-drive fan-out — live
+    // DriveInfo.GetDrives() enumeration is the #1099 live-value follow-up. So add_all_default_sensors
+    // currently registers only the C-drive disk sensors.
     return collector != nullptr ? AddGroup(collector, kDiskGroup) : HSM_RESULT_INVALID_ARGUMENT;
 }
 
