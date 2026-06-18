@@ -359,7 +359,7 @@ hsm_result_t hsm_service_commands_send_update_version(
     const char* old_version);
 
 /* ---- Default-sensor catalog (#1099) --------------------------------------------------------
-   The built-in sensors of IWindowsCollection/IUnixCollection (Prototypes/Collections/**). Each
+   The built-in sensors of IWindowsCollection/IUnixCollection (managed Prototypes/Collections). Each
    id maps 1:1 to a managed prototype and registers a byte-identical AddOrUpdateSensorRequest:
    path (.computer/.module + category + name), SensorType, OriginalUnit, Statistics, KeepHistory,
    TTLs, AggregateData/EnableGrafana/IsSingleton, EnumOptions, and the default alert(s). The
