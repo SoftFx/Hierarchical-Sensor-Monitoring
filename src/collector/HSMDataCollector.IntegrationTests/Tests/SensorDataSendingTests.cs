@@ -213,7 +213,7 @@ namespace HSMDataCollector.IntegrationTests.Tests
         }
 
 
-        [Fact(Skip = "Server bug #1068: History API returns empty for Enum sensors. The /enum endpoint accepts the value (HTTP 200) and EnumValue is wired into ApiConverters.Convert(BaseValue), but the history API still returns []. Same class of bug as TimeSpan/Version; commit 07bc22791's converter fix is not sufficient.")]
+        [Fact]
         public async Task SendEnumValue_ServerReceivesCorrectData()
         {
             var path = CollectorOptionsHelper.UniqueSensorPath("enum_sensor");
