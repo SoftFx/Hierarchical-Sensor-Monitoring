@@ -152,7 +152,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Configure
-        run: cmake -S src/native/collector -B build/native-install -DHSM_COLLECTOR_WERROR=ON
+        # CMAKE_BUILD_TYPE is explicit so the single-config (Makefiles) Linux build exports a
+        # per-config targets file (hsm_collectorTargets-release.cmake) with IMPORTED_LOCATION set;
+        # it is harmless on the multi-config (VS) Windows generator.
+        run: cmake -S src/native/collector -B build/native-install -DHSM_COLLECTOR_WERROR=ON -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build/native-install --config Release --parallel
@@ -164,6 +167,7 @@ jobs:
         run: >
           cmake -S src/native/collector/examples/console/standalone
           -B build/native-standalone
+          -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_PREFIX_PATH="${{ runner.temp }}/hsm-prefix"
 
       - name: Build standalone consumer
@@ -186,7 +190,11 @@ jobs:
       - name: Install doxygen
         run: sudo apt-get update && sudo apt-get install -y doxygen
       - name: Generate API reference (warning-clean)
-        run: doxygen docs/native-collector/Doxyfile
+        # Pre-create the nested OUTPUT_DIRECTORY: doxygen won't create a multi-level path, and
+        # WARN_AS_ERROR turns that into a hard failure.
+        run: |
+          mkdir -p build/doxygen
+          doxygen docs/native-collector/Doxyfile
       - name: Upload API reference
         uses: actions/upload-artifact@v4
         with:
