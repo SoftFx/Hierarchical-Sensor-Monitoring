@@ -145,6 +145,49 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Fact]
+        [Trait("Category", "Concurrency")]
+        public async Task ConcurrentProductRenameTest()
+        {
+            const int productCount = 5;
+            const int threadCount = 10;
+            const int iterationsPerThread = 50;
+
+            var createdProducts = new List<ProductModel>(productCount);
+            for (int i = 0; i < productCount; ++i)
+                createdProducts.Add(await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty));
+
+            var namesPool = Enumerable.Range(0, productCount * 4)
+                .Select(_ => $"target_{Guid.NewGuid():N}")
+                .ToList();
+
+            var rnd = new Random();
+            var tasks = Enumerable.Range(0, threadCount).Select(_ => Task.Run(async () =>
+            {
+                for (int i = 0; i < iterationsPerThread; ++i)
+                {
+                    var product = createdProducts[rnd.Next(productCount)];
+                    var newName = namesPool[rnd.Next(namesPool.Count)];
+                    await _valuesCache.UpdateProductAsync(new ProductUpdate
+                    {
+                        Id = product.Id,
+                        Name = newName,
+                    }, default);
+                }
+            })).ToArray();
+            await Task.WhenAll(tasks);
+
+            var currentRoots = _valuesCache.GetProducts();
+
+            Assert.Equal(currentRoots.Count, currentRoots.Distinct().Count());
+
+            foreach (var root in currentRoots)
+                Assert.Same(root, _valuesCache.GetProductByName(root.DisplayName));
+
+            foreach (var created in createdProducts)
+                Assert.NotNull(_valuesCache.GetProduct(created.Id));
+        }
+
+        [Fact]
         [Trait("Category", "Remove product(s)")]
         public async Task RemoveProductTest()
         {

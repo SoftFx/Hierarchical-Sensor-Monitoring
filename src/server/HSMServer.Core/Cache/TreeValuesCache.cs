@@ -72,6 +72,7 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
         private readonly ConcurrentDictionary<Guid, AlertTemplateModel> _alertTemplates = new();
         private readonly ConcurrentDictionary<string, ProductModel> _productsByName = new(StringComparer.Ordinal);
+        private readonly object _productsByNameLock = new();
 
         private readonly CDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
@@ -248,8 +249,13 @@ namespace HSMServer.Core.Cache
 
             if (product.IsRoot && !string.IsNullOrEmpty(update.Name) && product.DisplayName != update.Name)
             {
-                _productsByName.Remove(product.DisplayName, out _);
-                _productsByName.TryAdd(update.Name, product);
+                var oldName = product.DisplayName;
+                lock (_productsByNameLock)
+                {
+                    _productsByName.TryRemove(oldName, out _);
+                    if (!_productsByName.TryAdd(update.Name, product))
+                        _logger.Warn($"Cannot rename root product {product.Id} from '{oldName}' to '{update.Name}': target name already in use");
+                }
             }
 
             _database.UpdateProduct(product.Update(update).ToEntity());
@@ -303,7 +309,8 @@ namespace HSMServer.Core.Cache
                 {
                     if (product.IsRoot)
                     {
-                        _productsByName.TryRemove(product.DisplayName, out _);
+                        lock (_productsByNameLock)
+                            _productsByName.TryRemove(product.DisplayName, out _);
                     }
 
                     RemoveProduct(request.Id, request.InitiatorInfo);
@@ -2014,8 +2021,12 @@ namespace HSMServer.Core.Cache
 
             _logger.Info("Links between products are built");
 
-            foreach (var product in _tree.Values.Where(x => x.IsRoot))
-                _productsByName.TryAdd(product.DisplayName, product);
+            var rootProducts = _tree.Values.Where(x => x.IsRoot).ToList();
+            lock (_productsByNameLock)
+            {
+                foreach (var product in rootProducts)
+                    _productsByName.TryAdd(product.DisplayName, product);
+            }
 
             _logger.Info($"Produts cache by name initialized [{_productsByName.Count}]");
         }
@@ -2187,7 +2198,8 @@ namespace HSMServer.Core.Cache
 
                     product.Update(update);
 
-                    _productsByName.TryAdd(product.DisplayName, product);
+                    lock (_productsByNameLock)
+                        _productsByName.TryAdd(product.DisplayName, product);
                 }
 
                 AddBaseNodeSubscription(product);
