@@ -15,6 +15,7 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
@@ -156,17 +157,17 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             for (int i = 0; i < productCount; ++i)
                 createdProducts.Add(await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty));
 
-            var namesPool = Enumerable.Range(0, productCount * 4)
-                .Select(_ => $"target_{Guid.NewGuid():N}")
-                .ToList();
-
+            // Each rename picks a globally-unique target name, so TryAdd always
+            // succeeds and the final state is fully determined: every created
+            // product must resolve through _productsByName under its DisplayName.
+            var nameCounter = 0;
             var rnd = new Random();
             var tasks = Enumerable.Range(0, threadCount).Select(_ => Task.Run(async () =>
             {
                 for (int i = 0; i < iterationsPerThread; ++i)
                 {
                     var product = createdProducts[rnd.Next(productCount)];
-                    var newName = namesPool[rnd.Next(namesPool.Count)];
+                    var newName = $"target_{Interlocked.Increment(ref nameCounter)}";
                     await _valuesCache.UpdateProductAsync(new ProductUpdate
                     {
                         Id = product.Id,
@@ -176,15 +177,16 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             })).ToArray();
             await Task.WhenAll(tasks);
 
+            // _productsByName must never hold duplicate product references.
             var currentRoots = _valuesCache.GetProducts();
-
             Assert.Equal(currentRoots.Count, currentRoots.Distinct().Count());
 
-            foreach (var root in currentRoots)
-                Assert.Same(root, _valuesCache.GetProductByName(root.DisplayName));
-
+            // The real invariant: every created product must be reachable via its
+            // current DisplayName. Iterating GetProducts() (= _productsByName.Values)
+            // instead would be tautological — an orphaned product never reaches
+            // Values, so the loop wouldn't inspect it.
             foreach (var created in createdProducts)
-                Assert.NotNull(_valuesCache.GetProduct(created.Id));
+                Assert.Same(created, _valuesCache.GetProductByName(created.DisplayName));
         }
 
         [Fact]
