@@ -111,6 +111,50 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Template TTL protection")]
+        public void UpdateTTLs_MixedInitiatorBatch_ClearsUserOwnedTTLsNotInUpdate()
+        {
+            // Regression for #1129: a user-initiated batch that happens to carry a
+            // template-initiator item must not preserve user-owned TTLs that the
+            // user request was supposed to clear. The orphan-cleanup check must
+            // depend on the batch initiator, not on sibling items' initiators.
+            var keepUserId = AddManualTTL(600_000_000);
+            var dropUserId = AddManualTTL(3_000_000_000);
+            var templateAAlertId = Guid.NewGuid();
+            AddTemplateTTL(TemplateA, 6_000_000_000, templateAAlertId);
+
+            // Mixed-initiator batch: top-level user initiator, but the second item
+            // is template-initiated.
+            _sensor.Policies.UpdateTTLs(
+            [
+                new PolicyUpdate
+                {
+                    Id = keepUserId,
+                    TTL = 600_000_000,
+                    Initiator = InitiatorInfo.AsUser("test"),
+                    Conditions = [],
+                    Destination = new PolicyDestinationUpdate(),
+                },
+                new PolicyUpdate
+                {
+                    Id = Guid.NewGuid(),
+                    TTL = 9_000_000_000,
+                    TemplateId = TemplateB,
+                    TemplateAlertId = Guid.NewGuid(),
+                    Initiator = InitiatorInfo.AlertTemplate,
+                    Conditions = [],
+                    Destination = new PolicyDestinationUpdate(),
+                },
+            ], InitiatorInfo.AsUser("test"));
+
+            Assert.Equal(3, _sensor.Policies.TTLPolicies.Count);
+            Assert.DoesNotContain(_sensor.Policies.TTLPolicies, p => p.Id == dropUserId);
+            Assert.Single(_sensor.Policies.TTLPolicies, p => p.Id == keepUserId);
+            Assert.Single(_sensor.Policies.TTLPolicies, p => p.TemplateId == TemplateA);
+            Assert.Single(_sensor.Policies.TTLPolicies, p => p.TemplateId == TemplateB);
+        }
+
+        [Fact]
+        [Trait("Category", "Template TTL protection")]
         public void UpdateTTLs_EmptySensor_TemplateAddsAll()
         {
             ApplyTemplateTTLs(TemplateA,

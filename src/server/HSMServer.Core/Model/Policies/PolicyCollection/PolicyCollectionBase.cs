@@ -86,8 +86,7 @@ namespace HSMServer.Core.Model.Policies
                 .GroupBy(u => u.Id)
                 .ToDictionary(g => g.Key, g => g.Last());
             var newPolicyUpdates = updates.Where(u => u.Id == Guid.Empty).ToList();
-            var isTemplateInitiated = initiator == InitiatorInfo.AlertTemplate
-                || updates.Any(u => u.Initiator == InitiatorInfo.AlertTemplate);
+            var isTemplateInitiated = initiator == InitiatorInfo.AlertTemplate;
 
             var journalEntries = new List<(string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)>();
 
