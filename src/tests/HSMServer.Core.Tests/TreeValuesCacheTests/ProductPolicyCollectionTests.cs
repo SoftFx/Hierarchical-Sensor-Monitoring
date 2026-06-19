@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -82,6 +83,86 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Assert.True(collection.TemplateToGroup.ContainsKey(key));
                 Assert.Equal(policiesPerThread, collection.TemplateToGroup[key].Policies.Count);
             }
+        }
+
+        [Fact]
+        [Trait("Category", "Concurrency")]
+        public async Task AddRemove_InterleavedOnSameTemplate_NoOrphansOrLeaks()
+        {
+            // Regression coverage for the reviewer-flagged race on #1155: without
+            // the _gate lock, RemovePolicy's empty-group cleanup can evict a group
+            // that a concurrent AddPolicy just re-populated, orphaning that policy
+            // from _templateToGroup. The race window is narrow (a few instructions
+            // between the IsEmpty check and the TryRemove), so this test is mostly
+            // a probabilistic catcher + a check that the documented invariants hold
+            // under heavy churn. The lock itself is correct by construction.
+            //
+            // Cycler threads run tight add/add/remove/remove cycles on the shared
+            // template. Adder threads concurrently append policies that are never
+            // removed, so any orphan that does occur survives to the assertions.
+            const int cyclerThreads = 8;
+            const int adderThreads = 8;
+            const int cyclesPerCycler = 500;
+            const int addsPerAdder = 500;
+            const int expectedLivePolicies = adderThreads * addsPerAdder;
+
+            var collection = new ProductPolicyCollection();
+
+            using var barrier = new Barrier(cyclerThreads + adderThreads);
+            var tasks = new List<Task>();
+
+            for (int t = 0; t < cyclerThreads; ++t)
+            {
+                tasks.Add(Task.Run(() =>
+                {
+                    barrier.SignalAndWait();
+                    for (int i = 0; i < cyclesPerCycler; ++i)
+                    {
+                        var p1 = BuildPolicy("shared-template");
+                        var p2 = BuildPolicy("shared-template");
+
+                        collection.AddPolicy(p1);
+                        collection.AddPolicy(p2);
+                        collection.ReceivePolicyUpdate(ActionType.Delete, p1);
+                        collection.ReceivePolicyUpdate(ActionType.Delete, p2);
+                    }
+                }));
+            }
+
+            for (int t = 0; t < adderThreads; ++t)
+            {
+                tasks.Add(Task.Run(() =>
+                {
+                    barrier.SignalAndWait();
+                    for (int i = 0; i < addsPerAdder; ++i)
+                        collection.AddPolicy(BuildPolicy("shared-template"));
+                }));
+            }
+
+            await Task.WhenAll(tasks);
+
+            // Invariant 1: every entry in _policyToGroup points to a group still
+            // reachable via _templateToGroup, and the group still holds that policy.
+            // Without the lock, RemovePolicy's eviction can leave _policyToGroup
+            // pointing at an orphaned group that SaveStateToExportGroup cannot see.
+            var reachableGroups = collection.TemplateToGroup.Values.ToHashSet();
+            foreach (var (policyId, group) in collection.PolicyToGroup)
+            {
+                Assert.Contains(group, reachableGroups);
+                Assert.Contains(policyId, group.Policies.Keys);
+            }
+
+            // Invariant 2: the total policy count across groups matches _policyToGroup.
+            var totalInGroups = collection.TemplateToGroup.Values.Sum(g => g.Policies.Count);
+            Assert.Equal(collection.PolicyToGroup.Count, totalInGroups);
+
+            // Invariant 3: no empty groups leaked into _templateToGroup.
+            Assert.All(collection.TemplateToGroup.Values, g => Assert.False(g.IsEmpty));
+
+            // Invariant 4: every live (never-removed) policy survived the churn.
+            // A cascade from the race can orphan adder policies and then evict
+            // their replacements, dropping them from _policyToGroup entirely.
+            Assert.Equal(expectedLivePolicies, collection.PolicyToGroup.Count);
         }
 
 

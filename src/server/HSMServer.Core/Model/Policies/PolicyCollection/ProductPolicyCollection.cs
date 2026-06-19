@@ -15,7 +15,16 @@ namespace HSMServer.Core.Model.Policies
 
         private readonly ConcurrentDictionary<Guid, PolicyGroup> _policyToGroup = new();
 
+        // AddPolicy and RemovePolicy are serialized under _gate so the empty-group
+        // cleanup in RemovePolicy cannot race with a concurrent AddPolicy re-populating
+        // the same group (which would orphan the newly-added policy). Reads
+        // (SaveStateToExportGroup) stay lock-free — ConcurrentDictionary is safe for
+        // concurrent reads.
+        private readonly object _gate = new();
+
         internal IReadOnlyDictionary<string, PolicyGroup> TemplateToGroup => _templateToGroup;
+
+        internal IReadOnlyDictionary<Guid, PolicyGroup> PolicyToGroup => _policyToGroup;
 
         // Bounded view of the owning product's Settings.TTL: same CurValue, no parent chain.
         // "From Parent" on a node-level TTL alert resolves against THIS node's own setting
@@ -73,20 +82,31 @@ namespace HSMServer.Core.Model.Policies
 
         internal void AddPolicy(Policy policy)
         {
-            var group = _templateToGroup.GetOrAdd(policy.ToString(), template => new PolicyGroup(template));
+            lock (_gate)
+            {
+                // Pre-check under the lock so a duplicate policyId no-ops without
+                // creating an orphan empty group via GetOrAdd.
+                if (_policyToGroup.ContainsKey(policy.Id))
+                    return;
 
-            if (_policyToGroup.TryAdd(policy.Id, group))
+                var group = _templateToGroup.GetOrAdd(policy.ToString(), template => new PolicyGroup(template));
+
+                _policyToGroup[policy.Id] = group;
                 group.AddPolicy(policy);
+            }
         }
 
         private void RemovePolicy(Guid policyId)
         {
-            if (_policyToGroup.TryRemove(policyId, out var group))
+            lock (_gate)
             {
-                group.RemovePolicy(policyId);
+                if (_policyToGroup.TryRemove(policyId, out var group))
+                {
+                    group.RemovePolicy(policyId);
 
-                if (group.IsEmpty)
-                    _templateToGroup.TryRemove(group.Template, out _);
+                    if (group.IsEmpty)
+                        _templateToGroup.TryRemove(group.Template, out _);
+                }
             }
         }
 
