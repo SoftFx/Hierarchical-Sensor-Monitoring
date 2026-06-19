@@ -1,7 +1,9 @@
 # Standalone consumer (#1100): the clean-machine proof that the installed package is usable purely
-# through find_package(hsm_collector) — no access to the collector source tree beyond this directory.
-# The CI install-consume lane installs the collector to a prefix, then configures + builds this
-# project with CMAKE_PREFIX_PATH pointing at that prefix. It reuses the in-tree example source.
+# through find_package(hsm_collector) — the only dependency on the collector is the installed
+# package; nothing here references its source or CMake tree. The CI install-consume lane installs
+# the collector to a prefix, then configures + builds this project with CMAKE_PREFIX_PATH at it.
+# The example *source* is shared with the in-tree target (../main.cpp) to avoid duplication — that is
+# a sibling example file, not part of the collector tree the package replaces.
 cmake_minimum_required(VERSION 3.20)
 
 project(hsm_console_standalone LANGUAGES CXX)

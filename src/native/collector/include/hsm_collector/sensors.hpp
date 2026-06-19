@@ -158,8 +158,10 @@ namespace hsm::collector
         }
     };
 
-    /// TimeSpan instant sensor. Values are 100-ns ticks; AddValue accepts a chrono duration (lossy
-    /// below 100 ns) or pass exact ticks via AddTicks.
+    /// TimeSpan instant sensor. Values are 100-ns ticks; AddValue accepts a chrono duration and
+    /// converts by integer division (truncates toward zero — lossy below 100 ns, and a negative
+    /// duration also truncates toward zero, matching std::chrono). Pass exact ticks via AddTicks to
+    /// avoid the rounding.
     class TimeSpanSensor : public Sensor
     {
     public:

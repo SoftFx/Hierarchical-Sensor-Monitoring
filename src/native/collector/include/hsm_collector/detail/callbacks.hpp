@@ -9,6 +9,10 @@
 /// to outlive the collector, so the owning Collector keeps these heap objects alive until AFTER it
 /// calls `hsm_collector_destroy` (see collector.hpp). Storing them via `std::unique_ptr` keeps the
 /// callable at a fixed address even when the Collector is moved.
+///
+/// The thunks are `extern "C"` to match the C-linkage callback typedefs. C language linkage ignores
+/// the enclosing namespace, so they are prefixed `hsm_collector_cpp_*` to avoid colliding with
+/// other unmangled C symbols a consumer might link.
 
 #include "hsm_collector/enums.hpp"
 #include "hsm_collector/hsm_collector.h"
@@ -39,6 +43,12 @@ namespace hsm::collector
     /// equivalent). Return a value, `std::nullopt` to skip this tick, or THROW to signal a read
     /// error (the collector disposes and recreates the source, matching the managed
     /// recreate-on-exception behavior).
+    ///
+    /// NOTE (#1099): the production metric-source seam is NOT yet wired into the scheduler — no
+    /// default sensor reads it during normal operation today (the per-sensor scheduled-tick wiring
+    /// + real OS readers are the #1099 live-value follow-up). Installing a factory before Start does
+    /// not yet produce live values; the seam is exercised only via the test driver. See
+    /// Collector::SetMetricSourceFactory.
     class IMetricSource
     {
     public:
@@ -47,12 +57,13 @@ namespace hsm::collector
     };
 
     /// Factory producing a metric source for a sensor's full registered path. Return `nullptr` to
-    /// leave the sensor without a live source (it still registers).
+    /// leave the sensor without a live source (it still registers). See IMetricSource for the
+    /// #1099 "not yet wired" caveat.
     using MetricSourceFactory = std::function<std::unique_ptr<IMetricSource>(const std::string& sensor_path)>;
 
     namespace detail
     {
-        extern "C" inline void LifecycleThunk(hsm_collector_status_t status, void* user_data)
+        extern "C" inline void hsm_collector_cpp_lifecycle_thunk(hsm_collector_status_t status, void* user_data)
         {
             try
             {
@@ -63,7 +74,7 @@ namespace hsm::collector
             }
         }
 
-        extern "C" inline void LogThunk(hsm_log_level_t level, const char* message, void* user_data)
+        extern "C" inline void hsm_collector_cpp_log_thunk(hsm_log_level_t level, const char* message, void* user_data)
         {
             try
             {
@@ -76,7 +87,7 @@ namespace hsm::collector
             }
         }
 
-        extern "C" inline std::int32_t IntFunctionThunk(void* user_data)
+        extern "C" inline std::int32_t hsm_collector_cpp_int_function_thunk(void* user_data)
         {
             try
             {
@@ -88,14 +99,17 @@ namespace hsm::collector
             }
         }
 
-        extern "C" inline std::int32_t IntValuesFunctionThunk(const std::int32_t* values, std::int32_t count, void* user_data)
+        extern "C" inline std::int32_t hsm_collector_cpp_int_values_function_thunk(const std::int32_t* values, std::int32_t count, void* user_data)
         {
-            std::vector<std::int32_t> snapshot;
-            if (values != nullptr && count > 0)
-                snapshot.assign(values, values + count);
-
+            // Everything that can throw — including the snapshot allocation/copy (bad_alloc, or
+            // length_error for a hostile count) — MUST stay inside the try: an exception escaping an
+            // extern "C" function called on the scheduler thread is UB.
             try
             {
+                std::vector<std::int32_t> snapshot;
+                if (values != nullptr && count > 0)
+                    snapshot.assign(values, values + count);
+
                 return (*static_cast<IntValuesFunction*>(user_data))(snapshot);
             }
             catch (...)
@@ -105,9 +119,9 @@ namespace hsm::collector
         }
 
         // Metric-source thunks. The factory hands ownership of the created IMetricSource to the C
-        // side as `source_user_data`; DisposeThunk deletes it (dispose is called exactly once,
+        // side as `source_user_data`; the dispose thunk deletes it (dispose is called exactly once,
         // including on the partial-failure path inside the core).
-        extern "C" inline hsm_metric_read_t MetricReadThunk(void* source_user_data, double* out_value)
+        extern "C" inline hsm_metric_read_t hsm_collector_cpp_metric_read_thunk(void* source_user_data, double* out_value)
         {
             try
             {
@@ -124,12 +138,20 @@ namespace hsm::collector
             }
         }
 
-        extern "C" inline void MetricDisposeThunk(void* source_user_data)
+        extern "C" inline void hsm_collector_cpp_metric_dispose_thunk(void* source_user_data)
         {
-            delete static_cast<IMetricSource*>(source_user_data);
+            // A throwing IMetricSource destructor is already a contract violation, but never let it
+            // cross the extern "C" boundary.
+            try
+            {
+                delete static_cast<IMetricSource*>(source_user_data);
+            }
+            catch (...)
+            {
+            }
         }
 
-        extern "C" inline int MetricFactoryThunk(
+        extern "C" inline int hsm_collector_cpp_metric_factory_thunk(
             void* factory_user_data,
             const char* sensor_path,
             hsm_metric_read_fn* out_read,
@@ -150,8 +172,8 @@ namespace hsm::collector
             if (source == nullptr)
                 return 0;
 
-            *out_read = &MetricReadThunk;
-            *out_dispose = &MetricDisposeThunk;
+            *out_read = &hsm_collector_cpp_metric_read_thunk;
+            *out_dispose = &hsm_collector_cpp_metric_dispose_thunk;
             *out_source_user_data = source.release();
             return 1;
         }

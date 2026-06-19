@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.20)
+# 3.21 (matches CMakePresets.json) so PROJECT_IS_TOP_LEVEL is always defined — it gates the
+# install/example defaults below and is only auto-set from 3.21.
+cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
@@ -32,12 +34,9 @@ find_package(Threads REQUIRED)
 include(GNUInstallDirs)
 
 # Whether to emit install()/find_package() rules (#1100). On by default only for a top-level build
-# so an add_subdirectory() consumer is not forced to install the collector.
-if(DEFINED PROJECT_IS_TOP_LEVEL)
-    set(_hsm_default_install ${PROJECT_IS_TOP_LEVEL})
-else()
-    set(_hsm_default_install ON)
-endif()
+# so an add_subdirectory() consumer is not forced to install the collector. PROJECT_IS_TOP_LEVEL is
+# guaranteed defined by the 3.21 minimum above.
+set(_hsm_default_install ${PROJECT_IS_TOP_LEVEL})
 option(HSM_COLLECTOR_INSTALL "Generate install + find_package package for the native collector" ${_hsm_default_install})
 
 # Build the in-tree console example (#1100). Defaults to the install setting.

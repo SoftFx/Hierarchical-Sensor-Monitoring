@@ -73,15 +73,19 @@ namespace hsm::collector
             native.exception_deduplicator_window_ms = options.exception_deduplicator_window_ms;
             native.max_deduplicated_messages = options.max_deduplicated_messages;
 
-            if (hsm_collector_create(&native, &handle_) != HSM_RESULT_OK)
-                throw Error("Failed to create collector.");
+            // handle_ is null on failure so there is no last-error string to pull; surface the
+            // result-code name so the caller can tell INVALID_ARGUMENT (bad key/address/port) from
+            // an internal error.
+            const auto result = hsm_collector_create(&native, &handle_);
+            if (result != HSM_RESULT_OK)
+                throw Error(std::string{ "Failed to create collector. (" } + detail::ResultName(result) + ")");
         }
 
         Collector(const Collector&) = delete;
         Collector& operator=(const Collector&) = delete;
 
         Collector(Collector&& other) noexcept
-            : handle_(std::exchange(other.handle_, nullptr)), lifecycle_listeners_(std::move(other.lifecycle_listeners_)), logger_(std::move(other.logger_)), metric_factory_(std::move(other.metric_factory_)), int_functions_(std::move(other.int_functions_)), int_values_functions_(std::move(other.int_values_functions_))
+            : handle_(std::exchange(other.handle_, nullptr)), lifecycle_listeners_(std::move(other.lifecycle_listeners_)), loggers_(std::move(other.loggers_)), metric_factories_(std::move(other.metric_factories_)), int_functions_(std::move(other.int_functions_)), int_values_functions_(std::move(other.int_values_functions_))
         {
         }
 
@@ -92,8 +96,8 @@ namespace hsm::collector
                 Reset();
                 handle_ = std::exchange(other.handle_, nullptr);
                 lifecycle_listeners_ = std::move(other.lifecycle_listeners_);
-                logger_ = std::move(other.logger_);
-                metric_factory_ = std::move(other.metric_factory_);
+                loggers_ = std::move(other.loggers_);
+                metric_factories_ = std::move(other.metric_factories_);
                 int_functions_ = std::move(other.int_functions_);
                 int_values_functions_ = std::move(other.int_values_functions_);
             }
@@ -118,8 +122,10 @@ namespace hsm::collector
             Check(hsm_collector_stop(handle_), "Failed to stop collector.");
         }
 
-        /// Start on a background thread. Wait on (or discard) the returned future; note std::async's
-        /// future blocks in its destructor until the task completes.
+        /// Start on a background thread. The returned future's task captures `this`, so the Collector
+        /// must outlive the future and must NOT be moved or destroyed while the future is pending.
+        /// Wait on (or discard) the returned future; note std::async's future blocks in its
+        /// destructor until the task completes.
         std::future<void> StartAsync()
         {
             return std::async(std::launch::async, [this] { Start(); });
@@ -155,27 +161,31 @@ namespace hsm::collector
         {
             auto holder = std::make_unique<LifecycleListener>(std::move(listener));
             Check(
-                hsm_collector_add_lifecycle_listener(handle_, &detail::LifecycleThunk, holder.get()),
+                hsm_collector_add_lifecycle_listener(handle_, &detail::hsm_collector_cpp_lifecycle_thunk, holder.get()),
                 "Failed to add lifecycle listener.");
             lifecycle_listeners_.push_back(std::move(holder));
         }
 
-        /// Install (or, with an empty std::function, clear) the log sink.
+        /// Install (or, with an empty std::function, clear) the log sink. A replaced/cleared holder
+        /// is retained (not freed) until the Collector is destroyed: the C side may still be
+        /// invoking the previous logger on the scheduler thread when this is called on a running
+        /// collector, so freeing it here would be a use-after-free.
         void SetLogger(Logger logger)
         {
             if (!logger)
             {
                 Check(hsm_collector_set_logger(handle_, nullptr, nullptr), "Failed to clear logger.");
-                logger_.reset();
                 return;
             }
 
             auto holder = std::make_unique<Logger>(std::move(logger));
-            Check(hsm_collector_set_logger(handle_, &detail::LogThunk, holder.get()), "Failed to set logger.");
-            logger_ = std::move(holder);
+            Check(hsm_collector_set_logger(handle_, &detail::hsm_collector_cpp_log_thunk, holder.get()), "Failed to set logger.");
+            loggers_.push_back(std::move(holder));
         }
 
-        /// Install (or, with an empty std::function, clear) the metric-source factory.
+        /// Install (or, with an empty std::function, clear) the metric-source factory. As with
+        /// SetLogger, a replaced/cleared holder is retained until destruction (the factory may be in
+        /// use on the scheduler thread).
         void SetMetricSourceFactory(MetricSourceFactory factory)
         {
             if (!factory)
@@ -183,15 +193,14 @@ namespace hsm::collector
                 Check(
                     hsm_collector_set_metric_source_factory(handle_, nullptr, nullptr),
                     "Failed to clear metric-source factory.");
-                metric_factory_.reset();
                 return;
             }
 
             auto holder = std::make_unique<MetricSourceFactory>(std::move(factory));
             Check(
-                hsm_collector_set_metric_source_factory(handle_, &detail::MetricFactoryThunk, holder.get()),
+                hsm_collector_set_metric_source_factory(handle_, &detail::hsm_collector_cpp_metric_factory_thunk, holder.get()),
                 "Failed to set metric-source factory.");
-            metric_factory_ = std::move(holder);
+            metric_factories_.push_back(std::move(holder));
         }
 
         // ---- Instant sensors ----------------------------------------------------------------
@@ -394,7 +403,7 @@ namespace hsm::collector
                     handle_,
                     path.c_str(),
                     static_cast<std::int64_t>(post_period.count()),
-                    &detail::IntFunctionThunk,
+                    &detail::hsm_collector_cpp_int_function_thunk,
                     holder.get(),
                     &sensor),
                 "Failed to create function sensor.");
@@ -418,7 +427,7 @@ namespace hsm::collector
                     path.c_str(),
                     static_cast<std::int64_t>(post_period.count()),
                     max_cache_size,
-                    &detail::IntValuesFunctionThunk,
+                    &detail::hsm_collector_cpp_int_values_function_thunk,
                     holder.get(),
                     &sensor),
                 "Failed to create values-function sensor.");
@@ -607,10 +616,12 @@ namespace hsm::collector
         hsm_collector_t* handle_ = nullptr;
 
         // std::function storage kept alive for the C ABI's `void* user_data`. unique_ptr keeps each
-        // callable at a stable heap address across moves.
+        // callable at a stable heap address across moves. All are append-only graveyards: a holder
+        // handed to the C side is never freed until the Collector is destroyed (the scheduler thread
+        // may still be invoking it), so SetLogger/SetMetricSourceFactory retain replaced holders too.
         std::vector<std::unique_ptr<LifecycleListener>> lifecycle_listeners_;
-        std::unique_ptr<Logger> logger_;
-        std::unique_ptr<MetricSourceFactory> metric_factory_;
+        std::vector<std::unique_ptr<Logger>> loggers_;
+        std::vector<std::unique_ptr<MetricSourceFactory>> metric_factories_;
         std::vector<std::unique_ptr<IntFunction>> int_functions_;
         std::vector<std::unique_ptr<IntValuesFunction>> int_values_functions_;
     };
