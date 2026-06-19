@@ -2260,6 +2260,22 @@ namespace HSMServer.Core.Cache
             catch (Exception ex)
             {
                 _logger.Error("An error was occurred by creating sensor", ex);
+
+                if (sensor is not null)
+                {
+                    // Roll back the in-memory mutations performed before the failure.
+                    // RemoveSensorFromCache is a no-op when AddSensor threw on the DB
+                    // write (nothing was added yet); it cleans up only if a later step
+                    // failed. RemoveSensorPolicies reverts the SubscribeSensorToPolicyUpdate
+                    // wiring, and parent.RemoveSensor drops the sensor from the parent
+                    // product. We intentionally do not call _database.RemoveSensorWithMetadata
+                    // — if AddSensor threw, there is no row to remove.
+                    RemoveSensorFromCache(sensor);
+                    RemoveSensorPolicies(sensor);
+                    sensor.Parent?.RemoveSensor(sensor.Id);
+                    sensor = null;
+                }
+
                 error = "Can't create sensor";
                 return false;
             }
@@ -2267,23 +2283,19 @@ namespace HSMServer.Core.Cache
 
         private void AddSensor(BaseSensorModel sensor, ProductModel productModel)
         {
-            try
+            // Persist first so a DB failure can't leave an orphan in the in-memory
+            // caches. The exception propagates to TryAddSensor, which rolls back any
+            // earlier mutations and reports the failure to the caller (#1128).
+            _database.AddSensor(sensor.ToEntity());
+
+            AddSensorToCache(productModel, sensor);
+
+            ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
+
+            foreach (var template in _alertTemplates.Values)
             {
-                AddSensorToCache(productModel, sensor);
-
-                _database.AddSensor(sensor.ToEntity());
-
-                ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
-
-                foreach (var template in _alertTemplates.Values)
-                {
-                    if (template.IsMatch(sensor))
-                        ApplyTemplateToSensor(new ApplyTemplateRequest(sensor.Id, template));
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex);
+                if (template.IsMatch(sensor))
+                    ApplyTemplateToSensor(new ApplyTemplateRequest(sensor.Id, template));
             }
         }
 
