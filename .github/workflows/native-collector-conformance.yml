@@ -264,6 +264,12 @@ jobs:
 
       - name: Install the overlay port from branch source
         shell: bash
+        # run-vcpkg defaults VCPKG_BINARY_SOURCES to "clear;x-gha,readwrite", whose GHA backend needs
+        # ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL that aren't reliably exported here — failing the
+        # install. Override to "clear" so the port builds from source, no cache tokens (same fix as
+        # the http-transport lane).
+        env:
+          VCPKG_BINARY_SOURCES: clear
         run: |
           "$VCPKG_ROOT/vcpkg" install hsm-collector --overlay-ports=src/native/collector/vcpkg-port
 
