@@ -1,0 +1,7 @@
+Native HSM DataCollector (hsm-collector).
+
+Source: https://github.com/SoftFx/Hierarchical-Sensor-Monitoring (src/native/collector)
+Copyright (c) SoftFx.
+
+The repository does not ship a standalone LICENSE file; refer to the upstream repository for the
+authoritative license terms.

@@ -66,10 +66,23 @@ sensor.AttachAlert(alert);
 
 ## Building against the native API
 
+Whichever package manager you use, the CMake usage is identical:
+
 ```cmake
 find_package(hsm_collector CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE hsm_collector::hsm_collector_cpp)
 ```
+
+Consume the package one of three ways:
+
+- **CMake `find_package`** — `cmake --install` the collector to a prefix, then point
+  `CMAKE_PREFIX_PATH` at it.
+- **Conan** — `conan create src/native/collector` (or add `hsm-collector/0.4.0` to your
+  `conanfile`), with `-o hsm-collector/*:http=True` for the libcurl transport.
+- **vcpkg** — add the overlay port: `vcpkg install hsm-collector
+  --overlay-ports=src/native/collector/vcpkg-port` (feature `http` for curl), then build with the
+  vcpkg toolchain. For a registry, replace the port's `SOURCE_PATH` with a `vcpkg_from_github` block
+  at a release tag.
 
 See `src/native/collector/examples/console/` for a complete example (and its `standalone/`
 subproject for the `find_package` consume path). API reference: `docs/native-collector/Doxyfile`

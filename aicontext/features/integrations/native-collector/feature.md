@@ -54,6 +54,8 @@ The wrapper is a **thin convenience layer**: it adds no wire behavior. Every reg
 | `src/native/collector/examples/console/main.cpp` | console example (WrapperConsole equivalent) |
 | `src/native/collector/examples/console/standalone/CMakeLists.txt` | clean-machine `find_package` consumer |
 | `src/native/collector/cmake/hsm_collectorConfig.cmake.in` | package config template |
+| `src/native/collector/conanfile.py` + `test_package/` | Conan recipe + clean-consumer test |
+| `src/native/collector/vcpkg-port/` | vcpkg overlay port (portfile + manifest + copyright) |
 | `docs/native-collector-migration.md` | source-compat audit vs the C++/CLI wrapper |
 | `docs/native-collector/Doxyfile` | API-reference generation (CI doxygen lane) |
 
@@ -66,7 +68,15 @@ The wrapper is a **thin convenience layer**: it adds no wire behavior. Every reg
 
 ## Packaging & versioning
 
-`cmake --install` emits the headers, the static core lib, and a `find_package(hsm_collector)` package (`hsm_collectorConfig.cmake` + version file + exported namespaced targets). The package version tracks the C ABI semver (`HSM_COLLECTOR_VERSION`, currently 0.4.0); `find_package(hsm_collector 0.4)` version checks use it. The CI **install-consume** lane proves the clean-machine path end-to-end. A **Conan recipe** and **NuGet native assets** are a deferred follow-up under #1100.
+Three consumption paths, all built on the one set of CMake `install()` rules; the package version tracks the C ABI semver (`HSM_COLLECTOR_VERSION`, currently 0.4.0):
+
+- **CMake `find_package`** (baseline). `cmake --install` emits the headers, the static core lib, and `hsm_collectorConfig.cmake` + version file + exported namespaced targets (`hsm_collector::hsm_collector_core` / `::hsm_collector_cpp`). `find_package(hsm_collector 0.4)` version checks work. Proven by the CI **install-consume** lane (build → install → standalone `find_package` build+run, Win+Linux).
+- **Conan** (`conanfile.py` + `test_package/`). `conan create` builds from source with tests/examples gated off; Conan owns the CMake integration (the project's own config is dropped in `package()`, components re-declared). An optional `http` Conan option pulls `libcurl`. Proven by the **conan-consume** lane (`conan create` runs the `test_package` consumer).
+- **vcpkg** (overlay port `vcpkg-port/`). `portfile.cmake` + manifest build the library from the adjacent source (`SOURCE_PATH=../`), with an `http` feature for curl; for registry publication the `SOURCE_PATH` line is swapped for a `vcpkg_from_github` block at a release tag. Proven by the **vcpkg-consume** lane (install the overlay port → build+run a consumer through the vcpkg toolchain, Win+Linux).
+
+CMake gates: `HSM_COLLECTOR_INSTALL`, `HSM_COLLECTOR_BUILD_EXAMPLES`, `HSM_COLLECTOR_BUILD_TESTS` (each defaults to `PROJECT_IS_TOP_LEVEL`), and `HSM_COLLECTOR_HTTP`. Package builds set tests/examples OFF.
+
+**NuGet native assets** were intentionally **dropped** — there is no concrete mixed managed/native consumer to justify the `.nuspec` + native-asset layout; .NET consumers use the managed `HSMDataCollector` package, native consumers use one of the three paths above.
 
 ## Divergences from the C++/CLI wrapper (`DataCollector.h`)
 

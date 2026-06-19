@@ -1,0 +1,29 @@
+{
+  "name": "hsm-collector",
+  "version": "0.4.0",
+  "description": "Native C++ HSM DataCollector — stable C ABI core + header-only RAII C++ wrapper.",
+  "homepage": "https://github.com/SoftFx/Hierarchical-Sensor-Monitoring",
+  "supports": "!uwp",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "features": {
+    "http": {
+      "description": "libcurl HTTP transport (Schannel on Windows, OpenSSL elsewhere)",
+      "dependencies": [
+        {
+          "name": "curl",
+          "default-features": false,
+          "features": ["ssl"]
+        }
+      ]
+    }
+  }
+}

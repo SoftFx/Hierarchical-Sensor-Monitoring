@@ -221,3 +221,64 @@ jobs:
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
         working-directory: src/native/collector
+
+  conan-consume:
+    # Packaging proof (#1100): `conan create` builds the package from this branch's source and runs
+    # the test_package (a clean consumer via find_package(hsm_collector)).
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install Conan
+        run: pip install "conan>=2.0"
+      - name: Detect Conan profile
+        run: conan profile detect --force
+      - name: conan create + test_package
+        run: conan create src/native/collector --build=missing
+
+  vcpkg-consume:
+    # Packaging proof (#1100): build the overlay port from this branch's source, then build + run a
+    # consumer against the vcpkg-installed package via the vcpkg CMake toolchain.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_DISABLE_METRICS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
+
+      - name: Install the overlay port from branch source
+        shell: bash
+        run: "$VCPKG_ROOT/vcpkg" install hsm-collector --overlay-ports=src/native/collector/vcpkg-port
+
+      - name: Configure consumer against the vcpkg package
+        shell: bash
+        run: >
+          cmake -S src/native/collector/examples/console/standalone -B build/vcpkg-consume
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build consumer
+        run: cmake --build build/vcpkg-consume --config Release --parallel
+
+      - name: Run consumer
+        shell: bash
+        run: |
+          bin=$(find build/vcpkg-consume \( -name 'hsm_console_standalone' -o -name 'hsm_console_standalone.exe' \) -type f | head -1)
+          echo "running $bin"
+          "$bin"
