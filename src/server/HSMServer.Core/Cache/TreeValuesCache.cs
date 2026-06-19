@@ -228,17 +228,17 @@ namespace HSMServer.Core.Cache
             return false;
         }
 
-        public async Task UpdateProductAsync(ProductUpdate request, CancellationToken token)
+        public async Task<TaskResult> UpdateProductAsync(ProductUpdate request, CancellationToken token)
         {
             var product = GetProduct(request.Id);
 
             if (product == null)
-                return;
+                return TaskResult.FromError(ErrorProductNotFound);
 
             if (!product.IsRoot)
                 product = product.Root;
 
-            await ProcessRequestAsync(product.Id, request, token);
+            return await ProcessRequestAsync(product.Id, request, token);
         }
 
 
@@ -255,10 +255,8 @@ namespace HSMServer.Core.Cache
                     if (_productsByName.TryAdd(update.Name, product))
                         _productsByName.TryRemove(oldName, out _);
                     else
-                    {
-                        _logger.Warn($"Cannot rename root product {product.Id} from '{oldName}' to '{update.Name}': target name already in use");
-                        update = update with { Name = null };
-                    }
+                        throw new InvalidOperationException(
+                            $"Cannot rename root product {product.Id} from '{oldName}' to '{update.Name}': target name already in use");
                 }
             }
 
