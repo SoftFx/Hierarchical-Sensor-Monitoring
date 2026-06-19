@@ -15,6 +15,7 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
@@ -142,6 +143,84 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                                    _valuesCache.TryGetProductNameById,
                                    _valuesCache.GetProduct,
                                    _databaseCoreManager.DatabaseCore.GetProduct);
+        }
+
+        [Fact]
+        [Trait("Category", "Concurrency")]
+        public async Task ConcurrentProductRenameTest()
+        {
+            const int productCount = 5;
+            const int threadCount = 10;
+            const int iterationsPerThread = 50;
+
+            var createdProducts = new List<ProductModel>(productCount);
+            for (int i = 0; i < productCount; ++i)
+                createdProducts.Add(await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty));
+
+            // Each rename picks a globally-unique target name, so TryAdd always
+            // succeeds and the final state is fully determined: every created
+            // product must resolve through _productsByName under its DisplayName.
+            var nameCounter = 0;
+            var tasks = Enumerable.Range(0, threadCount).Select(_ => Task.Run(async () =>
+            {
+                for (int i = 0; i < iterationsPerThread; ++i)
+                {
+                    var product = createdProducts[Random.Shared.Next(productCount)];
+                    var newName = $"target_{Interlocked.Increment(ref nameCounter)}";
+                    await _valuesCache.UpdateProductAsync(new ProductUpdate
+                    {
+                        Id = product.Id,
+                        Name = newName,
+                    }, default);
+                }
+            })).ToArray();
+            await Task.WhenAll(tasks);
+
+            // _productsByName must never hold duplicate product references.
+            var currentRoots = _valuesCache.GetProducts();
+            Assert.Equal(currentRoots.Count, currentRoots.Distinct().Count());
+
+            // The real invariant: every created product must be reachable via its
+            // current DisplayName. Iterating GetProducts() (= _productsByName.Values)
+            // instead would be tautological — an orphaned product never reaches
+            // Values, so the loop wouldn't inspect it.
+            foreach (var created in createdProducts)
+                Assert.Same(created, _valuesCache.GetProductByName(created.DisplayName));
+        }
+
+        [Fact]
+        [Trait("Category", "Concurrency")]
+        public async Task ConcurrentProductRenameToSameNameTest()
+        {
+            var initialRootCount = _valuesCache.GetProducts().Count;
+
+            var p1 = await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty);
+            var p2 = await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty);
+            var sharedName = $"shared_{Guid.NewGuid():N}";
+
+            using var barrier = new Barrier(2);
+            var t1 = Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = p1.Id, Name = sharedName }, default);
+            });
+            var t2 = Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = p2.Id, Name = sharedName }, default);
+            });
+            await Task.WhenAll(t1, t2);
+
+            // Collision: exactly one product can own sharedName. The loser must
+            // keep its original name in _productsByName — neither p1 nor p2 is
+            // allowed to be orphaned by the collision.
+            Assert.Equal(initialRootCount + 2, _valuesCache.GetProducts().Count);
+
+            foreach (var created in new[] { p1, p2 })
+            {
+                var current = _valuesCache.GetProduct(created.Id);
+                Assert.Same(current, _valuesCache.GetProductByName(current.DisplayName));
+            }
         }
 
         [Fact]
