@@ -64,7 +64,13 @@ namespace HSMServer.Core.Tests.Infrastructure
         public AccessKeyEntity GetAccessKey(Guid id) => _inner.GetAccessKey(id);
         public List<AccessKeyEntity> GetAccessKeys() => _inner.GetAccessKeys();
 
-        public void AddSensor(SensorEntity entity) => _inner.AddSensor(entity);
+        public void AddSensor(SensorEntity entity)
+        {
+            if (_shouldFail(entity))
+                throw new InvalidOperationException($"Simulated DB failure for sensor {entity.Id}");
+
+            _inner.AddSensor(entity);
+        }
 
         public void UpdateSensor(SensorEntity entity)
         {
