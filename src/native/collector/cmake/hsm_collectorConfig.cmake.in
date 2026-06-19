@@ -9,8 +9,9 @@ include(CMakeFindDependencyMacro)
 
 find_dependency(Threads)
 
-# CURL is a PUBLIC dependency only when the library was built with the HTTP transport
-# (HSM_COLLECTOR_HTTP). The value is baked in at configure time.
+# CURL is needed only when the library was built with the HTTP transport (HSM_COLLECTOR_HTTP).
+# It is PRIVATE-linked into the static core, but a static archive still propagates private link
+# requirements (as $<LINK_ONLY:>), so a consumer must be able to resolve it. Baked in at configure time.
 if(@HSM_COLLECTOR_HTTP@)
     find_dependency(CURL)
 endif()

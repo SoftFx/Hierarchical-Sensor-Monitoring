@@ -29,6 +29,12 @@ int main()
         options.computer_name = "example-host";
         options.package_collect_period_ms = 50; // dispatch quickly so the example finishes fast
 
+        // State captured by reference into a collector-owned callback (the function sensor below)
+        // MUST be declared before the Collector so it outlives it: the Collector destructor joins
+        // the scheduler thread, so `tick` must still be alive then — including if an exception
+        // unwinds the stack between Start() and Stop().
+        int tick = 0;
+
         hc::Collector collector(options);
 
         collector.SetLogger([](hc::LogLevel level, const std::string& message) {
@@ -49,9 +55,9 @@ int main()
         auto temperature = collector.CreateDoubleSensor("Example/Temperature");
         temperature.AttachAlert(alert);
 
-        // A rate sensor and a pull-function sensor driven by a std::function.
+        // A rate sensor and a pull-function sensor driven by a std::function (over `tick`, declared
+        // above the collector so it outlives the scheduler join).
         auto requests = collector.CreateRateSensor("Example/Requests");
-        int tick = 0;
         [[maybe_unused]] auto uptime = collector.CreateFunctionSensor(
             "Example/UptimeTicks",
             std::chrono::seconds(1),

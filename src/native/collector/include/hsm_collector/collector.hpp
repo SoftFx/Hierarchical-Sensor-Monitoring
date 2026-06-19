@@ -51,6 +51,13 @@ namespace hsm::collector
     /// Owning RAII handle to a native collector. Move-only. The destructor disposes and frees the
     /// underlying handle; std::function callbacks registered through this object are kept alive
     /// until after that happens.
+    ///
+    /// Threading: sensor `AddValue` is safe from any thread, but sensor/observer/sink REGISTRATION
+    /// (the `Create*` factories, `AddLifecycleListener`, `SetLogger`, `SetMetricSourceFactory`) must
+    /// be driven from a single thread — the internal callback storage is not synchronized. In
+    /// particular, a callback running on the scheduler thread must not register from inside itself
+    /// while another thread also registers. The natural pattern is to configure the collector fully
+    /// before `Start()`.
     class Collector
     {
     public:
@@ -166,10 +173,11 @@ namespace hsm::collector
             lifecycle_listeners_.push_back(std::move(holder));
         }
 
-        /// Install (or, with an empty std::function, clear) the log sink. A replaced/cleared holder
-        /// is retained (not freed) until the Collector is destroyed: the C side may still be
-        /// invoking the previous logger on the scheduler thread when this is called on a running
-        /// collector, so freeing it here would be a use-after-free.
+        /// Install (or, with an empty std::function, clear) the log sink. Prefer to call this ONCE,
+        /// before Start(). A replaced/cleared holder is retained (not freed) until the Collector is
+        /// destroyed: the C side may still be invoking the previous logger on the scheduler thread,
+        /// so freeing it here would be a use-after-free. There is no safe reclamation point, so
+        /// repeatedly re-installing on a long-lived collector accumulates one holder per call.
         void SetLogger(Logger logger)
         {
             if (!logger)
@@ -184,8 +192,8 @@ namespace hsm::collector
         }
 
         /// Install (or, with an empty std::function, clear) the metric-source factory. As with
-        /// SetLogger, a replaced/cleared holder is retained until destruction (the factory may be in
-        /// use on the scheduler thread).
+        /// SetLogger, call once before Start(): a replaced/cleared holder is retained until
+        /// destruction (the factory may be in use on the scheduler thread), with no reclamation.
         void SetMetricSourceFactory(MetricSourceFactory factory)
         {
             if (!factory)
