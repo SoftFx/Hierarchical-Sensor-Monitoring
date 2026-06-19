@@ -23,10 +23,10 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     env:
-      # Matches the fixture's `FROM hsmonitoring/hierarchical_sensor_monitoring:latest`.
-      # HSMServer.csproj already sets `ContainerImageTags=$(Version);latest`, so the
-      # local build is automatically tagged `:latest` as well — Docker prefers local
-      # over remote when the tag matches, so no push is needed.
+      # Must match the fixture's `FROM hsmonitoring/hierarchical_sensor_monitoring:latest`
+      # (HsmServerFixture) so the locally-built source image shadows the published one.
+      # HSMServer.csproj sets `ContainerImageTags=$(Version);latest`, so the build is also
+      # tagged `:latest`; Docker prefers a matching local image over remote, so no push is needed.
       SERVER_REPOSITORY: hsmonitoring/hierarchical_sensor_monitoring
     steps:
       - uses: actions/checkout@v4
@@ -37,14 +37,17 @@ jobs:
 
       # Build the server container from the SAME branch the integration tests run against.
       # Without this step the fixture pulls master's published `:latest`, so any server-side
-      # API addition on the branch (e.g. a new /enum endpoint) is invisible to the tests
-      # and the matching collector-side route returns 404. Mirrors the pattern in tests.yml.
-      # `ContainerRepository` is the modern property name; the deprecated `ContainerImageName`
-      # also works but emits a warning. We do NOT set ContainerImageTag because the csproj
-      # already supplies `ContainerImageTags`, and the two are mutually exclusive (error
-      # CONTAINER2008).
+      # change on the branch (e.g. the #1068 history-API fix for Enum/TimeSpan/Version) is
+      # invisible to the tests. Mirrors the publish recipe in server-build.yml.
+      #
+      # IMPORTANT: override `ContainerImageName` (NOT `ContainerRepository`). HSMServer.csproj
+      # hard-codes `<ContainerImageName>$(MSBuildProjectName)</ContainerImageName>` (= `hsmserver`);
+      # a `-p:ContainerRepository=...` does NOT override it, so the build is tagged `hsmserver:latest`
+      # and the fixture silently falls back to the remote published image. server-build.yml uses
+      # `-p:ContainerImageName=...` for exactly this reason. We do NOT set ContainerImageTag — the
+      # csproj already supplies `ContainerImageTags` and the two are mutually exclusive (CONTAINER2008).
       - name: Build server container image from branch source
-        run: dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerRepository=${{ env.SERVER_REPOSITORY }}
+        run: dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerImageName=${{ env.SERVER_REPOSITORY }}
 
       - name: Run Integration Tests
         run: dotnet test src/collector/HSMDataCollector.IntegrationTests --logger "console;verbosity=detailed"
