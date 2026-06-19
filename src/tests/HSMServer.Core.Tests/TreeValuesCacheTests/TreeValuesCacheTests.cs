@@ -224,6 +224,26 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Fact]
+        [Trait("Category", "Update product(s)")]
+        public async Task RenameToTakenNameReturnsErrorTest()
+        {
+            var keeper = await _valuesCache.AddProductAsync($"keeper_{Guid.NewGuid():N}", Guid.Empty);
+            var challenger = await _valuesCache.AddProductAsync($"challenger_{Guid.NewGuid():N}", Guid.Empty);
+            var challengerOriginalName = challenger.DisplayName;
+
+            var result = await _valuesCache.UpdateProductAsync(
+                new ProductUpdate { Id = challenger.Id, Name = keeper.DisplayName }, default);
+
+            Assert.False(result.IsOk);
+            Assert.Contains("already in use", result.Error);
+
+            // The challenger must keep its original name and remain reachable.
+            var current = _valuesCache.GetProduct(challenger.Id);
+            Assert.Equal(challengerOriginalName, current.DisplayName);
+            Assert.Same(current, _valuesCache.GetProductByName(current.DisplayName));
+        }
+
+        [Fact]
         [Trait("Category", "Remove product(s)")]
         public async Task RemoveProductTest()
         {

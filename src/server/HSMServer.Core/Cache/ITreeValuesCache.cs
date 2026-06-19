@@ -44,7 +44,7 @@ namespace HSMServer.Core.Cache
         List<AccessKeyModel> GetAccessKeys();
 
         Task<ProductModel> AddProductAsync(string productName, Guid authorId, CancellationToken token = default);
-        Task UpdateProductAsync(ProductUpdate product, CancellationToken token = default);
+        Task<TaskResult> UpdateProductAsync(ProductUpdate product, CancellationToken token = default);
         Task RemoveProductAsync(Guid id, InitiatorInfo initiator = null, CancellationToken token = default);
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);
