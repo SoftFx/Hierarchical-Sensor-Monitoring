@@ -2209,6 +2209,7 @@ namespace HSMServer.Core.Cache
         {
             sensor = null;
             error = string.Empty;
+            var persisted = false;
             try
             {
 
@@ -2246,6 +2247,13 @@ namespace HSMServer.Core.Cache
 
                 //sensor.Policies.AddDefault(options);
 
+                // Persist first so a DB failure can't leave an orphan in the in-memory
+                // caches. Any later failure (ChangeSensorEvent, ApplyTemplateToSensor,
+                // UpdateProduct, journal) must roll the row back too — tracked by
+                // `persisted` in the catch below.
+                _database.AddSensor(sensor.ToEntity());
+                persisted = true;
+
                 AddSensor(sensor, product);
                 UpdateProduct(parentProduct);
 
@@ -2263,13 +2271,23 @@ namespace HSMServer.Core.Cache
 
                 if (sensor is not null)
                 {
-                    // Roll back the in-memory mutations performed before the failure.
-                    // RemoveSensorFromCache is a no-op when AddSensor threw on the DB
-                    // write (nothing was added yet); it cleans up only if a later step
-                    // failed. RemoveSensorPolicies reverts the SubscribeSensorToPolicyUpdate
-                    // wiring, and parent.RemoveSensor drops the sensor from the parent
-                    // product. We intentionally do not call _database.RemoveSensorWithMetadata
-                    // — if AddSensor threw, there is no row to remove.
+                    // If the failure happened after _database.AddSensor returned, the row
+                    // is already in the DB. Remove it so the cache and DB stay consistent —
+                    // otherwise the orphan row would be reloaded on the next restart while
+                    // the in-memory cache says the sensor doesn't exist. Wrap the rollback
+                    // delete so a failure here doesn't mask the original exception.
+                    if (persisted)
+                    {
+                        try
+                        {
+                            _database.RemoveSensorWithMetadata(sensor.Id);
+                        }
+                        catch (Exception rollbackEx)
+                        {
+                            _logger.Error($"Failed to remove persisted sensor row {sensor.Id} during rollback", rollbackEx);
+                        }
+                    }
+
                     RemoveSensorFromCache(sensor);
                     RemoveSensorPolicies(sensor);
                     sensor.Parent?.RemoveSensor(sensor.Id);
@@ -2283,11 +2301,9 @@ namespace HSMServer.Core.Cache
 
         private void AddSensor(BaseSensorModel sensor, ProductModel productModel)
         {
-            // Persist first so a DB failure can't leave an orphan in the in-memory
-            // caches. The exception propagates to TryAddSensor, which rolls back any
-            // earlier mutations and reports the failure to the caller (#1128).
-            _database.AddSensor(sensor.ToEntity());
-
+            // Pre-condition: the sensor row is already persisted by the caller.
+            // Updates the in-memory caches and fires notifications/template application;
+            // any exception propagates back so the caller can roll the row back.
             AddSensorToCache(productModel, sensor);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
