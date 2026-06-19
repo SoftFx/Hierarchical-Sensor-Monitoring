@@ -2291,6 +2291,22 @@ namespace HSMServer.Core.Cache
                     RemoveSensorFromCache(sensor);
                     RemoveSensorPolicies(sensor);
                     sensor.Parent?.RemoveSensor(sensor.Id);
+
+                    // ChangeSensorEvent(Add) may have fired inside AddSensor before the
+                    // failure. Mirror RemoveSensor and fire the matching Delete so any
+                    // subscriber that retained a reference can clean it up rather than
+                    // holding a dangling pointer to a sensor that no longer exists.
+                    // Wrapped because event handlers can throw and we don't want that to
+                    // mask the original exception.
+                    try
+                    {
+                        ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        _logger.Error($"Failed to invoke ChangeSensorEvent.Delete for sensor {sensor.Id} during rollback", rollbackEx);
+                    }
+
                     sensor = null;
                 }
 

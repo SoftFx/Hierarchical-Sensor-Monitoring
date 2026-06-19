@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using HSMCommon.Model;
@@ -69,12 +70,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         // Regression for #1128 follow-up: a failure AFTER _database.AddSensor returns
-        // (here: a ChangeSensorEvent subscriber throwing) must still roll the row back.
-        // Otherwise the DB has the row while the in-memory cache says the sensor doesn't
-        // exist — the orphan would be reloaded on the next restart.
+        // (here: a ChangeSensorEvent subscriber throwing on Add) must still roll the row
+        // back AND fire the matching ChangeSensorEvent(Delete) so subscribers that saw
+        // Add can clean up rather than hold a dangling reference. Without the Delete,
+        // the DB has the row removed while the in-memory cache says the sensor doesn't
+        // exist AND subscribers think it still does.
         [Fact]
         [Trait("Category", "Add new sensor value")]
-        public async Task AddSensor_WhenPostPersistStepFails_DbRowRolledBack()
+        public async Task AddSensor_WhenPostPersistStepFails_RollsBackAndFiresDeleteEvent()
         {
             var accessKey = Guid.Parse(TestProductsManager.TestProductKey.Id);
             var productId = TestProductsManager.ProductId;
@@ -84,12 +87,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             const string sensorPath = "post_persist_failure_sensor";
 
-            void ThrowingHandler(BaseSensorModel s, ActionType t)
+            var recordedEvents = new List<(string Name, ActionType Type)>();
+            void RecordingHandler(BaseSensorModel s, ActionType t)
             {
                 if (s.DisplayName == sensorPath)
+                    recordedEvents.Add((s.DisplayName, t));
+            }
+
+            void ThrowingHandler(BaseSensorModel s, ActionType t)
+            {
+                if (s.DisplayName == sensorPath && t == ActionType.Add)
                     throw new InvalidOperationException("Simulated post-persist subscriber failure");
             }
 
+            // Subscribe the recorder first so it sees Add before ThrowingHandler throws.
+            _valuesCache.ChangeSensorEvent += RecordingHandler;
             _valuesCache.ChangeSensorEvent += ThrowingHandler;
             try
             {
@@ -104,9 +116,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             finally
             {
                 _valuesCache.ChangeSensorEvent -= ThrowingHandler;
+                _valuesCache.ChangeSensorEvent -= RecordingHandler;
             }
 
-            // Retry with the same path now that the subscriber is gone: must succeed.
+            // Subscribers that saw Add must also see Delete during the rollback —
+            // otherwise they retain a dangling reference to a sensor that's now gone
+            // from cache and DB.
+            Assert.Equal(new[] { (sensorPath, ActionType.Add), (sensorPath, ActionType.Delete) }, recordedEvents);
+
+            // Retry with the same path now that the failing subscriber is gone: must succeed.
             var retryValue = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorPath, DateTime.UtcNow);
             await _valuesCache.AddSensorValueAsync(accessKey, productId, retryValue);
             await Task.Delay(200);
