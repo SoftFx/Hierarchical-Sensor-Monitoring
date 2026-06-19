@@ -264,7 +264,8 @@ jobs:
 
       - name: Install the overlay port from branch source
         shell: bash
-        run: "$VCPKG_ROOT/vcpkg" install hsm-collector --overlay-ports=src/native/collector/vcpkg-port
+        run: |
+          "$VCPKG_ROOT/vcpkg" install hsm-collector --overlay-ports=src/native/collector/vcpkg-port
 
       - name: Configure consumer against the vcpkg package
         shell: bash
