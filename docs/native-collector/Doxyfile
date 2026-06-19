@@ -19,6 +19,10 @@ JAVADOC_AUTOBRIEF      = YES
 GENERATE_HTML          = YES
 GENERATE_LATEX         = NO
 
+# No Graphviz dependency: dot-based include/collaboration graphs would require the `dot` binary on
+# the runner and, when absent, abort under WARN_AS_ERROR. The API reference does not need them.
+HAVE_DOT               = NO
+
 QUIET                  = YES
 WARNINGS               = YES
 WARN_IF_UNDOCUMENTED   = NO
