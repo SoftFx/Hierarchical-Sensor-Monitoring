@@ -3,7 +3,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Model.NodeSettings
 {
-    public sealed class TimeIntervalSettingProperty : SettingPropertyBase<TimeIntervalModel>
+    public class TimeIntervalSettingProperty : SettingPropertyBase<TimeIntervalModel>
     {
         private Func<bool> _isSetOverride;
 

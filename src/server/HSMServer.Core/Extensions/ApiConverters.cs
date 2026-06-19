@@ -238,42 +238,6 @@ namespace HSMServer.Core.ApiObjectsConverters
             };
 
 
-        public static object Convert(this BaseValue value) =>
-            value switch
-            {
-                BooleanValue sv => sv.Convert(),
-                IntegerValue sv => sv.Convert(),
-                DoubleValue sv => sv.Convert(),
-                StringValue sv => sv.Convert(),
-                IntegerBarValue sv => sv.Convert(),
-                DoubleBarValue sv => sv.Convert(),
-                FileValue sv => sv.Convert(),
-                RateValue sv => sv.Convert(),
-                EnumValue sv => sv.Convert(),
-                _ => null,
-            };
-
-
-        public static List<object> Convert(this List<BaseValue> values)
-        {
-            var apiValues = new List<object>(values.Count);
-
-            foreach (var value in values)
-            {
-                var apiValue = value.Convert();
-                if (apiValue != null)
-                    apiValues.Add(apiValue);
-            }
-
-            return apiValues;
-        }
-
-
-
-
-  
-
-
         public static SensorStatus Convert(this ApiSensorStatus status) =>
             status switch
             {

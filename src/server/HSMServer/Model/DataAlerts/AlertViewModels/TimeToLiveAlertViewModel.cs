@@ -30,7 +30,13 @@ namespace HSMServer.Model.DataAlerts
                 return;
             }
 
-            FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, () => (node.Parent?.TTL, node.ParentIsFolder)) { IsAlertBlock = true });
+            // For a new TTL alert on a product/node, "From Parent" should reference this node's own
+            // Settings.TTL — not the parent product/folder. For sensors, climb the parent chain.
+            var (parent, isFolder) = node is ProductNodeViewModel
+                ? (node.TTL, false)
+                : (node.Parent?.TTL, node.ParentIsFolder);
+
+            FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, () => (parent, isFolder)) { IsAlertBlock = true });
         }
 
         public TimeToLiveAlertViewModel(TTLPolicy policy, NodeViewModel node) : base(policy, node)
@@ -39,9 +45,28 @@ namespace HSMServer.Model.DataAlerts
 
             if (policy.IsTTLFromParent && node != null)
             {
-                interval = new TimeIntervalViewModel(
-                    PredefinedIntervals.ForTimeout,
-                    () => (node.Parent?.TTL, node.ParentIsFolder)) { IsAlertBlock = true };
+                if (node is ProductNodeViewModel)
+                {
+                    // Node-level TTL alert: "From Parent" resolves against this node's own Settings.TTL
+                    // (bounded — does not climb to the parent product/folder). Build the parent view
+                    // from the policy's resolved TTL so the UI matches the node's "Time to sensor(s) live" field.
+                    var resolved = policy.TTLInterval.UseTicks
+                        ? new TimeIntervalModel(policy.TTLInterval.Ticks)
+                        : policy.TTLInterval;
+
+                    var resolvedParent = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true };
+                    resolvedParent.FromModel(resolved, PredefinedIntervals.ForTimeout);
+
+                    interval = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, () => (resolvedParent, false)) { IsAlertBlock = true };
+                }
+                else
+                {
+                    // Sensor-level TTL alert: keep the parent-chain resolution.
+                    interval = new TimeIntervalViewModel(
+                        PredefinedIntervals.ForTimeout,
+                        () => (node.Parent?.TTL, node.ParentIsFolder)) { IsAlertBlock = true };
+                }
+
                 interval.Interval = TimeInterval.FromParent;
             }
             else

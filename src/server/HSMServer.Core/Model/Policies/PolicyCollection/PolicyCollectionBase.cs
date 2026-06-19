@@ -1,6 +1,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
@@ -26,6 +27,12 @@ namespace HSMServer.Core.Model.Policies
         public event Action<JournalRecordModel> ChangesHandler;
 
 
+        // Source used to resolve a TTL policy with IsTTLFromParent == true.
+        // Default: the owning model's Settings.TTL (walks the parent chain — sensor behaviour).
+        // ProductPolicyCollection overrides this to bound resolution to the node itself.
+        protected virtual TimeIntervalSettingProperty TTLParentSource => _model.Settings.TTL;
+
+
         internal virtual void Attach(BaseNodeModel model) => _model = model;
 
         internal virtual void BuildDefault(BaseNodeModel node, PolicyEntity entity = null)
@@ -33,7 +40,13 @@ namespace HSMServer.Core.Model.Policies
             lock (_ttlLock)
             {
                 if (entity != null)
-                    _ttlPolicies = [new TTLPolicy(node, entity)];
+                {
+                    var policy = new TTLPolicy(node, entity);
+                    if (policy.IsTTLFromParent)
+                        policy.SetTTLParent(TTLParentSource);
+
+                    _ttlPolicies = [policy];
+                }
                 else
                     _ttlPolicies = [];
             }
@@ -42,7 +55,24 @@ namespace HSMServer.Core.Model.Policies
         internal void BuildDefault(BaseNodeModel node, List<PolicyEntity> entities)
         {
             lock (_ttlLock)
-                _ttlPolicies = entities?.Select(e => new TTLPolicy(node, e)).ToList() ?? [];
+            {
+                _ttlPolicies = [];
+
+                if (entities is null)
+                    return;
+
+                var built = new List<TTLPolicy>(entities.Count);
+                foreach (var e in entities)
+                {
+                    var policy = new TTLPolicy(node, e);
+                    if (policy.IsTTLFromParent)
+                        policy.SetTTLParent(TTLParentSource);
+
+                    built.Add(policy);
+                }
+
+                _ttlPolicies = built;
+            }
         }
 
 
@@ -56,8 +86,7 @@ namespace HSMServer.Core.Model.Policies
                 .GroupBy(u => u.Id)
                 .ToDictionary(g => g.Key, g => g.Last());
             var newPolicyUpdates = updates.Where(u => u.Id == Guid.Empty).ToList();
-            var isTemplateInitiated = initiator == InitiatorInfo.AlertTemplate
-                || updates.Any(u => u.Initiator == InitiatorInfo.AlertTemplate);
+            var isTemplateInitiated = initiator == InitiatorInfo.AlertTemplate;
 
             var journalEntries = new List<(string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)>();
 
@@ -90,7 +119,7 @@ namespace HSMServer.Core.Model.Policies
                             policy.FullUpdate(update);
 
                             if (!update.TTL.HasValue)
-                                policy.SetTTLParent(_model.Settings.TTL);
+                                policy.SetTTLParent(TTLParentSource);
 
                             journalEntries.Add((oldValue, policy, update, update.IsParentRequest));
                         }
@@ -112,7 +141,7 @@ namespace HSMServer.Core.Model.Policies
                     policy.FullUpdate(update, _model as BaseSensorModel);
 
                     if (!update.TTL.HasValue)
-                        policy.SetTTLParent(_model.Settings.TTL);
+                        policy.SetTTLParent(TTLParentSource);
 
                     journalEntries.Add((string.Empty, policy, update, false));
                     newList.Add(policy);
@@ -132,7 +161,7 @@ namespace HSMServer.Core.Model.Policies
             policy.FullUpdate(update, _model as BaseSensorModel);
 
             if (!update.TTL.HasValue)
-                policy.SetTTLParent(_model.Settings.TTL);
+                policy.SetTTLParent(TTLParentSource);
 
             lock (_ttlLock)
                 _ttlPolicies = [.._ttlPolicies, policy];
@@ -143,7 +172,7 @@ namespace HSMServer.Core.Model.Policies
         internal void AddTTLPolicy(TTLPolicy policy)
         {
             if (policy.IsTTLFromParent)
-                policy.SetTTLParent(_model.Settings.TTL);
+                policy.SetTTLParent(TTLParentSource);
 
             lock (_ttlLock)
                 _ttlPolicies = [.._ttlPolicies, policy];
