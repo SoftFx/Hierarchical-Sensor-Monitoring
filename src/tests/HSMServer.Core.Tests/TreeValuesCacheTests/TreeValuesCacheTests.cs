@@ -161,12 +161,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // succeeds and the final state is fully determined: every created
             // product must resolve through _productsByName under its DisplayName.
             var nameCounter = 0;
-            var rnd = new Random();
             var tasks = Enumerable.Range(0, threadCount).Select(_ => Task.Run(async () =>
             {
                 for (int i = 0; i < iterationsPerThread; ++i)
                 {
-                    var product = createdProducts[rnd.Next(productCount)];
+                    var product = createdProducts[Random.Shared.Next(productCount)];
                     var newName = $"target_{Interlocked.Increment(ref nameCounter)}";
                     await _valuesCache.UpdateProductAsync(new ProductUpdate
                     {
