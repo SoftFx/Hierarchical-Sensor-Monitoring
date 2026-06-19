@@ -94,7 +94,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             for (int i = 0; i < count; ++i)
             {
-                var productName = RandomGenerator.GetRandomString();
+                // GUID-based names: the cache now rejects duplicate DisplayNames
+                // (see AddProductWithDuplicateNameThrowsTest), and the DB persists
+                // between test runs, so RandomGenerator.GetRandomString() — which
+                // uses a fixed seed — would collide with products from prior runs.
+                var productName = $"prod_{Guid.NewGuid():N}";
                 productNames.Add(productName);
 
                 addedProducts.Add(await _valuesCache.AddProductAsync(productName, Guid.Empty));
@@ -131,7 +135,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var addedProducts = new List<Guid>(count);
             for (int i = 0; i < count; ++i)
-                addedProducts.Add((await _valuesCache.AddProductAsync(RandomGenerator.GetRandomString(), Guid.Empty)).Id);
+                addedProducts.Add((await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty)).Id);
 
             //await Task.Delay(100);
 
@@ -224,6 +228,28 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Fact]
+        [Trait("Category", "Add product(s)")]
+        public async Task AddProductWithDuplicateNameThrowsTest()
+        {
+            var sharedName = $"dup_{Guid.NewGuid():N}";
+
+            var first = await _valuesCache.AddProductAsync(sharedName, Guid.Empty);
+
+            // Second add with the same DisplayName must throw — without this
+            // guard the second root would land in _tree but never in
+            // _productsByName, becoming unreachable until a restart.
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                _valuesCache.AddProductAsync(sharedName, Guid.Empty));
+
+            // The first root must still be reachable under the shared name.
+            Assert.Same(first, _valuesCache.GetProductByName(sharedName));
+
+            // The rejected add must not have leaked into the tree: the root
+            // count is exactly one for this name.
+            Assert.Equal(1, _valuesCache.GetProducts().Count(p => p.DisplayName == sharedName));
+        }
+
+        [Fact]
         [Trait("Category", "Update product(s)")]
         public async Task RenameToTakenNameReturnsErrorTest()
         {
@@ -241,6 +267,43 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var current = _valuesCache.GetProduct(challenger.Id);
             Assert.Equal(challengerOriginalName, current.DisplayName);
             Assert.Same(current, _valuesCache.GetProductByName(current.DisplayName));
+        }
+
+        [Fact]
+        [Trait("Category", "Concurrency")]
+        public async Task ConcurrentAddProductWithSameNameTest()
+        {
+            var initialRootCount = _valuesCache.GetProducts().Count;
+            var sharedName = $"race_{Guid.NewGuid():N}";
+
+            // Two threads add a root with the same DisplayName. Exactly one
+            // must win; the loser must throw and leave no unreachable orphan.
+            ProductModel winner = null;
+            InvalidOperationException loserError = null;
+
+            using var barrier = new Barrier(2);
+            var tasks = Enumerable.Range(0, 2).Select(_ => Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                try
+                {
+                    var added = await _valuesCache.AddProductAsync(sharedName, Guid.Empty);
+                    Interlocked.CompareExchange(ref winner, added, null);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Interlocked.CompareExchange(ref loserError, ex, null);
+                }
+            })).ToArray();
+            await Task.WhenAll(tasks);
+
+            Assert.NotNull(winner);
+            Assert.NotNull(loserError);
+            Assert.Contains("already in use", loserError.Message);
+
+            // Exactly one root was added under the shared name.
+            Assert.Equal(initialRootCount + 1, _valuesCache.GetProducts().Count);
+            Assert.Same(winner, _valuesCache.GetProductByName(sharedName));
         }
 
         [Fact]
