@@ -190,6 +190,41 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Fact]
+        [Trait("Category", "Concurrency")]
+        public async Task ConcurrentProductRenameToSameNameTest()
+        {
+            var initialRootCount = _valuesCache.GetProducts().Count;
+
+            var p1 = await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty);
+            var p2 = await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty);
+            var sharedName = $"shared_{Guid.NewGuid():N}";
+
+            using var barrier = new Barrier(2);
+            var t1 = Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = p1.Id, Name = sharedName }, default);
+            });
+            var t2 = Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = p2.Id, Name = sharedName }, default);
+            });
+            await Task.WhenAll(t1, t2);
+
+            // Collision: exactly one product can own sharedName. The loser must
+            // keep its original name in _productsByName — neither p1 nor p2 is
+            // allowed to be orphaned by the collision.
+            Assert.Equal(initialRootCount + 2, _valuesCache.GetProducts().Count);
+
+            foreach (var created in new[] { p1, p2 })
+            {
+                var current = _valuesCache.GetProduct(created.Id);
+                Assert.Same(current, _valuesCache.GetProductByName(current.DisplayName));
+            }
+        }
+
+        [Fact]
         [Trait("Category", "Remove product(s)")]
         public async Task RemoveProductTest()
         {

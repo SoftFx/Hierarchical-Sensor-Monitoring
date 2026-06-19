@@ -252,9 +252,13 @@ namespace HSMServer.Core.Cache
                 var oldName = product.DisplayName;
                 lock (_productsByNameLock)
                 {
-                    _productsByName.TryRemove(oldName, out _);
-                    if (!_productsByName.TryAdd(update.Name, product))
+                    if (_productsByName.TryAdd(update.Name, product))
+                        _productsByName.TryRemove(oldName, out _);
+                    else
+                    {
                         _logger.Warn($"Cannot rename root product {product.Id} from '{oldName}' to '{update.Name}': target name already in use");
+                        update = update with { Name = null };
+                    }
                 }
             }
 
