@@ -4,6 +4,7 @@
 #include "../src/hsm_http_retry.hpp"
 #include <iostream>
 #include <fstream>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -3825,6 +3826,335 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
     }
 
+    // ---- #1100 public C++ wrapper tests -----------------------------------------------------
+    // The RAII wrapper (hsm_collector.hpp) is a thin convenience layer over the C ABI; it must add
+    // NO wire behavior. These tests pin that by building twin sensors — one via the wrapper, one via
+    // the raw C ABI on an identically-configured collector — and asserting byte-identical
+    // registration payloads (hsm_sensor_test_wire_registration_json is deterministic, no
+    // per-post timestamp), plus the RAII lifetime and std::function-bridging contracts.
+
+    namespace hc = hsm::collector;
+
+    hc::CollectorOptions WrapperTestOptions()
+    {
+        hc::CollectorOptions options;
+        options.access_key = "test-key";
+        options.server_address = "https://localhost";
+        options.port = 443;
+        options.module = "conformance-module";
+        options.computer_name = "conformance-host";
+        options.max_values_in_package = 50;
+        options.package_collect_period_ms = 20;
+        return options;
+    }
+
+    void RequireSameRegistration(hsm_sensor_t* wrapper_sensor, hsm_sensor_t* abi_sensor, const char* what)
+    {
+        const std::string wrapper_json = hsm_sensor_test_wire_registration_json(wrapper_sensor);
+        const std::string abi_json = hsm_sensor_test_wire_registration_json(abi_sensor);
+        if (wrapper_json != abi_json)
+            throw std::runtime_error(
+                std::string("wrapper/ABI registration mismatch for ") + what + "\nwrapper: " + wrapper_json + "\nABI:     " + abi_json);
+    }
+
+    // Build twin sensors (wrapper + raw ABI) for every sensor type and assert the registration
+    // payloads are byte-identical — proving the wrapper's type/options/enum lowering matches the ABI.
+    void NativeWrapperRegistrationMatchesAbi()
+    {
+        CollectorHandle abi = CreateCollector(); // raw ABI side (TestOptions == WrapperTestOptions)
+        hc::Collector wrapper(WrapperTestOptions());
+
+        // Plain instant sensors.
+        {
+            SensorHandle a = CreateBoolSensor(abi.value, "w/bool");
+            auto w = wrapper.CreateBoolSensor("w/bool");
+            RequireSameRegistration(w.handle(), a.value, "bool");
+        }
+        {
+            SensorHandle a = CreateIntSensor(abi.value, "w/int");
+            auto w = wrapper.CreateIntSensor("w/int");
+            RequireSameRegistration(w.handle(), a.value, "int");
+        }
+        {
+            SensorHandle a = CreateDoubleSensor(abi.value, "w/double");
+            auto w = wrapper.CreateDoubleSensor("w/double");
+            RequireSameRegistration(w.handle(), a.value, "double");
+        }
+        {
+            SensorHandle a = CreateStringSensor(abi.value, "w/string");
+            auto w = wrapper.CreateStringSensor("w/string");
+            RequireSameRegistration(w.handle(), a.value, "string");
+        }
+
+        // Enum sensor with an EnumOptions table.
+        {
+            hsm_enum_option_t opts[2] = {
+                { 1, "A", 10, "da" },
+                { 2, "B", 20, "db" },
+            };
+            hsm_sensor_t* as = nullptr;
+            Require(
+                hsm_collector_create_enum_sensor_with_options(abi.value, "w/enum", "e", opts, 2, &as) == HSM_RESULT_OK,
+                "abi enum create");
+            SensorHandle a{ as };
+
+            std::vector<hc::EnumOption> w_opts = {
+                { 1, "A", 10, "da" },
+                { 2, "B", 20, "db" },
+            };
+            auto w = wrapper.CreateEnumSensor("w/enum", "e", w_opts);
+            RequireSameRegistration(w.handle(), a.value, "enum-with-options");
+        }
+
+        // TimeSpan / Version instant sensors.
+        {
+            hsm_sensor_t* as = nullptr;
+            Require(hsm_collector_create_timespan_sensor(abi.value, "w/ts", &as) == HSM_RESULT_OK, "abi timespan create");
+            SensorHandle a{ as };
+            auto w = wrapper.CreateTimeSpanSensor("w/ts");
+            RequireSameRegistration(w.handle(), a.value, "timespan");
+        }
+        {
+            hsm_sensor_t* as = nullptr;
+            Require(hsm_collector_create_version_sensor(abi.value, "w/ver", &as) == HSM_RESULT_OK, "abi version create");
+            SensorHandle a{ as };
+            auto w = wrapper.CreateVersionSensor("w/ver");
+            RequireSameRegistration(w.handle(), a.value, "version");
+        }
+
+        // Full SensorOptions surface — proves SensorOptions::ToNative() matches a hand-built struct.
+        {
+            hsm_sensor_options_t ro = hsm_sensor_options_default();
+            ro.ttl_ms = 60000;
+            ro.unit = 3; // MB
+            ro.description = "d";
+            ro.keep_history_ms = 600000;
+            ro.self_destroy_ms = 1200000;
+            ro.display_unit = 3;
+            ro.statistics = 1; // EMA
+            ro.is_singleton = 1;
+            ro.aggregate_data = 1;
+            ro.enable_grafana = 1;
+            hsm_sensor_t* as = nullptr;
+            Require(
+                hsm_collector_create_sensor_with_options(abi.value, "w/opts", HSM_SENSOR_TYPE_INT, &ro, &as) == HSM_RESULT_OK,
+                "abi options create");
+            SensorHandle a{ as };
+
+            hc::SensorOptions wo;
+            wo.ttl = std::chrono::milliseconds(60000);
+            wo.unit = hc::Unit::MB;
+            wo.description = "d";
+            wo.keep_history = std::chrono::milliseconds(600000);
+            wo.self_destroy = std::chrono::milliseconds(1200000);
+            wo.display_unit = hc::Unit::MB;
+            wo.ema_statistics = true;
+            wo.is_singleton = true;
+            wo.aggregate_data = true;
+            wo.enable_grafana = true;
+            auto w = wrapper.CreateIntSensor("w/opts", wo);
+            RequireSameRegistration(w.handle(), a.value, "int-with-options");
+        }
+
+        // Last-value, bar, rate, file, service-commands.
+        {
+            hsm_sensor_t* as = nullptr;
+            Require(hsm_collector_create_last_value_int_sensor(abi.value, "w/lvi", 7, &as) == HSM_RESULT_OK, "abi lv create");
+            SensorHandle a{ as };
+            auto w = wrapper.CreateLastValueIntSensor("w/lvi", 7);
+            RequireSameRegistration(w.handle(), a.value, "last-value-int");
+        }
+        {
+            hsm_sensor_t* as = nullptr;
+            Require(hsm_collector_create_int_bar_sensor(abi.value, "w/ibar", 300000, 15000, &as) == HSM_RESULT_OK, "abi ibar create");
+            SensorHandle a{ as };
+            hc::BarOptions bo;
+            bo.bar_period = std::chrono::milliseconds(300000);
+            bo.post_period = std::chrono::milliseconds(15000);
+            auto w = wrapper.CreateIntBarSensor("w/ibar", bo);
+            RequireSameRegistration(w.handle(), a.value, "int-bar");
+        }
+        {
+            hsm_sensor_t* as = nullptr;
+            Require(hsm_collector_create_double_bar_sensor(abi.value, "w/dbar", 300000, 15000, 2, &as) == HSM_RESULT_OK, "abi dbar create");
+            SensorHandle a{ as };
+            hc::BarOptions bo;
+            bo.bar_period = std::chrono::milliseconds(300000);
+            bo.post_period = std::chrono::milliseconds(15000);
+            bo.precision = 2;
+            auto w = wrapper.CreateDoubleBarSensor("w/dbar", bo);
+            RequireSameRegistration(w.handle(), a.value, "double-bar");
+        }
+        {
+            hsm_sensor_t* as = nullptr;
+            Require(hsm_collector_create_rate_sensor(abi.value, "w/rate", 15000, &as) == HSM_RESULT_OK, "abi rate create");
+            SensorHandle a{ as };
+            auto w = wrapper.CreateRateSensor("w/rate");
+            RequireSameRegistration(w.handle(), a.value, "rate");
+        }
+        {
+            hsm_sensor_t* as = nullptr;
+            Require(hsm_collector_create_file_sensor(abi.value, "w/file", "name", "ext", &as) == HSM_RESULT_OK, "abi file create");
+            SensorHandle a{ as };
+            auto w = wrapper.CreateFileSensor("w/file", "name", "ext");
+            RequireSameRegistration(w.handle(), a.value, "file");
+        }
+        {
+            hsm_sensor_t* as = nullptr;
+            Require(hsm_collector_create_service_commands_sensor(abi.value, &as) == HSM_RESULT_OK, "abi service-cmd create");
+            SensorHandle a{ as };
+            auto w = wrapper.CreateServiceCommandsSensor();
+            RequireSameRegistration(w.handle(), a.value, "service-commands");
+        }
+    }
+
+    // Build the same canonical data+TTL alert via the fluent AlertBuilder AND via the raw alert ABI
+    // on twin sensors; the registration payloads must be byte-identical (AlertBuilder lowers exactly).
+    void NativeWrapperAlertBuilderMatchesAbi()
+    {
+        CollectorHandle abi = CreateCollector();
+        hc::Collector wrapper(WrapperTestOptions());
+
+        hsm_sensor_options_t ro = hsm_sensor_options_default();
+        ro.unit = 3; // MB
+        ro.description = "d";
+        hsm_sensor_t* as = nullptr;
+        Require(
+            hsm_collector_create_sensor_with_options(abi.value, "p/alert", HSM_SENSOR_TYPE_INT, &ro, &as) == HSM_RESULT_OK,
+            "abi alert sensor create");
+        SensorHandle a{ as };
+
+        hsm_alert_t* data = nullptr;
+        Require(hsm_collector_create_alert(abi.value, HSM_ALERT_KIND_INSTANT, &data) == HSM_RESULT_OK, "abi data alert");
+        hsm_alert_add_condition(data, HSM_ALERT_COMBINATION_AND, HSM_ALERT_PROP_VALUE, HSM_ALERT_OP_GREATER_THAN, HSM_ALERT_TARGET_CONST, "42");
+        hsm_alert_add_condition(data, HSM_ALERT_COMBINATION_OR, HSM_ALERT_PROP_STATUS, HSM_ALERT_OP_IS_OK, HSM_ALERT_TARGET_LAST_VALUE, nullptr);
+        hsm_alert_set_sensor_error(data);
+        hsm_alert_set_notification(data, "spike", HSM_ALERT_DESTINATION_ALL_CHATS);
+        hsm_alert_set_icon(data, HSM_ALERT_ICON_WARNING);
+        hsm_alert_set_confirmation_period(data, 300000);
+        Require(hsm_sensor_attach_alert(a.value, data) == HSM_RESULT_OK, "abi attach data");
+
+        hsm_alert_t* ttl = nullptr;
+        Require(hsm_collector_create_alert(abi.value, HSM_ALERT_KIND_TTL, &ttl) == HSM_RESULT_OK, "abi ttl alert");
+        hsm_alert_set_inactivity_period(ttl, 60000);
+        hsm_alert_set_notification(ttl, "inactive", HSM_ALERT_DESTINATION_FROM_PARENT);
+        Require(hsm_sensor_attach_alert(a.value, ttl) == HSM_RESULT_OK, "abi attach ttl");
+
+        hc::SensorOptions wo;
+        wo.unit = hc::Unit::MB;
+        wo.description = "d";
+        auto w = wrapper.CreateIntSensor("p/alert", wo);
+
+        auto w_data = wrapper.CreateAlert(hc::AlertKind::Instant)
+                          .If(hc::AlertProperty::Value, hc::AlertOperation::GreaterThan, "42")
+                          .IfLastValue(hc::AlertProperty::Status, hc::AlertOperation::IsOk, hc::AlertCombination::Or)
+                          .AsSensorError()
+                          .ThenNotify("spike", hc::AlertDestination::AllChats)
+                          .WithIcon(hc::AlertIcon::Warning)
+                          .WithConfirmationPeriod(std::chrono::milliseconds(300000));
+        w.AttachAlert(w_data);
+
+        auto w_ttl = wrapper.CreateAlert(hc::AlertKind::Ttl)
+                         .WithInactivityPeriod(std::chrono::milliseconds(60000))
+                         .ThenNotify("inactive", hc::AlertDestination::FromParent);
+        w.AttachAlert(w_ttl);
+
+        RequireSameRegistration(w.handle(), a.value, "alert-builder");
+    }
+
+    // The value-add path forwards 1:1 to the ABI: a wrapper-posted value reaches the sender.
+    void NativeWrapperValuePathPostsThrough()
+    {
+        hc::Collector c(WrapperTestOptions());
+        auto sensor = c.CreateIntSensor("w/path/int");
+        c.Start();
+        sensor.AddValue(123, hc::SensorStatus::Ok, "hi");
+        Require(WaitForSentCountEquals(c.handle(), 1), "wrapper value was not dispatched");
+        Contains(c.SentJson(0), "\"Value\":123,");
+        c.Stop();
+    }
+
+    // RAII: moving a sensor and the collector keeps the underlying handles valid and posting; Dispose
+    // is terminal.
+    void NativeWrapperLifetimeMoveSemantics()
+    {
+        hc::Collector c(WrapperTestOptions());
+        auto sensor = c.CreateIntSensor("w/move/int");
+
+        hc::IntSensor moved_sensor = std::move(sensor);
+        hc::Collector moved_collector = std::move(c);
+
+        moved_collector.Start();
+        moved_sensor.AddValue(5);
+        Require(WaitForSentCountEquals(moved_collector.handle(), 1), "moved wrapper must still post");
+        moved_collector.Stop();
+
+        moved_collector.Dispose();
+        Require(moved_collector.Status() == hc::CollectorStatus::Disposed, "dispose must be terminal");
+    }
+
+    // Every std::function callback fires through its trampoline: lifecycle listener, logger,
+    // function sensor, and the metric-source factory (with recreate-on-throw).
+    void NativeWrapperCallbacksBridgeStdFunction()
+    {
+        auto options = WrapperTestOptions();
+        options.exception_deduplicator_window_ms = 0; // log every error
+        hc::Collector c(options);
+
+        std::vector<hc::CollectorStatus> transitions;
+        c.AddLifecycleListener([&](hc::CollectorStatus status) { transitions.push_back(status); });
+
+        std::vector<std::string> logs;
+        c.SetLogger([&](hc::LogLevel, const std::string& message) { logs.push_back(message); });
+
+        std::atomic<int> calls{ 0 };
+        auto fn = c.CreateFunctionSensor("w/fn", std::chrono::milliseconds(20), [&]() -> std::int32_t { return ++calls; });
+
+        c.Start();
+        Require(WaitForSentCountAtLeast(c.handle(), 1, 2000), "function sensor must post through the wrapper");
+        hsm_collector_test_log_error(c.handle(), "wrapper-log");
+        c.Stop();
+
+        Require(!transitions.empty(), "lifecycle listener must fire through the wrapper");
+        Require(calls.load() > 0, "function sensor callback must be invoked");
+        bool saw_log = false;
+        for (const auto& message : logs)
+            if (message.find("wrapper-log") != std::string::npos)
+                saw_log = true;
+        Require(saw_log, "logger must receive the error through the wrapper");
+
+        // Metric-source factory via std::function: first source throws on its 2nd read -> recreate.
+        int creates = 0;
+        c.SetMetricSourceFactory([&](const std::string&) -> std::unique_ptr<hc::IMetricSource> {
+            ++creates;
+            const bool first = creates == 1;
+            struct Source : hc::IMetricSource
+            {
+                int reads = 0;
+                bool first;
+                explicit Source(bool f)
+                    : first(f)
+                {
+                }
+                std::optional<double> Read() override
+                {
+                    ++reads;
+                    if (first && reads == 2)
+                        throw std::runtime_error("boom");
+                    return static_cast<double>(reads);
+                }
+            };
+            return std::make_unique<Source>(first);
+        });
+
+        double values[8] = { 0 };
+        std::int32_t recreated = -1;
+        const std::int32_t collected = hsm_collector_test_drive_metric_source(c.handle(), "w/metric", 4, values, &recreated);
+        Require(collected == 3, "metric factory must yield three OK samples through the wrapper");
+        Require(recreated == 1, "metric factory must recreate once on the thrown read error");
+        Require(creates == 2, "metric factory std::function invoked for initial + recreate");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
@@ -3869,6 +4199,11 @@ namespace
             { "native_add_after_collector_destroy_is_rejected", [](const std::string&) { NativeAddAfterCollectorDestroyIsRejected(); } },
             { "native_sent_json_failure_reports_fresh_error", [](const std::string&) { NativeSentJsonFailureReportsFreshError(); } },
             { "native_wrapper_sent_json_missing_throws_message", [](const std::string&) { NativeWrapperSentJsonMissingThrowsMessage(); } },
+            { "native_wrapper_registration_matches_abi", [](const std::string&) { NativeWrapperRegistrationMatchesAbi(); } },
+            { "native_wrapper_alert_builder_matches_abi", [](const std::string&) { NativeWrapperAlertBuilderMatchesAbi(); } },
+            { "native_wrapper_value_path_posts_through", [](const std::string&) { NativeWrapperValuePathPostsThrough(); } },
+            { "native_wrapper_lifetime_move_semantics", [](const std::string&) { NativeWrapperLifetimeMoveSemantics(); } },
+            { "native_wrapper_callbacks_bridge_std_function", [](const std::string&) { NativeWrapperCallbacksBridgeStdFunction(); } },
             { "native_create_rejects_null_server_address", [](const std::string&) { NativeCreateRejectsNullServerAddress(); } },
             { "native_create_rejects_blank_server_address", [](const std::string&) { NativeCreateRejectsBlankServerAddress(); } },
             { "native_create_rejects_null_access_key", [](const std::string&) { NativeCreateRejectsNullAccessKey(); } },

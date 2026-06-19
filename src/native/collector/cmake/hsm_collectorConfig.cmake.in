@@ -1,0 +1,21 @@
+@PACKAGE_INIT@
+
+# find_package(hsm_collector) config (#1100). Re-resolves the public link dependencies of
+# hsm_collector_core, then pulls in the exported targets:
+#   hsm_collector::hsm_collector_core  (static core + C ABI)
+#   hsm_collector::hsm_collector_cpp   (header-only C++ RAII wrapper; links the core)
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(Threads)
+
+# CURL is needed only when the library was built with the HTTP transport (HSM_COLLECTOR_HTTP).
+# It is PRIVATE-linked into the static core, but a static archive still propagates private link
+# requirements (as $<LINK_ONLY:>), so a consumer must be able to resolve it. Baked in at configure time.
+if(@HSM_COLLECTOR_HTTP@)
+    find_dependency(CURL)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/hsm_collectorTargets.cmake")
+
+check_required_components(hsm_collector)

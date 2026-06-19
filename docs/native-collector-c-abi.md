@@ -148,6 +148,12 @@ Test-only symbols prefixed `hsm_collector_test_*` (and `hsm_sensor_test_*` /
 `hsm_alert_test_*`) are **not** part of the ABI; they are intentionally omitted
 from the public header and are linked only by the native test binary.
 
+The public C++ RAII API (#1100, `include/hsm_collector/*.hpp`, `namespace hsm::collector`) is a
+header-only convenience layer over this ABI — it adds **no** ABI surface and does **not** bump the
+version. It is documented in `aicontext/features/integrations/native-collector/feature.md`, with the
+C++/CLI-wrapper migration audit in `docs/native-collector-migration.md`. The package version emitted
+by `find_package(hsm_collector)` tracks this ABI semver.
+
 Version history:
 
 - **0.4.0** (#1099) — additive default-sensor catalog: `hsm_default_sensor_t` (the

@@ -1,6 +1,10 @@
-cmake_minimum_required(VERSION 3.20)
+# 3.21 (matches CMakePresets.json) so PROJECT_IS_TOP_LEVEL is always defined — it gates the
+# install/example defaults below and is only auto-set from 3.21.
+cmake_minimum_required(VERSION 3.21)
 
-project(HsmCollectorNative LANGUAGES CXX)
+# VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
+# keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
+project(HsmCollectorNative VERSION 0.4.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -24,6 +28,19 @@ project(HsmCollectorNative LANGUAGES CXX)
 # std::thread / std::condition_variable need an explicit pthread link on POSIX
 # toolchains (gcc without -pthread links but may crash at runtime).
 find_package(Threads REQUIRED)
+
+# Standard install layout (CMAKE_INSTALL_INCLUDEDIR/LIBDIR/...). Included early because the
+# target include dirs below reference CMAKE_INSTALL_INCLUDEDIR for their $<INSTALL_INTERFACE:>.
+include(GNUInstallDirs)
+
+# Whether to emit install()/find_package() rules (#1100). On by default only for a top-level build
+# so an add_subdirectory() consumer is not forced to install the collector. PROJECT_IS_TOP_LEVEL is
+# guaranteed defined by the 3.21 minimum above.
+set(_hsm_default_install ${PROJECT_IS_TOP_LEVEL})
+option(HSM_COLLECTOR_INSTALL "Generate install + find_package package for the native collector" ${_hsm_default_install})
+
+# Build the in-tree console example (#1100). Defaults to the install setting.
+option(HSM_COLLECTOR_BUILD_EXAMPLES "Build the native collector example apps" ${_hsm_default_install})
 
 # Treat warnings as errors (off by default so local dev is not blocked; CI
 # turns it on). The corpus + unit tests must build warning-clean under it.
@@ -80,7 +97,8 @@ add_library(hsm_collector_core STATIC
 
 target_include_directories(hsm_collector_core
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 target_compile_features(hsm_collector_core PUBLIC cxx_std_17)
@@ -108,12 +126,64 @@ add_library(hsm_collector_cpp INTERFACE)
 
 target_include_directories(hsm_collector_cpp
     INTERFACE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 target_link_libraries(hsm_collector_cpp INTERFACE hsm_collector_core)
 
 target_compile_features(hsm_collector_cpp INTERFACE cxx_std_17)
+
+# ---------------------------------------------------------------------------
+# Packaging (#1100): CMake install + find_package(hsm_collector) consumer
+# config (the baseline that satisfies native consumers and the standalone
+# example's clean-build proof). A Conan recipe / NuGet native assets are a
+# deferred follow-up under the same issue.
+# ---------------------------------------------------------------------------
+if(HSM_COLLECTOR_INSTALL)
+    include(CMakePackageConfigHelpers)
+
+    install(TARGETS hsm_collector_core hsm_collector_cpp
+        EXPORT hsm_collectorTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/hsm_collector
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+
+    set(HSM_COLLECTOR_INSTALL_CMAKEDIR ${CMAKE_INSTALL_LIBDIR}/cmake/hsm_collector)
+
+    install(EXPORT hsm_collectorTargets
+        FILE hsm_collectorTargets.cmake
+        NAMESPACE hsm_collector::
+        DESTINATION ${HSM_COLLECTOR_INSTALL_CMAKEDIR}
+    )
+
+    configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/hsm_collectorConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/hsm_collectorConfig.cmake
+        INSTALL_DESTINATION ${HSM_COLLECTOR_INSTALL_CMAKEDIR}
+    )
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/hsm_collectorConfigVersion.cmake
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+    install(FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/hsm_collectorConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/hsm_collectorConfigVersion.cmake
+        DESTINATION ${HSM_COLLECTOR_INSTALL_CMAKEDIR}
+    )
+endif()
+
+# In-tree console example. The standalone find_package consumer lives under
+# examples/console/standalone and is built separately against the installed package (CI lane).
+if(HSM_COLLECTOR_BUILD_EXAMPLES)
+    add_subdirectory(examples/console)
+endif()
 
 add_executable(hsm_collector_tests
     tests/hsm_collector_tests.cpp
@@ -152,6 +222,21 @@ add_test(NAME native_sent_json_failure_reports_fresh_error
 )
 add_test(NAME native_wrapper_sent_json_missing_throws_message
     COMMAND hsm_collector_tests native_wrapper_sent_json_missing_throws_message
+)
+add_test(NAME native_wrapper_registration_matches_abi
+    COMMAND hsm_collector_tests native_wrapper_registration_matches_abi
+)
+add_test(NAME native_wrapper_alert_builder_matches_abi
+    COMMAND hsm_collector_tests native_wrapper_alert_builder_matches_abi
+)
+add_test(NAME native_wrapper_value_path_posts_through
+    COMMAND hsm_collector_tests native_wrapper_value_path_posts_through
+)
+add_test(NAME native_wrapper_lifetime_move_semantics
+    COMMAND hsm_collector_tests native_wrapper_lifetime_move_semantics
+)
+add_test(NAME native_wrapper_callbacks_bridge_std_function
+    COMMAND hsm_collector_tests native_wrapper_callbacks_bridge_std_function
 )
 
 set(NATIVE_REGRESSION_TESTS

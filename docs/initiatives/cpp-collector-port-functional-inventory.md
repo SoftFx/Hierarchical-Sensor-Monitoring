@@ -374,16 +374,18 @@ Details: [`api/wire-contract/feature.md`](../../aicontext/features/api/wire-cont
 
 ## 16. Wrapper parity gaps — ALL [decide]
 
-Reference: `src/wrapper/include/` (C++/CLI wrapper as minimal-API oracle)
+Reference: `src/wrapper/include/` (C++/CLI wrapper as minimal-API oracle). The public C++ RAII API
+(#1100, `hsm::collector`) is the supported successor; the migration audit is in
+`docs/native-collector-migration.md`.
 
-- [x] TimeSpan sensor — native `hsm_collector_create_timespan_sensor` + `hsm_sensor_add_timespan` (#1098)
-- [x] Version sensor — native `hsm_collector_create_version_sensor` + `hsm_sensor_add_version` (#1098)
-- [ ] Enum sensor (absent)
-- [ ] Service-commands sensor (absent)
-- [ ] Lifecycle listeners/events (absent)
-- [ ] Fluent builders (absent)
-- [ ] History queries (absent)
-- [ ] Rate-sensor type asymmetry: wrapper exposes int AND double rate sensors; .NET rate is double-only
+- [x] TimeSpan sensor — C ABI `hsm_collector_create_timespan_sensor` + `hsm_sensor_add_timespan` (#1098); C++ `TimeSpanSensor` (#1100)
+- [x] Version sensor — C ABI `hsm_collector_create_version_sensor` + `hsm_sensor_add_version` (#1098); C++ `VersionSensor` (#1100)
+- [x] Enum sensor — C ABI `hsm_collector_create_enum_sensor[_with_options]` (#1098); C++ `Collector::CreateEnumSensor` + `EnumOption` (#1100)
+- [x] Service-commands sensor — C ABI `hsm_collector_create_service_commands_sensor` (#1098); C++ `ServiceCommandsSensor` (#1100)
+- [x] Lifecycle listeners/events — C ABI `hsm_collector_add_lifecycle_listener` (#1095); C++ `AddLifecycleListener(std::function)` (#1100)
+- [x] Fluent builders — C++ `AlertBuilder` + `SensorOptions`/`BarOptions`/`RateOptions` builders (#1100)
+- [x] History queries — N/A: the collector is send-only; history is a server-side query (no collector surface in .NET either). Resolved not-applicable.
+- [x] Rate-sensor type asymmetry — resolved double-only: C++ `CreateRateSensor` is double (matches .NET); the C++/CLI wrapper's int-rate convenience is intentionally dropped (`native-collector-migration.md`).
 
 ## 17. Cross-cutting invariants (gate for every slice)
 
