@@ -741,17 +741,16 @@ namespace HSMServer.Controllers
 
         public IActionResult AddDataPolicy(byte type, Guid entityId, Guid? folderId = null)
         {
-            TryGetSelectedNode(entityId, out var entity);
+            // entityId may be a template id (Alert Template authoring) rather than a sensor
+            // id — in that case sensor is null and BuildAlert produces a default block.
+            _treeViewModel.Sensors.TryGetValue(entityId, out var sensor);
 
-            DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, entity);
+            DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, sensor);
             viewModel.Schedules = GetAlertSchedulesSelectList();
 
-            if (entity is null && folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
-            {
-                var folderChats = folder.TelegramChats;
+            if (sensor is null && folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
                 foreach (var action in viewModel.Actions)
-                    action.AvailableChats.UnionWith(folderChats);
-            }
+                    action.AvailableChats.UnionWith(folder.TelegramChats);
 
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
@@ -764,8 +763,8 @@ namespace HSMServer.Controllers
         public IActionResult AddAlertAction(Guid entityId, bool isMain, bool isTtl, Guid? folderId = null)
         {
             HashSet<Guid> chats = [];
-            if (TryGetSelectedNode(entityId, out var entity))
-                entity.TryGetChats(out chats);
+            if (_treeViewModel.Sensors.TryGetValue(entityId, out var sensor))
+                sensor.TryGetChats(out chats);
             else if (folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
                 chats = folder.TelegramChats;
 
@@ -805,18 +804,6 @@ namespace HSMServer.Controllers
                 (byte)SensorType.Enum => new NumericConditionViewModel(false),
                 _ => null,
             };
-
-        private bool TryGetSelectedNode(Guid entityId, out NodeViewModel entity)
-        {
-            entity = null;
-
-            if (_treeViewModel.Sensors.TryGetValue(entityId, out var sensor))
-                entity = sensor;
-            if (_treeViewModel.Nodes.TryGetValue(entityId, out var node))
-                entity = node;
-
-            return entity is not null;
-        }
 
 
         [HttpPost]
@@ -930,23 +917,9 @@ namespace HSMServer.Controllers
                 return PartialView("_MetaInfo", invalidModel);
             }
 
-            var availableChats = product.GetAvailableChats(_telegramChatsManager);
-            newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var ttlAlerts);
-
-            var ttlPolicies = ttlAlerts?.Select(t =>
-            {
-                var interval = t.Conditions is { Count: > 0 } ? t.Conditions[0].TimeToLive : null;
-                var fromParent = interval?.TimeInterval.IsParent() ?? false;
-                return t.ToTimeToLiveUpdate(CurrentInitiator, availableChats) with
-                {
-                    TTL = fromParent ? null : interval?.ToModel(product.TTL)?.Ticks
-                };
-            }).ToList() ?? [];
-
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                TTLPolicies = ttlPolicies,
                 TTL = newModel.ExpectedUpdateInterval.ToModel(product.TTL),
                 DefaultChats = newModel.DefaultChats?.ToUpdate(product, _telegramChatsManager, _folderManager),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),

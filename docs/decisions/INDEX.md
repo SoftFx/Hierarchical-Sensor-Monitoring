@@ -15,4 +15,5 @@ Use ADRs for durable decisions that future maintainers will ask about.
 
 | ADR | Status | Title | Date |
 |---|---|---|---|
+| 0001 | Accepted | [Remove user-facing node-level alert creation on non-leaf nodes](0001-node-level-alert-removal.md) | 2026-06-22 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |

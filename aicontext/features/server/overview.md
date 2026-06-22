@@ -68,7 +68,7 @@ TypeScript 5.3 + Webpack 5:
 ## Feature Folders To Add Here
 
 - `ingestion/` - receiving and validating collector data.
-- `alerts/` - alert conditions, templates, schedules, notification triggers.
+- `alerts/` - alert conditions, templates, schedules, notification triggers. See `alerts/feature.md` for the canonical model: global alerts via `AlertTemplate` plus per-sensor editor; node-level alerting on Folders/Products was removed in #1142.
 - `notifications/` - Telegram/email delivery, retries, failure handling.
 - `dashboards/` - server-owned dashboard behavior and data shaping.
 - `auth/` - authentication, access keys, users, permissions.

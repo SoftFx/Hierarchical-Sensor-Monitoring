@@ -1938,7 +1938,9 @@ namespace HSMServer.Core.Cache
         {
             _logger.Info($"{nameof(TreeValuesCache)} is initializing");
 
-            ApplyProducts(RequestProducts());
+            var productEntities = RequestProducts();
+            ApplyProducts(productEntities);
+            CleanupProductOwnedPolicies(productEntities);
             ApplySensors(RequestSensors(), RequestPolicies());
 
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
@@ -2076,6 +2078,76 @@ namespace HSMServer.Core.Cache
             }
 
             _logger.Info($"Produts cache by name initialized [{_productsByName.Count}]");
+        }
+
+        private void CleanupProductOwnedPolicies(List<ProductEntity> productEntities)
+        {
+            _logger.Info("Product-owned policy cleanup is running (node-level alert removal)");
+
+            // Tolerate duplicate policy ids (same as RequestPolicies) — ToDictionary would
+            // throw and abort startup on a database that previously started fine.
+            var policiesById = new Dictionary<Guid, PolicyEntity>();
+            foreach (var policy in _database.GetAllPolicies())
+            {
+                if (policy.Id is null)
+                    continue;
+
+                var key = new Guid(policy.Id);
+                if (!policiesById.TryAdd(key, policy))
+                    _logger.Error($"Duplicate policy id found {key}");
+            }
+
+            var removedPolicies = 0;
+            var updatedProducts = 0;
+
+            foreach (var entity in productEntities)
+            {
+                // ApplyProducts (run just before this) removes orphans whose parent is
+                // missing. Skip them: UpdateProduct below would re-write the blob and
+                // resurrect a dangling entry that is no longer in the product list.
+                if (!Guid.TryParse(entity.Id, out var entityId) || !_tree.ContainsKey(entityId))
+                    continue;
+
+                if (entity.Policies is null or { Count: 0 })
+                    continue;
+
+                var survivingIds = new List<string>();
+                var changed = false;
+
+                foreach (var policyIdStr in entity.Policies)
+                {
+                    if (!Guid.TryParse(policyIdStr, out var policyGuid))
+                    {
+                        survivingIds.Add(policyIdStr);
+                        continue;
+                    }
+
+                    if (!policiesById.TryGetValue(policyGuid, out var policy))
+                    {
+                        changed = true;
+                        continue;
+                    }
+
+                    if (policy.TemplateId is null)
+                    {
+                        _database.RemovePolicy(policyGuid);
+                        removedPolicies++;
+                        changed = true;
+                    }
+                    else
+                    {
+                        survivingIds.Add(policyIdStr);
+                    }
+                }
+
+                if (changed)
+                {
+                    _database.UpdateProduct(entity with { Policies = survivingIds });
+                    updatedProducts++;
+                }
+            }
+
+            _logger.Info($"Product-owned policy cleanup complete: removed {removedPolicies} user-added policies across {updatedProducts} products");
         }
 
         private void ApplySensors(List<SensorEntity> sensorEntities, Dictionary<string, PolicyEntity> policies)

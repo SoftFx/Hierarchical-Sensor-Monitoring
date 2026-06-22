@@ -123,7 +123,10 @@
             <textarea id='description' class="form-control w-100 d-none"  type='text' asp-for="Description" value='@Model.Description'></textarea>
         </div>
 
-        @await Html.PartialAsync("~/Views/Home/Alerts/_Alerts.cshtml", Model)
+        @if (Model is SensorInfoViewModel)
+        {
+            @await Html.PartialAsync("~/Views/Home/Alerts/_Alerts.cshtml", Model)
+        }
 
         <div class="collapse" id="metaInfoCollapse">
             @await Html.PartialAsync("_GeneralInfo", Model)

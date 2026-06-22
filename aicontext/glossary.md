@@ -54,6 +54,9 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Term | Meaning | Notes |
 |---|---|---|
 | Alert | Rule-driven notification condition for monitored sensors. | Use "alert" for rule/notification concept. |
+| Global alert | Alert defined via an `AlertTemplate` (wildcard path + folder + sensor type) that auto-applies to matching sensors. | Canonical mechanism for non-leaf alerting since #1142. |
+| Per-sensor alert | Alert attached to a single sensor via the `_Alerts.cshtml` editor. | Supported path; templates materialize onto sensors as per-sensor policies tagged with `TemplateId`. |
+| Node-level alert (removed) | Legacy alert attached directly to a Folder/Product via the per-node editor. | Removed in #1142; replaced by global alerts. Storage cleanup migration prunes dangling rows. |
 | Alert template | Reusable alert configuration/template. | Keep distinct from a concrete alert instance if code does. |
 | Alert schedule | Time window or schedule controlling alert activity. | Time zone and boundary behavior need tests. |
 | Notification | Delivered message via Telegram/email or other channel. | Use when discussing delivery, retries, and failures. |
