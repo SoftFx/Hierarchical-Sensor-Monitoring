@@ -136,3 +136,6 @@ src/module/HSMPingModule/Config/*
 #AI
 # Claude Code local state (permissions, worktrees) - machine-local, never commit
 .claude/
+
+# Conan/CMake user presets (generated, never committed)
+CMakeUserPresets.json

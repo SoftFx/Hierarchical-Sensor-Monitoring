@@ -42,6 +42,10 @@ option(HSM_COLLECTOR_INSTALL "Generate install + find_package package for the na
 # Build the in-tree console example (#1100). Defaults to the install setting.
 option(HSM_COLLECTOR_BUILD_EXAMPLES "Build the native collector example apps" ${_hsm_default_install})
 
+# Build the test/conformance binary (#1100). Off for package builds (Conan/vcpkg) and
+# add_subdirectory consumers, which want only the library.
+option(HSM_COLLECTOR_BUILD_TESTS "Build the native collector test + conformance binary" ${_hsm_default_install})
+
 # Treat warnings as errors (off by default so local dev is not blocked; CI
 # turns it on). The corpus + unit tests must build warning-clean under it.
 option(HSM_COLLECTOR_WERROR "Treat compiler warnings as errors" OFF)
@@ -137,8 +141,9 @@ target_compile_features(hsm_collector_cpp INTERFACE cxx_std_17)
 # ---------------------------------------------------------------------------
 # Packaging (#1100): CMake install + find_package(hsm_collector) consumer
 # config (the baseline that satisfies native consumers and the standalone
-# example's clean-build proof). A Conan recipe / NuGet native assets are a
-# deferred follow-up under the same issue.
+# example's clean-build proof). The Conan recipe (conanfile.py) and the vcpkg
+# overlay port (vcpkg-port/) build on top of these install rules. NuGet native
+# assets were intentionally dropped (no mixed .NET/native consumer).
 # ---------------------------------------------------------------------------
 if(HSM_COLLECTOR_INSTALL)
     include(CMakePackageConfigHelpers)
@@ -184,6 +189,10 @@ endif()
 if(HSM_COLLECTOR_BUILD_EXAMPLES)
     add_subdirectory(examples/console)
 endif()
+
+# The test/conformance binary and its ctest registrations (gated so package/consumer builds skip
+# them). The body below is intentionally left un-indented to keep the guard a minimal diff.
+if(HSM_COLLECTOR_BUILD_TESTS)
 
 add_executable(hsm_collector_tests
     tests/hsm_collector_tests.cpp
@@ -364,3 +373,5 @@ add_meta_conformance_test(meta_sent_count_overcount.hsmtest)
 add_meta_conformance_test(meta_sent_count_zero_but_sent.hsmtest)
 add_meta_conformance_test(meta_unknown_action_rejected.hsmtest)
 add_meta_conformance_test(meta_value_sequence_wrong_start.hsmtest)
+
+endif() # HSM_COLLECTOR_BUILD_TESTS
