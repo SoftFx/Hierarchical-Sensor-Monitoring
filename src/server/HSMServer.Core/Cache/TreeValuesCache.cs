@@ -2050,6 +2050,12 @@ namespace HSMServer.Core.Cache
 
             foreach (var entity in productEntities)
             {
+                // ApplyProducts (run just before this) removes orphans whose parent is
+                // missing. Skip them: UpdateProduct below would re-write the blob and
+                // resurrect a dangling entry that is no longer in the product list.
+                if (!Guid.TryParse(entity.Id, out var entityId) || !_tree.ContainsKey(entityId))
+                    continue;
+
                 if (entity.Policies is null or { Count: 0 })
                     continue;
 
