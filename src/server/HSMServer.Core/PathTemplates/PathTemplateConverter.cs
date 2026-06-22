@@ -6,6 +6,13 @@ namespace HSMServer.PathTemplates
 {
     public sealed partial class PathTemplateConverter
     {
+        // Matches a single path segment only: the charset intentionally excludes '/'.
+        // The compiled regex is anchored as ^...$ against the sensor's FullPath, which is
+        // product-prefixed (e.g. "ProductName/segment1/segment2"). To consume a product
+        // name or any single segment, use '*'; to span multiple segments, chain '*' with
+        // explicit '/' separators (e.g. "*/group/*/temperature"). '**' is NOT a glob-style
+        // multi-segment wildcard — it produces two adjacent single-segment classes that
+        // still cannot cross '/'.
         private const string AllValidSymbols = @"[\p{L}\p{Nd}\p{Zs}\._\#,%\$\-&]*";
         private const string NamedVariables = @"\{(.*?)\}";
         private const string UnnamedVariable = @"\*";

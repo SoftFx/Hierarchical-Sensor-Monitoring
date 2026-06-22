@@ -31,8 +31,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Template application")]
         public async Task NewSensor_MatchingTemplateWithTTL_GetsTemplateTTLPolicy()
         {
-            // Arrange: create template with a TTL entry and add it
-            var template = BuildTemplate(SensorType.Integer, "**",
+            // Arrange: create template with a TTL entry and add it.
+            // Pattern must include the product-name prefix: FullPath is "TemplateTestProduct/testIntegerSensor"
+            // and '*' matches only within a single path segment (PathTemplateConverter charset excludes '/').
+            var template = BuildTemplate(SensorType.Integer, "*/testIntegerSensor",
                 ttlInterval: TimeSpan.FromMinutes(5));
 
             var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);
@@ -63,8 +65,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Template application")]
         public async Task NewSensor_NotMatchingTemplate_GetsNoPolicies()
         {
-            // Arrange: template matches only Double sensors
-            var template = BuildTemplate(SensorType.Double, "**",
+            // Arrange: template path matches the sensor, but sensor type does not.
+            // Path pattern must include the product-name prefix to actually reach the type check;
+            // otherwise the test passes by accident (broken path also yields Empty).
+            var template = BuildTemplate(SensorType.Double, "*/testIntegerSensor_noMatch",
                 ttlInterval: TimeSpan.FromMinutes(5));
 
             var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);
@@ -91,10 +95,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Template application")]
         public async Task NewSensor_MatchingMultipleTemplates_GetsAllPolicies()
         {
-            // Arrange: create two templates with different TTLs
-            var template1 = BuildTemplate(SensorType.Integer, "**",
+            // Arrange: create two templates with different TTLs.
+            // Both patterns must match the sensor's full product-prefixed path.
+            var template1 = BuildTemplate(SensorType.Integer, "*/testIntegerSensor_multi",
                 ttlInterval: TimeSpan.FromMinutes(5));
-            var template2 = BuildTemplate(SensorType.Integer, "**",
+            var template2 = BuildTemplate(SensorType.Integer, "*/testIntegerSensor_multi",
                 ttlInterval: TimeSpan.FromMinutes(10));
 
             var (s1, e1) = await _valuesCache.AddAlertTemplateAsync(template1);
@@ -126,8 +131,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Template application")]
         public async Task NewSensor_MatchingPathWildcard_GetsPolicies()
         {
-            // Arrange: template with specific path pattern
-            var template = BuildTemplate(SensorType.Integer, "group/*/temperature",
+            // Arrange: template with specific path pattern.
+            // FullPath is "TemplateTestProduct/group/server1/temperature", so the pattern must
+            // consume the product-name segment with a leading '*' before matching the rest.
+            var template = BuildTemplate(SensorType.Integer, "*/group/*/temperature",
                 ttlInterval: TimeSpan.FromMinutes(3));
 
             var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);
@@ -156,14 +163,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Template application")]
         public async Task NewSensor_NonMatchingPath_GetsNoPolicies()
         {
-            // Arrange
-            var template = BuildTemplate(SensorType.Integer, "group/*/temperature",
+            // Arrange: pattern requires group/.../temperature after the product segment.
+            var template = BuildTemplate(SensorType.Integer, "*/group/*/temperature",
                 ttlInterval: TimeSpan.FromMinutes(3));
 
             var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(success, $"Failed to add template: {error}");
 
-            // Act: sensor path does NOT match
+            // Act: sensor path does NOT match (disjoint segments under the product)
             var sensorPath = "other/humidity";
             var sensorValue = SensorValuesFactory.BuildSensorValue(
                 SensorType.Integer, sensorPath, DateTime.UtcNow);
