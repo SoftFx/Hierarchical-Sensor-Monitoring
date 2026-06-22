@@ -217,11 +217,17 @@ Details: [`default-sensors/feature.md`](../../aicontext/features/collector/defau
 > **#1099 native port status:** the **registration payload** of every default sensor below is ported
 > and conformance-pinned (`hsm_collector_add_default_sensor` ↔ the real managed prototype) — corpus:
 > `default_sensors_contract:*`; byte goldens: `WireFormatGoldenLockTests.Default_sensor_registrations_match_*`
-> ↔ `NativeDefaultSensorWireMatchesNet`. The boxes below stay `[ ]` because their **live values**
-> (PDH/WMI/registry/EventLog reads) are the live-value follow-up under #1099 — per-platform smoke, not
-> the portable corpus. The metric-source seam (`IPerformanceCounterFactory` equivalent) is ported
-> (`hsm_collector_set_metric_source_factory`, recreate-on-error, dispose-on-stop) with a no-op production
-> factory — native unit: `native_metric_source_seam_lifecycle`.
+> ↔ `NativeDefaultSensorWireMatchesNet`. The boxes below stay `[ ]` because their **live values** are
+> per-platform smoke, not the portable corpus. **#1164 delivered the double/PDH live-value subset on
+> Windows** (`hsm_collector_install_windows_metric_sources` — a PDH/Win32 factory for Total CPU, Free
+> RAM, LogicalDisk active-time/queue/write-speed, free disk, process CPU/mem/threads, TCP connections
+> established): the metric-source seam now binds a reader at Start and posts each period (DoubleBar →
+> one-sample bar, Double/Int → value; recreate-on-error, dispose-on-stop). Pinned by the platform-
+> agnostic plumbing unit `native_metric_source_drives_default_bar_sensor` + the Windows smoke
+> `native_windows_metric_sources_produce_live_value`, and proven end-to-end against a real server by
+> `examples/windows-monitor`. Still follow-up: WMI (last restart/update/install), registry (Windows
+> version), EventLog (logs), free-disk **prediction** (TimeSpan EMA), ThreadPool count, network
+> failure/reset deltas — those need non-double seams.
 
 - [ ] `AddProcessCpu` (`Process \ % Processor Time`, instance = process) — registration: `default_sensors_contract:process_cpu_registers_empty_alerts` — platform: win; registration: default_sensors_contract:process_cpu_registers_empty_alerts; live-read: #1099 follow-up (PDH)
 - [ ] `AddProcessMemory` (`Process \ Working set` → MB) — platform: win; registration: default_sensors_contract (catalog-pinned); live-read: #1099 follow-up (PDH)
