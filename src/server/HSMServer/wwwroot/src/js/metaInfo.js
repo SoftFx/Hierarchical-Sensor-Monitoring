@@ -17,7 +17,6 @@ window.editInfoButtonClick = function () {
     $('#metainfo_separator').removeClass('d-none');
     $('#metaInfo_alerts').removeClass('d-none');
     $('#addDataAlert').removeClass('d-none');
-    $('#addTtlAlert').removeClass('d-none');
     $('#commentHelp').removeClass('d-none');
     $('[id^="dataAlertsList_"]').removeClass('d-none');
 

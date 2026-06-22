@@ -248,49 +248,65 @@
 
 
     function setFormDataAlerts(formData, type, alertsList) {
-        alertsList.find(`div.dataAlertRow`).each(function (i) {
-            setFormDataAlertsProperty(formData, "input", type, i, $(this), "Id");
-            setFormDataAlertsProperty(formData, "input", type, i, $(this), "EntityId");
-            setFormDataAlertsProperty(formData, "input", type, i, $(this), "IsDisabled");
-            setFormDataAlertsProperty(formData, "input", type, i, $(this), "TemplateId");
-            setFormDataAlertsProperty(formData, "select", type, i, $(this), "ScheduleId");
+        // Per-row destination type: read data-alert-type if present (set in _DataAlert.cshtml
+        // based on whether the main condition is TTL). Rows whose main condition is TTL route
+        // to DataAlerts[255] so the server stores them as TTLPolicy; others go to the
+        // container's sensor type. Indices are tracked per destination type so the ASP.NET
+        // model binder sees contiguous indexes for each key.
+        const ttlKey = String(@TimeToLiveAlertViewModel.AlertKey);
+        let counters = {};
+        counters[type] = 0;
+        counters[ttlKey] = 0;
 
-            $(this).find(`div[name='alertCondition']`).each(function (j) {
-                setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
+        alertsList.find(`div.dataAlertRow`).each(function () {
+            const $row = $(this);
+            const rawType = $row.data("alert-type");
+            const alertType = rawType != null ? String(rawType) : String(type);
+            if (!(alertType in counters)) counters[alertType] = 0;
+            const i = counters[alertType]++;
+
+            setFormDataAlertsProperty(formData, "input", alertType, i, $row, "Id");
+            setFormDataAlertsProperty(formData, "input", alertType, i, $row, "EntityId");
+            setFormDataAlertsProperty(formData, "input", alertType, i, $row, "IsDisabled");
+            setFormDataAlertsProperty(formData, "input", alertType, i, $row, "TemplateId");
+            setFormDataAlertsProperty(formData, "select", alertType, i, $row, "ScheduleId");
+
+            $row.find(`div[name='alertCondition']`).each(function (j) {
+                setFormDataAlertsListProperty(formData, alertType, i, j, $(this), "Conditions", "select", "Property");
 
                 let intervalOperationBlock = $(this).find('div.interval-operation');
                 if (intervalOperationBlock.hasClass("d-flex")) {
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, intervalOperationBlock, "select", "Interval");
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, intervalOperationBlock, "input", "CustomString");
+                    setFormDataAlertsConditionIntervals(formData, alertType, i, j, intervalOperationBlock, "select", "Interval");
+                    setFormDataAlertsConditionIntervals(formData, alertType, i, j, intervalOperationBlock, "input", "CustomString");
                 }
                 else {
                     let operationBlock = $(this).find('div.operation');
 
-                    setFormDataAlertsListProperty(formData, type, i, j, operationBlock, "Conditions", "select", "Operation");
-                    setFormDataAlertsListProperty(formData, type, i, j, operationBlock, "Conditions", "input", "Target");
+                    setFormDataAlertsListProperty(formData, alertType, i, j, operationBlock, "Conditions", "select", "Operation");
+                    setFormDataAlertsListProperty(formData, alertType, i, j, operationBlock, "Conditions", "input", "Target");
                 }
             });
 
-            $(this).find(`div[name='alertAction']`).each(function (j) {
-                setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "select", "Action");
+            $row.find(`div[name='alertAction']`).each(function (j) {
+                setFormDataAlertsListProperty(formData, alertType, i, j, $(this), "Actions", "select", "Action");
 
                 let sendBlock = $(this).find('div[name="sendNotificationAction"]');
                 if (sendBlock.hasClass('d-flex')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, sendBlock, "Actions", "input", "Comment");
-                    setFormDataAlertsSendNotificationChats(formData, type, i, j, sendBlock);
+                    setFormDataAlertsListProperty(formData, alertType, i, j, sendBlock, "Actions", "input", "Comment");
+                    setFormDataAlertsSendNotificationChats(formData, alertType, i, j, sendBlock);
 
                     let scheduleBlock = sendBlock.find('div[name="schedule"]');
                     if (scheduleBlock.hasClass('d-flex')) {
-                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "select", "ScheduleRepeatMode");
-                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "input", "ScheduleStartTime");
-                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "input", "ScheduleInstantSend", 'checkbox');
+                        setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "select", "ScheduleRepeatMode");
+                        setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "input", "ScheduleStartTime");
+                        setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "input", "ScheduleInstantSend", 'checkbox');
                     }
                 }
 
                 let showBlock = $(this).find('div[name="showIconAction"]');
                 if (showBlock.hasClass('d-flex')) {
                     showBlock.find(`div[name='emoji']`).each(function () {
-                        formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Icon`, $(this)[0].innerText);
+                        formData.append(`DataAlerts[${alertType}][${i}].Actions[${j}].Icon`, $(this)[0].innerText);
                     });
                 }
             });

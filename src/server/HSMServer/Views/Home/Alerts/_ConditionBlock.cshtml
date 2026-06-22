@@ -49,9 +49,30 @@
         let type = $(this).data('type');
 
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
+        let conditionsBlock = conditionBlock.parent();
         let operation = conditionBlock.find($(`div.operation`));
 
         let property = $(this).val();
+        let isMainCondition = conditionsBlock.find("div[name='alertCondition']").first().is(conditionBlock);
+        let isTtlProperty = property === '@nameof(AlertProperty.TimeToLive)';
+
+        if (isMainCondition) {
+            if (isTtlProperty) {
+                // Promote row to TTL: TTL alerts are single-condition, so drop any non-main
+                // conditions, hide the add-condition button, and tag the row's action block
+                // so the schedule UI restricts to TTL mode. data-alert-type drives form
+                // collection routing on submit.
+                conditionsBlock.find("div[name='alertCondition']").not(conditionBlock).remove();
+                conditionsBlock.find("a.addCondition").addClass("d-none");
+                dataAlert.find("div.fullAction").addClass("ttlAction");
+                dataAlert.attr("data-alert-type", @TimeToLiveAlertViewModel.AlertKey);
+            } else {
+                // Demote from TTL: restore the add-condition button and regular schedule UI.
+                conditionsBlock.find("a.addCondition").removeClass("d-none");
+                dataAlert.find("div.fullAction").removeClass("ttlAction");
+                dataAlert.attr("data-alert-type", type);
+            }
+        }
 
         $.ajax({
             url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?type=${type}&property=${property}`,

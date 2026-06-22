@@ -11,6 +11,7 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.Status,
             AlertProperty.Comment,
             AlertProperty.NewSensorData,
+            AlertProperty.TimeToLive,
         };
 
 

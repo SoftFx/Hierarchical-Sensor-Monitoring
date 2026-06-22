@@ -14,6 +14,8 @@ HSM alerts are server-side rules that evaluate sensor state and produce notifica
 
 Per-node (Folder/Product) alert creation is **removed** as of issue #1142. Templates are the only supported path for alerting scenarios that previously used per-node alerts. The per-sensor editor remains in place because sensors own their runtime state and templates materialize onto sensors.
 
+As of issue #1159 the editor exposes a single "Add" entry point: Inactivity Period is selectable as a condition property (`AlertProperty.TimeToLive`) inside the regular alert editor and the Alert Templates editor. The dedicated "Add Inactivity Period" link and TTL section are removed. Storage semantics are unchanged — the form collection JS routes each row to `DataAlerts[255]` when its main condition is TTL, and the controller's existing split persists it as `TTLPolicy`.
+
 ## Invariants
 
 - The `_Alerts.cshtml` editor partial renders only when the selected node is a `SensorInfoViewModel`. `FolderInfoViewModel` and `ProductInfoViewModel` no longer render it.
@@ -22,6 +24,9 @@ Per-node (Folder/Product) alert creation is **removed** as of issue #1142. Templ
 - The multi-edit TTL modal (`_MultiEditModal` / `HomeController.EditAlerts`) remains the supported way to bulk-set TTL across selected items.
 - `AlertsController` (export/import) is preserved as-is.
 - `ProductEntity.Policies` (the non-TTL persisted policy-id list on a product) is **dead at runtime**: `ProductModel(ProductEntity)` only loads `entity.TTLPolicies`, never `entity.Policies`. The field exists for backward-compatible deserialization only; a startup migration prunes it.
+- A single "Add" entry point is exposed in both `_Alerts.cshtml` and `_AlertTemplate.cshtml`. "Inactivity Period" is one of the options in the regular condition property dropdown (added to every condition view model's `Properties` list).
+- Each `dataAlertRow` carries a `data-alert-type` attribute (`255` for TTL, sensor type byte otherwise). The form collection JS (`_MetaInfo.cshtml`, `AlertTemplate.cshtml`) reads this attribute per row and routes field names to `DataAlerts[255][i]...` or `DataAlerts[sensorType][i]...` accordingly, with per-type counters keeping indices contiguous for the model binder.
+- TTL alerts are single-condition: when the main condition's property is `AlertProperty.TimeToLive`, the `_ConditionBlock.cshtml` change handler removes any non-main conditions and hides the "add condition" button.
 
 ## Primary Workflows
 
@@ -102,9 +107,11 @@ Coverage for the product-owned policy cleanup lives in `src/tests/HSMServer.Core
 
 - Issue #1141 (parent epic) established that node-level alerts are replaced by global alerts.
 - Issue #1142 removed the per-node alert editor UI and endpoint support, and added the storage cleanup migration.
+- Issue #1159 consolidated Inactivity Period into the regular alert editor as a condition property; the dedicated `addTtlAlert` link and `dataAlertsList_@ttlType` section were removed from both `_Alerts.cshtml` and `_AlertTemplate.cshtml`. Storage semantics (TTLPolicy vs regular Policy) are unchanged — only the UI entry point and form routing changed.
 - Collector-side alert behavior is explicitly out of scope per epic #1141.
 
 ## Known Issues / Limitations
 
 - `_Alerts.cshtml` still contains an unreachable `FolderInfoViewModel` branch. Removing it is a cleanup for a future PR.
 - `ProductInfoViewModel.DataAlerts` is still populated but never posted from the form; cleanup deferred to avoid rippling into import/export.
+- Switching a template's sensor type after adding alerts empties the unified alerts container (existing behavior for regular alerts; as of #1159 this also clears any TTL rows mixed in). Type changes are rare in practice; preserving TTL across type changes would require splitting the container.
