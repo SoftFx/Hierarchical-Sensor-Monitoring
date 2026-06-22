@@ -35,4 +35,19 @@ jobs:
       # - CollectorAdversarialTests host-callback matrix
       # - ProcessEventListenerTests malformed EventCounters matrix
       - name: Run collector unit tests
-        run: dotnet test src/collector/HSMDataCollector.Tests/HSMDataCollector.Tests.csproj --logger "console;verbosity=minimal"
+        run: >
+          dotnet test src/collector/HSMDataCollector.Tests/HSMDataCollector.Tests.csproj
+          --logger "console;verbosity=minimal"
+          --logger "trx;LogFileName=collector-tests.trx"
+          --results-directory ${{ runner.temp }}/test-results
+
+      # Parity-gate diagnostics (#1101): keep the test result log on failure so a red
+      # CollectorConformanceTests run (the .NET half of the shared corpus) is inspectable
+      # without re-running locally.
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collector-unit-test-results
+          path: ${{ runner.temp }}/test-results
+          if-no-files-found: ignore

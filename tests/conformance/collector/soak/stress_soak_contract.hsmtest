@@ -1,0 +1,49 @@
+# HSM collector SOAK / endurance conformance (#1101).
+#
+# This fixture lives in soak/ — a subdirectory that the normal per-PR discovery
+# (CollectorConformanceTests.FindContractFiles / the native add_conformance_test
+# list) does NOT scan. It runs only on the scheduled native-collector-soak lane,
+# against BOTH drivers, with much heavier volume + sustained failure/recovery
+# than the per-PR stress_*_contract fixtures. Every case is DETERMINISTIC (the
+# assertions both drivers must satisfy are identical), so a divergence in drop /
+# delivery behavior between the .NET and native collectors fails the lane — that
+# shared pass/fail IS the drop-counter parity check.
+#
+# Verbs are the same ones the per-PR stress / sender_retry / queue_overflow
+# fixtures use, so both drivers already support them.
+# Format: case|action|arg1|arg2|...
+
+# 1) Sustained parallel volume: 16 workers x 500 values across 64 sensors, no
+#    loss and no duplication (8000 distinct values each delivered exactly once).
+sustained_parallel_load_delivers_all|create_collector
+sustained_parallel_load_delivers_all|create_int_sensors|64|contract/soak/parallel
+sustained_parallel_load_delivers_all|start
+sustained_parallel_load_delivers_all|add_int_parallel|16|500|64|Ok|soak-parallel
+sustained_parallel_load_delivers_all|expect_sent_count|8000|45
+sustained_parallel_load_delivers_all|expect_each_value_once|0|8000
+sustained_parallel_load_delivers_all|stop
+
+# 2) Failing-sender endurance: the first 20 send attempts fail, then recover;
+#    5000 sequential values must all survive the retry path (at-least-once, no
+#    duplicates) — the durable-retry contract under a flapping transport.
+endurance_failing_sender_delivers_all|create_collector_with_limits|50000|100|1000
+endurance_failing_sender_delivers_all|create_int_sensor|contract/soak/endurance
+endurance_failing_sender_delivers_all|start
+endurance_failing_sender_delivers_all|set_sender_fail_next|20
+endurance_failing_sender_delivers_all|add_int_sequence|1|5000|0|Ok|soak-endurance
+endurance_failing_sender_delivers_all|expect_sent_count|5000|45
+endurance_failing_sender_delivers_all|expect_each_value_once|0|5000
+endurance_failing_sender_delivers_all|stop
+
+# 3) Queue overflow under sustained load: 20000 values poured into a 2000-deep
+#    queue behind a hung sender. The overflow path evicts oldest continuously;
+#    Stop is bounded and drops everything pending on the dead transport, so the
+#    delivered count is exactly zero. Exercises the eviction hot path + bounded
+#    shutdown together under load.
+overflow_under_hanging_sender_drops_all_pending|create_collector_with_limits|2000|50|1000
+overflow_under_hanging_sender_drops_all_pending|create_int_sensor|contract/soak/overflow
+overflow_under_hanging_sender_drops_all_pending|start
+overflow_under_hanging_sender_drops_all_pending|set_sender_hang
+overflow_under_hanging_sender_drops_all_pending|add_int_sequence|1|20000|0|Ok|soak-overflow
+overflow_under_hanging_sender_drops_all_pending|stop
+overflow_under_hanging_sender_drops_all_pending|expect_sent_count|0
