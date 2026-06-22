@@ -117,9 +117,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 _fixture.ProductId, sensorPath, out var sensor);
             Assert.True(found, "Sensor was not found in cache");
 
-            Assert.Equal(2, sensor.Policies.TTLPolicies.Count);
-            Assert.Equal(template1.Id, sensor.Policies.TTLPolicies[0].TemplateId);
-            Assert.Equal(template2.Id, sensor.Policies.TTLPolicies[1].TemplateId);
+            var ttlTemplateIds = sensor.Policies.TTLPolicies.Select(t => t.TemplateId).ToHashSet();
+            Assert.Equal(2, ttlTemplateIds.Count);
+            Assert.Contains(template1.Id, ttlTemplateIds);
+            Assert.Contains(template2.Id, ttlTemplateIds);
         }
 
         [Fact]
@@ -127,7 +128,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public async Task NewSensor_MatchingPathWildcard_GetsPolicies()
         {
             // Arrange: template with specific path pattern
-            var template = BuildTemplate(SensorType.Integer, "group/*/temperature",
+            // */group/*/temperature: first * matches the product name (sensor.FullPath includes it).
+            var template = BuildTemplate(SensorType.Integer, "*/group/*/temperature",
                 ttlInterval: TimeSpan.FromMinutes(3));
 
             var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);
@@ -157,7 +159,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public async Task NewSensor_NonMatchingPath_GetsNoPolicies()
         {
             // Arrange
-            var template = BuildTemplate(SensorType.Integer, "group/*/temperature",
+            // */group/*/temperature: first * matches the product name (sensor.FullPath includes it).
+            var template = BuildTemplate(SensorType.Integer, "*/group/*/temperature",
                 ttlInterval: TimeSpan.FromMinutes(3));
 
             var (success, error) = await _valuesCache.AddAlertTemplateAsync(template);

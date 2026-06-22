@@ -7,11 +7,16 @@ namespace HSMServer.PathTemplates
     public sealed partial class PathTemplateConverter
     {
         private const string AllValidSymbols = @"[\p{L}\p{Nd}\p{Zs}\._\#,%\$\-&]*";
+        // Uses {0,} instead of * to avoid the trailing * being re-matched by EmptyVariableToRegex.
+        private const string AllValidSymbolsWithSlash = @"[\p{L}\p{Nd}\p{Zs}\._\#,%\$\-&/]{0,}";
         private const string NamedVariables = @"\{(.*?)\}";
         private const string UnnamedVariable = @"\*";
 
         private readonly ConcurrentDictionary<string, string> _namedVariables = new();
         private string _regexPattern;
+
+        [GeneratedRegex(@"\*\*")]
+        private static partial Regex DoubleStarToRegex();
 
         [GeneratedRegex(UnnamedVariable)]
         private static partial Regex EmptyVariableToRegex();
@@ -35,7 +40,8 @@ namespace HSMServer.PathTemplates
             {
                 template = EscapeConstParts().Replace(template, "($0)"); // add () to const parts of template
                 template = NamedVariableToRegex().Replace(template, g => $"(?<{RegisterNamedVariable(g.Value)}>{AllValidSymbols})"); // change custom variable {product} -> regex style (?<product>...)
-                template = EmptyVariableToRegex().Replace(template, AllValidSymbols); //change noname variable * to regex pattern
+                template = DoubleStarToRegex().Replace(template, AllValidSymbolsWithSlash); // ** matches any path including '/'
+                template = EmptyVariableToRegex().Replace(template, AllValidSymbols); // * matches any segment without '/'
 
                 _regexPattern = $"^{template}$"; //set start and end string constants
 
