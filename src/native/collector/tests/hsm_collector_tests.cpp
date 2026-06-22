@@ -2988,6 +2988,39 @@ namespace
         hsm_sensor_release(sensor);
     }
 
+#if defined(_WIN32)
+    // #1164 Windows smoke: the real PDH factory drives a live Total CPU reading. Uses real time (the
+    // first post fires immediately on Start). The first PDH sample of a rate counter may read 0 while
+    // priming, but the sensor still posts a DoubleBar — so a value is produced.
+    void NativeWindowsMetricSourcesProduceLiveValue()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_windows_metric_sources(collector.value) == HSM_RESULT_OK,
+            "installing Windows metric sources should succeed on Windows");
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_TOTAL_CPU, nullptr, &sensor) == HSM_RESULT_OK,
+            "add Total CPU default sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // Generous timeout: the first post fires on Start, but if a counter's very first sample is
+        // not ready the next post is a whole period (15 s) out — so allow for that worst case.
+        Require(
+            WaitForSentCountAtLeast(collector.value, 1, 20000),
+            "the Windows PDH factory should drive a live Total CPU post");
+
+        const char* json = nullptr;
+        Require(hsm_collector_get_sent_json(collector.value, 0, &json) == HSM_RESULT_OK, "sent payload lookup failed");
+        Contains(std::string(json), "\"Type\":5"); // DoubleBar
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+#endif
+
     void NativeSchedulerOnErrorIsolatesThrowingCallback()
     {
         auto collector = CreateCollector();
@@ -4305,6 +4338,9 @@ namespace
             { "dump_default_sensors_golden", [](const std::string&) { DumpDefaultSensorsGolden(); } },
             { "native_metric_source_seam_lifecycle", [](const std::string&) { NativeMetricSourceSeamLifecycle(); } },
             { "native_metric_source_drives_default_bar_sensor", [](const std::string&) { NativeMetricSourceDrivesDefaultBarSensor(); } },
+#if defined(_WIN32)
+            { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
+#endif
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },

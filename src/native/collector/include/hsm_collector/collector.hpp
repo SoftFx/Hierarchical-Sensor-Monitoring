@@ -157,6 +157,13 @@ namespace hsm::collector
             Check(hsm_collector_use_http_transport(handle_), "HTTP transport is not available (build with HSM_COLLECTOR_HTTP).");
         }
 
+        /// Install the ready-made Windows PDH/Win32 metric-source factory so the value-typed default
+        /// sensors report live values. Call BEFORE Start. Throws hsm::collector::Error off Windows.
+        void InstallWindowsMetricSources()
+        {
+            Check(hsm_collector_install_windows_metric_sources(handle_), "Windows metric sources are only available on Windows.");
+        }
+
         /// Graceful, terminal, idempotent shutdown. Safe from any thread/state.
         void Dispose()
         {

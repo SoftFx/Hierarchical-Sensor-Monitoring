@@ -267,6 +267,13 @@ hsm_result_t hsm_collector_test_connection(hsm_collector_t* collector);
    (HSM_COLLECTOR_HTTP off). Default builds stay on the in-memory sender (#1165). */
 hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collector);
 
+/* Install the ready-made Windows PDH / Win32 metric-source factory (#1164): the value-typed default
+   sensors (Total CPU, Free RAM, disk gauges, free disk, process counters, TCP connections) read live
+   values via PDH/Win32 each post period. Call BEFORE Start. Returns HSM_RESULT_OK on Windows, or
+   HSM_RESULT_INVALID_STATE on other platforms. Equivalent to installing the Windows factory through
+   hsm_collector_set_metric_source_factory; a custom factory may be installed instead. */
+hsm_result_t hsm_collector_install_windows_metric_sources(hsm_collector_t* collector);
+
 /* Lifecycle observer (portable ILifecycleListener equivalent). The callback
    fires on the thread driving the transition, under the lifecycle lock, AFTER
    the status changes; only transitions after registration are delivered (no

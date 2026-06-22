@@ -1,5 +1,7 @@
 #include "hsm_collector/hsm_collector.h"
 
+#include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
+
 #include <algorithm>
 #include <atomic>
 #include <charconv>
@@ -4105,6 +4107,21 @@ extern "C" hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collec
         return HSM_RESULT_INVALID_ARGUMENT;
 #if defined(HSM_COLLECTOR_HTTP)
     collector->impl->UseHttpTransport();
+    return HSM_RESULT_OK;
+#else
+    return HSM_RESULT_INVALID_STATE;
+#endif
+}
+
+// Install the ready-made Windows PDH / Win32 metric-source factory (#1164) so the value-typed
+// default sensors (Total CPU, Free RAM, disk gauges, free disk, process counters, TCP connections)
+// produce live values at Start. Call before Start. Returns HSM_RESULT_INVALID_STATE off Windows.
+extern "C" hsm_result_t hsm_collector_install_windows_metric_sources(hsm_collector_t* collector)
+{
+    if (collector == nullptr || collector->impl == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+#if defined(_WIN32)
+    collector->impl->SetMetricSourceFactory(&hsm::platform::WindowsMetricSourceFactory, nullptr);
     return HSM_RESULT_OK;
 #else
     return HSM_RESULT_INVALID_STATE;
