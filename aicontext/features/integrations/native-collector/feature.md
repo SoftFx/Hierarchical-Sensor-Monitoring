@@ -1,6 +1,6 @@
 # Feature: Native Collector C++ API
 
-> Owner: integrations | Last reviewed: 2026-06-19 | Canonical: yes
+> Owner: integrations | Last reviewed: 2026-06-22 | Canonical: yes
 > Scope: The public, developer-facing C++ RAII API over the native collector C ABI, plus its `find_package` packaging, console example, and migration story from the C++/CLI wrapper.
 
 ---
@@ -95,3 +95,4 @@ Tracked in full in `docs/native-collector-migration.md`. Headlines:
 - `native_wrapper_lifetime_move_semantics` — move + Dispose correctness.
 - `native_wrapper_callbacks_bridge_std_function` — lifecycle listener, logger, function sensor, and metric-source factory all fire through their trampolines.
 - CI `install-consume` (Win+Linux) and `doxygen` lanes in `native-collector-conformance.yml`.
+- Parity/process lanes (#1101): the per-PR `checklist-gate` job (strict checklist-disposition + unsupported-marker triage), the scheduled `native-collector-soak.yml` (heavier endurance fixtures on both drivers, drop-counter parity), and the scheduled alert-only `native-collector-benchmark.yml` (enqueue throughput + peak RSS vs `bench/baseline.json`).

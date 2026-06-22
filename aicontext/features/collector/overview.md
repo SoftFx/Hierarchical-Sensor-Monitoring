@@ -250,7 +250,7 @@ Cross-checking against `df -k /` and `grep MemAvailable /proc/meminfo` confirms 
 | Error Handling | [`error-handling/`](./error-handling/feature.md) | Exception isolation, MessageDeduplicator, diagnostic sensors |
 
 Wire contract (shared with server/wrapper/ports): [`../api/wire-contract/feature.md`](../api/wire-contract/feature.md).
-C++ port coverage tracker: [`docs/initiatives/cpp-collector-port-functional-inventory.md`](../../../docs/initiatives/cpp-collector-port-functional-inventory.md).
+C++ port coverage tracker: [`docs/initiatives/cpp-collector-port-functional-inventory.md`](../../../docs/initiatives/cpp-collector-port-functional-inventory.md) — **frozen index** as of #1101; the conformance corpus (`tests/conformance/collector/*.hsmtest`) is the source of truth, and the CI `checklist-gate` job enforces it. Add a scenario, don't reopen a box.
 
 ## Thread Safety Model
 
