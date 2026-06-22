@@ -1,19 +1,33 @@
-# Conformance coverage report (#1094, epic #1093).
+# Conformance coverage / disposition report (#1094 + #1101, epic #1093).
 #
-# Cross-references the functional checklist
-# (docs/initiatives/cpp-collector-port-functional-inventory.md) with the
-# conformance corpus (tests/conformance/collector/*.hsmtest):
-#   - per-section ticked/total counts (a line is "covered" when it is [x] and
-#     carries a "— conformance: fixture:case" annotation);
-#   - validates every annotation against the actual corpus (unknown fixture or
-#     case name fails the run — annotations must not rot);
-#   - -ShowUnticked prints the unmapped lines (= the remaining port/coverage
-#     backlog; the "fails on native" half of the picture is ctest output).
+# The functional checklist
+# (docs/initiatives/cpp-collector-port-functional-inventory.md) was RETIRED in
+# #1101: it is a frozen index in which every line carries exactly one
+# disposition. This script is the gate that keeps it frozen.
 #
-# Exit codes: 0 = all annotations valid; 1 = at least one stale annotation.
+# A line is "resolved" when it is one of:
+#   - [x] + "— conformance: fixture:case[, ...]"  (owned by the portable corpus)
+#   - [~] (+ conformance)                          (partial — registration corpus-pinned)
+#   - [ ] + "— platform: ..."                      (platform-bound; live read = smoke/#1099)
+#   - [ ] + "— unit: <test>"                       (language-local unit test only)
+#   - [ ] + "— [decide]: <rationale>"              (explicitly out of port scope)
+#
+# The script:
+#   - per-section resolved/total and corpus-covered/total counts;
+#   - validates every "— conformance:" reference against the actual corpus
+#     (unknown fixture or case fails the run — annotations must not rot);
+#   - -Strict (CI gate): additionally FAILS if any line is unresolved (a bare
+#     "- [ ]" with no disposition) — this is what keeps the checklist frozen;
+#   - -ShowUnticked prints every line not owned by the in-proc corpus
+#     (i.e. resolved by platform/unit/decide instead);
+#   - -JsonOut <path> writes a shields.io endpoint badge JSON.
+#
+# Exit codes: 0 = OK; 1 = a stale annotation, or (with -Strict) an unresolved line.
 
 param(
-    [switch]$ShowUnticked
+    [switch]$ShowUnticked,
+    [switch]$Strict,
+    [string]$JsonOut
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,8 +49,27 @@ foreach ($file in Get-ChildItem $corpusDir -Filter *.hsmtest) {
 
 $section = "(preamble)"
 $stats = [ordered]@{}
-$unticked = @()
+$untickedCorpus = @()   # resolved by platform/unit/decide (not owned by the corpus)
+$unresolved = @()       # bare "- [ ]" with no disposition — only possible if someone breaks the freeze
 $staleRefs = @()
+
+function Test-ConformanceRefs([string]$text) {
+    if ($text -match '—\s*conformance:\s*(.+)$') {
+        foreach ($reference in ($Matches[1] -split ',')) {
+            $reference = $reference.Trim()
+            # stop at the first trailing parenthetical/extra clause if present
+            $parts = $reference -split ':', 2
+            $fixture = $parts[0].Trim()
+            $case = if ($parts.Count -gt 1) { ($parts[1].Trim() -split '\s')[0] } else { '*' }
+            if (-not $corpus.ContainsKey($fixture)) {
+                $script:staleRefs += "unknown fixture '$fixture' in: $text"
+            }
+            elseif ($case -ne '*' -and -not $corpus[$fixture].Contains($case)) {
+                $script:staleRefs += "unknown case '${fixture}:${case}' in: $text"
+            }
+        }
+    }
+}
 
 foreach ($line in [System.IO.File]::ReadAllLines($inventory)) {
     if ($line -match '^##\s+(.*)$') {
@@ -44,60 +77,85 @@ foreach ($line in [System.IO.File]::ReadAllLines($inventory)) {
         continue
     }
 
-    if ($line -notmatch '^- \[(x| )\]\s*(.*)$') { continue }
+    # [x] ticked-corpus, [~] partial, [ ] disposed-but-not-corpus
+    if ($line -notmatch '^- \[(x|~| )\]\s*(.*)$') { continue }
 
     if (-not $stats.Contains($section)) {
-        $stats[$section] = @{ Ticked = 0; Total = 0 }
+        $stats[$section] = @{ Resolved = 0; Corpus = 0; Total = 0 }
     }
     $stats[$section].Total++
 
-    $ticked = $Matches[1] -eq 'x'
+    $mark = $Matches[1]
     $text = $Matches[2]
 
-    if (-not $ticked) {
-        $unticked += "[$section] $text"
-        continue
+    $hasConformance = $text -match '—\s*conformance:'
+    $hasDisposition = ($text -match '—\s*(platform|unit)\s*:') -or ($text -match '\[decide\]\s*:')
+
+    $isCorpus = ($mark -eq 'x') -or ($mark -eq '~' -and $hasConformance) -or $hasConformance
+    $isResolved = ($mark -eq 'x') -or ($mark -eq '~') -or $hasConformance -or $hasDisposition
+
+    if ($hasConformance -or $mark -eq 'x' -or $mark -eq '~') { Test-ConformanceRefs $text }
+
+    if ($isCorpus) { $stats[$section].Corpus++ }
+    if ($isResolved) {
+        $stats[$section].Resolved++
+        if (-not $isCorpus) { $untickedCorpus += "[$section] $text" }
     }
-
-    $stats[$section].Ticked++
-
-    if ($text -match '—\s*conformance:\s*(.+)$') {
-        foreach ($reference in ($Matches[1] -split ',')) {
-            $parts = $reference.Trim() -split ':', 2
-            $fixture = $parts[0].Trim()
-            $case = if ($parts.Count -gt 1) { $parts[1].Trim() } else { '*' }
-
-            if (-not $corpus.ContainsKey($fixture)) {
-                $staleRefs += "unknown fixture '$fixture' in: $text"
-            }
-            elseif ($case -ne '*' -and -not $corpus[$fixture].Contains($case)) {
-                $staleRefs += "unknown case '${fixture}:${case}' in: $text"
-            }
-        }
+    else {
+        $unresolved += "[$section] $text"
     }
 }
 
-$totalTicked = 0
-$totalLines = 0
-Write-Host "Conformance coverage by checklist section:"
+$totalResolved = 0; $totalCorpus = 0; $totalLines = 0
+Write-Host "Conformance disposition by checklist section (resolved / corpus-owned / total):"
 foreach ($entry in $stats.GetEnumerator()) {
-    $totalTicked += $entry.Value.Ticked
-    $totalLines += $entry.Value.Total
-    Write-Host ("  {0,3}/{1,-3} {2}" -f $entry.Value.Ticked, $entry.Value.Total, $entry.Key)
+    $totalResolved += $entry.Value.Resolved
+    $totalCorpus   += $entry.Value.Corpus
+    $totalLines    += $entry.Value.Total
+    Write-Host ("  {0,3}/{1,-3} corpus {2,3}  {3}" -f $entry.Value.Resolved, $entry.Value.Total, $entry.Value.Corpus, $entry.Key)
 }
-Write-Host ("TOTAL: {0}/{1} ({2:P0})" -f $totalTicked, $totalLines, ($totalTicked / [Math]::Max(1, $totalLines)))
+Write-Host ("TOTAL resolved: {0}/{1} ({2:P0}); corpus-owned: {3}/{1} ({4:P0})" -f `
+    $totalResolved, $totalLines, ($totalResolved / [Math]::Max(1, $totalLines)), `
+    $totalCorpus, ($totalCorpus / [Math]::Max(1, $totalLines)))
 
 if ($ShowUnticked) {
     Write-Host ""
-    Write-Host "Unmapped lines (remaining backlog):"
-    $unticked | ForEach-Object { Write-Host "  $_" }
+    Write-Host "Resolved but NOT corpus-owned (platform / unit / decide):"
+    $untickedCorpus | ForEach-Object { Write-Host "  $_" }
 }
+
+if ($JsonOut) {
+    $pct = [int][Math]::Round(100.0 * $totalResolved / [Math]::Max(1, $totalLines))
+    $color = if ($totalResolved -eq $totalLines) { 'brightgreen' } elseif ($pct -ge 90) { 'green' } else { 'yellow' }
+    $badge = [ordered]@{
+        schemaVersion = 1
+        label         = 'checklist resolved'
+        message       = "$totalResolved/$totalLines"
+        color         = $color
+    }
+    $dir = Split-Path -Parent $JsonOut
+    if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    ($badge | ConvertTo-Json -Compress) | Set-Content -Path $JsonOut -Encoding utf8
+    Write-Host ""
+    Write-Host "Wrote badge endpoint JSON -> $JsonOut"
+}
+
+$failed = $false
 
 if ($staleRefs.Count -gt 0) {
     Write-Host ""
     Write-Host "STALE ANNOTATIONS ($($staleRefs.Count)):" -ForegroundColor Red
     $staleRefs | ForEach-Object { Write-Host "  $_" }
-    exit 1
+    $failed = $true
 }
 
+if ($Strict -and $unresolved.Count -gt 0) {
+    Write-Host ""
+    Write-Host "UNRESOLVED LINES — checklist is frozen; every line needs a disposition ($($unresolved.Count)):" -ForegroundColor Red
+    Write-Host "  Resolve each with '— conformance: fixture:case' (tick), '— platform: ...', '— unit: <test>', or '— [decide]: <rationale>'."
+    $unresolved | ForEach-Object { Write-Host "  $_" }
+    $failed = $true
+}
+
+if ($failed) { exit 1 }
 exit 0

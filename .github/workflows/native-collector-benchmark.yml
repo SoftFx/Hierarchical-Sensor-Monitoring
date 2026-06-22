@@ -1,0 +1,68 @@
+name: Native collector benchmark
+
+# Scheduled benchmark smoke (#1101, epic #1093). Performance is a selling point of the
+# native port, so we track enqueue throughput + peak RSS over time. This lane is
+# REGRESSION-ALERT-ONLY: it never fails the build (the comparison step is
+# continue-on-error). It compares against src/native/collector/bench/baseline.json and
+# surfaces a warning in the job summary when a run drops below the floor; the result JSON
+# is uploaded as an artifact every run. NOT a per-PR required check.
+
+on:
+  schedule:
+    - cron: '41 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build benchmark (Release)
+        run: |
+          cmake -S src/native/collector -B build/native-bench \
+            -DCMAKE_BUILD_TYPE=Release -DHSM_COLLECTOR_BUILD_BENCH=ON
+          cmake --build build/native-bench --config Release --target hsm_collector_bench --parallel
+
+      - name: Run benchmark
+        run: |
+          bin=$(find build/native-bench -name 'hsm_collector_bench' -type f | head -1)
+          echo "benchmark: $bin"
+          "$bin" "${{ runner.temp }}/bench-result.json"
+
+      - name: Compare against baseline (alert only)
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import json, os
+          base = json.load(open("src/native/collector/bench/baseline.json"))
+          res  = json.load(open(os.environ["RUNNER_TEMP"] + "/bench-result.json"))
+          floor = base["enqueue_ops_per_sec"] * (1.0 - base.get("tolerance", 0.4))
+          ops   = res["enqueue_ops_per_sec"]
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          lines = [
+              "## Native collector benchmark",
+              "",
+              f"- enqueue: **{ops:,} ops/sec** ({res['values']:,} values / {res['sensors']} sensors, {res['elapsed_seconds']:.2f}s)",
+              f"- peak RSS: **{res['peak_rss_kb']:,} KB**",
+              f"- baseline floor: {int(floor):,} ops/sec (baseline {base['enqueue_ops_per_sec']:,}, tolerance {base.get('tolerance',0.4)})",
+          ]
+          if ops < floor:
+              lines.append("")
+              lines.append(f"> [!WARNING] Enqueue throughput {ops:,} is BELOW the floor {int(floor):,} — possible regression. (Alert only; not a gate.)")
+          else:
+              lines.append("")
+              lines.append("> Within expected range.")
+          text = "\n".join(lines) + "\n"
+          print(text)
+          if summary:
+              open(summary, "a").write(text)
+          PY
+
+      - name: Upload benchmark result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-collector-benchmark-result
+          path: ${{ runner.temp }}/bench-result.json
+          if-no-files-found: ignore

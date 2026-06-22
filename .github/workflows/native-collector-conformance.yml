@@ -75,6 +75,16 @@ jobs:
       - name: Test
         run: ctest --test-dir build/native-collector -C Release --output-on-failure
 
+      # Parity-gate diagnostics (#1101): on a red conformance run, keep the ctest logs
+      # (Testing/**/LastTest.log has the per-fixture driver output / payload diffs) for triage.
+      - name: Upload conformance logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-conformance-logs-${{ matrix.os }}
+          path: build/native-collector/Testing
+          if-no-files-found: ignore
+
   native-conformance-clang:
     # The toolchain matrix's clang leg (the default ubuntu lane above uses gcc).
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -137,6 +147,14 @@ jobs:
       # Transport E2E (real libcurl against a loopback capture server), route table, retry policy.
       - name: Test (HTTP lane)
         run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http"
+
+      - name: Upload HTTP transport logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-http-logs-${{ matrix.os }}
+          path: build/native-http/Testing
+          if-no-files-found: ignore
 
   install-consume:
     # Clean-machine consumability proof (#1100 "Done when"): build + install the package to a
@@ -222,6 +240,14 @@ jobs:
         run: ctest --preset ${{ matrix.preset }}
         working-directory: src/native/collector
 
+      - name: Upload sanitizer logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-sanitizer-logs-${{ matrix.preset }}
+          path: src/native/collector/build/${{ matrix.preset }}/Testing
+          if-no-files-found: ignore
+
   conan-consume:
     # Packaging proof (#1100): `conan create` builds the package from this branch's source and runs
     # the test_package (a clean consumer via find_package(hsm_collector)).
@@ -289,3 +315,40 @@ jobs:
           bin=$(find build/vcpkg-consume \( -name 'hsm_console_standalone' -o -name 'hsm_console_standalone.exe' \) -type f | head -1)
           echo "running $bin"
           "$bin"
+
+  checklist-gate:
+    # Frozen functional-checklist gate (#1101). The inventory
+    # (docs/initiatives/cpp-collector-port-functional-inventory.md) was retired into a frozen index:
+    # every line must carry a disposition, every "— conformance:" reference must still resolve to a
+    # real corpus case, and every unsupported-verb marker must reference a cpp-port issue. Cheap
+    # (PowerShell over text), so it runs as a per-PR check; it also emits the coverage badge JSON.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checklist disposition gate (strict) + coverage badge
+        shell: pwsh
+        run: ./scripts/conformance-coverage.ps1 -Strict -JsonOut ${{ runner.temp }}/checklist-badge.json
+
+      - name: Unsupported-marker triage
+        shell: pwsh
+        run: ./scripts/conformance-unsupported-triage.ps1
+
+      - name: Publish coverage summary
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "${{ runner.temp }}/checklist-badge.json") {
+            $b = Get-Content "${{ runner.temp }}/checklist-badge.json" | ConvertFrom-Json
+            "## Functional checklist (frozen index)`n`n- **$($b.message)** lines resolved (corpus tick / platform / unit / decide)" `
+              | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
+
+      - name: Upload coverage badge
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checklist-coverage-badge
+          path: ${{ runner.temp }}/checklist-badge.json
+          if-no-files-found: ignore

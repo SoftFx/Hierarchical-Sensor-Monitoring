@@ -46,6 +46,11 @@ option(HSM_COLLECTOR_BUILD_EXAMPLES "Build the native collector example apps" ${
 # add_subdirectory consumers, which want only the library.
 option(HSM_COLLECTOR_BUILD_TESTS "Build the native collector test + conformance binary" ${_hsm_default_install})
 
+# Build the micro-benchmark (#1101). OFF by default — only the scheduled
+# native-collector-benchmark lane turns it on; it is not part of the normal
+# build/test matrix.
+option(HSM_COLLECTOR_BUILD_BENCH "Build the native collector enqueue-throughput benchmark" OFF)
+
 # Treat warnings as errors (off by default so local dev is not blocked; CI
 # turns it on). The corpus + unit tests must build warning-clean under it.
 option(HSM_COLLECTOR_WERROR "Treat compiler warnings as errors" OFF)
@@ -188,6 +193,17 @@ endif()
 # examples/console/standalone and is built separately against the installed package (CI lane).
 if(HSM_COLLECTOR_BUILD_EXAMPLES)
     add_subdirectory(examples/console)
+endif()
+
+# Enqueue-throughput micro-benchmark (#1101). Gated OFF; the scheduled benchmark lane builds it.
+if(HSM_COLLECTOR_BUILD_BENCH)
+    add_executable(hsm_collector_bench bench/hsm_collector_bench.cpp)
+    target_link_libraries(hsm_collector_bench PRIVATE hsm_collector_cpp)
+    hsm_collector_set_warnings(hsm_collector_bench)
+    hsm_collector_apply_sanitizer(hsm_collector_bench)
+    if(WIN32)
+        target_link_libraries(hsm_collector_bench PRIVATE psapi)
+    endif()
 endif()
 
 # The test/conformance binary and its ctest registrations (gated so package/consumer builds skip

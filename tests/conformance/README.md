@@ -237,7 +237,13 @@ meta-suite) — never skip silently.
 **Unsupported marker.** A driver that cannot yet implement a verb registers
 it explicitly as unsupported so the run fails with a `TODO` count instead of
 a generic unknown-verb error; the failure list is the port backlog. (No verb
-is currently in that state — the native spike implements the full vocabulary.)
+is currently in that state — both drivers implement the full vocabulary.)
+
+Mark such a verb in the driver source with the token `CONFORMANCE-UNSUPPORTED:
+<verb> (#<issue>)`. The reference to a cpp-port issue is mandatory and enforced
+in CI by [`scripts/conformance-unsupported-triage.ps1`](../../scripts/conformance-unsupported-triage.ps1)
+(the `checklist-gate` job): an unsupported marker without a `#<issue>` fails the
+build, so the backlog is always tracked, never silently accumulated.
 
 ## Meta-suite ("test the tests")
 

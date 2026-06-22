@@ -4226,6 +4226,10 @@ namespace
             { "native_invalid_status_on_last_value_preserves_previous_snapshot", [](const std::string&) { NativeInvalidStatusOnLastValuePreservesPreviousSnapshot(); } },
             { "native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values", [](const std::string&) { NativeRetryMeetingFullQueueIsDroppedNotEvictingQueuedValues(); } },
             { "native_retry_below_capacity_is_always_redelivered", [](const std::string&) { NativeRetryBelowCapacityIsAlwaysRedelivered(); } },
+            // Generic runner: execute ANY fixture given its path. Used by the scheduled
+            // native-collector-soak lane (#1101) to run soak/*.hsmtest fixtures that are not
+            // registered as per-PR ctest cases. Same engine as the named conformance_* keys.
+            { "conformance", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_instant_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_lifecycle_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_stress_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
