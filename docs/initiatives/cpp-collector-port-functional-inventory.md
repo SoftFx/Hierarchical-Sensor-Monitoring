@@ -1,5 +1,7 @@
 # C++ Collector Port — Functional Checklist (Spike Step 1)
 
+![checklist resolved](https://img.shields.io/badge/checklist%20resolved-261%2F261-brightgreen)
+
 > Owner: collector/integrations | Created: 2026-06-10 | Status: **FROZEN INDEX — source of truth = the conformance corpus** (epic #1093 retired this checklist in #1101)
 > Companion to [`cpp-collector-port-spike.md`](cpp-collector-port-spike.md).
 
