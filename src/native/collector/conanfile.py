@@ -72,6 +72,11 @@ class HsmCollectorConan(ConanFile):
         core.libs = ["hsm_collector_core"]
         if self.settings.os in ("Linux", "FreeBSD"):
             core.system_libs.append("pthread")
+        if self.settings.os == "Windows":
+            # The Windows live metric readers (#1164) link PDH (perf counters); the recipe re-declares
+            # components, so propagate it to consumers explicitly (the in-tree/vcpkg CMake export does
+            # this automatically as a static-lib LINK_ONLY dependency).
+            core.system_libs.append("pdh")
         if self.options.http:
             core.requires.append("libcurl::libcurl")
 
