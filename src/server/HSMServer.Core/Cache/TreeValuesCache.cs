@@ -196,12 +196,57 @@ namespace HSMServer.Core.Cache
         {
             var request = new AddProductRequest(productName, authorId);
 
+            // Reserve the DisplayName atomically before touching _cache or
+            // _tree. If two concurrent adds race on the same name, exactly
+            // one wins; the other throws here, before any state mutation, so
+            // no second root can land in _tree but go missing from
+            // _productsByName (and thus from GetProducts()/GetProductByName()
+            // until a restart rebuilds the index). Mirrors the rename
+            // collision handling in UpdateProduct(ProductUpdate). Done here
+            // rather than in AddProduct(ProductModel) because ProcessRequestAsync
+            // swallows exceptions from the queue worker into TaskResult, which
+            // AddProductAsync surfaces via the IsOk check below.
+            //
+            // Both failure modes throw InvalidOperationException for
+            // consistency. AddProductAsync's signature returns ProductModel
+            // (not TaskResult like UpdateProductAsync), so it cannot report a
+            // graceful TaskResult error; callers like
+            // ProductController.CreateProduct rely on the [UniqueValidation]
+            // model-state check for the common duplicate case, and this
+            // throw only fires in the TOCTOU race window.
+            lock (_productsByNameLock)
+            {
+                if (!_productsByName.TryAdd(request.ProductModel.DisplayName, request.ProductModel))
+                    throw new InvalidOperationException(
+                        $"Cannot add root product '{productName}': name already in use by another root product");
+            }
+
             if (!_cache.TryAdd(request.ProductModel.Id, new CachedValue(request.ProductModel, this)))
-                throw new Exception($"Product {productName} already exists");
+            {
+                // ID collision (shouldn't happen with fresh GUIDs, but be
+                // safe). Roll back the name reservation so a future add with
+                // this name can succeed.
+                lock (_productsByNameLock)
+                    _productsByName.TryRemove(request.ProductModel.DisplayName, out _);
+                throw new InvalidOperationException($"Cannot add root product '{productName}': id already in use");
+            }
 
-            await ProcessRequestAsync(request.ProductModel.Id, request, token);
+            var result = await ProcessRequestAsync(request.ProductModel.Id, request, token);
+            if (!result.IsOk)
+            {
+                // The queue worker failed (DB write error, cancellation,
+                // etc.) before the product entered _tree. Roll back both the
+                // _cache entry and the name reservation — otherwise the name
+                // stays permanently reserved for an unreachable product,
+                // which is the inverse of the orphan this method prevents.
+                _cache.TryRemove(request.ProductModel.Id, out _);
+                lock (_productsByNameLock)
+                    _productsByName.TryRemove(request.ProductModel.DisplayName, out _);
+                throw new InvalidOperationException(
+                    $"Cannot add root product '{productName}': {result.Error}");
+            }
+
             return request.ProductModel;
-
         }
 
         private void UpdateProduct(ProductModel product)
