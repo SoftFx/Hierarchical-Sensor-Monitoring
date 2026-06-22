@@ -259,6 +259,14 @@ void hsm_collector_dispose(hsm_collector_t* collector);
    reports reachable. */
 hsm_result_t hsm_collector_test_connection(hsm_collector_t* collector);
 
+/* Switch the collector from the in-memory recording sender to the real libcurl
+   HTTP transport: values serialize to the .NET server WIRE format and are POSTed
+   to /list, and every sensor is registered (wire AddOrUpdate batch -> /commands)
+   at Start. Call BEFORE Start. Returns HSM_RESULT_OK on success, or
+   HSM_RESULT_INVALID_STATE when the library was built without the HTTP transport
+   (HSM_COLLECTOR_HTTP off). Default builds stay on the in-memory sender (#1165). */
+hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collector);
+
 /* Lifecycle observer (portable ILifecycleListener equivalent). The callback
    fires on the thread driving the transition, under the lifecycle lock, AFTER
    the status changes; only transitions after registration are delivered (no

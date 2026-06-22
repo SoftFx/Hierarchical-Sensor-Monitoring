@@ -149,6 +149,14 @@ namespace hsm::collector
             Check(hsm_collector_test_connection(handle_), "TestConnection failed.");
         }
 
+        /// Switch to the real HTTP transport: values post to the server in wire format and every
+        /// sensor is registered (/commands) at Start. Call BEFORE Start. Throws hsm::collector::Error
+        /// if the library was built without the HTTP transport (HSM_COLLECTOR_HTTP off).
+        void UseHttpTransport()
+        {
+            Check(hsm_collector_use_http_transport(handle_), "HTTP transport is not available (build with HSM_COLLECTOR_HTTP).");
+        }
+
         /// Graceful, terminal, idempotent shutdown. Safe from any thread/state.
         void Dispose()
         {

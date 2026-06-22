@@ -3150,6 +3150,50 @@ namespace
         Require(!request.body.empty() && request.body.front() == '[' && request.body.back() == ']', "live body must be a JSON array");
         Contains(request.body, "\"Value\":42");
         Contains(request.body, "\"Path\":\"live/int\"");
+        // #1165: the live path posts the .NET server WIRE format (ISO-8601 "Time", not the
+        // canonical/behavior-corpus "UnixTimeMs") so a real HSM server accepts the value.
+        Contains(request.body, "\"Time\":\"");
+        Require(request.body.find("UnixTimeMs") == std::string::npos, "live wire value must NOT carry the canonical UnixTimeMs field");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // #1165: a sensor created BEFORE Start is registered on the server — the collector POSTs a wire
+    // AddOrUpdate batch to /commands at Start (the server discriminates on "Type":0 == Command
+    // .AddOrUpdateSensor). Without this the server never learns the sensor exists.
+    void NativeHttpRegistersSensorsOnStart()
+    {
+        hsm::test::HttpCaptureServer server(200);
+
+        hsm_collector_options_t options{};
+        options.access_key = "reg-key";
+        options.server_address = "http://127.0.0.1";
+        options.port = server.Port();
+        options.client_name = "reg-client";
+        options.allow_plaintext_transport = true;
+        options.package_collect_period_ms = 20;
+
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_test_install_http_sender(collector.value);
+
+        // Created BEFORE Start, so it is in the Start registration snapshot. No value is added, so the
+        // only POST the capture server sees is the registration to /commands.
+        SensorHandle sensor = CreateIntSensor(collector.value, "reg/int");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        for (int i = 0; i < 400 && !server.Request().received.load(std::memory_order_acquire); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        const auto& request = server.Request();
+        Require(request.received.load(std::memory_order_acquire), "the capture server must have received the registration POST");
+        Require(request.method == "POST", "registration method must be POST");
+        Require(request.path == "/api/sensors/commands", "registration must route to /commands");
+        Contains(request.headers, "Key: reg-key");
+        Require(!request.body.empty() && request.body.front() == '[' && request.body.back() == ']', "registration body must be a JSON array");
+        Contains(request.body, "\"Type\":0");       // Command.AddOrUpdateSensor discriminator
+        Contains(request.body, "\"SensorType\":1"); // Int
+        Contains(request.body, "\"Path\":\"reg/int\"");
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
     }
@@ -4161,6 +4205,7 @@ namespace
 #if defined(HSM_COLLECTOR_HTTP)
             { "native_http_transport_posts_to_capture_server", [](const std::string&) { NativeHttpTransportPostsToCaptureServer(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
+            { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },

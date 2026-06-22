@@ -2022,19 +2022,77 @@ namespace
         }
 
 #if defined(HSM_COLLECTOR_HTTP)
-        // Live-path seam (HTTP build): swap the recording sender for a real libcurl POST to the
-        // batch /list route. Install before Start, same one-way contract as SetClock — the worker
-        // thread only reads sender_ after Start, so the swap needs no lock. One transport per
-        // collector; Cancel()/ResetCancel() are wired into Stop/StartWorker so a Stop aborts an
-        // in-flight POST (the CancelPendingRequests primitive) and a restart re-arms it.
-        void TestInstallHttpSender()
+        // Public live transport (HTTP build): swap the in-memory recording sender for a real libcurl
+        // POST to the server's batch /list route, and switch payloads to the .NET server WIRE format
+        // (Time ISO-8601, bar OpenTime/CloseTime, the Command/SensorType discriminators) so a real
+        // HSM server accepts them. Registrations are POSTed to /commands at Start (PostRegistrationsWire).
+        // Install before Start, same one-way contract as SetClock — the worker thread only reads
+        // sender_/send_wire_ after Start, so the swap needs no lock. One transport per collector;
+        // Cancel()/ResetCancel() are wired into Stop/StartWorker so a Stop aborts an in-flight POST
+        // (the CancelPendingRequests primitive) and a restart re-arms it.
+        void UseHttpTransport()
         {
             http_transport_ = std::make_unique<hsm::http::HttpTransport>(
                 request_timeout_ms_, /*verify_peer=*/!allow_untrusted_certificate_);
             endpoints_ = hsm::http::MakeEndpoints(server_address_, port_, allow_plaintext_transport_);
             sender_ = [this](std::vector<std::string>& batch) { return HttpSendBatch(batch); };
+            send_wire_ = true;
+        }
+
+        // POST every registration as a wire AddOrUpdate batch to /commands (mirrors the C# command
+        // queue, which batch-registers on Start). The wire registration already carries the
+        // "Type":0 Command discriminator the server's CommandRequestBaseDeserializationConverter
+        // keys on. Best-effort: a failure is logged and Start proceeds (values would fail too if the
+        // server is unreachable; the value queue's durable retry handles a transient outage).
+        void PostRegistrationsWire(const std::vector<std::shared_ptr<NativeSensor>>& sensors)
+        {
+            if (sensors.empty())
+                return;
+
+            std::string body = "[";
+            for (size_t i = 0; i < sensors.size(); ++i)
+            {
+                if (i != 0)
+                    body += ',';
+                body += sensors[i]->WireRegistrationJson();
+            }
+            body += "]";
+
+            const std::vector<hsm::http::HttpHeader> headers = {
+                { "Key", access_key_ },
+                { "ClientName", client_name_ },
+                { "Content-Type", "application/json" },
+            };
+
+            const auto response = http_transport_->Post(endpoints_.CommandsList(), body, headers);
+            if (!response.IsSuccess())
+                LogError("Failed to register " + std::to_string(sensors.size()) +
+                         " sensor(s) on Start: " + (response.error.empty() ? "non-2xx response" : response.error));
         }
 #endif
+
+        // Outgoing payload format selector. On the live HTTP path (send_wire_) values/bars serialize
+        // to the .NET server WIRE format; otherwise the canonical/behavior-corpus format the
+        // in-memory recording sender (and the conformance harness) assert on. send_wire_ is set once
+        // before Start and read without a lock (same one-way contract as sender_).
+        std::string OutgoingValueJson(
+            const std::string& path,
+            hsm_sensor_type_t type,
+            const std::string& value_json,
+            hsm_sensor_status_t status,
+            const std::string& comment)
+        {
+            if (send_wire_)
+                return BuildWireValueJson(type, value_json, comment, comment.empty(), status, UnixTimeMilliseconds(), path);
+            return BuildValueJson(path, type, value_json, status, comment);
+        }
+
+        std::string OutgoingBarJson(const MonitoringBar& bar, const std::string& path)
+        {
+            if (send_wire_)
+                return BuildWireBarJson(bar, UnixTimeMilliseconds(), path);
+            return MonitoringBarJson(bar, path);
+        }
 
         // Advance the installed manual clock and wake the scheduler so it re-evaluates the
         // virtual due-time at once (no real-time wait).
@@ -2113,6 +2171,14 @@ namespace
             for (const auto& sensor : sensors_snapshot)
                 sensor->ResetPeriodicBaseline();
 
+#if defined(HSM_COLLECTOR_HTTP)
+            // Register every sensor on the server (wire AddOrUpdate batch -> /commands) before the
+            // worker starts dispatching values, so a real server knows the sensors first. Recording
+            // builds (conformance) never set send_wire_, so this is a no-op there.
+            if (send_wire_)
+                PostRegistrationsWire(sensors_snapshot);
+#endif
+
             StartWorker();
             StartScheduler();
 
@@ -2170,7 +2236,7 @@ namespace
             {
                 SensorSnapshot snapshot;
                 if (sensor->TryGetLastValueSnapshot(snapshot))
-                    flushed.push_back(BuildValueJson(snapshot.path, snapshot.type, snapshot.value_json, snapshot.status, snapshot.comment));
+                    flushed.push_back(OutgoingValueJson(snapshot.path, snapshot.type, snapshot.value_json, snapshot.status, snapshot.comment));
 
                 std::string bar_json;
                 if (sensor->TryFlushBarJson(bar_json))
@@ -2677,7 +2743,7 @@ namespace
                     return HSM_RESULT_OK;
             }
 
-            Enqueue(BuildValueJson(path, type, value_json, status, TrimComment(CopyString(comment))));
+            Enqueue(OutgoingValueJson(path, type, value_json, status, TrimComment(CopyString(comment))));
             return HSM_RESULT_OK;
         }
 
@@ -3299,10 +3365,14 @@ namespace
         bool send_hang_ = false;
         bool send_cancelled_ = false;
 
-        // Send seam: TrySendBatch delegates here. Default records into sent_values_; the HTTP build
-        // swaps in a libcurl POST via TestInstallHttpSender (installed before Start, read only by
+        // Send seam: TrySendBatch delegates here. Default records into sent_values_; the public HTTP
+        // transport (UseHttpTransport) swaps in a libcurl POST (installed before Start, read only by
         // the worker thread after Start — no lock needed for the swap).
         std::function<bool(std::vector<std::string>&)> sender_;
+        // True once UseHttpTransport installs the live transport: payloads serialize to the .NET
+        // server WIRE format instead of the canonical/behavior-corpus format. Set once before Start,
+        // read without a lock (same one-way contract as sender_).
+        bool send_wire_ = false;
 #if defined(HSM_COLLECTOR_HTTP)
         std::unique_ptr<hsm::http::HttpTransport> http_transport_;
         hsm::http::Endpoints endpoints_;
@@ -3509,7 +3579,7 @@ namespace
             if (bar_.close_ms < now_ms)
             {
                 if (bar_.count > 0)
-                    closed_json = MonitoringBarJson(bar_, path_);
+                    closed_json = collector->OutgoingBarJson(bar_, path_);
 
                 bar_.Init(now_ms);
             }
@@ -3609,6 +3679,14 @@ namespace
         if (!is_periodic_)
             return false;
 
+        // Outgoing-format selector: the collector chooses wire vs canonical (send_wire_). Reading
+        // send_wire_ is lock-free; if the collector is gone (teardown race) fall back to canonical.
+        const auto collector = collector_.lock();
+        const auto build_value = [&](hsm_sensor_type_t t, const std::string& v, hsm_sensor_status_t s, const std::string& c) {
+            return collector ? collector->OutgoingValueJson(path_, t, v, s, c)
+                             : NativeCollector::BuildValueJson(path_, t, v, s, c);
+        };
+
         // The sensor lock covers only the due-check and the mutable-state snapshot. User
         // callbacks run OUTSIDE it: a callback that re-enters the same sensor (AddRate /
         // AddFunctionInt) must not deadlock on the non-recursive mutex, and arbitrary user
@@ -3659,7 +3737,7 @@ namespace
                 const double rate = seconds > 0 ? rate_sum_ / seconds : 0.0;
                 rate_sum_ = 0.0;
 
-                out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_RATE, DoubleJson(rate), rate_status_, rate_comment_);
+                out_json = build_value(HSM_SENSOR_TYPE_RATE, DoubleJson(rate), rate_status_, rate_comment_);
                 return true;
             }
 
@@ -3673,7 +3751,7 @@ namespace
         if (int_function_ != nullptr)
         {
             const auto value = int_function_(function_user_data_);
-            out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});
+            out_json = build_value(HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});
             return true;
         }
 
@@ -3684,7 +3762,7 @@ namespace
                 static_cast<int32_t>(values_snapshot.size()),
                 function_user_data_);
 
-            out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});
+            out_json = build_value(HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});
             return true;
         }
 
@@ -3717,7 +3795,8 @@ namespace
         if (bar_.count <= 0)
             return false;
 
-        out_json = MonitoringBarJson(bar_, path_);
+        const auto collector = collector_.lock();
+        out_json = collector ? collector->OutgoingBarJson(bar_, path_) : MonitoringBarJson(bar_, path_);
 
         // Roll after a successful flush so a stop -> restart -> stop cycle never resends the bar.
         bar_.Init(UnixTimeMilliseconds());
@@ -3895,14 +3974,29 @@ extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const c
         collector->impl->TestLogError(message);
 }
 
+// Public live transport (#1165): switch the collector from the in-memory recording sender to a real
+// libcurl POST to the server (wire-format values + registration POST to /commands at Start). Install
+// before Start. Returns HSM_RESULT_INVALID_STATE when the library was built without HSM_COLLECTOR_HTTP
+// (no transport compiled in).
+extern "C" hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collector)
+{
+    if (collector == nullptr || collector->impl == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
 #if defined(HSM_COLLECTOR_HTTP)
-// Test-only seam (#1097): swap the recording sender for the live libcurl transport so the native
-// unit tests exercise the real queue -> worker -> POST path against the in-proc capture server.
-// Install before Start (same contract as the clock seam). HTTP-build only.
+    collector->impl->UseHttpTransport();
+    return HSM_RESULT_OK;
+#else
+    return HSM_RESULT_INVALID_STATE;
+#endif
+}
+
+#if defined(HSM_COLLECTOR_HTTP)
+// Test seam (#1097): the native unit tests exercise the real queue -> worker -> POST path against
+// the in-proc capture server. Now an alias of the public hsm_collector_use_http_transport.
 extern "C" void hsm_collector_test_install_http_sender(hsm_collector_t* collector)
 {
     if (collector != nullptr && collector->impl != nullptr)
-        collector->impl->TestInstallHttpSender();
+        collector->impl->UseHttpTransport();
 }
 #endif
 
