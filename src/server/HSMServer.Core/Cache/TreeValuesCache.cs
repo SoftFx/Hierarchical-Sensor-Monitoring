@@ -2041,9 +2041,18 @@ namespace HSMServer.Core.Cache
         {
             _logger.Info("Product-owned policy cleanup is running (node-level alert removal)");
 
-            var policiesById = _database.GetAllPolicies()
-                .Where(p => p.Id is not null)
-                .ToDictionary(p => new Guid(p.Id));
+            // Tolerate duplicate policy ids (same as RequestPolicies) — ToDictionary would
+            // throw and abort startup on a database that previously started fine.
+            var policiesById = new Dictionary<Guid, PolicyEntity>();
+            foreach (var policy in _database.GetAllPolicies())
+            {
+                if (policy.Id is null)
+                    continue;
+
+                var key = new Guid(policy.Id);
+                if (!policiesById.TryAdd(key, policy))
+                    _logger.Error($"Duplicate policy id found {key}");
+            }
 
             var removedPolicies = 0;
             var updatedProducts = 0;
