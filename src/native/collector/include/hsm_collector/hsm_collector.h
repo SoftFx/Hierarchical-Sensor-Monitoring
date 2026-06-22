@@ -314,6 +314,14 @@ hsm_result_t hsm_collector_create_double_sensor(
     hsm_collector_t* collector,
     const char* path,
     hsm_sensor_t** out_sensor);
+/* A custom Double sensor driven by the installed metric-source factory (#1164 value-source plugin):
+   the factory supplies the value each post_period_ms instead of the app calling AddValue. The crypto-
+   quote plugin is the canonical use. post_period_ms must be > 0. */
+hsm_result_t hsm_collector_create_metric_double_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_sensor_t** out_sensor);
 hsm_result_t hsm_collector_create_string_sensor(
     hsm_collector_t* collector,
     const char* path,

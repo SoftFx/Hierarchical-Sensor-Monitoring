@@ -202,6 +202,8 @@ if(HSM_COLLECTOR_BUILD_EXAMPLES)
     # The server-monitor example POSTs to a real server, so it needs the libcurl transport.
     if(HSM_COLLECTOR_HTTP)
         add_subdirectory(examples/server-monitor)
+        # The crypto-monitor value-source plugin example fetches quotes via libcurl.
+        add_subdirectory(examples/crypto-monitor)
         # The windows-monitor example uses the Windows PDH live readers — Windows only.
         if(WIN32)
             add_subdirectory(examples/windows-monitor)
@@ -322,6 +324,7 @@ set(NATIVE_REGRESSION_TESTS
     native_default_sensor_group_composition
     native_metric_source_seam_lifecycle
     native_metric_source_drives_default_bar_sensor
+    native_metric_source_drives_custom_double_sensor
     # native_windows_metric_sources_produce_live_value is registered below (Windows only).
     native_prototype_merge_pins_identity_overrides_metadata
     native_http_endpoint_routing_matches_net

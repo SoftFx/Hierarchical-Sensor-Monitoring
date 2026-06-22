@@ -258,6 +258,20 @@ namespace hsm::collector
             return DoubleSensor(CreateWithOptions(path, HSM_SENSOR_TYPE_DOUBLE, options));
         }
 
+        /// A custom Double sensor whose value comes from the installed metric-source factory each
+        /// `post_period` (a value-source plugin; #1164) instead of the app calling AddValue. The
+        /// returned handle owns the sensor's lifetime. SetMetricSourceFactory must supply a reader for
+        /// `path`, and InstallWindows/UseHttpTransport etc. install before Start.
+        DoubleSensor CreateMetricSensor(const std::string& path, std::chrono::milliseconds post_period)
+        {
+            hsm_sensor_t* sensor = nullptr;
+            Check(
+                hsm_collector_create_metric_double_sensor(
+                    handle_, path.c_str(), static_cast<std::int64_t>(post_period.count()), &sensor),
+                "Failed to create metric double sensor.");
+            return DoubleSensor(sensor);
+        }
+
         StringSensor CreateStringSensor(const std::string& path)
         {
             return StringSensor(CreateSimple(&hsm_collector_create_string_sensor, path, "Failed to create string sensor."));

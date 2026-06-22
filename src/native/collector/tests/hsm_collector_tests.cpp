@@ -2988,6 +2988,39 @@ namespace
         hsm_sensor_release(sensor);
     }
 
+    // #1164 value-source plugin: a CUSTOM Double sensor created via create_metric_double_sensor is
+    // bound to the installed factory at Start and posts the read value as a Double (the crypto-quote
+    // plugin path, exercised here with the deterministic fake factory).
+    void NativeMetricSourceDrivesCustomDoubleSensor()
+    {
+        FakeMetricFactoryState fake;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_set_metric_source_factory(collector.value, &FakeMetricFactory, &fake) == HSM_RESULT_OK,
+            "set metric-source factory failed");
+        hsm_collector_test_install_manual_clock(collector.value, 1000000);
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_create_metric_double_sensor(collector.value, "plugin/quote", 2000, &sensor) == HSM_RESULT_OK,
+            "create metric double sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "the bound plugin source should post on Start");
+        Require(fake.creates.load() == 1, "factory should create the source once at Start");
+
+        const char* json = nullptr;
+        Require(hsm_collector_get_sent_json(collector.value, 0, &json) == HSM_RESULT_OK, "sent payload lookup failed");
+        const std::string payload = json;
+        Contains(payload, "\"Type\":2"); // Double
+        Contains(payload, "\"Value\":42");
+        Contains(payload, "plugin/quote"); // path tail (the collector prefixes computer/module)
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+
 #if defined(_WIN32)
     // #1164 Windows smoke: the real PDH factory drives a live Total CPU reading. Uses real time (the
     // first post fires immediately on Start). The first PDH sample of a rate counter may read 0 while
@@ -4338,6 +4371,7 @@ namespace
             { "dump_default_sensors_golden", [](const std::string&) { DumpDefaultSensorsGolden(); } },
             { "native_metric_source_seam_lifecycle", [](const std::string&) { NativeMetricSourceSeamLifecycle(); } },
             { "native_metric_source_drives_default_bar_sensor", [](const std::string&) { NativeMetricSourceDrivesDefaultBarSensor(); } },
+            { "native_metric_source_drives_custom_double_sensor", [](const std::string&) { NativeMetricSourceDrivesCustomDoubleSensor(); } },
 #if defined(_WIN32)
             { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
 #endif

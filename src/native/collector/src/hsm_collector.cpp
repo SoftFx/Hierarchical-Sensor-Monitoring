@@ -4309,6 +4309,25 @@ hsm_result_t hsm_collector_create_double_sensor(
     return CreateSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE, false, std::string{}, out_sensor);
 }
 
+// A custom Double sensor whose value is produced by the installed metric-source factory each
+// post_period_ms (#1164 value-source plugin): at Start the factory is asked for a reader for this
+// path; if it binds, the sensor posts the read value periodically (instead of the app calling
+// AddValue). The crypto-quote plugin is the canonical use. post_period_ms must be > 0.
+hsm_result_t hsm_collector_create_metric_double_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_sensor_t** out_sensor)
+{
+    if (post_period_ms <= 0)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const auto result = CreateSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE, false, std::string{}, out_sensor);
+    if (result == HSM_RESULT_OK && out_sensor != nullptr && *out_sensor != nullptr)
+        (*out_sensor)->impl->MarkMetricCandidate(post_period_ms, 2);
+    return result;
+}
+
 hsm_result_t hsm_collector_create_string_sensor(
     hsm_collector_t* collector,
     const char* path,
