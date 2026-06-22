@@ -1914,6 +1914,43 @@ namespace
         // computation; std::numeric_limits<int64_t>::max() for a non-periodic sensor.
         int64_t NextPostHint() const { return next_post_hint_.load(); }
 
+        // ---- Metric-source-driven monitoring (#1164) ----
+        const std::string& Path() const { return path_; }
+
+        // Mark this sensor as eligible for metric-source binding at Start (a value type whose live
+        // values come from a PDH/WMI/plugin reader). post_period_ms is the post cadence; precision is
+        // the bar-payload rounding for DoubleBar/IntBar sensors.
+        void MarkMetricCandidate(int64_t post_period_ms, int32_t precision)
+        {
+            is_metric_candidate_ = true;
+            metric_post_period_ms_ = post_period_ms;
+            metric_bar_precision_ = precision;
+        }
+
+        bool IsMetricCandidate() const { return is_metric_candidate_ && !is_metric_driven_; }
+
+        // Bind a freshly created metric source (called on the Start thread before the scheduler runs).
+        // Makes the sensor periodic so TickPeriodicSensors drives it; the source is read on the
+        // scheduler thread only thereafter.
+        void BindMetricSource(std::unique_ptr<MetricSource> source)
+        {
+            metric_source_ = std::move(source);
+            is_metric_driven_ = true;
+            is_periodic_ = true;
+            post_period_ms_ = metric_post_period_ms_ > 0 ? metric_post_period_ms_ : 15000;
+        }
+
+        // Dispose the bound source on Stop (managed dispose-on-stop); a restart rebinds.
+        void ResetMetricSource()
+        {
+            metric_source_.reset();
+            if (is_metric_driven_)
+            {
+                is_metric_driven_ = false;
+                is_periodic_ = false;
+            }
+        }
+
     private:
         hsm_result_t AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment);
 
@@ -1952,6 +1989,16 @@ namespace
         void* function_user_data_ = nullptr;
         std::deque<int32_t> function_values_;
         int32_t function_max_cache_ = 0;
+
+        // Metric-source-driven monitoring (#1164): a default/value sensor whose value each post
+        // period comes from the installed metric-source factory (PDH/WMI/plugin). Set at AddDefault
+        // (candidate) and bound at Start (driven). The bound source + the periodic state above are
+        // touched only by the scheduler thread after Start, so they need no extra lock.
+        bool is_metric_candidate_ = false;  // eligible: a value type that a metric source can drive
+        bool is_metric_driven_ = false;     // a source was bound at Start -> periodic reads
+        int64_t metric_post_period_ms_ = 0; // post cadence (catalog post_period for default sensors)
+        int32_t metric_bar_precision_ = 2;  // bar-payload rounding for DoubleBar/IntBar metric sensors
+        std::unique_ptr<MetricSource> metric_source_;
 
         // File sensor identity.
         std::string file_name_;
@@ -2165,6 +2212,20 @@ namespace
 
             NotifyLifecycle(CollectorState::Starting);
 
+            // Bind metric sources (#1164): ask the installed factory for a reader per candidate path.
+            // A bound sensor becomes periodic, so binding must precede ResetPeriodicBaseline (which
+            // seeds the due-time) and the scheduler start. With no factory installed, candidates stay
+            // registration-only (CreateMetricSource returns null). Runs on the Start thread; the
+            // bound source is read only on the scheduler thread thereafter.
+            for (const auto& sensor : sensors_snapshot)
+            {
+                if (sensor->IsMetricCandidate())
+                {
+                    if (auto source = CreateMetricSource(sensor->Path()))
+                        sensor->BindMetricSource(std::move(source));
+                }
+            }
+
             // Re-arm periodic sensors outside the collector lock (sensor locks are never taken
             // under it): the first post fires immediately, and a restarted rate sensor must not
             // divide by the stopped gap (fresh elapsed baseline — mirrors C# InitAsync).
@@ -2228,6 +2289,11 @@ namespace
             // the CanAcceptData gate; rate sums / function posts are deliberately NOT flushed
             // (a partial-window rate is alert-noise risk — only bars preserve data at stop).
             StopScheduler();
+
+            // Dispose bound metric sources now the scheduler has stopped reading them (managed
+            // dispose-on-stop; #1164). A restart rebinds via the factory.
+            for (const auto& sensor : sensors_snapshot)
+                sensor->ResetMetricSource();
 
             // Phase 2: flush sensors — last-value snapshots and non-empty partial bars — into
             // the queue, bypassing the data gate (this is the explicit stop-flush path).
@@ -2627,10 +2693,22 @@ namespace
             RegistrationOptions registration = BuildDefaultRegistration(*def, name);
             const std::string prototype_path = RevealDefaultPath(category, name, def->is_computer);
 
-            if (def->is_bar)
-                return CreateDefaultBarSensor(prototype_path, def->type, kDefaultBarPeriodMs, kDefaultBarPrecision, registration, out_sensor);
+            const hsm_result_t rc = def->is_bar
+                                        ? CreateDefaultBarSensor(prototype_path, def->type, kDefaultBarPeriodMs, kDefaultBarPrecision, registration, out_sensor)
+                                        : CreateSensor(prototype_path.c_str(), def->type, false, std::string{}, out_sensor, registration);
 
-            return CreateSensor(prototype_path.c_str(), def->type, false, std::string{}, out_sensor, registration);
+            // Mark value-typed default sensors as metric candidates (#1164): at Start the installed
+            // metric-source factory (PDH/WMI/plugin) is asked for a reader for this path; if it binds,
+            // the sensor posts live values each post_period. Non-value default sensors (bool/string/
+            // enum/version/timespan heartbeat/self-diagnostic feeds) are not metric-driven.
+            if (rc == HSM_RESULT_OK && out_sensor &&
+                (def->type == HSM_SENSOR_TYPE_DOUBLE_BAR || def->type == HSM_SENSOR_TYPE_INT_BAR ||
+                 def->type == HSM_SENSOR_TYPE_DOUBLE || def->type == HSM_SENSOR_TYPE_INT))
+            {
+                out_sensor->MarkMetricCandidate(def->post_period_ms, kDefaultBarPrecision);
+            }
+
+            return rc;
         }
 
         // Bar variant of CreateSensor: a default monitoring bar sensor needs the full RegistrationOptions
@@ -3746,6 +3824,49 @@ namespace
                 // Snapshot of the sliding window — the buffer itself is NOT drained.
                 values_snapshot.assign(function_values_.begin(), function_values_.end());
             }
+        }
+
+        // Metric-source-driven default/value sensor (#1164): read the bound reader OUTSIDE the lock
+        // (it may do PDH/WMI/network IO). The source is touched only by the scheduler thread, so no
+        // lock is needed. A DoubleBar/IntBar sensor posts a one-sample bar each period (its registered
+        // type requires a bar payload); Double/Int post one value. NO_VALUE skips, ERROR disposes +
+        // recreates via the factory (managed recreate-on-error) and drops this tick.
+        if (is_metric_driven_)
+        {
+            double value = 0.0;
+            const auto outcome = metric_source_ ? metric_source_->ReadInto(value) : HSM_METRIC_READ_NO_VALUE;
+
+            if (outcome == HSM_METRIC_READ_ERROR)
+            {
+                metric_source_.reset();
+                if (collector)
+                    metric_source_ = collector->CreateMetricSource(path_);
+                return false;
+            }
+
+            if (outcome != HSM_METRIC_READ_OK)
+                return false;
+
+            if (type_ == HSM_SENSOR_TYPE_DOUBLE_BAR || type_ == HSM_SENSOR_TYPE_INT_BAR)
+            {
+                MonitoringBar bar;
+                bar.is_int = (type_ == HSM_SENSOR_TYPE_INT_BAR);
+                bar.precision = metric_bar_precision_;
+                bar.period_ms = post_period_ms_ > 0 ? post_period_ms_ : 1;
+                bar.Init(UnixTimeMilliseconds());
+                bar.AddValue(value);
+                out_json = collector ? collector->OutgoingBarJson(bar, path_) : MonitoringBarJson(bar, path_);
+            }
+            else if (type_ == HSM_SENSOR_TYPE_INT)
+            {
+                out_json = build_value(
+                    HSM_SENSOR_TYPE_INT, std::to_string(static_cast<long long>(std::llround(value))), HSM_SENSOR_STATUS_OK, std::string{});
+            }
+            else
+            {
+                out_json = build_value(HSM_SENSOR_TYPE_DOUBLE, DoubleJson(value), HSM_SENSOR_STATUS_OK, std::string{});
+            }
+            return true;
         }
 
         if (int_function_ != nullptr)

@@ -492,10 +492,10 @@ typedef int (*hsm_metric_source_factory_fn)(
     void** out_source_user_data);
 
 /* Install the metric-source factory (replaces the no-op default). Passing NULL restores the no-op.
-   NOTE (#1099): this stores the factory and is exercised by the seam lifecycle, but no scheduled
-   default sensor reads it yet — the production factory is a no-op and the per-sensor scheduled-tick
-   wiring lands with the live readers (the live-value follow-up). Installing a real factory before
-   Start does NOT yet produce live values. */
+   At Start each value-typed default/candidate sensor asks the factory for a reader for its path; a
+   bound sensor then posts live values each post period (DoubleBar/IntBar as a one-sample bar,
+   Double/Int as a value), recreating its source on a READ_ERROR and disposing it on Stop (#1164).
+   For Windows, `hsm_collector_install_windows_metric_sources` installs a ready-made PDH factory. */
 hsm_result_t hsm_collector_set_metric_source_factory(
     hsm_collector_t* collector,
     hsm_metric_source_factory_fn factory,

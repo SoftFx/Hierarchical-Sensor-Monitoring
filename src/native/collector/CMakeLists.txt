@@ -311,6 +311,7 @@ set(NATIVE_REGRESSION_TESTS
     native_default_sensor_wire_matches_net
     native_default_sensor_group_composition
     native_metric_source_seam_lifecycle
+    native_metric_source_drives_default_bar_sensor
     native_prototype_merge_pins_identity_overrides_metadata
     native_http_endpoint_routing_matches_net
     native_http_retry_policy_matches_net
