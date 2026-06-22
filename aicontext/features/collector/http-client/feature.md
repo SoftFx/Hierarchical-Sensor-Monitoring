@@ -1,6 +1,6 @@
 # Feature: HTTP Client
 
-> Owner: collector | Last reviewed: 2026-06-16 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-06-23 | Canonical: yes
 > Scope: Collector - HTTPS transport with Polly retry for sending sensor data
 
 ---
@@ -75,7 +75,7 @@ Routing + retry are pure headers compiled into the always-on core, so they are u
 
 Send semantics: **one POST attempt per batch**. A non-2xx or transport failure returns `false`, so the dispatcher re-enqueues the batch at the tail — the same durable-retry contract the C# queue uses (re-enqueue on `PackageSendingInfo.Error != null`, including 5xx and 4xx). The Polly-equivalent in-send exponential/linear backoff (`hsm_http_retry.hpp`, unit-tested separately) is a non-blocking refinement layered on later; doing it inline would block the single worker thread for up to the policy max-delay per batch. The end-to-end live path is pinned by `native_http_live_send_posts_to_capture_server` (drives a real int value through the collector and asserts the captured POST route/headers/body).
 
-**Remaining integration step:** the HTTP sender is currently reachable only through the test-install seam (the production default stays recording so the conformance corpus runs unchanged in the HTTP lane). Making the libcurl transport the production default in the `HSM_COLLECTOR_HTTP` build — with the corpus driver explicitly installing the recording sender — is the next step, alongside per-command error-dictionary parse and the in-send backoff (#1097 / public-API #1100).
+**Public live transport (#1165):** `hsm_collector_use_http_transport` (C ABI) / `Collector::UseHttpTransport()` (C++) makes the libcurl transport reachable from application code. Installed before Start, it (a) POSTs the wire `AddOrUpdate` registration batch to `/commands` at Start (the `Type:0` Command discriminator), and (b) switches values/bars to the **server wire format** (`Time` ISO-8601, bar `OpenTime`/`CloseTime`) via `OutgoingValueJson`/`OutgoingBarJson` — the conformance corpus keeps the canonical/in-memory recorder (`send_wire_` is false there). Pinned by `native_http_registers_sensors_on_start` + the wire assertions in `native_http_live_send_posts_to_capture_server`, and proven end-to-end against a Dockerized HSM server by `examples/server-monitor` (registration + live int/double values readable via `/api/sensors/history`). Before #1165 the transport was test-only and posted canonical JSON, so nothing reached a real server. Still open: per-command error-dictionary parse, in-send Polly backoff, and registering sensors created *while running* (today only the Start-batch registers over HTTP).
 
 ## Known Issues / Limitations
 

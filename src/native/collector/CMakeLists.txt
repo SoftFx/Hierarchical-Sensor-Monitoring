@@ -193,6 +193,10 @@ endif()
 # examples/console/standalone and is built separately against the installed package (CI lane).
 if(HSM_COLLECTOR_BUILD_EXAMPLES)
     add_subdirectory(examples/console)
+    # The server-monitor example POSTs to a real server, so it needs the libcurl transport.
+    if(HSM_COLLECTOR_HTTP)
+        add_subdirectory(examples/server-monitor)
+    endif()
 endif()
 
 # Enqueue-throughput micro-benchmark (#1101). Gated OFF; the scheduled benchmark lane builds it.
