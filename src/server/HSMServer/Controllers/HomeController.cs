@@ -741,11 +741,16 @@ namespace HSMServer.Controllers
 
         public IActionResult AddDataPolicy(byte type, Guid entityId, Guid? folderId = null)
         {
-            if (!_treeViewModel.Sensors.TryGetValue(entityId, out var sensor))
-                return _emptyResult;
+            // entityId may be a template id (Alert Template authoring) rather than a sensor
+            // id — in that case sensor is null and BuildAlert produces a default block.
+            _treeViewModel.Sensors.TryGetValue(entityId, out var sensor);
 
             DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, sensor);
             viewModel.Schedules = GetAlertSchedulesSelectList();
+
+            if (sensor is null && folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
+                foreach (var action in viewModel.Actions)
+                    action.AvailableChats.UnionWith(folder.TelegramChats);
 
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
