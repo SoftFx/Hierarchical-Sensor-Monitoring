@@ -299,8 +299,17 @@
                     let scheduleBlock = sendBlock.find('div[name="schedule"]');
                     if (scheduleBlock.hasClass('d-flex')) {
                         setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "select", "ScheduleRepeatMode");
-                        setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "input", "ScheduleStartTime");
-                        setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "input", "ScheduleInstantSend", 'checkbox');
+
+                        // TTL alerts only support repeat-mode scheduling. StartTime/InstantSend
+                        // are not rendered for TTL rows loaded from storage (Model.IsTtl gate in
+                        // _ActionBlock.cshtml); for rows promoted to TTL client-side the inputs
+                        // exist but are disabled+hidden via the .ttlAction class. Skip both
+                        // fields when routing to the TTL key so the server doesn't receive
+                        // leftover values from a regular→TTL toggle.
+                        if (alertType !== ttlKey) {
+                            setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "input", "ScheduleStartTime");
+                            setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "input", "ScheduleInstantSend", 'checkbox');
+                        }
                     }
                 }
 

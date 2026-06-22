@@ -386,3 +386,13 @@
         });
     }
 </script>
+
+<style>
+    /* TTL alerts restrict the action schedule to repeat-mode only: hide "starting at"
+       and "instant send" blocks. The .ttlAction class is added to .fullAction at render
+       time for TTL alerts loaded from storage, and toggled client-side by the property
+       change handler in _ConditionBlock.cshtml when a regular alert is promoted to TTL. */
+    .fullAction.ttlAction .schedule-ttl-gated {
+        display: none !important;
+    }
+</style>

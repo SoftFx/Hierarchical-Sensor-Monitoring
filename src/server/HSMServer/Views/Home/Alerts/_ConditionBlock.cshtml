@@ -48,6 +48,14 @@
         let dataAlert = $(this).parents("div.dataAlertRow:first");
         let type = $(this).data('type');
 
+        // Container ID prefix is the actual sensor/template type. For TTL alerts loaded from
+        // storage, Model.Type (and therefore data-type on the select) is Boolean (1), not the
+        // real sensor type — so reading data-type for demote would route the row to the wrong
+        // dictionary key and the server would silently drop it. The container always reflects
+        // the parent context's type.
+        let container = dataAlert.closest("[id^='dataAlertsList_']");
+        let containerType = container.length ? container.attr("id").replace("dataAlertsList_", "") : type;
+
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
         let conditionsBlock = conditionBlock.parent();
         let operation = conditionBlock.find($(`div.operation`));
@@ -61,16 +69,24 @@
                 // Promote row to TTL: TTL alerts are single-condition, so drop any non-main
                 // conditions, hide the add-condition button, and tag the row's action block
                 // so the schedule UI restricts to TTL mode. data-alert-type drives form
-                // collection routing on submit.
+                // collection routing on submit. Disable schedule-ttl-gated inputs so the form
+                // doesn't submit ScheduleStartTime/InstantSend for a TTL row (server stores
+                // them via ToTimeToLiveUpdate).
                 conditionsBlock.find("div[name='alertCondition']").not(conditionBlock).remove();
                 conditionsBlock.find("a.addCondition").addClass("d-none");
                 dataAlert.find("div.fullAction").addClass("ttlAction");
+                dataAlert.find(".schedule-ttl-gated input").prop("disabled", true);
                 dataAlert.attr("data-alert-type", @TimeToLiveAlertViewModel.AlertKey);
             } else {
                 // Demote from TTL: restore the add-condition button and regular schedule UI.
+                // Re-enable the gated schedule inputs. Route the row back to its container's
+                // sensor type so the server matches it against sensor.Type. Note: a TTL alert
+                // loaded from storage never rendered these inputs (server-side Model.IsTtl gate),
+                // so demote cannot recreate them — see feature.md known limitations.
                 conditionsBlock.find("a.addCondition").removeClass("d-none");
                 dataAlert.find("div.fullAction").removeClass("ttlAction");
-                dataAlert.attr("data-alert-type", type);
+                dataAlert.find(".schedule-ttl-gated input").prop("disabled", false);
+                dataAlert.attr("data-alert-type", containerType);
             }
         }
 

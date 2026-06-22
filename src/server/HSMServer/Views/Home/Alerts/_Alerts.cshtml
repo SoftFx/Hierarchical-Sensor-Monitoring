@@ -56,15 +56,15 @@ else
             </a>
         </div>
 
-        @if (Model is SensorInfoViewModel)
+        @if (Model is SensorInfoViewModel sensorInfo)
         {
-            var sensorType = Model.DataAlerts.FirstOrDefault(a => a.Key != ttlType).Key;
+            var sensorType = sensorInfo.DataAlerts.FirstOrDefault(a => a.Key != ttlType).Key;
 
             // Unified list: regular + TTL alerts in one container. Each row's data-alert-type
             // attribute (set in _DataAlert.cshtml) tells form collection whether to route to
             // TTL (255) or sensor-type storage.
             <div id="dataAlertsList_@sensorType">
-                @foreach (var (_, alerts) in Model.DataAlerts)
+                @foreach (var (_, alerts) in sensorInfo.DataAlerts)
                 {
                     @foreach (var alert in alerts)
                     {
