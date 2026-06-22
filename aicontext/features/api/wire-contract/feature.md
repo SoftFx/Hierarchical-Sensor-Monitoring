@@ -87,6 +87,7 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 
 - Never renumber or reuse enum values; never rename JSON fields; additive evolution only.
 - Server tolerates unknown/omitted optional fields; collectors must tolerate unknown response fields.
+- `ProductEntity.Policies` (non-TTL persisted policy-id list on a product) is deprecated and no longer populated by the server. Node-level alerts on Folders/Products were removed in #1142; the collector wire format is unaffected because template materialization targets sensors only.
 
 ## Native port (C++)
 
