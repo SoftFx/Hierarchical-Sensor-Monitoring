@@ -9,7 +9,22 @@
 #                             the libcurl HTTP transport (HSM_COLLECTOR_HTTP).
 cmake_minimum_required(VERSION 3.21)
 
+# Self-contained Windows agent: the downloadable bundle ships a SINGLE hsm-agent.exe with no
+# redistributable DLLs, so build the curl HTTP transport against the STATIC vcpkg triplet
+# (static curl[ssl]=Schannel + zlib, no libcurl/zlib DLLs) and link the CRT statically below.
+# Set the triplet before project() so the vcpkg toolchain (included during project()) picks it up.
+# Gate on the host (the Win32 service only builds on Windows) and allow an explicit override.
+if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
+    set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg triplet for the self-contained agent build")
+endif()
+
 project(HsmAgent VERSION 0.4.0 LANGUAGES CXX)
+
+if(MSVC)
+    # Static CRT (/MT) to match the static triplet — the exe must run on a clean machine with no VC++
+    # redistributable. Applies to the agent, the linked collector subdir, and the portable config lib.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 option(HSM_AGENT_WERROR "Treat compiler warnings as errors" OFF)
 option(HSM_AGENT_BUILD_TESTS "Build the agent unit tests" ON)

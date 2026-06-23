@@ -49,9 +49,10 @@ jobs:
 
       # HSM Agent (#1167): build the native Windows agent and stage it into wwwroot so the published
       # server image serves a real per-product download bundle (otherwise /api/agent/installer 503s).
-      # The agent links the collector with the libcurl HTTP transport, so it needs vcpkg (curl). This
-      # job is already windows-latest, so the agent's MSVC build fits here. wwwroot is included by the
-      # dotnet publish below.
+      # The agent links the collector with the libcurl HTTP transport, so it needs vcpkg (curl). It is
+      # statically linked (x64-windows-static, forced by src/agent/CMakeLists.txt) so the served exe is
+      # a self-contained single binary. This job is already windows-latest, so the agent's MSVC build
+      # fits here. wwwroot is included by the dotnet publish below.
       - name: Set up vcpkg (HSM Agent curl)
         uses: lukka/run-vcpkg@v11
         with:

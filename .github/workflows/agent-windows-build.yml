@@ -41,10 +41,11 @@ jobs:
           vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
 
       - name: Configure (Release, HTTP transport on)
-        # The agent CMake forces HSM_COLLECTOR_HTTP=ON on Windows; vcpkg manifest install (curl) runs
-        # at configure time. Override VCPKG_BINARY_SOURCES to "clear" so the GHA cache backend (whose
-        # tokens aren't reliably exported) is not used — curl builds from source. Same fix the
-        # collector http-transport lane uses.
+        # The agent CMake forces HSM_COLLECTOR_HTTP=ON on Windows AND the x64-windows-static triplet +
+        # static CRT, so the produced hsm-agent.exe is a self-contained single binary (no libcurl/zlib
+        # DLLs). vcpkg manifest install (static curl[ssl]=Schannel + zlib) runs at configure time.
+        # Override VCPKG_BINARY_SOURCES to "clear" so the GHA cache backend (whose tokens aren't
+        # reliably exported) is not used — curl builds from source. Same fix the collector lane uses.
         env:
           VCPKG_BINARY_SOURCES: clear
         run: >

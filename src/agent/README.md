@@ -26,6 +26,11 @@ tree under `<computer>/.computer/...` for the product the access key belongs to.
 The agent links the in-tree collector with the libcurl HTTP transport, so a vcpkg toolchain (for
 curl) is required for the `hsm-agent` executable.
 
+On Windows the build is **statically linked** (`x64-windows-static` triplet + static CRT, forced by
+`src/agent/CMakeLists.txt`): the downloadable bundle ships a single self-contained `hsm-agent.exe`
+that runs on a clean machine with no libcurl/zlib DLLs or VC++ redistributable (curl uses Schannel,
+so no OpenSSL). Don't pass `-DVCPKG_TARGET_TRIPLET` unless you intend to override this.
+
 ```sh
 cmake -S src/agent -B src/agent/build/debug \
       -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake \
