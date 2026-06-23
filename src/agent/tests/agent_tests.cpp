@@ -78,7 +78,6 @@ namespace
               "all host groups default on");
         Check(!config.sensors_process, "process sensors default off");
         CheckEq(config.collect_period_ms, 0, "default collect period (collector default)");
-        Check(config.plugins.empty(), "no plugins by default");
         Check(!config.allow_untrusted_certificate, "untrusted cert defaults off");
     }
 
@@ -148,29 +147,6 @@ namespace
         CheckEq(config.server_address, std::string{ "h" }, "address survives unknown siblings");
     }
 
-    void PluginsAreParsedButOptional()
-    {
-        const auto config = ParseOk(R"({
-            "server": { "address": "h", "accessKey": "k" },
-            "plugins": [
-                { "path": "Crypto/BTCUSD", "type": "http-json", "period": 2000,
-                  "params": { "url": "https://api/x", "key": "price", "count": 3 } }
-            ]
-        })");
-        Check(config.plugins.size() == 1, "one plugin parsed");
-        if (config.plugins.size() == 1)
-        {
-            const auto& plugin = config.plugins.front();
-            CheckEq(plugin.path, std::string{ "Crypto/BTCUSD" }, "plugin path");
-            CheckEq(plugin.type, std::string{ "http-json" }, "plugin type");
-            Check(plugin.period_ms == 2000, "plugin period");
-            const std::string* url = plugin.Param("url");
-            Check(url != nullptr && *url == "https://api/x", "plugin param url");
-            const std::string* count = plugin.Param("count");
-            Check(count != nullptr && *count == "3", "numeric plugin param stringified");
-        }
-    }
-
     void StringEscapesDecode()
     {
         const auto config = ParseOk(R"({ "server": { "address": "a\tbé", "accessKey": "k" } })");
@@ -188,7 +164,6 @@ namespace
             { "agent_config_rejects_malformed_json", MalformedJsonIsRejected },
             { "agent_config_rejects_wrong_typed_field", WrongTypedFieldIsRejected },
             { "agent_config_ignores_unknown_fields", UnknownFieldsAreIgnored },
-            { "agent_config_parses_plugins", PluginsAreParsedButOptional },
             { "agent_config_decodes_string_escapes", StringEscapesDecode },
         };
         return tests;

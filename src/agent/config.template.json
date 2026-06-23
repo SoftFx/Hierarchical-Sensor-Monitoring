@@ -27,7 +27,5 @@
     "collectMs": 15000
   },
 
-  "productVersion": "1.0.0.0",
-
-  "plugins": []
+  "productVersion": "1.0.0.0"
 }

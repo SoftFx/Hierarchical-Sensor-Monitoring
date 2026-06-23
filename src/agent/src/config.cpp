@@ -5,6 +5,8 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace hsm::agent
 {
@@ -430,36 +432,7 @@ namespace hsm::agent
             return true;
         }
 
-        std::string ScalarToString(const JsonValue& value)
-        {
-            switch (value.type)
-            {
-            case JsonValue::Type::String:
-                return value.text;
-            case JsonValue::Type::Bool:
-                return value.boolean ? "true" : "false";
-            case JsonValue::Type::Number: {
-                // Render whole numbers without a trailing ".000000".
-                const double rounded = value.number;
-                if (rounded == static_cast<double>(static_cast<long long>(rounded)))
-                    return std::to_string(static_cast<long long>(rounded));
-                std::ostringstream stream;
-                stream << rounded;
-                return stream.str();
-            }
-            default:
-                return std::string{};
-            }
-        }
     } // namespace
-
-    const std::string* PluginConfig::Param(const std::string& key) const
-    {
-        for (const auto& param : params)
-            if (param.first == key)
-                return &param.second;
-        return nullptr;
-    }
 
     bool AgentConfig::ComputerNameIsAuto() const
     {
@@ -526,39 +499,6 @@ namespace hsm::agent
 
         if (!ReadString(root, "productVersion", out.product_version, error))
             return false;
-
-        if (const JsonValue* plugins = root.Find("plugins"))
-        {
-            if (plugins->type != JsonValue::Type::Array)
-            {
-                error = "'plugins' must be an array";
-                return false;
-            }
-            for (const JsonValue& entry : plugins->elements)
-            {
-                if (entry.type != JsonValue::Type::Object)
-                {
-                    error = "each 'plugins' entry must be an object";
-                    return false;
-                }
-                PluginConfig plugin;
-                int period = 0;
-                if (!ReadString(entry, "path", plugin.path, error) || !ReadString(entry, "type", plugin.type, error) || !ReadInt(entry, "period", period, error))
-                    return false;
-                plugin.period_ms = period;
-                if (const JsonValue* params = entry.Find("params"))
-                {
-                    if (params->type != JsonValue::Type::Object)
-                    {
-                        error = "'plugins[].params' must be an object";
-                        return false;
-                    }
-                    for (const auto& member : params->members)
-                        plugin.params.emplace_back(member.first, ScalarToString(member.second));
-                }
-                out.plugins.push_back(std::move(plugin));
-            }
-        }
 
         // Required-field validation (epic: blank key/address must refuse to start).
         if (out.server_address.empty())

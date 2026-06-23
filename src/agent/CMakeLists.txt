@@ -49,7 +49,6 @@ if(HSM_AGENT_BUILD_TESTS)
             agent_config_rejects_malformed_json
             agent_config_rejects_wrong_typed_field
             agent_config_ignores_unknown_fields
-            agent_config_parses_plugins
             agent_config_decodes_string_escapes)
         add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
     endforeach()

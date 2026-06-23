@@ -11,26 +11,10 @@
 /// unit-tested on every CI lane. `"auto"` computer-name resolution and the mapping onto
 /// CollectorOptions happen in the Windows runtime (agent_runtime.cpp).
 
-#include <cstdint>
 #include <string>
-#include <utility>
-#include <vector>
 
 namespace hsm::agent
 {
-    /// A config-declared value-source sensor (W5 plugins). Parsed here for forward-compatibility so a
-    /// future bundle config is accepted today; the runtime does not wire these until the plugin
-    /// follow-up. `params` keeps every declared key as a string (numbers/bools stringified).
-    struct PluginConfig
-    {
-        std::string path;
-        std::string type;
-        std::int64_t period_ms = 0;
-        std::vector<std::pair<std::string, std::string>> params;
-
-        const std::string* Param(const std::string& key) const;
-    };
-
     /// The fully-parsed agent configuration. Every field has a sensible default so a minimal
     /// `{ "server": { "address": "...", "accessKey": "..." } }` already monitors the whole host.
     struct AgentConfig
@@ -58,9 +42,6 @@ namespace hsm::agent
 
         // module-sensor product version
         std::string product_version = "1.0.0.0";
-
-        // plugins[] (parsed, not yet wired)
-        std::vector<PluginConfig> plugins;
 
         /// True once `computer_name` should be replaced by the resolved machine name.
         bool ComputerNameIsAuto() const;

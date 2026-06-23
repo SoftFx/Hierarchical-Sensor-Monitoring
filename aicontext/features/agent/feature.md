@@ -12,19 +12,24 @@ The HSM Agent is a separate, CLR-free product **built on top of** the native col
 Windows service (`HSMAgent`), snapshots the host (CPU/RAM/disks/network + the collector's own
 self-sensors), and streams to an HSM server. Tracked by epic #1167.
 
-The agent only *hosts* an already-proven pipeline: live HTTP transport (#1165, `UseHttpTransport`),
-Windows PDH/Win32 live readers (#1164, `InstallWindowsMetricSources`), and the value-source plugin
-seam (#1164). `examples/windows-monitor` is the console-shaped predecessor; `AgentRuntime` is its
-productionized, service-managed form.
+The agent only *hosts* an already-proven pipeline: live HTTP transport (#1165, `UseHttpTransport`) and
+Windows PDH/Win32 live readers (#1164, `InstallWindowsMetricSources`). `examples/windows-monitor` is
+the console-shaped predecessor; `AgentRuntime` is its productionized, service-managed form.
 
-**Killer UX — zero client configuration.** An admin downloads a per-product installer bundle from the
-HSM web UI; the bundle already carries the server address + access key in a `config.json`. The client
-just runs it. (Server-side download = W6/W7, follow-up.)
+**Pure-native, runs anywhere.** The agent and its installation are 100% C++ — no .NET runtime on the
+target machine, no C#/MSI installer. Install is the exe's own `--install` (SCM registration). The
+first version monitors the **standard host sensors only**; there is intentionally **no plugin system**
+(extra sources are added later, separately, not via a config-declared plugin layer).
+
+**Killer UX — zero client configuration.** An admin downloads a per-product config bundle from the HSM
+web UI; the bundle carries the server address + access key in a `config.json`, and the client runs the
+(byte-identical, pre-built) C++ exe which self-installs. The only server-side part is serving a
+zip — never a .NET installer. (Server-side download = W6/W7, follow-up.)
 
 **Foundation status (this feature's current extent):** W1–W3 + the logging half of W4 — a runnable,
 self-installing, auto-start service that streams the standard host catalog. Out of scope here (own
-follow-up PRs): config-declared plugins (W5), the server-side per-product installer download + zip
-bundle (W6/W7), packaging artifacts/MSI (W8), and full E2E CI (W9).
+follow-up PRs): the server-side per-product config download + zip bundle (W6/W7), packaging (W8), and
+full E2E CI (W9). A plugin system is **not** planned for v1.
 
 ---
 
@@ -74,8 +79,6 @@ defaults. Maps onto `CollectorOptions` + runtime group gates:
   `system`/`disk`/`network` are finer subsets used **only when `computer` is false**; `module` =
   collector self-sensors; `process` is opt-in.
 - `periods.collectMs` → `package_collect_period_ms`. `productVersion` → module-sensor version.
-- `plugins[]` — parsed for forward-compatibility (a future bundle config is accepted today) but not yet
-  wired; the value-source binding lands in W5.
 
 ## Logging
 

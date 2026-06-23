@@ -10,8 +10,9 @@ per-product access key, and reports — **with zero client-side configuration**.
 (server address + key). Part of epic
 [#1167](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/issues/1167).
 
-> Status: foundation (W1–W3 + logging). The server-side per-product installer download (W6/W7),
-> config-declared plugins (W5), packaging (W8) and full E2E CI (W9) land in follow-up PRs.
+> Status: foundation (W1–W3 + logging). The server-side per-product config download (W6/W7),
+> packaging (W8) and full E2E CI (W9) land in follow-up PRs. The first version ships the standard
+> host sensors only — no plugin system.
 
 ## What it monitors
 
@@ -68,7 +69,6 @@ Default location: `%ProgramData%\HSM Agent\config.json` (see
 | `sensors.module` | `true` | collector self-sensors (alive / version / queue) |
 | `sensors.process` | `false` | per-process sensors (opt-in) |
 | `periods.collectMs` | collector default (15000) | package collect period |
-| `plugins[]` | `[]` | parsed for forward-compatibility; value-source plugins land in W5 |
 
 Blank/missing `address` or `accessKey`, or an out-of-range `port`, make the agent refuse to start
 (the error is logged to the Event Log and the file log).
