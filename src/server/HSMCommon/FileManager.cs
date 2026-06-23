@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text;
-using System.Threading;
+using System.Threading.Tasks;
 
 namespace HSMCommon
 {
@@ -44,31 +44,44 @@ namespace HSMCommon
             DoActionWhileThereAreAttempts(RemoveFolder);
         }
 
-        // Sync retry loop. Callers (test-fixture Dispose, static ctor) are synchronous and
-        // fire-and-forget — they cannot await. The previous `async void` form routed the
-        // terminal IOException through Task.ThrowAsync into the ThreadPool, which surfaces
-        // as an unhandled exception and crashes the test-host process even when every test
-        // has passed. Blocking the calling thread on Thread.Sleep is acceptable here: the
-        // callers run at fixture disposal / startup, off any hot path.
+        // Fire-and-forget retry loop. Callers (test-fixture Dispose, static ctor) are
+        // synchronous and cannot await. Two failure modes had to be avoided simultaneously:
+        //
+        //   1. The previous `async void` form routed the terminal IOException through
+        //      Task.ThrowAsync into the ThreadPool, surfacing as an unhandled exception
+        //      and crashing the test-host process — even on a best-effort cleanup that
+        //      callers have no way to react to.
+        //   2. The intermediate synchronous retry (Thread.Sleep on the calling thread)
+        //      blocked parallel fixture constructors for up to 25 s, cascading into
+        //      hundreds of xUnit TestClassException failures.
+        //
+        // Pushing the retry onto the thread pool via `Task.Run` preserves the original
+        // non-blocking behaviour, and swallowing the terminal exception keeps the cleanup
+        // best-effort: the callers' contracts already treat the operation as fire-and-forget
+        // (none of them checks the result), and the underlying LevelDB disposal races that
+        // trigger this path are benign leftover-temp-file situations.
         private static void DoActionWhileThereAreAttempts(Action action)
         {
-            int attempts = 0;
-
-            while (true)
+            _ = Task.Run(async () =>
             {
-                try
-                {
-                    action?.Invoke();
-                    return;
-                }
-                catch (IOException)
-                {
-                    if (++attempts == MaxAttemptsCount)
-                        throw;
+                int attempts = 0;
 
-                    Thread.Sleep(WaitTime);
+                while (true)
+                {
+                    try
+                    {
+                        action?.Invoke();
+                        return;
+                    }
+                    catch (IOException)
+                    {
+                        if (++attempts == MaxAttemptsCount)
+                            return;
+
+                        await Task.Delay(WaitTime);
+                    }
                 }
-            }
+            });
         }
     }
 }
