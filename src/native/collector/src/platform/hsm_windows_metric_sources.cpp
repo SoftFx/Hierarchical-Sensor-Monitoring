@@ -43,8 +43,20 @@ namespace hsm
                 if (source == nullptr || source->query == nullptr)
                     return HSM_METRIC_READ_ERROR;
 
-                if (PdhCollectQueryData(source->query) != ERROR_SUCCESS)
+                const PDH_STATUS collect = PdhCollectQueryData(source->query);
+                if (collect != ERROR_SUCCESS)
+                {
+                    // Priming / transient at the query level: a just-bound rate or instance counter
+                    // whose data isn't populated on this first/next collect (PDH_NO_DATA), or a
+                    // momentarily-absent instance. Skip this tick and KEEP the primed query rather than
+                    // returning ERROR — an ERROR makes the core dispose + recreate the source, throwing
+                    // away the rate baseline and (under a persistent transient) churning every period.
+                    // Only a genuine failure (e.g. an invalid handle) recreates.
+                    if (collect == PDH_NO_DATA || collect == PDH_INVALID_DATA || collect == PDH_CSTATUS_NO_INSTANCE ||
+                        collect == PDH_CSTATUS_NO_OBJECT || collect == PDH_CSTATUS_NO_COUNTER)
+                        return HSM_METRIC_READ_NO_VALUE;
                     return HSM_METRIC_READ_ERROR;
+                }
 
                 double sum = 0.0;
                 for (auto counter : source->counters)
@@ -105,7 +117,9 @@ namespace hsm
                 return haystack.find(needle) != std::string::npos;
             }
 
-            // Drive letter from a per-disk sensor name "... on <L> disk" (default 'C').
+            // Drive letter from a per-disk sensor name "... on <L> disk"; 0 if it can't be parsed.
+            // The caller declines (registration-only) on 0 rather than guessing a volume — reporting a
+            // different drive's space than the sensor name claims is the worst failure for monitoring.
             wchar_t DiskLetter(const std::string& path)
             {
                 const auto pos = path.rfind(" disk");
@@ -115,7 +129,7 @@ namespace hsm
                     if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
                         return static_cast<wchar_t>(c >= 'a' ? c - ('a' - 'A') : c);
                 }
-                return L'C';
+                return 0;
             }
 
             // PDH instance name of the current process: the executable base name without ".exe".
@@ -194,19 +208,37 @@ namespace hsm
             if (Contains(path, "Free RAM"))
                 return pdh({ L"\\Memory\\Available MBytes" }, 1.0);
 
-            // ---- Disks (per drive letter) ----
+            // ---- Disks (per drive letter; decline if the drive can't be parsed) ----
             if (Contains(path, "Free space on") && !Contains(path, "prediction"))
             {
+                const wchar_t letter = DiskLetter(path);
+                if (letter == 0)
+                    return 0;
                 auto* source = new DiskSource();
-                source->root = std::wstring(1, DiskLetter(path)) + L":\\";
+                source->root = std::wstring(1, letter) + L":\\";
                 return Finish(source, &DiskRead, &DiskDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
             }
             if (Contains(path, "Active time on"))
-                return pdh({ L"\\LogicalDisk(" + std::wstring(1, DiskLetter(path)) + L":)\\% Disk Time" }, 1.0);
+            {
+                const wchar_t letter = DiskLetter(path);
+                if (letter == 0)
+                    return 0;
+                return pdh({ L"\\LogicalDisk(" + std::wstring(1, letter) + L":)\\% Disk Time" }, 1.0);
+            }
             if (Contains(path, "Disk queue length on"))
-                return pdh({ L"\\LogicalDisk(" + std::wstring(1, DiskLetter(path)) + L":)\\Avg. Disk Queue Length" }, 1.0);
+            {
+                const wchar_t letter = DiskLetter(path);
+                if (letter == 0)
+                    return 0;
+                return pdh({ L"\\LogicalDisk(" + std::wstring(1, letter) + L":)\\Avg. Disk Queue Length" }, 1.0);
+            }
             if (Contains(path, "Average disk write speed on"))
-                return pdh({ L"\\LogicalDisk(" + std::wstring(1, DiskLetter(path)) + L":)\\Disk Write Bytes/sec" }, 1.0 / (1024.0 * 1024.0));
+            {
+                const wchar_t letter = DiskLetter(path);
+                if (letter == 0)
+                    return 0;
+                return pdh({ L"\\LogicalDisk(" + std::wstring(1, letter) + L":)\\Disk Write Bytes/sec" }, 1.0 / (1024.0 * 1024.0));
+            }
 
             // ---- Process (current process, best-effort instance; PID disambiguation is a follow-up) ----
             if (Contains(path, "Process CPU"))

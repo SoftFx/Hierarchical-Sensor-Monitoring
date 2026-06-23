@@ -2901,19 +2901,22 @@ namespace
     }
 
     // Fake metric-source factory for the live-reader plumbing test (#1164): every read returns 42.0
-    // (OK) except the 2nd, which returns ERROR to exercise dispose+recreate through the real periodic
-    // engine. `creates` counts factory calls (initial + recreate).
+    // (OK). `fail_next` forces the next read to return ERROR once (exercises dispose+recreate);
+    // `decline` makes the factory return 0 (a declined recreate). `creates`/`reads` count factory and
+    // read calls so the test can poll the async scheduler deterministically.
     struct FakeMetricFactoryState
     {
         std::atomic<int> creates{ 0 };
         std::atomic<int> reads{ 0 };
+        std::atomic<bool> fail_next{ false };
+        std::atomic<bool> decline{ false };
     };
 
     inline hsm_metric_read_t FakeMetricRead(void* user_data, double* out_value)
     {
         auto* state = static_cast<FakeMetricFactoryState*>(user_data);
-        const int n = ++state->reads;
-        if (n == 2)
+        ++state->reads;
+        if (state->fail_next.exchange(false))
             return HSM_METRIC_READ_ERROR;
         *out_value = 42.0;
         return HSM_METRIC_READ_OK;
@@ -2926,6 +2929,8 @@ namespace
         hsm_metric_dispose_fn* out_dispose, void** out_source_user_data)
     {
         auto* state = static_cast<FakeMetricFactoryState*>(factory_user_data);
+        if (state->decline.load())
+            return 0; // declined recreate -> CreateMetricSource returns null
         ++state->creates;
         *out_read = &FakeMetricRead;
         *out_dispose = &FakeMetricDispose;
@@ -2933,9 +2938,19 @@ namespace
         return 1;
     }
 
-    // #1164: a default DoubleBar sensor (Total CPU) bound to a metric source at Start posts a
-    // one-sample DoubleBar each post period; an ERROR read posts nothing and recreates the source.
-    // The manual clock drives cadence deterministically (no real-time wait).
+    // Poll an atomic counter up to timeout_ms (the scheduler drives reads/creates on its own thread).
+    inline bool WaitForAtomicAtLeast(std::atomic<int>& counter, int target, int timeout_ms)
+    {
+        for (int waited = 0; waited < timeout_ms && counter.load() < target; waited += 10)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return counter.load() >= target;
+    }
+
+    // #1164: a default DoubleBar sensor (Total CPU) bound to a metric source at Start samples its
+    // reader at a sub-period tick and emits ONE aggregated bar per post window (real Min/Max/Mean/Count,
+    // not a single instantaneous sample). An ERROR read posts nothing and recreates the source; a
+    // DECLINED recreate parks the sensor (no silent NO_VALUE forever). The manual clock drives cadence
+    // deterministically; reads/creates are polled because the scheduler runs on its own thread.
     void NativeMetricSourceDrivesDefaultBarSensor()
     {
         FakeMetricFactoryState fake;
@@ -2952,37 +2967,52 @@ namespace
 
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
 
-        // First post fires immediately on Start: read #1 = OK(42) -> a one-sample DoubleBar.
-        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "first metric post should fire on Start");
+        // First sample fires on Start and OPENS the bar — it must NOT emit yet (the 15 s window is not
+        // elapsed). Total CPU posts every 15 s (catalog) and samples every 5 s (kMetricBarSampleMs).
+        Require(WaitForAtomicAtLeast(fake.reads, 1, 2000), "first metric sample should fire on Start");
         Require(fake.creates.load() == 1, "factory should create the source once at Start");
+        Require(hsm_collector_sent_count(collector.value) == 0, "an open metric bar must not emit before its window");
+
+        // Drive three more 5 s sample ticks; the read at the 15 s boundary closes + emits the bar.
+        for (int sample = 2; sample <= 4; ++sample)
+        {
+            hsm_collector_test_advance_clock_ms(collector.value, 5000);
+            Require(WaitForAtomicAtLeast(fake.reads, sample, 2000), "each sample tick should read the source");
+        }
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "the aggregated bar should emit at the post window");
 
         const char* json = nullptr;
         Require(hsm_collector_get_sent_json(collector.value, 0, &json) == HSM_RESULT_OK, "sent payload lookup failed");
         const std::string payload = json;
-        Contains(payload, "\"Type\":5"); // DoubleBar
-        Contains(payload, "\"Mean\":42");
-        Contains(payload, "\"Count\":1");
+        Contains(payload, "\"Type\":5");  // DoubleBar
+        Contains(payload, "\"Mean\":42"); // every sample read 42
+        Contains(payload, "\"Min\":42");
+        Contains(payload, "\"Max\":42");
+        Contains(payload, "\"Count\":4"); // 4 samples aggregated into ONE bar (not a single sample)
 
-        // Advance one period: read #2 = ERROR -> nothing posted, source disposed + recreated.
-        // The ERROR tick posts nothing, so poll for the recreate (factory called a second time).
+        // ERROR read -> nothing posted, source disposed + recreated (poll the recreate).
         const auto after_first = hsm_collector_sent_count(collector.value);
-        hsm_collector_test_advance_clock_ms(collector.value, 15000);
-        bool recreated = false;
-        for (int i = 0; i < 200 && !recreated; ++i)
-        {
-            if (fake.creates.load() == 2)
-                recreated = true;
-            else
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        Require(recreated, "an ERROR read must recreate the source via the factory");
+        const int creates_before = fake.creates.load();
+        fake.fail_next.store(true);
+        hsm_collector_test_advance_clock_ms(collector.value, 5000);
+        Require(
+            WaitForAtomicAtLeast(fake.creates, creates_before + 1, 2000),
+            "an ERROR read must recreate the source via the factory");
         Require(hsm_collector_sent_count(collector.value) == after_first, "an ERROR read must post nothing");
 
-        // Advance again: read #3 = OK(42) -> the recreated source resumes posting.
-        hsm_collector_test_advance_clock_ms(collector.value, 15000);
-        Require(
-            WaitForSentCountAtLeast(collector.value, after_first + 1, 2000),
-            "the recreated source should resume posting");
+        // DECLINED recreate: ERROR read + a factory that now returns 0 -> the sensor stops driving
+        // (parked) instead of looping on NO_VALUE forever. No further reads occur after it parks.
+        const int reads_before_park = fake.reads.load();
+        fake.decline.store(true);
+        fake.fail_next.store(true);
+        hsm_collector_test_advance_clock_ms(collector.value, 5000);
+        Require(WaitForAtomicAtLeast(fake.reads, reads_before_park + 1, 2000), "the parking ERROR read should fire");
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        const int reads_parked = fake.reads.load();
+        hsm_collector_test_advance_clock_ms(collector.value, 60000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        Require(fake.reads.load() == reads_parked, "a declined recreate must park the sensor (no further reads)");
+        Require(hsm_collector_sent_count(collector.value) == after_first, "a parked metric sensor posts nothing further");
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
         hsm_sensor_release(sensor);
@@ -3022,9 +3052,9 @@ namespace
     }
 
 #if defined(_WIN32)
-    // #1164 Windows smoke: the real PDH factory drives a live Total CPU reading. Uses real time (the
-    // first post fires immediately on Start). The first PDH sample of a rate counter may read 0 while
-    // priming, but the sensor still posts a DoubleBar — so a value is produced.
+    // #1164 Windows smoke: the real PDH factory drives a live Total CPU reading. Uses real time. The
+    // bar now aggregates 5 s samples and emits at the 15 s post window, so the first DoubleBar lands
+    // ~one window in (not immediately) — the timeout allows for that plus a slow runner.
     void NativeWindowsMetricSourcesProduceLiveValue()
     {
         auto collector = CreateCollector();
@@ -3039,10 +3069,10 @@ namespace
 
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
 
-        // Generous timeout: the first post fires on Start, but if a counter's very first sample is
-        // not ready the next post is a whole period (15 s) out — so allow for that worst case.
+        // Generous timeout: the aggregated bar emits at the 15 s window, so allow ~one window plus
+        // priming and slow-runner overhead.
         Require(
-            WaitForSentCountAtLeast(collector.value, 1, 20000),
+            WaitForSentCountAtLeast(collector.value, 1, 30000),
             "the Windows PDH factory should drive a live Total CPU post");
 
         const char* json = nullptr;

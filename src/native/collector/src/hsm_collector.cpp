@@ -1130,6 +1130,11 @@ namespace
     constexpr int64_t kDefaultBarPeriodMs = 300000; // 5 min
     constexpr int32_t kDefaultBarPrecision = 2;
 
+    // Metric-driven bar sub-sampling (#1164): a DoubleBar/IntBar default sensor reads its bound
+    // metric source at this cadence and emits an aggregated bar each post period, so the bar carries
+    // real Min/Max/Mean/Count instead of a single instantaneous sample (managed BarTickPeriod).
+    constexpr int64_t kMetricBarSampleMs = 5000; // 5 s
+
     // KeepHistory windows in ms (managed TimeSpan.FromDays(n)); *10000 -> ticks on the wire.
     constexpr int64_t kKeepHistory90dMs = 90LL * 86400000;
     constexpr int64_t kKeepHistory180dMs = 180LL * 86400000;
@@ -1939,13 +1944,29 @@ namespace
             metric_source_ = std::move(source);
             is_metric_driven_ = true;
             is_periodic_ = true;
-            post_period_ms_ = metric_post_period_ms_ > 0 ? metric_post_period_ms_ : 15000;
+            metric_bar_open_ = false;
+
+            const int64_t emit = metric_post_period_ms_ > 0 ? metric_post_period_ms_ : 15000;
+            metric_emit_period_ms_ = emit;
+            if (type_ == HSM_SENSOR_TYPE_DOUBLE_BAR || type_ == HSM_SENSOR_TYPE_INT_BAR)
+            {
+                // Bar sensors sample at a sub-period tick and aggregate into one bar per emit window,
+                // so the bar carries real Min/Max/Mean/Count. The scheduler fires at the sample tick;
+                // the metric branch gates the actual emit on the window. Never finer than the window.
+                post_period_ms_ = (std::min)(emit, kMetricBarSampleMs);
+            }
+            else
+            {
+                // Value sensors (free disk, network): read + post once per period.
+                post_period_ms_ = emit;
+            }
         }
 
         // Dispose the bound source on Stop (managed dispose-on-stop); a restart rebinds.
         void ResetMetricSource()
         {
             metric_source_.reset();
+            metric_bar_open_ = false;
             if (is_metric_driven_)
             {
                 is_metric_driven_ = false;
@@ -1996,10 +2017,14 @@ namespace
         // period comes from the installed metric-source factory (PDH/WMI/plugin). Set at AddDefault
         // (candidate) and bound at Start (driven). The bound source + the periodic state above are
         // touched only by the scheduler thread after Start, so they need no extra lock.
-        bool is_metric_candidate_ = false;  // eligible: a value type that a metric source can drive
-        bool is_metric_driven_ = false;     // a source was bound at Start -> periodic reads
-        int64_t metric_post_period_ms_ = 0; // post cadence (catalog post_period for default sensors)
-        int32_t metric_bar_precision_ = 2;  // bar-payload rounding for DoubleBar/IntBar metric sensors
+        bool is_metric_candidate_ = false;   // eligible: a value type that a metric source can drive
+        bool is_metric_driven_ = false;      // a source was bound at Start -> periodic reads
+        int64_t metric_post_period_ms_ = 0;  // post cadence (catalog post_period for default sensors)
+        int32_t metric_bar_precision_ = 2;   // bar-payload rounding for DoubleBar/IntBar metric sensors
+        int64_t metric_emit_period_ms_ = 0;  // bar emit window / value post cadence once bound
+        int64_t metric_bar_open_steady_ = 0; // steady ms the in-flight accumulation bar opened
+        bool metric_bar_open_ = false;       // a DoubleBar/IntBar metric bar is mid-accumulation
+        MonitoringBar metric_bar_;           // accumulation bar for metric-driven DoubleBar/IntBar
         std::unique_ptr<MetricSource> metric_source_;
 
         // File sensor identity.
@@ -2141,6 +2166,17 @@ namespace
             if (send_wire_)
                 return BuildWireBarJson(bar, UnixTimeMilliseconds(), path);
             return MonitoringBarJson(bar, path);
+        }
+
+        // Surface a metric-source read failure through the deduplicated error log so a wedged live
+        // reader is visible instead of degrading silently (the PeriodicTask silent-death lesson).
+        // recreated=true: the source was rebuilt and the sensor keeps trying; false: the factory
+        // declined to rebuild it, so the sensor stops reporting until the next Start.
+        void LogMetricSourceError(const std::string& path, bool recreated)
+        {
+            LogError(
+                recreated ? ("Metric source for '" + path + "' failed to read; recreated it.")
+                          : ("Metric source for '" + path + "' is unavailable; sensor will not report until restart."));
         }
 
         // Advance the installed manual clock and wake the scheduler so it re-evaluates the
@@ -3829,10 +3865,12 @@ namespace
         }
 
         // Metric-source-driven default/value sensor (#1164): read the bound reader OUTSIDE the lock
-        // (it may do PDH/WMI/network IO). The source is touched only by the scheduler thread, so no
-        // lock is needed. A DoubleBar/IntBar sensor posts a one-sample bar each period (its registered
-        // type requires a bar payload); Double/Int post one value. NO_VALUE skips, ERROR disposes +
-        // recreates via the factory (managed recreate-on-error) and drops this tick.
+        // (it may do PDH/WMI/network IO). The source + the metric/periodic state are touched only by the
+        // scheduler thread after Start, so no lock is needed. DoubleBar/IntBar sensors sample at a
+        // sub-period tick and emit ONE aggregated bar per post window (real Min/Max/Mean/Count);
+        // Double/Int post one value per period. NO_VALUE skips this tick; ERROR disposes + recreates the
+        // source (managed recreate-on-error) and is logged — and if the factory declines to rebuild, the
+        // sensor stops driving rather than silently posting nothing for the rest of the run.
         if (is_metric_driven_)
         {
             double value = 0.0;
@@ -3841,8 +3879,24 @@ namespace
             if (outcome == HSM_METRIC_READ_ERROR)
             {
                 metric_source_.reset();
+                metric_bar_open_ = false;
                 if (collector)
                     metric_source_ = collector->CreateMetricSource(path_);
+
+                if (collector && metric_source_)
+                {
+                    collector->LogMetricSourceError(path_, /*recreated=*/true);
+                }
+                else
+                {
+                    // The factory declined to rebuild (or the collector is gone): stop driving this
+                    // sensor so it can't loop on NO_VALUE forever, and make the stall loud.
+                    if (collector)
+                        collector->LogMetricSourceError(path_, /*recreated=*/false);
+                    is_metric_driven_ = false;
+                    is_periodic_ = false;
+                    next_post_hint_.store((std::numeric_limits<int64_t>::max)());
+                }
                 return false;
             }
 
@@ -3851,15 +3905,30 @@ namespace
 
             if (type_ == HSM_SENSOR_TYPE_DOUBLE_BAR || type_ == HSM_SENSOR_TYPE_INT_BAR)
             {
-                MonitoringBar bar;
-                bar.is_int = (type_ == HSM_SENSOR_TYPE_INT_BAR);
-                bar.precision = metric_bar_precision_;
-                bar.period_ms = post_period_ms_ > 0 ? post_period_ms_ : 1;
-                bar.Init(UnixTimeMilliseconds());
-                bar.AddValue(value);
-                out_json = collector ? collector->OutgoingBarJson(bar, path_) : MonitoringBarJson(bar, path_);
+                const int64_t now_steady = SteadyNowMs();
+                if (!metric_bar_open_)
+                {
+                    metric_bar_.is_int = (type_ == HSM_SENSOR_TYPE_INT_BAR);
+                    metric_bar_.precision = metric_bar_precision_;
+                    metric_bar_.period_ms = metric_emit_period_ms_ > 0 ? metric_emit_period_ms_ : 1;
+                    metric_bar_.Init(UnixTimeMilliseconds());
+                    metric_bar_open_steady_ = now_steady;
+                    metric_bar_open_ = true;
+                }
+                metric_bar_.AddValue(value);
+
+                // Emit once the window has elapsed (or the next sample would overshoot it); the next
+                // tick opens a fresh bar.
+                if (now_steady - metric_bar_open_steady_ + post_period_ms_ > metric_emit_period_ms_)
+                {
+                    out_json = collector ? collector->OutgoingBarJson(metric_bar_, path_) : MonitoringBarJson(metric_bar_, path_);
+                    metric_bar_open_ = false;
+                    return true;
+                }
+                return false; // still accumulating this window
             }
-            else if (type_ == HSM_SENSOR_TYPE_INT)
+
+            if (type_ == HSM_SENSOR_TYPE_INT)
             {
                 out_json = build_value(
                     HSM_SENSOR_TYPE_INT, std::to_string(static_cast<long long>(std::llround(value))), HSM_SENSOR_STATUS_OK, std::string{});
@@ -4106,6 +4175,10 @@ extern "C" hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collec
     if (collector == nullptr || collector->impl == nullptr)
         return HSM_RESULT_INVALID_ARGUMENT;
 #if defined(HSM_COLLECTOR_HTTP)
+    // Must be installed before Start: the worker thread reads sender_/send_wire_ lock-free, so
+    // swapping the transport on a running collector would be a data race. Reject unless stopped.
+    if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
+        return HSM_RESULT_INVALID_STATE;
     collector->impl->UseHttpTransport();
     return HSM_RESULT_OK;
 #else
@@ -4121,6 +4194,10 @@ extern "C" hsm_result_t hsm_collector_install_windows_metric_sources(hsm_collect
     if (collector == nullptr || collector->impl == nullptr)
         return HSM_RESULT_INVALID_ARGUMENT;
 #if defined(_WIN32)
+    // Install before Start: the factory binds sources during Start. Reject on a running collector so
+    // the install can't no-op silently against already-bound sensors.
+    if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
+        return HSM_RESULT_INVALID_STATE;
     collector->impl->SetMetricSourceFactory(&hsm::platform::WindowsMetricSourceFactory, nullptr);
     return HSM_RESULT_OK;
 #else
