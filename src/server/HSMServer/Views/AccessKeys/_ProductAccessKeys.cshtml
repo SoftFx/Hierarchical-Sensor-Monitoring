@@ -26,6 +26,10 @@
 
     <div class="container-fluid d-flex flex-row-reverse align-items-center flex-shrink-0 ">
         <div class="row flex-nowrap">
+            @if (user is not null && user.IsAdmin)
+            {
+                <button id="downloadAgentButton" class="btn btn-secondary mx-1" type="button" onclick="downloadAgentClick()" title="Download a ready-to-run Windows agent for this product (server address + key pre-configured)">Download agent</button>
+            }
             @if (Model.IsChangingAccessKeysAvailable(User as User))
             {
                 <button id="addButton" class="btn btn-secondary col-2 w-50 mx-1" type="button" onclick="addButtonClick()">Add</button>
@@ -42,6 +46,11 @@
         let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
         showNewAccessKeyModal(`${newAccessKeyURL}?selectedId=${productId}`, false);
+    }
+
+    function downloadAgentClick() {
+        // Attachment response → the browser downloads without navigating away from the modal.
+        window.location.href = '/api/Agent/installer?productId=@Model.Id';
     }
     
     $(document).ready(() => {
