@@ -10,9 +10,9 @@ per-product access key, and reports — **with zero client-side configuration**.
 (server address + key). Part of epic
 [#1167](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/issues/1167).
 
-> Status: foundation (W1–W3 + logging). The server-side per-product config download (W6/W7),
-> packaging (W8) and full E2E CI (W9) land in follow-up PRs. The first version ships the standard
-> host sensors only — no plugin system.
+> Status: foundation (W1–W3 + logging) + the W8 build/packaging lane (CI artifact, install scripts,
+> [docs](../../docs/hsm-agent.md)). The server-side per-product config download (W6/W7) and full E2E CI
+> (W9) land in follow-up PRs. The first version ships the standard host sensors only — no plugin system.
 
 ## What it monitors
 

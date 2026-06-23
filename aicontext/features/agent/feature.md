@@ -27,9 +27,10 @@ web UI; the bundle carries the server address + access key in a `config.json`, a
 zip — never a .NET installer. (Server-side download = W6/W7, follow-up.)
 
 **Foundation status (this feature's current extent):** W1–W3 + the logging half of W4 — a runnable,
-self-installing, auto-start service that streams the standard host catalog. Out of scope here (own
-follow-up PRs): the server-side per-product config download + zip bundle (W6/W7), packaging (W8), and
-full E2E CI (W9). A plugin system is **not** planned for v1.
+self-installing, auto-start service that streams the standard host catalog, plus the W8 build/packaging
+lane (CI artifact + install scripts + docs). Out of scope here (own follow-up PRs): the server-side
+per-product config download + zip bundle (W6/W7), and full E2E CI (W9 — wiring the artifact into the
+server image + the install→data→stop run). A plugin system is **not** planned for v1.
 
 ---
 
@@ -93,10 +94,13 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 
 ## Verification
 
-- Portable config-parser unit tests (`tests/agent_tests.cpp`, name-dispatched, 10 cases) — run on every
+- Portable config-parser unit tests (`tests/agent_tests.cpp`, name-dispatched, 9 cases) — run on every
   platform, registered in `ctest`.
-- Windows smoke (manual now; CI lane = W9): build `hsm-agent`, `--install`, `sc query HSMAgent` shows
-  auto-start, `--console` runs against a local Dockerized server, `--uninstall` cleans up.
+- **CI build lane (W8):** `.github/workflows/agent-windows-build.yml` — windows-latest, vcpkg curl,
+  configures + builds `src/agent` Release with warnings-as-errors, runs the config `ctest`, and uploads
+  the bundle payload (`hsm-agent.exe` + `config.json` template + `install.cmd`/`uninstall.cmd`) as an
+  artifact. The server's per-product download consumes the exe; wiring the artifact into the server
+  image + the install/`sc query`/`--console`/`--uninstall` smoke is W9.
 - Live E2E mirrors the already-proven collector recipe (#1166): against a Dockerized
   `hsmonitoring/hierarchical_sensor_monitoring:latest`, the host sensors land in the tree under
   `<computer>/.computer/...` for the key's product. In HTTP mode `SentCount()` stays 0 (in-memory
