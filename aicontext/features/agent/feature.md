@@ -99,8 +99,11 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 - **CI build lane (W8):** `.github/workflows/agent-windows-build.yml` — windows-latest, vcpkg curl,
   configures + builds `src/agent` Release with warnings-as-errors, runs the config `ctest`, and uploads
   the bundle payload (`hsm-agent.exe` + `config.json` template + `install.cmd`/`uninstall.cmd`) as an
-  artifact. The server's per-product download consumes the exe; wiring the artifact into the server
-  image + the install/`sc query`/`--console`/`--uninstall` smoke is W9.
+  artifact.
+- **Service smoke (W9):** the same lane then exercises the real SCM lifecycle on the admin runner —
+  `--install` → `sc qc HSMAgent` shows `AUTO_START` → a `--console` run survives an unreachable server
+  (no crash) → `--uninstall`. The exe is also staged into the server image by `server-build.yml`
+  (copied into `wwwroot/agent/` before publish) so the download serves a real bundle.
 - Live E2E mirrors the already-proven collector recipe (#1166): against a Dockerized
   `hsmonitoring/hierarchical_sensor_monitoring:latest`, the host sensors land in the tree under
   `<computer>/.computer/...` for the key's product. In HTTP mode `SentCount()` stays 0 (in-memory

@@ -47,6 +47,30 @@ jobs:
       - name: Build & Test Solution
         run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
 
+      # HSM Agent (#1167): build the native Windows agent and stage it into wwwroot so the published
+      # server image serves a real per-product download bundle (otherwise /api/agent/installer 503s).
+      # The agent links the collector with the libcurl HTTP transport, so it needs vcpkg (curl). This
+      # job is already windows-latest, so the agent's MSVC build fits here. wwwroot is included by the
+      # dotnet publish below.
+      - name: Set up vcpkg (HSM Agent curl)
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
+
+      - name: Build HSM Agent into wwwroot
+        shell: pwsh
+        env:
+          VCPKG_BINARY_SOURCES: clear
+        run: |
+          cmake -S src/agent -B build/agent -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+          cmake --build build/agent --config Release --parallel
+          $exe = Get-ChildItem -Recurse -Path build/agent -Filter hsm-agent.exe | Select-Object -First 1
+          if (-not $exe) { throw "hsm-agent.exe not found after build" }
+          New-Item -ItemType Directory -Force -Path src/server/HSMServer/wwwroot/agent | Out-Null
+          Copy-Item $exe.FullName -Destination src/server/HSMServer/wwwroot/agent/hsm-agent.exe -Force
+          if (-not (Test-Path src/server/HSMServer/wwwroot/agent/hsm-agent.exe)) { throw "agent exe missing in wwwroot" }
+          Write-Host "Staged agent: $($exe.FullName) -> wwwroot/agent/hsm-agent.exe"
+
       - name: Publish HSMServer
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
 

@@ -35,26 +35,33 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 | Server setting "Agent connection URL" | `HSMServer/ServerConfiguration/Sections/AgentConfig.cs` (+ `IServerConfig`/`ServerConfig`) |
 | Settings UI (Agent tab) | `Views/Configuration/_Agent.cshtml`, `Views/Configuration/Index.cshtml`, `AgentSettingsViewModel`, `ConfigurationController.SaveAgentSettings` |
 | Download button | `Views/AccessKeys/_ProductAccessKeys.cshtml` (admin-only) |
-| Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` (published by CI, W8) |
-| Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (5 cases) |
+| Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` (staged by `server-build.yml` before publish, W9) |
+| Key selection / URL resolution (pure, testable) | `Model/Agent/AgentKeySelector.cs`, `Model/Agent/AgentConnectionResolver.cs` |
+| Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (5) + `AgentDownloadLogicTests.cs` (11: key selection + URL resolution) |
 
 ## Connection URL resolution
 
-`AgentController.ResolveConnection()`: if the admin set `AgentConfig.ExternalConnectionUrl`, parse it
-into `address` (scheme://host) + `port` (explicit port, else the configured `Kestrel.SensorPort`).
-Behind Docker/NAT the server cannot infer its external address, so this setting exists; when blank it
-falls back to the request host + the Sensor port. The result is written into the bundle's
-`config.json` (`server.address` / `server.port`), which the agent maps onto `CollectorOptions`.
+`AgentConnectionResolver.Resolve(externalUrl, sensorPort, fallbackScheme, fallbackHost)`: if the admin
+set `AgentConfig.ExternalConnectionUrl`, parse it into `address` (scheme://host) + `port` (explicit
+port, else the configured `Kestrel.SensorPort`). Behind Docker/NAT the server cannot infer its external
+address, so this setting exists; when blank it falls back to the request host + the Sensor port. The
+result is written into the bundle's `config.json` (`server.address` / `server.port`), which the agent
+maps onto `CollectorOptions`.
 
 ## Behavior notes
 
-- If `wwwroot/agent/hsm-agent.exe` is absent (binary not yet published by CI), the endpoint returns
-  **503** with a clear message — config/script generation is still unit-tested independently.
+- The signed exe is **staged into `wwwroot/agent/` by `server-build.yml`** (it builds the agent on the
+  Windows release runner and copies it in before `dotnet publish`, so the published/container server
+  serves a real bundle). If the binary is absent the endpoint returns **503** with a clear message —
+  config/script generation + key/URL selection are unit-tested independently of the binary.
 - The generated `config.json` matches the agent's config schema; only `server.address` + `server.accessKey`
   are required, the rest defaults (`identity.computerName: "auto"`, all sensor groups on).
 
 ## Out of scope (follow-up)
 
-- Publishing the signed exe into `wwwroot/agent/` from CI (W8).
 - A dedicated, separately-revocable per-download "agent key" (currently reuses the product DefaultKey).
-- End-to-end download→install→data CI lane (W9).
+- A fully-live download→install→data **CI** lane: the agent installs on Windows while the server runs as
+  a Linux container, so co-locating them in one runner is fragile. The server-half (key/URL/bundle) is
+  unit-tested; the agent service lifecycle (`--install`/`sc query`/`--console`/`--uninstall`) is
+  CI-smoked on the windows runner; the final cross-OS "data appears after a real download+install" run
+  is a documented **manual** smoke (mirrors the #1166 collector recipe).

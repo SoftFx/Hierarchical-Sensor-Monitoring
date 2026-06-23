@@ -1,8 +1,6 @@
-using HSMCommon.Constants;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
 using HSMServer.Model.Agent;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
@@ -11,7 +9,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.IO;
-using System.Linq;
 
 namespace HSMServer.Controllers
 {
@@ -26,11 +23,6 @@ namespace HSMServer.Controllers
     [Route("api/[controller]")]
     public class AgentController : BaseController
     {
-        // The agent registers its default sensors at start and streams values, so its key needs both
-        // the add-node/add-sensor and send-data permissions. The product DefaultKey has all of these.
-        private const KeyPermissions AgentPermissions =
-            KeyPermissions.CanSendSensorData | KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors;
-
         private static readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
 
         private readonly ITreeValuesCache _cache;
@@ -54,16 +46,17 @@ namespace HSMServer.Controllers
             if (!_cache.TryGetProduct(productId, out var product))
                 return NotFound("Product not found.");
 
-            var key = SelectAgentKey(product);
+            var key = AgentKeySelector.Select(product);
             if (key is null)
                 return BadRequest("This product has no usable access key. Create one with send-data permission first.");
 
             var exePath = Path.Combine(_environment.WebRootPath ?? string.Empty, "agent", AgentInstallerBundle.ExeName);
             if (!System.IO.File.Exists(exePath))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable,
-                    "The agent binary is not available on this server yet. Publish hsm-agent.exe to wwwroot/agent/ (CI packaging, W8).");
+                    "The agent binary is not available on this server yet. Publish hsm-agent.exe to wwwroot/agent/.");
 
-            var (address, port) = ResolveConnection();
+            var (address, port) = AgentConnectionResolver.Resolve(
+                _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
             var options = new AgentBundleOptions(address, port, key.Id.ToString(), AllowUntrustedCertificate: false);
             var zip = AgentInstallerBundle.BuildZip(System.IO.File.ReadAllBytes(exePath), options);
 
@@ -72,44 +65,6 @@ namespace HSMServer.Controllers
             return File(zip, "application/zip", $"hsm-agent-{Sanitize(product.DisplayName)}.zip");
         }
 
-
-        private (string address, int port) ResolveConnection()
-        {
-            var external = _config.Agent.ExternalConnectionUrl;
-            if (!string.IsNullOrWhiteSpace(external))
-            {
-                var raw = external.Trim();
-                if (!raw.Contains("://"))
-                    raw = $"https://{raw}";
-
-                if (Uri.TryCreate(raw, UriKind.Absolute, out var uri))
-                {
-                    var port = uri.IsDefaultPort ? _config.Kestrel.SensorPort : uri.Port;
-                    return ($"{uri.Scheme}://{uri.Host}", port);
-                }
-            }
-
-            // No external URL configured: best-effort fallback to the request host + the Sensor port.
-            return ($"{Request.Scheme}://{Request.Host.Host}", _config.Kestrel.SensorPort);
-        }
-
-        private static AccessKeyModel SelectAgentKey(ProductModel product)
-        {
-            var keys = product.AccessKeys.Values;
-
-            // Prefer the product's DefaultKey (it carries full permissions and never expires).
-            foreach (var key in keys)
-                if (key.DisplayName == CommonConstants.DefaultAccessKey && key.IsValid(AgentPermissions, out _))
-                    return key;
-
-            // Otherwise any valid key with the permissions the agent needs.
-            var valid = keys.FirstOrDefault(k => k.IsValid(AgentPermissions, out _));
-            if (valid is not null)
-                return valid;
-
-            // Last resort: the DefaultKey regardless of state, else any key (the admin can fix it up).
-            return keys.FirstOrDefault(k => k.DisplayName == CommonConstants.DefaultAccessKey) ?? keys.FirstOrDefault();
-        }
 
         private static string Sanitize(string name)
         {
