@@ -15,6 +15,12 @@
     const byte ttlType = TimeToLiveAlertViewModel.AlertKey;
 
     var hasAlerts = Model.DataAlerts.Any(a => a.Value.Any(v => v.IsAlertDisplayed));
+
+    // For a sensor, DataAlerts contains exactly one non-TTL entry keyed by (byte)Type (see
+    // SensorNodeViewModel), plus the TTL entry keyed by ttlType. FirstOrDefault therefore
+    // picks the sensor's concrete type unambiguously — used by both the Add button and the
+    // unified alerts container below. Unused for folder/product branches.
+    var sensorType = Model.DataAlerts.FirstOrDefault(a => a.Key != ttlType).Key;
 }
 
 
@@ -43,16 +49,10 @@ else
 
                 @if (Model is SensorInfoViewModel)
                 {
-                    var sensorType = Model.DataAlerts.FirstOrDefault(a => a.Key != ttlType).Key;
-
                     <a id="addDataAlert" href="javascript:addDataAlert('@sensorType', '@Model.EncodedId');" class="d-none btn btn-link p-0 m-0 ms-2">
                         <i class="fa-solid fa-plus"></i> Add
                     </a>
                 }
-
-                <a id="addTtlAlert" href="javascript:addDataAlert('@ttlType', '@Model.EncodedId');" class="d-none btn btn-link p-0 m-0 ms-2">
-                    <i class="fa-solid fa-plus"></i> Add Inactivity Period
-                </a>
             </div>
 
             <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()" class="d-none help-popover">
@@ -60,26 +60,26 @@ else
             </a>
         </div>
 
-        <div id="dataAlertsList_@ttlType">
-            @if (Model.HasTimeToLive && Model.DataAlerts.TryGetValue(ttlType, out var ttlAlerts) && ttlAlerts.Count > 0)
-            {
-                @foreach (var ttlAlert in ttlAlerts)
-                {
-                    @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", ttlAlert)
-                }
-            }
-        </div>
-
-        @foreach (var (type, alerts) in Model.DataAlerts)
+        @if (Model is SensorInfoViewModel sensorInfo)
         {
-            @if (type == ttlType)
-            {
-                continue;
-            }
-
-            <div id="dataAlertsList_@type" class="@(alerts.Count == 0 ? "d-none" : string.Empty)">
-                @if (Model is not SensorInfoViewModel)
+            // Unified list: regular + TTL alerts in one container. Each row's data-alert-type
+            // attribute (set in _DataAlert.cshtml) tells form collection whether to route to
+            // TTL (255) or sensor-type storage.
+            <div id="dataAlertsList_@sensorType">
+                @foreach (var (_, alerts) in sensorInfo.DataAlerts)
                 {
+                    @foreach (var alert in alerts)
+                    {
+                        @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
+                    }
+                }
+            </div>
+        }
+        else
+        {
+            @foreach (var (type, alerts) in Model.DataAlerts)
+            {
+                <div id="dataAlertsList_@type" class="@(alerts.Count == 0 ? "d-none" : string.Empty)">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <label class="col-form-label fw-bold">@type alerts:</label>
@@ -91,13 +91,13 @@ else
                             Comment help
                         </a>
                     </div>
-                }
 
-                @foreach (var alert in alerts)
-                {
-                    @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
-                }
-            </div>
+                    @foreach (var alert in alerts)
+                    {
+                        @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
+                    }
+                </div>
+            }
         }
     </div>
 }
@@ -137,6 +137,16 @@ else
             cache: false
         }).done(function (viewData) {
             $(`#dataAlertsList_${type}`).append(viewData);
+            defaultNewAlertToTtl($(`#dataAlertsList_${type}`));
         });
+    }
+
+    function defaultNewAlertToTtl($container) {
+        var ttlValue = '@nameof(AlertProperty.TimeToLive)';
+        var $newRow = $container.find('div.dataAlertRow').last();
+        var $property = $newRow.find('select[name="Property"]:first');
+        if ($property.length && $property.find(`option[value="${ttlValue}"]`).length) {
+            $property.val(ttlValue).trigger('change');
+        }
     }
 </script>
