@@ -3,7 +3,7 @@ setlocal
 net session >nul 2>&1
 if %errorlevel% neq 0 (
   echo Requesting administrator privileges...
-  powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+  powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs -Wait"
   exit /b
 )
 set "INSTALL_DIR=%ProgramFiles%\HSM Agent"

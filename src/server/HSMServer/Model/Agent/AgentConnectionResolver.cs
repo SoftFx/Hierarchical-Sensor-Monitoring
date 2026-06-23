@@ -20,10 +20,13 @@ namespace HSMServer.Model.Agent
 
                 if (Uri.TryCreate(raw, UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.Host))
                 {
-                    // Keep scheme + host + any path base (drop the trailing slash); the port travels
-                    // separately in config.json.
-                    var path = uri.AbsolutePath.TrimEnd('/');
-                    var address = $"{uri.Scheme}://{uri.Host}{path}";
+                    // Keep scheme + host only; the port travels separately in config.json. A path base
+                    // is deliberately NOT preserved: the native collector's endpoint builder
+                    // (hsm_http_endpoints.hpp / HostOnly) strips everything after the first '/', so a
+                    // reverse-proxy prefix could never reach the wire. Emitting it here would only
+                    // bake a misleading address that silently connects to "<host>/api/sensors".
+                    // Uri.Host already brackets IPv6 literals ("[::1]"), so the address stays well-formed.
+                    var address = $"{uri.Scheme}://{uri.Host}";
 
                     // Use the admin's explicit port when present — even when it equals the scheme
                     // default (e.g. :443). Uri.IsDefaultPort can't tell "no port" from "explicit

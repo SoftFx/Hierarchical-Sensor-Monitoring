@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -25,6 +26,10 @@ namespace hsm::agent
         SERVICE_STATUS_HANDLE g_status_handle = nullptr;
         SERVICE_STATUS g_status{};
         DWORD g_checkpoint = 0;
+        // Serializes SetState: the worker thread (on_started -> SERVICE_RUNNING) and the SCM
+        // control-handler thread (HandlerEx -> SERVICE_STOP_PENDING) can call it concurrently, and
+        // each call mutates g_status/g_checkpoint and then reports via SetServiceStatus.
+        std::mutex g_status_mutex;
         // Shared between the SCM control-handler thread and ServiceMain — atomic so the handler never
         // reads a torn/dangling pointer while ServiceMain sets or clears it.
         std::atomic<AgentRuntime*> g_runtime{ nullptr };
@@ -32,6 +37,8 @@ namespace hsm::agent
 
         void SetState(DWORD state, DWORD exit_code = NO_ERROR, DWORD wait_hint = 0)
         {
+            std::lock_guard<std::mutex> lock(g_status_mutex);
+
             g_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
             g_status.dwCurrentState = state;
             g_status.dwWin32ExitCode = exit_code;

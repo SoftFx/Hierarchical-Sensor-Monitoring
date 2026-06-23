@@ -72,17 +72,27 @@ namespace HSMServer.Core.Tests
         }
 
         [Fact]
-        public void Select_RejectsKeyWithoutSendDataPermission_ButStillReturnsDefaultAsLastResort()
+        public void Select_ReturnsNull_WhenOnlyKeyLacksSendDataPermission()
         {
             var product = new ProductModel("P");
-            // A read-only key is not valid for the agent; with no better option the named DefaultKey wins.
+            // A read-only key cannot send sensor data: baking it into the bundle would fail to
+            // authenticate at runtime, so Select returns null and the caller refuses the download.
             var readOnlyDefault = Key(product, CommonConstants.DefaultAccessKey, KeyPermissions.CanReadSensorData);
             product.AccessKeys.TryAdd(readOnlyDefault.Id, readOnlyDefault);
 
-            var selected = AgentKeySelector.Select(product);
+            Assert.Null(AgentKeySelector.Select(product));
+        }
 
-            Assert.NotNull(selected);
-            Assert.Equal(readOnlyDefault.Id, selected.Id);
+        [Fact]
+        public void Select_ReturnsNull_WhenOnlyDefaultIsExpired()
+        {
+            var product = new ProductModel("P");
+            // An expired DefaultKey is the only key: still no usable credential, so refuse rather
+            // than ship a key that authenticates as expired.
+            var expiredDefault = Key(product, CommonConstants.DefaultAccessKey, AgentKeySelector.AgentPermissions, expired: true);
+            product.AccessKeys.TryAdd(expiredDefault.Id, expiredDefault);
+
+            Assert.Null(AgentKeySelector.Select(product));
         }
     }
 
@@ -126,12 +136,23 @@ namespace HSMServer.Core.Tests
         }
 
         [Fact]
-        public void Resolve_PreservesPathBase()
+        public void Resolve_DropsPathBase()
         {
+            // A path prefix cannot survive: the native collector strips anything after the first '/'.
+            // The resolver must NOT emit it, so the baked address matches what the agent actually hits.
             var (address, port) = AgentConnectionResolver.Resolve("https://hsm.example.com/sensor-api/", 44330, "http", "ignored");
 
-            Assert.Equal("https://hsm.example.com/sensor-api", address);
+            Assert.Equal("https://hsm.example.com", address);
             Assert.Equal(44330, port);
+        }
+
+        [Fact]
+        public void Resolve_BracketsIPv6Literal()
+        {
+            var (address, port) = AgentConnectionResolver.Resolve("https://[::1]:9000", 44330, "http", "ignored");
+
+            Assert.Equal("https://[::1]", address);
+            Assert.Equal(9000, port);
         }
 
         [Theory]

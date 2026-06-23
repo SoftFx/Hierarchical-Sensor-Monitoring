@@ -23,7 +23,9 @@ hosts it. The single signed `hsm-agent.exe` is identical across every download �
 For the download button to bake in the right URL, set the **Agent connection URL** under
 *Configuration → Agent* (the externally-reachable Sensor-API base, e.g. `https://hsm.company.com:44330`).
 Behind Docker/NAT the server cannot infer this. When blank, it falls back to the request host + the
-configured Sensors API port.
+configured Sensors API port. Use a scheme + host (+ optional port) only — a **path prefix is not
+supported** (a reverse proxy must expose the Sensor API at the host root, not under a sub-path), and the
+prefix is dropped rather than baked into a config that would not connect.
 
 ## Install — manual
 

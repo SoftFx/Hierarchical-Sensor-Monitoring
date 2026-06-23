@@ -1,6 +1,7 @@
 #include "agent/config.hpp"
 
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -434,7 +435,15 @@ namespace hsm::agent
                 error = "field '" + key + "' is out of the 32-bit integer range";
                 return false;
             }
-            out = static_cast<int>(value->number);
+            // Reject a fractional value rather than silently truncating it: "port": 1.5 must not
+            // quietly become 1. The lenient number scanner accepts such tokens, so guard here.
+            double integral = 0.0;
+            if (std::modf(value->number, &integral) != 0.0)
+            {
+                error = "field '" + key + "' must be an integer";
+                return false;
+            }
+            out = static_cast<int>(integral);
             return true;
         }
 

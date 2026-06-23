@@ -15,7 +15,13 @@ namespace HSMServer.Model.Agent
         public const KeyPermissions AgentPermissions =
             KeyPermissions.CanSendSensorData | KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors;
 
-        /// <summary>Returns the best agent key for the product, or null if it has none.</summary>
+        /// <summary>
+        /// Returns the best agent key for the product, or null when none actually satisfies
+        /// <see cref="AgentPermissions"/>. We never hand back an expired/under-permissioned key as a
+        /// "last resort": it would bake a credential that fails to authenticate at runtime into the
+        /// bundle with no signal to the admin. Null instead lets the caller refuse the download
+        /// (BadRequest) so the admin fixes the key first.
+        /// </summary>
         public static AccessKeyModel Select(ProductModel product)
         {
             // Order by Id so the choice is deterministic if a product happens to have more than one key
@@ -27,13 +33,8 @@ namespace HSMServer.Model.Agent
                 if (key.DisplayName == CommonConstants.DefaultAccessKey && key.IsValid(AgentPermissions, out _))
                     return key;
 
-            // Otherwise any valid key with the permissions the agent needs.
-            var valid = keys.FirstOrDefault(k => k.IsValid(AgentPermissions, out _));
-            if (valid is not null)
-                return valid;
-
-            // Last resort: the DefaultKey regardless of state, else any key (the admin can fix it up).
-            return keys.FirstOrDefault(k => k.DisplayName == CommonConstants.DefaultAccessKey) ?? keys.FirstOrDefault();
+            // Otherwise any valid key with the permissions the agent needs, or null if there is none.
+            return keys.FirstOrDefault(k => k.IsValid(AgentPermissions, out _));
         }
     }
 }

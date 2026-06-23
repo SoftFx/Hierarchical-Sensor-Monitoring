@@ -50,7 +50,13 @@ namespace HSMServer.Controllers
             if (key is null)
                 return BadRequest("This product has no usable access key. Create one with send-data permission first.");
 
-            var exePath = Path.Combine(_environment.WebRootPath ?? string.Empty, "agent", AgentInstallerBundle.ExeName);
+            // Without a web root there is no wwwroot/agent/ to read from; report the same graceful 503
+            // as a missing binary instead of silently probing a relative "agent/hsm-agent.exe".
+            if (string.IsNullOrEmpty(_environment.WebRootPath))
+                return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                    "The agent binary is not available on this server yet. Publish hsm-agent.exe to wwwroot/agent/.");
+
+            var exePath = Path.Combine(_environment.WebRootPath, "agent", AgentInstallerBundle.ExeName);
 
             byte[] exeBytes;
             try

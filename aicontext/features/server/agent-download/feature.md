@@ -37,16 +37,20 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 | Download button | `Views/AccessKeys/_ProductAccessKeys.cshtml` (admin-only) |
 | Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` (staged by `server-build.yml` before publish, W9) |
 | Key selection / URL resolution (pure, testable) | `Model/Agent/AgentKeySelector.cs`, `Model/Agent/AgentConnectionResolver.cs` |
-| Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (5) + `AgentDownloadLogicTests.cs` (11: key selection + URL resolution) |
+| Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (5) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
 
 ## Connection URL resolution
 
 `AgentConnectionResolver.Resolve(externalUrl, sensorPort, fallbackScheme, fallbackHost)`: if the admin
-set `AgentConfig.ExternalConnectionUrl`, parse it into `address` (scheme://host + any path base) +
-`port`. An **explicit** port is kept even when it equals the scheme default (`:443` survives — detected
-from the raw authority, not `Uri.IsDefaultPort`); only an absent port falls back to the configured
-`Kestrel.SensorPort`. Behind Docker/NAT the server cannot infer its external address, so this setting
-exists; when blank it falls back to the request host + the Sensor port. `AgentConfig.AllowUntrustedCertificate`
+set `AgentConfig.ExternalConnectionUrl`, parse it into `address` (scheme://host only) + `port`. A
+**path base is NOT supported** — the native collector's endpoint builder (`hsm_http_endpoints.hpp` /
+`HostOnly`) strips everything after the first `/`, so a reverse-proxy prefix could never reach the wire;
+the resolver drops it rather than bake a misleading address. IPv6 literals stay bracketed
+(`https://[::1]`, since `Uri.Host` brackets them). An **explicit** port is kept even when it equals the
+scheme default (`:443` survives —
+detected from the raw authority, not `Uri.IsDefaultPort`); only an absent port falls back to the
+configured `Kestrel.SensorPort`. Behind Docker/NAT the server cannot infer its external address, so this
+setting exists; when blank it falls back to the request host + the Sensor port. `AgentConfig.AllowUntrustedCertificate`
 is baked into the bundle's `server.allowUntrustedCertificate` (for self-hosted / self-signed servers).
 The result is written into the bundle's `config.json`, which the agent maps onto `CollectorOptions`.
 

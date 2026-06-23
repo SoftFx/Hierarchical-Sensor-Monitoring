@@ -48,9 +48,38 @@
         showNewAccessKeyModal(`${newAccessKeyURL}?selectedId=${productId}`, false);
     }
 
-    function downloadAgentClick() {
-        // Attachment response → the browser downloads without navigating away from the modal.
-        window.location.href = '/api/Agent/installer?productId=@Model.Id';
+    async function downloadAgentClick() {
+        // Fetch + blob (not window.location) so a 503/BadRequest surfaces as an in-modal toast
+        // instead of navigating the browser to a raw error page — e.g. when the product has no
+        // usable access key or the agent binary isn't staged on the server yet.
+        const button = document.getElementById('downloadAgentButton');
+        button.disabled = true;
+        try {
+            const response = await fetch('/api/Agent/installer?productId=@Model.Id');
+            if (!response.ok) {
+                const message = await response.text();
+                showToast(message || 'Failed to download the HSM Agent.', 'Error');
+                return;
+            }
+
+            const blob = await response.blob();
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+            const fileName = match ? decodeURIComponent(match[1]) : 'hsm-agent.zip';
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            showToast('Failed to download the HSM Agent: ' + error, 'Error');
+        } finally {
+            button.disabled = false;
+        }
     }
     
     $(document).ready(() => {
