@@ -84,6 +84,23 @@ defaults. Maps onto `CollectorOptions` + runtime group gates:
   `system`/`disk`/`network` are finer subsets used **only when `computer` is false**; `module` =
   collector self-sensors; `process` is opt-in.
 - `periods.collectMs` → `package_collect_period_ms`. `productVersion` → module-sensor version.
+- `topCpu.{enabled=false,periodMs=60000,minPercent=1.0,count=10}` — opt-in "top processes by CPU"
+  (issue #1175). Validated only when enabled (period/count > 0, minPercent ≥ 0).
+
+## Top processes by CPU (issue #1175)
+
+Opt-in (`topCpu.enabled`). A dedicated thread in `AgentRuntime` (started after `Start()`, joined
+before `Stop()`, waits on the same `cv_` so it exits the moment stop is requested) runs every
+`periodMs`:
+1. `WindowsCpuSampler` (`src/cpu_top.cpp`, `#ifdef _WIN32`) enumerates processes (`CreateToolhelp32Snapshot`
+   + `GetProcessTimes`), diffs each PID's CPU time against the previous tick, and aggregates by exe name
+   into CPU% **of the whole machine** (÷ logical-core count).
+2. `SelectTopN` (portable, unit-tested) keeps names `>= minPercent` and returns the busiest `count`.
+3. Each survivor's % is posted to a lazily-created `Top CPU processes/<exe>` Double sensor (cached by
+   name). Names not in the top list that tick get **no value** → natural gaps in their series.
+
+Aggregating by exe name (not PID, not PDH `#n` suffix) keeps a stable sensor identity over time.
+**Out of scope:** browser tab/site attribution (needs browser-level instrumentation; tracked separately).
 
 ## Logging
 
@@ -98,7 +115,7 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 
 ## Verification
 
-- Portable config-parser unit tests (`tests/agent_tests.cpp`, name-dispatched, 9 cases) — run on every
+- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 12 cases — config parser + topCpu config + `SelectTopN`) — run on every
   platform, registered in `ctest`.
 - **CI build lane (W8):** `.github/workflows/agent-windows-build.yml` — windows-latest, vcpkg curl,
   configures + builds `src/agent` Release with warnings-as-errors, runs the config `ctest`, and uploads
