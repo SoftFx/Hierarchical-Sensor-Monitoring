@@ -32,12 +32,17 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 |---|---|
 | Download endpoint `GET /api/agent/installer?productId=…` | `HSMServer/Controllers/AgentController.cs` |
 | Bundle builder (config.json + scripts + zip; pure/testable) | `HSMServer/Model/Agent/AgentInstallerBundle.cs` |
-| Server settings "Agent connection URL" + "Allow untrusted server certificate" | `HSMServer/ServerConfiguration/Sections/AgentConfig.cs` (`ExternalConnectionUrl`, `AllowUntrustedCertificate`) (+ `IServerConfig`/`ServerConfig`) |
+| Server settings "Agent connection URL" + "Allow untrusted server certificate" + "Report top processes by CPU" | `HSMServer/ServerConfiguration/Sections/AgentConfig.cs` (`ExternalConnectionUrl`, `AllowUntrustedCertificate`, `EnableTopCpuProcesses`) (+ `IServerConfig`/`ServerConfig`) |
 | Settings UI (Agent tab) | `Views/Configuration/_Agent.cshtml`, `Views/Configuration/Index.cshtml`, `AgentSettingsViewModel`, `ConfigurationController.SaveAgentSettings` |
 | Download button | `Views/AccessKeys/_ProductAccessKeys.cshtml` (admin-only) |
 | Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` (staged by `server-build.yml` before publish, W9) |
 | Key selection / URL resolution (pure, testable) | `Model/Agent/AgentKeySelector.cs`, `Model/Agent/AgentConnectionResolver.cs` |
-| Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (5) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
+| Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (7: incl. topCpu on/off) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
+
+`AgentConfig.EnableTopCpuProcesses` (admin toggle, Configuration → Agent) makes `BuildConfigJson` add a
+`topCpu` block (`enabled:true, periodMs:60000, minPercent:1.0, count:10`) to the generated `config.json`,
+so the downloaded agent also reports the top processes by CPU (issue #1175). Off by default; the client
+agent has no UI and just runs the baked config.
 
 ## Connection URL resolution
 

@@ -30,6 +30,30 @@ namespace HSMServer.Core.Tests
         }
 
         [Fact]
+        public void ConfigJson_OmitsTopCpu_WhenDisabled()
+        {
+            var json = AgentInstallerBundle.BuildConfigJson(_options); // EnableTopCpu defaults to false
+
+            using var doc = JsonDocument.Parse(json);
+            Assert.False(doc.RootElement.TryGetProperty("topCpu", out _));
+        }
+
+        [Fact]
+        public void ConfigJson_CarriesTopCpu_WhenEnabled()
+        {
+            var options = _options with { EnableTopCpu = true };
+
+            var json = AgentInstallerBundle.BuildConfigJson(options);
+
+            using var doc = JsonDocument.Parse(json);
+            var topCpu = doc.RootElement.GetProperty("topCpu");
+            Assert.True(topCpu.GetProperty("enabled").GetBoolean());
+            Assert.Equal(60000, topCpu.GetProperty("periodMs").GetInt32());
+            Assert.Equal(10, topCpu.GetProperty("count").GetInt32());
+            Assert.Equal(1.0, topCpu.GetProperty("minPercent").GetDouble());
+        }
+
+        [Fact]
         public void Zip_ContainsExeConfigAndScripts()
         {
             var exeBytes = Encoding.ASCII.GetBytes("MZ-fake-signed-agent-binary");

@@ -73,7 +73,7 @@ namespace HSMServer.Controllers
 
             var (address, port) = AgentConnectionResolver.Resolve(
                 _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
-            var options = new AgentBundleOptions(address, port, key.Id.ToString(), _config.Agent.AllowUntrustedCertificate);
+            var options = new AgentBundleOptions(address, port, key.Id.ToString(), _config.Agent.AllowUntrustedCertificate, _config.Agent.EnableTopCpuProcesses);
             var zip = AgentInstallerBundle.BuildZip(exeBytes, options);
 
             _logger.Info($"{CurrentUser?.Name} downloaded the HSM Agent bundle for product '{product.DisplayName}' ({productId}).");
