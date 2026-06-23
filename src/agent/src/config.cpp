@@ -428,6 +428,12 @@ namespace hsm::agent
                 error = "field '" + key + "' must be a number";
                 return false;
             }
+            // Casting an out-of-range double to int is undefined behavior; reject instead.
+            if (value->number < -2147483648.0 || value->number > 2147483647.0)
+            {
+                error = "field '" + key + "' is out of the 32-bit integer range";
+                return false;
+            }
             out = static_cast<int>(value->number);
             return true;
         }

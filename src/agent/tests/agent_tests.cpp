@@ -122,6 +122,8 @@ namespace
     {
         ExpectReject(R"({ "server": { "address": "https://h", "accessKey": "k", "port": 0 } })", "port 0");
         ExpectReject(R"({ "server": { "address": "https://h", "accessKey": "k", "port": 70000 } })", "port too high");
+        // Out of 32-bit range — must be rejected, not cast (casting out-of-range double to int is UB).
+        ExpectReject(R"({ "server": { "address": "https://h", "accessKey": "k", "port": 1e10 } })", "port overflow");
     }
 
     void MalformedJsonIsRejected()

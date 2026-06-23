@@ -51,14 +51,24 @@ namespace HSMServer.Controllers
                 return BadRequest("This product has no usable access key. Create one with send-data permission first.");
 
             var exePath = Path.Combine(_environment.WebRootPath ?? string.Empty, "agent", AgentInstallerBundle.ExeName);
-            if (!System.IO.File.Exists(exePath))
+
+            byte[] exeBytes;
+            try
+            {
+                // Read directly (no separate File.Exists check) so a missing/locked exe — including the
+                // race where it is removed between the check and the read — is the same graceful 503.
+                exeBytes = System.IO.File.ReadAllBytes(exePath);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or IOException)
+            {
                 return StatusCode(StatusCodes.Status503ServiceUnavailable,
                     "The agent binary is not available on this server yet. Publish hsm-agent.exe to wwwroot/agent/.");
+            }
 
             var (address, port) = AgentConnectionResolver.Resolve(
                 _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
-            var options = new AgentBundleOptions(address, port, key.Id.ToString(), AllowUntrustedCertificate: false);
-            var zip = AgentInstallerBundle.BuildZip(System.IO.File.ReadAllBytes(exePath), options);
+            var options = new AgentBundleOptions(address, port, key.Id.ToString(), _config.Agent.AllowUntrustedCertificate);
+            var zip = AgentInstallerBundle.BuildZip(exeBytes, options);
 
             _logger.Info($"{CurrentUser?.Name} downloaded the HSM Agent bundle for product '{product.DisplayName}' ({productId}).");
 

@@ -18,7 +18,9 @@ namespace HSMServer.Model.Agent
         /// <summary>Returns the best agent key for the product, or null if it has none.</summary>
         public static AccessKeyModel Select(ProductModel product)
         {
-            var keys = product.AccessKeys.Values;
+            // Order by Id so the choice is deterministic if a product happens to have more than one key
+            // sharing a name (the dictionary's own enumeration order is not guaranteed).
+            var keys = product.AccessKeys.Values.OrderBy(k => k.Id).ToList();
 
             // Prefer the product's DefaultKey when it is valid for the agent's needs.
             foreach (var key in keys)

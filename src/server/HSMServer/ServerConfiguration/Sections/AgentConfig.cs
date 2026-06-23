@@ -9,4 +9,10 @@ namespace HSMServer.ServerConfiguration;
 public class AgentConfig
 {
     public string ExternalConnectionUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Baked into downloaded bundles as <c>server.allowUntrustedCertificate</c> so an agent accepts a
+    /// self-signed server certificate (the typical self-hosted / Docker eval case). Default false.
+    /// </summary>
+    public bool AllowUntrustedCertificate { get; set; }
 }

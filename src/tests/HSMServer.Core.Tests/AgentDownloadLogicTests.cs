@@ -115,6 +115,25 @@ namespace HSMServer.Core.Tests
             Assert.Equal(8443, port);
         }
 
+        [Fact]
+        public void Resolve_KeepsExplicitDefaultPort()
+        {
+            // ':443' is explicit (e.g. a reverse proxy) — it must survive, not be replaced by sensorPort.
+            var (address, port) = AgentConnectionResolver.Resolve("https://hsm.example.com:443", 44330, "http", "ignored");
+
+            Assert.Equal("https://hsm.example.com", address);
+            Assert.Equal(443, port);
+        }
+
+        [Fact]
+        public void Resolve_PreservesPathBase()
+        {
+            var (address, port) = AgentConnectionResolver.Resolve("https://hsm.example.com/sensor-api/", 44330, "http", "ignored");
+
+            Assert.Equal("https://hsm.example.com/sensor-api", address);
+            Assert.Equal(44330, port);
+        }
+
         [Theory]
         [InlineData("")]
         [InlineData("   ")]

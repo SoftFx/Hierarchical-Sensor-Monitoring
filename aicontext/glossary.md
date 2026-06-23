@@ -71,6 +71,15 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | C++ wrapper | Native wrapper surface under `src/wrapper`. | Keep parity with collector public APIs. |
 | Ping module | External module under `src/module/HSMPingModule`. | Integration surface and deployment assumptions matter. |
 
+## HSM Agent Terms
+
+| Term | Meaning | Notes |
+|---|---|---|
+| HSM Agent | Standalone Windows-service product (`src/agent`) that hosts the native collector and streams a machine's metrics to an HSM Server. | Distinct from the collector library it hosts; epic #1167. |
+| Agent bundle | Per-product zip an admin downloads from the server (signed `hsm-agent.exe` + generated `config.json` + install scripts). | The exe is byte-identical across downloads; only `config.json` differs. |
+| Agent config | `config.json` read by the agent (server address + access key + sensor groups). | Schema lives in `src/agent` + `docs/hsm-agent.md`; the server generates it per product. |
+| Agent connection URL | Admin server setting (`AgentConfig.ExternalConnectionUrl`) — the externally-reachable Sensor-API base baked into bundles. | Behind Docker/NAT the server can't infer it; blank falls back to the request host. |
+
 ## Deprecated / Avoid
 
 | Avoid | Prefer | Why |

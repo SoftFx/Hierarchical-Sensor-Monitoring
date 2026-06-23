@@ -18,14 +18,49 @@ namespace HSMServer.Model.Agent
                 if (!raw.Contains("://"))
                     raw = $"https://{raw}";
 
-                if (Uri.TryCreate(raw, UriKind.Absolute, out var uri))
+                if (Uri.TryCreate(raw, UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.Host))
                 {
-                    var port = uri.IsDefaultPort ? sensorPort : uri.Port;
-                    return ($"{uri.Scheme}://{uri.Host}", port);
+                    // Keep scheme + host + any path base (drop the trailing slash); the port travels
+                    // separately in config.json.
+                    var path = uri.AbsolutePath.TrimEnd('/');
+                    var address = $"{uri.Scheme}://{uri.Host}{path}";
+
+                    // Use the admin's explicit port when present — even when it equals the scheme
+                    // default (e.g. :443). Uri.IsDefaultPort can't tell "no port" from "explicit
+                    // default port", so inspect the raw authority instead. Only an absent port falls
+                    // back to the configured Sensor port.
+                    var port = HasExplicitPort(raw) ? uri.Port : sensorPort;
+                    return (address, port);
                 }
             }
 
             return ($"{fallbackScheme}://{fallbackHost}", sensorPort);
+        }
+
+        private static bool HasExplicitPort(string raw)
+        {
+            var schemeIndex = raw.IndexOf("://", StringComparison.Ordinal);
+            var authorityStart = schemeIndex >= 0 ? schemeIndex + 3 : 0;
+
+            var authorityEnd = raw.IndexOf('/', authorityStart);
+            var authority = authorityEnd >= 0 ? raw.Substring(authorityStart, authorityEnd - authorityStart) : raw.Substring(authorityStart);
+
+            var at = authority.LastIndexOf('@'); // strip userinfo
+            if (at >= 0)
+                authority = authority.Substring(at + 1);
+
+            int colon;
+            if (authority.StartsWith("[", StringComparison.Ordinal)) // [IPv6]:port
+            {
+                var close = authority.IndexOf(']');
+                colon = close >= 0 ? authority.IndexOf(':', close) : -1;
+            }
+            else
+            {
+                colon = authority.LastIndexOf(':');
+            }
+
+            return colon >= 0 && int.TryParse(authority.Substring(colon + 1), out _);
         }
     }
 }

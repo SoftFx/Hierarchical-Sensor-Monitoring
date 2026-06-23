@@ -16,6 +16,7 @@
 #include "agent/service_install.hpp"
 #include "agent/windows_service.hpp"
 
+#include <atomic>
 #include <iostream>
 #include <string>
 
@@ -26,7 +27,9 @@
 
 namespace
 {
-    hsm::agent::AgentRuntime* g_console_runtime = nullptr;
+    // Read from the console-control-handler thread; atomic so a Ctrl-C during teardown never reads a
+    // dangling pointer.
+    std::atomic<hsm::agent::AgentRuntime*> g_console_runtime{ nullptr };
 
     BOOL WINAPI ConsoleCtrlHandler(DWORD type)
     {
@@ -37,8 +40,8 @@ namespace
         case CTRL_CLOSE_EVENT:
         case CTRL_LOGOFF_EVENT:
         case CTRL_SHUTDOWN_EVENT:
-            if (g_console_runtime != nullptr)
-                g_console_runtime->RequestStop();
+            if (hsm::agent::AgentRuntime* runtime = g_console_runtime.load())
+                runtime->RequestStop();
             return TRUE;
         default:
             return FALSE;
@@ -82,12 +85,12 @@ namespace
         auto logger = MakeAgentLogger(&file, &event_log, /*also_stderr=*/true);
 
         AgentRuntime runtime(std::move(config), std::move(logger));
-        g_console_runtime = &runtime;
+        g_console_runtime.store(&runtime);
         SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 
         std::cout << "hsm-agent: running in console mode (Ctrl-C to stop).\n";
         const int rc = runtime.Run();
-        g_console_runtime = nullptr;
+        g_console_runtime.store(nullptr);
         return rc;
     }
 } // namespace
@@ -141,10 +144,9 @@ int wmain(int argc, wchar_t** argv)
 
     const int rc = (mode == L"--console") ? RunConsole(config_path) : RunService(config_path);
 
+    // Single-instance relies on the named mutex's existence, not ownership (CreateMutexW was called
+    // with bInitialOwner=FALSE), so just close the handle — the mutex goes away with the last handle.
     if (mutex != nullptr)
-    {
-        ReleaseMutex(mutex);
         CloseHandle(mutex);
-    }
     return rc;
 }

@@ -32,7 +32,7 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 |---|---|
 | Download endpoint `GET /api/agent/installer?productId=…` | `HSMServer/Controllers/AgentController.cs` |
 | Bundle builder (config.json + scripts + zip; pure/testable) | `HSMServer/Model/Agent/AgentInstallerBundle.cs` |
-| Server setting "Agent connection URL" | `HSMServer/ServerConfiguration/Sections/AgentConfig.cs` (+ `IServerConfig`/`ServerConfig`) |
+| Server settings "Agent connection URL" + "Allow untrusted server certificate" | `HSMServer/ServerConfiguration/Sections/AgentConfig.cs` (`ExternalConnectionUrl`, `AllowUntrustedCertificate`) (+ `IServerConfig`/`ServerConfig`) |
 | Settings UI (Agent tab) | `Views/Configuration/_Agent.cshtml`, `Views/Configuration/Index.cshtml`, `AgentSettingsViewModel`, `ConfigurationController.SaveAgentSettings` |
 | Download button | `Views/AccessKeys/_ProductAccessKeys.cshtml` (admin-only) |
 | Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` (staged by `server-build.yml` before publish, W9) |
@@ -42,11 +42,13 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 ## Connection URL resolution
 
 `AgentConnectionResolver.Resolve(externalUrl, sensorPort, fallbackScheme, fallbackHost)`: if the admin
-set `AgentConfig.ExternalConnectionUrl`, parse it into `address` (scheme://host) + `port` (explicit
-port, else the configured `Kestrel.SensorPort`). Behind Docker/NAT the server cannot infer its external
-address, so this setting exists; when blank it falls back to the request host + the Sensor port. The
-result is written into the bundle's `config.json` (`server.address` / `server.port`), which the agent
-maps onto `CollectorOptions`.
+set `AgentConfig.ExternalConnectionUrl`, parse it into `address` (scheme://host + any path base) +
+`port`. An **explicit** port is kept even when it equals the scheme default (`:443` survives — detected
+from the raw authority, not `Uri.IsDefaultPort`); only an absent port falls back to the configured
+`Kestrel.SensorPort`. Behind Docker/NAT the server cannot infer its external address, so this setting
+exists; when blank it falls back to the request host + the Sensor port. `AgentConfig.AllowUntrustedCertificate`
+is baked into the bundle's `server.allowUntrustedCertificate` (for self-hosted / self-signed servers).
+The result is written into the bundle's `config.json`, which the agent maps onto `CollectorOptions`.
 
 ## Behavior notes
 

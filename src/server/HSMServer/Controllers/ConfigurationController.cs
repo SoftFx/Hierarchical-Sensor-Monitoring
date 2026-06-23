@@ -59,11 +59,12 @@ namespace HSMServer.Controllers
             if (ModelState.IsValid)
             {
                 var newUrl = settings.ExternalConnectionUrl?.Trim() ?? string.Empty;
-                if (config.Agent.ExternalConnectionUrl != newUrl)
+                if (config.Agent.ExternalConnectionUrl != newUrl || config.Agent.AllowUntrustedCertificate != settings.AllowUntrustedCertificate)
                 {
-                    _logger.Info($"SaveAgentSettings: {GetUserName()} changed Agent connection URL '{config.Agent.ExternalConnectionUrl}' -> '{newUrl}'");
+                    _logger.Info($"SaveAgentSettings: {GetUserName()} changed Agent settings (URL '{config.Agent.ExternalConnectionUrl}' -> '{newUrl}', allowUntrustedCertificate {config.Agent.AllowUntrustedCertificate} -> {settings.AllowUntrustedCertificate})");
 
                     config.Agent.ExternalConnectionUrl = newUrl;
+                    config.Agent.AllowUntrustedCertificate = settings.AllowUntrustedCertificate;
                     config.ResaveSettings();
                 }
             }

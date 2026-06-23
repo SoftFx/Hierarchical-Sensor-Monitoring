@@ -1,4 +1,5 @@
 using HSMServer.Model.Agent;
+using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -88,6 +89,42 @@ namespace HSMServer.Core.Tests
             var script = reader.ReadToEnd();
             Assert.Contains("--install", script);
             Assert.Contains("HSMAgent", script);
+        }
+
+        // The static packaging scripts (src/agent/packaging/*.cmd, used for the manual-artifact install)
+        // must stay identical to what the server generates for the download, so they can't drift.
+        // Compared with line endings normalized (the static files' CRLF is an eol-policy concern).
+        [Fact]
+        public void StaticInstallScript_MatchesGenerated()
+        {
+            Assert.Equal(
+                Normalize(AgentInstallerBundle.BuildInstallScript()),
+                Normalize(File.ReadAllText(RepoFile("src/agent/packaging/install.cmd"))));
+        }
+
+        [Fact]
+        public void StaticUninstallScript_MatchesGenerated()
+        {
+            Assert.Equal(
+                Normalize(AgentInstallerBundle.BuildUninstallScript()),
+                Normalize(File.ReadAllText(RepoFile("src/agent/packaging/uninstall.cmd"))));
+        }
+
+        private static string Normalize(string text) => text.Replace("\r\n", "\n").Replace("\r", "\n");
+
+        private static string RepoFile(string relative)
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            var native = relative.Replace('/', Path.DirectorySeparatorChar);
+            while (dir is not null)
+            {
+                var candidate = Path.Combine(dir.FullName, native);
+                if (File.Exists(candidate))
+                    return candidate;
+                dir = dir.Parent;
+            }
+
+            throw new FileNotFoundException($"Could not locate '{relative}' above {AppContext.BaseDirectory}");
         }
     }
 }

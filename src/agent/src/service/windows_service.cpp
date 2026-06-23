@@ -8,6 +8,7 @@
 #include "agent/paths.hpp"
 #include "agent/service_install.hpp"
 
+#include <atomic>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -24,7 +25,9 @@ namespace hsm::agent
         SERVICE_STATUS_HANDLE g_status_handle = nullptr;
         SERVICE_STATUS g_status{};
         DWORD g_checkpoint = 0;
-        AgentRuntime* g_runtime = nullptr;
+        // Shared between the SCM control-handler thread and ServiceMain — atomic so the handler never
+        // reads a torn/dangling pointer while ServiceMain sets or clears it.
+        std::atomic<AgentRuntime*> g_runtime{ nullptr };
         std::wstring g_config_path;
 
         void SetState(DWORD state, DWORD exit_code = NO_ERROR, DWORD wait_hint = 0)
@@ -54,8 +57,8 @@ namespace hsm::agent
             case SERVICE_CONTROL_SHUTDOWN:
             case SERVICE_CONTROL_PRESHUTDOWN:
                 SetState(SERVICE_STOP_PENDING, NO_ERROR, 8000);
-                if (g_runtime != nullptr)
-                    g_runtime->RequestStop();
+                if (AgentRuntime* runtime = g_runtime.load())
+                    runtime->RequestStop();
                 return NO_ERROR;
             case SERVICE_CONTROL_INTERROGATE:
                 return NO_ERROR;
@@ -97,7 +100,7 @@ namespace hsm::agent
 
             auto logger = MakeAgentLogger(&file, &event_log, false);
             AgentRuntime runtime(std::move(config), std::move(logger));
-            g_runtime = &runtime;
+            g_runtime.store(&runtime);
             event_log.ReportInformation("HSM Agent service starting.");
 
             int exit_code = 0;
@@ -106,7 +109,7 @@ namespace hsm::agent
             });
             worker.join();
 
-            g_runtime = nullptr;
+            g_runtime.store(nullptr);
             if (exit_code == 0)
             {
                 event_log.ReportInformation("HSM Agent service stopped.");
