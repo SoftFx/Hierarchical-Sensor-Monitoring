@@ -102,7 +102,13 @@ endfunction()
 
 add_library(hsm_collector_core STATIC
     src/hsm_collector.cpp
+    src/platform/hsm_windows_metric_sources.cpp  # self-guarded #if _WIN32 (#1164)
 )
+
+# Windows live metric readers (#1164) link PDH (perf counters) + Win32.
+if(WIN32)
+    target_link_libraries(hsm_collector_core PRIVATE pdh)
+endif()
 
 target_include_directories(hsm_collector_core
     PUBLIC
@@ -193,6 +199,16 @@ endif()
 # examples/console/standalone and is built separately against the installed package (CI lane).
 if(HSM_COLLECTOR_BUILD_EXAMPLES)
     add_subdirectory(examples/console)
+    # The server-monitor example POSTs to a real server, so it needs the libcurl transport.
+    if(HSM_COLLECTOR_HTTP)
+        add_subdirectory(examples/server-monitor)
+        # The crypto-monitor value-source plugin example fetches quotes via libcurl.
+        add_subdirectory(examples/crypto-monitor)
+        # The windows-monitor example uses the Windows PDH live readers — Windows only.
+        if(WIN32)
+            add_subdirectory(examples/windows-monitor)
+        endif()
+    endif()
 endif()
 
 # Enqueue-throughput micro-benchmark (#1101). Gated OFF; the scheduled benchmark lane builds it.
@@ -233,6 +249,9 @@ if(HSM_COLLECTOR_HTTP)
     )
     add_test(NAME native_http_live_send_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server
+    )
+    add_test(NAME native_http_registers_sensors_on_start
+        COMMAND hsm_collector_tests native_http_registers_sensors_on_start
     )
 endif()
 
@@ -304,6 +323,9 @@ set(NATIVE_REGRESSION_TESTS
     native_default_sensor_wire_matches_net
     native_default_sensor_group_composition
     native_metric_source_seam_lifecycle
+    native_metric_source_drives_default_bar_sensor
+    native_metric_source_drives_custom_double_sensor
+    # native_windows_metric_sources_produce_live_value is registered below (Windows only).
     native_prototype_merge_pins_identity_overrides_metadata
     native_http_endpoint_routing_matches_net
     native_http_retry_policy_matches_net
@@ -325,6 +347,17 @@ foreach(name IN LISTS NATIVE_REGRESSION_TESTS)
         COMMAND hsm_collector_tests ${name}
     )
 endforeach()
+
+# Windows-only smoke: the real PDH metric-source factory drives a live Total CPU reading (#1164), plus a
+# Process sensor binding to the PID-resolved current-process instance.
+if(WIN32)
+    add_test(NAME native_windows_metric_sources_produce_live_value
+        COMMAND hsm_collector_tests native_windows_metric_sources_produce_live_value
+    )
+    add_test(NAME native_windows_process_metric_resolves_current_process
+        COMMAND hsm_collector_tests native_windows_process_metric_resolves_current_process
+    )
+endif()
 
 function(add_conformance_test name fixture)
     add_test(

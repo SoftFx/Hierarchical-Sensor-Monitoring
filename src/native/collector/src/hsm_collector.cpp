@@ -1,5 +1,7 @@
 #include "hsm_collector/hsm_collector.h"
 
+#include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
+
 #include <algorithm>
 #include <atomic>
 #include <charconv>
@@ -1128,6 +1130,11 @@ namespace
     constexpr int64_t kDefaultBarPeriodMs = 300000; // 5 min
     constexpr int32_t kDefaultBarPrecision = 2;
 
+    // Metric-driven bar sub-sampling (#1164): a DoubleBar/IntBar default sensor reads its bound
+    // metric source at this cadence and emits an aggregated bar each post period, so the bar carries
+    // real Min/Max/Mean/Count instead of a single instantaneous sample (managed BarTickPeriod).
+    constexpr int64_t kMetricBarSampleMs = 5000; // 5 s
+
     // KeepHistory windows in ms (managed TimeSpan.FromDays(n)); *10000 -> ticks on the wire.
     constexpr int64_t kKeepHistory90dMs = 90LL * 86400000;
     constexpr int64_t kKeepHistory180dMs = 180LL * 86400000;
@@ -1914,6 +1921,59 @@ namespace
         // computation; std::numeric_limits<int64_t>::max() for a non-periodic sensor.
         int64_t NextPostHint() const { return next_post_hint_.load(); }
 
+        // ---- Metric-source-driven monitoring (#1164) ----
+        const std::string& Path() const { return path_; }
+
+        // Mark this sensor as eligible for metric-source binding at Start (a value type whose live
+        // values come from a PDH/WMI/plugin reader). post_period_ms is the post cadence; precision is
+        // the bar-payload rounding for DoubleBar/IntBar sensors.
+        void MarkMetricCandidate(int64_t post_period_ms, int32_t precision)
+        {
+            is_metric_candidate_ = true;
+            metric_post_period_ms_ = post_period_ms;
+            metric_bar_precision_ = precision;
+        }
+
+        bool IsMetricCandidate() const { return is_metric_candidate_ && !is_metric_driven_; }
+
+        // Bind a freshly created metric source (called on the Start thread before the scheduler runs).
+        // Makes the sensor periodic so TickPeriodicSensors drives it; the source is read on the
+        // scheduler thread only thereafter.
+        void BindMetricSource(std::unique_ptr<MetricSource> source)
+        {
+            metric_source_ = std::move(source);
+            is_metric_driven_ = true;
+            is_periodic_ = true;
+            metric_bar_open_ = false;
+
+            const int64_t emit = metric_post_period_ms_ > 0 ? metric_post_period_ms_ : 15000;
+            metric_emit_period_ms_ = emit;
+            if (type_ == HSM_SENSOR_TYPE_DOUBLE_BAR || type_ == HSM_SENSOR_TYPE_INT_BAR)
+            {
+                // Bar sensors sample at a sub-period tick and aggregate into one bar per emit window,
+                // so the bar carries real Min/Max/Mean/Count. The scheduler fires at the sample tick;
+                // the metric branch gates the actual emit on the window. Never finer than the window.
+                post_period_ms_ = (std::min)(emit, kMetricBarSampleMs);
+            }
+            else
+            {
+                // Value sensors (free disk, network): read + post once per period.
+                post_period_ms_ = emit;
+            }
+        }
+
+        // Dispose the bound source on Stop (managed dispose-on-stop); a restart rebinds.
+        void ResetMetricSource()
+        {
+            metric_source_.reset();
+            metric_bar_open_ = false;
+            if (is_metric_driven_)
+            {
+                is_metric_driven_ = false;
+                is_periodic_ = false;
+            }
+        }
+
     private:
         hsm_result_t AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment);
 
@@ -1952,6 +2012,20 @@ namespace
         void* function_user_data_ = nullptr;
         std::deque<int32_t> function_values_;
         int32_t function_max_cache_ = 0;
+
+        // Metric-source-driven monitoring (#1164): a default/value sensor whose value each post
+        // period comes from the installed metric-source factory (PDH/WMI/plugin). Set at AddDefault
+        // (candidate) and bound at Start (driven). The bound source + the periodic state above are
+        // touched only by the scheduler thread after Start, so they need no extra lock.
+        bool is_metric_candidate_ = false;   // eligible: a value type that a metric source can drive
+        bool is_metric_driven_ = false;      // a source was bound at Start -> periodic reads
+        int64_t metric_post_period_ms_ = 0;  // post cadence (catalog post_period for default sensors)
+        int32_t metric_bar_precision_ = 2;   // bar-payload rounding for DoubleBar/IntBar metric sensors
+        int64_t metric_emit_period_ms_ = 0;  // bar emit window / value post cadence once bound
+        int64_t metric_bar_open_steady_ = 0; // steady ms the in-flight accumulation bar opened
+        bool metric_bar_open_ = false;       // a DoubleBar/IntBar metric bar is mid-accumulation
+        MonitoringBar metric_bar_;           // accumulation bar for metric-driven DoubleBar/IntBar
+        std::unique_ptr<MetricSource> metric_source_;
 
         // File sensor identity.
         std::string file_name_;
@@ -2022,19 +2096,88 @@ namespace
         }
 
 #if defined(HSM_COLLECTOR_HTTP)
-        // Live-path seam (HTTP build): swap the recording sender for a real libcurl POST to the
-        // batch /list route. Install before Start, same one-way contract as SetClock — the worker
-        // thread only reads sender_ after Start, so the swap needs no lock. One transport per
-        // collector; Cancel()/ResetCancel() are wired into Stop/StartWorker so a Stop aborts an
-        // in-flight POST (the CancelPendingRequests primitive) and a restart re-arms it.
-        void TestInstallHttpSender()
+        // Public live transport (HTTP build): swap the in-memory recording sender for a real libcurl
+        // POST to the server's batch /list route, and switch payloads to the .NET server WIRE format
+        // (Time ISO-8601, bar OpenTime/CloseTime, the Command/SensorType discriminators) so a real
+        // HSM server accepts them. Registrations are POSTed to /commands at Start (PostRegistrationsWire).
+        // Install before Start, same one-way contract as SetClock — the worker thread only reads
+        // sender_/send_wire_ after Start, so the swap needs no lock. One transport per collector;
+        // Cancel()/ResetCancel() are wired into Stop/StartWorker so a Stop aborts an in-flight POST
+        // (the CancelPendingRequests primitive) and a restart re-arms it.
+        void UseHttpTransport()
         {
             http_transport_ = std::make_unique<hsm::http::HttpTransport>(
                 request_timeout_ms_, /*verify_peer=*/!allow_untrusted_certificate_);
             endpoints_ = hsm::http::MakeEndpoints(server_address_, port_, allow_plaintext_transport_);
             sender_ = [this](std::vector<std::string>& batch) { return HttpSendBatch(batch); };
+            send_wire_ = true;
+        }
+
+        // POST every registration as a wire AddOrUpdate batch to /commands (mirrors the C# command
+        // queue, which batch-registers on Start). The wire registration already carries the
+        // "Type":0 Command discriminator the server's CommandRequestBaseDeserializationConverter
+        // keys on. Best-effort: a failure is logged and Start proceeds (values would fail too if the
+        // server is unreachable; the value queue's durable retry handles a transient outage).
+        void PostRegistrationsWire(const std::vector<std::shared_ptr<NativeSensor>>& sensors)
+        {
+            if (sensors.empty())
+                return;
+
+            std::string body = "[";
+            for (size_t i = 0; i < sensors.size(); ++i)
+            {
+                if (i != 0)
+                    body += ',';
+                body += sensors[i]->WireRegistrationJson();
+            }
+            body += "]";
+
+            const std::vector<hsm::http::HttpHeader> headers = {
+                { "Key", access_key_ },
+                { "ClientName", client_name_ },
+                { "Content-Type", "application/json" },
+            };
+
+            const auto response = http_transport_->Post(endpoints_.CommandsList(), body, headers);
+            if (!response.IsSuccess())
+                LogError("Failed to register " + std::to_string(sensors.size()) +
+                         " sensor(s) on Start: " + (response.error.empty() ? "non-2xx response" : response.error));
         }
 #endif
+
+        // Outgoing payload format selector. On the live HTTP path (send_wire_) values/bars serialize
+        // to the .NET server WIRE format; otherwise the canonical/behavior-corpus format the
+        // in-memory recording sender (and the conformance harness) assert on. send_wire_ is set once
+        // before Start and read without a lock (same one-way contract as sender_).
+        std::string OutgoingValueJson(
+            const std::string& path,
+            hsm_sensor_type_t type,
+            const std::string& value_json,
+            hsm_sensor_status_t status,
+            const std::string& comment)
+        {
+            if (send_wire_)
+                return BuildWireValueJson(type, value_json, comment, comment.empty(), status, UnixTimeMilliseconds(), path);
+            return BuildValueJson(path, type, value_json, status, comment);
+        }
+
+        std::string OutgoingBarJson(const MonitoringBar& bar, const std::string& path)
+        {
+            if (send_wire_)
+                return BuildWireBarJson(bar, UnixTimeMilliseconds(), path);
+            return MonitoringBarJson(bar, path);
+        }
+
+        // Surface a metric-source read failure through the deduplicated error log so a wedged live
+        // reader is visible instead of degrading silently (the PeriodicTask silent-death lesson).
+        // recreated=true: the source was rebuilt and the sensor keeps trying; false: the factory
+        // declined to rebuild it, so the sensor stops reporting until the next Start.
+        void LogMetricSourceError(const std::string& path, bool recreated)
+        {
+            LogError(
+                recreated ? ("Metric source for '" + path + "' failed to read; recreated it.")
+                          : ("Metric source for '" + path + "' is unavailable; sensor will not report until restart."));
+        }
 
         // Advance the installed manual clock and wake the scheduler so it re-evaluates the
         // virtual due-time at once (no real-time wait).
@@ -2107,11 +2250,33 @@ namespace
 
             NotifyLifecycle(CollectorState::Starting);
 
+            // Bind metric sources (#1164): ask the installed factory for a reader per candidate path.
+            // A bound sensor becomes periodic, so binding must precede ResetPeriodicBaseline (which
+            // seeds the due-time) and the scheduler start. With no factory installed, candidates stay
+            // registration-only (CreateMetricSource returns null). Runs on the Start thread; the
+            // bound source is read only on the scheduler thread thereafter.
+            for (const auto& sensor : sensors_snapshot)
+            {
+                if (sensor->IsMetricCandidate())
+                {
+                    if (auto source = CreateMetricSource(sensor->Path()))
+                        sensor->BindMetricSource(std::move(source));
+                }
+            }
+
             // Re-arm periodic sensors outside the collector lock (sensor locks are never taken
             // under it): the first post fires immediately, and a restarted rate sensor must not
             // divide by the stopped gap (fresh elapsed baseline — mirrors C# InitAsync).
             for (const auto& sensor : sensors_snapshot)
                 sensor->ResetPeriodicBaseline();
+
+#if defined(HSM_COLLECTOR_HTTP)
+            // Register every sensor on the server (wire AddOrUpdate batch -> /commands) before the
+            // worker starts dispatching values, so a real server knows the sensors first. Recording
+            // builds (conformance) never set send_wire_, so this is a no-op there.
+            if (send_wire_)
+                PostRegistrationsWire(sensors_snapshot);
+#endif
 
             StartWorker();
             StartScheduler();
@@ -2163,6 +2328,11 @@ namespace
             // (a partial-window rate is alert-noise risk — only bars preserve data at stop).
             StopScheduler();
 
+            // Dispose bound metric sources now the scheduler has stopped reading them (managed
+            // dispose-on-stop; #1164). A restart rebinds via the factory.
+            for (const auto& sensor : sensors_snapshot)
+                sensor->ResetMetricSource();
+
             // Phase 2: flush sensors — last-value snapshots and non-empty partial bars — into
             // the queue, bypassing the data gate (this is the explicit stop-flush path).
             std::vector<std::string> flushed;
@@ -2170,7 +2340,7 @@ namespace
             {
                 SensorSnapshot snapshot;
                 if (sensor->TryGetLastValueSnapshot(snapshot))
-                    flushed.push_back(BuildValueJson(snapshot.path, snapshot.type, snapshot.value_json, snapshot.status, snapshot.comment));
+                    flushed.push_back(OutgoingValueJson(snapshot.path, snapshot.type, snapshot.value_json, snapshot.status, snapshot.comment));
 
                 std::string bar_json;
                 if (sensor->TryFlushBarJson(bar_json))
@@ -2561,10 +2731,22 @@ namespace
             RegistrationOptions registration = BuildDefaultRegistration(*def, name);
             const std::string prototype_path = RevealDefaultPath(category, name, def->is_computer);
 
-            if (def->is_bar)
-                return CreateDefaultBarSensor(prototype_path, def->type, kDefaultBarPeriodMs, kDefaultBarPrecision, registration, out_sensor);
+            const hsm_result_t rc = def->is_bar
+                                        ? CreateDefaultBarSensor(prototype_path, def->type, kDefaultBarPeriodMs, kDefaultBarPrecision, registration, out_sensor)
+                                        : CreateSensor(prototype_path.c_str(), def->type, false, std::string{}, out_sensor, registration);
 
-            return CreateSensor(prototype_path.c_str(), def->type, false, std::string{}, out_sensor, registration);
+            // Mark value-typed default sensors as metric candidates (#1164): at Start the installed
+            // metric-source factory (PDH/WMI/plugin) is asked for a reader for this path; if it binds,
+            // the sensor posts live values each post_period. Non-value default sensors (bool/string/
+            // enum/version/timespan heartbeat/self-diagnostic feeds) are not metric-driven.
+            if (rc == HSM_RESULT_OK && out_sensor &&
+                (def->type == HSM_SENSOR_TYPE_DOUBLE_BAR || def->type == HSM_SENSOR_TYPE_INT_BAR ||
+                 def->type == HSM_SENSOR_TYPE_DOUBLE || def->type == HSM_SENSOR_TYPE_INT))
+            {
+                out_sensor->MarkMetricCandidate(def->post_period_ms, kDefaultBarPrecision);
+            }
+
+            return rc;
         }
 
         // Bar variant of CreateSensor: a default monitoring bar sensor needs the full RegistrationOptions
@@ -2677,7 +2859,7 @@ namespace
                     return HSM_RESULT_OK;
             }
 
-            Enqueue(BuildValueJson(path, type, value_json, status, TrimComment(CopyString(comment))));
+            Enqueue(OutgoingValueJson(path, type, value_json, status, TrimComment(CopyString(comment))));
             return HSM_RESULT_OK;
         }
 
@@ -3299,10 +3481,14 @@ namespace
         bool send_hang_ = false;
         bool send_cancelled_ = false;
 
-        // Send seam: TrySendBatch delegates here. Default records into sent_values_; the HTTP build
-        // swaps in a libcurl POST via TestInstallHttpSender (installed before Start, read only by
+        // Send seam: TrySendBatch delegates here. Default records into sent_values_; the public HTTP
+        // transport (UseHttpTransport) swaps in a libcurl POST (installed before Start, read only by
         // the worker thread after Start — no lock needed for the swap).
         std::function<bool(std::vector<std::string>&)> sender_;
+        // True once UseHttpTransport installs the live transport: payloads serialize to the .NET
+        // server WIRE format instead of the canonical/behavior-corpus format. Set once before Start,
+        // read without a lock (same one-way contract as sender_).
+        bool send_wire_ = false;
 #if defined(HSM_COLLECTOR_HTTP)
         std::unique_ptr<hsm::http::HttpTransport> http_transport_;
         hsm::http::Endpoints endpoints_;
@@ -3509,7 +3695,7 @@ namespace
             if (bar_.close_ms < now_ms)
             {
                 if (bar_.count > 0)
-                    closed_json = MonitoringBarJson(bar_, path_);
+                    closed_json = collector->OutgoingBarJson(bar_, path_);
 
                 bar_.Init(now_ms);
             }
@@ -3609,6 +3795,14 @@ namespace
         if (!is_periodic_)
             return false;
 
+        // Outgoing-format selector: the collector chooses wire vs canonical (send_wire_). Reading
+        // send_wire_ is lock-free; if the collector is gone (teardown race) fall back to canonical.
+        const auto collector = collector_.lock();
+        const auto build_value = [&](hsm_sensor_type_t t, const std::string& v, hsm_sensor_status_t s, const std::string& c) {
+            return collector ? collector->OutgoingValueJson(path_, t, v, s, c)
+                             : NativeCollector::BuildValueJson(path_, t, v, s, c);
+        };
+
         // The sensor lock covers only the due-check and the mutable-state snapshot. User
         // callbacks run OUTSIDE it: a callback that re-enters the same sensor (AddRate /
         // AddFunctionInt) must not deadlock on the non-recursive mutex, and arbitrary user
@@ -3659,7 +3853,7 @@ namespace
                 const double rate = seconds > 0 ? rate_sum_ / seconds : 0.0;
                 rate_sum_ = 0.0;
 
-                out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_RATE, DoubleJson(rate), rate_status_, rate_comment_);
+                out_json = build_value(HSM_SENSOR_TYPE_RATE, DoubleJson(rate), rate_status_, rate_comment_);
                 return true;
             }
 
@@ -3670,10 +3864,86 @@ namespace
             }
         }
 
+        // Metric-source-driven default/value sensor (#1164): read the bound reader OUTSIDE the lock
+        // (it may do PDH/WMI/network IO). The source + the metric/periodic state are touched only by the
+        // scheduler thread after Start, so no lock is needed. DoubleBar/IntBar sensors sample at a
+        // sub-period tick and emit ONE aggregated bar per post window (real Min/Max/Mean/Count);
+        // Double/Int post one value per period. NO_VALUE skips this tick; ERROR disposes + recreates the
+        // source (managed recreate-on-error) and is logged — and if the factory declines to rebuild, the
+        // sensor stops driving rather than silently posting nothing for the rest of the run.
+        if (is_metric_driven_)
+        {
+            double value = 0.0;
+            const auto outcome = metric_source_ ? metric_source_->ReadInto(value) : HSM_METRIC_READ_NO_VALUE;
+
+            if (outcome == HSM_METRIC_READ_ERROR)
+            {
+                metric_source_.reset();
+                metric_bar_open_ = false;
+                if (collector)
+                    metric_source_ = collector->CreateMetricSource(path_);
+
+                if (collector && metric_source_)
+                {
+                    collector->LogMetricSourceError(path_, /*recreated=*/true);
+                }
+                else
+                {
+                    // The factory declined to rebuild (or the collector is gone): stop driving this
+                    // sensor so it can't loop on NO_VALUE forever, and make the stall loud.
+                    if (collector)
+                        collector->LogMetricSourceError(path_, /*recreated=*/false);
+                    is_metric_driven_ = false;
+                    is_periodic_ = false;
+                    next_post_hint_.store((std::numeric_limits<int64_t>::max)());
+                }
+                return false;
+            }
+
+            if (outcome != HSM_METRIC_READ_OK)
+                return false;
+
+            if (type_ == HSM_SENSOR_TYPE_DOUBLE_BAR || type_ == HSM_SENSOR_TYPE_INT_BAR)
+            {
+                const int64_t now_steady = SteadyNowMs();
+                if (!metric_bar_open_)
+                {
+                    metric_bar_.is_int = (type_ == HSM_SENSOR_TYPE_INT_BAR);
+                    metric_bar_.precision = metric_bar_precision_;
+                    metric_bar_.period_ms = metric_emit_period_ms_ > 0 ? metric_emit_period_ms_ : 1;
+                    metric_bar_.Init(UnixTimeMilliseconds());
+                    metric_bar_open_steady_ = now_steady;
+                    metric_bar_open_ = true;
+                }
+                metric_bar_.AddValue(value);
+
+                // Emit once the window has elapsed (or the next sample would overshoot it); the next
+                // tick opens a fresh bar.
+                if (now_steady - metric_bar_open_steady_ + post_period_ms_ > metric_emit_period_ms_)
+                {
+                    out_json = collector ? collector->OutgoingBarJson(metric_bar_, path_) : MonitoringBarJson(metric_bar_, path_);
+                    metric_bar_open_ = false;
+                    return true;
+                }
+                return false; // still accumulating this window
+            }
+
+            if (type_ == HSM_SENSOR_TYPE_INT)
+            {
+                out_json = build_value(
+                    HSM_SENSOR_TYPE_INT, std::to_string(static_cast<long long>(std::llround(value))), HSM_SENSOR_STATUS_OK, std::string{});
+            }
+            else
+            {
+                out_json = build_value(HSM_SENSOR_TYPE_DOUBLE, DoubleJson(value), HSM_SENSOR_STATUS_OK, std::string{});
+            }
+            return true;
+        }
+
         if (int_function_ != nullptr)
         {
             const auto value = int_function_(function_user_data_);
-            out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});
+            out_json = build_value(HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});
             return true;
         }
 
@@ -3684,7 +3954,7 @@ namespace
                 static_cast<int32_t>(values_snapshot.size()),
                 function_user_data_);
 
-            out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});
+            out_json = build_value(HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});
             return true;
         }
 
@@ -3717,7 +3987,8 @@ namespace
         if (bar_.count <= 0)
             return false;
 
-        out_json = MonitoringBarJson(bar_, path_);
+        const auto collector = collector_.lock();
+        out_json = collector ? collector->OutgoingBarJson(bar_, path_) : MonitoringBarJson(bar_, path_);
 
         // Roll after a successful flush so a stop -> restart -> stop cycle never resends the bar.
         bar_.Init(UnixTimeMilliseconds());
@@ -3895,14 +4166,52 @@ extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const c
         collector->impl->TestLogError(message);
 }
 
+// Public live transport (#1165): switch the collector from the in-memory recording sender to a real
+// libcurl POST to the server (wire-format values + registration POST to /commands at Start). Install
+// before Start. Returns HSM_RESULT_INVALID_STATE when the library was built without HSM_COLLECTOR_HTTP
+// (no transport compiled in).
+extern "C" hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collector)
+{
+    if (collector == nullptr || collector->impl == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
 #if defined(HSM_COLLECTOR_HTTP)
-// Test-only seam (#1097): swap the recording sender for the live libcurl transport so the native
-// unit tests exercise the real queue -> worker -> POST path against the in-proc capture server.
-// Install before Start (same contract as the clock seam). HTTP-build only.
+    // Must be installed before Start: the worker thread reads sender_/send_wire_ lock-free, so
+    // swapping the transport on a running collector would be a data race. Reject unless stopped.
+    if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
+        return HSM_RESULT_INVALID_STATE;
+    collector->impl->UseHttpTransport();
+    return HSM_RESULT_OK;
+#else
+    return HSM_RESULT_INVALID_STATE;
+#endif
+}
+
+// Install the ready-made Windows PDH / Win32 metric-source factory (#1164) so the value-typed
+// default sensors (Total CPU, Free RAM, disk gauges, free disk, process counters, TCP connections)
+// produce live values at Start. Call before Start. Returns HSM_RESULT_INVALID_STATE off Windows.
+extern "C" hsm_result_t hsm_collector_install_windows_metric_sources(hsm_collector_t* collector)
+{
+    if (collector == nullptr || collector->impl == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+#if defined(_WIN32)
+    // Install before Start: the factory binds sources during Start. Reject on a running collector so
+    // the install can't no-op silently against already-bound sensors.
+    if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
+        return HSM_RESULT_INVALID_STATE;
+    collector->impl->SetMetricSourceFactory(&hsm::platform::WindowsMetricSourceFactory, nullptr);
+    return HSM_RESULT_OK;
+#else
+    return HSM_RESULT_INVALID_STATE;
+#endif
+}
+
+#if defined(HSM_COLLECTOR_HTTP)
+// Test seam (#1097): the native unit tests exercise the real queue -> worker -> POST path against
+// the in-proc capture server. Now an alias of the public hsm_collector_use_http_transport.
 extern "C" void hsm_collector_test_install_http_sender(hsm_collector_t* collector)
 {
     if (collector != nullptr && collector->impl != nullptr)
-        collector->impl->TestInstallHttpSender();
+        collector->impl->UseHttpTransport();
 }
 #endif
 
@@ -4075,6 +4384,25 @@ hsm_result_t hsm_collector_create_double_sensor(
     hsm_sensor_t** out_sensor)
 {
     return CreateSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE, false, std::string{}, out_sensor);
+}
+
+// A custom Double sensor whose value is produced by the installed metric-source factory each
+// post_period_ms (#1164 value-source plugin): at Start the factory is asked for a reader for this
+// path; if it binds, the sensor posts the read value periodically (instead of the app calling
+// AddValue). The crypto-quote plugin is the canonical use. post_period_ms must be > 0.
+hsm_result_t hsm_collector_create_metric_double_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_sensor_t** out_sensor)
+{
+    if (post_period_ms <= 0)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const auto result = CreateSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE, false, std::string{}, out_sensor);
+    if (result == HSM_RESULT_OK && out_sensor != nullptr && *out_sensor != nullptr)
+        (*out_sensor)->impl->MarkMetricCandidate(post_period_ms, 2);
+    return result;
 }
 
 hsm_result_t hsm_collector_create_string_sensor(

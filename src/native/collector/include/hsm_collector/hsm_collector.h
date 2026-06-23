@@ -259,6 +259,21 @@ void hsm_collector_dispose(hsm_collector_t* collector);
    reports reachable. */
 hsm_result_t hsm_collector_test_connection(hsm_collector_t* collector);
 
+/* Switch the collector from the in-memory recording sender to the real libcurl
+   HTTP transport: values serialize to the .NET server WIRE format and are POSTed
+   to /list, and every sensor is registered (wire AddOrUpdate batch -> /commands)
+   at Start. Call BEFORE Start. Returns HSM_RESULT_OK on success, or
+   HSM_RESULT_INVALID_STATE when the library was built without the HTTP transport
+   (HSM_COLLECTOR_HTTP off). Default builds stay on the in-memory sender (#1165). */
+hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collector);
+
+/* Install the ready-made Windows PDH / Win32 metric-source factory (#1164): the value-typed default
+   sensors (Total CPU, Free RAM, disk gauges, free disk, process counters, TCP connections) read live
+   values via PDH/Win32 each post period. Call BEFORE Start. Returns HSM_RESULT_OK on Windows, or
+   HSM_RESULT_INVALID_STATE on other platforms. Equivalent to installing the Windows factory through
+   hsm_collector_set_metric_source_factory; a custom factory may be installed instead. */
+hsm_result_t hsm_collector_install_windows_metric_sources(hsm_collector_t* collector);
+
 /* Lifecycle observer (portable ILifecycleListener equivalent). The callback
    fires on the thread driving the transition, under the lifecycle lock, AFTER
    the status changes; only transitions after registration are delivered (no
@@ -298,6 +313,14 @@ hsm_result_t hsm_collector_create_bool_sensor(
 hsm_result_t hsm_collector_create_double_sensor(
     hsm_collector_t* collector,
     const char* path,
+    hsm_sensor_t** out_sensor);
+/* A custom Double sensor driven by the installed metric-source factory (#1164 value-source plugin):
+   the factory supplies the value each post_period_ms instead of the app calling AddValue. The crypto-
+   quote plugin is the canonical use. post_period_ms must be > 0. */
+hsm_result_t hsm_collector_create_metric_double_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
     hsm_sensor_t** out_sensor);
 hsm_result_t hsm_collector_create_string_sensor(
     hsm_collector_t* collector,
@@ -484,10 +507,10 @@ typedef int (*hsm_metric_source_factory_fn)(
     void** out_source_user_data);
 
 /* Install the metric-source factory (replaces the no-op default). Passing NULL restores the no-op.
-   NOTE (#1099): this stores the factory and is exercised by the seam lifecycle, but no scheduled
-   default sensor reads it yet — the production factory is a no-op and the per-sensor scheduled-tick
-   wiring lands with the live readers (the live-value follow-up). Installing a real factory before
-   Start does NOT yet produce live values. */
+   At Start each value-typed default/candidate sensor asks the factory for a reader for its path; a
+   bound sensor then posts live values each post period (DoubleBar/IntBar as a one-sample bar,
+   Double/Int as a value), recreating its source on a READ_ERROR and disposing it on Stop (#1164).
+   For Windows, `hsm_collector_install_windows_metric_sources` installs a ready-made PDH factory. */
 hsm_result_t hsm_collector_set_metric_source_factory(
     hsm_collector_t* collector,
     hsm_metric_source_factory_fn factory,

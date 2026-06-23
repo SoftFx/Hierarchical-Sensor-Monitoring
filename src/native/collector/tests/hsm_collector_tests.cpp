@@ -2900,6 +2900,218 @@ namespace
         hsm_sensor_release(sensor);
     }
 
+    // Fake metric-source factory for the live-reader plumbing test (#1164): every read returns 42.0
+    // (OK). `fail_next` forces the next read to return ERROR once (exercises dispose+recreate);
+    // `decline` makes the factory return 0 (a declined recreate). `creates`/`reads` count factory and
+    // read calls so the test can poll the async scheduler deterministically.
+    struct FakeMetricFactoryState
+    {
+        std::atomic<int> creates{ 0 };
+        std::atomic<int> reads{ 0 };
+        std::atomic<bool> fail_next{ false };
+        std::atomic<bool> decline{ false };
+    };
+
+    inline hsm_metric_read_t FakeMetricRead(void* user_data, double* out_value)
+    {
+        auto* state = static_cast<FakeMetricFactoryState*>(user_data);
+        ++state->reads;
+        if (state->fail_next.exchange(false))
+            return HSM_METRIC_READ_ERROR;
+        *out_value = 42.0;
+        return HSM_METRIC_READ_OK;
+    }
+
+    inline void FakeMetricDispose(void*) {}
+
+    inline int FakeMetricFactory(
+        void* factory_user_data, const char* /*sensor_path*/, hsm_metric_read_fn* out_read,
+        hsm_metric_dispose_fn* out_dispose, void** out_source_user_data)
+    {
+        auto* state = static_cast<FakeMetricFactoryState*>(factory_user_data);
+        if (state->decline.load())
+            return 0; // declined recreate -> CreateMetricSource returns null
+        ++state->creates;
+        *out_read = &FakeMetricRead;
+        *out_dispose = &FakeMetricDispose;
+        *out_source_user_data = factory_user_data; // share state across recreates
+        return 1;
+    }
+
+    // Poll an atomic counter up to timeout_ms (the scheduler drives reads/creates on its own thread).
+    inline bool WaitForAtomicAtLeast(std::atomic<int>& counter, int target, int timeout_ms)
+    {
+        for (int waited = 0; waited < timeout_ms && counter.load() < target; waited += 10)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return counter.load() >= target;
+    }
+
+    // #1164: a default DoubleBar sensor (Total CPU) bound to a metric source at Start samples its
+    // reader at a sub-period tick and emits ONE aggregated bar per post window (real Min/Max/Mean/Count,
+    // not a single instantaneous sample). An ERROR read posts nothing and recreates the source; a
+    // DECLINED recreate parks the sensor (no silent NO_VALUE forever). The manual clock drives cadence
+    // deterministically; reads/creates are polled because the scheduler runs on its own thread.
+    void NativeMetricSourceDrivesDefaultBarSensor()
+    {
+        FakeMetricFactoryState fake;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_set_metric_source_factory(collector.value, &FakeMetricFactory, &fake) == HSM_RESULT_OK,
+            "set metric-source factory failed");
+        hsm_collector_test_install_manual_clock(collector.value, 1000000);
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_TOTAL_CPU, nullptr, &sensor) == HSM_RESULT_OK,
+            "add Total CPU default sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // First sample fires on Start and OPENS the bar — it must NOT emit yet (the 15 s window is not
+        // elapsed). Total CPU posts every 15 s (catalog) and samples every 5 s (kMetricBarSampleMs).
+        Require(WaitForAtomicAtLeast(fake.reads, 1, 2000), "first metric sample should fire on Start");
+        Require(fake.creates.load() == 1, "factory should create the source once at Start");
+        Require(hsm_collector_sent_count(collector.value) == 0, "an open metric bar must not emit before its window");
+
+        // Drive three more 5 s sample ticks; the read at the 15 s boundary closes + emits the bar.
+        for (int sample = 2; sample <= 4; ++sample)
+        {
+            hsm_collector_test_advance_clock_ms(collector.value, 5000);
+            Require(WaitForAtomicAtLeast(fake.reads, sample, 2000), "each sample tick should read the source");
+        }
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "the aggregated bar should emit at the post window");
+
+        const char* json = nullptr;
+        Require(hsm_collector_get_sent_json(collector.value, 0, &json) == HSM_RESULT_OK, "sent payload lookup failed");
+        const std::string payload = json;
+        Contains(payload, "\"Type\":5");  // DoubleBar
+        Contains(payload, "\"Mean\":42"); // every sample read 42
+        Contains(payload, "\"Min\":42");
+        Contains(payload, "\"Max\":42");
+        Contains(payload, "\"Count\":4"); // 4 samples aggregated into ONE bar (not a single sample)
+
+        // ERROR read -> nothing posted, source disposed + recreated (poll the recreate).
+        const auto after_first = hsm_collector_sent_count(collector.value);
+        const int creates_before = fake.creates.load();
+        fake.fail_next.store(true);
+        hsm_collector_test_advance_clock_ms(collector.value, 5000);
+        Require(
+            WaitForAtomicAtLeast(fake.creates, creates_before + 1, 2000),
+            "an ERROR read must recreate the source via the factory");
+        Require(hsm_collector_sent_count(collector.value) == after_first, "an ERROR read must post nothing");
+
+        // DECLINED recreate: ERROR read + a factory that now returns 0 -> the sensor stops driving
+        // (parked) instead of looping on NO_VALUE forever. No further reads occur after it parks.
+        const int reads_before_park = fake.reads.load();
+        fake.decline.store(true);
+        fake.fail_next.store(true);
+        hsm_collector_test_advance_clock_ms(collector.value, 5000);
+        Require(WaitForAtomicAtLeast(fake.reads, reads_before_park + 1, 2000), "the parking ERROR read should fire");
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        const int reads_parked = fake.reads.load();
+        hsm_collector_test_advance_clock_ms(collector.value, 60000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        Require(fake.reads.load() == reads_parked, "a declined recreate must park the sensor (no further reads)");
+        Require(hsm_collector_sent_count(collector.value) == after_first, "a parked metric sensor posts nothing further");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+
+    // #1164 value-source plugin: a CUSTOM Double sensor created via create_metric_double_sensor is
+    // bound to the installed factory at Start and posts the read value as a Double (the crypto-quote
+    // plugin path, exercised here with the deterministic fake factory).
+    void NativeMetricSourceDrivesCustomDoubleSensor()
+    {
+        FakeMetricFactoryState fake;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_set_metric_source_factory(collector.value, &FakeMetricFactory, &fake) == HSM_RESULT_OK,
+            "set metric-source factory failed");
+        hsm_collector_test_install_manual_clock(collector.value, 1000000);
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_create_metric_double_sensor(collector.value, "plugin/quote", 2000, &sensor) == HSM_RESULT_OK,
+            "create metric double sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "the bound plugin source should post on Start");
+        Require(fake.creates.load() == 1, "factory should create the source once at Start");
+
+        const char* json = nullptr;
+        Require(hsm_collector_get_sent_json(collector.value, 0, &json) == HSM_RESULT_OK, "sent payload lookup failed");
+        const std::string payload = json;
+        Contains(payload, "\"Type\":2"); // Double
+        Contains(payload, "\"Value\":42");
+        Contains(payload, "plugin/quote"); // path tail (the collector prefixes computer/module)
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+
+#if defined(_WIN32)
+    // #1164 Windows smoke: the real PDH factory drives a live Total CPU reading. Uses real time. The
+    // bar now aggregates 5 s samples and emits at the 15 s post window, so the first DoubleBar lands
+    // ~one window in (not immediately) — the timeout allows for that plus a slow runner.
+    void NativeWindowsMetricSourcesProduceLiveValue()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_windows_metric_sources(collector.value) == HSM_RESULT_OK,
+            "installing Windows metric sources should succeed on Windows");
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_TOTAL_CPU, nullptr, &sensor) == HSM_RESULT_OK,
+            "add Total CPU default sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // Generous timeout: the aggregated bar emits at the 15 s window, so allow ~one window plus
+        // priming and slow-runner overhead.
+        Require(
+            WaitForSentCountAtLeast(collector.value, 1, 30000),
+            "the Windows PDH factory should drive a live Total CPU post");
+
+        const char* json = nullptr;
+        Require(hsm_collector_get_sent_json(collector.value, 0, &json) == HSM_RESULT_OK, "sent payload lookup failed");
+        Contains(std::string(json), "\"Type\":5"); // DoubleBar
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+
+    // #1164 Windows smoke: a Process default sensor binds to THIS process's PDH instance (the PID-
+    // resolved "<exe>" / "<exe>#N"), so the per-process counter path resolves and a DoubleBar is
+    // produced. Exercises CurrentProcessInstance's enumeration + ID-Process match end to end.
+    void NativeWindowsProcessMetricResolvesCurrentProcess()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_windows_metric_sources(collector.value) == HSM_RESULT_OK,
+            "installing Windows metric sources should succeed on Windows");
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_PROCESS_CPU, nullptr, &sensor) == HSM_RESULT_OK,
+            "add Process CPU default sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(
+            WaitForSentCountAtLeast(collector.value, 1, 30000),
+            "the PID-resolved Process counter should drive a live post");
+
+        const char* json = nullptr;
+        Require(hsm_collector_get_sent_json(collector.value, 0, &json) == HSM_RESULT_OK, "sent payload lookup failed");
+        Contains(std::string(json), "\"Type\":5"); // DoubleBar
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+#endif
+
     void NativeSchedulerOnErrorIsolatesThrowingCallback()
     {
         auto collector = CreateCollector();
@@ -3150,6 +3362,50 @@ namespace
         Require(!request.body.empty() && request.body.front() == '[' && request.body.back() == ']', "live body must be a JSON array");
         Contains(request.body, "\"Value\":42");
         Contains(request.body, "\"Path\":\"live/int\"");
+        // #1165: the live path posts the .NET server WIRE format (ISO-8601 "Time", not the
+        // canonical/behavior-corpus "UnixTimeMs") so a real HSM server accepts the value.
+        Contains(request.body, "\"Time\":\"");
+        Require(request.body.find("UnixTimeMs") == std::string::npos, "live wire value must NOT carry the canonical UnixTimeMs field");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+    }
+
+    // #1165: a sensor created BEFORE Start is registered on the server — the collector POSTs a wire
+    // AddOrUpdate batch to /commands at Start (the server discriminates on "Type":0 == Command
+    // .AddOrUpdateSensor). Without this the server never learns the sensor exists.
+    void NativeHttpRegistersSensorsOnStart()
+    {
+        hsm::test::HttpCaptureServer server(200);
+
+        hsm_collector_options_t options{};
+        options.access_key = "reg-key";
+        options.server_address = "http://127.0.0.1";
+        options.port = server.Port();
+        options.client_name = "reg-client";
+        options.allow_plaintext_transport = true;
+        options.package_collect_period_ms = 20;
+
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_test_install_http_sender(collector.value);
+
+        // Created BEFORE Start, so it is in the Start registration snapshot. No value is added, so the
+        // only POST the capture server sees is the registration to /commands.
+        SensorHandle sensor = CreateIntSensor(collector.value, "reg/int");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+
+        for (int i = 0; i < 400 && !server.Request().received.load(std::memory_order_acquire); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        const auto& request = server.Request();
+        Require(request.received.load(std::memory_order_acquire), "the capture server must have received the registration POST");
+        Require(request.method == "POST", "registration method must be POST");
+        Require(request.path == "/api/sensors/commands", "registration must route to /commands");
+        Contains(request.headers, "Key: reg-key");
+        Require(!request.body.empty() && request.body.front() == '[' && request.body.back() == ']', "registration body must be a JSON array");
+        Contains(request.body, "\"Type\":0");       // Command.AddOrUpdateSensor discriminator
+        Contains(request.body, "\"SensorType\":1"); // Int
+        Contains(request.body, "\"Path\":\"reg/int\"");
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
     }
@@ -4161,6 +4417,7 @@ namespace
 #if defined(HSM_COLLECTOR_HTTP)
             { "native_http_transport_posts_to_capture_server", [](const std::string&) { NativeHttpTransportPostsToCaptureServer(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
+            { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },
@@ -4171,6 +4428,13 @@ namespace
             { "native_default_sensors_wire_golden", [](const std::string& path) { NativeDefaultSensorsWireGolden(path); } },
             { "dump_default_sensors_golden", [](const std::string&) { DumpDefaultSensorsGolden(); } },
             { "native_metric_source_seam_lifecycle", [](const std::string&) { NativeMetricSourceSeamLifecycle(); } },
+            { "native_metric_source_drives_default_bar_sensor", [](const std::string&) { NativeMetricSourceDrivesDefaultBarSensor(); } },
+            { "native_metric_source_drives_custom_double_sensor", [](const std::string&) { NativeMetricSourceDrivesCustomDoubleSensor(); } },
+#if defined(_WIN32)
+            { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
+            { "native_windows_process_metric_resolves_current_process",
+              [](const std::string&) { NativeWindowsProcessMetricResolvesCurrentProcess(); } },
+#endif
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },

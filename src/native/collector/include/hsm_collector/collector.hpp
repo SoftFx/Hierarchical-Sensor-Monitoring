@@ -149,6 +149,21 @@ namespace hsm::collector
             Check(hsm_collector_test_connection(handle_), "TestConnection failed.");
         }
 
+        /// Switch to the real HTTP transport: values post to the server in wire format and every
+        /// sensor is registered (/commands) at Start. Call BEFORE Start. Throws hsm::collector::Error
+        /// if the library was built without the HTTP transport (HSM_COLLECTOR_HTTP off).
+        void UseHttpTransport()
+        {
+            Check(hsm_collector_use_http_transport(handle_), "HTTP transport is not available (build with HSM_COLLECTOR_HTTP).");
+        }
+
+        /// Install the ready-made Windows PDH/Win32 metric-source factory so the value-typed default
+        /// sensors report live values. Call BEFORE Start. Throws hsm::collector::Error off Windows.
+        void InstallWindowsMetricSources()
+        {
+            Check(hsm_collector_install_windows_metric_sources(handle_), "Windows metric sources are only available on Windows.");
+        }
+
         /// Graceful, terminal, idempotent shutdown. Safe from any thread/state.
         void Dispose()
         {
@@ -241,6 +256,20 @@ namespace hsm::collector
         DoubleSensor CreateDoubleSensor(const std::string& path, const SensorOptions& options)
         {
             return DoubleSensor(CreateWithOptions(path, HSM_SENSOR_TYPE_DOUBLE, options));
+        }
+
+        /// A custom Double sensor whose value comes from the installed metric-source factory each
+        /// `post_period` (a value-source plugin; #1164) instead of the app calling AddValue. The
+        /// returned handle owns the sensor's lifetime. SetMetricSourceFactory must supply a reader for
+        /// `path`, and InstallWindows/UseHttpTransport etc. install before Start.
+        DoubleSensor CreateMetricSensor(const std::string& path, std::chrono::milliseconds post_period)
+        {
+            hsm_sensor_t* sensor = nullptr;
+            Check(
+                hsm_collector_create_metric_double_sensor(
+                    handle_, path.c_str(), static_cast<std::int64_t>(post_period.count()), &sensor),
+                "Failed to create metric double sensor.");
+            return DoubleSensor(sensor);
         }
 
         StringSensor CreateStringSensor(const std::string& path)
