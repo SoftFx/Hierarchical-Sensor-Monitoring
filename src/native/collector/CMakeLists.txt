@@ -348,10 +348,14 @@ foreach(name IN LISTS NATIVE_REGRESSION_TESTS)
     )
 endforeach()
 
-# Windows-only smoke: the real PDH metric-source factory drives a live Total CPU reading (#1164).
+# Windows-only smoke: the real PDH metric-source factory drives a live Total CPU reading (#1164), plus a
+# Process sensor binding to the PID-resolved current-process instance.
 if(WIN32)
     add_test(NAME native_windows_metric_sources_produce_live_value
         COMMAND hsm_collector_tests native_windows_metric_sources_produce_live_value
+    )
+    add_test(NAME native_windows_process_metric_resolves_current_process
+        COMMAND hsm_collector_tests native_windows_process_metric_resolves_current_process
     )
 endif()
 

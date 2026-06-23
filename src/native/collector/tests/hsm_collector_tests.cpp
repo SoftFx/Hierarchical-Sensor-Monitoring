@@ -3082,6 +3082,34 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
         hsm_sensor_release(sensor);
     }
+
+    // #1164 Windows smoke: a Process default sensor binds to THIS process's PDH instance (the PID-
+    // resolved "<exe>" / "<exe>#N"), so the per-process counter path resolves and a DoubleBar is
+    // produced. Exercises CurrentProcessInstance's enumeration + ID-Process match end to end.
+    void NativeWindowsProcessMetricResolvesCurrentProcess()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_windows_metric_sources(collector.value) == HSM_RESULT_OK,
+            "installing Windows metric sources should succeed on Windows");
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_PROCESS_CPU, nullptr, &sensor) == HSM_RESULT_OK,
+            "add Process CPU default sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(
+            WaitForSentCountAtLeast(collector.value, 1, 30000),
+            "the PID-resolved Process counter should drive a live post");
+
+        const char* json = nullptr;
+        Require(hsm_collector_get_sent_json(collector.value, 0, &json) == HSM_RESULT_OK, "sent payload lookup failed");
+        Contains(std::string(json), "\"Type\":5"); // DoubleBar
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
 #endif
 
     void NativeSchedulerOnErrorIsolatesThrowingCallback()
@@ -4404,6 +4432,8 @@ namespace
             { "native_metric_source_drives_custom_double_sensor", [](const std::string&) { NativeMetricSourceDrivesCustomDoubleSensor(); } },
 #if defined(_WIN32)
             { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
+            { "native_windows_process_metric_resolves_current_process",
+              [](const std::string&) { NativeWindowsProcessMetricResolvesCurrentProcess(); } },
 #endif
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
