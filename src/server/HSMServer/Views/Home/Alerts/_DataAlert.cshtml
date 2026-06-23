@@ -246,9 +246,10 @@
 
         $("a.addCondition").off("click").on("click", function () {
             // TTL alerts are single-condition: refuse to add another condition if the row
-            // has been promoted to TTL via the property dropdown.
+            // has been promoted to TTL via the property dropdown. Read data-alert-type via
+            // .attr() to avoid jQuery's .data() cache returning a stale pre-promote value.
             let row = $(this).closest("div.dataAlertRow");
-            if (row.data("alert-type") == @TimeToLiveAlertViewModel.AlertKey) {
+            if (row.attr("data-alert-type") == "@TimeToLiveAlertViewModel.AlertKey") {
                 return;
             }
 

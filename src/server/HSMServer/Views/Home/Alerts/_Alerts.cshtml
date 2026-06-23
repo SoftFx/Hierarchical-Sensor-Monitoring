@@ -15,6 +15,12 @@
     const byte ttlType = TimeToLiveAlertViewModel.AlertKey;
 
     var hasAlerts = Model.DataAlerts.Any(a => a.Value.Any(v => v.IsAlertDisplayed));
+
+    // For a sensor, DataAlerts contains exactly one non-TTL entry keyed by (byte)Type (see
+    // SensorNodeViewModel), plus the TTL entry keyed by ttlType. FirstOrDefault therefore
+    // picks the sensor's concrete type unambiguously — used by both the Add button and the
+    // unified alerts container below. Unused for folder/product branches.
+    var sensorType = Model.DataAlerts.FirstOrDefault(a => a.Key != ttlType).Key;
 }
 
 
@@ -43,8 +49,6 @@ else
 
                 @if (Model is SensorInfoViewModel)
                 {
-                    var sensorType = Model.DataAlerts.FirstOrDefault(a => a.Key != ttlType).Key;
-
                     <a id="addDataAlert" href="javascript:addDataAlert('@sensorType', '@Model.EncodedId');" class="d-none btn btn-link p-0 m-0 ms-2">
                         <i class="fa-solid fa-plus"></i> Add
                     </a>
@@ -58,8 +62,6 @@ else
 
         @if (Model is SensorInfoViewModel sensorInfo)
         {
-            var sensorType = sensorInfo.DataAlerts.FirstOrDefault(a => a.Key != ttlType).Key;
-
             // Unified list: regular + TTL alerts in one container. Each row's data-alert-type
             // attribute (set in _DataAlert.cshtml) tells form collection whether to route to
             // TTL (255) or sensor-type storage.
@@ -135,6 +137,16 @@ else
             cache: false
         }).done(function (viewData) {
             $(`#dataAlertsList_${type}`).append(viewData);
+            defaultNewAlertToTtl($(`#dataAlertsList_${type}`));
         });
+    }
+
+    function defaultNewAlertToTtl($container) {
+        var ttlValue = '@nameof(AlertProperty.TimeToLive)';
+        var $newRow = $container.find('div.dataAlertRow').last();
+        var $property = $newRow.find('select[name="Property"]:first');
+        if ($property.length && $property.find(`option[value="${ttlValue}"]`).length) {
+            $property.val(ttlValue).trigger('change');
+        }
     }
 </script>

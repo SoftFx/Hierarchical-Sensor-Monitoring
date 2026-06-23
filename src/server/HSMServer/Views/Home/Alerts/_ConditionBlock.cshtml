@@ -69,15 +69,30 @@
                 // Promote row to TTL: TTL alerts are single-condition, so drop any non-main
                 // conditions, hide the add-condition button, and tag the row's action block
                 // so the schedule UI restricts to TTL mode. data-alert-type drives form
-                // collection routing on submit. Disable schedule-ttl-gated inputs so the form
-                // doesn't submit ScheduleStartTime/InstantSend for a TTL row (server stores
-                // them via ToTimeToLiveUpdate).
+                // collection routing on submit. The schedule-ttl-gated inputs are also hidden
+                // via the .ttlAction CSS rule and disabled here as defense-in-depth — the
+                // real submission gate is the alertType !== ttlKey check in setFormDataAlerts
+                // (_MetaInfo.cshtml / AlertTemplate.cshtml), which skips ScheduleStartTime /
+                // ScheduleInstantSend for TTL-routed rows regardless of DOM state.
                 conditionsBlock.find("div[name='alertCondition']").not(conditionBlock).remove();
                 conditionsBlock.find("a.addCondition").addClass("d-none");
                 dataAlert.find("div.fullAction").addClass("ttlAction");
                 dataAlert.find(".schedule-ttl-gated input").prop("disabled", true);
                 dataAlert.attr("data-alert-type", @TimeToLiveAlertViewModel.AlertKey);
             } else {
+                // Inside an Any-template TTL container (the only container Any templates
+                // render, id dataAlertsList_<ttlKey>) there is no concrete sensor type to
+                // demote to — Any templates only allow TTL alerts. Revert the dropdown to
+                // TimeToLive and skip both the state change and the operation-refetch ajax
+                // so the row stays routed as TTLPolicy. Without this guard the demote would
+                // set data-alert-type back to containerType (== ttlKey) but flip the visual
+                // state to regular, leaving a row with a non-TTL property persisted as a
+                // malformed TTLPolicy.
+                if (containerType == @TimeToLiveAlertViewModel.AlertKey) {
+                    $(this).val('@nameof(AlertProperty.TimeToLive)');
+                    return;
+                }
+
                 // Demote from TTL: restore the add-condition button and regular schedule UI.
                 // Re-enable the gated schedule inputs. Route the row back to its container's
                 // sensor type so the server matches it against sensor.Type. Note: a TTL alert

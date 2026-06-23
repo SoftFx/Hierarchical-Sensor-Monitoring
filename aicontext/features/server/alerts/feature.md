@@ -1,6 +1,6 @@
 # Feature: Alerts
 
-> Owner: server | Last reviewed: 2026-06-22 | Canonical: yes
+> Owner: server | Last reviewed: 2026-06-23 | Canonical: yes
 > Scope: Server-side alert ownership, creation paths, and the boundary between global (template) and per-sensor alerts.
 
 ---
@@ -24,9 +24,11 @@ As of issue #1159 the editor exposes a single "Add" entry point: Inactivity Peri
 - The multi-edit TTL modal (`_MultiEditModal` / `HomeController.EditAlerts`) remains the supported way to bulk-set TTL across selected items.
 - `AlertsController` (export/import) is preserved as-is.
 - `ProductEntity.Policies` (the non-TTL persisted policy-id list on a product) is **dead at runtime**: `ProductModel(ProductEntity)` only loads `entity.TTLPolicies`, never `entity.Policies`. The field exists for backward-compatible deserialization only; a startup migration prunes it.
-- A single "Add" entry point is exposed in both `_Alerts.cshtml` and `_AlertTemplate.cshtml`. "Inactivity Period" is one of the options in the regular condition property dropdown (added to every condition view model's `Properties` list).
-- Each `dataAlertRow` carries a `data-alert-type` attribute (`255` for TTL, sensor type byte otherwise). The form collection JS (`_MetaInfo.cshtml`, `AlertTemplate.cshtml`) reads this attribute per row and routes field names to `DataAlerts[255][i]...` or `DataAlerts[sensorType][i]...` accordingly, with per-type counters keeping indices contiguous for the model binder.
+- A single "Add" entry point is exposed in both `_Alerts.cshtml` and `_AlertTemplate.cshtml`. "Inactivity Period" is one of the options in the regular condition property dropdown (added to every condition view model's `Properties` list). When a new alert is appended from `AddDataPolicy`, the property select is client-side flipped to `TimeToLive` and `.trigger('change')` runs the promote handler in `_ConditionBlock.cshtml` — so the default newly-added alert is TTL, with the interval picker shown and the action schedule restricted to repeat mode. The user can switch the property back to a regular value to demote the row.
+- Each `dataAlertRow` carries a `data-alert-type` attribute (`255` for TTL, sensor type byte otherwise). The form collection JS (`_AlertsFormCollection.cshtml` partial, inlined into `_MetaInfo.cshtml` and `AlertTemplate.cshtml`) reads this attribute per row and routes field names to `DataAlerts[255][i]...` or `DataAlerts[sensorType][i]...` accordingly, with per-type counters keeping indices contiguous for the model binder. The attribute is read via jQuery `.attr()`, never `.data()` — `_ConditionBlock.cshtml` updates the attribute via `.attr()` on promote/demote, and jQuery's `.data()` cache is not invalidated by `.attr()`, so a `.data()` read after a `.attr()` write returns the stale pre-toggle value and routes the row to the wrong dictionary key.
 - TTL alerts are single-condition: when the main condition's property is `AlertProperty.TimeToLive`, the `_ConditionBlock.cshtml` change handler removes any non-main conditions and hides the "add condition" button.
+- The TTL demote path in `_ConditionBlock.cshtml` is a no-op inside an Any-template TTL container (`containerType == ttlKey`). Any templates only allow TTL alerts, so there is no concrete sensor type to demote to — the dropdown reverts to `TimeToLive` and the operation-refetch ajax is skipped, keeping the row routed as `TTLPolicy`. Without this guard the demote would set `data-alert-type` back to the container's key (which is also `ttlKey` for Any) but flip the visual state to regular, producing a row with a non-TTL property persisted as a malformed `TTLPolicy`.
+- `ConditionViewModel.Property` defaults to `PropertiesItems.First()`. `AlertProperty.TimeToLive` is the last entry in every condition view model's `Properties` list (asserted by `ConditionViewModelPropertiesTests.DefaultProperty_IsNotTimeToLive`), so a freshly-created alert never defaults to TTL — the user must explicitly pick Inactivity Period.
 
 ## Primary Workflows
 
@@ -54,6 +56,7 @@ As of issue #1159 the editor exposes a single "Add" entry point: Inactivity Peri
 |---|---|
 | `src/server/HSMServer/Views/Home/_MetaInfo.cshtml` | Hosts the `_Alerts.cshtml` partial; gated to `SensorInfoViewModel`. |
 | `src/server/HSMServer/Views/Home/Alerts/_Alerts.cshtml` | Per-sensor alert editor. |
+| `src/server/HSMServer/Views/Home/Alerts/_AlertsFormCollection.cshtml` | Shared form-collection JS for `DataAlerts[...]` routing; inlined into `_MetaInfo.cshtml` and `AlertTemplate.cshtml`. |
 | `src/server/HSMServer/Views/Tree/_MultiEditModal.cshtml` | Multi-edit TTL modal. |
 | `src/server/HSMServer/Controllers/HomeController.cs` | Alert mutation endpoints + `UpdateProductInfo`. |
 | `src/server/HSMServer/Controllers/AlertTemplatesController.cs` | Global alert template CRUD. |
@@ -102,6 +105,11 @@ Coverage for the product-owned policy cleanup lives in `src/tests/HSMServer.Core
 - `Cleanup_PreservesTtlPolicies_OnProduct`
 - `Cleanup_PreservesSensorPolicies`
 - `Cleanup_UpdatesProductEntityPoliciesList_WithSurvivingIds`
+
+Condition view model guards live in `src/tests/HSMServer.Core.Tests/ConditionViewModelTests/ConditionViewModelPropertiesTests.cs`:
+
+- `PropertiesItems_IncludesTimeToLive` — every condition type offers Inactivity Period in the dropdown.
+- `DefaultProperty_IsNotTimeToLive` — a freshly-created alert never defaults to TTL; the user must explicitly pick Inactivity Period. Guards against a `Properties` list reorder silently routing every new row to `TTLPolicy`.
 
 ## Notes
 

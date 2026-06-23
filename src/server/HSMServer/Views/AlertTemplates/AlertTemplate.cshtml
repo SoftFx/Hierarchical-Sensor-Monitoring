@@ -152,8 +152,9 @@
 
     function addDataAlert(entityId) {
         // For Type=Any templates, only TTL alerts are addable (regular alerts need a concrete type).
-        // For concrete types, a regular alert is created and the user can switch the property
-        // to Inactivity Period in the condition block.
+        // For concrete types, a regular alert is created and the property is then flipped to
+        // Inactivity Period client-side so the default new alert is TTL. The user can switch
+        // back to a regular property via the condition dropdown.
         var selectedType = $('#Type').val();
         var isAny = selectedType == @DataAlertTemplateViewModel.AnyType;
         var listType = isAny ? @ttlType : selectedType;
@@ -163,7 +164,14 @@
             url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${sendType}&entityId=${entityId}&folderId=${$('#FolderId').val()}`,
             cache: false
         }).done(function (viewData) {
-            $(`#dataAlertsList_${listType}`).append(viewData);
+            var $container = $(`#dataAlertsList_${listType}`);
+            $container.append(viewData);
+            var ttlValue = '@nameof(AlertProperty.TimeToLive)';
+            var $newRow = $container.find('div.dataAlertRow').last();
+            var $property = $newRow.find('select[name="Property"]:first');
+            if ($property.length && $property.find(`option[value="${ttlValue}"]`).length) {
+                $property.val(ttlValue).trigger('change');
+            }
         });
     }
 
@@ -247,134 +255,7 @@
         });
     }
 
-    function setFormDataAlerts(formData, type, alertsList) {
-        // Per-row destination type: read data-alert-type if present (set in _DataAlert.cshtml
-        // based on whether the main condition is TTL). Rows whose main condition is TTL route
-        // to DataAlerts[255] so the server stores them as TTLPolicy; others go to the
-        // container's sensor type. Indices are tracked per destination type so the ASP.NET
-        // model binder sees contiguous indexes for each key.
-        const ttlKey = String(@ttlType);
-        let counters = {};
-        counters[type] = 0;
-        counters[ttlKey] = 0;
-
-        alertsList.find(`div.dataAlertRow`).each(function () {
-            const $row = $(this);
-            const rawType = $row.data("alert-type");
-            const alertType = rawType != null ? String(rawType) : String(type);
-            if (!(alertType in counters)) counters[alertType] = 0;
-            const i = counters[alertType]++;
-
-            setFormDataAlertsProperty(formData, "input", alertType, i, $row, "Id");
-            setFormDataAlertsProperty(formData, "input", alertType, i, $row, "EntityId");
-            setFormDataAlertsProperty(formData, "input", alertType, i, $row, "IsDisabled");
-            setFormDataAlertsProperty(formData, "input", alertType, i, $row, "TemplateId");
-            setFormDataAlertsProperty(formData, "select", alertType, i, $row, "ScheduleId");
-
-
-            $row.find(`div[name='alertCondition']`).each(function (j) {
-                setFormDataAlertsListProperty(formData, alertType, i, j, $(this), "Conditions", "select", "Property");
-
-                let intervalOperationBlock = $(this).find('div.interval-operation');
-                if (intervalOperationBlock.hasClass("d-flex")) {
-                    setFormDataAlertsConditionIntervals(formData, alertType, i, j, intervalOperationBlock, "select", "Interval");
-                    setFormDataAlertsConditionIntervals(formData, alertType, i, j, intervalOperationBlock, "input", "CustomString");
-                }
-                else {
-                    let operationBlock = $(this).find('div.operation');
-
-                    setFormDataAlertsListProperty(formData, alertType, i, j, operationBlock, "Conditions", "select", "Operation");
-                    setFormDataAlertsListProperty(formData, alertType, i, j, operationBlock, "Conditions", "input", "Target");
-                }
-            });
-
-            $row.find(`div[name='alertAction']`).each(function (j) {
-                setFormDataAlertsListProperty(formData, alertType, i, j, $(this), "Actions", "select", "Action");
-
-                let sendBlock = $(this).find('div[name="sendNotificationAction"]');
-                if (sendBlock.hasClass('d-flex')) {
-                    setFormDataAlertsListProperty(formData, alertType, i, j, sendBlock, "Actions", "input", "Comment");
-                    setFormDataAlertsSendNotificationChats(formData, alertType, i, j, sendBlock);
-
-                    let scheduleBlock = sendBlock.find('div[name="schedule"]');
-                    if (scheduleBlock.hasClass('d-flex')) {
-                        setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "select", "ScheduleRepeatMode");
-
-                        // TTL alerts only support repeat-mode scheduling. StartTime/InstantSend
-                        // are not rendered for TTL rows loaded from storage (Model.IsTtl gate in
-                        // _ActionBlock.cshtml); for rows promoted to TTL client-side the inputs
-                        // exist but are disabled+hidden via the .ttlAction class. Skip both
-                        // fields when routing to the TTL key so the server doesn't receive
-                        // leftover values from a regular→TTL toggle.
-                        if (alertType !== ttlKey) {
-                            setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "input", "ScheduleStartTime");
-                            setFormDataAlertsListProperty(formData, alertType, i, j, scheduleBlock, "Actions", "input", "ScheduleInstantSend", 'checkbox');
-                        }
-                    }
-                }
-
-                let showBlock = $(this).find('div[name="showIconAction"]');
-                if (showBlock.hasClass('d-flex')) {
-                    showBlock.find(`div[name='emoji']`).each(function () {
-                        formData.append(`DataAlerts[${alertType}][${i}].Actions[${j}].Icon`, $(this)[0].innerText);
-                    });
-                }
-            });
-        });
-    }
-
-    function setFormDataAlertsProperty(formData, element, type, i, block, propertyName) {
-        block.find(`${element}[name='${propertyName}']:first`).each(function () {
-            formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
-        });
-    }
-
-    function setFormDataAlertsListProperty(formData, type, i, j, block, list, element, propertyName, elementType = undefined) {
-        block.find(`${element}[name='${propertyName}']`).each(function () {
-            let value = $(this).val();
-            if (elementType == 'checkbox') {
-                value = this.checked;
-            }
-
-            formData.append(`DataAlerts[${type}][${i}].${list}[${j}].${propertyName}`, value);
-        });
-    }
-
-    function setFormDataAlertsConditionIntervals(formData, type, i, j, block, element, propertyName) {
-        var targetName = block.attr("name");
-
-        block.find(`${element}[name='Target.${propertyName}']`).each(function () {
-            formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${targetName}.${propertyName}`, $(this).val());
-        });
-    }
-
-    function setFormDataAlertsSendNotificationChats(formData, type, i, j, block) {
-        let chatsMode = '@ChatsMode.Custom';
-        let chats = [];
-
-        block.find("select[name='Chats']:first option").each(function () {
-            if ($(this).is(':selected')) {
-                if ($(this).val() === '@ChatsMode.FromParent' || $(this).val() === '@ChatsMode.NotInitialized' ||
-                    $(this).val() === '@ChatsMode.Empty' || $(this).val() === '@ChatsMode.All') {
-                    chatsMode = $(this).val();
-                    chats = [];
-                    return;
-                }
-
-                chats.push($(this).val());
-            }
-        });
-
-        block.find("div[name='Chats']").each(function () {
-            chatsMode = '@ChatsMode.FromParent';
-        });
-
-        formData.append(`DataAlerts[${type}][${i}].Actions[${j}].ChatsMode`, chatsMode);
-
-        for (let k = 0; k < chats.length; ++k){
-            formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${k}]`, chats[k]);
-        }
-    }
+    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertsFormCollection.cshtml")
 
     function updateTemplateChatDropdowns(chats) {
         var groups = chats.filter(c => c.Type === 1);
