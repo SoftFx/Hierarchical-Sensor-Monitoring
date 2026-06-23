@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 
 namespace HSMCommon
 {
@@ -44,44 +44,48 @@ namespace HSMCommon
             DoActionWhileThereAreAttempts(RemoveFolder);
         }
 
-        // Fire-and-forget retry loop. Callers (test-fixture Dispose, static ctor) are
-        // synchronous and cannot await. Two failure modes had to be avoided simultaneously:
+        // Synchronous retry loop. Callers (ServerConfig static ctor, DatabaseFixture
+        // ctor, DatabaseRegisterFixture.Dispose) treat the operation as "done when I
+        // return" — they cannot await, and several of them immediately write to / open
+        // a database in the directory we just touched. Three failure modes had to be
+        // avoided simultaneously:
         //
-        //   1. The previous `async void` form routed the terminal IOException through
-        //      Task.ThrowAsync into the ThreadPool, surfacing as an unhandled exception
-        //      and crashing the test-host process — even on a best-effort cleanup that
-        //      callers have no way to react to.
-        //   2. The intermediate synchronous retry (Thread.Sleep on the calling thread)
-        //      blocked parallel fixture constructors for up to 25 s, cascading into
-        //      hundreds of xUnit TestClassException failures.
+        //   1. `async void` routed the terminal IOException through Task.ThrowAsync
+        //      into the ThreadPool and crashed the test-host process. The first attempt
+        //      was synchronous, but the failure path was off-thread and un-catchable.
+        //   2. `_ = Task.Run(...)` deferred even the first attempt, racing with
+        //      immediate-successor writes in ServerConfig and with fresh-database
+        //      opens in DatabaseFixture. It also faulted the discarded task on any
+        //      non-IOException, turning programmer errors into UnobservedTaskException.
+        //   3. `Thread.Sleep` + throw-after-max-retries cascaded into 310 xUnit
+        //      TestClassExceptions, because fixture constructors re-threw the terminal
+        //      IOException and xUnit wrapped it.
         //
-        // Pushing the retry onto the thread pool via `Task.Run` preserves the original
-        // non-blocking behaviour, and swallowing the terminal exception keeps the cleanup
-        // best-effort: the callers' contracts already treat the operation as fire-and-forget
-        // (none of them checks the result), and the underlying LevelDB disposal races that
-        // trigger this path are benign leftover-temp-file situations.
+        // The shape below makes the first attempt synchronous (so the common success
+        // path completes before return), retries transient IOExceptions inline, and
+        // swallows the terminal IOException so cleanup / setup does not propagate a
+        // best-effort failure into callers that have no useful way to react. Non-IOException
+        // errors (bad path, access denied) propagate to the caller deterministically —
+        // those signal programmer error, not a transient race.
         private static void DoActionWhileThereAreAttempts(Action action)
         {
-            _ = Task.Run(async () =>
+            int attempts = 0;
+
+            while (true)
             {
-                int attempts = 0;
-
-                while (true)
+                try
                 {
-                    try
-                    {
-                        action?.Invoke();
-                        return;
-                    }
-                    catch (IOException)
-                    {
-                        if (++attempts == MaxAttemptsCount)
-                            return;
-
-                        await Task.Delay(WaitTime);
-                    }
+                    action?.Invoke();
+                    return;
                 }
-            });
+                catch (IOException)
+                {
+                    if (++attempts == MaxAttemptsCount)
+                        return;
+
+                    Thread.Sleep(WaitTime);
+                }
+            }
         }
     }
 }
