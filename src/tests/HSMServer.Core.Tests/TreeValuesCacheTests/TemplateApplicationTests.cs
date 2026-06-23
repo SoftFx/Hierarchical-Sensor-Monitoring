@@ -122,9 +122,18 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 _fixture.ProductId, sensorPath, out var sensor);
             Assert.True(found, "Sensor was not found in cache");
 
+            // Positional order is not part of the contract: _alertTemplates is a
+            // ConcurrentDictionary (insertion order undefined), and the per-sensor queue
+            // applies matching templates in whatever order the dispatch loop sees them.
+            // Even with the OrderBy on the dispatch loop, asserting position here would
+            // couple the test to that implementation detail. Assert set membership instead.
             Assert.Equal(2, sensor.Policies.TTLPolicies.Count);
-            Assert.Equal(template1.Id, sensor.Policies.TTLPolicies[0].TemplateId);
-            Assert.Equal(template2.Id, sensor.Policies.TTLPolicies[1].TemplateId);
+            var templateIds = sensor.Policies.TTLPolicies
+                .Select(p => p.TemplateId!.Value)
+                .OrderBy(id => id)
+                .ToArray();
+            var expectedIds = new[] { template1.Id, template2.Id }.OrderBy(id => id).ToArray();
+            Assert.Equal(expectedIds, templateIds);
         }
 
         [Fact]

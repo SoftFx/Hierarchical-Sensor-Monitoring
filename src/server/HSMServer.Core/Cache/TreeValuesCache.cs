@@ -2455,7 +2455,13 @@ namespace HSMServer.Core.Cache
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
 
-            foreach (var template in _alertTemplates.Values)
+            // OrderBy on the dispatch loop: _alertTemplates is a ConcurrentDictionary, whose
+            // .Values enumeration order is not insertion-stable, and ApplyTemplateToSensor
+            // dispatches per-template onto the per-sensor queue. Without ordering, two
+            // templates matching the same sensor could land in arbitrary order in
+            // sensor.Policies.TTLPolicies, which surfaces as non-deterministic list state for
+            // callers that read the policies list by index.
+            foreach (var template in _alertTemplates.Values.OrderBy(t => t.Id))
             {
                 if (template.IsMatch(sensor))
                     ApplyTemplateToSensor(new ApplyTemplateRequest(sensor.Id, template));
