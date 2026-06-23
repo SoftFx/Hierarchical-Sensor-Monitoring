@@ -13,6 +13,8 @@ The wrapper is a **thin convenience layer**: it adds no wire behavior. Every reg
 
 **Error strategy (resolved #1100):** exceptions. Every failing call throws `hsm::collector::Error` (carrying the collector's `last_error` for collector-scoped calls, or a static message + C result-code name for sensor-scoped calls). This matches the .NET wrapper's throwing style.
 
+**Hosted by the HSM Agent (#1167).** The standalone Windows-service product `src/agent/` consumes this API to run the collector as an always-on service. See `agent/feature.md`.
+
 ---
 
 ## Invariants

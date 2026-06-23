@@ -1,0 +1,2 @@
+# Windows batch installers must keep CRLF line endings.
+*.cmd text eol=crlf

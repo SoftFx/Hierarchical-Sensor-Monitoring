@@ -1,0 +1,23 @@
+# Formatting for the native collector core (epic #1093 / #1095).
+# Matches the existing hand-written style: Allman braces, 4-space indent,
+# indented namespace bodies, left-aligned pointers, braced-init with inner
+# spaces. Enforced in CI by `clang-format --dry-run --Werror`.
+Language: Cpp
+BasedOnStyle: Microsoft
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+# 0 disables column-based reflow: the hand-written one-argument-per-line
+# wrapping (especially in the C ABI header) is clearer than clang-format's
+# column packing, so we only normalize braces / indentation / spacing.
+ColumnLimit: 0
+NamespaceIndentation: All
+IndentExternBlock: NoIndent
+PointerAlignment: Left
+Cpp11BracedListStyle: false
+IndentCaseLabels: false
+AccessModifierOffset: -4
+AllowShortLambdasOnASingleLine: All
+AllowShortFunctionsOnASingleLine: Inline
+FixNamespaceComments: true
+SortIncludes: false

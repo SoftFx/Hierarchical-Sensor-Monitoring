@@ -1,0 +1,105 @@
+name: HSM Agent build (Windows)
+
+# Builds the HSM Agent (src/agent) — the always-on Windows service that hosts the native collector
+# (epic #1167). The agent links the in-tree collector with the libcurl HTTP transport, so it builds
+# only on Windows with vcpkg (curl). The lane:
+#   - configures + builds src/agent in Release with warnings-as-errors,
+#   - runs the portable config-parser ctest suite,
+#   - stages the publishable bundle payload (hsm-agent.exe + config.json template + install scripts)
+#     and uploads it as an artifact. The server's per-product download (W6/W7) consumes hsm-agent.exe
+#     (wiring the artifact into the server image is the release step, W9). The exe is unsigned here;
+#     code-signing is a later release step.
+
+on:
+  push:
+    branches: [master, develop]
+    paths:
+      - 'src/agent/**'
+      - '.github/workflows/agent-windows-build.yml'
+  pull_request:
+    # ready_for_review so the lane runs when a draft is marked ready.
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/agent/**'
+      - '.github/workflows/agent-windows-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Skip on draft PRs; non-PR events have no pull_request payload, so they still run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: windows-latest
+    env:
+      VCPKG_DISABLE_METRICS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the agent vcpkg.json builtin-baseline so the curl manifest resolves deterministically.
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
+
+      - name: Configure (Release, HTTP transport on)
+        # The agent CMake forces HSM_COLLECTOR_HTTP=ON on Windows; vcpkg manifest install (curl) runs
+        # at configure time. Override VCPKG_BINARY_SOURCES to "clear" so the GHA cache backend (whose
+        # tokens aren't reliably exported) is not used — curl builds from source. Same fix the
+        # collector http-transport lane uses.
+        env:
+          VCPKG_BINARY_SOURCES: clear
+        run: >
+          cmake -S src/agent -B build/agent
+          -DHSM_AGENT_WERROR=ON
+          -DHSM_COLLECTOR_WERROR=ON
+          -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build
+        run: cmake --build build/agent --config Release --parallel
+
+      - name: Test (config parser)
+        run: ctest --test-dir build/agent -C Release --output-on-failure
+
+      # Service smoke (W9): the GitHub windows runner is admin, so exercise the real SCM lifecycle —
+      # --install registers an auto-start service, --uninstall removes it — and a short --console run
+      # proves the worker survives an unreachable server (no crash) instead of exiting.
+      - name: Service install / console smoke
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem -Recurse -Path build/agent -Filter hsm-agent.exe | Select-Object -First 1).FullName
+          Write-Host "smoke exe: $exe"
+
+          & $exe --install
+          if ($LASTEXITCODE -ne 0) { throw "--install failed ($LASTEXITCODE)" }
+          $qc = (sc.exe qc HSMAgent | Out-String)
+          Write-Host $qc
+          if ($qc -notmatch 'AUTO_START') { throw "service is not auto-start" }
+
+          '{ "server": { "address": "https://127.0.0.1", "port": 65530, "accessKey": "smoke" }, "periods": { "collectMs": 1000 } }' |
+            Out-File -Encoding ascii cfg.json
+          $p = Start-Process -FilePath $exe -ArgumentList '--console','--config','cfg.json' -PassThru
+          Start-Sleep -Seconds 5
+          if ($p.HasExited) { throw "console run exited early (exit $($p.ExitCode)) — should survive an unreachable server" }
+          Stop-Process -Id $p.Id -Force
+
+          & $exe --uninstall
+          if ($LASTEXITCODE -ne 0) { throw "--uninstall failed ($LASTEXITCODE)" }
+          Write-Host "service install + console-resilience + uninstall smoke ok"
+
+      - name: Stage bundle payload
+        shell: bash
+        run: |
+          mkdir -p staging
+          exe=$(find build/agent -name 'hsm-agent.exe' -type f | head -1)
+          echo "agent exe: $exe"
+          cp "$exe" staging/hsm-agent.exe
+          cp src/agent/config.template.json staging/config.json
+          cp src/agent/packaging/install.cmd staging/install.cmd
+          cp src/agent/packaging/uninstall.cmd staging/uninstall.cmd
+          ls -l staging
+
+      - name: Upload agent bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: hsm-agent-windows
+          path: staging
+          if-no-files-found: error
