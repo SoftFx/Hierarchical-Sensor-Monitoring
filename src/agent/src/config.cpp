@@ -447,6 +447,20 @@ namespace hsm::agent
             return true;
         }
 
+        bool ReadDouble(const JsonValue& object, const std::string& key, double& out, std::string& error)
+        {
+            const JsonValue* value = object.Find(key);
+            if (value == nullptr)
+                return true;
+            if (value->type != JsonValue::Type::Number)
+            {
+                error = "field '" + key + "' must be a number";
+                return false;
+            }
+            out = value->number;
+            return true;
+        }
+
     } // namespace
 
     bool AgentConfig::ComputerNameIsAuto() const
@@ -512,6 +526,17 @@ namespace hsm::agent
                 return false;
         }
 
+        if (const JsonValue* top_cpu = root.Find("topCpu"))
+        {
+            if (top_cpu->type != JsonValue::Type::Object)
+            {
+                error = "'topCpu' must be an object";
+                return false;
+            }
+            if (!ReadBool(*top_cpu, "enabled", out.top_cpu_enabled, error) || !ReadInt(*top_cpu, "periodMs", out.top_cpu_period_ms, error) || !ReadDouble(*top_cpu, "minPercent", out.top_cpu_min_percent, error) || !ReadInt(*top_cpu, "count", out.top_cpu_count, error))
+                return false;
+        }
+
         if (!ReadString(root, "productVersion", out.product_version, error))
             return false;
 
@@ -530,6 +555,24 @@ namespace hsm::agent
         {
             error = "config: 'server.port' must be between 1 and 65535";
             return false;
+        }
+        if (out.top_cpu_enabled)
+        {
+            if (out.top_cpu_period_ms <= 0)
+            {
+                error = "config: 'topCpu.periodMs' must be greater than 0";
+                return false;
+            }
+            if (out.top_cpu_count <= 0)
+            {
+                error = "config: 'topCpu.count' must be greater than 0";
+                return false;
+            }
+            if (out.top_cpu_min_percent < 0.0)
+            {
+                error = "config: 'topCpu.minPercent' must not be negative";
+                return false;
+            }
         }
 
         return true;

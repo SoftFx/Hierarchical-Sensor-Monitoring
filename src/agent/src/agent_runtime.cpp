@@ -1,6 +1,11 @@
 #include "agent/agent_runtime.hpp"
 
+#include "agent/cpu_top.hpp"
+
+#include <chrono>
 #include <exception>
+#include <map>
+#include <thread>
 #include <utility>
 
 #ifdef _WIN32
@@ -78,6 +83,48 @@ namespace hsm::agent
         cv_.notify_all();
     }
 
+    void AgentRuntime::RunTopCpuLoop(hc::Collector& collector)
+    {
+#ifdef _WIN32
+        WindowsCpuSampler sampler;
+        // exe name -> its sensor, created lazily the first time the name reaches the top list.
+        std::map<std::string, hc::DoubleSensor> sensors;
+        const auto period = std::chrono::milliseconds(config_.top_cpu_period_ms);
+
+        // Seed the baseline now so the first posted tick is a true delta over one full period.
+        sampler.Sample();
+
+        while (true)
+        {
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                if (cv_.wait_for(lock, period, [this] { return stop_requested_; }))
+                    return; // stop requested — leave before touching the collector again
+            }
+
+            try
+            {
+                const auto by_name = sampler.Sample();
+                const auto top = SelectTopN(by_name, config_.top_cpu_count, config_.top_cpu_min_percent);
+                for (const auto& usage : top)
+                {
+                    auto it = sensors.find(usage.name);
+                    if (it == sensors.end())
+                        it = sensors.emplace(usage.name, collector.CreateDoubleSensor("Top CPU processes/" + usage.name)).first;
+                    it->second.AddValue(usage.percent);
+                }
+            }
+            catch (const std::exception& ex)
+            {
+                // A bad tick must never kill the loop or the agent; log and try again next period.
+                Log(hc::LogLevel::Error, std::string{ "top-CPU sampling error: " } + ex.what());
+            }
+        }
+#else
+        (void)collector;
+#endif
+    }
+
     int AgentRuntime::Run(const std::function<void()>& on_started)
     {
         try
@@ -121,10 +168,20 @@ namespace hsm::agent
 
             collector.Start();
 
+            // Periodic "top processes by CPU" sensors (issue #1175). Own thread so the minute-cadence
+            // sampling never blocks the collector's pipeline; it waits on the same cv_ and returns the
+            // moment stop is requested. Joined before Stop() so no sensor op overlaps shutdown.
+            std::thread top_cpu_thread;
+            if (config_.top_cpu_enabled)
+                top_cpu_thread = std::thread(&AgentRuntime::RunTopCpuLoop, this, std::ref(collector));
+
             if (on_started)
                 on_started();
 
             WaitForStop();
+
+            if (top_cpu_thread.joinable())
+                top_cpu_thread.join();
 
             Log(hc::LogLevel::Info, "HSM Agent stopping...");
             collector.Stop(); // bounded graceful drain (capped internally)

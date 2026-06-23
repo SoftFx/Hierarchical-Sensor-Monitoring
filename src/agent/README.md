@@ -21,6 +21,10 @@ With a minimal config it registers and streams the standard host catalog via
 PDH/Win32 metric sources (`InstallWindowsMetricSources()`). Computer sensors appear in the server
 tree under `<computer>/.computer/...` for the product the access key belongs to.
 
+Optionally (`topCpu.enabled` in the config) it also posts **top processes by CPU** every minute —
+per-exe-name `Top CPU processes/<exe>` Double sensors for the busiest apps (issue #1175). See the
+[config reference](../../docs/hsm-agent.md#configuration-reference).
+
 ## Build
 
 The agent links the in-tree collector with the libcurl HTTP transport, so a vcpkg toolchain (for
