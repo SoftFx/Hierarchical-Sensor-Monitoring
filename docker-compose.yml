@@ -1,13 +1,19 @@
+# Single-container HSM Server. Everyone runs the same stack with `docker compose up -d`.
+# The image is published by CI (server-build.yml). To run a build from local sources instead,
+# publish it to this exact tag first:
+#   dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 \
+#     -p:PublishProfile=DefaultContainer -p:ContainerImageName=hsmonitoring/hierarchical_sensor_monitoring
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
+    container_name: hsm-server
     restart: unless-stopped
     user: '0'
     ports:
-      - '44330:44330'
-      - '44333:44333'
+      - '44330:44330'   # Sensor API — collectors/agents send values here (https, /api/sensors/*)
+      - '44333:44333'   # Web UI — browser dashboard, admin, agent download (https)
     volumes:
-      - ./Logs:/app/Logs
-      - ./Config:/app/Config
-      - ./Databases:/app/Databases
+      - ./Logs:/app/Logs                       # NLog output
+      - ./Config:/app/Config                   # server config (TLS cert, Telegram, Agent settings)
+      - ./Databases:/app/Databases             # embedded LevelDB (sensor history + metadata)
       - ./DatabasesBackups:/app/DatabasesBackups

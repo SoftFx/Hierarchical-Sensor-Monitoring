@@ -40,6 +40,10 @@ server image + the install→data→stop run). A plugin system is **not** planne
   per-install/per-product data (server address, key, identity, sensor groups) lives in a separate
   `config.json`. The PE is never patched — preserving Authenticode (no SmartScreen/AV breakage). The
   agent enforces this structurally by reading config from a file, never from embedded bytes.
+- **Self-contained exe.** The Windows build is statically linked (`x64-windows-static` triplet +
+  static CRT, forced in `src/agent/CMakeLists.txt`): the bundle ships one `hsm-agent.exe` with no
+  libcurl/zlib DLLs or VC++ redistributable, so it runs on a clean machine. curl uses Schannel (no
+  OpenSSL). This is what keeps the single-exe bundle (above) actually runnable after download.
 - **No wire distortion.** The agent adds no payload behavior; it calls the collector's public API
   (`AddAllComputerSensors`/`AddAllModuleSensors`/`UseHttpTransport`/`InstallWindowsMetricSources`).
   All wire/parity contracts remain the collector's.
