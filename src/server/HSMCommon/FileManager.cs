@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 
 namespace HSMCommon
 {
@@ -44,7 +44,13 @@ namespace HSMCommon
             DoActionWhileThereAreAttempts(RemoveFolder);
         }
 
-        private static async void DoActionWhileThereAreAttempts(Action action)
+        // Sync retry loop. Callers (test-fixture Dispose, static ctor) are synchronous and
+        // fire-and-forget — they cannot await. The previous `async void` form routed the
+        // terminal IOException through Task.ThrowAsync into the ThreadPool, which surfaces
+        // as an unhandled exception and crashes the test-host process even when every test
+        // has passed. Blocking the calling thread on Thread.Sleep is acceptable here: the
+        // callers run at fixture disposal / startup, off any hot path.
+        private static void DoActionWhileThereAreAttempts(Action action)
         {
             int attempts = 0;
 
@@ -60,7 +66,7 @@ namespace HSMCommon
                     if (++attempts == MaxAttemptsCount)
                         throw;
 
-                    await Task.Delay(WaitTime);
+                    Thread.Sleep(WaitTime);
                 }
             }
         }
