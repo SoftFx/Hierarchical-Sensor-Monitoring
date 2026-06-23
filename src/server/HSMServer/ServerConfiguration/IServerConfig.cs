@@ -12,6 +12,8 @@
 
         ServerCertificateConfig ServerCertificate { get; }
 
+        AgentConfig Agent { get; }
+
 
         void ResaveSettings();
     }
