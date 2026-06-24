@@ -1,0 +1,17 @@
+{
+  "server": {
+    "address": "https://localhost",
+    "port": 44330,
+    "accessKey": "5c1a1057-d02c-4240-830a-92d5b3ad2c48",
+    "allowUntrustedCertificate": true
+  },
+  "identity": {
+    "computerName": "auto"
+  },
+  "topCpu": {
+    "enabled": true,
+    "periodMs": 60000,
+    "minPercent": 1.0,
+    "count": 10
+  }
+}
