@@ -2,6 +2,7 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.DefaultSensors.Windows.Network;
+using HSMDataCollector.DefaultSensors.Windows.Process;
 using HSMDataCollector.DefaultSensors.Windows.Service;
 using HSMDataCollector.DefaultSensors.Windows.WindowsInfo;
 using HSMDataCollector.Options;
@@ -20,7 +21,7 @@ namespace HSMDataCollector.DefaultSensors
 
 
         public IWindowsCollection AddAllComputerSensors() =>
-            (this as IWindowsCollection).AddSystemMonitoringSensors().AddAllDisksMonitoringSensors().AddWindowsInfoMonitoringSensors().AddAllNetworkSensors();
+            (this as IWindowsCollection).AddSystemMonitoringSensors().AddAllDisksMonitoringSensors().AddWindowsInfoMonitoringSensors().AddAllNetworkSensors().AddTopCpuProcessesSensors();
 
         public IWindowsCollection AddAllModuleSensors(Version productVersion)
         {
@@ -272,6 +273,12 @@ namespace HSMDataCollector.DefaultSensors
         public IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null) => AddNetworkConnectionFailures(options).AddNetworkConnectionsEstablished(options).AddNetworkConnectionsReset(options);
 
         #endregion
+
+
+        public IWindowsCollection AddTopCpuProcessesSensors(int count = 10, double minPercent = 1.0, TimeSpan? period = null)
+        {
+            return ToWindows(new WindowsTopCpuMonitor(_storage, count, minPercent, period ?? TimeSpan.FromMinutes(1)));
+        }
 
 
         public IWindowsCollection AddProductVersion(VersionSensorOptions options) => (IWindowsCollection)AddProductVersionCommon(options);

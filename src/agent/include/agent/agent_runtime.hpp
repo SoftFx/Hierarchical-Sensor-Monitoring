@@ -44,11 +44,6 @@ namespace hsm::agent
         void Log(hsm::collector::LogLevel level, const std::string& message) const;
         void WaitForStop();
 
-        /// Periodic "top processes by CPU" loop (issue #1175). Runs on its own thread between Start and
-        /// stop when `topCpu.enabled`; posts the busiest exe names to `Top CPU processes/<exe>` Double
-        /// sensors each `topCpu.periodMs`. Returns promptly when stop is requested.
-        void RunTopCpuLoop(hsm::collector::Collector& collector);
-
         AgentConfig config_;
         LogFn log_;
 

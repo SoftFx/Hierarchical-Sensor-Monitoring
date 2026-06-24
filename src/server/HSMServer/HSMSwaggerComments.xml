@@ -225,10 +225,14 @@
             <summary>The generated config.json — matches the agent's config schema (only address + key required).</summary>
         </member>
         <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildInstallScript">
-            <summary>Self-elevating silent installer: copy exe + config, register the service, start it.</summary>
+            <summary>
+            Installer script: stops any running service, copies the exe, copies config on first install
+            only (never overwrites a user-customised config), registers and starts the service.
+            Requires Administrator (prints an error and pauses if not elevated).
+            </summary>
         </member>
         <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildUninstallScript">
-            <summary>Self-elevating silent uninstaller: deregister the service, remove the installed exe.</summary>
+            <summary>Uninstaller script: deregisters the service and removes the installed exe. Requires Administrator.</summary>
         </member>
         <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildZip(System.Byte[],HSMServer.Model.Agent.AgentBundleOptions)">
             <summary>Assemble the zip in memory: the unmodified exe + generated config + install scripts.</summary>

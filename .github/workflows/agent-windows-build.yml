@@ -94,8 +94,8 @@ jobs:
           echo "agent exe: $exe"
           cp "$exe" staging/hsm-agent.exe
           cp src/agent/config.template.json staging/config.json
-          cp src/agent/packaging/install.cmd staging/install.cmd
-          cp src/agent/packaging/uninstall.cmd staging/uninstall.cmd
+          cp src/agent/packaging/install-hsmagent-service.cmd staging/install-hsmagent-service.cmd
+          cp src/agent/packaging/uninstall-hsmagent-service.cmd staging/uninstall-hsmagent-service.cmd
           ls -l staging
 
       - name: Upload agent bundle

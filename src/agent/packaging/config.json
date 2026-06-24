@@ -1,0 +1,17 @@
+{
+  "server": {
+    "address": "https://localhost",
+    "port": 44330,
+    "accessKey": "<paste access key from HSM server settings>",
+    "allowUntrustedCertificate": true
+  },
+  "identity": {
+    "computerName": "auto"
+  },
+  "topCpu": {
+    "enabled": true,
+    "periodMs": 60000,
+    "minPercent": 1.0,
+    "count": 10
+  }
+}

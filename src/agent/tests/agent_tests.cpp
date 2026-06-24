@@ -2,7 +2,6 @@
 // exits 0 on pass, non-zero on failure. Portable (config parser only) so every CI lane can run it.
 
 #include "agent/config.hpp"
-#include "agent/cpu_top.hpp"
 
 #include <cstring>
 #include <functional>
@@ -185,31 +184,6 @@ namespace
         ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "topCpu": { "enabled": "yes" } })", "non-bool enabled");
     }
 
-    void TopCpuSelectsBusiestAboveThreshold()
-    {
-        using hsm::agent::SelectTopN;
-        const std::map<std::string, double> by_name = {
-            { "chrome.exe", 40.0 }, { "idle.exe", 0.5 }, { "code.exe", 12.0 }, { "svchost.exe", 3.0 }
-        };
-
-        // count=2, min=1.0 → busiest two at or above 1% (idle.exe filtered out).
-        const auto top = SelectTopN(by_name, 2, 1.0);
-        CheckEq(top.size(), static_cast<std::size_t>(2), "top size capped to count");
-        CheckEq(top[0].name, std::string{ "chrome.exe" }, "busiest first");
-        CheckEq(top[1].name, std::string{ "code.exe" }, "second busiest");
-
-        // Threshold drops sub-1% names entirely.
-        const auto filtered = SelectTopN(by_name, 10, 1.0);
-        CheckEq(filtered.size(), static_cast<std::size_t>(3), "sub-threshold filtered");
-
-        // Deterministic tie-break by name when percentages are equal.
-        const std::map<std::string, double> ties = { { "b.exe", 5.0 }, { "a.exe", 5.0 } };
-        const auto tied = SelectTopN(ties, 10, 0.0);
-        CheckEq(tied[0].name, std::string{ "a.exe" }, "tie broken by name asc");
-
-        CheckEq(SelectTopN(by_name, 0, 0.0).size(), static_cast<std::size_t>(0), "count<=0 → empty");
-    }
-
     const std::map<std::string, std::function<void()>>& Tests()
     {
         static const std::map<std::string, std::function<void()>> tests = {
@@ -224,7 +198,6 @@ namespace
             { "agent_config_decodes_string_escapes", StringEscapesDecode },
             { "agent_topcpu_config_parses_and_defaults", TopCpuConfigParsesAndDefaults },
             { "agent_topcpu_rejects_bad_config", TopCpuRejectsBadConfig },
-            { "agent_topcpu_selects_busiest_above_threshold", TopCpuSelectsBusiestAboveThreshold },
         };
         return tests;
     }
