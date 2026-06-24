@@ -18,7 +18,7 @@ if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg triplet for the self-contained agent build")
 endif()
 
-project(HsmAgent VERSION 0.4.0 LANGUAGES CXX)
+project(HsmAgent VERSION 0.5.0 LANGUAGES CXX)
 
 if(MSVC)
     # Static CRT (/MT) to match the static triplet — the exe must run on a clean machine with no VC++
