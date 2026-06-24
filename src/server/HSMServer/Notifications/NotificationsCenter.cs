@@ -19,8 +19,11 @@ namespace HSMServer.Notifications
 
         public TelegramBot TelegramBot { get; }
 
+        public SlackNotificationChannel SlackChannel { get; }
 
-        public NotificationsCenter(ITelegramChatsManager telegramChats, IFolderManager folderManager, ITreeValuesCache cache, IServerConfig config)
+
+        public NotificationsCenter(ITelegramChatsManager telegramChats, IFolderManager folderManager, ITreeValuesCache cache, IServerConfig config,
+                                   SlackNotificationChannel slackChannel)
         {
             _telegramChatsManager = telegramChats;
             _folderManager = folderManager;
@@ -29,7 +32,8 @@ namespace HSMServer.Notifications
             ConnectFoldersAndChats();
 
             TelegramBot = new(telegramChats, folderManager, config.Telegram);
-            _channels = [new TelegramNotificationChannel(TelegramBot)];
+            SlackChannel = slackChannel;
+            _channels = [new TelegramNotificationChannel(TelegramBot), SlackChannel];
 
             _cache.NewAlertMessageEvent += DispatchAlertMessage;
         }

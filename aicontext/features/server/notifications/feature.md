@@ -68,7 +68,38 @@ NotificationsBackgroundService (timer) -> NotificationsCenter.SendAllMessagesAsy
 - `src/tests/HSMServer.Core.Tests/Notifications/PolicyDestinationKindTests.cs` — `Kind` round-trips through `ToEntity()` -> ctor; missing/empty `Kind` deserializes to `Telegram`; `Slack` and `Telegram` values survive the round-trip.
 - Existing destination/policy tests stay green with no assertion changes: `TreeValuesCacheTests/TemplateConcurrencyTests.cs`, `TreeValuesCacheTests/AlertTemplatePartialFailureTests.cs`, `Controllers/HomeControllerAddDataPolicyTests.cs`.
 
-## Notes
+## Slack delivery (PR3 scope)
 
-- This seam is the behavior-preserving foundation (PR 1 of 4) for adding Slack as a notification destination under epic #1144. No Slack code is introduced here.
-- Planned follow-ups (separate PRs): Slack destination storage + config (PR2), Slack webhook delivery channel + diagnostics (PR3), Slack management UI + alert-action destination selector + docs (PR4).
+`SlackNotificationChannel : INotificationChannel` (`src/server/HSMServer/Notifications/Slack/SlackNotificationChannel.cs`) is wired into `NotificationsCenter._channels` alongside the Telegram channel. Each channel filters by `Kind` so Telegram and Slack do not cross-fire.
+
+### Destination filtering
+
+`AlertDestination` gained a `NotificationKind Kind` property, populated from `policy.Destination.Kind` in the `AlertDestination(Policy)` ctor. `TelegramBot.DeliverAsync` skips alerts whose `Kind != Telegram`; `SlackNotificationChannel.DeliverAsync` skips alerts whose `Kind != Slack`. This is the only behavior change to the Telegram path: previously Telegram delivered every alert regardless of `Kind`, but since pre-PR3 policies are all `Telegram`, no observable behavior regresses.
+
+### HTTP delivery contract
+
+- One `HttpClient` per channel instance, registered via `services.AddHttpClient<SlackNotificationChannel>()` in `ApplicationServiceExtensions`. Default request timeout: 30 s.
+- One POST per `(alert, destination)` pair. No aggregation — Slack webhooks take one payload per call, so the Telegram-style per-chat aggregation is not applicable.
+- Payload shape: `SlackMessageBuilder.BuildPayload(alert)` produces `{"text":"<alert.ToString()>"}` (System.Text.Json, camelCase). Rich blocks are explicitly out of scope for v1.
+- Retry policy: up to 3 attempts (1 initial + 2 retries). Transient failures (HTTP 5xx and `RequestTimeout`) are retried with exponential backoff (initial 2 s, doubled per retry). 4xx responses are terminal — Slack returns 200 on success and various 4xx for malformed payloads or revoked webhooks, so retrying would not help. Network errors (`HttpRequestException`) and timeouts (`TaskCanceledException`) are retried like 5xx.
+- `DeliverAsync` does not throw — every terminal failure is funneled through `ErrorHandled` and logged, matching the Telegram channel's contract.
+
+### Events (mirroring TelegramBot)
+
+- `event Action MessageSending` — raised once per POST attempt.
+- `event Action<string, string> MessageSended` — `(destinationName, payload)` on HTTP 200.
+- `event Action<string> ErrorHandled` — `(message)` on terminal failure or per-retry warning.
+
+### Diagnostics
+
+`SlackChannelStatistics` (`src/server/HSMServer/BackgroundServices/DatacollectorService/Nodes/SlackChannelStatistics.cs`) mirrors `TelegramBotStatistics` under NodeName `"Slack"`:
+
+- `Slack/Errors` — string sensor aggregating error messages.
+- `Slack/Total` — per-minute rate of POST attempts.
+- `Slack/Messages/<destinationName>` — per-destination string sensor with the last delivered payload.
+
+`DataCollectorWrapper` instantiates `SlackChannelStatistics` alongside `TelegramBotStatistics` and subscribes/unsubscribes the three channel events symmetrically to the Telegram wiring.
+
+### Storage
+
+Unchanged from PR2. `SlackDestinationEntity` rows under the `"SlackDestinations"` LevelDB key, accessed via `ISlackDestinationsManager`. The channel resolves webhook URLs from this registry at delivery time.
