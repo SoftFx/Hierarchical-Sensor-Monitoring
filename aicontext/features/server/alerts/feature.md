@@ -1,6 +1,6 @@
 # Feature: Alerts
 
-> Owner: server | Last reviewed: 2026-06-23 | Canonical: yes
+> Owner: server | Last reviewed: 2026-06-24 | Canonical: yes
 > Scope: Server-side alert ownership, creation paths, and the boundary between global (template) and per-sensor alerts.
 
 ---
@@ -80,6 +80,7 @@ Operator selects sensor -> per-sensor _Alerts.cshtml editor -> UpdateSensorInfo 
 ## Storage / Persistence
 
 - `PolicyEntity` rows live in a single LevelDB table keyed by `byte[] Id` (Guid). The `"NewPolicyIds"` index lists all known ids.
+- `PolicyDestinationEntity` (nested in `PolicyEntity.cs`) carries an additive `string Kind` (a `NotificationKind` discriminator) as of issue #1181. A missing/empty `Kind` reads as `Telegram`, so existing rows are unchanged and no migration is required. Notification delivery lives behind the `INotificationChannel` seam — see `features/server/notifications/feature.md`.
 - `BaseNodeEntity.Policies` (a `List<string>` of stringified Guids) exists on every Product and Sensor entity. At runtime, only `SensorEntity.Policies` is loaded into the in-memory `SensorPolicyCollection`. `ProductEntity.Policies` is **never read** into `ProductModel` — only `TTLPolicies` is.
 - Template-derived policies carry non-null `TemplateId` / `TemplateAlertId`; user-added policies have `TemplateId == null`.
 - `TreeValuesCache.CleanupProductOwnedPolicies` runs once at startup (`Initialize()`, after `ApplyProducts`) and deletes any `PolicyEntity` referenced by `ProductEntity.Policies` whose `TemplateId == null`, then prunes the dangling references from the list. The migration is idempotent: a second run finds an empty list and writes nothing.
@@ -120,7 +121,6 @@ Condition view model guards live in `src/tests/HSMServer.Core.Tests/ConditionVie
 
 ## Known Issues / Limitations
 
-- `_Alerts.cshtml` still contains an unreachable `FolderInfoViewModel` branch. Removing it is a cleanup for a future PR.
 - `ProductInfoViewModel.DataAlerts` is still populated but never posted from the form; cleanup deferred to avoid rippling into import/export.
 - Switching a template's sensor type after adding alerts empties the unified alerts container (existing behavior for regular alerts; as of #1159 this also clears any TTL rows mixed in). Type changes are rare in practice; preserving TTL across type changes would require splitting the container.
 - Demoting a TTL alert (loaded from storage) to a regular alert via the property dropdown does not restore the schedule's "starting at" / "instant send" fields. Those fields are gated server-side by `Model.IsTtl` in `_ActionBlock.cshtml` and never render for TTL rows, so the client cannot show them after demote. Regular-to-TTL-to-regular works correctly because the fields exist in the DOM and are only hidden+disabled by the `.ttlAction` class on `.fullAction`. Workaround: save and reopen the editor.

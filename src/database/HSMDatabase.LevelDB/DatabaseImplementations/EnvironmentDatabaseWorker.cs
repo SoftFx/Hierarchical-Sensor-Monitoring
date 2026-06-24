@@ -25,6 +25,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly byte[] _policyIdsKey = "NewPolicyIds"u8.ToArray();
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
         private readonly byte[] _telegramChatIdsKey = "TelegramChats"u8.ToArray();
+        private readonly byte[] _slackDestinationIdsKey = "SlackDestinations"u8.ToArray();
         private readonly byte[] _alertTemplatesIdsKey = "AlertTemplates"u8.ToArray();
         private readonly byte[] _alertScheduleIdsKey = "AlertSchedule"u8.ToArray();
 
@@ -658,6 +659,85 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception e)
             {
                 _logger.Error(e, $"Failed to remove telegram chat id {chatId} from list");
+            }
+        }
+
+        #endregion
+
+        #region Slack destinations
+
+        public List<byte[]> GetSlackDestinationsList() => GetListOfBytes(_slackDestinationIdsKey, "Failed to get slack destinations ids list");
+
+        public SlackDestinationEntity GetSlackDestination(byte[] id)
+        {
+            try
+            {
+                return _database.TryRead(id, out byte[] value)
+                    ? JsonSerializer.Deserialize<SlackDestinationEntity>(Encoding.UTF8.GetString(value))
+                    : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for slack destination {new Guid(id)}");
+            }
+
+            return null;
+        }
+
+        public void AddSlackDestination(SlackDestinationEntity destination)
+        {
+            try
+            {
+                _database.Put(destination.Id, JsonSerializer.SerializeToUtf8Bytes(destination));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add slack destination info for {destination.Id}");
+            }
+        }
+
+        public void RemoveSlackDestination(byte[] id)
+        {
+            try
+            {
+                _database.Delete(id);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove info for slack destination {new Guid(id)}");
+            }
+        }
+
+        public void AddSlackDestinationToList(byte[] id)
+        {
+            try
+            {
+                var currentList = GetSlackDestinationsList();
+
+                if (!currentList.Contains(id))
+                    currentList.Add(id);
+
+                _database.Put(_slackDestinationIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to add slack destination id to list");
+            }
+        }
+
+        public void RemoveSlackDestinationFromList(byte[] id)
+        {
+            try
+            {
+                var currentList = GetSlackDestinationsList();
+
+                currentList.Remove(id);
+
+                _database.Put(_slackDestinationIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove slack destination id {id} from list");
             }
         }
 
