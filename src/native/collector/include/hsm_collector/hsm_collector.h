@@ -14,7 +14,7 @@ extern "C"
    appended); MAJOR for any breaking change (field reorder/removal, semantic
    change). hsm_collector_version() returns the packed value at runtime. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 4
+#define HSM_COLLECTOR_VERSION_MINOR 5
 #define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
@@ -793,6 +793,18 @@ size_t hsm_collector_sent_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_sent_json(const hsm_collector_t* collector, size_t index, const char** out_json);
 
 const char* hsm_collector_last_error(const hsm_collector_t* collector);
+
+/* Enable per-process CPU-usage sensors (Windows only, #1179). Starts a background thread that
+   samples all processes at intervals of `period_ms` milliseconds, filters to the `count` busiest
+   above `min_percent`% of total machine CPU, and posts a Double sensor for each at path
+   "Top CPU processes/<exe-name>". Call BEFORE Start().
+   Returns HSM_RESULT_INVALID_ARGUMENT if count <= 0 or period_ms <= 0.
+   Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
+hsm_result_t hsm_collector_enable_top_cpu_sensors(
+    hsm_collector_t* collector,
+    int32_t count,
+    double min_percent,
+    int32_t period_ms);
 
 #ifdef __cplusplus
 }

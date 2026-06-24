@@ -1,4 +1,4 @@
-#include "agent/cpu_top.hpp"
+#include "cpu_top.hpp"
 
 #include <algorithm>
 
@@ -11,7 +11,7 @@
 #include <tlhelp32.h>
 #endif
 
-namespace hsm::agent
+namespace hsm::collector
 {
     std::vector<CpuUsage> SelectTopN(const std::map<std::string, double>& by_name, int count, double min_percent)
     {
@@ -132,4 +132,4 @@ namespace hsm::agent
         return by_name; // empty on the first call (baseline only)
     }
 #endif
-} // namespace hsm::agent
+} // namespace hsm::collector

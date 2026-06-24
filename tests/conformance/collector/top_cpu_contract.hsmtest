@@ -1,0 +1,19 @@
+# HSM collector conformance v1 — top-CPU per-process monitoring (#1179).
+# New verb:
+#   enable_top_cpu_sensors|count|min_percent|period_ms
+#     configure per-process CPU sampling; must be called before start.
+#     Windows-only feature; both drivers are no-ops on other platforms so the
+#     fixture parses cross-platform without an unsupported marker.
+#     count       — max number of processes to report per sample
+#     min_percent — minimum CPU% for a process to be included (0 = any positive delta)
+#     period_ms   — sampling interval in milliseconds
+# Sensors appear at path "Top CPU processes/<exe-name>" (Double, type 2).
+# Data is OS-sourced so cross-platform assertions are API-level only.
+
+# The API call is accepted before start; collector lifecycle completes normally.
+# (Data posting is Windows-only; values appear at "Top CPU processes/<exe>" once the
+# sampling thread fires — verified via the live-server integration path, not here.)
+top_cpu_is_accepted_before_start|create_collector
+top_cpu_is_accepted_before_start|enable_top_cpu_sensors|100|1.0|60000
+top_cpu_is_accepted_before_start|start
+top_cpu_is_accepted_before_start|stop

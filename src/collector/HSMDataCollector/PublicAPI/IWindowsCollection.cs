@@ -121,5 +121,14 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);
 
         bool UnsubscribeWindowsServiceStatus(ServiceSensorOptions options);
+
+
+        /// <summary>
+        /// Enable periodic per-process CPU monitoring (#1179). Samples all processes every
+        /// <paramref name="period"/> (default 1 minute), posts Double sensors at
+        /// "Top CPU processes/&lt;exe-name&gt;" for the <paramref name="count"/> busiest processes
+        /// above <paramref name="minPercent"/>% of total machine CPU. Windows only.
+        /// </summary>
+        IWindowsCollection AddTopCpuProcessesSensors(int count = 10, double minPercent = 1.0, TimeSpan? period = null);
     }
 }

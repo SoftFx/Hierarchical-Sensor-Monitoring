@@ -15,7 +15,7 @@ namespace HSMDataCollector.DefaultSensors
 
         private static readonly NotSupportedException _notSupportedException = new NotSupportedException(NotSupportedSensor);
 
-        private readonly SensorsStorage _storage;
+        protected readonly SensorsStorage _storage;
         protected readonly PrototypesCollection _prototype;
 
 

@@ -44,9 +44,9 @@ function(hsm_agent_set_warnings target)
 endfunction()
 
 # --- Portable config layer + tests (every platform) ----------------------------------------------
-# cpu_top.cpp is built here too: its SelectTopN logic is portable + unit-tested, while the Win32
-# process sampler inside it is #ifdef _WIN32 (compiled only into the agent on Windows).
-add_library(hsm_agent_config STATIC src/config.cpp src/cpu_top.cpp)
+# cpu_top.cpp moved to the native collector (#1179): SelectTopN + WindowsCpuSampler now live in
+# src/native/collector/src/cpu_top.cpp and are exposed via hsm_collector_enable_top_cpu_sensors.
+add_library(hsm_agent_config STATIC src/config.cpp)
 target_include_directories(hsm_agent_config PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(hsm_agent_config PUBLIC cxx_std_17)
 hsm_agent_set_warnings(hsm_agent_config)
@@ -68,8 +68,7 @@ if(HSM_AGENT_BUILD_TESTS)
             agent_config_ignores_unknown_fields
             agent_config_decodes_string_escapes
             agent_topcpu_config_parses_and_defaults
-            agent_topcpu_rejects_bad_config
-            agent_topcpu_selects_busiest_above_threshold)
+            agent_topcpu_rejects_bad_config)
         add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
     endforeach()
 endif()

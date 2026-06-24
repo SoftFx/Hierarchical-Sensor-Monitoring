@@ -102,6 +102,7 @@ endfunction()
 
 add_library(hsm_collector_core STATIC
     src/hsm_collector.cpp
+    src/cpu_top.cpp                              # per-process CPU sampling (#1179; SelectTopN portable, WindowsCpuSampler #if _WIN32)
     src/platform/hsm_windows_metric_sources.cpp  # self-guarded #if _WIN32 (#1164)
 )
 
@@ -393,6 +394,7 @@ add_conformance_test(conformance_alert_registration_contract alert_registration_
 add_conformance_test(conformance_options_surface_contract options_surface_contract.hsmtest)
 add_conformance_test(conformance_service_commands_contract service_commands_contract.hsmtest)
 add_conformance_test(conformance_default_sensors_contract default_sensors_contract.hsmtest)
+add_conformance_test(conformance_top_cpu_contract top_cpu_contract.hsmtest)
 
 add_test(
     NAME native_default_sensors_wire_golden

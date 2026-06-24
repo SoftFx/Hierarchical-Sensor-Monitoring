@@ -578,6 +578,16 @@ namespace hsm::collector
             Check(hsm_collector_add_all_queue_diagnostic_sensors(handle_), "Failed to add queue-diagnostic sensors.");
         }
 
+        /// Enable per-process CPU sampling (Windows only, #1179). Call BEFORE Start().
+        /// Creates Double sensors at "Top CPU processes/<exe-name>" for the busiest `count`
+        /// processes above `min_percent`% of total machine CPU, sampled every `period`.
+        void EnableTopCpuSensors(int count, double min_percent, std::chrono::milliseconds period)
+        {
+            Check(
+                hsm_collector_enable_top_cpu_sensors(handle_, count, min_percent, static_cast<int32_t>(period.count())),
+                "Failed to enable top-CPU sensors.");
+        }
+
         // ---- Introspection ------------------------------------------------------------------
 
         std::size_t SentCount() const

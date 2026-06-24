@@ -2307,6 +2307,23 @@ namespace
             return;
         }
 
+        if (action == "enable_top_cpu_sensors")
+        {
+            // (#1179) count|min_percent|period_ms — Windows-only; no-op on non-Windows so the
+            // fixture parses on Linux without an unsupported marker.
+            Require(step.size() >= 4, "enable_top_cpu_sensors requires count|min_percent|period_ms");
+#ifdef _WIN32
+            Require(
+                hsm_collector_enable_top_cpu_sensors(
+                    state.collector.value,
+                    ToInt(step[1]),
+                    ToDouble(step[2]),
+                    ToInt(step[3])) == HSM_RESULT_OK,
+                "enable_top_cpu_sensors failed");
+#endif
+            return;
+        }
+
         throw std::runtime_error("Unknown conformance action: " + action);
     }
 
@@ -4520,6 +4537,7 @@ namespace
             { "conformance_options_surface_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_service_commands_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_top_cpu_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };

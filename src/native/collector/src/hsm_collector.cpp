@@ -1,5 +1,6 @@
 #include "hsm_collector/hsm_collector.h"
 
+#include "cpu_top.hpp"                             // per-process CPU sampling (#1179; _WIN32 only for WindowsCpuSampler)
 #include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
 
 #include <algorithm>
@@ -2280,6 +2281,7 @@ namespace
 
             StartWorker();
             StartScheduler();
+            StartTopCpuSampler();
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -2323,10 +2325,12 @@ namespace
 
             NotifyLifecycle(CollectorState::Stopping);
 
-            // Phase 1: stop the periodic scheduler. Posts racing the state flip are dropped by
-            // the CanAcceptData gate; rate sums / function posts are deliberately NOT flushed
-            // (a partial-window rate is alert-noise risk — only bars preserve data at stop).
+            // Phase 1: stop the periodic scheduler and the optional top-CPU sampler. Posts racing
+            // the state flip are dropped by the CanAcceptData gate; rate sums / function posts are
+            // deliberately NOT flushed (a partial-window rate is alert-noise risk — only bars
+            // preserve data at stop).
             StopScheduler();
+            StopTopCpuSampler();
 
             // Dispose bound metric sources now the scheduler has stopped reading them (managed
             // dispose-on-stop; #1164). A restart rebinds via the factory.
@@ -2988,6 +2992,30 @@ namespace
             return last_error_.c_str();
         }
 
+        // --- Top-CPU sampling (#1179) ---
+
+        hsm_result_t EnableTopCpuSensors(int32_t count, double min_percent, int32_t period_ms)
+        {
+            if (count <= 0 || period_ms <= 0)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+#ifndef _WIN32
+            (void)count; (void)min_percent; (void)period_ms;
+            return SetError(HSM_RESULT_INVALID_STATE, "Top-CPU sensors are only supported on Windows.");
+#else
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (state_ != CollectorState::Stopped)
+                return SetError(HSM_RESULT_INVALID_STATE, "EnableTopCpuSensors must be called before Start.");
+
+            top_cpu_enabled_ = true;
+            top_cpu_count_ = count;
+            top_cpu_min_percent_ = min_percent < 0.0 ? 0.0 : min_percent;
+            top_cpu_period_ms_ = period_ms;
+            ClearError();
+            return HSM_RESULT_OK;
+#endif
+        }
+
     private:
         hsm_result_t SetError(hsm_result_t result, std::string message) const
         {
@@ -3199,6 +3227,79 @@ namespace
 
             queue_.push_back(std::move(json));
         }
+
+        void StartTopCpuSampler()
+        {
+#ifdef _WIN32
+            if (!top_cpu_enabled_)
+                return;
+            {
+                std::lock_guard<std::mutex> guard(top_cpu_cv_mutex_);
+                top_cpu_stop_ = false;
+            }
+            top_cpu_thread_ = std::thread([this] { RunTopCpuLoop(); });
+#endif
+        }
+
+        void StopTopCpuSampler()
+        {
+            {
+                std::lock_guard<std::mutex> guard(top_cpu_cv_mutex_);
+                top_cpu_stop_ = true;
+            }
+            top_cpu_cv_.notify_all();
+            if (top_cpu_thread_.joinable())
+                top_cpu_thread_.join();
+        }
+
+        void RunTopCpuLoop()
+        {
+#ifdef _WIN32
+            hsm::collector::WindowsCpuSampler sampler;
+            std::map<std::string, std::shared_ptr<NativeSensor>> sensor_cache;
+            const auto period = std::chrono::milliseconds(top_cpu_period_ms_);
+
+            sampler.Sample(); // seed baseline — first call returns empty map, so first post is a true delta
+
+            while (true)
+            {
+                {
+                    std::unique_lock<std::mutex> lock(top_cpu_cv_mutex_);
+                    if (top_cpu_cv_.wait_for(lock, period, [this] { return top_cpu_stop_; }))
+                        return; // stop requested — exit before touching the collector again
+                }
+
+                try
+                {
+                    const auto by_name = sampler.Sample();
+                    const auto top = hsm::collector::SelectTopN(by_name, top_cpu_count_, top_cpu_min_percent_);
+                    for (const auto& usage : top)
+                    {
+                        auto it = sensor_cache.find(usage.name);
+                        if (it == sensor_cache.end())
+                        {
+                            // Creating a sensor from this background thread (after Start) is safe:
+                            // CollectorImpl::CreateSensor serializes on mutex_, and the scheduler
+                            // reads the registry only via a snapshot under the same lock.
+                            std::shared_ptr<NativeSensor> sensor;
+                            if (CreateSensor(("Top CPU processes/" + usage.name).c_str(),
+                                             HSM_SENSOR_TYPE_DOUBLE, false, std::string{}, sensor) == HSM_RESULT_OK)
+                                it = sensor_cache.emplace(usage.name, std::move(sensor)).first;
+                            else
+                                continue;
+                        }
+                        it->second->AddDouble(usage.percent, HSM_SENSOR_STATUS_OK, nullptr);
+                    }
+                }
+                catch (const std::exception& ex)
+                {
+                    LogError(std::string("top-CPU sampling error: ") + ex.what());
+                }
+            }
+#endif
+        }
+
+        // --- End top-CPU sampling ---
 
         void StartWorker()
         {
@@ -3540,6 +3641,16 @@ namespace
         // tick. Null is the no-op production default (no live values until a real factory is set).
         hsm_metric_source_factory_fn metric_source_factory_ = nullptr;
         void* metric_source_factory_user_data_ = nullptr;
+
+        // Top-CPU sensor sampling (#1179): optional background thread, Windows-only.
+        bool top_cpu_enabled_ = false;
+        int32_t top_cpu_count_ = 0;
+        double top_cpu_min_percent_ = 0.0;
+        int32_t top_cpu_period_ms_ = 0;
+        std::thread top_cpu_thread_;
+        std::mutex top_cpu_cv_mutex_;
+        std::condition_variable top_cpu_cv_;
+        bool top_cpu_stop_ = false;
     };
 
     hsm_result_t NativeSensor::AddInt(int32_t value, hsm_sensor_status_t status, const char* comment)
@@ -5448,6 +5559,18 @@ hsm_result_t hsm_collector_add_all_default_sensors(hsm_collector_t* collector, c
 
     const hsm_result_t result = hsm_collector_add_all_computer_sensors(collector);
     return result == HSM_RESULT_OK ? hsm_collector_add_all_module_sensors(collector, product_version) : result;
+}
+
+hsm_result_t hsm_collector_enable_top_cpu_sensors(
+    hsm_collector_t* collector,
+    int32_t count,
+    double min_percent,
+    int32_t period_ms)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->EnableTopCpuSensors(count, min_percent, period_ms);
 }
 
 hsm_result_t hsm_collector_set_metric_source_factory(

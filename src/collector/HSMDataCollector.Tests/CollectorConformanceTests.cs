@@ -765,6 +765,16 @@ namespace HSMDataCollector.Tests
                     Assert.Equal(payloadBaseline, state.Sender.Values.Count);
                     break;
 
+                case "enable_top_cpu_sensors":
+                    // (#1179) count|min_percent|period_ms — Windows-only; no-op on other platforms
+                    // so the fixture file can be parsed cross-platform without an unsupported marker.
+                    if (DataCollector.IsWindowsOS)
+                        state.Collector.Windows.AddTopCpuProcessesSensors(
+                            count: int.Parse(step.Arg(0)),
+                            minPercent: ParseDouble(step.Arg(1)),
+                            period: TimeSpan.FromMilliseconds(int.Parse(step.Arg(2))));
+                    break;
+
                 default:
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
