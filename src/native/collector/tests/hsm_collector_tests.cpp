@@ -3655,6 +3655,68 @@ namespace
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_default_sensors(c, nullptr); }) == 29, "all-default without product version = 29");
     }
 
+    // The module-sensor group emits an initial value for BOTH version sensors on Start (mirrors managed
+    // ProductVersionSensor.StartAsync / AddCollectorVersion). Sensors are registered while Stopped — as
+    // the agent does, before Start — so the value must be deferred and dispatched on Start, not dropped
+    // by the data gate. Asserts the product version carries the exact string the caller passed.
+    void NativeModuleVersionSensorsEmitStartValueOnStart()
+    {
+        auto collector = CreateCollector();
+
+        Require(hsm_collector_add_all_module_sensors(collector.value, "4.5.6.7") == HSM_RESULT_OK,
+                "add_all_module_sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // Two version values land on the wire: ".module/Version" (product) and ".module/Collector version".
+        Require(WaitForSentCountAtLeast(collector.value, 2, 2000), "version start values were not dispatched");
+
+        bool saw_product = false;
+        bool saw_collector = false;
+        const auto count = hsm_collector_sent_count(collector.value);
+        for (size_t i = 0; i < count; ++i)
+        {
+            const auto payload = SentJson(collector.value, i);
+
+            if (payload.find(".module/Version\"") != std::string::npos)
+            {
+                saw_product = true;
+                Contains(payload, "\"Type\":8"); // Version sensor type
+                Contains(payload, "4.5.6.7");    // exact product version the caller passed
+                Contains(payload, "Start:");     // start-time comment
+            }
+            else if (payload.find(".module/Collector version\"") != std::string::npos)
+            {
+                saw_collector = true;
+                Contains(payload, "\"Type\":8");
+                Contains(payload, "Start:");
+            }
+        }
+
+        Require(saw_product, "product-version start value (.module/Version) was not sent");
+        Require(saw_collector, "collector-version start value (.module/Collector version) was not sent");
+
+        hsm_collector_stop(collector.value);
+    }
+
+    // A NULL/empty product version skips the product sensor entirely (no registration, no value),
+    // but the collector's own version still emits — the two are independent.
+    void NativeModuleVersionSkipsProductWhenVersionMissing()
+    {
+        auto collector = CreateCollector();
+
+        Require(hsm_collector_add_all_module_sensors(collector.value, nullptr) == HSM_RESULT_OK,
+                "add_all_module_sensors(nullptr) failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "collector-version start value was not dispatched");
+
+        const auto count = hsm_collector_sent_count(collector.value);
+        for (size_t i = 0; i < count; ++i)
+            NotContains(SentJson(collector.value, i), ".module/Version\"");
+
+        hsm_collector_stop(collector.value);
+    }
+
     // Fake metric source for the seam smoke test (#1099): yields a fixed sequence of read outcomes,
     // and counts how many times the collector disposed it (recreate-on-error + dispose-on-stop).
     struct FakeMetricSource
@@ -4496,6 +4558,8 @@ namespace
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
             { "native_default_sensor_wire_matches_net", [](const std::string&) { NativeDefaultSensorWireMatchesNet(); } },
             { "native_default_sensor_group_composition", [](const std::string&) { NativeDefaultSensorGroupComposition(); } },
+            { "native_module_version_sensors_emit_start_value", [](const std::string&) { NativeModuleVersionSensorsEmitStartValueOnStart(); } },
+            { "native_module_version_skips_product_when_missing", [](const std::string&) { NativeModuleVersionSkipsProductWhenVersionMissing(); } },
             { "native_default_sensors_wire_golden", [](const std::string& path) { NativeDefaultSensorsWireGolden(path); } },
             { "dump_default_sensors_golden", [](const std::string&) { DumpDefaultSensorsGolden(); } },
             { "native_metric_source_seam_lifecycle", [](const std::string&) { NativeMetricSourceSeamLifecycle(); } },
