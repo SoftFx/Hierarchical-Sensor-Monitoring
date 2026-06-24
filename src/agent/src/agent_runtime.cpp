@@ -117,13 +117,15 @@ namespace hsm::agent
             if (config_.sensors_module)
                 collector.AddAllModuleSensors(config_.product_version);
 
-            // Periodic "top processes by CPU" sensors (#1175/#1179). Delegated to the collector's
-            // internal background thread — EnableTopCpuSensors must be called before Start().
+            // Periodic "top processes by CPU" sensors (#1175/#1179). Windows-only; the collector
+            // rejects the call on non-Windows, so guard here to avoid a fatal throw on Linux builds.
+#ifdef _WIN32
             if (config_.top_cpu_enabled)
                 collector.EnableTopCpuSensors(
                     config_.top_cpu_count,
                     config_.top_cpu_min_percent,
                     std::chrono::milliseconds(config_.top_cpu_period_ms));
+#endif
 
             Log(hc::LogLevel::Info,
                 "HSM Agent starting: streaming to " + config_.server_address + ":" + std::to_string(config_.port));

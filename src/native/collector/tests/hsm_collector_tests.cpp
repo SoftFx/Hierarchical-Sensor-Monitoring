@@ -1,5 +1,6 @@
 #include "hsm_collector/hsm_collector.h"
 #include "hsm_collector/hsm_collector.hpp"
+#include "../src/cpu_top.hpp"
 #include "../src/hsm_http_endpoints.hpp"
 #include "../src/hsm_http_retry.hpp"
 #include <iostream>
@@ -4428,6 +4429,58 @@ namespace
         Require(creates == 2, "metric factory std::function invoked for initial + recreate");
     }
 
+    // ------- SelectTopN unit tests (cpu_top.cpp — portable, no Win32 needed) ---------
+
+    static hsm::collector::CpuUsage MakeCpuUsage(const char* name, double percent)
+    {
+        hsm::collector::CpuUsage u;
+        u.name    = name;
+        u.percent = percent;
+        return u;
+    }
+
+    static void SelectTopNSelectsBusiestAboveThreshold()
+    {
+        using namespace hsm::collector;
+
+        std::map<std::string, CpuUsage> by_name;
+        by_name["chrome.exe"] = MakeCpuUsage("chrome.exe", 20.0);
+        by_name["node.exe"]   = MakeCpuUsage("node.exe",   15.0);
+        by_name["git.exe"]    = MakeCpuUsage("git.exe",     0.5); // below 1.0% threshold
+        by_name["devenv.exe"] = MakeCpuUsage("devenv.exe",  5.0);
+        by_name["code.exe"]   = MakeCpuUsage("code.exe",   10.0);
+
+        // Top 3, threshold 1.0% — git.exe excluded, rest ordered by percent desc.
+        auto top3 = SelectTopN(by_name, 3, 1.0);
+        Require(top3.size() == 3,                    "SelectTopN: count cap should yield 3");
+        Require(top3[0].name == "chrome.exe",        "SelectTopN: busiest first");
+        Require(top3[1].name == "node.exe",          "SelectTopN: second busiest");
+        Require(top3[2].name == "code.exe",          "SelectTopN: third busiest");
+
+        // Threshold filters — requesting more than available above threshold.
+        auto topAll = SelectTopN(by_name, 10, 1.0);
+        Require(topAll.size() == 4, "SelectTopN: threshold=1.0 excludes git.exe");
+        for (const auto& u : topAll)
+            Require(u.percent >= 1.0, "SelectTopN: every returned entry must be >= threshold");
+
+        // count=0 returns empty.
+        Require(SelectTopN(by_name, 0, 0.0).empty(),  "SelectTopN: count=0 must return empty");
+
+        // count<0 returns empty.
+        Require(SelectTopN(by_name, -1, 0.0).empty(), "SelectTopN: count<0 must return empty");
+
+        // Tie-break: equal percent -> ascending by name for stable output.
+        std::map<std::string, CpuUsage> tied;
+        tied["z.exe"] = MakeCpuUsage("z.exe", 5.0);
+        tied["a.exe"] = MakeCpuUsage("a.exe", 5.0);
+        tied["m.exe"] = MakeCpuUsage("m.exe", 5.0);
+        auto tie3 = SelectTopN(tied, 3, 0.0);
+        Require(tie3.size() == 3,            "SelectTopN tie-break: 3 entries");
+        Require(tie3[0].name == "a.exe",     "SelectTopN tie-break: a before m");
+        Require(tie3[1].name == "m.exe",     "SelectTopN tie-break: m before z");
+        Require(tie3[2].name == "z.exe",     "SelectTopN tie-break: z last");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
@@ -4507,6 +4560,7 @@ namespace
             { "native_invalid_status_on_last_value_preserves_previous_snapshot", [](const std::string&) { NativeInvalidStatusOnLastValuePreservesPreviousSnapshot(); } },
             { "native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values", [](const std::string&) { NativeRetryMeetingFullQueueIsDroppedNotEvictingQueuedValues(); } },
             { "native_retry_below_capacity_is_always_redelivered", [](const std::string&) { NativeRetryBelowCapacityIsAlwaysRedelivered(); } },
+            { "cpu_select_top_n_selects_busiest_above_threshold", [](const std::string&) { SelectTopNSelectsBusiestAboveThreshold(); } },
             // Generic runner: execute ANY fixture given its path. Used by the scheduled
             // native-collector-soak lane (#1101) to run soak/*.hsmtest fixtures that are not
             // registered as per-PR ctest cases. Same engine as the named conformance_* keys.

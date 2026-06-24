@@ -66,36 +66,82 @@ namespace HSMServer.Model.Agent
             return JsonSerializer.Serialize(config, _jsonOptions);
         }
 
-        /// <summary>Self-elevating silent installer: copy exe + config, register the service, start it.</summary>
+        /// <summary>
+        /// Installer script: stops any running service, copies the exe, copies config on first install
+        /// only (never overwrites a user-customised config), registers and starts the service.
+        /// Requires Administrator (prints an error and pauses if not elevated).
+        /// </summary>
         public static string BuildInstallScript()
         {
             return Join(
                 "@echo off",
                 "setlocal",
-                ":: Self-elevate if not already running as administrator.",
+                ":: HSM Agent — fresh install or reinstall.",
+                ":: Requires Administrator: right-click > Run as administrator.",
+                "::",
+                ":: Expected layout (cmake copies exe here automatically after build):",
+                "::   install-hsmagent-service.cmd  <- this file",
+                "::   update-hsmagent-service.cmd",
+                "::   uninstall-hsmagent-service.cmd",
+                "::   hsm-agent.exe                 <- built by cmake, gitignored",
+                "::   config.json                   <- edit before first install if needed",
+                "",
                 "net session >nul 2>&1",
                 "if %errorlevel% neq 0 (",
                 "  echo ERROR: Run this script as Administrator ^(right-click ^> Run as administrator^).",
                 "  pause",
                 "  exit /b 1",
                 ")",
+                "",
+                "if not exist \"%~dp0" + ExeName + "\" (",
+                "  echo ERROR: " + ExeName + " not found next to this script.",
+                "  echo Build the project first ^(cmake --build^) — it copies the exe here automatically.",
+                "  pause & exit /b 1",
+                ")",
+                "",
                 "set \"INSTALL_DIR=%ProgramFiles%\\HSM Agent\"",
                 "set \"DATA_DIR=%ProgramData%\\HSM Agent\"",
+                "",
+                ":: Stop gracefully if already running (handles reinstall/upgrade).",
+                "sc query HSMAgent >nul 2>&1",
+                "if %errorlevel% equ 0 (",
+                "  echo Stopping existing HSMAgent...",
+                "  sc stop HSMAgent >nul 2>&1",
+                "  timeout /t 3 /nobreak >nul",
+                ")",
+                "",
                 "if not exist \"%INSTALL_DIR%\" mkdir \"%INSTALL_DIR%\"",
-                "if not exist \"%DATA_DIR%\" mkdir \"%DATA_DIR%\"",
+                "if not exist \"%DATA_DIR%\"  mkdir \"%DATA_DIR%\"",
+                "",
+                "echo Installing version:",
+                "\"%~dp0" + ExeName + "\" --version",
+                "echo.",
                 "copy /Y \"%~dp0" + ExeName + "\" \"%INSTALL_DIR%\\" + ExeName + "\" >nul",
-                "copy /Y \"%~dp0" + ConfigName + "\" \"%DATA_DIR%\\" + ConfigName + "\" >nul",
+                "",
+                ":: Copy config only on first install — never overwrite a user-customised config.",
+                "if exist \"%~dp0" + ConfigName + "\" (",
+                "  if not exist \"%DATA_DIR%\\" + ConfigName + "\" (",
+                "    copy /Y \"%~dp0" + ConfigName + "\" \"%DATA_DIR%\\" + ConfigName + "\" >nul",
+                "    echo Config installed to %DATA_DIR%\\" + ConfigName,
+                "  ) else (",
+                "    echo Keeping existing config at %DATA_DIR%\\" + ConfigName,
+                "  )",
+                ")",
+                "",
                 "\"%INSTALL_DIR%\\" + ExeName + "\" --install",
                 "if %errorlevel% neq 0 (",
-                "  echo HSM Agent install failed. & pause & exit /b 1",
+                "  echo HSM Agent --install failed. & pause & exit /b 1",
                 ")",
                 "sc start HSMAgent",
+                "if %errorlevel% neq 0 (",
+                "  echo HSM Agent failed to start. & pause & exit /b 1",
+                ")",
                 "echo HSM Agent installed and started.",
                 "pause",
                 "endlocal");
         }
 
-        /// <summary>Self-elevating silent uninstaller: deregister the service, remove the installed exe.</summary>
+        /// <summary>Uninstaller script: deregisters the service and removes the installed exe. Requires Administrator.</summary>
         public static string BuildUninstallScript()
         {
             return Join(

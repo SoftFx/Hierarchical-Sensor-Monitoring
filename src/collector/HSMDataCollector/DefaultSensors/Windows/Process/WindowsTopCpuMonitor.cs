@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -18,6 +19,29 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
     /// </summary>
     internal sealed class WindowsTopCpuMonitor : ISensor
     {
+        // Group-aware processor count: Environment.ProcessorCount only sees the current processor
+        // group (≤64) on net472, which would over-report CPU% on large multi-group servers.
+        [DllImport("kernel32.dll")]
+        private static extern uint GetActiveProcessorCount(ushort groupNumber);
+        private const ushort AllProcessorGroups = 0xffff;
+
+        private static int GetTotalProcessorCount()
+        {
+            try { return (int)GetActiveProcessorCount(AllProcessorGroups); }
+            catch { return Environment.ProcessorCount; }
+        }
+
+        // Composite (pid, startTicks) key — avoids XOR collision from simple long packing.
+        private readonly struct ProcessKey : IEquatable<ProcessKey>
+        {
+            public readonly int Pid;
+            public readonly long StartTicks;
+            public ProcessKey(int pid, long startTicks) { Pid = pid; StartTicks = startTicks; }
+            public bool Equals(ProcessKey other) => Pid == other.Pid && StartTicks == other.StartTicks;
+            public override bool Equals(object obj) => obj is ProcessKey k && Equals(k);
+            public override int GetHashCode() => unchecked(Pid * 397 ^ (int)(StartTicks ^ (StartTicks >> 32)));
+        }
+
         // Fixed internal path — used only as a dedup key in SensorsStorage; never posted to the server.
         private const string MonitorPath = ".top_cpu_group_monitor.";
 
@@ -25,6 +49,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
         private readonly int _count;
         private readonly double _minPercent;
         private readonly TimeSpan _period;
+        private readonly int _processorCount;
 
         // name -> sensor handle (created lazily on first appearance)
         private readonly Dictionary<string, IInstantValueSensor<double>> _sensors =
@@ -33,7 +58,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
         private readonly Dictionary<string, string> _fullPaths =
             new Dictionary<string, string>(StringComparer.Ordinal);
         // (pid, startTimeTicks) -> previous TotalProcessorTime in milliseconds
-        private readonly Dictionary<long, double> _prevCpu = new Dictionary<long, double>();
+        private readonly Dictionary<ProcessKey, double> _prevCpu = new Dictionary<ProcessKey, double>();
         private DateTime _prevTime = DateTime.MinValue;
 
         private CancellationTokenSource _cts;
@@ -47,6 +72,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
             _count = count;
             _minPercent = minPercent;
             _period = period;
+            _processorCount = GetTotalProcessorCount();
         }
 
         public ValueTask<bool> InitAsync()
@@ -88,8 +114,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                 {
                     try
                     {
-                        var key = MakeKey(p.Id, p.StartTime.ToUniversalTime().Ticks);
-                        _prevCpu[key] = p.TotalProcessorTime.TotalMilliseconds;
+                        _prevCpu[new ProcessKey(p.Id, p.StartTime.ToUniversalTime().Ticks)] =
+                            p.TotalProcessorTime.TotalMilliseconds;
                     }
                     catch { }
                     finally { p.Dispose(); }
@@ -118,13 +144,13 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                 return;
 
             var byName = new Dictionary<string, double>(StringComparer.Ordinal);
-            var curCpu = new Dictionary<long, double>();
+            var curCpu = new Dictionary<ProcessKey, double>();
 
             foreach (var p in SysProcess.GetProcesses())
             {
                 try
                 {
-                    var key = MakeKey(p.Id, p.StartTime.ToUniversalTime().Ticks);
+                    var key = new ProcessKey(p.Id, p.StartTime.ToUniversalTime().Ticks);
                     var cpuMs = p.TotalProcessorTime.TotalMilliseconds;
                     curCpu[key] = cpuMs;
 
@@ -139,7 +165,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                     if (_prevCpu.TryGetValue(key, out prevMs))
                     {
                         var deltaCpu = cpuMs - prevMs;
-                        var percent = deltaCpu / (elapsedMs * Environment.ProcessorCount) * 100.0;
+                        var percent = deltaCpu / (elapsedMs * _processorCount) * 100.0;
                         if (percent > 0)
                         {
                             double existing;
@@ -158,9 +184,11 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
             foreach (var kv in curCpu)
                 _prevCpu[kv.Key] = kv.Value;
 
+            // Busiest first; deterministic tie-break by name ascending (mirrors native SelectTopN).
             var top = byName
                 .Where(kv => kv.Value >= _minPercent)
                 .OrderByDescending(kv => kv.Value)
+                .ThenBy(kv => kv.Key, StringComparer.Ordinal)
                 .Take(_count);
 
             foreach (var kv in top)
@@ -186,7 +214,5 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
             }
         }
 
-        // Combine pid + startTimeTicks into a single long key to avoid tuple syntax issues on net472.
-        private static long MakeKey(int pid, long startTicks) => ((long)pid << 32) ^ startTicks;
     }
 }

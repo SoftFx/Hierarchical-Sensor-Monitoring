@@ -341,6 +341,7 @@ set(NATIVE_REGRESSION_TESTS
     native_logger_zero_window_logs_every_error
     native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values
     native_retry_below_capacity_is_always_redelivered
+    cpu_select_top_n_selects_busiest_above_threshold
 )
 
 foreach(name IN LISTS NATIVE_REGRESSION_TESTS)
