@@ -110,6 +110,11 @@ namespace hsm::agent
                 {
                     auto it = sensors.find(usage.name);
                     if (it == sensors.end())
+                        // Creating a sensor from this background thread (after Start) is safe: the C-ABI
+                        // CreateSensor serializes on the collector's mutex_, and the scheduler reads the
+                        // registry only via a snapshot taken under the same mutex. A plain instant-sensor
+                        // create touches no unsynchronized std::function callback storage (only SetLogger/
+                        // AddLifecycleListener/SetMetricSourceFactory do — all done pre-Start on one thread).
                         it = sensors.emplace(usage.name, collector.CreateDoubleSensor("Top CPU processes/" + usage.name)).first;
                     it->second.AddValue(usage.percent);
                 }
@@ -172,6 +177,24 @@ namespace hsm::agent
             // sampling never blocks the collector's pipeline; it waits on the same cv_ and returns the
             // moment stop is requested. Joined before Stop() so no sensor op overlaps shutdown.
             std::thread top_cpu_thread;
+
+            // RAII backstop: if on_started() or WaitForStop() throws, the stack unwinds through here and
+            // the worker must be joined before its std::thread is destroyed — otherwise the destructor
+            // calls std::terminate(), bypassing the catch below. Requests stop, then joins, on any exit.
+            struct ThreadGuard
+            {
+                AgentRuntime* self;
+                std::thread& thread;
+                ~ThreadGuard()
+                {
+                    if (thread.joinable())
+                    {
+                        self->RequestStop();
+                        thread.join();
+                    }
+                }
+            } top_cpu_guard{ this, top_cpu_thread };
+
             if (config_.top_cpu_enabled)
                 top_cpu_thread = std::thread(&AgentRuntime::RunTopCpuLoop, this, std::ref(collector));
 

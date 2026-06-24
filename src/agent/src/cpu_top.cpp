@@ -46,13 +46,6 @@ namespace hsm::agent
             return v.QuadPart;
         }
 
-        std::uint64_t NowWall100ns()
-        {
-            FILETIME ft;
-            GetSystemTimeAsFileTime(&ft); // 100-ns ticks; monotonic enough for a delta over ~1 min
-            return FileTimeTo100ns(ft);
-        }
-
         std::string NarrowExeName(const wchar_t* wide)
         {
             const int needed = WideCharToMultiByte(CP_UTF8, 0, wide, -1, nullptr, 0, nullptr, nullptr);
@@ -66,17 +59,20 @@ namespace hsm::agent
 
     WindowsCpuSampler::WindowsCpuSampler()
     {
-        SYSTEM_INFO info{};
-        GetSystemInfo(&info);
-        cores_ = info.dwNumberOfProcessors > 0 ? info.dwNumberOfProcessors : 1;
+        // Group-aware count: GetSystemInfo().dwNumberOfProcessors only sees the current processor
+        // group (<= 64), which would over-report CPU% on large multi-group servers.
+        const DWORD cores = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+        cores_ = cores > 0 ? cores : 1;
     }
 
     std::map<std::string, double> WindowsCpuSampler::Sample()
     {
-        const std::uint64_t wall = NowWall100ns();
+        // Monotonic elapsed time for the denominator — GetTickCount64 is immune to NTP/DST/manual
+        // wall-clock adjustments (which could zero or inflate the interval).
+        const std::uint64_t wall_ms = GetTickCount64();
 
-        // Snapshot: pid -> cumulative CPU 100ns, and pid -> exe name (for this tick).
-        std::map<std::uint32_t, std::uint64_t> cur_cpu;
+        // This tick: pid -> {creation, cpu} and pid -> exe name.
+        std::map<std::uint32_t, PrevSample> cur;
         std::map<std::uint32_t, std::string> cur_name;
 
         HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -99,7 +95,7 @@ namespace hsm::agent
                     FILETIME creation, exit, kernel, user;
                     if (GetProcessTimes(process, &creation, &exit, &kernel, &user))
                     {
-                        cur_cpu[pid] = FileTimeTo100ns(kernel) + FileTimeTo100ns(user);
+                        cur[pid] = { FileTimeTo100ns(creation), FileTimeTo100ns(kernel) + FileTimeTo100ns(user) };
                         cur_name[pid] = NarrowExeName(entry.szExeFile);
                     }
                     CloseHandle(process);
@@ -110,25 +106,28 @@ namespace hsm::agent
 
         std::map<std::string, double> by_name;
 
-        const std::uint64_t wall_delta = wall > prev_wall_100ns_ ? wall - prev_wall_100ns_ : 0;
-        if (have_baseline_ && wall_delta > 0)
+        const std::uint64_t wall_delta_ms = wall_ms > prev_wall_ms_ ? wall_ms - prev_wall_ms_ : 0;
+        if (have_baseline_ && wall_delta_ms > 0)
         {
-            const double denom = static_cast<double>(wall_delta) * static_cast<double>(cores_);
-            for (const auto& [pid, cpu] : cur_cpu)
+            // Total CPU capacity over the interval, in 100ns units: ms * 10000 per core.
+            const double denom = static_cast<double>(wall_delta_ms) * 10000.0 * static_cast<double>(cores_);
+            for (const auto& [pid, sample] : cur)
             {
-                const auto prev = prev_cpu_100ns_.find(pid);
-                if (prev == prev_cpu_100ns_.end() || cpu < prev->second)
-                    continue; // new process this tick (or counter reset) — no delta to attribute
+                const auto prev = prev_.find(pid);
+                // Skip a process new this tick, a PID reused by a different process (creation time
+                // changed), or a non-monotonic counter — none has a valid delta to attribute.
+                if (prev == prev_.end() || prev->second.creation_100ns != sample.creation_100ns || sample.cpu_100ns < prev->second.cpu_100ns)
+                    continue;
 
-                const double percent = static_cast<double>(cpu - prev->second) / denom * 100.0;
+                const double percent = static_cast<double>(sample.cpu_100ns - prev->second.cpu_100ns) / denom * 100.0;
                 const auto name = cur_name.find(pid);
                 if (name != cur_name.end() && !name->second.empty())
                     by_name[name->second] += percent;
             }
         }
 
-        prev_cpu_100ns_ = std::move(cur_cpu);
-        prev_wall_100ns_ = wall;
+        prev_ = std::move(cur);
+        prev_wall_ms_ = wall_ms;
         have_baseline_ = true;
         return by_name; // empty on the first call (baseline only)
     }

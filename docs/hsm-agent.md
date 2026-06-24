@@ -86,6 +86,10 @@ aggregates by **executable name** (all `chrome.exe` instances summed), and posts
 busiest `count` names (that are also `>= minPercent`) to `Top CPU processes/<exe name>` Double sensors.
 A name that isn't in the top list that tick gets no value — leaving a natural gap in its graph.
 
+> Note: a sensor is created the first time an exe name reaches the top list and kept afterwards, so on a
+> long-lived, busy host the number of `Top CPU processes/*` sensors grows with the number of distinct
+> programs that have ever been busy. Raise `minPercent` to limit churn from short-lived spikes.
+
 Blank/missing `address` or `accessKey`, or an out-of-range `port`, make the agent refuse to start (the
 reason is logged to the Event Log and the file log).
 

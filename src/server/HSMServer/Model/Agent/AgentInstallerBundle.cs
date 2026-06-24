@@ -52,7 +52,8 @@ namespace HSMServer.Model.Agent
             if (options.EnableTopCpu)
             {
                 // Server-side opt-in (Configuration → Agent). Ship the agent's topCpu defaults so the
-                // installed service reports the top processes by CPU once a minute.
+                // installed service reports the top processes by CPU once a minute. NOTE: these defaults
+                // mirror AgentConfig in the agent (src/agent/include/agent/config.hpp) — keep in sync.
                 config["topCpu"] = new
                 {
                     enabled = true,

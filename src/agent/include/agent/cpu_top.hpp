@@ -40,8 +40,14 @@ namespace hsm::agent
         std::map<std::string, double> Sample();
 
     private:
-        std::map<std::uint32_t, std::uint64_t> prev_cpu_100ns_; ///< pid -> cumulative (kernel+user) 100ns
-        std::uint64_t prev_wall_100ns_ = 0;
+        struct PrevSample
+        {
+            std::uint64_t creation_100ns; ///< process creation time — detects PID reuse between ticks
+            std::uint64_t cpu_100ns;      ///< cumulative (kernel+user) CPU time
+        };
+
+        std::map<std::uint32_t, PrevSample> prev_; ///< pid -> previous sample
+        std::uint64_t prev_wall_ms_ = 0;           ///< monotonic (GetTickCount64) wall ms at last sample
         unsigned int cores_ = 1;
         bool have_baseline_ = false;
     };
