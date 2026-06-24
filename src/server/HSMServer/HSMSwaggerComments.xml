@@ -296,5 +296,24 @@
             client agent has no UI and simply runs whatever config.json the bundle ships. Default false.
             </summary>
         </member>
+        <member name="P:HSMServer.ServerConfiguration.AgentConfig.AutoUpdateEnabled">
+            <summary>
+            Global kill-switch for the agent self-update channel (epic #1174). When false the
+            <c>GET /api/agent/version</c> manifest returns <c>updateEnabled: false</c> and every agent
+            that polls it will stay on its current version. Default false (opt-in).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentController.GetVersion">
+            <summary>
+            Agent self-update manifest (epic #1174). Returns version, SHA-256 of the staged exe, and
+            whether the server permits auto-updates. No authentication. Returns 503 when no exe is staged.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentController.GetExe">
+            <summary>
+            Serve the staged agent binary for self-update (epic #1174). Requires a valid product access
+            key in the <c>Key</c> request header. Sets <c>X-Agent-Sha256</c> on the response.
+            </summary>
+        </member>
     </members>
 </doc>

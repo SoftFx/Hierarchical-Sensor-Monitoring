@@ -184,6 +184,29 @@ namespace
         ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "topCpu": { "enabled": "yes" } })", "non-bool enabled");
     }
 
+    void UpdateConfigParsesAndDefaults()
+    {
+        // Absent update section → enabled=true, 24 h default.
+        const auto def = ParseOk(R"({ "server": { "address": "h", "accessKey": "k" } })");
+        Check(def.update_enabled, "update enabled by default");
+        CheckEq(def.update_check_period_hours, 24, "default check period");
+
+        // Explicit values round-trip.
+        const auto cfg = ParseOk(R"({
+            "server": { "address": "h", "accessKey": "k" },
+            "update": { "enabled": false, "checkPeriodHours": 12 }
+        })");
+        Check(!cfg.update_enabled, "disabled");
+        CheckEq(cfg.update_check_period_hours, 12, "check period");
+    }
+
+    void UpdateConfigRejectsBadPeriod()
+    {
+        ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "update": { "checkPeriodHours": 0 } })", "zero period");
+        ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "update": { "checkPeriodHours": -1 } })", "negative period");
+        ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "update": "on" })", "non-object update");
+    }
+
     const std::map<std::string, std::function<void()>>& Tests()
     {
         static const std::map<std::string, std::function<void()>> tests = {
@@ -198,6 +221,8 @@ namespace
             { "agent_config_decodes_string_escapes", StringEscapesDecode },
             { "agent_topcpu_config_parses_and_defaults", TopCpuConfigParsesAndDefaults },
             { "agent_topcpu_rejects_bad_config", TopCpuRejectsBadConfig },
+            { "agent_update_config_parses_and_defaults", UpdateConfigParsesAndDefaults },
+            { "agent_update_config_rejects_bad_period", UpdateConfigRejectsBadPeriod },
         };
         return tests;
     }

@@ -1,6 +1,6 @@
 # Feature: HSM Agent (Windows service)
 
-> Owner: agent | Last reviewed: 2026-06-23 | Canonical: yes
+> Owner: agent | Last reviewed: 2026-06-25 | Canonical: yes
 > Scope: The standalone **HSM Agent** product (`src/agent/`) — an always-on Windows service that hosts the native collector and streams this computer's metrics to an HSM server with zero client-side configuration. This feature owns the service host, config, and logging; it owns NO wire behavior (that all lives in `collector/` + `integrations/native-collector`).
 
 ---
@@ -86,6 +86,42 @@ defaults. Maps onto `CollectorOptions` + runtime group gates:
 - `periods.collectMs` → `package_collect_period_ms`. `productVersion` → module-sensor version.
 - `topCpu.{enabled=false,periodMs=60000,minPercent=1.0,count=10}` — opt-in "top processes by CPU"
   (issue #1175). Validated only when enabled (period/count > 0, minPercent ≥ 0).
+- `update.{enabled=true,checkPeriodHours=24}` — self-update channel (epic #1174). When enabled the
+  agent periodically polls `GET <server>/api/agent/version` and self-updates when the server advertises
+  a newer version AND its global `AutoUpdateEnabled` flag is true. `enabled=false` opts this machine out
+  regardless of the server's flag. Validated: `checkPeriodHours ≥ 1`.
+
+## Self-update (epic #1174)
+
+Server-driven auto-upgrade of the running Windows service. The server exposes:
+- `GET /api/agent/version` — public, returns `{ version, sha256, updateEnabled }`. Version is read from
+  `wwwroot/agent/version.txt` (staged by CI). SHA-256 is computed from the staged exe at request time.
+  `updateEnabled` mirrors `ServerConfig.Agent.AutoUpdateEnabled` (admin toggle, default false).
+- `GET /api/agent/exe` — Key-header auth (agent's own access key), returns the binary stream with
+  `X-Agent-Sha256` response header.
+
+`UpdateChecker` (`src/agent/src/update_checker.cpp`, Windows-only) runs on a background thread after
+`collector.Start()`. Flow per poll:
+1. Fetch version manifest (WinHTTP, TLS enforced; `allow_untrusted_certificate` honoured for eval setups).
+2. Parse version string into `(major, minor, patch)`; skip if `remote ≤ current` (downgrade protection).
+3. Skip if `updateEnabled == false` (server kill-switch).
+4. Download exe (`Key` header), verify SHA-256 against manifest value.
+5. Write to `%ProgramFiles%\HSM Agent\hsm-agent.new.exe`.
+6. Spawn `hsm-agent.exe --apply-update` as a detached process.
+7. Call `RequestStop()` → graceful service shutdown begins.
+
+`--apply-update` (`src/agent/src/apply_update.cpp`) is the detached binary-swap helper:
+1. Wait up to 60 s for `HSMAgent` service to reach `STOPPED`.
+2. Rename dance: `hsm-agent.exe → hsm-agent.old.exe`; `hsm-agent.new.exe → hsm-agent.exe`.
+3. `StartService(HSMAgent)`.
+4. Health gate: wait 30 s for `SERVICE_RUNNING`; on failure, roll back (`hsm-agent.old.exe →
+   hsm-agent.exe`), restart old version, log error to Event Log.
+
+On next startup, `AgentRuntime::Run()` deletes `hsm-agent.old.exe` to confirm the new version is live.
+
+**Admin kill-switch:** `Agent.AutoUpdateEnabled: false` in `appsettings.json` (default). Flip to true
+when ready to roll out; flip back to halt. Per-machine opt-out: set `update.enabled: false` in the
+machine's `config.json`.
 
 ## Top processes by CPU (issue #1175)
 
@@ -115,7 +151,7 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 
 ## Verification
 
-- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 12 cases — config parser + topCpu config + `SelectTopN`) — run on every
+- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 13 cases — config parser + topCpu config + update config) — run on every
   platform, registered in `ctest`.
 - **CI build lane (W8):** `.github/workflows/agent-windows-build.yml` — windows-latest, vcpkg curl,
   configures + builds `src/agent` Release with warnings-as-errors, runs the config `ctest`, and uploads

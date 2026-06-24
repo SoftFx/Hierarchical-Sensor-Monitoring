@@ -1,5 +1,10 @@
 #include "agent/agent_runtime.hpp"
 
+#ifdef _WIN32
+#include "agent/paths.hpp"
+#include "agent/update_checker.hpp"
+#endif
+
 #include <chrono>
 #include <exception>
 #include <utility>
@@ -83,6 +88,14 @@ namespace hsm::agent
     {
         try
         {
+#ifdef _WIN32
+            // If a previous self-update succeeded, clean up the old binary now that the new
+            // service is confirmed running (this is the first Run() call after the swap).
+            const std::wstring old_exe = OldExePath();
+            if (GetFileAttributesW(old_exe.c_str()) != INVALID_FILE_ATTRIBUTES)
+                DeleteFileW(old_exe.c_str());
+#endif
+
             hc::Collector collector(BuildOptions());
 
             // Install the log sink first so configuration/transport diagnostics are captured.
@@ -135,7 +148,23 @@ namespace hsm::agent
             if (on_started)
                 on_started();
 
+#ifdef _WIN32
+            // Start the self-update checker after the collector is running (it may call RequestStop
+            // to trigger a service restart when an update is applied).
+            UpdateChecker updater(
+                config_,
+                [this](int level, const std::string& msg) {
+                    Log(static_cast<hc::LogLevel>(level), msg);
+                },
+                [this] { RequestStop(); });
+            updater.Start();
+#endif
+
             WaitForStop();
+
+#ifdef _WIN32
+            updater.Stop();
+#endif
 
             Log(hc::LogLevel::Info, "HSM Agent stopping...");
             collector.Stop(); // bounded graceful drain (capped internally)

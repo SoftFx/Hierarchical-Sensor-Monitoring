@@ -68,7 +68,9 @@ if(HSM_AGENT_BUILD_TESTS)
             agent_config_ignores_unknown_fields
             agent_config_decodes_string_escapes
             agent_topcpu_config_parses_and_defaults
-            agent_topcpu_rejects_bad_config)
+            agent_topcpu_rejects_bad_config
+            agent_update_config_parses_and_defaults
+            agent_update_config_rejects_bad_period)
         add_test(NAME ${name} COMMAND hsm_agent_tests ${name})
     endforeach()
 endif()
@@ -99,7 +101,9 @@ if(WIN32)
     add_executable(hsm-agent
         src/main.cpp
         src/agent_runtime.cpp
+        src/apply_update.cpp
         src/paths.cpp
+        src/update_checker.cpp
         src/logging/file_logger.cpp
         src/logging/agent_logger.cpp
         src/service/event_log.cpp
@@ -108,7 +112,8 @@ if(WIN32)
         "${TIMESTAMP_CPP}"
     )
     add_dependencies(hsm-agent hsm_agent_timestamp)
-    target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_collector_cpp advapi32)
+    # winhttp: WinHTTP for self-update HTTP (epic #1174); bcrypt: SHA-256 via Windows CNG
+    target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_collector_cpp advapi32 winhttp bcrypt)
     target_compile_features(hsm-agent PRIVATE cxx_std_17)
     target_compile_definitions(hsm-agent PRIVATE HSM_AGENT_VERSION="${PROJECT_VERSION}")
     hsm_agent_set_warnings(hsm-agent)

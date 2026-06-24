@@ -22,4 +22,12 @@ public class AgentConfig
     /// client agent has no UI and simply runs whatever config.json the bundle ships. Default false.
     /// </summary>
     public bool EnableTopCpuProcesses { get; set; }
+
+    /// <summary>
+    /// Global kill-switch for the agent self-update channel (epic #1174). When false the
+    /// <c>GET /api/agent/version</c> manifest returns <c>updateEnabled: false</c> and every agent
+    /// that polls it will stay on its current version regardless of its local config. Default false
+    /// (opt-in: enable when ready to roll out, disable to halt).
+    /// </summary>
+    public bool AutoUpdateEnabled { get; set; }
 }
