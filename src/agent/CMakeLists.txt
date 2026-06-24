@@ -79,6 +79,23 @@ if(WIN32)
     set(HSM_COLLECTOR_HTTP ON CACHE BOOL "Build the libcurl HTTP transport" FORCE)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../native/collector ${CMAKE_CURRENT_BINARY_DIR}/collector)
 
+    # Regenerate build_timestamp.cpp on every build so --version always shows the real build time.
+    # Using add_custom_target(ALL) ensures the cmake script runs each time; writing a new file
+    # (timestamp always changes) forces recompilation of that one translation unit.
+    set(TIMESTAMP_CPP "${CMAKE_CURRENT_BINARY_DIR}/build_timestamp.cpp")
+    add_custom_target(hsm_agent_timestamp ALL
+        COMMAND ${CMAKE_COMMAND}
+            -DOUTPUT=${TIMESTAMP_CPP}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_timestamp.cmake
+        COMMENT "Generating build timestamp"
+        VERBATIM
+    )
+    # Create a placeholder so cmake doesn't error on the missing source before the first build.
+    if(NOT EXISTS "${TIMESTAMP_CPP}")
+        file(WRITE "${TIMESTAMP_CPP}" "namespace hsm { namespace agent { const char* BuildTimestamp() { return \"(unknown)\"; } } }\n")
+    endif()
+    set_source_files_properties("${TIMESTAMP_CPP}" PROPERTIES GENERATED TRUE)
+
     add_executable(hsm-agent
         src/main.cpp
         src/agent_runtime.cpp
@@ -88,7 +105,9 @@ if(WIN32)
         src/service/event_log.cpp
         src/service/service_install.cpp
         src/service/windows_service.cpp
+        "${TIMESTAMP_CPP}"
     )
+    add_dependencies(hsm-agent hsm_agent_timestamp)
     target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_collector_cpp advapi32)
     target_compile_features(hsm-agent PRIVATE cxx_std_17)
     target_compile_definitions(hsm-agent PRIVATE HSM_AGENT_VERSION="${PROJECT_VERSION}")

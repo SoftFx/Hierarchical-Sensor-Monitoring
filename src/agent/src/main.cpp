@@ -7,6 +7,8 @@
 // The single signed binary is identical across every product download; only the bundled config.json
 // differs (epic #1167 signed-exe invariant).
 
+namespace hsm { namespace agent { const char* BuildTimestamp(); } }
+
 #include "agent/agent_runtime.hpp"
 #include "agent/config.hpp"
 #include "agent/event_log.hpp"
@@ -117,7 +119,7 @@ int wmain(int argc, wchar_t** argv)
         else if (arg == L"--version" || arg == L"-v")
         {
             std::cout << "hsm-agent " << HSM_AGENT_VERSION
-                      << " (built " << __DATE__ << " " << __TIME__ << ")\n";
+                      << " (built " << hsm::agent::BuildTimestamp() << ")\n";
             return 0;
         }
         else if (arg == L"--help" || arg == L"-h" || arg == L"/?")
