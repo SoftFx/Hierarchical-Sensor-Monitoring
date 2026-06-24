@@ -173,14 +173,12 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                 {
                     string fullPath;
                     _fullPaths.TryGetValue(name, out fullPath);
-                    var descSuffix = string.IsNullOrEmpty(fullPath) ? "" : "; " + fullPath;
+                    var pathLine = string.IsNullOrEmpty(fullPath) ? "" : "\n\n**Path:** `" + fullPath + "`";
                     sensor = _storage.CreateInstantSensor<double>(
                         "Top CPU processes/" + name,
                         new InstantSensorOptions
                         {
-                            Description = string.Format(
-                                "Top CPU processes/{0} — top {1} consumers by % of machine CPU{2}",
-                                name, _count, descSuffix)
+                            Description = "Top **" + _count + "** CPU consumers by % of machine CPU" + pathLine
                         });
                     _sensors[name] = sensor;
                 }
