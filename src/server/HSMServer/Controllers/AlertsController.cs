@@ -42,6 +42,7 @@ namespace HSMServer.Controllers
         private readonly ITreeValuesCache _cache;
         private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
+        private readonly ISlackDestinationsManager _slackDestinations;
 
 
         static AlertsController()
@@ -52,12 +53,13 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertsController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users) : base(users)
+        public AlertsController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users, ISlackDestinationsManager slackDestinations) : base(users)
         {
             _telegram = telegram;
             _folders = folders;
             _cache = cache;
             _tree = tree;
+            _slackDestinations = slackDestinations;
         }
 
 
@@ -126,6 +128,9 @@ namespace HSMServer.Controllers
             if (_tree.Nodes.TryGetValue(nodeId, out var targetNode))
             {
                 var availableChats = targetNode.GetAvailableChats(_telegram).ToDictionary(k => k.Value, v => v.Key);
+                var availableSlackDestinations = _slackDestinations.GetValues()
+                    .Where(d => d.SendMessages)
+                    .ToDictionary(d => d.Name, d => d.Id);
                 var productId = targetNode.RootProduct.Id;
 
                 foreach (var sensorPath in importGroup.Sensors)
@@ -134,7 +139,7 @@ namespace HSMServer.Controllers
 
                     if (_cache.TryGetSensorByPath(productId, fullSensorPath, out var sensor))
                     {
-                        var newAlert = importGroup.ToUpdate(sensor.Id, availableChats);
+                        var newAlert = importGroup.ToUpdate(sensor.Id, availableChats, availableSlackDestinations);
 
                         newAlerts[sensor.Id].Add(newAlert);
                     }
@@ -203,12 +208,15 @@ namespace HSMServer.Controllers
         private FileContentResult ExportModelToFile(string selectedNodePath, PolicyExportGroup group)
         {
             var chats = _telegram.GetValues().ToDictionary(ch => ch.Id, ch => ch.Name);
+            var slackDestinations = _slackDestinations.GetValues()
+                .Where(d => d.SendMessages)
+                .ToDictionary(d => d.Id, d => d.Name);
 
             var fileName = $"{selectedNodePath.Replace('/', '_')}-alerts.json";
             var content = JsonSerializer.SerializeToUtf8Bytes(group.SelectMany(p => p.Value.Select(info => (p.Key, info)))
                                                                    .Where(x => x.info.Policy.TemplateId == null)
                                                                    .GroupBy(g => (g.info.ProductName, g.Key))
-                                                                   .Select(p => new AlertExportViewModel(p.Select(v => v.info), chats)), _serializeOptions);
+                                                                   .Select(p => new AlertExportViewModel(p.Select(v => v.info), chats, slackDestinations)), _serializeOptions);
 
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 

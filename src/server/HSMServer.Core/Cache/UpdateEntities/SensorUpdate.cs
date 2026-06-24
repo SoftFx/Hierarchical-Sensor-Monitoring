@@ -8,6 +8,7 @@ using HSMCommon.TaskResult;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Notifications;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
 using SensorStatus = HSMCommon.Model.SensorStatus;
@@ -140,6 +141,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public PolicyDestinationMode? Mode { get; }
 
+        public NotificationKind? Kind { get; }
+
 
         public PolicyDestinationUpdate(PolicyDestinationMode? mode = null)
         {
@@ -151,9 +154,16 @@ namespace HSMServer.Core.Cache.UpdateEntities
             Chats = chats;
         }
 
+        public PolicyDestinationUpdate(Dictionary<Guid, string> chats, PolicyDestinationMode mode, NotificationKind kind) : this(mode)
+        {
+            Chats = chats;
+            Kind = kind;
+        }
+
         public PolicyDestinationUpdate(PolicyDestination destination) : this(destination.Mode)
         {
             Chats = new Dictionary<Guid, string>(destination.Chats);
+            Kind = destination.Kind;
         }
     }
 

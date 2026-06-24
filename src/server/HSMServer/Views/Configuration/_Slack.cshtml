@@ -1,0 +1,106 @@
+@using HSMServer.Controllers
+@using HSMServer.Constants
+@using HSMServer.Model.Configuration
+
+@model SlackSettingsViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="container my-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">Slack destinations</h5>
+        <a href="@Url.Action(nameof(NotificationsController.EditSlackDestination), ViewConstants.NotificationsController, new { id = Guid.Empty })"
+           class="btn btn-link p-0">
+            <i class="fa-solid fa-plus"></i> Add new destination
+        </a>
+    </div>
+
+    <p class="text-muted small">
+        Each destination is one Slack incoming-webhook URL. Create a webhook in Slack
+        (channel &rarr; Integrations &rarr; Incoming Webhook), then paste the URL here.
+        Reference the destination from an alert action's destination-kind selector.
+    </p>
+
+    @if (Model.Destinations is null || Model.Destinations.Count == 0)
+    {
+        <div class="text-muted">No Slack destinations configured yet.</div>
+    }
+    else
+    {
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Webhook URL</th>
+                    <th>Enabled</th>
+                    <th>Author</th>
+                    <th>Created</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Model.Destinations)
+                {
+                    <tr>
+                        <td>@d.Name</td>
+                        <td><code>@MaskUrl(d.WebhookUrl)</code></td>
+                        <td>
+                            @if (d.EnableMessages)
+                            {
+                                <span class="badge bg-success">on</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">off</span>
+                            }
+                        </td>
+                        <td>@(d.Author ?? "—")</td>
+                        <td>@d.CreationDate.ToLocalTime().ToString("g")</td>
+                        <td class="text-end text-nowrap">
+                            <a href="@Url.Action(nameof(NotificationsController.EditSlackDestination), ViewConstants.NotificationsController, new { id = d.Id })"
+                               class="btn btn-sm btn-link p-0 me-2" title="Edit">
+                                <i class="fa-solid fa-pen"></i>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-link p-0 remove-slack-destination"
+                                    data-id="@d.Id" data-name="@d.Name" title="Remove">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<form id="removeSlackDestination_form" method="post"
+      action="@Url.Action(nameof(NotificationsController.RemoveSlackDestination), ViewConstants.NotificationsController)">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" id="removeSlackDestination_id" />
+</form>
+
+<script>
+    $(function () {
+        $(document).off("click", ".remove-slack-destination").on("click", ".remove-slack-destination", function () {
+            var id = $(this).data("id");
+            var name = $(this).data("name");
+
+            if (!confirm("Remove Slack destination \"" + name + "\"?"))
+                return;
+
+            $("#removeSlackDestination_id").val(id);
+            $("#removeSlackDestination_form").submit();
+        });
+    });
+</script>
+
+@{
+    static string MaskUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url) || url.Length <= 24)
+            return url;
+
+        return url[..24] + "…";
+    }
+}

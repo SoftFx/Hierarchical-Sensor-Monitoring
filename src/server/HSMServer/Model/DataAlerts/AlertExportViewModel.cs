@@ -4,6 +4,7 @@ using System.Linq;
 using HSMCommon.Model;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Notifications;
 using HSMServer.Extensions;
 
 
@@ -47,12 +48,14 @@ namespace HSMServer.Model.DataAlerts
 
         public List<string> Chats { get; set; } = [];
 
+        public string Kind { get; set; } = nameof(NotificationKind.Telegram);
+
         public bool IsDisabled { get; set; }
 
 
         public AlertExportViewModel() { }
 
-        internal AlertExportViewModel(IEnumerable<PolicyExportInfo> infoList, Dictionary<Guid, string> availableChats)
+        internal AlertExportViewModel(IEnumerable<PolicyExportInfo> infoList, Dictionary<Guid, string> availableChats, Dictionary<Guid, string> availableSlackDestinations = null)
         {
             Sensors = infoList.Select(u => u.FullRelativePath).OrderBy(u => u).ToList();
 
@@ -71,27 +74,38 @@ namespace HSMServer.Model.DataAlerts
             ScheduledRepeatMode = policy.Schedule.RepeatMode; // TODO: null if None or Immediatly?
             ScheduledInstantSend = policy.Schedule.InstantSend;
 
+            Kind = policy.Destination.Kind.ToString();
+
+            var destinationPool = policy.Destination.Kind == NotificationKind.Slack && availableSlackDestinations is not null
+                ? availableSlackDestinations
+                : availableChats;
+
             if (_chatsModeToKeyWords.TryGetValue(policy.Destination.Mode, out var keyWord))
                 Chats.Add(keyWord);
             else
                 foreach (var (id, _) in policy.Destination.Chats)
-                    if (availableChats.TryGetValue(id, out var name))
+                    if (destinationPool.TryGetValue(id, out var name))
                         Chats.Add(name);
 
             if (policy.Destination.Mode is PolicyDestinationMode.FromParent)
             {
                 foreach (var (id, _) in policy.Destination.Chats)
-                    if (availableChats.TryGetValue(id, out var name))
+                    if (destinationPool.TryGetValue(id, out var name))
                         Chats.Add(name);
             }
 
             Conditions = policy.Conditions.Select(c => new ConditionExportViewModel(c)).ToList();
         }
 
-        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats)
+        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats, Dictionary<string, Guid> availableSlackDestinations = null)
         {
             PolicyDestinationMode? mode = PolicyDestinationMode.Custom;
             Dictionary<Guid, string> chats = [];
+
+            var kind = Enum.TryParse<NotificationKind>(Kind, out var parsedKind) ? parsedKind : NotificationKind.Telegram;
+            var pool = kind == NotificationKind.Slack && availableSlackDestinations is not null
+                ? availableSlackDestinations
+                : availableChats;
 
             if (Chats is not null)
             {
@@ -109,7 +123,7 @@ namespace HSMServer.Model.DataAlerts
                         }
                     }
 
-                    if (availableChats.TryGetValue(chat, out var chatId))
+                    if (pool.TryGetValue(chat, out var chatId))
                         chats.Add(chatId, chat);
                 }
             }
@@ -133,7 +147,7 @@ namespace HSMServer.Model.DataAlerts
                     RepeatMode = ScheduledRepeatMode,
                     InstantSend = ScheduledInstantSend,
                 },
-                Destination = new PolicyDestinationUpdate(chats, mode),
+                Destination = new PolicyDestinationUpdate(chats, mode ?? PolicyDestinationMode.Custom, kind),
             };
         }
     }

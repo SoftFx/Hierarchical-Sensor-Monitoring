@@ -1,6 +1,7 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Filters.FolderRoleFilters;
+using HSMServer.Filters.SlackRoleFilters;
 using HSMServer.Filters.TelegramRoleFilters;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
@@ -24,13 +25,17 @@ namespace HSMServer.Controllers
 
         internal ITelegramChatsManager ChatsManager { get; }
 
+        internal ISlackDestinationsManager SlackDestinations { get; }
+
 
         public NotificationsController(ITelegramChatsManager chatsManager, NotificationsCenter notifications,
-            IFolderManager folderManager, IUserManager userManager) : base(userManager)
+            IFolderManager folderManager, IUserManager userManager,
+            ISlackDestinationsManager slackDestinations) : base(userManager)
         {
             ChatsManager = chatsManager;
             _folderManager = folderManager;
             _telegramBot = notifications.TelegramBot;
+            SlackDestinations = slackDestinations;
         }
 
 
@@ -95,6 +100,51 @@ namespace HSMServer.Controllers
 
             await _telegramBot.SendTestMessageAsync(chatId, testMessage);
         }
+
+
+        [HttpGet]
+        [SlackAdmin]
+        public IActionResult EditSlackDestination(Guid id)
+        {
+            if (id == Guid.Empty)
+                return View(new SlackDestinationViewModel { EnableMessages = true });
+
+            return SlackDestinations.TryGetValue(id, out var destination)
+                ? View(new SlackDestinationViewModel(destination))
+                : _emptyResult;
+        }
+
+        [HttpPost]
+        [SlackAdmin]
+        public async Task<IActionResult> AddSlackDestination(SlackDestinationViewModel model)
+        {
+            if (!ModelState.IsValid)
+                return View(nameof(EditSlackDestination), model);
+
+            var destination = new SlackDestination(model.ToAddRequest(CurrentUser.Id));
+
+            await SlackDestinations.TryAdd(destination);
+
+            return RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
+        }
+
+        [HttpPost]
+        [SlackAdmin]
+        public async Task<IActionResult> EditSlackDestination(SlackDestinationViewModel model)
+        {
+            if (!ModelState.IsValid)
+                return View(model);
+
+            await SlackDestinations.TryUpdate(model.ToUpdate());
+
+            return SlackDestinations.TryGetValue(model.Id, out var destination)
+                ? View(new SlackDestinationViewModel(destination))
+                : RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
+        }
+
+        [HttpPost]
+        [SlackAdmin]
+        public async Task RemoveSlackDestination(Guid id) => await SlackDestinations.TryRemove(new(id, CurrentInitiator));
 
 
         private ChatFoldersViewModel BuildChatFolders(TelegramChat chat)

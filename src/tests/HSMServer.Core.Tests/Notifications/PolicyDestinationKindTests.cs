@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Notifications;
 using Xunit;
@@ -59,6 +61,26 @@ namespace HSMServer.Core.Tests.Notifications
             var roundTripped = new PolicyDestination(original.ToEntity());
 
             Assert.Equal(NotificationKind.Telegram, roundTripped.Kind);
+        }
+
+        [Fact]
+        public void Update_with_kind_ctor_preserves_kind()
+        {
+            var chats = new Dictionary<Guid, string> { { Guid.NewGuid(), "slack-dest" } };
+
+            var update = new PolicyDestinationUpdate(chats, PolicyDestinationMode.Custom, NotificationKind.Slack);
+
+            Assert.Equal(NotificationKind.Slack, update.Kind);
+            Assert.Equal(PolicyDestinationMode.Custom, update.Mode);
+            Assert.Single(update.Chats);
+        }
+
+        [Fact]
+        public void Update_default_ctor_leaves_kind_null()
+        {
+            var update = new PolicyDestinationUpdate(PolicyDestinationMode.Custom);
+
+            Assert.Null(update.Kind);
         }
     }
 }

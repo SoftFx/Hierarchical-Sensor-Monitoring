@@ -1,5 +1,6 @@
 ﻿@using HSMCommon.Extensions
 @using HSMServer.Extensions
+@using HSMServer.Core.Notifications
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Notifications
 @using HSMServer.Model.DataAlerts
@@ -9,13 +10,14 @@
 @model ActionViewModel
 
 @inject ITelegramChatsManager ChatsManager
+@inject ISlackDestinationsManager SlackDestinations
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
 @{
     var action = Model.Action;
-      
+
 
     var isSendAction = action == ActionType.SendNotification;
     var isNotSendAction = action != ActionType.SendNotification;
@@ -26,6 +28,9 @@
     var isSecondaryCondition = !Model.IsMain;
 
     var chats = ChatsManager.GetValues().Where(x => Model.AvailableChats.Contains(x.Id)).ToList();
+
+    var isSlack = Model.Kind == NotificationKind.Slack;
+    var slackDestinations = SlackDestinations.GetValues().Where(d => d.SendMessages).OrderBy(d => d.Name).ToList();
 }
 
 @* <div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3 w-100" > *@
@@ -40,7 +45,11 @@
         <div class="d-flex align-items-center flex-nowrap pt-1">
             <div class="alert-text-block operation-select ms-2">to</div>
 
-            <select class="selectpicker ms-2" name="Chats" multiple
+            <select class="alert-block alert-select target-input ms-2 notification-kind-select" asp-for="Kind" asp-items="Enum.GetValues<NotificationKind>().ToSelectedItems(k => k.ToString())" data-container="body"></select>
+        </div>
+
+        <div name="telegramDestinations" class="kind-destinations kind-telegram d-flex align-items-center flex-nowrap pt-1 @(isSlack ? "d-none" : string.Empty)">
+            <select class="selectpicker ms-2" name="Chats" multiple @(!isSlack ? "" : "disabled")
                     data-width="auto" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-container="body">
                 <option class="general-group-chat-mode" value="@ChatsMode.FromParent" selected="@(Model.ChatsMode is ChatsMode.FromParent)">@ChatsMode.FromParent.GetDisplayName()</option>
                 <option class="general-group-chat-mode" value="@ChatsMode.NotInitialized" selected="@(Model.ChatsMode is ChatsMode.NotInitialized)">@ChatsMode.NotInitialized.GetDisplayName()</option>
@@ -59,6 +68,23 @@
                 @foreach (var chat in chats.GetPrivates())
                 {
                     <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                }
+            </select>
+        </div>
+
+        <div name="slackDestinations" class="kind-destinations kind-slack d-flex align-items-center flex-nowrap pt-1 @(!isSlack ? "d-none" : string.Empty)">
+            <select class="selectpicker ms-2" name="Chats" multiple @(isSlack ? "" : "disabled")
+                    data-width="auto" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="slack destinations" data-container="body">
+                @if (slackDestinations.Count == 0)
+                {
+                    <option disabled value="">No Slack destinations configured</option>
+                }
+                else
+                {
+                    foreach (var destination in slackDestinations)
+                    {
+                        <option value="@destination.Id" selected="@Model.SlackDestinationIsSelected(destination)">@destination.Name</option>
+                    }
                 }
             </select>
         </div>
@@ -184,7 +210,7 @@
             $(this).selectpicker('refresh')
         });
 
-        
+
 
 
            $("div[name='emoji']").emojioneArea({
@@ -201,11 +227,43 @@
                 buttonTitle: "Select icon",
 
                 ui: {
-                    hideButtons: true   
+                    hideButtons: true
                 }
 
 
             });
+
+        function toggleKindVisibility(actionBlock) {
+            var kind = actionBlock.find("select.notification-kind-select").val();
+            var telegramBlock = actionBlock.find("div[name='telegramDestinations']");
+            var slackBlock = actionBlock.find("div[name='slackDestinations']");
+            var telegramSelect = telegramBlock.find("select[name='Chats']");
+            var slackSelect = slackBlock.find("select[name='Chats']");
+
+            if (kind === "@NotificationKind.Slack") {
+                telegramBlock.addClass("d-none");
+                slackBlock.removeClass("d-none");
+                telegramSelect.attr("disabled", "disabled");
+                slackSelect.removeAttr("disabled");
+            } else {
+                slackBlock.addClass("d-none");
+                telegramBlock.removeClass("d-none");
+                slackSelect.attr("disabled", "disabled");
+                telegramSelect.removeAttr("disabled");
+            }
+
+            telegramSelect.selectpicker("refresh");
+            slackSelect.selectpicker("refresh");
+        }
+
+        $("div[name='alertAction']").each(function () {
+            toggleKindVisibility($(this));
+        });
+
+        $("select.notification-kind-select").off("change").on("change", function () {
+            var block = $(this).parents("div[name='alertAction']:first");
+            toggleKindVisibility(block);
+        });
 
     });
 

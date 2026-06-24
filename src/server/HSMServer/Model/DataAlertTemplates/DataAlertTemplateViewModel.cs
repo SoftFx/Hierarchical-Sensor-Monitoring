@@ -91,7 +91,7 @@ namespace HSMServer.Model.DataAlertTemplates
             SetAvailableFolders(availableFolders);
         }
 
-        public AlertTemplateModel ToModel(Dictionary<Guid, string> availableChats)
+        public AlertTemplateModel ToModel(Dictionary<Guid, string> availableChats, Dictionary<Guid, string> availableSlackDestinations = null)
         {
             var result = new AlertTemplateModel()
             {
@@ -114,7 +114,7 @@ namespace HSMServer.Model.DataAlertTemplates
                         ttl.Id = Guid.NewGuid();
 
                     var ttlPolicy = new TTLPolicy();
-                    var update = ttl.ToTimeToLiveUpdate(InitiatorInfo.AlertTemplate, availableChats ?? []);
+                    var update = ttl.ToTimeToLiveUpdate(InitiatorInfo.AlertTemplate, availableChats ?? [], availableSlackDestinations ?? []);
                     var interval = ttl.Conditions is { Count: > 0 } ? ttl.Conditions[0].TimeToLive.ToModel() : TimeIntervalModel.None;
                     update = update with { TTL = interval?.Ticks };
                     ttlPolicy.FullUpdate(update);
@@ -135,7 +135,7 @@ namespace HSMServer.Model.DataAlertTemplates
                         item.Id = Guid.NewGuid();
 
                     var policy = Policy.BuildPolicy(key);
-                    var update = item.ToUpdate(availableChats ?? []);
+                    var update = item.ToUpdate(availableChats ?? [], availableSlackDestinations ?? []);
                     policy.UpdatePolicy(update);
                     result.Policies.Add(policy);
                 }

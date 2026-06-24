@@ -1,7 +1,7 @@
 # Feature: Notifications
 
 > Owner: server | Last reviewed: 2026-06-24 | Canonical: yes
-> Scope: Server-side alert notification delivery channels and the destination-kind discriminator on policies.
+> Scope: Server-side alert notification delivery channels, the destination-kind discriminator on policies, the Slack destination registry UI, and the alert-action destination-kind selector.
 
 ---
 
@@ -103,3 +103,54 @@ NotificationsBackgroundService (timer) -> NotificationsCenter.SendAllMessagesAsy
 ### Storage
 
 Unchanged from PR2. `SlackDestinationEntity` rows under the `"SlackDestinations"` LevelDB key, accessed via `ISlackDestinationsManager`. The channel resolves webhook URLs from this registry at delivery time.
+
+## Management UI + alert-action selector (PR4 scope)
+
+PR4 closes epic #1144 by exposing Slack destinations to operators and letting each alert action pick its delivery kind.
+
+### Slack destination CRUD
+
+`NotificationsController` gained four endpoints under the existing `NotificationsController` route, all gated by `[SlackAdmin]` (admin-only — Slack destinations are global, not folder-scoped, so they cannot reuse the folder-role filter that gates Telegram chat edits):
+
+- `GET  EditSlackDestination(Guid id)` — `id == Guid.Empty` returns an empty "new destination" view; otherwise loads the destination and renders the edit form.
+- `POST AddSlackDestination(SlackDestinationViewModel)` — creates a new destination from the form.
+- `POST EditSlackDestination(SlackDestinationViewModel)` — updates an existing destination.
+- `POST RemoveSlackDestination(Guid id)` — removes the destination.
+
+`SlackDestinationViewModel` is the form DTO. `ToAddRequest(authorId)` and `ToUpdate()` produce the `SlackAddRequest` / `SlackDestinationUpdate` records consumed by `ISlackDestinationsManager`.
+
+UI surface:
+- `Views/Configuration/Index.cshtml` gained a "Slack" tab whose panel renders `_Slack.cshtml`.
+- `Views/Configuration/_Slack.cshtml` lists destinations (Name, masked Webhook URL, Enabled badge, Author, Created, Edit/Remove actions) and links to `EditSlackDestination?id=Guid.Empty` for "Add new destination".
+- `Views/Notifications/EditSlackDestination.cshtml` is the add/edit form (Name, Webhook URL with `type="url"`, Description, EnableMessages switch). Remove uses `_ConfirmationModal.cshtml` and POSTs to `RemoveSlackDestination` via AJAX.
+
+### Alert-action destination-kind selector
+
+`ActionViewModel` (`src/server/HSMServer/Model/DataAlerts/ActionViewModel.cs`) gained:
+
+- `NotificationKind Kind { get; set; }` (default `Telegram`) — form-posted from the action block UI.
+- `SlackDestinationIsSelected(SlackDestination destination)` — helper mirroring the existing `ChatIsSelected(TelegramChat)`.
+
+`DataAlertViewModelBase.GetActions` resolves the right id→name dictionary per action (`availableSlackDestinations` when `action.Kind == Slack`, otherwise `availableChats`), then builds `PolicyDestinationUpdate(chats, mode, action.Kind)`. `DataAlertViewModel(Policy, NodeViewModel)` reads `Kind = policy.Destination.Kind` when reconstructing an action from an existing policy.
+
+Controller call sites that previously passed only Telegram chats now also build a Slack-destinations dictionary and pass it through:
+
+- `HomeController.UpdateSensorInfo` — `_slackDestinationsManager.GetValues().Where(d => d.SendMessages).ToDictionary(Id, Name)`.
+- `AlertTemplatesController.AlertTemplate` — same dictionary, threaded into `DataAlertTemplateViewModel.ToModel`.
+- `AlertsController.ExportModelToFile` / `ImportAlertsToProduct` — see "Alert export/import" below.
+
+### _ActionBlock.cshtml UI
+
+`Views/Home/Alerts/_ActionBlock.cshtml` renders a `Kind` dropdown next to "to" in the send-notification action block. The Telegram chats `<select>` and a new Slack destinations `<select>` are both rendered, but the inactive one is `disabled` (so it is not submitted) and wrapped in a `d-none` wrapper. Initial disabled/hidden state is server-rendered from `Model.Kind`; a jQuery `change` handler on `.notification-kind-select` toggles visibility + `disabled` when the operator switches kind. Both selects use `name="Chats"` — only the enabled one contributes to the form post.
+
+Slack destinations are injected via `@inject ISlackDestinationsManager SlackDestinations` (mirroring the existing `@inject ITelegramChatsManager ChatsManager`). The Slack picker filters to destinations where `SendMessages == true` (i.e., `EnableMessages` is on); disabled destinations are not selectable for new alerts.
+
+### Alert export/import
+
+`AlertExportViewModel` gained a serialized `string Kind` field (defaults to `"Telegram"` so old export files keep their pre-PR4 meaning). On export, the ctor picks the right id→name pool per `policy.Destination.Kind`; on import, `ToUpdate` parses `Kind` back, resolves chat names against the matching pool, and emits `PolicyDestinationUpdate(chats, mode, kind)`. `AlertsController` builds both pools (Telegram chat names + Slack destination names) and passes them through.
+
+Slack destinations themselves are **not** migrated by alert export/import — only the references by name. If a target server is missing a referenced Slack destination, the alert is imported with that destination silently dropped from `Chats` (matching how missing Telegram chats are already handled). Use the configuration UI on the target server to recreate the destination first.
+
+### Role filter
+
+`SlackAdminAttribute` (`src/server/HSMServer/Filters/SlackRoleFilters/SlackAdminAttribute.cs`) implements `IAuthorizationFilter` directly. Non-admins are redirected to `Home/Index`. It does **not** inherit from `UserRoleFilterBase` because Slack destinations are not folder-scoped — there is no folder id to bind against.

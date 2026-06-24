@@ -19,14 +19,14 @@ namespace HSMServer.Controllers
     [Authorize]
     [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService, IDatabaseCore database) : Controller
+    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService, IDatabaseCore database, ISlackDestinationsManager slackDestinations) : Controller
     {
         private readonly TelegramBot _telegramBot = notifications.TelegramBot;
 
         protected readonly Logger _logger = LogManager.GetLogger(typeof(ConfigurationController).Name);
 
 
-        public IActionResult Index() => View(new ConfigurationViewModel(config, _telegramBot.IsBotRunning, database));
+        public IActionResult Index() => View(new ConfigurationViewModel(config, _telegramBot.IsBotRunning, database, slackDestinations));
 
         [HttpPost]
         public IActionResult SaveServerSettings(ServerSettingsViewModel settings)

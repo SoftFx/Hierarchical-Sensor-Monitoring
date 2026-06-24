@@ -7,6 +7,7 @@ using HSMCommon.Model;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Notifications;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Model.Controls;
@@ -63,7 +64,7 @@ namespace HSMServer.Model.DataAlerts
             }
         }
 
-        internal PolicyUpdate ToUpdate(Dictionary<Guid, string> availableChats)
+        internal PolicyUpdate ToUpdate(Dictionary<Guid, string> availableChats, Dictionary<Guid, string> availableSlackDestinations = null)
         {
             List<PolicyConditionUpdate> conditions = new(Conditions.Count);
             Core.Model.TimeIntervalModel confirmationPeriod = null;
@@ -89,7 +90,7 @@ namespace HSMServer.Model.DataAlerts
                 }
             }
 
-            var actions = GetActions(availableChats);
+            var actions = GetActions(availableChats, availableSlackDestinations);
 
             return new()
             {
@@ -108,9 +109,9 @@ namespace HSMServer.Model.DataAlerts
             };
         }
 
-        internal PolicyUpdate ToTimeToLiveUpdate(InitiatorInfo initiator, Dictionary<Guid, string> availableChats)
+        internal PolicyUpdate ToTimeToLiveUpdate(InitiatorInfo initiator, Dictionary<Guid, string> availableChats, Dictionary<Guid, string> availableSlackDestinations = null)
         {
-            var actions = GetActions(availableChats);
+            var actions = GetActions(availableChats, availableSlackDestinations);
 
             return new()
             {
@@ -129,7 +130,7 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        private ActionProperties GetActions(Dictionary<Guid, string> availableChats)
+        private ActionProperties GetActions(Dictionary<Guid, string> availableChats, Dictionary<Guid, string> availableSlackDestinations)
         {
             PolicyDestinationUpdate destination = new();
             SensorStatus status = SensorStatus.Ok;
@@ -148,7 +149,15 @@ namespace HSMServer.Model.DataAlerts
                         InstantSend = action.ScheduleInstantSend
                     };
 
-                    destination = new PolicyDestinationUpdate(action.Chats?.Where(availableChats.ContainsKey).ToDictionary(k => k, v => availableChats[v]) ?? new(0), action.ChatsMode.ToCore());
+                    var pool = action.Kind == NotificationKind.Slack && availableSlackDestinations is not null
+                        ? availableSlackDestinations
+                        : availableChats;
+
+                    destination = new PolicyDestinationUpdate(
+                        action.Chats?.Where(pool.ContainsKey).ToDictionary(k => k, v => pool[v]) ?? new(0),
+                        action.ChatsMode.ToCore(),
+                        action.Kind);
+
                     comment = action.Comment;
                 }
                 else if (action.Action == ActionType.ShowIcon)
@@ -347,6 +356,7 @@ namespace HSMServer.Model.DataAlerts
                     ScheduleRepeatMode = policy.Schedule.RepeatMode.ToClient(),
                     ScheduleInstantSend = policy.Schedule.InstantSend,
                     ChatsMode = policy.Destination.Mode.ToClient(),
+                    Kind = policy.Destination.Kind,
                 };
 
                 if (policy.Destination.IsCustom || policy.Destination.IsFromParentChats)

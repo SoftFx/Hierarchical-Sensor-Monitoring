@@ -10,7 +10,7 @@ Alerts are the core feature of HSM. You define rules (policies) that describe wh
 |---|---|
 | **Policy** | A single alert rule: if [condition] then [notify] |
 | **Condition** | What triggers the alert: value threshold, status change, inactivity |
-| **Destination** | Where to send the alert: a Telegram chat |
+| **Destination** | Where to send the alert: a Telegram chat or a Slack destination (per action's *Kind*) |
 | **Template** | The notification message text, with dynamic variables |
 | **Schedule** | When alerts can fire: working hours, repeat intervals |
 | **Confirmation Period** | How long the condition must persist before alerting |

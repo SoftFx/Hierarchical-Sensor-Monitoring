@@ -55,11 +55,12 @@ namespace HSMServer.Controllers
         private readonly TreeViewModel _treeViewModel;
         private readonly IDatabaseCore _database;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
+        private readonly ISlackDestinationsManager _slackDestinationsManager;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager, 
-                              IDatabaseCore database, IAlertScheduleProvider provider) : base(userManager)
+                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager,
+                              IDatabaseCore database, IAlertScheduleProvider provider, ISlackDestinationsManager slackDestinationsManager) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
@@ -68,6 +69,7 @@ namespace HSMServer.Controllers
             _telegramChatsManager = telegramChatsManager;
             _database = database;
             _alertScheduleProvider = provider;
+            _slackDestinationsManager = slackDestinationsManager;
         }
 
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -678,17 +680,20 @@ namespace HSMServer.Controllers
             }
 
             var availableChats = sensor.GetAvailableChats(_telegramChatsManager);
+            var availableSlackDestinations = _slackDestinationsManager.GetValues()
+                .Where(d => d.SendMessages)
+                .ToDictionary(d => d.Id, d => d.Name);
 
             newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var ttlAlertList);
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
-                ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
+                ? list.Select(a => a.ToUpdate(availableChats, availableSlackDestinations)).ToList() : [];
 
 
             var ttlPolicies = ttlAlertList?.Select(t =>
             {
                 var interval = t.Conditions is { Count: > 0 } ? t.Conditions[0].TimeToLive : null;
                 var fromParent = interval?.TimeInterval.IsParent() ?? false;
-                return t.ToTimeToLiveUpdate(CurrentInitiator, availableChats) with
+                return t.ToTimeToLiveUpdate(CurrentInitiator, availableChats, availableSlackDestinations) with
                 {
                     TTL = fromParent ? null : interval?.ToModel()?.Ticks
                 };

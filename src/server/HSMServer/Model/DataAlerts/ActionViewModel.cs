@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Extensions;
+using HSMServer.Core.Notifications;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
@@ -64,6 +65,8 @@ namespace HSMServer.Model.DataAlerts
 
         public ChatsMode ChatsMode { get; set; }
 
+        public NotificationKind Kind { get; set; } = NotificationKind.Telegram;
+
         public HashSet<Guid> Chats { get; set; } = new();
 
         public string Comment { get; set; }
@@ -111,5 +114,7 @@ namespace HSMServer.Model.DataAlerts
         }
 
         public bool ChatIsSelected(TelegramChat chat) => Chats?.Contains(chat.Id) ?? false;
+
+        public bool SlackDestinationIsSelected(SlackDestination destination) => Chats?.Contains(destination.Id) ?? false;
     }
 }

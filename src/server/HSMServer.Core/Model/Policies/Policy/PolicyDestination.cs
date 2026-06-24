@@ -93,6 +93,8 @@ namespace HSMServer.Core.Model.Policies
         {
             Mode = update.Mode ?? Mode;
 
+            Kind = update.Kind ?? Kind;
+
             Chats.Clear();
 
             if (update.Chats is not null)

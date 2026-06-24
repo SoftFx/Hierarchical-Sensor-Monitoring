@@ -44,6 +44,7 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
+        private readonly ISlackDestinationsManager _slackDestinations;
 
 
         static AlertTemplatesController()
@@ -55,13 +56,14 @@ namespace HSMServer.Controllers
         }
 
         public AlertTemplatesController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache,
-                                        IUserManager users, IAlertScheduleProvider provider) : base(users)
+                                        IUserManager users, IAlertScheduleProvider provider, ISlackDestinationsManager slackDestinations) : base(users)
         {
             _telegram = telegram;
             _folders = folders;
             _cache = cache;
             _tree = tree;
             _alertScheduleProvider = provider;
+            _slackDestinations = slackDestinations;
         }
 
         [HttpGet]
@@ -200,11 +202,15 @@ namespace HSMServer.Controllers
             if (_folders.TryGetValue(data.FolderId, out var folder) && folder.TelegramChats.Count > 0)
                 availableChats = folder.TelegramChats.GetAvailableChatsDictionary(_telegram);
 
+            var availableSlackDestinations = _slackDestinations.GetValues()
+                .Where(d => d.SendMessages)
+                .ToDictionary(d => d.Id, d => d.Name);
+
             AlertTemplateModel model = null;
 
             if (ModelState.IsValid)
             {
-                model = data.ToModel(availableChats);
+                model = data.ToModel(availableChats, availableSlackDestinations);
 
                 if (!model.TryApplyPathTemplates(out var pathError))
                     ModelState.AddModelError(nameof(data.PathTemplates), $"Invalid path template: {pathError}");
@@ -220,7 +226,7 @@ namespace HSMServer.Controllers
                 return Ok();
             }
 
-            model ??= data.ToModel(availableChats);
+            model ??= data.ToModel(availableChats, availableSlackDestinations);
             data = new DataAlertTemplateViewModel(model, _folders.GetUserFolders(CurrentUser));
 
             if (folder != null)
