@@ -5553,8 +5553,10 @@ hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector)
     if (result == HSM_RESULT_OK)
         result = hsm_collector_add_all_network_sensors(collector);
 #ifdef _WIN32
+    // Best-effort: top-CPU requires pre-Start setup; ignore the error when called after
+    // Start (e.g. from a test that starts first, then adds sensors).
     if (result == HSM_RESULT_OK)
-        result = hsm_collector_enable_top_cpu_sensors(collector, 10, 1.0, 60000);
+        hsm_collector_enable_top_cpu_sensors(collector, 10, 1.0, 60000);
 #endif
     return result;
 }

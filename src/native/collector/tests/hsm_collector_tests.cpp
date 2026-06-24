@@ -3647,7 +3647,8 @@ namespace
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_collector_monitoring_sensors(c); }) == 3, "collector group = 3");
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_queue_diagnostic_sensors(c); }) == 4, "queue group = 4");
 
-        // computer = system(2) + disk(5) + windows-info(8) + network(3) = 18.
+        // computer = system(2) + disk(5) + windows-info(8) + network(3) = 18 eager;
+        // top-CPU sensors enabled by default but register lazily (first sample ~60 s).
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_computer_sensors(c); }) == 18, "all-computer = 18");
         // default = computer(18) + module[process(4)+collector(3)+queue(4)] (11) + product version (1) = 30.
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_default_sensors(c, "1.0.0"); }) == 30, "all-default with product version = 30");
@@ -4434,7 +4435,7 @@ namespace
     static hsm::collector::CpuUsage MakeCpuUsage(const char* name, double percent)
     {
         hsm::collector::CpuUsage u;
-        u.name    = name;
+        u.name = name;
         u.percent = percent;
         return u;
     }
@@ -4445,10 +4446,10 @@ namespace
 
         std::map<std::string, CpuUsage> by_name;
         by_name["chrome.exe"] = MakeCpuUsage("chrome.exe", 20.0);
-        by_name["node.exe"]   = MakeCpuUsage("node.exe",   15.0);
-        by_name["git.exe"]    = MakeCpuUsage("git.exe",     0.5); // below 1.0% threshold
-        by_name["devenv.exe"] = MakeCpuUsage("devenv.exe",  5.0);
-        by_name["code.exe"]   = MakeCpuUsage("code.exe",   10.0);
+        by_name["node.exe"] = MakeCpuUsage("node.exe", 15.0);
+        by_name["git.exe"] = MakeCpuUsage("git.exe", 0.5); // below 1.0% threshold
+        by_name["devenv.exe"] = MakeCpuUsage("devenv.exe", 5.0);
+        by_name["code.exe"] = MakeCpuUsage("code.exe", 10.0);
 
         // Top 3, threshold 1.0% — git.exe excluded, rest ordered by percent desc.
         auto top3 = SelectTopN(by_name, 3, 1.0);
