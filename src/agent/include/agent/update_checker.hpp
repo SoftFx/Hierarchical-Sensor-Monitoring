@@ -39,9 +39,11 @@ namespace hsm::agent
         /// Signal the thread to exit and block until it does.
         void Stop();
 
-    private:
-        static DWORD WINAPI ThreadProc(LPVOID param);
+        // Called by the background thread only; public so the file-scope thread proc
+        // can invoke it without pulling Win32 types into this header.
         void Run();
+
+    private:
         bool CheckAndUpdate();
 
         const AgentConfig& config_;

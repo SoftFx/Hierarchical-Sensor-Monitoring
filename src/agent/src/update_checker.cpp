@@ -372,7 +372,7 @@ namespace hsm::agent
 
     // ---- UpdateChecker implementation ------------------------------------------------------------
 
-    DWORD WINAPI UpdateChecker::ThreadProc(LPVOID param)
+    static DWORD WINAPI UpdateThreadProc(LPVOID param)
     {
         static_cast<UpdateChecker*>(param)->Run();
         return 0;
@@ -398,7 +398,7 @@ namespace hsm::agent
         if (stop_event_ == nullptr)
             return;
         ResetEvent(static_cast<HANDLE>(stop_event_));
-        thread_handle_ = CreateThread(nullptr, 0, ThreadProc, this, 0, nullptr);
+        thread_handle_ = CreateThread(nullptr, 0, UpdateThreadProc, this, 0, nullptr);
     }
 
     void UpdateChecker::Stop()
