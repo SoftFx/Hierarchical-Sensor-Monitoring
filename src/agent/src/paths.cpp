@@ -51,4 +51,26 @@ namespace hsm::agent
         out = buffer.str();
         return true;
     }
+
+    std::wstring ProgramFilesAgentDir()
+    {
+        const wchar_t* pf = _wgetenv(L"ProgramFiles");
+        std::wstring base = (pf != nullptr && pf[0] != L'\0') ? pf : L"C:\\Program Files";
+        return base + L"\\HSM Agent";
+    }
+
+    std::wstring InstallExePath()
+    {
+        return ProgramFilesAgentDir() + L"\\hsm-agent.exe";
+    }
+
+    std::wstring NewExePath()
+    {
+        return ProgramFilesAgentDir() + L"\\hsm-agent.new.exe";
+    }
+
+    std::wstring OldExePath()
+    {
+        return ProgramFilesAgentDir() + L"\\hsm-agent.old.exe";
+    }
 } // namespace hsm::agent

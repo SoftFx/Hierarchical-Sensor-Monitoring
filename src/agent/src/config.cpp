@@ -540,6 +540,17 @@ namespace hsm::agent
         if (!ReadString(root, "productVersion", out.product_version, error))
             return false;
 
+        if (const JsonValue* upd = root.Find("update"))
+        {
+            if (upd->type != JsonValue::Type::Object)
+            {
+                error = "'update' must be an object";
+                return false;
+            }
+            if (!ReadBool(*upd, "enabled", out.update_enabled, error) || !ReadInt(*upd, "checkPeriodHours", out.update_check_period_hours, error))
+                return false;
+        }
+
         // Required-field validation (epic: blank key/address must refuse to start).
         if (out.server_address.empty())
         {
@@ -573,6 +584,18 @@ namespace hsm::agent
                 error = "config: 'topCpu.minPercent' must not be negative";
                 return false;
             }
+        }
+
+        if (out.update_check_period_hours < 1)
+        {
+            error = "config: 'update.checkPeriodHours' must be at least 1";
+            return false;
+        }
+        // 1193 h * 3600000 ms overflows DWORD; cap at 8760 h (1 year) for safe DWORD arithmetic.
+        if (out.update_check_period_hours > 8760)
+        {
+            error = "config: 'update.checkPeriodHours' must not exceed 8760 (1 year)";
+            return false;
         }
 
         return true;

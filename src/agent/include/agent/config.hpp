@@ -54,6 +54,13 @@ namespace hsm::agent
         // module-sensor product version
         std::string product_version = "1.0.0.0";
 
+        // update.* — agent self-update channel (epic #1174). The agent polls
+        // GET <server>/api/agent/version and self-updates when a newer build is available AND the
+        // server's global AutoUpdateEnabled flag is true. Set enabled=false in config to opt this
+        // machine out even when the server permits updates.
+        bool update_enabled = true;
+        int update_check_period_hours = 24; ///< poll interval; must be >= 1
+
         /// True once `computer_name` should be replaced by the resolved machine name.
         bool ComputerNameIsAuto() const;
     };
