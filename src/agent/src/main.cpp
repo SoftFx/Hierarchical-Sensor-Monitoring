@@ -116,7 +116,8 @@ int wmain(int argc, wchar_t** argv)
         }
         else if (arg == L"--version" || arg == L"-v")
         {
-            std::cout << "hsm-agent " << HSM_AGENT_VERSION << "\n";
+            std::cout << "hsm-agent " << HSM_AGENT_VERSION
+                      << " (built " << __DATE__ << " " << __TIME__ << ")\n";
             return 0;
         }
         else if (arg == L"--help" || arg == L"-h" || arg == L"/?")
