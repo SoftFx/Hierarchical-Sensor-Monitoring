@@ -139,3 +139,9 @@ src/module/HSMPingModule/Config/*
 
 # Conan/CMake user presets (generated, never committed)
 CMakeUserPresets.json
+
+# docker-compose.yml bind-mount volumes created at repo root by `docker compose up`
+/Logs/
+/Config/
+/Databases/
+/DatabasesBackups/

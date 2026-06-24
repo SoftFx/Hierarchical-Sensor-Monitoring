@@ -52,12 +52,19 @@ namespace hsm::collector
     /// underlying handle; std::function callbacks registered through this object are kept alive
     /// until after that happens.
     ///
-    /// Threading: sensor `AddValue` is safe from any thread, but sensor/observer/sink REGISTRATION
-    /// (the `Create*` factories, `AddLifecycleListener`, `SetLogger`, `SetMetricSourceFactory`) must
-    /// be driven from a single thread — the internal callback storage is not synchronized. In
-    /// particular, a callback running on the scheduler thread must not register from inside itself
-    /// while another thread also registers. The natural pattern is to configure the collector fully
-    /// before `Start()`.
+    /// Threading:
+    /// - `AddValue` is safe from any thread.
+    /// - Plain sensor `Create*` factories (`CreateBoolSensor`/`CreateIntSensor`/`CreateDoubleSensor`/
+    ///   `CreateStringSensor`/… and their option/last-value variants) are also safe from any thread,
+    ///   incl. after `Start()`: the underlying C-ABI serializes the sensor registry on the collector's
+    ///   internal mutex, and the scheduler thread reads it only via a snapshot taken under that mutex.
+    ///   They register no `std::function` callback, so they don't touch the unsynchronized storage below.
+    /// - The CALLBACK-registering setup — `SetLogger`, `AddLifecycleListener`, `SetMetricSourceFactory`,
+    ///   and `CreateMetricSensor` (binds a metric source) — stores `std::function`s that are NOT
+    ///   synchronized: drive these from a single thread, before `Start()`. A callback running on the
+    ///   scheduler thread must not register from inside itself while another thread also registers.
+    /// The natural pattern is still to configure the collector fully before `Start()`; lazily creating
+    /// plain sensors at runtime (e.g. the agent's top-CPU sensors) is the supported exception.
     class Collector
     {
     public:

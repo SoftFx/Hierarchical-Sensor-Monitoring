@@ -1,0 +1,31 @@
+{
+  "//": "HSM Agent configuration. Only 'server.address' and 'server.accessKey' are required; every",
+  "//1": "other field has a default. The server-side per-product download fills 'address' + 'accessKey'.",
+
+  "server": {
+    "address": "https://your-hsm-server",
+    "port": 44330,
+    "accessKey": "<paste-the-product-access-key>",
+    "allowUntrustedCertificate": false
+  },
+
+  "identity": {
+    "computerName": "auto",
+    "module": "HSM Agent"
+  },
+
+  "sensors": {
+    "computer": true,
+    "system": true,
+    "disk": true,
+    "network": true,
+    "module": true,
+    "process": false
+  },
+
+  "periods": {
+    "collectMs": 15000
+  },
+
+  "productVersion": "1.0.0.0"
+}

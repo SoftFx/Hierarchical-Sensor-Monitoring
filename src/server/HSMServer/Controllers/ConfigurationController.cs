@@ -54,6 +54,28 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public IActionResult SaveAgentSettings(AgentSettingsViewModel settings)
+        {
+            if (ModelState.IsValid)
+            {
+                var newUrl = settings.ExternalConnectionUrl?.Trim() ?? string.Empty;
+                if (config.Agent.ExternalConnectionUrl != newUrl
+                    || config.Agent.AllowUntrustedCertificate != settings.AllowUntrustedCertificate
+                    || config.Agent.EnableTopCpuProcesses != settings.EnableTopCpuProcesses)
+                {
+                    _logger.Info($"SaveAgentSettings: {GetUserName()} changed Agent settings (URL '{config.Agent.ExternalConnectionUrl}' -> '{newUrl}', allowUntrustedCertificate {config.Agent.AllowUntrustedCertificate} -> {settings.AllowUntrustedCertificate}, enableTopCpuProcesses {config.Agent.EnableTopCpuProcesses} -> {settings.EnableTopCpuProcesses})");
+
+                    config.Agent.ExternalConnectionUrl = newUrl;
+                    config.Agent.AllowUntrustedCertificate = settings.AllowUntrustedCertificate;
+                    config.Agent.EnableTopCpuProcesses = settings.EnableTopCpuProcesses;
+                    config.ResaveSettings();
+                }
+            }
+
+            return PartialView("_Agent", settings);
+        }
+
+        [HttpPost]
         public IActionResult SaveBackupSettings(BackupSettingsViewModel settings)
         {
             if (ModelState.IsValid)

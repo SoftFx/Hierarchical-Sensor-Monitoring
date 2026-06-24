@@ -27,14 +27,12 @@ window.editInfoButtonClick = function () {
     $('#emaStatisticsSwitch').attr("disabled", false);
     $('#singletonSwitch').attr("disabled", false);
 
-    $('#folder_ttl').removeClass('d-none');
     $('#node_ttl').removeClass('d-none');
     $('#partialSavedHistorySelect').removeClass('d-none');
     $('#partialSelfDestroySelect').removeClass('d-none');
     $('#defaultChatControl').removeClass('d-none');
     $('[id^="alertConstructor_"]').removeClass('d-none');
 
-    $('#folder_ttlLabel').addClass('d-none');
     $('#node_ttlLabel').addClass('d-none');
     $('#labelSavedHistory').addClass('d-none');
     $('#labelSelfDestroy').addClass('d-none');
