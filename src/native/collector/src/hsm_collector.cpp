@@ -3285,7 +3285,8 @@ namespace
                             opts.description =
                                 "Top CPU processes/" + usage.name +
                                 " \xe2\x80\x94 top " + std::to_string(top_cpu_count_) +
-                                " consumers by % of machine CPU";
+                                " consumers by % of machine CPU" +
+                                (usage.full_path.empty() ? "" : "; " + usage.full_path);
                             std::shared_ptr<NativeSensor> sensor;
                             if (CreateSensor(("Top CPU processes/" + usage.name).c_str(),
                                              HSM_SENSOR_TYPE_DOUBLE, false, "", sensor, opts) == HSM_RESULT_OK)

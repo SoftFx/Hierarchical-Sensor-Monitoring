@@ -29,6 +29,9 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
         // name -> sensor handle (created lazily on first appearance)
         private readonly Dictionary<string, IInstantValueSensor<double>> _sensors =
             new Dictionary<string, IInstantValueSensor<double>>();
+        // name -> first seen full path (MainModule.FileName), cached to survive process exit
+        private readonly Dictionary<string, string> _fullPaths =
+            new Dictionary<string, string>(StringComparer.Ordinal);
         // (pid, startTimeTicks) -> previous TotalProcessorTime in milliseconds
         private readonly Dictionary<long, double> _prevCpu = new Dictionary<long, double>();
         private DateTime _prevTime = DateTime.MinValue;
@@ -125,6 +128,13 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                     var cpuMs = p.TotalProcessorTime.TotalMilliseconds;
                     curCpu[key] = cpuMs;
 
+                    // Cache full path on first encounter — MainModule can throw for protected processes.
+                    if (!_fullPaths.ContainsKey(p.ProcessName))
+                    {
+                        try { _fullPaths[p.ProcessName] = p.MainModule.FileName; }
+                        catch { }
+                    }
+
                     double prevMs;
                     if (_prevCpu.TryGetValue(key, out prevMs))
                     {
@@ -161,13 +171,16 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                 IInstantValueSensor<double> sensor;
                 if (!_sensors.TryGetValue(name, out sensor))
                 {
+                    string fullPath;
+                    _fullPaths.TryGetValue(name, out fullPath);
+                    var descSuffix = string.IsNullOrEmpty(fullPath) ? "" : "; " + fullPath;
                     sensor = _storage.CreateInstantSensor<double>(
                         "Top CPU processes/" + name,
                         new InstantSensorOptions
                         {
                             Description = string.Format(
-                                "Top CPU processes/{0} — top {1} consumers by % of machine CPU",
-                                name, _count)
+                                "Top CPU processes/{0} — top {1} consumers by % of machine CPU{2}",
+                                name, _count, descSuffix)
                         });
                     _sensors[name] = sensor;
                 }
