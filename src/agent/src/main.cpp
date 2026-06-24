@@ -50,13 +50,14 @@ namespace
 
     void PrintUsage()
     {
-        std::cout << "HSM Agent — streams this computer's metrics to an HSM server.\n\n"
+        std::cout << "HSM Agent " HSM_AGENT_VERSION " — streams this computer's metrics to an HSM server.\n\n"
                      "Usage: hsm-agent [mode] [--config <path>]\n"
                      "  (no mode)      run as a Windows service (used by the SCM)\n"
                      "  --console      run in the foreground for debugging (Ctrl-C to stop)\n"
                      "  --install      register the auto-start service (requires elevation)\n"
                      "  --uninstall    remove the service (requires elevation)\n"
-                     "  --config <p>   use config file <p> (default: %ProgramData%\\HSM Agent\\config.json)\n";
+                     "  --config <p>   use config file <p> (default: %ProgramData%\\HSM Agent\\config.json)\n"
+                     "  --version      print version and exit\n";
     }
 
     int RunConsole(const std::wstring& config_path)
@@ -112,6 +113,11 @@ int wmain(int argc, wchar_t** argv)
         else if (arg == L"--config" && i + 1 < argc)
         {
             config_path = argv[++i];
+        }
+        else if (arg == L"--version" || arg == L"-v")
+        {
+            std::cout << "hsm-agent " << HSM_AGENT_VERSION << "\n";
+            return 0;
         }
         else if (arg == L"--help" || arg == L"-h" || arg == L"/?")
         {

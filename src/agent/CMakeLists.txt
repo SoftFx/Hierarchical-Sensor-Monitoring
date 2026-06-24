@@ -91,6 +91,7 @@ if(WIN32)
     )
     target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_collector_cpp advapi32)
     target_compile_features(hsm-agent PRIVATE cxx_std_17)
+    target_compile_definitions(hsm-agent PRIVATE HSM_AGENT_VERSION="${PROJECT_VERSION}")
     hsm_agent_set_warnings(hsm-agent)
 
     # After every build, copy the exe into packaging/ so that folder stays a ready-to-run bundle.

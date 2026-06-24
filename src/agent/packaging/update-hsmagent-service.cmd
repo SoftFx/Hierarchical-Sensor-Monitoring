@@ -21,6 +21,17 @@ if not exist "%~dp0hsm-agent.exe" (
 
 set "INSTALL_DIR=%ProgramFiles%\HSM Agent"
 
+echo Installed version:
+if exist "%INSTALL_DIR%\hsm-agent.exe" (
+  "%INSTALL_DIR%\hsm-agent.exe" --version
+) else (
+  echo   ^(not installed^)
+)
+
+echo New version:
+"%~dp0hsm-agent.exe" --version
+
+echo.
 echo Stopping HSMAgent...
 sc stop HSMAgent >nul 2>&1
 timeout /t 3 /nobreak >nul
@@ -37,6 +48,7 @@ if %errorlevel% neq 0 (
   echo ERROR: sc start failed. & pause & exit /b 1
 )
 
-echo HSM Agent updated and restarted.
+echo.
+echo HSM Agent updated successfully.
 pause
 endlocal

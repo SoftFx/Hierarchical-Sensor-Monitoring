@@ -37,6 +37,9 @@ if %errorlevel% equ 0 (
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 if not exist "%DATA_DIR%"  mkdir "%DATA_DIR%"
 
+echo Installing version:
+"%~dp0hsm-agent.exe" --version
+echo.
 copy /Y "%~dp0hsm-agent.exe" "%INSTALL_DIR%\hsm-agent.exe" >nul
 
 :: Copy config only on first install — never overwrite a user-customised config.
