@@ -51,6 +51,7 @@ namespace HSMServer.ServiceExtensions
             services.AddAsyncStorage<IUserManager, UserManager>()
                     .AddAsyncStorage<IFolderManager, FolderManager>()
                     .AddAsyncStorage<ITelegramChatsManager, TelegramChatsManager>()
+                    .AddAsyncStorage<ISlackDestinationsManager, SlackDestinationsManager>()
                     .AddAsyncStorage<IDashboardManager, DashboardManager>();
 
             services.AddSingleton<DataCollectorWrapper>()
