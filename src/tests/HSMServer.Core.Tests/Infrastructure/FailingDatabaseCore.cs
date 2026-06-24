@@ -111,6 +111,12 @@ namespace HSMServer.Core.Tests.Infrastructure
         public TelegramChatEntity GetTelegramChat(byte[] chatId) => _inner.GetTelegramChat(chatId);
         public List<TelegramChatEntity> GetTelegramChats() => _inner.GetTelegramChats();
 
+        public void AddSlackDestination(SlackDestinationEntity destination) => _inner.AddSlackDestination(destination);
+        public void UpdateSlackDestination(SlackDestinationEntity destination) => _inner.UpdateSlackDestination(destination);
+        public void RemoveSlackDestination(byte[] id) => _inner.RemoveSlackDestination(id);
+        public SlackDestinationEntity GetSlackDestination(byte[] id) => _inner.GetSlackDestination(id);
+        public List<SlackDestinationEntity> GetSlackDestinations() => _inner.GetSlackDestinations();
+
         public List<AlertTemplateEntity> GetAllAlertTemplates() => _inner.GetAllAlertTemplates();
         public void AddAlertTemplate(AlertTemplateEntity policy) => _inner.AddAlertTemplate(policy);
         public void RemoveAlertTemplate(Guid id) => _inner.RemoveAlertTemplate(id);

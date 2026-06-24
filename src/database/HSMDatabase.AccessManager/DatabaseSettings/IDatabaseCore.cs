@@ -126,6 +126,16 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
+        #region Slack destination
+
+        void AddSlackDestination(SlackDestinationEntity destination);
+        void UpdateSlackDestination(SlackDestinationEntity destination);
+        void RemoveSlackDestination(byte[] id);
+        SlackDestinationEntity GetSlackDestination(byte[] id);
+        List<SlackDestinationEntity> GetSlackDestinations();
+
+        #endregion
+
         #region Alert Templates
         List<AlertTemplateEntity> GetAllAlertTemplates();
         void AddAlertTemplate(AlertTemplateEntity policy);
