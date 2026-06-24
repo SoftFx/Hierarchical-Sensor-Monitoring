@@ -80,6 +80,7 @@ Operator selects sensor -> per-sensor _Alerts.cshtml editor -> UpdateSensorInfo 
 ## Storage / Persistence
 
 - `PolicyEntity` rows live in a single LevelDB table keyed by `byte[] Id` (Guid). The `"NewPolicyIds"` index lists all known ids.
+- `PolicyDestinationEntity` (nested in `PolicyEntity.cs`) carries an additive `string Kind` (a `NotificationKind` discriminator) as of issue #1181. A missing/empty `Kind` reads as `Telegram`, so existing rows are unchanged and no migration is required. Notification delivery lives behind the `INotificationChannel` seam — see `features/server/notifications/feature.md`.
 - `BaseNodeEntity.Policies` (a `List<string>` of stringified Guids) exists on every Product and Sensor entity. At runtime, only `SensorEntity.Policies` is loaded into the in-memory `SensorPolicyCollection`. `ProductEntity.Policies` is **never read** into `ProductModel` — only `TTLPolicies` is.
 - Template-derived policies carry non-null `TemplateId` / `TemplateAlertId`; user-added policies have `TemplateId == null`.
 - `TreeValuesCache.CleanupProductOwnedPolicies` runs once at startup (`Initialize()`, after `ApplyProducts`) and deletes any `PolicyEntity` referenced by `ProductEntity.Policies` whose `TemplateId == null`, then prunes the dangling references from the list. The migration is idempotent: a second run finds an empty list and writes nothing.
