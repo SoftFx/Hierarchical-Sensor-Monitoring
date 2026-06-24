@@ -2,7 +2,7 @@
   "server": {
     "address": "https://localhost",
     "port": 44330,
-    "accessKey": "5c1a1057-d02c-4240-830a-92d5b3ad2c48",
+    "accessKey": "<paste access key from HSM server settings>",
     "allowUntrustedCertificate": true
   },
   "identity": {

@@ -92,4 +92,12 @@ if(WIN32)
     target_link_libraries(hsm-agent PRIVATE hsm_agent_config hsm_collector_cpp advapi32)
     target_compile_features(hsm-agent PRIVATE cxx_std_17)
     hsm_agent_set_warnings(hsm-agent)
+
+    # After every build, copy the exe into packaging/ so that folder stays a ready-to-run bundle.
+    add_custom_command(TARGET hsm-agent POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:hsm-agent>"
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/hsm-agent.exe"
+        COMMENT "Copying hsm-agent.exe -> src/agent/packaging/"
+    )
 endif()
