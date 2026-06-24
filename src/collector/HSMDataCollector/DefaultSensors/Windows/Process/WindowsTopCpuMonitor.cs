@@ -163,7 +163,12 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                 {
                     sensor = _storage.CreateInstantSensor<double>(
                         "Top CPU processes/" + name,
-                        new InstantSensorOptions());
+                        new InstantSensorOptions
+                        {
+                            Description = string.Format(
+                                "Top CPU processes/{0} — top {1} consumers by % of machine CPU",
+                                name, _count)
+                        });
                     _sensors[name] = sensor;
                 }
                 sensor.AddValue(percent);
