@@ -1,6 +1,6 @@
 # Feature: Alerts
 
-> Owner: server | Last reviewed: 2026-06-23 | Canonical: yes
+> Owner: server | Last reviewed: 2026-06-24 | Canonical: yes
 > Scope: Server-side alert ownership, creation paths, and the boundary between global (template) and per-sensor alerts.
 
 ---
@@ -120,7 +120,6 @@ Condition view model guards live in `src/tests/HSMServer.Core.Tests/ConditionVie
 
 ## Known Issues / Limitations
 
-- `_Alerts.cshtml` still contains an unreachable `FolderInfoViewModel` branch. Removing it is a cleanup for a future PR.
 - `ProductInfoViewModel.DataAlerts` is still populated but never posted from the form; cleanup deferred to avoid rippling into import/export.
 - Switching a template's sensor type after adding alerts empties the unified alerts container (existing behavior for regular alerts; as of #1159 this also clears any TTL rows mixed in). Type changes are rare in practice; preserving TTL across type changes would require splitting the container.
 - Demoting a TTL alert (loaded from storage) to a regular alert via the property dropdown does not restore the schedule's "starting at" / "instant send" fields. Those fields are gated server-side by `Model.IsTtl` in `_ActionBlock.cshtml` and never render for TTL rows, so the client cannot show them after demote. Regular-to-TTL-to-regular works correctly because the fields exist in the DOM and are only hidden+disabled by the `.ttlAction` class on `.fullAction`. Workaround: save and reopen the editor.
