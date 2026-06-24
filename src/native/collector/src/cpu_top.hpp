@@ -12,7 +12,7 @@ namespace hsm::collector
     struct CpuUsage
     {
         std::string name;      ///< executable image name, e.g. "chrome.exe"
-        double      percent;   ///< CPU% of the whole machine (0..100), summed over all instances
+        double percent;        ///< CPU% of the whole machine (0..100), summed over all instances
         std::string full_path; ///< full path to the image, e.g. "C:\...\chrome.exe" (empty if access denied)
     };
 

@@ -3000,7 +3000,9 @@ namespace
                 return HSM_RESULT_INVALID_ARGUMENT;
 
 #ifndef _WIN32
-            (void)count; (void)min_percent; (void)period_ms;
+            (void)count;
+            (void)min_percent;
+            (void)period_ms;
             return SetError(HSM_RESULT_INVALID_STATE, "Top-CPU sensors are only supported on Windows.");
 #else
             std::lock_guard<std::mutex> guard(mutex_);
@@ -3243,6 +3245,7 @@ namespace
 
         void StopTopCpuSampler()
         {
+#ifdef _WIN32
             {
                 std::lock_guard<std::mutex> guard(top_cpu_cv_mutex_);
                 top_cpu_stop_ = true;
@@ -3250,6 +3253,7 @@ namespace
             top_cpu_cv_.notify_all();
             if (top_cpu_thread_.joinable())
                 top_cpu_thread_.join();
+#endif
         }
 
         void RunTopCpuLoop()
@@ -3284,10 +3288,10 @@ namespace
                             RegistrationOptions opts = InstantRegistrationDefaults();
                             opts.description =
                                 "Top **" + std::to_string(top_cpu_count_) + "** CPU consumers"
-                                " by % of machine CPU" +
+                                                                            " by % of machine CPU" +
                                 (usage.full_path.empty()
-                                    ? ""
-                                    : "\n\n**Path:** `" + usage.full_path + "`");
+                                     ? ""
+                                     : "\n\n**Path:** `" + usage.full_path + "`");
                             std::shared_ptr<NativeSensor> sensor;
                             if (CreateSensor(("Top CPU processes/" + usage.name).c_str(),
                                              HSM_SENSOR_TYPE_DOUBLE, false, "", sensor, opts) == HSM_RESULT_OK)
@@ -3299,7 +3303,7 @@ namespace
                                 // so the server gets the description. HttpTransport::Post is
                                 // thread-safe (per-call libcurl easy handle).
                                 if (send_wire_)
-                                    PostRegistrationsWire({std::move(sensor)});
+                                    PostRegistrationsWire({ std::move(sensor) });
 #endif
                             }
                             else
@@ -3660,6 +3664,7 @@ namespace
         void* metric_source_factory_user_data_ = nullptr;
 
         // Top-CPU sensor sampling (#1179): optional background thread, Windows-only.
+#ifdef _WIN32
         bool top_cpu_enabled_ = false;
         int32_t top_cpu_count_ = 0;
         double top_cpu_min_percent_ = 0.0;
@@ -3668,6 +3673,7 @@ namespace
         std::mutex top_cpu_cv_mutex_;
         std::condition_variable top_cpu_cv_;
         bool top_cpu_stop_ = false;
+#endif
     };
 
     hsm_result_t NativeSensor::AddInt(int32_t value, hsm_sensor_status_t status, const char* comment)

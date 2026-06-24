@@ -74,7 +74,7 @@ namespace hsm::collector
         // This tick: pid -> {creation, cpu}, pid -> exe name, pid -> full path.
         std::map<std::uint32_t, PrevSample> cur;
         std::map<std::uint32_t, std::string> cur_name;
-        std::map<std::string, std::string>   name_to_path; // first seen full path per exe name
+        std::map<std::string, std::string> name_to_path; // first seen full path per exe name
 
         HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if (snapshot != INVALID_HANDLE_VALUE)
@@ -137,7 +137,7 @@ namespace hsm::collector
                     continue;
 
                 const std::string& name = name_it->second;
-                by_name[name].name     = name;
+                by_name[name].name = name;
                 by_name[name].percent += percent;
                 if (by_name[name].full_path.empty())
                 {
