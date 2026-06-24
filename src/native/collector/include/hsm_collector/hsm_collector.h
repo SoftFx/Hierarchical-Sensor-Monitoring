@@ -798,6 +798,9 @@ const char* hsm_collector_last_error(const hsm_collector_t* collector);
    samples all processes at intervals of `period_ms` milliseconds, filters to the `count` busiest
    above `min_percent`% of total machine CPU, and posts a Double sensor for each at path
    "Top CPU processes/<exe-name>". Call BEFORE Start().
+   The number of distinct per-process sensors is capped (max(count * 8, 64)) so a host that churns
+   through many distinctly named processes cannot grow the sensor namespace without bound or exhaust
+   the global MaxSensors cap; once the cap is reached, newly seen process names are skipped.
    Returns HSM_RESULT_INVALID_ARGUMENT if count <= 0 or period_ms <= 0.
    Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
 hsm_result_t hsm_collector_enable_top_cpu_sensors(
