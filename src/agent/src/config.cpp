@@ -591,6 +591,12 @@ namespace hsm::agent
             error = "config: 'update.checkPeriodHours' must be at least 1";
             return false;
         }
+        // 1193 h * 3600000 ms overflows DWORD; cap at 8760 h (1 year) for safe DWORD arithmetic.
+        if (out.update_check_period_hours > 8760)
+        {
+            error = "config: 'update.checkPeriodHours' must not exceed 8760 (1 year)";
+            return false;
+        }
 
         return true;
     }

@@ -188,21 +188,16 @@ namespace hsm::agent
     {
         HINTERNET session = nullptr;
         HINTERNET connect = nullptr;
+        bool allow_untrusted = false; // forwarded to each request handle (session-level has no effect)
 
-        explicit WinHttpSession(const std::string& host, int port, bool https, bool allow_untrusted)
+        explicit WinHttpSession(const std::string& host, int port, bool /*https*/, bool allow_untr)
+            : allow_untrusted(allow_untr)
         {
             session = WinHttpOpen(L"HSMAgent/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
             if (!session)
                 return;
 
             connect = WinHttpConnect(session, Utf8ToWide(host).c_str(), static_cast<INTERNET_PORT>(port), 0);
-
-            if (https && allow_untrusted)
-            {
-                DWORD flags = SECURITY_FLAG_IGNORE_UNKNOWN_CA | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID |
-                              SECURITY_FLAG_IGNORE_CERT_CN_INVALID | SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
-                WinHttpSetOption(session, WINHTTP_OPTION_SECURITY_FLAGS, &flags, sizeof(flags));
-            }
         }
 
         ~WinHttpSession()
@@ -232,6 +227,14 @@ namespace hsm::agent
 
         if (!extra_headers.empty())
             WinHttpAddRequestHeaders(req, extra_headers.c_str(), static_cast<DWORD>(-1L), WINHTTP_ADDREQ_FLAG_ADD);
+
+        // WINHTTP_OPTION_SECURITY_FLAGS must be set on the request handle, not the session.
+        if (https && sess.allow_untrusted)
+        {
+            DWORD sec_flags = SECURITY_FLAG_IGNORE_UNKNOWN_CA | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID |
+                              SECURITY_FLAG_IGNORE_CERT_CN_INVALID | SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
+            WinHttpSetOption(req, WINHTTP_OPTION_SECURITY_FLAGS, &sec_flags, sizeof(sec_flags));
+        }
 
         bool sent = WinHttpSendRequest(req, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
                     WinHttpReceiveResponse(req, nullptr);

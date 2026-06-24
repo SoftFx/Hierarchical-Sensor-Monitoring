@@ -100,10 +100,18 @@ namespace HSMServer.Controllers
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Agent binary not staged.");
 
             var exePath = Path.Combine(_environment.WebRootPath, "agent", AgentInstallerBundle.ExeName);
-            if (!System.IO.File.Exists(exePath))
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Agent binary not staged.");
 
-            var sha256 = ComputeSha256Hex(exePath);
+            // Read + hash in one open call — no separate File.Exists to avoid TOCTOU.
+            string sha256;
+            try
+            {
+                sha256 = ComputeSha256Hex(exePath);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or IOException)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Agent binary not staged.");
+            }
+
             var version = ReadStagedVersion(_environment.WebRootPath);
 
             return Ok(new
@@ -134,10 +142,17 @@ namespace HSMServer.Controllers
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Agent binary not staged.");
 
             var exePath = Path.Combine(_environment.WebRootPath, "agent", AgentInstallerBundle.ExeName);
-            if (!System.IO.File.Exists(exePath))
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Agent binary not staged.");
 
-            var sha256 = ComputeSha256Hex(exePath);
+            string sha256;
+            try
+            {
+                sha256 = ComputeSha256Hex(exePath);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or IOException)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Agent binary not staged.");
+            }
+
             Response.Headers["X-Agent-Sha256"] = sha256;
             return PhysicalFile(exePath, "application/octet-stream", AgentInstallerBundle.ExeName);
         }

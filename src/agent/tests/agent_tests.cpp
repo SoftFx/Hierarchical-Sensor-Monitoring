@@ -88,7 +88,8 @@ namespace
             "identity": { "computerName": "BUILD01", "module": "Custom Module" },
             "sensors": { "computer": false, "system": true, "disk": false, "network": true, "module": false, "process": true },
             "periods": { "collectMs": 5000 },
-            "productVersion": "2.3.4.5"
+            "productVersion": "2.3.4.5",
+            "update": { "enabled": false, "checkPeriodHours": 48 }
         })");
         CheckEq(config.server_address, std::string{ "https://h:1" }, "address");
         CheckEq(config.port, 9999, "port");
@@ -104,6 +105,8 @@ namespace
         Check(config.sensors_process, "process on");
         CheckEq(config.collect_period_ms, 5000, "collect period");
         CheckEq(config.product_version, std::string{ "2.3.4.5" }, "version");
+        Check(!config.update_enabled, "update disabled");
+        CheckEq(config.update_check_period_hours, 48, "update period");
     }
 
     void BlankAccessKeyIsRejected()
@@ -204,6 +207,8 @@ namespace
     {
         ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "update": { "checkPeriodHours": 0 } })", "zero period");
         ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "update": { "checkPeriodHours": -1 } })", "negative period");
+        // 1194 h * 3600000 overflows DWORD — must be rejected.
+        ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "update": { "checkPeriodHours": 9000 } })", "overflow period");
         ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "update": "on" })", "non-object update");
     }
 

@@ -63,9 +63,10 @@ static void LogErr(const std::string& msg)
 }
 
 // Wait until the service status matches `target_state` or timeout_ms elapses.
+// Uses GetTickCount64() to avoid the 32-bit wrap every ~49 days.
 static bool WaitForServiceState(SC_HANDLE svc, DWORD target_state, DWORD timeout_ms)
 {
-    const DWORD deadline = GetTickCount() + timeout_ms;
+    const ULONGLONG deadline = GetTickCount64() + timeout_ms;
     while (true)
     {
         SERVICE_STATUS ss = {};
@@ -73,7 +74,7 @@ static bool WaitForServiceState(SC_HANDLE svc, DWORD target_state, DWORD timeout
             return false;
         if (ss.dwCurrentState == target_state)
             return true;
-        if (GetTickCount() >= deadline)
+        if (GetTickCount64() >= deadline)
             return false;
         Sleep(500);
     }
@@ -155,7 +156,8 @@ namespace hsm::agent
                 // Rollback.
                 MoveFileExW(install_exe.c_str(), new_exe.c_str(), MOVEFILE_REPLACE_EXISTING);
                 MoveFileExW(old_exe.c_str(), install_exe.c_str(), MOVEFILE_REPLACE_EXISTING);
-                StartServiceW(svc, 0, nullptr);
+                if (!StartServiceW(svc, 0, nullptr) && GetLastError() != ERROR_SERVICE_ALREADY_RUNNING)
+                    LogErr("rollback: StartService for old version also failed (" + std::to_string(GetLastError()) + ") — service is stopped");
                 CloseServiceHandle(svc);
                 CloseServiceHandle(scm);
                 LogErr("StartService failed (" + std::to_string(err) + "); rolled back");
@@ -177,7 +179,8 @@ namespace hsm::agent
             // Restore the old binary.
             MoveFileExW(install_exe.c_str(), new_exe.c_str(), MOVEFILE_REPLACE_EXISTING);
             MoveFileExW(old_exe.c_str(), install_exe.c_str(), MOVEFILE_REPLACE_EXISTING);
-            StartServiceW(svc, 0, nullptr);
+            if (!StartServiceW(svc, 0, nullptr) && GetLastError() != ERROR_SERVICE_ALREADY_RUNNING)
+                LogErr("rollback: StartService for old version also failed (" + std::to_string(GetLastError()) + ") — service is stopped");
 
             CloseServiceHandle(svc);
             CloseServiceHandle(scm);
