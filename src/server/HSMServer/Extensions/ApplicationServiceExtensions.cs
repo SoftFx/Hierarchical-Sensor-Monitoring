@@ -60,6 +60,8 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<BackupDatabaseService>()
                     .AddSingleton<NotificationsCenter>();
 
+            services.AddHttpClient<SlackNotificationChannel>();
+
             services.AddHostedService<TreeSnapshotService>()
                     .AddHostedService<ClearDatabaseService>()
                     //                .AddHostedService<MonitoringBackgroundService>()

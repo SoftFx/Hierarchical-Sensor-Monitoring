@@ -56,6 +56,8 @@ namespace HSMServer.BackgroundServices
 
         internal TelegramBotStatistics TelegramBotStatistics { get; }
 
+        internal SlackChannelStatistics SlackChannelStatistics { get; }
+
 
         public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter)
         {
@@ -92,6 +94,7 @@ namespace HSMServer.BackgroundServices
             BackupSensors = new BackupSensors(_collector);
             TreeValueCacheStatistics = new TreeValueChacheStatistics(_collector);
             TelegramBotStatistics = new TelegramBotStatistics(_collector);
+            SlackChannelStatistics = new SlackChannelStatistics(_collector);
 
             _cache.RequestProcessed += OnRequestProcessed;
 
@@ -99,6 +102,10 @@ namespace HSMServer.BackgroundServices
             _notificationsCenter.TelegramBot.MessageSended += OnMessageSended;
             _notificationsCenter.TelegramBot.ErrorHandled += OnErrorHandled;
             _notificationsCenter.TelegramBot.MessageSending += OnMesageSending;
+
+            _notificationsCenter.SlackChannel.MessageSended += OnSlackMessageSended;
+            _notificationsCenter.SlackChannel.ErrorHandled += OnSlackErrorHandled;
+            _notificationsCenter.SlackChannel.MessageSending += OnSlackMessageSending;
 
 
         }
@@ -111,6 +118,12 @@ namespace HSMServer.BackgroundServices
 
         private void OnErrorHandled(string message) => TelegramBotStatistics.RegisterError(message);
 
+        private void OnSlackMessageSended(string destination, string message) => SlackChannelStatistics.RegisterMessageSended(destination, message);
+
+        private void OnSlackMessageSending() => SlackChannelStatistics.RegisterMessageSending();
+
+        private void OnSlackErrorHandled(string message) => SlackChannelStatistics.RegisterError(message);
+
 
         public void Dispose()
         {
@@ -118,6 +131,9 @@ namespace HSMServer.BackgroundServices
             _notificationsCenter.TelegramBot.MessageSended -= OnMessageSended;
             _notificationsCenter.TelegramBot.ErrorHandled -= OnErrorHandled;
             _notificationsCenter.TelegramBot.MessageSending -= OnMesageSending;
+            _notificationsCenter.SlackChannel.MessageSended -= OnSlackMessageSended;
+            _notificationsCenter.SlackChannel.ErrorHandled -= OnSlackErrorHandled;
+            _notificationsCenter.SlackChannel.MessageSending -= OnSlackMessageSending;
             _collector?.Dispose();
         }
 
