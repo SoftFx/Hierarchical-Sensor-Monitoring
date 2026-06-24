@@ -6,7 +6,6 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Exceptions;
-using HSMServer.Core.Cache;
 using HSMServer.Core.Managers;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.ConcurrentStorage;
@@ -38,7 +37,6 @@ namespace HSMServer.Notifications
         private readonly TelegramUpdateHandler _updateHandler;
         private readonly ITelegramChatsManager _chatsManager;
         private readonly IFolderManager _folderManager;
-        private readonly ITreeValuesCache _cache;
         private readonly TelegramConfig _config;
 
         private CancellationTokenSource _tokenSource = new();
@@ -56,15 +54,12 @@ namespace HSMServer.Notifications
         public event Action<string, string> MessageSended;
         public event Action MessageSending;
 
-        internal TelegramBot(ITelegramChatsManager chatsManager, IFolderManager folderManager, ITreeValuesCache cache, TelegramConfig config)
+        internal TelegramBot(ITelegramChatsManager chatsManager, IFolderManager folderManager, TelegramConfig config)
         {
             _folderManager = folderManager;
             _chatsManager = chatsManager;
 
             _config = config;
-            _cache = cache;
-
-            _cache.NewAlertMessageEvent += StoreMessage;
 
             _updateHandler = new(this, _chatsManager, _folderManager, config);
         }
@@ -174,15 +169,15 @@ namespace HSMServer.Notifications
             return string.Empty;
         }
 
-        private async void StoreMessage(AlertMessage message)
+        internal async Task DeliverAsync(AlertMessage message)
         {
             try
             {
-                _logger.Info($"TSend: StoreMessage enter");
+                _logger.Info($"TSend: DeliverAsync enter");
 
                 if (!CanSendNotifications || !_folderManager.TryGetValue(message.FolderId, out var _))
                 {
-                    _logger.Info($"TSend: StoreMessage can't send: CanSendNotifications={CanSendNotifications}");
+                    _logger.Info($"TSend: DeliverAsync can't send: CanSendNotifications={CanSendNotifications}");
                     return;
                 }
 
@@ -213,7 +208,7 @@ namespace HSMServer.Notifications
             }
             catch (Exception ex)
             {
-                _logger.Error($"Send telegram: StoreMessage error: {ex}");
+                _logger.Error($"Send telegram: DeliverAsync error: {ex}");
             }
 
         }
