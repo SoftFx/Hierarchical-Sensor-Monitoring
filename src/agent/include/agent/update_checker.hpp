@@ -40,6 +40,7 @@ namespace hsm::agent
         void Stop();
 
     private:
+        static DWORD WINAPI ThreadProc(LPVOID param);
         void Run();
         bool CheckAndUpdate();
 
