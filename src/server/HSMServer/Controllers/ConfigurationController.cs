@@ -59,12 +59,15 @@ namespace HSMServer.Controllers
             if (ModelState.IsValid)
             {
                 var newUrl = settings.ExternalConnectionUrl?.Trim() ?? string.Empty;
-                if (config.Agent.ExternalConnectionUrl != newUrl || config.Agent.AllowUntrustedCertificate != settings.AllowUntrustedCertificate)
+                if (config.Agent.ExternalConnectionUrl != newUrl
+                    || config.Agent.AllowUntrustedCertificate != settings.AllowUntrustedCertificate
+                    || config.Agent.EnableTopCpuProcesses != settings.EnableTopCpuProcesses)
                 {
-                    _logger.Info($"SaveAgentSettings: {GetUserName()} changed Agent settings (URL '{config.Agent.ExternalConnectionUrl}' -> '{newUrl}', allowUntrustedCertificate {config.Agent.AllowUntrustedCertificate} -> {settings.AllowUntrustedCertificate})");
+                    _logger.Info($"SaveAgentSettings: {GetUserName()} changed Agent settings (URL '{config.Agent.ExternalConnectionUrl}' -> '{newUrl}', allowUntrustedCertificate {config.Agent.AllowUntrustedCertificate} -> {settings.AllowUntrustedCertificate}, enableTopCpuProcesses {config.Agent.EnableTopCpuProcesses} -> {settings.EnableTopCpuProcesses})");
 
                     config.Agent.ExternalConnectionUrl = newUrl;
                     config.Agent.AllowUntrustedCertificate = settings.AllowUntrustedCertificate;
+                    config.Agent.EnableTopCpuProcesses = settings.EnableTopCpuProcesses;
                     config.ResaveSettings();
                 }
             }

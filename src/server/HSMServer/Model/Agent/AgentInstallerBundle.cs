@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
@@ -7,9 +8,10 @@ namespace HSMServer.Model.Agent
 {
     /// <summary>
     /// Parameters baked into one per-product agent bundle. <see cref="AccessKey"/> is the product's
-    /// access-key GUID (string) the agent sends in the <c>Key</c> header.
+    /// access-key GUID (string) the agent sends in the <c>Key</c> header. <see cref="EnableTopCpu"/>
+    /// adds a <c>topCpu</c> block so the installed agent also reports the top processes by CPU (#1175).
     /// </summary>
-    public sealed record AgentBundleOptions(string ServerAddress, int Port, string AccessKey, bool AllowUntrustedCertificate);
+    public sealed record AgentBundleOptions(string ServerAddress, int Port, string AccessKey, bool AllowUntrustedCertificate, bool EnableTopCpu = false);
 
     /// <summary>
     /// Builds the downloadable HSM Agent bundle (epic #1167, W7): a zip of the byte-identical signed
@@ -30,20 +32,36 @@ namespace HSMServer.Model.Agent
         /// <summary>The generated config.json — matches the agent's config schema (only address + key required).</summary>
         public static string BuildConfigJson(AgentBundleOptions options)
         {
-            var config = new
+            // A Dictionary (not an anonymous type) so the optional topCpu block can be added
+            // conditionally; each value's own property names serialize verbatim (camelCase as written).
+            var config = new Dictionary<string, object>
             {
-                server = new
+                ["server"] = new
                 {
                     address = options.ServerAddress,
                     port = options.Port,
                     accessKey = options.AccessKey,
                     allowUntrustedCertificate = options.AllowUntrustedCertificate,
                 },
-                identity = new
+                ["identity"] = new
                 {
                     computerName = "auto",
                 },
             };
+
+            if (options.EnableTopCpu)
+            {
+                // Server-side opt-in (Configuration → Agent). Ship the agent's topCpu defaults so the
+                // installed service reports the top processes by CPU once a minute. NOTE: these defaults
+                // mirror AgentConfig in the agent (src/agent/include/agent/config.hpp) — keep in sync.
+                config["topCpu"] = new
+                {
+                    enabled = true,
+                    periodMs = 60000,
+                    minPercent = 1.0,
+                    count = 10,
+                };
+            }
 
             return JsonSerializer.Serialize(config, _jsonOptions);
         }

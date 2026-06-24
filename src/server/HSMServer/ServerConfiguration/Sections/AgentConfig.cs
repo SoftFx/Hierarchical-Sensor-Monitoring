@@ -15,4 +15,11 @@ public class AgentConfig
     /// self-signed server certificate (the typical self-hosted / Docker eval case). Default false.
     /// </summary>
     public bool AllowUntrustedCertificate { get; set; }
+
+    /// <summary>
+    /// When true, downloaded bundles carry a <c>topCpu</c> block (issue #1175) so the installed agent
+    /// also reports the top processes by CPU once a minute. The admin opts in here (server-side); the
+    /// client agent has no UI and simply runs whatever config.json the bundle ships. Default false.
+    /// </summary>
+    public bool EnableTopCpuProcesses { get; set; }
 }

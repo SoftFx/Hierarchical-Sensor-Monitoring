@@ -75,7 +75,20 @@ are required; everything else has a default.
 | `sensors.module` | `true` | collector self-sensors (alive / version / queue) |
 | `sensors.process` | `false` | per-process sensors (opt-in) |
 | `periods.collectMs` | `15000` | package collect period (ms) |
+| `topCpu.enabled` | `false` | opt-in: periodic "top processes by CPU" sensors |
+| `topCpu.periodMs` | `60000` | how often to sample + post the top list (ms) |
+| `topCpu.minPercent` | `1.0` | skip processes below this %CPU (of the whole machine) |
+| `topCpu.count` | `10` | how many of the busiest exe names to post per tick |
 | `productVersion` | `"1.0.0.0"` | version reported by module sensors |
+
+When `topCpu.enabled` is `true`, every `periodMs` the agent samples CPU usage of all processes,
+aggregates by **executable name** (all `chrome.exe` instances summed), and posts the CPU% of the
+busiest `count` names (that are also `>= minPercent`) to `Top CPU processes/<exe name>` Double sensors.
+A name that isn't in the top list that tick gets no value — leaving a natural gap in its graph.
+
+> Note: a sensor is created the first time an exe name reaches the top list and kept afterwards, so on a
+> long-lived, busy host the number of `Top CPU processes/*` sensors grows with the number of distinct
+> programs that have ever been busy. Raise `minPercent` to limit churn from short-lived spikes.
 
 Blank/missing `address` or `accessKey`, or an out-of-range `port`, make the agent refuse to start (the
 reason is logged to the Event Log and the file log).

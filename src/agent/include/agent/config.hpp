@@ -40,6 +40,17 @@ namespace hsm::agent
         // periods.*
         int collect_period_ms = 0; ///< 0 → collector default (15000)
 
+        // topCpu.* — periodic "top processes by CPU" sensors (issue #1175). Opt-in. Each tick the
+        // agent samples per-process CPU, aggregates by exe name, and posts the CPU% of the busiest
+        // names (in the top `count` AND >= `min_percent`) to `Top CPU processes/<exe>` Double sensors.
+        // Names that don't qualify a given tick get no value → natural gaps in their series.
+        // NOTE: these defaults are mirrored server-side in AgentInstallerBundle.BuildConfigJson (the
+        // download bundle's topCpu block) — keep the two in sync when changing them.
+        bool top_cpu_enabled = false;
+        int top_cpu_period_ms = 60000;     ///< sampling/post interval; must be > 0
+        double top_cpu_min_percent = 1.0;  ///< skip anything below this %CPU (of the whole machine)
+        int top_cpu_count = 10;            ///< how many of the busiest names to post per tick
+
         // module-sensor product version
         std::string product_version = "1.0.0.0";
 
