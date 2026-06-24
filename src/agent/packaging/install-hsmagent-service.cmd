@@ -3,9 +3,9 @@ setlocal
 :: Self-elevate if not already running as administrator.
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-  echo Requesting administrator privileges...
-  powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs -Wait"
-  exit /b
+  echo ERROR: Run this script as Administrator ^(right-click ^> Run as administrator^).
+  pause
+  exit /b 1
 )
 set "INSTALL_DIR=%ProgramFiles%\HSM Agent"
 set "DATA_DIR=%ProgramData%\HSM Agent"
@@ -19,4 +19,5 @@ if %errorlevel% neq 0 (
 )
 sc start HSMAgent
 echo HSM Agent installed and started.
+pause
 endlocal

@@ -123,7 +123,7 @@ namespace HSMServer.Core.Tests
         {
             Assert.Equal(
                 Normalize(AgentInstallerBundle.BuildInstallScript()),
-                Normalize(File.ReadAllText(RepoFile("src/agent/packaging/install.cmd"))));
+                Normalize(File.ReadAllText(RepoFile("src/agent/packaging/install-hsmagent-service.cmd"))));
         }
 
         [Fact]
@@ -131,7 +131,7 @@ namespace HSMServer.Core.Tests
         {
             Assert.Equal(
                 Normalize(AgentInstallerBundle.BuildUninstallScript()),
-                Normalize(File.ReadAllText(RepoFile("src/agent/packaging/uninstall.cmd"))));
+                Normalize(File.ReadAllText(RepoFile("src/agent/packaging/uninstall-hsmagent-service.cmd"))));
         }
 
         private static string Normalize(string text) => text.Replace("\r\n", "\n").Replace("\r", "\n");
