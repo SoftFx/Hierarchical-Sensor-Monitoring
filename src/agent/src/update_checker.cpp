@@ -418,22 +418,20 @@ namespace hsm::agent
         if (!config_.update_enabled)
             return;
 
-        // Jitter: wait 0–10 min on first boot so a fleet doesn't all check at once.
-        const DWORD jitter_ms = static_cast<DWORD>(GetTickCount64() % 600000ULL);
         const DWORD period_ms = static_cast<DWORD>(config_.update_check_period_hours) * 3600000UL;
-
         HANDLE ev = static_cast<HANDLE>(stop_event_);
 
-        // Initial jitter wait.
-        if (WaitForSingleObject(ev, jitter_ms) == WAIT_OBJECT_0)
-            return;
+        // Check immediately on startup — restarting the Windows service is the admin's "check now"
+        // gesture; no need to wait the full period to pick up a freshly staged binary.
+        if (CheckAndUpdate())
+            return; // update triggered — the service will be restarted by --apply-update
 
         while (true)
         {
-            if (CheckAndUpdate())
-                return; // update triggered — the service will be restarted by --apply-update
-
             if (WaitForSingleObject(ev, period_ms) == WAIT_OBJECT_0)
+                return;
+
+            if (CheckAndUpdate())
                 return;
         }
     }
