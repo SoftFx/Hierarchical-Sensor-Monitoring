@@ -3263,6 +3263,18 @@ namespace
             std::map<std::string, std::shared_ptr<NativeSensor>> sensor_cache;
             const auto period = std::chrono::milliseconds(top_cpu_period_ms_);
 
+            // Dedicated cap on the number of distinct "Top CPU processes/<name>" sensors this
+            // feature may ever create. The server sensor registry (sensors_) is permanent — there
+            // is no delete-sensor API — so without a bound a host that churns through distinctly
+            // named processes (CI/build agents, batch jobs) would grow the namespace without limit
+            // and could silently consume the global MaxSensors cap, starving legitimately-busy
+            // processes. 8x the per-tick count (min 64) leaves generous headroom for normal
+            // rotation of busy processes while containing runaway churn. Once the cap is reached,
+            // new names are skipped; already-tracked names keep updating.
+            const size_t max_tracked_names =
+                std::max<size_t>(static_cast<size_t>(top_cpu_count_) * 8, 64);
+            bool cap_logged = false;
+
             sampler.Sample(); // seed baseline — first call returns empty map, so first post is a true delta
 
             while (true)
@@ -3282,6 +3294,21 @@ namespace
                         auto it = sensor_cache.find(usage.name);
                         if (it == sensor_cache.end())
                         {
+                            // Dedicated namespace cap: stop creating new per-process sensors once
+                            // the bound is reached so transient processes can't grow the registry
+                            // without limit or exhaust the global MaxSensors cap. Log once.
+                            if (sensor_cache.size() >= max_tracked_names)
+                            {
+                                if (!cap_logged)
+                                {
+                                    LogError("top-CPU: tracked-process cap (" +
+                                             std::to_string(max_tracked_names) +
+                                             ") reached; new process names will not get a sensor.");
+                                    cap_logged = true;
+                                }
+                                continue;
+                            }
+
                             // Creating a sensor from this background thread (after Start) is safe:
                             // CollectorImpl::CreateSensor serializes on mutex_, and the scheduler
                             // reads the registry only via a snapshot under the same lock.
