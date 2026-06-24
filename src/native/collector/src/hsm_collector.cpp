@@ -3281,14 +3281,25 @@ namespace
                             // Creating a sensor from this background thread (after Start) is safe:
                             // CollectorImpl::CreateSensor serializes on mutex_, and the scheduler
                             // reads the registry only via a snapshot under the same lock.
-                            const auto description =
+                            RegistrationOptions opts = InstantRegistrationDefaults();
+                            opts.description =
                                 "Top CPU processes/" + usage.name +
                                 " \xe2\x80\x94 top " + std::to_string(top_cpu_count_) +
                                 " consumers by % of machine CPU";
                             std::shared_ptr<NativeSensor> sensor;
                             if (CreateSensor(("Top CPU processes/" + usage.name).c_str(),
-                                             HSM_SENSOR_TYPE_DOUBLE, false, description, sensor) == HSM_RESULT_OK)
-                                it = sensor_cache.emplace(usage.name, std::move(sensor)).first;
+                                             HSM_SENSOR_TYPE_DOUBLE, false, "", sensor, opts) == HSM_RESULT_OK)
+                            {
+                                it = sensor_cache.emplace(usage.name, sensor).first;
+#if defined(HSM_COLLECTOR_HTTP)
+                                // This sensor was created after Start (lazy), so it was not in the
+                                // Start snapshot that PostRegistrationsWire sent. Register it now
+                                // so the server gets the description. HttpTransport::Post is
+                                // thread-safe (per-call libcurl easy handle).
+                                if (send_wire_)
+                                    PostRegistrationsWire({std::move(sensor)});
+#endif
+                            }
                             else
                                 continue;
                         }
