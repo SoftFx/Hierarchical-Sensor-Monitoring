@@ -51,6 +51,14 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
         private readonly TimeSpan _period;
         private readonly int _processorCount;
 
+        // Dedicated cap on the number of distinct "Top CPU processes/<name>" sensors this feature
+        // may ever create. The server sensor registry is permanent, so without a bound a host that
+        // churns through distinctly named processes (CI/build agents, batch jobs) would grow the
+        // namespace without limit. 8x the per-tick count (min 64) leaves generous headroom for
+        // normal rotation; once reached, new names are skipped and already-tracked names keep
+        // updating. Mirrors the native collector's max_tracked_names bound.
+        private readonly int _maxTrackedNames;
+
         // name -> sensor handle (created lazily on first appearance)
         private readonly Dictionary<string, IInstantValueSensor<double>> _sensors =
             new Dictionary<string, IInstantValueSensor<double>>();
@@ -73,6 +81,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
             _minPercent = minPercent;
             _period = period;
             _processorCount = GetTotalProcessorCount();
+            _maxTrackedNames = Math.Max(count * 8, 64);
         }
 
         public ValueTask<bool> InitAsync()
@@ -155,7 +164,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                     curCpu[key] = cpuMs;
 
                     // Cache full path on first encounter — MainModule can throw for protected processes.
-                    if (!_fullPaths.ContainsKey(p.ProcessName))
+                    // Bounded by the same cap as the sensor map so this dictionary can't grow without limit.
+                    if (_fullPaths.Count < _maxTrackedNames && !_fullPaths.ContainsKey(p.ProcessName))
                     {
                         try { _fullPaths[p.ProcessName] = p.MainModule.FileName; }
                         catch { }
@@ -199,6 +209,11 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                 IInstantValueSensor<double> sensor;
                 if (!_sensors.TryGetValue(name, out sensor))
                 {
+                    // Dedicated namespace cap: stop creating new per-process sensors once the bound
+                    // is reached so transient processes can't grow the server namespace without limit.
+                    if (_sensors.Count >= _maxTrackedNames)
+                        continue;
+
                     string fullPath;
                     _fullPaths.TryGetValue(name, out fullPath);
                     var pathLine = string.IsNullOrEmpty(fullPath) ? "" : "\n\n**Path:** `" + fullPath + "`";

@@ -128,6 +128,9 @@ namespace HSMDataCollector.PublicInterface
         /// <paramref name="period"/> (default 1 minute), posts Double sensors at
         /// "Top CPU processes/&lt;exe-name&gt;" for the <paramref name="count"/> busiest processes
         /// above <paramref name="minPercent"/>% of total machine CPU. Windows only.
+        /// The number of distinct per-process sensors is capped (max(<paramref name="count"/> * 8, 64))
+        /// so a host that churns through many distinctly named processes cannot grow the sensor
+        /// namespace without bound; once the cap is reached, newly seen process names are skipped.
         /// </summary>
         IWindowsCollection AddTopCpuProcessesSensors(int count = 10, double minPercent = 1.0, TimeSpan? period = null);
     }

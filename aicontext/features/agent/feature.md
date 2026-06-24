@@ -98,6 +98,9 @@ before `Stop()`, waits on the same `cv_` so it exits the moment stop is requeste
 2. `SelectTopN` (portable, unit-tested) keeps names `>= minPercent` and returns the busiest `count`.
 3. Each survivor's % is posted to a lazily-created `Top CPU processes/<exe>` Double sensor (cached by
    name). Names not in the top list that tick get **no value** → natural gaps in their series.
+   The distinct-name set is **capped at `max(count * 8, 64)`** in both collectors (the server sensor
+   registry is permanent, with no delete API): once the cap is reached, newly seen process names are
+   skipped so a churn-heavy host can't grow the namespace without bound or exhaust the global MaxSensors.
 
 Aggregating by exe name (not PID, not PDH `#n` suffix) keeps a stable sensor identity over time.
 **Out of scope:** browser tab/site attribution (needs browser-level instrumentation; tracked separately).
