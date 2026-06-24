@@ -4453,10 +4453,10 @@ namespace
 
         // Top 3, threshold 1.0% — git.exe excluded, rest ordered by percent desc.
         auto top3 = SelectTopN(by_name, 3, 1.0);
-        Require(top3.size() == 3,                    "SelectTopN: count cap should yield 3");
-        Require(top3[0].name == "chrome.exe",        "SelectTopN: busiest first");
-        Require(top3[1].name == "node.exe",          "SelectTopN: second busiest");
-        Require(top3[2].name == "code.exe",          "SelectTopN: third busiest");
+        Require(top3.size() == 3, "SelectTopN: count cap should yield 3");
+        Require(top3[0].name == "chrome.exe", "SelectTopN: busiest first");
+        Require(top3[1].name == "node.exe", "SelectTopN: second busiest");
+        Require(top3[2].name == "code.exe", "SelectTopN: third busiest");
 
         // Threshold filters — requesting more than available above threshold.
         auto topAll = SelectTopN(by_name, 10, 1.0);
@@ -4465,7 +4465,7 @@ namespace
             Require(u.percent >= 1.0, "SelectTopN: every returned entry must be >= threshold");
 
         // count=0 returns empty.
-        Require(SelectTopN(by_name, 0, 0.0).empty(),  "SelectTopN: count=0 must return empty");
+        Require(SelectTopN(by_name, 0, 0.0).empty(), "SelectTopN: count=0 must return empty");
 
         // count<0 returns empty.
         Require(SelectTopN(by_name, -1, 0.0).empty(), "SelectTopN: count<0 must return empty");
@@ -4476,10 +4476,10 @@ namespace
         tied["a.exe"] = MakeCpuUsage("a.exe", 5.0);
         tied["m.exe"] = MakeCpuUsage("m.exe", 5.0);
         auto tie3 = SelectTopN(tied, 3, 0.0);
-        Require(tie3.size() == 3,            "SelectTopN tie-break: 3 entries");
-        Require(tie3[0].name == "a.exe",     "SelectTopN tie-break: a before m");
-        Require(tie3[1].name == "m.exe",     "SelectTopN tie-break: m before z");
-        Require(tie3[2].name == "z.exe",     "SelectTopN tie-break: z last");
+        Require(tie3.size() == 3, "SelectTopN tie-break: 3 entries");
+        Require(tie3[0].name == "a.exe", "SelectTopN tie-break: a before m");
+        Require(tie3[1].name == "m.exe", "SelectTopN tie-break: m before z");
+        Require(tie3[2].name == "z.exe", "SelectTopN tie-break: z last");
     }
 
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
