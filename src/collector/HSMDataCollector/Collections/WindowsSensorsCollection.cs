@@ -21,7 +21,7 @@ namespace HSMDataCollector.DefaultSensors
 
 
         public IWindowsCollection AddAllComputerSensors() =>
-            (this as IWindowsCollection).AddSystemMonitoringSensors().AddAllDisksMonitoringSensors().AddWindowsInfoMonitoringSensors().AddAllNetworkSensors();
+            (this as IWindowsCollection).AddSystemMonitoringSensors().AddAllDisksMonitoringSensors().AddWindowsInfoMonitoringSensors().AddAllNetworkSensors().AddTopCpuProcessesSensors();
 
         public IWindowsCollection AddAllModuleSensors(Version productVersion)
         {

@@ -5546,6 +5546,10 @@ hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector)
         result = hsm_collector_add_windows_info_monitoring_sensors(collector);
     if (result == HSM_RESULT_OK)
         result = hsm_collector_add_all_network_sensors(collector);
+#ifdef _WIN32
+    if (result == HSM_RESULT_OK)
+        result = hsm_collector_enable_top_cpu_sensors(collector, 10, 1.0, 60000);
+#endif
     return result;
 }
 
