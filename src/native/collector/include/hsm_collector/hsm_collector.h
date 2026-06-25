@@ -449,9 +449,12 @@ typedef struct hsm_default_sensor_params_t
     const char* service_name;    /* RESERVED (not yet honored): service-status resolution */
     int is_host_service;         /* RESERVED (not yet honored): service-status registers under .module
                                     regardless — non-host placement lands with the live readers */
-    const char* product_version; /* RESERVED: only gates WHETHER the product-version sensor registers
-                                    (in hsm_collector_add_all_module_sensors); the value has no
-                                    destination until live values land */
+    const char* product_version; /* The connected application's version. In
+                                    hsm_collector_add_all_module_sensors it both gates WHETHER the
+                                    product-version sensor registers (NULL/empty => skip) and is parsed
+                                    + emitted as the sensor's value ("M.m[.b[.r]]") with a "Start: <utc>"
+                                    comment. Ignored by hsm_collector_add_default_sensor (no emission
+                                    there). */
 } hsm_default_sensor_params_t;
 
 hsm_default_sensor_params_t hsm_default_sensor_params_default(void);

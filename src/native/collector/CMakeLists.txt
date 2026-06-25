@@ -323,6 +323,8 @@ set(NATIVE_REGRESSION_TESTS
     native_alert_scheduled_notification_matches_net
     native_default_sensor_wire_matches_net
     native_default_sensor_group_composition
+    native_module_version_sensors_emit_start_value
+    native_module_version_skips_product_when_missing
     native_metric_source_seam_lifecycle
     native_metric_source_drives_default_bar_sensor
     native_metric_source_drives_custom_double_sensor
