@@ -164,8 +164,12 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                     curCpu[key] = cpuMs;
 
                     // Cache full path on first encounter — MainModule throws for protected/system
-                    // processes (e.g. vmmemWSL, System). Cache the failure as an empty string so the
-                    // lookup is attempted once per name, not re-thrown every tick. Bounded by the same
+                    // processes (e.g. vmmemWSL, System), and also, less commonly, for transient/benign
+                    // reasons: a 32-bit-vs-64-bit access mismatch, a brief ACCESS_DENIED, or a process
+                    // still initializing its module list. Cache the failure as an empty string so the
+                    // lookup is attempted once per name, not re-thrown every tick. Trade-off: such a
+                    // process keeps the "system process" label below for the collector's lifetime — an
+                    // accepted false-positive for a best-effort description hint. Bounded by the same
                     // cap as the sensor map so this dictionary can't grow without limit.
                     if (_fullPaths.Count < _maxTrackedNames && !_fullPaths.ContainsKey(p.ProcessName))
                     {
@@ -228,7 +232,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                     if (!string.IsNullOrEmpty(fullPath))
                         pathLine = "\n\n**Path:** `" + fullPath + "`";
                     else if (resolved)
-                        pathLine = "\n\n**Path:** _(system process — path unavailable)_";
+                        pathLine = "\n\n**Path:** _(system process - path unavailable)_"; // ASCII '-' to match native
                     else
                         pathLine = "";
                     sensor = _storage.CreateInstantSensor<double>(
