@@ -16,6 +16,7 @@ using HSMServer.ApiObjectsConverters;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model.Requests;
+using HSMServer.ServerConfiguration;
 using HSMServer.Extensions;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
@@ -23,6 +24,7 @@ using HSMServer.ModelBinders;
 using HSMServer.ObsoleteUnitedSensorValue;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using HSMSensorDataObjects.SensorRequests;
@@ -42,19 +44,26 @@ namespace HSMServer.Controllers
 
         private static readonly TaskResult _invalidRequestResult = TaskResult.FromError(InvalidRequest);
 
+        private const string DirectiveHeader = "X-Hsm-Directive";
+        private const string AgentVersionHeader = "X-Agent-Version";
+        private static readonly string[] _knownSensorGroups = ["computer", "system", "disk", "network", "module", "process"];
+
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly DataCollectorWrapper _collector;
         private readonly TelemetryCollector _telemetry;
-
         private readonly ITreeValuesCache _cache;
+        private readonly IWebHostEnvironment _environment;
+        private readonly IServerConfig _config;
 
 
-        public SensorsController(DataCollectorWrapper dataCollector, ITreeValuesCache cache, TelemetryCollector telemetry)
+        public SensorsController(DataCollectorWrapper dataCollector, ITreeValuesCache cache,
+            TelemetryCollector telemetry, IWebHostEnvironment environment, IServerConfig config)
         {
             _telemetry = telemetry;
-
             _collector = dataCollector;
             _cache = cache;
+            _environment = environment;
+            _config = config;
         }
 
 
@@ -403,13 +412,56 @@ namespace HSMServer.Controllers
             {
                 var result = await TryBuildAndAddData(value);
 
-                return result.IsOk ? Ok(value) : StatusCode(406, result.Error);
+                if (!result.IsOk)
+                    return StatusCode(406, result.Error);
+
+                EmitAgentDirectives();
+                return Ok(value);
             }
             catch (Exception ex)
             {
                 _logger.Error("Failed to put data!", ex);
 
                 return BadRequest(value);
+            }
+        }
+
+        private void EmitAgentDirectives()
+        {
+            // Phase 1: update-available — only when X-Agent-Version request header is present and
+            // the server has a newer binary staged in wwwroot/agent/.
+            if (_config.Agent.AutoUpdateEnabled
+                && !string.IsNullOrEmpty(Request.Headers[AgentVersionHeader].ToString())
+                && Version.TryParse(Request.Headers[AgentVersionHeader].ToString(), out var agentVer)
+                && !string.IsNullOrEmpty(_environment?.WebRootPath))
+            {
+                var staged = ReadStagedVersion(_environment.WebRootPath);
+                if (Version.TryParse(staged, out var stagedVer) && stagedVer > agentVer)
+                    Response.Headers.Append(DirectiveHeader, $"update-available:{staged}");
+            }
+
+            // Phase 2: sensor-disable / sensor-enable — driven by per-product DisabledSensorGroups.
+            if (!HttpContext.TryGetPublicApiInfo(out var info))
+                return;
+
+            foreach (var group in _knownSensorGroups)
+            {
+                if (info.Product.DisabledSensorGroups.Contains(group))
+                    Response.Headers.Append(DirectiveHeader, $"sensor-disable:{group}");
+            }
+        }
+
+        private static string ReadStagedVersion(string webRootPath)
+        {
+            try
+            {
+                var path = System.IO.Path.Combine(webRootPath, "agent", "version.txt");
+                var text = System.IO.File.ReadAllText(path).Trim();
+                return string.IsNullOrEmpty(text) ? "0.0.0" : text;
+            }
+            catch
+            {
+                return "0.0.0";
             }
         }
 

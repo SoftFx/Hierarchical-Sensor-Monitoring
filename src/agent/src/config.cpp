@@ -614,4 +614,60 @@ namespace hsm::agent
         buffer << stream.rdbuf();
         return ParseAgentConfig(buffer.str(), out, error);
     }
+
+    bool WriteAgentConfig(const std::string& path, const AgentConfig& c, std::string& error)
+    {
+        // Emit minimal but complete config.json; every key present so a reader never hits a default
+        // that diverges from what was active when this config was written.
+        const auto b = [](bool v) -> const char* { return v ? "true" : "false"; };
+
+        std::ostringstream out;
+        out << "{\n"
+            << "  \"server\": {\n"
+            << "    \"address\": \"" << c.server_address << "\",\n"
+            << "    \"port\": " << c.port << ",\n"
+            << "    \"accessKey\": \"" << c.access_key << "\",\n"
+            << "    \"allowUntrustedCertificate\": " << b(c.allow_untrusted_certificate) << "\n"
+            << "  },\n"
+            << "  \"identity\": {\n"
+            << "    \"computerName\": \"" << c.computer_name << "\",\n"
+            << "    \"module\": \"" << c.module << "\"\n"
+            << "  },\n"
+            << "  \"sensors\": {\n"
+            << "    \"computer\": " << b(c.sensors_computer) << ",\n"
+            << "    \"system\": " << b(c.sensors_system) << ",\n"
+            << "    \"disk\": " << b(c.sensors_disk) << ",\n"
+            << "    \"network\": " << b(c.sensors_network) << ",\n"
+            << "    \"module\": " << b(c.sensors_module) << ",\n"
+            << "    \"process\": " << b(c.sensors_process) << "\n"
+            << "  },\n"
+            << "  \"periods\": {\n"
+            << "    \"collectMs\": " << c.collect_period_ms << "\n"
+            << "  },\n"
+            << "  \"topCpu\": {\n"
+            << "    \"enabled\": " << b(c.top_cpu_enabled) << ",\n"
+            << "    \"periodMs\": " << c.top_cpu_period_ms << ",\n"
+            << "    \"minPercent\": " << c.top_cpu_min_percent << ",\n"
+            << "    \"count\": " << c.top_cpu_count << "\n"
+            << "  },\n"
+            << "  \"update\": {\n"
+            << "    \"enabled\": " << b(c.update_enabled) << ",\n"
+            << "    \"checkPeriodHours\": " << c.update_check_period_hours << "\n"
+            << "  }\n"
+            << "}\n";
+
+        std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+        if (!stream)
+        {
+            error = "cannot open config file for writing: " + path;
+            return false;
+        }
+        stream << out.str();
+        if (!stream)
+        {
+            error = "write error on config file: " + path;
+            return false;
+        }
+        return true;
+    }
 } // namespace hsm::agent

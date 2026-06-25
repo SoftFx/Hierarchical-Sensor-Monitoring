@@ -3628,13 +3628,32 @@ namespace
             }
             body += "]";
 
-            const std::vector<hsm::http::HttpHeader> headers = {
+            std::vector<hsm::http::HttpHeader> headers = {
                 { "Key", access_key_ },
                 { "ClientName", client_name_ },
                 { "Content-Type", "application/json" },
             };
+            // Append extra headers set by the host (e.g. X-Agent-Version from the agent).
+            headers.insert(headers.end(), extra_request_headers_.begin(), extra_request_headers_.end());
 
             const auto response = http_transport_->Post(endpoints_.List(), body, headers);
+
+            // Dispatch any X-Hsm-Directive headers the server included in the response.
+            if (directive_callback_ != nullptr && response.IsSuccess())
+            {
+                for (const auto& h : response.response_headers)
+                {
+                    if (h.name == "x-hsm-directive")
+                    {
+                        const auto colon = h.value.find(':');
+                        if (colon != std::string::npos)
+                            directive_callback_(h.value.substr(0, colon).c_str(), h.value.substr(colon + 1).c_str(), directive_user_data_);
+                        else
+                            directive_callback_(h.value.c_str(), "", directive_user_data_);
+                    }
+                }
+            }
+
             return response.IsSuccess();
         }
 #endif
@@ -3677,6 +3696,13 @@ namespace
         std::condition_variable hang_cv_;
         bool send_hang_ = false;
         bool send_cancelled_ = false;
+
+        // Extra HTTP request headers injected into every data POST (#1198 agent-directive channel).
+        // Set before Start; read only by the worker thread after Start — no lock needed.
+        std::vector<hsm::http::HttpHeader> extra_request_headers_;
+        // Server-directive callback: called when a data-POST response carries X-Hsm-Directive headers.
+        hsm_server_directive_callback_t directive_callback_ = nullptr;
+        void* directive_user_data_ = nullptr;
 
         // Send seam: TrySendBatch delegates here. Default records into sent_values_; the public HTTP
         // transport (UseHttpTransport) swaps in a libcurl POST (installed before Start, read only by
@@ -5188,6 +5214,28 @@ void hsm_collector_set_send_hang(hsm_collector_t* collector, bool hang)
 {
     if (collector != nullptr)
         collector->impl->SetSendHang(hang);
+}
+
+// ---- Agent-directive channel (#1198) -------------------------------------------------------
+
+hsm_result_t hsm_collector_set_extra_request_header(hsm_collector_t* collector, const char* name, const char* value)
+{
+    if (collector == nullptr || name == nullptr || value == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+    collector->impl->extra_request_headers_.push_back({name, value});
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_collector_set_server_directive_handler(
+    hsm_collector_t* collector,
+    hsm_server_directive_callback_t callback,
+    void* user_data)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+    collector->impl->directive_callback_ = callback;
+    collector->impl->directive_user_data_ = user_data;
+    return HSM_RESULT_OK;
 }
 
 size_t hsm_collector_sent_count(const hsm_collector_t* collector)

@@ -792,6 +792,28 @@ void hsm_collector_set_send_fail_next(hsm_collector_t* collector, int32_t count)
    collector shutdown must never block the host's restart. */
 void hsm_collector_set_send_hang(hsm_collector_t* collector, bool hang);
 
+/* Server-directive channel (#1198). Extra headers are injected into every sensor-data HTTP
+   POST. The agent uses this to send X-Agent-Version so the server can emit directives
+   conditionally. Multiple calls append multiple headers. Call before Start(). */
+hsm_result_t hsm_collector_set_extra_request_header(
+    hsm_collector_t* collector,
+    const char* name,
+    const char* value);
+
+/* Server-directive callback. Called on the worker thread for every X-Hsm-Directive header in
+   a successful data-POST response. `verb` is the directive name (e.g. "update-available");
+   `payload` is the colon-separated argument (e.g. "0.5.2") or an empty string when absent.
+   `user_data` must outlive the collector. NULL callback clears the handler. */
+typedef void (*hsm_server_directive_callback_t)(
+    const char* verb,
+    const char* payload,
+    void* user_data);
+
+hsm_result_t hsm_collector_set_server_directive_handler(
+    hsm_collector_t* collector,
+    hsm_server_directive_callback_t callback,
+    void* user_data);
+
 size_t hsm_collector_sent_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_sent_json(const hsm_collector_t* collector, size_t index, const char** out_json);
 

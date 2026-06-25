@@ -255,6 +255,16 @@ namespace HSMServer.Core.Cache
             ChangeProductEvent?.Invoke(product, ActionType.Update);
         }
 
+        public TaskResult UpdateDisabledSensorGroups(Guid productId, IEnumerable<string> disabled)
+        {
+            if (!_tree.TryGetValue(productId, out var product))
+                return TaskResult.FromError("Product not found.");
+
+            product.UpdateDisabledSensorGroups(disabled);
+            _database.UpdateProduct(product.ToEntity());
+            return TaskResult.Ok;
+        }
+
         public bool TryGetProduct(Guid productId, out ProductModel product)
         {
             return _tree.TryGetValue(productId, out product);

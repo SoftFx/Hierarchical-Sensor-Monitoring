@@ -19,6 +19,9 @@ namespace HSMServer.Model.ViewModel
 
         public HashSet<UserViewModel> NotAdminUsers { get; }
 
+        /// Sensor groups currently disabled for this product's agents (#1198).
+        public HashSet<string> DisabledSensorGroups { get; }
+
 
         public EditProductViewModel(ProductNodeViewModel product,
                                     List<(User, ProductRoleEnum)> usersRights,
@@ -28,9 +31,9 @@ namespace HSMServer.Model.ViewModel
 
             UsersRights = usersRights.Select(x => (new UserViewModel(x.Item1), x.Item2)).ToList();
             AccessKeys = product.GetAccessKeys();
+            DisabledSensorGroups = product.DisabledSensorGroups;
 
             _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();
-            //NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();
             NotAdminUsers = notAdminUsers
                 .Select(x => new UserViewModel(x))
                 .OrderBy(u => u.Username)
