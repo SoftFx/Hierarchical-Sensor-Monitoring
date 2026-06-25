@@ -78,11 +78,12 @@ namespace HSMServer.Core.Model.Policies
                 if (Destination.IsFromParentChats)
                 {
                     foreach (var (id, name) in GetParentChats(Sensor?.Parent))
-                    {
                         chats.TryAdd(id, name);
-                    }
+
+                    foreach (var (id, name) in GetParentSlackDestinations(Sensor?.Parent))
+                        chats.TryAdd(id, name);
                 }
-                
+
                 foreach (var (id, name) in Destination.Chats)
                 {
                     chats.TryAdd(id, name);
@@ -101,9 +102,7 @@ namespace HSMServer.Core.Model.Policies
                 return dict;
 
             foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
-            {
                 dict.TryAdd(id, name);
-            }
 
             if (parent.Settings.DefaultChats.CurValue.IsFromParent)
             {
@@ -114,9 +113,35 @@ namespace HSMServer.Core.Model.Policies
                 while (par != null)
                 {
                     foreach (var (id, name) in GetParentChats(par))
-                    {
                         dict.TryAdd(id, name);
-                    }
+
+                    par = par.Parent;
+                }
+
+                return dict;
+            }
+
+            return dict;
+        }
+
+        internal Dictionary<Guid, string> GetParentSlackDestinations(ProductModel parent)
+        {
+            var dict = new Dictionary<Guid, string>();
+
+            if (parent is null)
+                return dict;
+
+            foreach (var (id, name) in parent.Settings.DefaultSlackDestinations.CurValue.Chats)
+                dict.TryAdd(id, name);
+
+            if (parent.Settings.DefaultSlackDestinations.CurValue.IsFromParent)
+            {
+                var par = parent.Parent;
+
+                while (par != null)
+                {
+                    foreach (var (id, name) in GetParentSlackDestinations(par))
+                        dict.TryAdd(id, name);
 
                     par = par.Parent;
                 }

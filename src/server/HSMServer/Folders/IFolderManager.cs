@@ -19,6 +19,8 @@ namespace HSMServer.Folders
 
         event Func<Guid, string> GetChatName;
 
+        event Func<Guid, string> GetSlackDestinationName;
+
 
         Task<bool> TryAdd(FolderAdd folderAdd, out FolderModel folder);
 

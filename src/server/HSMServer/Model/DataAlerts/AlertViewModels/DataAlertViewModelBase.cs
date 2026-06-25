@@ -7,7 +7,6 @@ using HSMCommon.Model;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
-using HSMServer.Core.Notifications;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Model.Controls;
@@ -138,6 +137,8 @@ namespace HSMServer.Model.DataAlerts
             string comment = null;
             string icon = null;
 
+            var pool = MergePools(availableChats, availableSlackDestinations);
+
             foreach (var action in Actions)
             {
                 if (action.Action == ActionType.SendNotification)
@@ -149,14 +150,9 @@ namespace HSMServer.Model.DataAlerts
                         InstantSend = action.ScheduleInstantSend
                     };
 
-                    var pool = action.Kind == NotificationKind.Slack && availableSlackDestinations is not null
-                        ? availableSlackDestinations
-                        : availableChats;
-
                     destination = new PolicyDestinationUpdate(
                         action.Chats?.Where(pool.ContainsKey).ToDictionary(k => k, v => pool[v]) ?? new(0),
-                        action.ChatsMode.ToCore(),
-                        action.Kind);
+                        action.ChatsMode.ToCore());
 
                     comment = action.Comment;
                 }
@@ -167,6 +163,16 @@ namespace HSMServer.Model.DataAlerts
             }
 
             return new(comment, destination, schedule, status, icon);
+        }
+
+
+        private static Dictionary<Guid, string> MergePools(Dictionary<Guid, string> telegram, Dictionary<Guid, string> slack)
+        {
+            var merged = telegram is not null ? new Dictionary<Guid, string>(telegram) : [];
+            if (slack is not null)
+                foreach (var (id, name) in slack)
+                    merged.TryAdd(id, name);
+            return merged;
         }
 
 
@@ -356,7 +362,6 @@ namespace HSMServer.Model.DataAlerts
                     ScheduleRepeatMode = policy.Schedule.RepeatMode.ToClient(),
                     ScheduleInstantSend = policy.Schedule.InstantSend,
                     ChatsMode = policy.Destination.Mode.ToClient(),
-                    Kind = policy.Destination.Kind,
                 };
 
                 if (policy.Destination.IsCustom || policy.Destination.IsFromParentChats)

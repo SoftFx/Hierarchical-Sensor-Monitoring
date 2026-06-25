@@ -46,6 +46,8 @@ namespace HSMServer.Folders
 
         public event Func<Guid, string> GetChatName;
 
+        public event Func<Guid, string> GetSlackDestinationName;
+
 
         public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService)
         {
@@ -109,6 +111,7 @@ namespace HSMServer.Folders
                     await AddProductToFolder(productId, model.Id, info);
 
                 model.GetChatName += GetChatNameById;
+                model.GetSlackDestinationName += GetSlackDestinationNameById;
                 model.ChangesHandler += _journalService.AddRecord;
             }
 
@@ -201,6 +204,7 @@ namespace HSMServer.Folders
             foreach (var (_, folder) in this)
             {
                 folder.GetChatName += GetChatNameById;
+                folder.GetSlackDestinationName += GetSlackDestinationNameById;
                 folder.ChangesHandler += _journalService.AddRecord;
 
                 if (_userManager.TryGetValue(folder.AuthorId, out var author))
@@ -457,5 +461,7 @@ namespace HSMServer.Folders
 
 
         private string GetChatNameById(Guid id) => GetChatName?.Invoke(id);
+
+        private string GetSlackDestinationNameById(Guid id) => GetSlackDestinationName?.Invoke(id);
     }
 }

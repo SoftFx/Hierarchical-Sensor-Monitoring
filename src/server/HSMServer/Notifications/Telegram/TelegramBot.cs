@@ -184,9 +184,6 @@ namespace HSMServer.Notifications
 
                 foreach (var alert in message)
                 {
-                    if (alert.Destination.Kind != NotificationKind.Telegram)
-                        continue;
-
                     var chatIds = alert.Destination.Chats;
 
                     foreach (var chatId in chatIds)

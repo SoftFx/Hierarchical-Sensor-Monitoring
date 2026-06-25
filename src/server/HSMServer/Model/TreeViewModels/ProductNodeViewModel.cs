@@ -44,6 +44,7 @@ namespace HSMServer.Model.TreeViewModel
             base.Update(model);
 
             _ = DefaultChats.FromModel(model.Settings.DefaultChats.CurValue);
+            _ = DefaultSlackDestinations.FromModel(model.Settings.DefaultSlackDestinations.CurValue);
         }
 
 

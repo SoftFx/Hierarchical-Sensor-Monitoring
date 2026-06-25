@@ -23,6 +23,9 @@ namespace HSMServer.Notifications
         public SlackDestinationsManager(IDatabaseCore database) => _database = database;
 
 
+        public string GetSlackDestinationName(Guid id) => this.GetValueOrDefault(id)?.Name;
+
+
         protected override SlackDestination FromEntity(SlackDestinationEntity entity) => new(entity);
     }
 }

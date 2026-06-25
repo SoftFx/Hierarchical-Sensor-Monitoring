@@ -13,6 +13,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public PolicyDestinationSettings DefaultChats { get; init; }
 
+        public PolicyDestinationSettings DefaultSlackDestinations { get; init; }
+
 
         [SetsRequiredMembers]
         public ProductUpdate() : base() { }

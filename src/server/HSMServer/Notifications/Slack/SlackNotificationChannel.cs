@@ -53,18 +53,12 @@ namespace HSMServer.Notifications
             {
                 foreach (var alert in message)
                 {
-                    if (alert.Destination.Kind != NotificationKind.Slack)
-                        continue;
-
                     var payload = SlackMessageBuilder.BuildPayload(alert);
 
                     foreach (var destinationId in alert.Destination.Chats)
                     {
                         if (!_destinations.TryGetValue(destinationId, out var destination))
-                        {
-                            _logger.Warn($"Slack destination {destinationId} not found for alert {alert.PolicyId}");
                             continue;
-                        }
 
                         if (!destination.SendMessages)
                             continue;

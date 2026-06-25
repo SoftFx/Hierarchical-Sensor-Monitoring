@@ -18,6 +18,17 @@ namespace HSMServer.Extensions
             return string.Join(", ", chats);
         }
 
+        public static string ToNames(this HashSet<Guid> destinationIds, Dictionary<Guid, SlackDestination> availableDestinations)
+        {
+            var destinations = new List<string>(1 << 2);
+
+            foreach (var id in destinationIds)
+                if (availableDestinations.TryGetValue(id, out var destination))
+                    destinations.Add(destination.Name);
+
+            return string.Join(", ", destinations);
+        }
+
         internal static List<TelegramChat> GetGroups(this List<TelegramChat> chats) =>
             chats.GetChats(ConnectedChatType.TelegramGroup);
 

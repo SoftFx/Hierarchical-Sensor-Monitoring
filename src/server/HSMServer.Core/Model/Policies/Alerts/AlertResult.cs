@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.Extensions;
-using HSMServer.Core.Notifications;
 using HSMServer.Core.TreeStateSnapshot.States;
 using System;
 using System.Collections.Generic;
@@ -14,14 +13,11 @@ namespace HSMServer.Core.Model.Policies
 
         public bool AllChats { get; init; }
 
-        public NotificationKind Kind { get; init; }
-
         public AlertDestination(Policy policy)
         {
             var target = policy.TargetChats;
             Chats = new HashSet<Guid>(target.Chats.Keys);
             AllChats = target.IsAllChats;
-            Kind = policy.Destination.Kind;
         }
 
         internal AlertDestination() { }

@@ -42,12 +42,23 @@ The destination now appears in the list with its enabled state, author, and crea
 
 ## Target a destination from an alert action
 
-When authoring an alert (sensor → *Edit info* → *Alerts*), each **send notification** action now has a **Kind** dropdown next to **to**:
+When authoring an alert (sensor → *Edit info* → *Alerts*), each **send notification** action has a single unified destination picker next to **to**. The picker is grouped:
 
-1. Choose **Telegram** to send to Telegram chats (the historical default; pick chats as before).
-2. Choose **Slack** to send to Slack destinations. The chats picker switches to a Slack-destination multi-select.
+1. **Mode sentinels** — `parent telegram chat(s)`, `not initialized destination`, `empty destination`, `all chats`.
+2. **Telegram groups** then **Telegram users** — the chats the folder has access to.
+3. **Slack destinations** — every enabled destination on the server.
 
-For Slack, only enabled destinations are listed. The same action can be duplicated if you need to fan out to both Telegram and Slack — each action targets one kind.
+Pick any mix across groups in one action — a single action can fan out to Telegram chats AND Slack destinations simultaneously. Only enabled Slack destinations are listed.
+
+---
+
+## Default Slack destination per folder/product
+
+Folders and products have a **Slack destination(s)** default setting alongside the existing Telegram **Telegram chat(s)** default. When a sensor alert action uses the *parent telegram chat(s)* / *FromParent* mode, both the parent's default Telegram chats AND the parent's default Slack destinations are pulled in (each channel inherits independently — a product whose Telegram default is *FromParent* but whose Slack default is *Custom* resolves each side through its own chain).
+
+Edit on a product via *Edit info* → general info form (the Slack destination(s) row sits under the Telegram chat(s) row). On folders the value is displayed under general info; the inline editor lives on the product general-info form.
+
+---
 
 ---
 
@@ -60,11 +71,10 @@ For Slack, only enabled destinations are listed. The same action can be duplicat
 
 ## Export and import of alerts
 
-When alerts are exported via *Export alerts*, the export JSON records the `Kind` of each action plus the destination **names** (not webhook URLs). Importing on another server:
+When alerts are exported via *Export alerts*, the export JSON records the destination **names** (not webhook URLs). Telegram chat names and Slack destination names share one namespace in the export. Importing on another server:
 
-1. Resolve Telegram chat names against the target server's Telegram chats.
-2. Resolve Slack destination names against the target server's Slack destinations.
-3. Drop any name that is missing on the target — the alert is still imported without that destination.
+1. Resolve each name against the target server's Telegram chats AND Slack destinations.
+2. Drop any name that is missing on the target — the alert is still imported without that destination.
 
 Recreate the destination on the target server first (same name) if you want the import to retain Slack delivery.
 

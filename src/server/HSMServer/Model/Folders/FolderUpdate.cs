@@ -25,6 +25,8 @@ namespace HSMServer.Model.Folders
 
         public DefaultChatViewModel DefaultChats { get; init; }
 
+        public DefaultSlackDestinationViewModel DefaultSlackDestinations { get; init; }
+
 
         public string Description { get; init; }
 

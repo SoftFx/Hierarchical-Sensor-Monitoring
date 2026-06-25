@@ -1,10 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMCommon.Model;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
-using HSMServer.Core.Notifications;
 using HSMServer.Extensions;
 
 
@@ -48,8 +47,6 @@ namespace HSMServer.Model.DataAlerts
 
         public List<string> Chats { get; set; } = [];
 
-        public string Kind { get; set; } = nameof(NotificationKind.Telegram);
-
         public bool IsDisabled { get; set; }
 
 
@@ -74,11 +71,7 @@ namespace HSMServer.Model.DataAlerts
             ScheduledRepeatMode = policy.Schedule.RepeatMode; // TODO: null if None or Immediatly?
             ScheduledInstantSend = policy.Schedule.InstantSend;
 
-            Kind = policy.Destination.Kind.ToString();
-
-            var destinationPool = policy.Destination.Kind == NotificationKind.Slack && availableSlackDestinations is not null
-                ? availableSlackDestinations
-                : availableChats;
+            var destinationPool = MergePools(availableChats, availableSlackDestinations);
 
             if (_chatsModeToKeyWords.TryGetValue(policy.Destination.Mode, out var keyWord))
                 Chats.Add(keyWord);
@@ -102,10 +95,7 @@ namespace HSMServer.Model.DataAlerts
             PolicyDestinationMode? mode = PolicyDestinationMode.Custom;
             Dictionary<Guid, string> chats = [];
 
-            var kind = Enum.TryParse<NotificationKind>(Kind, out var parsedKind) ? parsedKind : NotificationKind.Telegram;
-            var pool = kind == NotificationKind.Slack && availableSlackDestinations is not null
-                ? availableSlackDestinations
-                : availableChats;
+            var pool = MergePools(availableChats, availableSlackDestinations);
 
             if (Chats is not null)
             {
@@ -147,8 +137,27 @@ namespace HSMServer.Model.DataAlerts
                     RepeatMode = ScheduledRepeatMode,
                     InstantSend = ScheduledInstantSend,
                 },
-                Destination = new PolicyDestinationUpdate(chats, mode ?? PolicyDestinationMode.Custom, kind),
+                Destination = new PolicyDestinationUpdate(chats, mode ?? PolicyDestinationMode.Custom),
             };
+        }
+
+
+        private static Dictionary<Guid, string> MergePools(Dictionary<Guid, string> telegram, Dictionary<Guid, string> slack)
+        {
+            var merged = telegram is not null ? new Dictionary<Guid, string>(telegram) : [];
+            if (slack is not null)
+                foreach (var (id, name) in slack)
+                    merged.TryAdd(id, name);
+            return merged;
+        }
+
+        private static Dictionary<string, Guid> MergePools(Dictionary<string, Guid> telegram, Dictionary<string, Guid> slack)
+        {
+            var merged = telegram is not null ? new Dictionary<string, Guid>(telegram) : [];
+            if (slack is not null)
+                foreach (var (name, id) in slack)
+                    merged.TryAdd(name, id);
+            return merged;
         }
     }
 

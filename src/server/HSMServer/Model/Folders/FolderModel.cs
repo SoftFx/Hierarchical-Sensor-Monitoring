@@ -39,6 +39,8 @@ namespace HSMServer.Model.Folders
 
         public event Func<Guid, string> GetChatName;
 
+        public event Func<Guid, string> GetSlackDestinationName;
+
 
         public FolderModel(FolderEntity entity)
         {
@@ -50,6 +52,7 @@ namespace HSMServer.Model.Folders
             CreationDate = new DateTime(entity.CreationDate);
 
             DefaultChats = LoadDefaultChats(entity.DefaultChatsSettings);
+            DefaultSlackDestinations = LoadDefaultSlackDestinations(entity.DefaultSlackDestinationsSettings);
 
             KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
@@ -72,6 +75,7 @@ namespace HSMServer.Model.Folders
             Description = addModel.Description;
 
             DefaultChats = LoadDefaultChats();
+            DefaultSlackDestinations = LoadDefaultSlackDestinations();
 
             KeepHistory = LoadKeepHistory();
             SelfDestroy = LoadSelfDestroy();
@@ -99,6 +103,9 @@ namespace HSMServer.Model.Folders
 
             if (update.DefaultChats != null)
                 DefaultChats = UpdateSetting(DefaultChats, update.DefaultChats, update.Initiator);
+
+            if (update.DefaultSlackDestinations != null)
+                DefaultSlackDestinations = UpdateSetting(DefaultSlackDestinations, update.DefaultSlackDestinations, update.Initiator);
         }
 
         private TimeIntervalViewModel UpdateSetting(TimeIntervalViewModel currentValue, TimeIntervalViewModel newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(currentValue))] string propName = "", NoneValues none = NoneValues.Never)
@@ -142,6 +149,33 @@ namespace HSMServer.Model.Folders
                     NewValue = GetJournalValue(newChat),
 
                     PropertyName = "Default telegram chat",
+                    Path = Name,
+                });
+            }
+
+            return newValue;
+        }
+
+        private DefaultSlackDestinationViewModel UpdateSetting(DefaultSlackDestinationViewModel currentValue, DefaultSlackDestinationViewModel newValue, InitiatorInfo initiator)
+        {
+            string GetJournalValue((HashSet<Guid> ids, DefaultChatMode mode) value) => value.mode switch
+            {
+                DefaultChatMode.Custom => string.Join(", ", value.ids.Select(i => GetSlackDestinationName?.Invoke(i))),
+                _ => value.mode.GetDisplayName(),
+            };
+
+            var oldDestination = (currentValue.SelectedChats, currentValue.ChatMode);
+            var newDestination = (newValue.SelectedChats, newValue.ChatMode);
+
+            if (oldDestination != newDestination)
+            {
+                ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
+                {
+                    Enviroment = "Folder settings update",
+                    OldValue = GetJournalValue(oldDestination),
+                    NewValue = GetJournalValue(newDestination),
+
+                    PropertyName = "Default slack destination",
                     Path = Name,
                 });
             }
@@ -201,6 +235,7 @@ namespace HSMServer.Model.Folders
                 TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
 
                 DefaultChatsSettings = DefaultChats.ToEntity(GetAvailableChats()),
+                DefaultSlackDestinationsSettings = DefaultSlackDestinations.ToEntity(GetAvailableSlackDestinations()),
 
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
@@ -211,6 +246,18 @@ namespace HSMServer.Model.Folders
             };
 
         internal Dictionary<Guid, string> GetAvailableChats() => TelegramChats.ToDictionary(k => k, v => GetChatName?.Invoke(v));
+
+        internal Dictionary<Guid, string> GetAvailableSlackDestinations()
+        {
+            var dict = new Dictionary<Guid, string>();
+            foreach (var id in DefaultSlackDestinations.SelectedChats)
+            {
+                var name = GetSlackDestinationName?.Invoke(id);
+                if (name is not null)
+                    dict.TryAdd(id, name);
+            }
+            return dict;
+        }
 
         internal FolderModel RecalculateState()
         {
@@ -227,6 +274,13 @@ namespace HSMServer.Model.Folders
             var model = new PolicyDestinationSettings(entity ?? new PolicyDestinationSettingsEntity());
 
             return new DefaultChatViewModel().FromModel(model);
+        }
+
+        private static DefaultSlackDestinationViewModel LoadDefaultSlackDestinations(PolicyDestinationSettingsEntity entity = null)
+        {
+            var model = new PolicyDestinationSettings(entity ?? new PolicyDestinationSettingsEntity());
+
+            return new DefaultSlackDestinationViewModel().FromModel(model);
         }
 
 

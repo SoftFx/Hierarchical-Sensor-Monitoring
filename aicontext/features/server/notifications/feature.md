@@ -1,17 +1,17 @@
 # Feature: Notifications
 
-> Owner: server | Last reviewed: 2026-06-24 | Canonical: yes
-> Scope: Server-side alert notification delivery channels, the destination-kind discriminator on policies, the Slack destination registry UI, and the alert-action destination-kind selector.
+> Owner: server | Last reviewed: 2026-06-25 | Canonical: yes
+> Scope: Server-side alert notification delivery channels, the heterogeneous destination model (Telegram + Slack mixed in one alert action), the Slack destination registry UI, the unified destination picker, and dual-channel FromParent default-destination resolution.
 
 ---
 
 ## Overview
 
-Notifications are how evaluated alerts reach people. Delivery is organized behind an `INotificationChannel` seam so that multiple destination kinds (Telegram today, Slack planned under epic #1144) can coexist without alert evaluation knowing about any specific provider.
+Notifications are how evaluated alerts reach people. Delivery is organized behind an `INotificationChannel` seam so that multiple destination kinds (Telegram, Slack) coexist without alert evaluation knowing about any specific provider.
 
 `NotificationsCenter` owns a read-only list of channels and dispatches two flows through them:
 
-1. **Real-time delivery** — `ITreeValuesCache.NewAlertMessageEvent` fires when an alert message is produced. `NotificationsCenter.DispatchAlertMessage` forwards the `AlertMessage` to every channel's `DeliverAsync`. Each channel is responsible for filtering alerts whose policy destination matches its own `NotificationKind`.
+1. **Real-time delivery** — `ITreeValuesCache.NewAlertMessageEvent` fires when an alert message is produced. `NotificationsCenter.DispatchAlertMessage` forwards the `AlertMessage` to every channel's `DeliverAsync`. Each channel iterates `AlertDestination.Chats` and resolves only the ids its own manager owns (`ITelegramChatsManager` for Telegram, `ISlackDestinationsManager` for Slack). Ids of the other kind are silently skipped — there is no top-level discriminator.
 2. **Periodic flush** — `NotificationsBackgroundService` calls `NotificationsCenter.SendAllMessagesAsync`, which calls `FlushAsync` on every channel (e.g. draining Telegram's per-chat message aggregation).
 
 Telegram-specific concerns (bot lifecycle, inbound update polling, chat-name sync, invitation tokens, per-chat aggregation) stay internal to `TelegramBot`. Only outbound delivery is exposed through `TelegramNotificationChannel`, a thin facade that delegates to `TelegramBot`.
@@ -20,7 +20,7 @@ Telegram-specific concerns (bot lifecycle, inbound update polling, chat-name syn
 
 - `NotificationsCenter` is the only subscriber to `ITreeValuesCache.NewAlertMessageEvent` (it unsubscribes in `DisposeAsync`). Individual channels must not subscribe to the cache event directly.
 - A channel's `DeliverAsync` must not throw — Telegram's implementation keeps the historical internal `try/catch` that logs and swallows errors. Diagnostics surface via the concrete `TelegramBot` events (`MessageSending`, `MessageSended`, `ErrorHandled`), which `DataCollectorWrapper` subscribes to directly; the interface itself carries no events in this revision.
-- `INotificationChannel.Kind` is a `NotificationKind` (`Telegram = 0`, `Slack = 1`). Each channel delivers only alerts whose policy destination `Kind` matches its own; alerts of other kinds are ignored by that channel. (As of this revision all destinations are `Telegram`, so the Telegram channel delivers everything — behavior-preserving.)
+- `INotificationChannel.Kind` is informational metadata (`NotificationKind.Telegram = 0`, `NotificationKind.Slack = 1`) used by diagnostics sensors and future channel-list UIs. It is no longer load-bearing for routing — each channel resolves ids against its own manager's registry, and unmatched ids are skipped without an error event.
 - Telegram delivery, the "Telegram Bot" diagnostics sensors, and the existing folder↔chat event wiring are unchanged end-to-end by the seam introduction.
 
 ## API / Public Contracts
@@ -28,27 +28,26 @@ Telegram-specific concerns (bot lifecycle, inbound update polling, chat-name syn
 | Contract | Location | Notes |
 |---|---|---|
 | `INotificationChannel` | `src/server/HSMServer/Notifications/Channels/INotificationChannel.cs` | `Kind`, `DeliverAsync(AlertMessage)`, `FlushAsync()`. Outbound delivery only. |
-| `NotificationKind` | `src/server/HSMServer.Core/Notifications/NotificationKind.cs` | Enum shared by Core (policy destination) and the app (channels). |
-| `NotificationsCenter` | `src/server/HSMServer/Notifications/NotificationsCenter.cs` | Owns the channel list + cache-event dispatch. |
+| `NotificationKind` | `src/server/HSMServer.Core/Notifications/NotificationKind.cs` | Enum kept as channel metadata; no longer on `PolicyDestination`. |
+| `NotificationsCenter` | `src/server/HSMServer/Notifications/NotificationsCenter.cs` | Owns the channel list + cache-event dispatch. Also wires `IFolderManager.GetSlackDestinationName` to `ISlackDestinationsManager.GetSlackDestinationName`. |
 
 ## Key Files
 
 | File | Purpose |
 |---|---|
-| `src/server/HSMServer/Notifications/Channels/INotificationChannel.cs` | Channel abstraction + (separately) the `NotificationKind` enum lives in Core. |
+| `src/server/HSMServer/Notifications/Channels/INotificationChannel.cs` | Channel abstraction. |
 | `src/server/HSMServer/Notifications/Channels/TelegramNotificationChannel.cs` | Thin facade delegating `DeliverAsync`/`FlushAsync` to `TelegramBot`. |
-| `src/server/HSMServer/Notifications/NotificationsCenter.cs` | Composition root: builds the channel list, subscribes the cache event, dispatches flush. |
+| `src/server/HSMServer/Notifications/NotificationsCenter.cs` | Composition root: builds the channel list, subscribes the cache event, dispatches flush, wires folder-name-lookup events. |
 | `src/server/HSMServer/Notifications/Telegram/TelegramBot.cs` | Telegram sender + bot lifecycle (unchanged surface; `StoreMessage` renamed to `DeliverAsync` and cache subscription moved to `NotificationsCenter`). |
+| `src/server/HSMServer/Notifications/Slack/SlackNotificationChannel.cs` | Slack sender (one POST per `(alert, destination)`). |
 
 ## Storage
 
-`PolicyDestinationEntity` (defined in `src/database/HSMDatabase.AccessManager/DatabaseEntities/PolicyEntity.cs`) gained an additive `string Kind` property. The discriminator is **storage-compatible**:
+`PolicyDestinationEntity` (defined in `src/database/HSMDatabase.AccessManager/DatabaseEntities/PolicyEntity.cs`) **keeps** its `string Kind` property for read-tolerant deserialization of pre-refactor rows, but the field is no longer written or consulted by `PolicyDestination`. Old LevelDB rows continue to work: their chat ids still resolve to the right channel via manager lookup.
 
-- Rows written by older servers have no `Kind` field and deserialize as `null`.
-- `PolicyDestination` parses the entity with `Enum.TryParse<NotificationKind>(entity.Kind, out var k) ? k : NotificationKind.Telegram`, so a missing or empty `Kind` is read as `Telegram`. No migration pass is required; existing rows keep their current meaning.
-- `PolicyDestination.ToEntity()` emits `Kind = Kind.ToString()`.
+`PolicyDestination.Chats` is a heterogeneous `Dictionary<Guid, string>` — a single alert action can deliver to both Telegram chats and Slack destinations simultaneously. Each id inherently resolves to one channel kind based on which manager owns it.
 
-`PolicyDestination.Chats` is unchanged — the same `Dictionary<Guid, string>` is reused for any channel kind (Telegram chat ids today; Slack webhook ids planned).
+`BaseNodeEntity` (parent of `ProductEntity`, `FolderEntity`) gained an additive `PolicyDestinationSettingsEntity DefaultSlackDestinationsSettings` parallel to the existing `DefaultChatsSettings`. Old rows deserialize as a default instance → no Slack default → `PolicyDestinationMode.FromParent` resolves to empty for Slack on legacy data.
 
 ## Data Flow
 
@@ -56,7 +55,12 @@ Telegram-specific concerns (bot lifecycle, inbound update polling, chat-name syn
 Alert evaluated -> TreeValuesCache raises NewAlertMessageEvent(AlertMessage)
   -> NotificationsCenter.DispatchAlertMessage
        -> for each INotificationChannel: await DeliverAsync(AlertMessage)
-            -> TelegramNotificationChannel -> TelegramBot.DeliverAsync (per-chat send or aggregation)
+            -> TelegramNotificationChannel -> TelegramBot.DeliverAsync
+                 (for each chatId in AlertDestination.Chats:
+                    _chatsManager.TryGetValue(chatId, out chat) ? send : skip)
+            -> SlackNotificationChannel.DeliverAsync
+                 (for each destinationId in AlertDestination.Chats:
+                    _destinations.TryGetValue(destinationId, out dest) ? POST : skip)
 
 NotificationsBackgroundService (timer) -> NotificationsCenter.SendAllMessagesAsync
   -> for each INotificationChannel: await FlushAsync()
@@ -65,16 +69,14 @@ NotificationsBackgroundService (timer) -> NotificationsCenter.SendAllMessagesAsy
 
 ## Tests
 
-- `src/tests/HSMServer.Core.Tests/Notifications/PolicyDestinationKindTests.cs` — `Kind` round-trips through `ToEntity()` -> ctor; missing/empty `Kind` deserializes to `Telegram`; `Slack` and `Telegram` values survive the round-trip.
+- `src/tests/HSMServer.Core.Tests/Notifications/SlackChannelTests.cs` — verifies heterogeneous dispatch: given an `AlertMessage` whose `Destination.Chats` mixes Slack and non-Slack Guids, the channel POSTs only to the Slack Guids. Also covers retry behavior (5xx retries, 4xx terminal), disabled destinations, unknown ids, exception swallowing.
+- `src/tests/HSMServer.Core.Tests/Notifications/PolicyTargetChatsHeterogeneousTests.cs` — verifies `Policy.TargetChats` resolves both the parent's default Telegram chat AND default Slack destination when `ChatsMode.FromParent`, and walks the grandparent chain for both channels.
+- `src/tests/HSMServer.Core.Tests/Notifications/DefaultSlackDestinationsRoundTripTests.cs` — round-trips the new `DefaultSlackDestinations` setting through `ProductModel.ToEntity`/ctor; verifies legacy entities without the field default to `NotInitialized`; verifies `ProductUpdate.DefaultSlackDestinations` flows into `Settings.DefaultSlackDestinations`.
 - Existing destination/policy tests stay green with no assertion changes: `TreeValuesCacheTests/TemplateConcurrencyTests.cs`, `TreeValuesCacheTests/AlertTemplatePartialFailureTests.cs`, `Controllers/HomeControllerAddDataPolicyTests.cs`.
 
-## Slack delivery (PR3 scope)
+## Slack delivery
 
-`SlackNotificationChannel : INotificationChannel` (`src/server/HSMServer/Notifications/Slack/SlackNotificationChannel.cs`) is wired into `NotificationsCenter._channels` alongside the Telegram channel. Each channel filters by `Kind` so Telegram and Slack do not cross-fire.
-
-### Destination filtering
-
-`AlertDestination` gained a `NotificationKind Kind` property, populated from `policy.Destination.Kind` in the `AlertDestination(Policy)` ctor. `TelegramBot.DeliverAsync` skips alerts whose `Kind != Telegram`; `SlackNotificationChannel.DeliverAsync` skips alerts whose `Kind != Slack`. This is the only behavior change to the Telegram path: previously Telegram delivered every alert regardless of `Kind`, but since pre-PR3 policies are all `Telegram`, no observable behavior regresses.
+`SlackNotificationChannel : INotificationChannel` (`src/server/HSMServer/Notifications/Slack/SlackNotificationChannel.cs`) is wired into `NotificationsCenter._channels` alongside the Telegram channel. Each channel resolves only the ids it can resolve — no top-level discriminator.
 
 ### HTTP delivery contract
 
@@ -102,11 +104,11 @@ NotificationsBackgroundService (timer) -> NotificationsCenter.SendAllMessagesAsy
 
 ### Storage
 
-Unchanged from PR2. `SlackDestinationEntity` rows under the `"SlackDestinations"` LevelDB key, accessed via `ISlackDestinationsManager`. The channel resolves webhook URLs from this registry at delivery time.
+`SlackDestinationEntity` rows under the `"SlackDestinations"` LevelDB key, accessed via `ISlackDestinationsManager`. The channel resolves webhook URLs from this registry at delivery time. `ISlackDestinationsManager.GetSlackDestinationName(Guid)` provides name lookup, wired to `IFolderManager.GetSlackDestinationName` so folder default-Slack-destination journal entries render names instead of ids.
 
-## Management UI + alert-action selector (PR4 scope)
+## Management UI (PR4 scope)
 
-PR4 closes epic #1144 by exposing Slack destinations to operators and letting each alert action pick its delivery kind.
+PR4 closes epic #1144. The original PR4 introduced `NotificationKind Kind` as a top-level discriminator on `PolicyDestination`; the refactor (this revision) drops `Kind` entirely in favor of heterogeneous destinations — one alert action can deliver to both Telegram chats and Slack destinations simultaneously.
 
 ### Slack destination CRUD
 
@@ -124,32 +126,57 @@ UI surface:
 - `Views/Configuration/_Slack.cshtml` lists destinations (Name, masked Webhook URL, Enabled badge, Author, Created, Edit/Remove actions) and links to `EditSlackDestination?id=Guid.Empty` for "Add new destination".
 - `Views/Notifications/EditSlackDestination.cshtml` is the add/edit form (Name, Webhook URL with `type="url"`, Description, EnableMessages switch). Remove uses `_ConfirmationModal.cshtml` and POSTs to `RemoveSlackDestination` via AJAX.
 
-### Alert-action destination-kind selector
+### Unified destination picker
 
-`ActionViewModel` (`src/server/HSMServer/Model/DataAlerts/ActionViewModel.cs`) gained:
+`Views/Home/Alerts/_ActionBlock.cshtml` renders a single `<select name="Chats" multiple>` next to "to" in the send-notification action block. Options are grouped:
 
-- `NotificationKind Kind { get; set; }` (default `Telegram`) — form-posted from the action block UI.
-- `SlackDestinationIsSelected(SlackDestination destination)` — helper mirroring the existing `ChatIsSelected(TelegramChat)`.
+1. Mode sentinels (`FromParent`, `NotInitialized`, `Empty`, `All`)
+2. Divider → Telegram groups
+3. Divider → Telegram users
+4. Divider → Slack destinations (filtered to `SendMessages == true`)
 
-`DataAlertViewModelBase.GetActions` resolves the right id→name dictionary per action (`availableSlackDestinations` when `action.Kind == Slack`, otherwise `availableChats`), then builds `PolicyDestinationUpdate(chats, mode, action.Kind)`. `DataAlertViewModel(Policy, NodeViewModel)` reads `Kind = policy.Destination.Kind` when reconstructing an action from an existing policy.
+Operators can mix selections across all groups in one action. `_AlertsFormCollection.cshtml`'s `setFormDataAlertsSendNotificationChats` already classifies mode-sentinel vs real id while reading the select, so the merged picker plugs in with no JS change. The picker uses `@inject ITelegramChatsManager ChatsManager` + `@inject ISlackDestinationsManager SlackDestinations`.
 
-Controller call sites that previously passed only Telegram chats now also build a Slack-destinations dictionary and pass it through:
+`ActionViewModel` exposes two selection-test helpers (`ChatIsSelected(TelegramChat)`, `SlackDestinationIsSelected(SlackDestination)`) so the partial can mark pre-selected options. There is no `Kind` field — heterogeneous ids live in the same `HashSet<Guid> Chats`.
 
-- `HomeController.UpdateSensorInfo` — `_slackDestinationsManager.GetValues().Where(d => d.SendMessages).ToDictionary(Id, Name)`.
-- `AlertTemplatesController.AlertTemplate` — same dictionary, threaded into `DataAlertTemplateViewModel.ToModel`.
-- `AlertsController.ExportModelToFile` / `ImportAlertsToProduct` — see "Alert export/import" below.
+### Dual-channel FromParent
 
-### _ActionBlock.cshtml UI
+`Policy.TargetChats` walks the parent chain when `ChatsMode.FromParent` and resolves defaults for BOTH channels in parallel:
 
-`Views/Home/Alerts/_ActionBlock.cshtml` renders a `Kind` dropdown next to "to" in the send-notification action block. The Telegram chats `<select>` and a new Slack destinations `<select>` are both rendered, but the inactive one is `disabled` (so it is not submitted) and wrapped in a `d-none` wrapper. Initial disabled/hidden state is server-rendered from `Model.Kind`; a jQuery `change` handler on `.notification-kind-select` toggles visibility + `disabled` when the operator switches kind. Both selects use `name="Chats"` — only the enabled one contributes to the form post.
+- `Policy.GetParentChats(ProductModel)` — walks `parent.Settings.DefaultChats.CurValue` (Telegram)
+- `Policy.GetParentSlackDestinations(ProductModel)` — walks `parent.Settings.DefaultSlackDestinations.CurValue` (Slack)
 
-Slack destinations are injected via `@inject ISlackDestinationsManager SlackDestinations` (mirroring the existing `@inject ITelegramChatsManager ChatsManager`). The Slack picker filters to destinations where `SendMessages == true` (i.e., `EnableMessages` is on); disabled destinations are not selectable for new alerts.
+Both helpers honor `IsFromParent` recursion — a product with `DefaultChats.Mode = FromParent` looks up to its parent, separately for each channel.
+
+The two parent-walk helpers feed one heterogeneous `Dictionary<Guid, string>`. Callers don't care which channel each id belongs to — the delivery channels resolve them individually.
+
+### Default Slack destination setting
+
+Mirrors the existing Telegram `DefaultChats` infrastructure:
+
+- `NodeSettingsCollection.DefaultSlackDestinations` (`DestinationSettingProperty`) parallel to `DefaultChats`.
+- `ProductUpdate.DefaultSlackDestinations` (`PolicyDestinationSettings`) parallel to `DefaultChats`.
+- `BaseNodeEntity.DefaultSlackDestinationsSettings` (`PolicyDestinationSettingsEntity`) parallel to `DefaultChatsSettings` — inherited by `ProductEntity` and `FolderEntity`.
+- `ProductModel` ctor / `ToEntity` / `Settings.Update` plumb the new field through.
+- `FolderModel.DefaultSlackDestinations` (`DefaultSlackDestinationViewModel`) — loaded from entity in both ctors, persisted in `ToEntity`, updated via `FolderUpdate.DefaultSlackDestinations`.
+- `BaseNodeViewModel.DefaultSlackDestinations` (`DefaultSlackDestinationViewModel`) — lazy-initialized in `NodeViewModel` ctor and refreshed in `ProductNodeViewModel.Update`.
+- `DefaultSlackDestinationViewModel` mirrors `DefaultChatViewModel` (`FromModel` / `ToEntity` / `ToUpdate` / `GetDisplayDestinationName` / parent-traversal helpers) but typed for `SlackDestination`.
+- `IFolderManager.GetSlackDestinationName` event — wired in `NotificationsCenter.ConnectFoldersAndChats` to `ISlackDestinationsManager.GetSlackDestinationName`, so journal records and folder storage lookups can resolve names.
+
+### Default-destination UI partial
+
+`Views/Shared/_DefaultSlackDestination.cshtml` mirrors `_DefaultChat.cshtml` (mode sentinels + flat Slack destinations list, no Groups/Users split). Wired into:
+
+- `Views/Product/_EditProductGeneralInfo.cshtml` (inline editable on product general info).
+- `Views/Home/_GeneralInfo.cshtml` (read-only display via `NodeInfoBaseViewModel`).
+
+`ProductController.EditProduct` was extended to inject `ISlackDestinationsManager` and pass it to `ProductGeneralInfoViewModel.ToUpdate`. The `DefaultSlackDestinations` field on `NodeInfoBaseViewModel` is populated from the model on read; on submit it round-trips back through `ProductUpdate.DefaultSlackDestinations`.
 
 ### Alert export/import
 
-`AlertExportViewModel` gained a serialized `string Kind` field (defaults to `"Telegram"` so old export files keep their pre-PR4 meaning). On export, the ctor picks the right id→name pool per `policy.Destination.Kind`; on import, `ToUpdate` parses `Kind` back, resolves chat names against the matching pool, and emits `PolicyDestinationUpdate(chats, mode, kind)`. `AlertsController` builds both pools (Telegram chat names + Slack destination names) and passes them through.
+`AlertExportViewModel` no longer carries `Kind`. The ctor and `ToUpdate` both merge Telegram + Slack name pools via a private `MergePools` helper — exported chat names from either channel survive import as long as the target server has the destination registered by name. Missing names are silently dropped (matching pre-refactor behavior for missing Telegram chats).
 
-Slack destinations themselves are **not** migrated by alert export/import — only the references by name. If a target server is missing a referenced Slack destination, the alert is imported with that destination silently dropped from `Chats` (matching how missing Telegram chats are already handled). Use the configuration UI on the target server to recreate the destination first.
+Slack destinations themselves are **not** migrated by alert export/import — only the references by name. Use the configuration UI on the target server to recreate the destination first.
 
 ### Role filter
 

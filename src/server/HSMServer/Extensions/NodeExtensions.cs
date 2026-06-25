@@ -60,6 +60,12 @@ namespace HSMServer.Extensions
         }
 
 
+        internal static Dictionary<Guid, string> GetAvailableSlackDestinations(this BaseNodeViewModel node, ISlackDestinationsManager destinationsManager)
+            => destinationsManager.GetValues()
+                .Where(d => d.SendMessages)
+                .ToDictionary(d => d.Id, d => d.Name);
+
+
         internal static bool HasUnconfiguredAlerts(this SensorNodeViewModel sensor)
         {
             bool IsUnconfigured(DataAlertViewModelBase alert) =>

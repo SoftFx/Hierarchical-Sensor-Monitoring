@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Extensions;
-using HSMServer.Core.Notifications;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
@@ -64,8 +63,6 @@ namespace HSMServer.Model.DataAlerts
         public bool ScheduleInstantSend { get; set; }
 
         public ChatsMode ChatsMode { get; set; }
-
-        public NotificationKind Kind { get; set; } = NotificationKind.Telegram;
 
         public HashSet<Guid> Chats { get; set; } = new();
 

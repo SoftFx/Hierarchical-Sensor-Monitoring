@@ -51,7 +51,7 @@ namespace HSMServer.Core.Model
         public ProductModel(ProductEntity entity) : base(entity)
         {
             if (entity.Settings is not null)
-                Settings.SetSettings(entity.Settings, entity.DefaultChatsSettings);
+                Settings.SetSettings(entity.Settings, entity.DefaultChatsSettings, entity.DefaultSlackDestinationsSettings);
 
             State = (ProductState)entity.State;
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
@@ -132,6 +132,7 @@ namespace HSMServer.Core.Model
             Description = Description,
             CreationDate = CreationDate.Ticks,
             DefaultChatsSettings = Settings.DefaultChats.ToEntity(),
+            DefaultSlackDestinationsSettings = Settings.DefaultSlackDestinations.ToEntity(),
             Settings = Settings.ToEntity(),
             TTLPolicies = Policies.TTLPolicies.Select(p => p.ToEntity()).ToList(),
             ChangeTable = ChangeTable.ToEntity(),

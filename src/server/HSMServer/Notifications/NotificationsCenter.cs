@@ -23,13 +23,13 @@ namespace HSMServer.Notifications
 
 
         public NotificationsCenter(ITelegramChatsManager telegramChats, IFolderManager folderManager, ITreeValuesCache cache, IServerConfig config,
-                                   SlackNotificationChannel slackChannel)
+                                   SlackNotificationChannel slackChannel, ISlackDestinationsManager slackDestinations)
         {
             _telegramChatsManager = telegramChats;
             _folderManager = folderManager;
             _cache = cache;
 
-            ConnectFoldersAndChats();
+            ConnectFoldersAndChats(slackDestinations);
 
             TelegramBot = new(telegramChats, folderManager, config.Telegram);
             SlackChannel = slackChannel;
@@ -76,7 +76,7 @@ namespace HSMServer.Notifications
                 await channel.DeliverAsync(message);
         }
 
-        private void ConnectFoldersAndChats()
+        private void ConnectFoldersAndChats(ISlackDestinationsManager slackDestinations)
         {
             _telegramChatsManager.ConnectChatToFolder += _folderManager.AddChatToFolder;
             _telegramChatsManager.Removed += _folderManager.RemoveChatHandler;
@@ -85,6 +85,7 @@ namespace HSMServer.Notifications
             _folderManager.AddFolderToChats += _telegramChatsManager.AddFolderToChats;
             _folderManager.Removed += _telegramChatsManager.RemoveFolderHandler;
             _folderManager.GetChatName += _telegramChatsManager.GetChatName;
+            _folderManager.GetSlackDestinationName += slackDestinations.GetSlackDestinationName;
 
             foreach (var folder in _folderManager.GetValues())
                 foreach (var chatId in folder.TelegramChats)

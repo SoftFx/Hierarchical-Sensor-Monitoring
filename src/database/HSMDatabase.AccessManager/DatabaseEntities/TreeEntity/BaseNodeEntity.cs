@@ -11,6 +11,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public PolicyDestinationSettingsEntity DefaultChatsSettings { get; init; } = new();
 
+        public PolicyDestinationSettingsEntity DefaultSlackDestinationsSettings { get; init; } = new();
+
 
         public required string Id { get; init; }
 

@@ -30,6 +30,10 @@
             <partial name="~/Views/Shared/_DefaultChat.cshtml" for="DefaultChats" />
         </div>
 
+        <div class="d-flex flex-row text-nowrap align-items-center ms-3">
+            <partial name="~/Views/Shared/_DefaultSlackDestination.cshtml" for="DefaultSlackDestinations" />
+        </div>
+
         <div class="d-flex flex-row text-nowrap align-items-center ms-3 mt-1">
             <span class="meta-info-label">Inactivity Period</span>
             <span id="node_ttlLabel" class="meta-info-value">@Model.ExpectedUpdateInterval.DisplayValue</span>
