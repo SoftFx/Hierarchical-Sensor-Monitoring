@@ -5667,7 +5667,7 @@ hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* col
         if (collector->impl->AddDefaultSensor(HSM_DEFAULT_COLLECTOR_VERSION, &params, collector_version) == HSM_RESULT_OK)
         {
             const std::string version = std::to_string(HSM_COLLECTOR_VERSION_MAJOR) + "." +
-                std::to_string(HSM_COLLECTOR_VERSION_MINOR) + "." + std::to_string(HSM_COLLECTOR_VERSION_PATCH);
+                                        std::to_string(HSM_COLLECTOR_VERSION_MINOR) + "." + std::to_string(HSM_COLLECTOR_VERSION_PATCH);
             EmitVersionStartValue(collector->impl.get(), collector_version, version.c_str());
         }
     }
