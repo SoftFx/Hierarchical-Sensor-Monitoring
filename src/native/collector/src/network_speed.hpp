@@ -13,9 +13,9 @@ namespace hsm::collector
     /// One interface's speed sample (MB/sec since last call).
     struct InterfaceSpeed
     {
-        std::string name;        // Interface alias (UTF-8), matches .NET NetworkInterface.Name
-        double rx_mb_per_sec;   // Bytes received / elapsed / 1 MiB
-        double tx_mb_per_sec;   // Bytes sent    / elapsed / 1 MiB
+        std::string name;     // Interface alias (UTF-8), matches .NET NetworkInterface.Name
+        double rx_mb_per_sec; // Bytes received / elapsed / 1 MiB
+        double tx_mb_per_sec; // Bytes sent    / elapsed / 1 MiB
     };
 
 #ifdef _WIN32

@@ -109,8 +109,13 @@ add_library(hsm_collector_core STATIC
 
 # Windows live metric readers (#1164) link PDH (perf counters) + Win32.
 # Network speed uses GetIfTable2 from iphlpapi (#1189).
+# iphlpapi is PUBLIC: GetIfTable2/FreeMibTable are called from network_speed.cpp whose object
+# is pulled into the static lib; Conan/vcpkg consumers must link iphlpapi to resolve them.
+# pdh stays PRIVATE: it is only used when the live metric-source factory is active (no-op
+# default), so the pdh object files are not linked into typical consumers.
 if(WIN32)
-    target_link_libraries(hsm_collector_core PRIVATE pdh iphlpapi)
+    target_link_libraries(hsm_collector_core PUBLIC iphlpapi)
+    target_link_libraries(hsm_collector_core PRIVATE pdh)
     # GetIfTable2 / MIB_IF_TABLE2 require NTDDI_VERSION >= Vista. Set Windows 10 target so
     # all modern Win32 APIs are available without per-file version guard hacks.
     target_compile_definitions(hsm_collector_core PRIVATE
