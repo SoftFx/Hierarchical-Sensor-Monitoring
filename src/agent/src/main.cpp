@@ -2,6 +2,8 @@
 //   (no args) / --service   run as an SCM service (StartServiceCtrlDispatcher)
 //   --console               run AgentRuntime in the foreground (Ctrl-C to stop) for debugging
 //   --install / --uninstall register/remove the auto-start service (requires elevation)
+//   --apply-update          detached helper: waits for service to stop, swaps binaries, restarts
+//                           with health gate (epic #1174)
 //   --config <path>         override the config.json location (default %ProgramData%\HSM Agent)
 //
 // The single signed binary is identical across every product download; only the bundled config.json
@@ -10,6 +12,7 @@
 namespace hsm { namespace agent { const char* BuildTimestamp(); } }
 
 #include "agent/agent_runtime.hpp"
+#include "agent/apply_update.hpp"
 #include "agent/config.hpp"
 #include "agent/event_log.hpp"
 #include "agent/file_logger.hpp"
@@ -58,6 +61,7 @@ namespace
                      "  --console      run in the foreground for debugging (Ctrl-C to stop)\n"
                      "  --install      register the auto-start service (requires elevation)\n"
                      "  --uninstall    remove the service (requires elevation)\n"
+                     "  --apply-update apply a staged update (spawned automatically by the agent)\n"
                      "  --config <p>   use config file <p> (default: %ProgramData%\\HSM Agent\\config.json)\n"
                      "  --version      print version and exit\n";
     }
@@ -108,7 +112,7 @@ int wmain(int argc, wchar_t** argv)
     for (int i = 1; i < argc; ++i)
     {
         const std::wstring arg = argv[i];
-        if (arg == L"--install" || arg == L"--uninstall" || arg == L"--console" || arg == L"--service")
+        if (arg == L"--install" || arg == L"--uninstall" || arg == L"--console" || arg == L"--service" || arg == L"--apply-update")
         {
             mode = arg;
         }
@@ -139,6 +143,8 @@ int wmain(int argc, wchar_t** argv)
         return InstallService();
     if (mode == L"--uninstall")
         return UninstallService();
+    if (mode == L"--apply-update")
+        return RunApplyUpdate();
 
     // Console + service runs must be single-instance so they never double-send. A Global mutex may
     // fail for a non-elevated user (no SeCreateGlobalPrivilege); in that case skip the guard rather

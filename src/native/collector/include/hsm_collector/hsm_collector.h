@@ -454,9 +454,12 @@ typedef struct hsm_default_sensor_params_t
     const char* service_name;    /* RESERVED (not yet honored): service-status resolution */
     int is_host_service;         /* RESERVED (not yet honored): service-status registers under .module
                                     regardless — non-host placement lands with the live readers */
-    const char* product_version; /* RESERVED: only gates WHETHER the product-version sensor registers
-                                    (in hsm_collector_add_all_module_sensors); the value has no
-                                    destination until live values land */
+    const char* product_version; /* The connected application's version. In
+                                    hsm_collector_add_all_module_sensors it both gates WHETHER the
+                                    product-version sensor registers (NULL/empty => skip) and is parsed
+                                    + emitted as the sensor's value ("M.m[.b[.r]]") with a "Start: <utc>"
+                                    comment. Ignored by hsm_collector_add_default_sensor (no emission
+                                    there). */
 } hsm_default_sensor_params_t;
 
 hsm_default_sensor_params_t hsm_default_sensor_params_default(void);
@@ -803,6 +806,9 @@ const char* hsm_collector_last_error(const hsm_collector_t* collector);
    samples all processes at intervals of `period_ms` milliseconds, filters to the `count` busiest
    above `min_percent`% of total machine CPU, and posts a Double sensor for each at path
    "Top CPU processes/<exe-name>". Call BEFORE Start().
+   The number of distinct per-process sensors is capped (max(count * 8, 64)) so a host that churns
+   through many distinctly named processes cannot grow the sensor namespace without bound or exhaust
+   the global MaxSensors cap; once the cap is reached, newly seen process names are skipped.
    Returns HSM_RESULT_INVALID_ARGUMENT if count <= 0 or period_ms <= 0.
    Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
 hsm_result_t hsm_collector_enable_top_cpu_sensors(

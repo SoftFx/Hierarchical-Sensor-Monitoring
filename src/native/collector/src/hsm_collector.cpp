@@ -2241,6 +2241,7 @@ namespace
             // RegistrationJson is immutable, so reading it under the collector lock keeps the
             // one-way lock order. Map iteration order is unspecified — fixtures assert counts.
             std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
+            std::vector<std::string> start_values;
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
@@ -2262,6 +2263,10 @@ namespace
                     sensors_snapshot.push_back(sensor.second);
                     registrations_.push_back(sensor.second->RegistrationJson());
                 }
+
+                // Take the one-shot Start values queued during pre-Start registration; enqueued below
+                // once the dispatcher is up (the state is Starting now, so the data gate accepts them).
+                start_values.swap(deferred_start_values_);
             }
 
             NotifyLifecycle(CollectorState::Starting);
@@ -2298,6 +2303,10 @@ namespace
             StartScheduler();
             StartTopCpuSampler();
             StartNetworkSpeedSampler();
+
+            // Drain the one-shot Start values (e.g. product/collector version) now the worker is up.
+            for (auto& json : start_values)
+                Enqueue(std::move(json));
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -2885,6 +2894,33 @@ namespace
             return HSM_RESULT_OK;
         }
 
+        // Publish a one-shot value on Start (mirrors managed SensorBase.StartAsync). Default sensors are
+        // registered while the collector is Stopped (the agent adds them before Start), where the data
+        // gate drops live values — so when not yet accepting data, the formatted payload is held and
+        // drained on the next Start. If the collector is already running (sensor added live), it is
+        // enqueued immediately. The payload is formatted now, so its timestamp is registration time
+        // (~Start), matching managed, which stamps StartTime at options creation.
+        hsm_result_t PostStartValue(
+            const std::string& path,
+            hsm_sensor_type_t type,
+            const std::string& value_json,
+            hsm_sensor_status_t status,
+            const std::string& comment)
+        {
+            std::string outgoing = OutgoingValueJson(path, type, value_json, status, TrimComment(comment));
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (!CanAcceptDataLocked())
+                {
+                    deferred_start_values_.push_back(std::move(outgoing));
+                    return HSM_RESULT_OK;
+                }
+            }
+
+            Enqueue(std::move(outgoing));
+            return HSM_RESULT_OK;
+        }
+
         // Bar publish path (roll-on-add): gated on CanAcceptData exactly like an instant value —
         // a bar that closes while the collector is stopped is dropped, not queued.
         void EnqueueIfRunning(std::string json)
@@ -3409,6 +3445,18 @@ namespace
             std::map<std::string, std::shared_ptr<NativeSensor>> sensor_cache;
             const auto period = std::chrono::milliseconds(top_cpu_period_ms_);
 
+            // Dedicated cap on the number of distinct "Top CPU processes/<name>" sensors this
+            // feature may ever create. The server sensor registry (sensors_) is permanent — there
+            // is no delete-sensor API — so without a bound a host that churns through distinctly
+            // named processes (CI/build agents, batch jobs) would grow the namespace without limit
+            // and could silently consume the global MaxSensors cap, starving legitimately-busy
+            // processes. 8x the per-tick count (min 64) leaves generous headroom for normal
+            // rotation of busy processes while containing runaway churn. Once the cap is reached,
+            // new names are skipped; already-tracked names keep updating.
+            const size_t max_tracked_names =
+                std::max<size_t>(static_cast<size_t>(top_cpu_count_) * 8, 64);
+            bool cap_logged = false;
+
             sampler.Sample(); // seed baseline — first call returns empty map, so first post is a true delta
 
             while (true)
@@ -3428,15 +3476,37 @@ namespace
                         auto it = sensor_cache.find(usage.name);
                         if (it == sensor_cache.end())
                         {
+                            // Dedicated namespace cap: stop creating new per-process sensors once
+                            // the bound is reached so transient processes can't grow the registry
+                            // without limit or exhaust the global MaxSensors cap. Log once.
+                            if (sensor_cache.size() >= max_tracked_names)
+                            {
+                                if (!cap_logged)
+                                {
+                                    LogError("top-CPU: tracked-process cap (" +
+                                             std::to_string(max_tracked_names) +
+                                             ") reached; new process names will not get a sensor.");
+                                    cap_logged = true;
+                                }
+                                continue;
+                            }
+
                             // Creating a sensor from this background thread (after Start) is safe:
                             // CollectorImpl::CreateSensor serializes on mutex_, and the scheduler
                             // reads the registry only via a snapshot under the same lock.
+                            // Path line: the resolved exe path, or an explicit "system process" note
+                            // when QueryFullProcessImageNameW was denied (protected/system process such
+                            // as vmmemWSL / System), so an empty path reads as intentional, not a bug.
+                            // Mirrors the managed WindowsTopCpuMonitor description. ASCII-only literal
+                            // (plain '-', not an em-dash): this string is the sensor description sent on
+                            // the wire, and MSVC without /utf-8 reads narrow literals in the system code
+                            // page, so a non-ASCII byte here could turn into mojibake on a non-UTF-8 host.
                             RegistrationOptions opts = InstantRegistrationDefaults();
                             opts.description =
                                 "Top **" + std::to_string(top_cpu_count_) + "** CPU consumers"
                                                                             " by % of machine CPU" +
                                 (usage.full_path.empty()
-                                     ? ""
+                                     ? "\n\n**Path:** _(system process - path unavailable)_"
                                      : "\n\n**Path:** `" + usage.full_path + "`");
                             std::shared_ptr<NativeSensor> sensor;
                             if (CreateSensor(("Top CPU processes/" + usage.name).c_str(),
@@ -3734,6 +3804,11 @@ namespace
         std::vector<std::shared_ptr<AlertData>> alert_data_; // alert handles, owned for the collector's lifetime
         std::vector<std::string> sent_values_;
         std::vector<std::string> registrations_;
+        // One-shot values queued (pre-formatted wire/record JSON) while not yet accepting data, drained
+        // into the send queue on the next Start. Lets a sensor registered pre-Start emit an initial
+        // value on connect (mirrors managed SensorBase.StartAsync) instead of having it dropped by the
+        // data gate. Guarded by mutex_.
+        std::vector<std::string> deferred_start_values_;
         mutable std::string last_error_;
 
         std::mutex queue_mutex_;
@@ -5685,9 +5760,81 @@ hsm_result_t hsm_collector_add_all_network_sensors(hsm_collector_t* collector)
     return collector != nullptr ? AddGroup(collector, kNetworkGroup) : HSM_RESULT_INVALID_ARGUMENT;
 }
 
+namespace
+{
+    // Parse a .NET-style version string ("M.m[.b[.r]]") into components. Major/minor default to 0,
+    // build/revision to -1 (absent) so VersionString reproduces the original shape. Parsing stops at
+    // the first non-digit/non-dot component; per-component values saturate at INT32_MAX. Non-throwing
+    // and allocation-free — product versions are well-formed, but a malformed string must not throw.
+    void ParseVersionString(const char* text, int32_t& major, int32_t& minor, int32_t& build, int32_t& revision)
+    {
+        int32_t parts[4] = { 0, 0, -1, -1 };
+        if (text != nullptr)
+        {
+            const char* p = text;
+            for (int idx = 0; idx < 4 && *p >= '0' && *p <= '9'; ++idx)
+            {
+                int64_t value = 0;
+                while (*p >= '0' && *p <= '9')
+                {
+                    value = value * 10 + (*p - '0');
+                    if (value > INT32_MAX)
+                        value = INT32_MAX;
+                    ++p;
+                }
+                parts[idx] = static_cast<int32_t>(value);
+                if (*p != '.')
+                    break;
+                ++p; // consume the separator
+            }
+        }
+        major = parts[0];
+        minor = parts[1];
+        build = parts[2];
+        revision = parts[3];
+    }
+
+    // Queue the one-shot "<version>" value with a "Start: <utc>" comment for a freshly registered
+    // version sensor, mirroring the managed ProductVersionSensor.StartAsync. Routed through
+    // PostStartValue because registration happens pre-Start (the agent adds sensors before Start),
+    // where the data gate would drop a direct send — the value is held and emitted on Start instead.
+    void EmitVersionStartValue(NativeCollector* impl, const std::shared_ptr<NativeSensor>& sensor, const char* version_text)
+    {
+        if (impl == nullptr || !sensor)
+            return;
+
+        int32_t major = 0, minor = 0, build = -1, revision = -1;
+        ParseVersionString(version_text, major, minor, build, revision);
+
+        const std::string value_json = "\"" + EscapeJson(VersionString(major, minor, build, revision)) + "\"";
+        const std::string comment = "Start: " + IsoUtcFromUnixMs(UnixTimeMilliseconds());
+        (void)impl->PostStartValue(sensor->Path(), sensor->Type(), value_json, HSM_SENSOR_STATUS_OK, comment);
+    }
+} // namespace
+
 hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* collector)
 {
-    return collector != nullptr ? AddGroup(collector, kCollectorGroup) : HSM_RESULT_INVALID_ARGUMENT;
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const hsm_result_t result = AddGroup(collector, kCollectorGroup);
+
+    // The collector knows its own compile-time version — emit it once so ".module/Collector version"
+    // carries a value instead of registering empty. Re-registration is idempotent and returns the
+    // existing handle (the group already registered it). Mirrors managed AddCollectorVersion.
+    if (result == HSM_RESULT_OK)
+    {
+        hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
+        std::shared_ptr<NativeSensor> collector_version;
+        if (collector->impl->AddDefaultSensor(HSM_DEFAULT_COLLECTOR_VERSION, &params, collector_version) == HSM_RESULT_OK)
+        {
+            const std::string version = std::to_string(HSM_COLLECTOR_VERSION_MAJOR) + "." +
+                                        std::to_string(HSM_COLLECTOR_VERSION_MINOR) + "." + std::to_string(HSM_COLLECTOR_VERSION_PATCH);
+            EmitVersionStartValue(collector->impl.get(), collector_version, version.c_str());
+        }
+    }
+
+    return result;
 }
 
 hsm_result_t hsm_collector_add_all_queue_diagnostic_sensors(hsm_collector_t* collector)
@@ -5734,6 +5881,11 @@ hsm_result_t hsm_collector_add_all_module_sensors(hsm_collector_t* collector, co
         params.product_version = product_version;
         std::shared_ptr<NativeSensor> sensor;
         result = collector->impl->AddDefaultSensor(HSM_DEFAULT_PRODUCT_VERSION, &params, sensor);
+
+        // Emit the connected application's version + start time once so ".module/Version" carries a
+        // value instead of registering empty. Mirrors managed ProductVersionSensor.StartAsync.
+        if (result == HSM_RESULT_OK)
+            EmitVersionStartValue(collector->impl.get(), sensor, product_version);
     }
     return result;
 }
