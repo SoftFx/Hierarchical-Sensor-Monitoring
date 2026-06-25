@@ -447,14 +447,17 @@ namespace HSMDataCollector.Tests
             using (var collector = new DataCollector(CreateOptions(sender, "flush-message")))
             {
                 collector.AddCustomLogger(logger);
-                var sensor = collector.CreateDoubleSensor("flush-message/data");
 
                 await collector.Start().ConfigureAwait(false);
-                sensor.AddValue(7);
 
-                // Give the run loop a chance to dequeue and either dispatch or land in queue
-                // before shutdown — we want at least one queued item to survive into the flush.
-                await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+                // Enqueue straight into the live data queue so an item is GUARANTEED present when the
+                // Stop flush runs. The sender always errors, so the run loop re-enqueues (never drops,
+                // queue is far below MaxQueueSize) and the item survives deterministically into the
+                // flush. The previous approach — sensor.AddValue + Task.Delay(100ms) — relied on a value
+                // happening to be queued at shutdown and was flaky on slow CI agents ("Captured: []"):
+                // if the value had not reached the data queue by Stop, the flush had nothing to dispatch.
+                var dataQueue = GetDataQueue(collector);
+                InvokeEnqueue(dataQueue, new IntBarSensorValue { Count = 1, Comment = "flush-item" });
 
                 await collector.Stop().ConfigureAwait(false);
             }
