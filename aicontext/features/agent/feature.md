@@ -138,6 +138,11 @@ before `Stop()`, waits on the same `cv_` so it exits the moment stop is requeste
    registry is permanent, with no delete API): once the cap is reached, newly seen process names are
    skipped so a churn-heavy host can't grow the namespace without bound or exhaust the global MaxSensors.
 
+The sensor description carries the process's full exe path; for a protected/system process whose path
+the OS denies (e.g. `vmmemWSL`, `System`), it shows `**Path:** _(system process — path unavailable)_`
+instead of an empty line, in both collectors. The managed collector caches that denial (an empty path
+entry) so `MainModule` is probed once per name rather than throwing every tick.
+
 Aggregating by exe name (not PID, not PDH `#n` suffix) keeps a stable sensor identity over time.
 **Out of scope:** browser tab/site attribution (needs browser-level instrumentation; tracked separately).
 

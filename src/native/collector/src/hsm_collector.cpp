@@ -3348,12 +3348,16 @@ namespace
                             // Creating a sensor from this background thread (after Start) is safe:
                             // CollectorImpl::CreateSensor serializes on mutex_, and the scheduler
                             // reads the registry only via a snapshot under the same lock.
+                            // Path line: the resolved exe path, or an explicit "system process" note
+                            // when QueryFullProcessImageNameW was denied (protected/system process such
+                            // as vmmemWSL / System), so an empty path reads as intentional, not a bug.
+                            // Mirrors the managed WindowsTopCpuMonitor description.
                             RegistrationOptions opts = InstantRegistrationDefaults();
                             opts.description =
                                 "Top **" + std::to_string(top_cpu_count_) + "** CPU consumers"
                                                                             " by % of machine CPU" +
                                 (usage.full_path.empty()
-                                     ? ""
+                                     ? "\n\n**Path:** _(system process — path unavailable)_"
                                      : "\n\n**Path:** `" + usage.full_path + "`");
                             std::shared_ptr<NativeSensor> sensor;
                             if (CreateSensor(("Top CPU processes/" + usage.name).c_str(),
