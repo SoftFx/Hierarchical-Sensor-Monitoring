@@ -22,6 +22,12 @@ jobs:
           fetch-depth: 1
 
       - uses: anthropics/claude-code-action@v1
+        # Route the Anthropic API through the self-hosted proxy: the key is only valid via it.
+        # Claude Code reads ANTHROPIC_BASE_URL/ANTHROPIC_API_KEY from the environment, and the action
+        # inherits the step env. Set the ANTHROPIC_BASE_URL repo secret to the proxy endpoint; if it
+        # is empty the action falls back to the public Anthropic API.
+        env:
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
