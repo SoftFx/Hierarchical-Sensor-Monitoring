@@ -1173,7 +1173,7 @@ namespace
         { HSM_DEFAULT_NETWORK_CONNECTIONS_RESET, "Network", "Connections Reset Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, true, 0, false, 60000, "TCP connections reset.", {} },
         // ---- Per-interface network speed (.computer/Network/{iface}/..., DoubleBar, MB/sec, 1 min, KeepHistory 90 d, TTL 5 min) ----
         { HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC, "Network", "{iface}/Received MB/sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average received network speed on interface.", {} },
-        { HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC,     "Network", "{iface}/Sent MB/sec",     HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average sent network speed on interface.",     {} },
+        { HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC, "Network", "{iface}/Sent MB/sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average sent network speed on interface.", {} },
         // ---- Module info (.module/...) ----
         { HSM_DEFAULT_COLLECTOR_ALIVE, "", "Service alive", HSM_SENSOR_TYPE_BOOLEAN, false, false, -1, false, true, kKeepHistory180dMs, false, 0, false, 15000, "DataCollector heartbeat.", { DefaultAlertKind::ServiceAliveTtl, HSM_ALERT_PROP_VALUE, HSM_ALERT_OP_EQUAL, nullptr, "[$product]$path" } },
         { HSM_DEFAULT_COLLECTOR_VERSION, "", "Collector version", HSM_SENSOR_TYPE_VERSION, false, false, -1, false, false, kKeepHistory1826dMs, true, 0, false, 15000, "DataCollector version and start time.", {} },
@@ -2744,8 +2744,8 @@ namespace
             if (def == nullptr)
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Unknown default sensor id.");
 
-            const char* process_name  = params != nullptr ? params->process_name  : nullptr;
-            const char* disk_letter   = params != nullptr ? params->disk_letter   : nullptr;
+            const char* process_name = params != nullptr ? params->process_name : nullptr;
+            const char* disk_letter = params != nullptr ? params->disk_letter : nullptr;
             const char* interface_name = params != nullptr ? params->interface_name : nullptr;
 
             const std::string name = ResolveDefaultSensorName(*def, disk_letter, interface_name);
@@ -3353,7 +3353,7 @@ namespace
                             RegistrationOptions rx_opts;
                             rx_opts.unit = 2103; // MBytes_sec
                             rx_opts.has_statistics = true;
-                            rx_opts.statistics = 1; // EMA
+                            rx_opts.statistics = 1;           // EMA
                             rx_opts.has_display_unit = false; // bar → null on wire
                             rx_opts.has_keep_history = true;
                             rx_opts.keep_history_ms = kKeepHistory90dMs;
@@ -3395,7 +3395,9 @@ namespace
                             tx_it->second->AddBarDouble(speed.tx_mb_per_sec);
                     }
                 }
-                catch (...) {}
+                catch (...)
+                {
+                }
             }
 #endif
         }
@@ -5561,10 +5563,10 @@ hsm_result_t hsm_service_commands_send_update_version(
 hsm_default_sensor_params_t hsm_default_sensor_params_default(void)
 {
     hsm_default_sensor_params_t params{};
-    params.process_name   = nullptr;
-    params.disk_letter    = nullptr;
+    params.process_name = nullptr;
+    params.disk_letter = nullptr;
     params.interface_name = nullptr;
-    params.service_name   = nullptr;
+    params.service_name = nullptr;
     params.is_host_service = 1;
     params.product_version = nullptr;
     return params;
