@@ -3351,13 +3351,16 @@ namespace
                             // Path line: the resolved exe path, or an explicit "system process" note
                             // when QueryFullProcessImageNameW was denied (protected/system process such
                             // as vmmemWSL / System), so an empty path reads as intentional, not a bug.
-                            // Mirrors the managed WindowsTopCpuMonitor description.
+                            // Mirrors the managed WindowsTopCpuMonitor description. ASCII-only literal
+                            // (plain '-', not an em-dash): this string is the sensor description sent on
+                            // the wire, and MSVC without /utf-8 reads narrow literals in the system code
+                            // page, so a non-ASCII byte here could turn into mojibake on a non-UTF-8 host.
                             RegistrationOptions opts = InstantRegistrationDefaults();
                             opts.description =
                                 "Top **" + std::to_string(top_cpu_count_) + "** CPU consumers"
                                                                             " by % of machine CPU" +
                                 (usage.full_path.empty()
-                                     ? "\n\n**Path:** _(system process — path unavailable)_"
+                                     ? "\n\n**Path:** _(system process - path unavailable)_"
                                      : "\n\n**Path:** `" + usage.full_path + "`");
                             std::shared_ptr<NativeSensor> sensor;
                             if (CreateSensor(("Top CPU processes/" + usage.name).c_str(),
