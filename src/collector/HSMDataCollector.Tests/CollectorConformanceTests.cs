@@ -775,6 +775,13 @@ namespace HSMDataCollector.Tests
                             period: TimeSpan.FromMilliseconds(int.Parse(step.Arg(2))));
                     break;
 
+                case "enable_network_interface_speed_sensors":
+                    // (#1189) period_ms — Windows-only; no-op on other platforms so the fixture
+                    // parses cross-platform without an unsupported marker.
+                    if (DataCollector.IsWindowsOS)
+                        state.Collector.Windows.AddNetworkInterfacesSpeed();
+                    break;
+
                 default:
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
@@ -1272,6 +1279,8 @@ namespace HSMDataCollector.Tests
                 case "network_established": return new ConnectionsEstablishedCountPrototype().Get(null).ApiRequest;
                 case "network_failures": return new ConnectionsFailuresCountPrototype().Get(null).ApiRequest;
                 case "network_reset": return new ConnectionsResetCountPrototype().Get(null).ApiRequest;
+                case "network_interface_received": return BuildNetworkInterfaceSpeedRequest("Ethernet", received: true);
+                case "network_interface_sent": return BuildNetworkInterfaceSpeedRequest("Ethernet", received: false);
                 case "collector_alive": return new ServiceAlivePrototype().Get(null).ApiRequest;
                 case "collector_version": return new CollectorVersionPrototype().Get(null).ApiRequest;
                 case "collector_errors": return new CollectorErrorsPrototype().Get(null).ApiRequest;
@@ -1283,6 +1292,28 @@ namespace HSMDataCollector.Tests
                 case "queue_content_size": return new PackageContentSizePrototype().Get(null).ApiRequest;
                 default: throw new ArgumentException("Unknown default sensor id name: " + id);
             }
+        }
+
+        // Build a registration request for the per-interface speed sensor catalog prototype (#1189).
+        // The path mirrors the native RevealDefaultPath output (.computer/Network/<iface>/...) so the
+        // suffix assertion in the conformance fixture matches both the managed and native drivers.
+        private static AddOrUpdateSensorRequest BuildNetworkInterfaceSpeedRequest(string iface, bool received)
+        {
+            var direction = received ? "Received" : "Sent";
+            var opts = new BarSensorOptions
+            {
+                Path = $".computer/Network/{iface}/{direction} MB/sec",
+                IsComputerSensor = true,
+                Type = HSMSensorDataObjects.SensorType.DoubleBarSensor,
+                TTL = TimeSpan.FromMinutes(5),
+                KeepHistory = TimeSpan.FromDays(90),
+                SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MBytes_sec,
+                Statistics = HSMSensorDataObjects.SensorRequests.StatisticsOptions.EMA,
+                Alerts = new List<Alerts.BarAlertTemplate>(),
+                EnableForGrafana = true,
+                Description = $"Average {direction.ToLowerInvariant()} network speed on interface **{iface}**.",
+            };
+            return opts.ApiRequest;
         }
 
         // Canonical cross-language registration (AddOrUpdateSensorRequest) text — fixed field

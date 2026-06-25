@@ -647,6 +647,8 @@ namespace
             { "network_established", HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED },
             { "network_failures", HSM_DEFAULT_NETWORK_CONNECTION_FAILURES },
             { "network_reset", HSM_DEFAULT_NETWORK_CONNECTIONS_RESET },
+            { "network_interface_received", HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC },
+            { "network_interface_sent", HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC },
             { "collector_alive", HSM_DEFAULT_COLLECTOR_ALIVE },
             { "collector_version", HSM_DEFAULT_COLLECTOR_VERSION },
             { "collector_errors", HSM_DEFAULT_COLLECTOR_ERRORS },
@@ -852,6 +854,8 @@ namespace
             auto params = hsm_default_sensor_params_default();
             if (step.size() >= 3 && !step[2].empty())
                 params.disk_letter = step[2].c_str();
+            if (step.size() >= 4 && !step[3].empty())
+                params.interface_name = step[3].c_str();
             SensorHandle sensor;
             Require(
                 hsm_collector_add_default_sensor(state.collector.value, DefaultSensorIdFromName(step[1]), &params, &sensor.value) == HSM_RESULT_OK,
@@ -2321,6 +2325,21 @@ namespace
                     ToDouble(step[2]),
                     ToInt(step[3])) == HSM_RESULT_OK,
                 "enable_top_cpu_sensors failed");
+#endif
+            return;
+        }
+
+        if (action == "enable_network_interface_speed_sensors")
+        {
+            // (#1189) period_ms — Windows-only; no-op on non-Windows so the fixture parses
+            // on Linux without an unsupported marker.
+            Require(step.size() >= 2, "enable_network_interface_speed_sensors requires period_ms");
+#ifdef _WIN32
+            Require(
+                hsm_collector_enable_network_interface_speed_sensors(
+                    state.collector.value,
+                    ToInt(step[1])) == HSM_RESULT_OK,
+                "enable_network_interface_speed_sensors failed");
 #endif
             return;
         }
@@ -4593,6 +4612,7 @@ namespace
             { "conformance_service_commands_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_top_cpu_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_network_speed_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };

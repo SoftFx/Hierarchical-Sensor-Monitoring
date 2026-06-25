@@ -424,6 +424,10 @@ typedef enum hsm_default_sensor_t HSM_ENUM_INT32
     HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED = 50,
     HSM_DEFAULT_NETWORK_CONNECTION_FAILURES = 51,
     HSM_DEFAULT_NETWORK_CONNECTIONS_RESET = 52,
+    /* Per-interface network speed (.computer/Network/{iface}/..., DoubleBar, MB/sec, 1 min, TTL 5 min).
+       interface_name in params substitutes the {iface} segment; NULL => "Ethernet". */
+    HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC = 53,
+    HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC = 54,
     /* Module info (.module/...). */
     HSM_DEFAULT_COLLECTOR_ALIVE = 60,
     HSM_DEFAULT_COLLECTOR_VERSION = 61,
@@ -446,6 +450,7 @@ typedef struct hsm_default_sensor_params_t
 {
     const char* process_name;    /* "Process <name>" category; NULL => "process" */
     const char* disk_letter;     /* the {letter} in a disk sensor name; NULL => "C" */
+    const char* interface_name;  /* the {iface} in a per-interface network sensor name; NULL => "Ethernet" */
     const char* service_name;    /* RESERVED (not yet honored): service-status resolution */
     int is_host_service;         /* RESERVED (not yet honored): service-status registers under .module
                                     regardless — non-host placement lands with the live readers */
@@ -804,6 +809,16 @@ hsm_result_t hsm_collector_enable_top_cpu_sensors(
     hsm_collector_t* collector,
     int32_t count,
     double min_percent,
+    int32_t period_ms);
+
+/* Enable per-interface network speed sensors (Windows only, #1189). Starts a background thread that
+   samples GetIfTable2 cumulative octet counters at intervals of `period_ms` milliseconds, computes
+   MB/sec deltas for every active (Up, non-loopback) interface, and posts DoubleBar sensors at
+   "Network/<interface-name>/{Received,Sent} MB/sec". Call BEFORE Start().
+   Returns HSM_RESULT_INVALID_ARGUMENT if period_ms <= 0.
+   Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
+hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
+    hsm_collector_t* collector,
     int32_t period_ms);
 
 #ifdef __cplusplus

@@ -1,6 +1,6 @@
 # Feature: Default Sensors
 
-> Owner: collector | Last reviewed: 2026-06-10 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-06-25 | Canonical: yes
 > Scope: Collector - built-in system, process, module, and diagnostic sensors registered via `Windows`/`Unix` collections
 
 ---
@@ -54,7 +54,16 @@ Windows info (`.computer/Windows OS Info/...`, 12 h period, instant):
 
 Event logs (instant string sensors; `EventLog.EntryWritten` subscription, value = EventID, comment = `Source + Message`, event time → UTC): `AddWindowsApplicationErrorLogs`, `AddWindowsSystemErrorLogs`, `AddWindowsApplicationWarningLogs`, `AddWindowsSystemWarningLogs`, bulks `AddErrorWindowsLogs` / `AddWarningWindowsLogs` / `AddAllWindowsLogs`.
 
-Network (`.computer/Network/...`, TCPv4+TCPv6 counters summed, 1 min period): `AddNetworkConnectionsEstablished` (gauge), `AddNetworkConnectionFailures` (delta), `AddNetworkConnectionsReset` (delta), bulk `AddAllNetworkSensors`.
+Network (`.computer/Network/...`):
+
+| Method | Sensor | Source | Notes |
+|---|---|---|---|
+| `AddNetworkConnectionsEstablished` | TCPv4+v6 established (gauge) | perf counter summed | 1 min period |
+| `AddNetworkConnectionFailures` | TCPv4+v6 failures (delta) | perf counter summed | 1 min period |
+| `AddNetworkConnectionsReset` | TCPv4+v6 resets (delta) | perf counter summed | 1 min period |
+| `AddNetworkInterfacesSpeed` | Per-interface received/sent MB/sec (DoubleBar) | `NetworkInterface.GetIPStatistics()` delta / 10 s | Dynamic — one sensor pair per Up non-loopback NIC discovered at runtime; paths `Network/<iface>/{Received,Sent} MB/sec`; `IsComputerSensor=true`; bar period 1 min; EMA; TTL 5 min; KeepHistory 90 d; counter reset or negative delta → interval skipped; disappeared interfaces expire by TTL. NO PDH. |
+
+Bulk `AddAllNetworkSensors` calls all four methods above.
 
 Service status: `SubscribeToWindowsServiceStatus(serviceName | ServiceSensorOptions)` / `UnsubscribeWindowsServiceStatus` — enum sensor of `ServiceControllerStatus`, 5 s poll via `ServiceController.Refresh`, send on change, default alert "≠ Running" with 5 min confirmation. Registration carries wire-visible `EnumOptions` for all 7 `ServiceControllerStatus` members with fixed ARGB colors plus an auto-generated markdown description (`ModuleInfoCollections.cs`) — a port must reproduce that payload. `ServiceSensorOptions.IsHostService` (default true) places the sensor under `.module`, else under `SensorPath`. Service resolution failures → error value + 1 h re-resolve backoff (`_nextServiceResolveTime`, non-blocking); `ServiceController` disposed on stop/fault, deferred until in-flight run completes (raw `ScheduledTask` with `CurrentRun`).
 
@@ -145,6 +154,14 @@ the cross-driver `default_sensors_contract.hsmtest` corpus runs both drivers ove
 disk (not the live `DriveInfo.GetDrives()` fan-out) and no GC sensors — so the native bulk is smaller by
 design today (group composition pinned by `native_default_sensor_group_composition`). The full per-drive
 enumeration is the live-value follow-up.
+
+**Dynamic samplers** (sensors not backed by static catalog rows): both network-speed (#1189) and top-CPU
+(#1103) run background threads started by `Start()` that discover items at runtime and lazily create
+`DoubleBar` sensors per item. `EnableNetworkInterfaceSpeedSensors(period_ms)` / `EnableTopCpuSensors(…)`
+configure and enable them before `Start`; calling them after `Start` returns `HSM_RESULT_INVALID_STATE`.
+The native sampler uses `GetIfTable2` (Windows only, Win10+ API set, Iphlpapi), same counter-reset-skip
+rule as the managed driver — the `network_speed_contract.hsmtest` fixture covers lifecycle + catalog-prototype
+registration for both drivers.
 
 Reproduced managed quirks: an alert-less default sensor emits `"Alerts":[]` (the prototype initializes
 the list — a user `CreateXSensor` with no alerts emits `null`); the `SpecialAlertCondition` TTL alert

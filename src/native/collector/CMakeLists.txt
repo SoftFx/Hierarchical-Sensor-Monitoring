@@ -103,12 +103,20 @@ endfunction()
 add_library(hsm_collector_core STATIC
     src/hsm_collector.cpp
     src/cpu_top.cpp                              # per-process CPU sampling (#1179; SelectTopN portable, WindowsCpuSampler #if _WIN32)
+    src/network_speed.cpp                        # per-interface network speed (#1189; WindowsNetworkSampler #if _WIN32)
     src/platform/hsm_windows_metric_sources.cpp  # self-guarded #if _WIN32 (#1164)
 )
 
 # Windows live metric readers (#1164) link PDH (perf counters) + Win32.
+# Network speed uses GetIfTable2 from iphlpapi (#1189).
 if(WIN32)
-    target_link_libraries(hsm_collector_core PRIVATE pdh)
+    target_link_libraries(hsm_collector_core PRIVATE pdh iphlpapi)
+    # GetIfTable2 / MIB_IF_TABLE2 require NTDDI_VERSION >= Vista. Set Windows 10 target so
+    # all modern Win32 APIs are available without per-file version guard hacks.
+    target_compile_definitions(hsm_collector_core PRIVATE
+        _WIN32_WINNT=0x0A00
+        NTDDI_VERSION=0x0A000000
+    )
 endif()
 
 target_include_directories(hsm_collector_core
@@ -396,6 +404,7 @@ add_conformance_test(conformance_options_surface_contract options_surface_contra
 add_conformance_test(conformance_service_commands_contract service_commands_contract.hsmtest)
 add_conformance_test(conformance_default_sensors_contract default_sensors_contract.hsmtest)
 add_conformance_test(conformance_top_cpu_contract top_cpu_contract.hsmtest)
+add_conformance_test(conformance_network_speed_contract network_speed_contract.hsmtest)
 
 add_test(
     NAME native_default_sensors_wire_golden

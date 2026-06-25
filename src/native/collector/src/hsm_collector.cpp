@@ -1,6 +1,7 @@
 #include "hsm_collector/hsm_collector.h"
 
 #include "cpu_top.hpp"                             // per-process CPU sampling (#1179; _WIN32 only for WindowsCpuSampler)
+#include "network_speed.hpp"                       // per-interface network speed sampling (#1189; _WIN32 only for WindowsNetworkSampler)
 #include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
 
 #include <algorithm>
@@ -1170,6 +1171,9 @@ namespace
         { HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED, "Network", "Connections Established Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Established TCP connections.", {} },
         { HSM_DEFAULT_NETWORK_CONNECTION_FAILURES, "Network", "Connection Failures Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, true, 0, false, 60000, "TCP connection failures.", {} },
         { HSM_DEFAULT_NETWORK_CONNECTIONS_RESET, "Network", "Connections Reset Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, true, 0, false, 60000, "TCP connections reset.", {} },
+        // ---- Per-interface network speed (.computer/Network/{iface}/..., DoubleBar, MB/sec, 1 min, KeepHistory 90 d, TTL 5 min) ----
+        { HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC, "Network", "{iface}/Received MB/sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average received network speed on interface.", {} },
+        { HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC,     "Network", "{iface}/Sent MB/sec",     HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average sent network speed on interface.",     {} },
         // ---- Module info (.module/...) ----
         { HSM_DEFAULT_COLLECTOR_ALIVE, "", "Service alive", HSM_SENSOR_TYPE_BOOLEAN, false, false, -1, false, true, kKeepHistory180dMs, false, 0, false, 15000, "DataCollector heartbeat.", { DefaultAlertKind::ServiceAliveTtl, HSM_ALERT_PROP_VALUE, HSM_ALERT_OP_EQUAL, nullptr, "[$product]$path" } },
         { HSM_DEFAULT_COLLECTOR_VERSION, "", "Collector version", HSM_SENSOR_TYPE_VERSION, false, false, -1, false, false, kKeepHistory1826dMs, true, 0, false, 15000, "DataCollector version and start time.", {} },
@@ -1191,18 +1195,29 @@ namespace
         return nullptr;
     }
 
-    // Substitute "{letter}" in a per-disk sensor name (default "C", matching the managed
-    // DriveInfo("C:\\").Name[0]); a non-disk name is returned unchanged.
-    std::string ResolveDefaultSensorName(const DefaultSensorDef& def, const char* disk_letter)
+    // Substitute "{letter}" / "{iface}" in a per-disk / per-interface sensor name.
+    // Unknown names are returned unchanged.
+    std::string ResolveDefaultSensorName(
+        const DefaultSensorDef& def, const char* disk_letter, const char* interface_name = nullptr)
     {
         std::string name = def.name;
-        const std::string ph = "{letter}";
-        const auto pos = name.find(ph);
-        if (pos != std::string::npos)
+
+        const std::string letter_ph = "{letter}";
+        const auto letter_pos = name.find(letter_ph);
+        if (letter_pos != std::string::npos)
         {
             std::string letter = (disk_letter && *disk_letter) ? disk_letter : "C";
-            name.replace(pos, ph.size(), letter);
+            name.replace(letter_pos, letter_ph.size(), letter);
         }
+
+        const std::string iface_ph = "{iface}";
+        const auto iface_pos = name.find(iface_ph);
+        if (iface_pos != std::string::npos)
+        {
+            std::string iface = (interface_name && *interface_name) ? interface_name : "Ethernet";
+            name.replace(iface_pos, iface_ph.size(), iface);
+        }
+
         return name;
     }
 
@@ -2282,6 +2297,7 @@ namespace
             StartWorker();
             StartScheduler();
             StartTopCpuSampler();
+            StartNetworkSpeedSampler();
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -2331,6 +2347,7 @@ namespace
             // preserve data at stop).
             StopScheduler();
             StopTopCpuSampler();
+            StopNetworkSpeedSampler();
 
             // Dispose bound metric sources now the scheduler has stopped reading them (managed
             // dispose-on-stop; #1164). A restart rebinds via the factory.
@@ -2727,10 +2744,11 @@ namespace
             if (def == nullptr)
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Unknown default sensor id.");
 
-            const char* process_name = params != nullptr ? params->process_name : nullptr;
-            const char* disk_letter = params != nullptr ? params->disk_letter : nullptr;
+            const char* process_name  = params != nullptr ? params->process_name  : nullptr;
+            const char* disk_letter   = params != nullptr ? params->disk_letter   : nullptr;
+            const char* interface_name = params != nullptr ? params->interface_name : nullptr;
 
-            const std::string name = ResolveDefaultSensorName(*def, disk_letter);
+            const std::string name = ResolveDefaultSensorName(*def, disk_letter, interface_name);
             const std::string category = ResolveDefaultCategory(*def, process_name);
             RegistrationOptions registration = BuildDefaultRegistration(*def, name);
             const std::string prototype_path = RevealDefaultPath(category, name, def->is_computer);
@@ -3018,6 +3036,28 @@ namespace
 #endif
         }
 
+        // --- Per-interface network speed sampling (#1189) ---
+
+        hsm_result_t EnableNetworkInterfaceSpeedSensors(int32_t period_ms)
+        {
+            if (period_ms <= 0)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+#ifndef _WIN32
+            (void)period_ms;
+            return SetError(HSM_RESULT_INVALID_STATE, "Network speed sensors are only supported on Windows.");
+#else
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (state_ != CollectorState::Stopped)
+                return SetError(HSM_RESULT_INVALID_STATE, "EnableNetworkInterfaceSpeedSensors must be called before Start.");
+
+            net_speed_enabled_ = true;
+            net_speed_period_ms_ = period_ms;
+            ClearError();
+            return HSM_RESULT_OK;
+#endif
+        }
+
     private:
         hsm_result_t SetError(hsm_result_t result, std::string message) const
         {
@@ -3253,6 +3293,110 @@ namespace
             top_cpu_cv_.notify_all();
             if (top_cpu_thread_.joinable())
                 top_cpu_thread_.join();
+#endif
+        }
+
+        void StartNetworkSpeedSampler()
+        {
+#ifdef _WIN32
+            if (!net_speed_enabled_)
+                return;
+            {
+                std::lock_guard<std::mutex> guard(net_speed_cv_mutex_);
+                net_speed_stop_ = false;
+            }
+            net_speed_thread_ = std::thread([this] { RunNetworkSpeedLoop(); });
+#endif
+        }
+
+        void StopNetworkSpeedSampler()
+        {
+#ifdef _WIN32
+            {
+                std::lock_guard<std::mutex> guard(net_speed_cv_mutex_);
+                net_speed_stop_ = true;
+            }
+            net_speed_cv_.notify_all();
+            if (net_speed_thread_.joinable())
+                net_speed_thread_.join();
+#endif
+        }
+
+        void RunNetworkSpeedLoop()
+        {
+#ifdef _WIN32
+            hsm::collector::WindowsNetworkSampler sampler;
+            std::map<std::string, std::shared_ptr<NativeSensor>> rx_cache;
+            std::map<std::string, std::shared_ptr<NativeSensor>> tx_cache;
+            const auto period = std::chrono::milliseconds(net_speed_period_ms_);
+
+            sampler.Sample(); // seed baseline — first call returns empty map
+
+            while (true)
+            {
+                {
+                    std::unique_lock<std::mutex> lock(net_speed_cv_mutex_);
+                    if (net_speed_cv_.wait_for(lock, period, [this] { return net_speed_stop_; }))
+                        return;
+                }
+
+                try
+                {
+                    const auto speeds = sampler.Sample();
+                    for (const auto& [iface, speed] : speeds)
+                    {
+                        auto rx_it = rx_cache.find(iface);
+                        if (rx_it == rx_cache.end())
+                        {
+                            // Build registration options matching the catalog prototype (#1189).
+                            // Bar sensors emit null DisplayUnit (managed BarSensorOptions.ToApi).
+                            RegistrationOptions rx_opts;
+                            rx_opts.unit = 2103; // MBytes_sec
+                            rx_opts.has_statistics = true;
+                            rx_opts.statistics = 1; // EMA
+                            rx_opts.has_display_unit = false; // bar → null on wire
+                            rx_opts.has_keep_history = true;
+                            rx_opts.keep_history_ms = kKeepHistory90dMs;
+                            rx_opts.ttl_ms = 300000; // 5 min
+                            rx_opts.has_description = true;
+                            rx_opts.description = "Average received network speed on interface **" + iface + "**.";
+                            rx_opts.has_alerts_list = true;
+                            rx_opts.enable_grafana = TriBool::True;
+                            rx_opts.is_computer_sensor = true;
+
+                            RegistrationOptions tx_opts = rx_opts;
+                            tx_opts.description = "Average sent network speed on interface **" + iface + "**.";
+
+                            // Path mirrors managed: CreateDoubleBarSensor("Network/<iface>/Received MB/sec", IsComputerSensor=true).
+                            // CalculateSystemPath prepends computer_name_, producing the same wire path as C#.
+                            std::shared_ptr<NativeSensor> rx_sensor, tx_sensor;
+                            const std::string rx_path = "Network/" + iface + "/Received MB/sec";
+                            const std::string tx_path = "Network/" + iface + "/Sent MB/sec";
+
+                            if (CreateDefaultBarSensor(rx_path, HSM_SENSOR_TYPE_DOUBLE_BAR, 60000, kDefaultBarPrecision, rx_opts, rx_sensor) != HSM_RESULT_OK)
+                                continue;
+                            if (CreateDefaultBarSensor(tx_path, HSM_SENSOR_TYPE_DOUBLE_BAR, 60000, kDefaultBarPrecision, tx_opts, tx_sensor) != HSM_RESULT_OK)
+                                continue;
+
+                            rx_it = rx_cache.emplace(iface, rx_sensor).first;
+                            tx_cache.emplace(iface, tx_sensor);
+#if defined(HSM_COLLECTOR_HTTP)
+                            if (send_wire_)
+                            {
+                                PostRegistrationsWire({ std::move(rx_sensor) });
+                                PostRegistrationsWire({ std::move(tx_sensor) });
+                            }
+#endif
+                        }
+
+                        rx_it->second->AddBarDouble(speed.rx_mb_per_sec);
+                        auto tx_it = tx_cache.find(iface);
+                        if (tx_it != tx_cache.end())
+                            tx_it->second->AddBarDouble(speed.tx_mb_per_sec);
+                    }
+                }
+                catch (...) {}
+            }
 #endif
         }
 
@@ -3673,6 +3817,14 @@ namespace
         std::mutex top_cpu_cv_mutex_;
         std::condition_variable top_cpu_cv_;
         bool top_cpu_stop_ = false;
+
+        // Per-interface network speed sampling (#1189): optional background thread, Windows-only.
+        bool net_speed_enabled_ = false;
+        int32_t net_speed_period_ms_ = 0;
+        std::thread net_speed_thread_;
+        std::mutex net_speed_cv_mutex_;
+        std::condition_variable net_speed_cv_;
+        bool net_speed_stop_ = false;
 #endif
     };
 
@@ -5409,9 +5561,10 @@ hsm_result_t hsm_service_commands_send_update_version(
 hsm_default_sensor_params_t hsm_default_sensor_params_default(void)
 {
     hsm_default_sensor_params_t params{};
-    params.process_name = nullptr;
-    params.disk_letter = nullptr;
-    params.service_name = nullptr;
+    params.process_name   = nullptr;
+    params.disk_letter    = nullptr;
+    params.interface_name = nullptr;
+    params.service_name   = nullptr;
     params.is_host_service = 1;
     params.product_version = nullptr;
     return params;
@@ -5553,10 +5706,12 @@ hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector)
     if (result == HSM_RESULT_OK)
         result = hsm_collector_add_all_network_sensors(collector);
 #ifdef _WIN32
-    // Best-effort: top-CPU requires pre-Start setup; ignore the error when called after
-    // Start (e.g. from a test that starts first, then adds sensors).
+    // Best-effort: top-CPU and network speed require pre-Start setup; ignore errors when called
+    // after Start (e.g. from a test that starts first, then adds sensors).
     if (result == HSM_RESULT_OK)
         hsm_collector_enable_top_cpu_sensors(collector, 10, 1.0, 60000);
+    if (result == HSM_RESULT_OK)
+        hsm_collector_enable_network_interface_speed_sensors(collector, 10000); // 10 s sample period
 #endif
     return result;
 }
@@ -5600,6 +5755,16 @@ hsm_result_t hsm_collector_enable_top_cpu_sensors(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return collector->impl->EnableTopCpuSensors(count, min_percent, period_ms);
+}
+
+hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
+    hsm_collector_t* collector,
+    int32_t period_ms)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->EnableNetworkInterfaceSpeedSensors(period_ms);
 }
 
 hsm_result_t hsm_collector_set_metric_source_factory(
