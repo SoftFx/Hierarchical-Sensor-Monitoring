@@ -163,12 +163,16 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                     var cpuMs = p.TotalProcessorTime.TotalMilliseconds;
                     curCpu[key] = cpuMs;
 
-                    // Cache full path on first encounter — MainModule can throw for protected processes.
-                    // Bounded by the same cap as the sensor map so this dictionary can't grow without limit.
+                    // Cache full path on first encounter — MainModule throws for protected/system
+                    // processes (e.g. vmmemWSL, System). Cache the failure as an empty string so the
+                    // lookup is attempted once per name, not re-thrown every tick. Bounded by the same
+                    // cap as the sensor map so this dictionary can't grow without limit.
                     if (_fullPaths.Count < _maxTrackedNames && !_fullPaths.ContainsKey(p.ProcessName))
                     {
-                        try { _fullPaths[p.ProcessName] = p.MainModule.FileName; }
-                        catch { }
+                        string resolved;
+                        try { resolved = p.MainModule.FileName; }
+                        catch { resolved = ""; }
+                        _fullPaths[p.ProcessName] = resolved ?? "";
                     }
 
                     double prevMs;
@@ -214,9 +218,19 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                     if (_sensors.Count >= _maxTrackedNames)
                         continue;
 
+                    // Path line: the resolved exe path when we have it; an explicit "system process"
+                    // note when the OS denied MainModule (a cached empty entry), so an empty path reads
+                    // as intentional rather than a bug; omitted entirely when the path was never looked
+                    // up (name-cap reached) so we don't mislabel an unresolved process as a system one.
                     string fullPath;
-                    _fullPaths.TryGetValue(name, out fullPath);
-                    var pathLine = string.IsNullOrEmpty(fullPath) ? "" : "\n\n**Path:** `" + fullPath + "`";
+                    var resolved = _fullPaths.TryGetValue(name, out fullPath);
+                    string pathLine;
+                    if (!string.IsNullOrEmpty(fullPath))
+                        pathLine = "\n\n**Path:** `" + fullPath + "`";
+                    else if (resolved)
+                        pathLine = "\n\n**Path:** _(system process — path unavailable)_";
+                    else
+                        pathLine = "";
                     sensor = _storage.CreateInstantSensor<double>(
                         "Top CPU processes/" + name,
                         new InstantSensorOptions
