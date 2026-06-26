@@ -1,21 +1,27 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
-import { login, navigateToAlertTemplates } from '../login.ts';
+import { login } from '../login.ts';
+
+test.use({
+  ignoreHTTPSErrors: true,
+  headless: false, // чтобы видеть, что происходит
+  viewport: { width: 1280, height: 720 }
+});
 
 test('Create/remove alert and verify it appears on sensor', async ({ page }) => {
   // --- Login ---
-  const { apiUrl, admin_user, admin_user_password, alertFolderGuid } = testConfig;
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
   await login(page, admin_user, admin_user_password, apiUrl);
-
-  // Проверка, что залогинились
-  await expect(page.getByRole('button', { name: 'Alerts' })).toBeVisible();
+  
+  // Проверка, что залогинились (например, появилась ссылка "Alert Templates")
+  await expect(page.getByRole('link', { name: 'Alert Templates' })).toBeVisible();
 
   // --- Создание нового алерта ---
-  await navigateToAlertTemplates(page);
+  await page.getByRole('link', { name: 'Alert Templates' }).click();
   await expect(page).toHaveURL(/.*AlertTemplates\/Index/);
   await page.getByRole('link', { name: 'Add Template' }).click();
 
-  await page.getByLabel('Folder').selectOption(alertFolderGuid);
+  await page.getByLabel('Folder').selectOption('c1727475-48e7-4850-8400-c65427de0b7c');
   await page.getByRole('textbox', { name: 'PathTemplate' })
     .fill('BetaTTS/BetaTTS/AutomaticDealer/.module/Service alive');
   await page.getByRole('textbox', { name: 'Name' }).fill('Beta_Service alive');
@@ -61,10 +67,11 @@ test('Create/remove alert and verify it appears on sensor', async ({ page }) => 
   await serviceAlive.click();
 
   //Проверяем что алерт добавился
-  // TODO: добавить проверки что темплейт применился к сенсору
-
+  
+  
+  
   //Удаляем алерт темплейт
-  await navigateToAlertTemplates(page);
+  await page.getByRole('link', { name: 'Alert Templates' }).click();
 
   // ищем строку таблицы, где есть имя нашего алерта
   const alertRow = page.getByRole('row', { name: /Beta_Service alive BetaTTS/ });

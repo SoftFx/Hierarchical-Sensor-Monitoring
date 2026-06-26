@@ -1,17 +1,24 @@
 import { test, expect } from '@playwright/test';
-import { testConfig, testData } from '../config.ts';
-import { login, navigateToAlertTemplates } from '../login.ts';
+import { testConfig } from '../config.ts';
+import { login } from '../login.ts';
+
+test.use({
+  ignoreHTTPSErrors: true,
+  headless: false, // чтобы видеть, что происходит
+  viewport: { width: 1280, height: 720 }
+}); 
+
 
 test('Check all templates fields', async ({ page }) => {
-  const { apiUrl, admin_user, admin_user_password, alertFolderGuid } = testConfig;
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
   const { templatePath, duplicateError, templateName, templateName2 } = testData;
 
   await login(page, admin_user, admin_user_password, apiUrl);
 
-  await navigateToAlertTemplates(page);
+  await page.getByRole('link', { name: 'Alert Templates' }).click();
   await page.getByRole('link', { name: 'Add Template' }).click();
 
-  await page.getByLabel('Folder').selectOption(alertFolderGuid);
+  await page.getByLabel('Folder').selectOption('c1727475-48e7-4850-8400-c65427de0b7c');
   await page.getByRole('textbox', { name: 'PathTemplate' }).fill(templatePath);
   await page.getByRole('textbox', { name: 'Name' }).fill(templateName);
 
@@ -25,7 +32,7 @@ test('Check all templates fields', async ({ page }) => {
 
   // Вторая попытка — ошибка уникальности
   await page.getByRole('link', { name: 'Add Template' }).click();
-  await page.getByLabel('Folder').selectOption(alertFolderGuid);
+  await page.getByLabel('Folder').selectOption('c1727475-48e7-4850-8400-c65427de0b7c');
   await page.getByRole('textbox', { name: 'PathTemplate' }).fill(templatePath);
   await page.getByRole('textbox', { name: 'Name' }).fill(templateName);
   await page.getByRole('button', { name: 'Create' }).click();
@@ -41,7 +48,7 @@ test('Check all templates fields', async ({ page }) => {
   await expect(page.getByText('The Name field is required.')).toBeVisible();
 
   //Редактирование алерта с сохранением
-  await navigateToAlertTemplates(page);
+  await page.getByRole('link', { name: 'Alert Templates' }).click();
   const alertRow1 = page.getByRole('row', { name: templateName });
   await expect(alertRow1).toBeVisible();
   await alertRow1.locator('#actionButton').click();
@@ -51,7 +58,7 @@ test('Check all templates fields', async ({ page }) => {
   await expect(page.getByRole('cell', { name: templateName2 })).toBeVisible();
 
   //Редактирование алерта без сохранения
-  await navigateToAlertTemplates(page);
+  await page.getByRole('link', { name: 'Alert Templates' }).click();
   const alertRow2 = page.getByRole('row', { name: templateName2 });
   await expect(alertRow2).toBeVisible();
   await alertRow2.locator('#actionButton').click();
@@ -61,7 +68,7 @@ test('Check all templates fields', async ({ page }) => {
   await expect(page.getByRole('cell', { name: templateName2 })).toBeVisible();
 
   //Удаление темплейта
-   await navigateToAlertTemplates(page);
+   await page.getByRole('link', { name: 'Alert Templates' }).click();
   // ищем строку таблицы, где есть имя нашего алерта
   const alertRow = page.getByRole('row', { name: templateName2 });
 

@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
-import { login, navigateToUsers } from '../login.ts';
+import { login } from '../login.ts';
+
+test.use({
+  ignoreHTTPSErrors: true,
+  headless: false, // чтобы видеть, что происходит
+  viewport: { width: 1280, height: 720 }
+});
 
 // Фикстура для авторизации перед каждым тестом
 test.beforeEach(async ({ page }) => {
@@ -8,10 +14,8 @@ test.beforeEach(async ({ page }) => {
    // Открываем страницу
   await login(page, admin_user, admin_user_password, apiUrl);
 
-  // Открываем dropdown Configuration
-  await page.getByRole('button', { name: 'Configuration' }).click();
   // Ждём перехода на Users
-  await navigateToUsers(page);
+  await page.getByRole('link', { name: 'Users' }).click();
   await expect(page).toHaveURL(/.*Users/);
 });
 

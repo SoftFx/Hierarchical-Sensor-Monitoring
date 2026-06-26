@@ -1,18 +1,14 @@
 import { test, expect, request as playwrightRequest } from '@playwright/test';
-import { testConfig } from '../config.ts';
 
 test('Create sensor via API', async () => {
-  const { apiUrl, sensorApiKey } = testConfig;
-  const baseURL = new URL(apiUrl).origin;
-
   const apiContext = await playwrightRequest.newContext({
-    baseURL,
+    baseURL: 'https://localhost:44333',
     ignoreHTTPSErrors: true,
   });
 
   const response = await apiContext.post('/api/Sensors/bool', {
     headers: {
-      Key: sensorApiKey,
+      Key: '9643e4ce-1480-47f8-8186-644fec277f11',
       ClientName: 'autotest-client',
     },
     data: {
