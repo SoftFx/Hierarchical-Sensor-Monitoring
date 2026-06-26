@@ -93,12 +93,18 @@ namespace hsm::collector
                     entry.tx_octets < prev_it->second.tx_octets)
                     continue;
 
-                const double rx_mb =
-                    static_cast<double>(entry.rx_octets - prev_it->second.rx_octets) *
-                    bytes_to_mb / elapsed_sec;
-                const double tx_mb =
-                    static_cast<double>(entry.tx_octets - prev_it->second.tx_octets) *
-                    bytes_to_mb / elapsed_sec;
+                const std::uint64_t rx_delta = entry.rx_octets - prev_it->second.rx_octets;
+                const std::uint64_t tx_delta = entry.tx_octets - prev_it->second.tx_octets;
+
+                // Surface only interfaces that actually moved data this interval. A perpetually-idle
+                // interface (Hyper-V vSwitch binding, Wi-Fi Direct virtual with no peer) transfers
+                // zero octets and never spawns a sensor; it appears as soon as it carries traffic and
+                // expires by TTL once it goes quiet again.
+                if (rx_delta == 0 && tx_delta == 0)
+                    continue;
+
+                const double rx_mb = static_cast<double>(rx_delta) * bytes_to_mb / elapsed_sec;
+                const double tx_mb = static_cast<double>(tx_delta) * bytes_to_mb / elapsed_sec;
 
                 result[alias] = { alias, rx_mb, tx_mb };
             }

@@ -61,7 +61,7 @@ Network (`.computer/Network/...`):
 | `AddNetworkConnectionsEstablished` | TCPv4+v6 established (gauge) | perf counter summed | 1 min period |
 | `AddNetworkConnectionFailures` | TCPv4+v6 failures (delta) | perf counter summed | 1 min period |
 | `AddNetworkConnectionsReset` | TCPv4+v6 resets (delta) | perf counter summed | 1 min period |
-| `AddNetworkInterfacesSpeed` | Per-interface received/sent MB/sec (DoubleBar) | `NetworkInterface.GetIPStatistics()` delta / 10 s | Dynamic — one sensor pair per Up non-loopback NIC discovered at runtime; paths `Network/<iface>/{Received,Sent} MB/sec`; `IsComputerSensor=true`; bar period 1 min; EMA; TTL 5 min; KeepHistory 90 d; counter reset or negative delta → interval skipped; disappeared interfaces expire by TTL. NO PDH. |
+| `AddNetworkInterfacesSpeed` | Per-interface received/sent MB/sec (DoubleBar) | `NetworkInterface.GetIPStatistics()` delta / 10 s | Dynamic — one sensor pair per Up, non-loopback, **non-filter** NIC **that actually carries traffic**, discovered at runtime; paths `Network/<iface>/{Received,Sent} MB/sec`; `IsComputerSensor=true`; bar period 1 min; EMA; TTL 5 min; KeepHistory 90 d; counter reset/negative delta **or a zero-delta (idle) interval → interface not surfaced**; idle/disappeared interfaces expire by TTL. NO PDH. |
 
 Bulk `AddAllNetworkSensors` calls all four methods above.
 
@@ -162,6 +162,19 @@ configure and enable them before `Start`; calling them after `Start` returns `HS
 The native sampler uses `GetIfTable2` (Windows only, Win10+ API set, Iphlpapi), same counter-reset-skip
 rule as the managed driver — the `network_speed_contract.hsmtest` fixture covers lifecycle + catalog-prototype
 registration for both drivers.
+
+Two live-sampler filters keep the interface set meaningful (both collectors, parity):
+- **Filter modules excluded** — `GetIfTable2` returns NDIS lightweight-filter pseudo-interfaces
+  (`<adapter>-QoS Packet Scheduler-NNNN`, `-WFP …`, `-Hyper-V Virtual Switch Extension Filter-NNNN`)
+  as Up, non-loopback rows; the native sampler skips rows with
+  `InterfaceAndOperStatusFlags.FilterInterface` set. The managed driver never saw them
+  (`NetworkInterface` wraps `GetAdaptersAddresses`, which omits filter modules), so this restores parity.
+- **Idle interfaces excluded** — an interface is surfaced only when its octet delta for the interval is
+  non-zero. Perpetually-quiet interfaces (Hyper-V vSwitch bindings, Wi-Fi Direct virtuals with no peer)
+  never create a sensor; an interface appears as soon as it transfers and expires by TTL once it goes quiet.
+
+Both are live-acquisition rules (not part of the action-protocol corpus), so the conformance fixture, which
+registers prototypes directly, is unaffected.
 
 Reproduced managed quirks: an alert-less default sensor emits `"Alerts":[]` (the prototype initializes
 the list — a user `CreateXSensor` with no alerts emits `null`); the `SpecialAlertCondition` TTL alert

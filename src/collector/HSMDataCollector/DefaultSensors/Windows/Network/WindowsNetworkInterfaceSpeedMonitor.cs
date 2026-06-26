@@ -151,7 +151,11 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
                             var deltaTx = curTx - prev.tx;
 
                             // Negative delta = counter reset or interface restarted; skip interval.
-                            if (deltaRx >= 0 && deltaTx >= 0)
+                            // Zero delta = idle this interval — do not surface the interface. A
+                            // perpetually-quiet interface (Hyper-V vSwitch binding, Wi-Fi Direct
+                            // virtual with no peer) never creates a sensor; the pair appears as soon
+                            // as traffic flows and expires by TTL once it goes quiet again.
+                            if (deltaRx >= 0 && deltaTx >= 0 && (deltaRx > 0 || deltaTx > 0))
                             {
                                 var rxMbPerSec = deltaRx / elapsedSec / (1024.0 * 1024.0);
                                 var txMbPerSec = deltaTx / elapsedSec / (1024.0 * 1024.0);
