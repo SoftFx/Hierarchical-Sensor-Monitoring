@@ -2,6 +2,7 @@
 
 #include "cpu_top.hpp"                             // per-process CPU sampling (#1179; _WIN32 only for WindowsCpuSampler)
 #include "network_speed.hpp"                       // per-interface network speed sampling (#1189; _WIN32 only for WindowsNetworkSampler)
+#include "windows_info.hpp"                        // Windows OS-info readers (#1189 follow-up; _WIN32 only for ReadWindowsInfo)
 #include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
 
 #include <algorithm>
@@ -2303,6 +2304,7 @@ namespace
             StartScheduler();
             StartTopCpuSampler();
             StartNetworkSpeedSampler();
+            StartWindowsInfoSampler();
 
             // Drain the one-shot Start values (e.g. product/collector version) now the worker is up.
             for (auto& json : start_values)
@@ -2357,6 +2359,7 @@ namespace
             StopScheduler();
             StopTopCpuSampler();
             StopNetworkSpeedSampler();
+            StopWindowsInfoSampler();
 
             // Dispose bound metric sources now the scheduler has stopped reading them (managed
             // dispose-on-stop; #1164). A restart rebinds via the factory.
@@ -3105,6 +3108,27 @@ namespace
 #endif
         }
 
+        // Enable the Windows OS-info sampler (#1189 follow-up). Must be called before Start.
+        hsm_result_t EnableWindowsInfoSensors(int32_t period_ms)
+        {
+            if (period_ms <= 0)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+#ifndef _WIN32
+            (void)period_ms;
+            return SetError(HSM_RESULT_INVALID_STATE, "Windows OS-info sensors are only supported on Windows.");
+#else
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (state_ != CollectorState::Stopped)
+                return SetError(HSM_RESULT_INVALID_STATE, "EnableWindowsInfoSensors must be called before Start.");
+
+            win_info_enabled_ = true;
+            win_info_period_ms_ = period_ms;
+            ClearError();
+            return HSM_RESULT_OK;
+#endif
+        }
+
     private:
         hsm_result_t SetError(hsm_result_t result, std::string message) const
         {
@@ -3444,6 +3468,80 @@ namespace
                 }
                 catch (...)
                 {
+                }
+            }
+#endif
+        }
+
+        void StartWindowsInfoSampler()
+        {
+#ifdef _WIN32
+            if (!win_info_enabled_)
+                return;
+            {
+                std::lock_guard<std::mutex> guard(win_info_cv_mutex_);
+                win_info_stop_ = false;
+            }
+            win_info_thread_ = std::thread([this] { RunWindowsInfoLoop(); });
+#endif
+        }
+
+        void StopWindowsInfoSampler()
+        {
+#ifdef _WIN32
+            {
+                std::lock_guard<std::mutex> guard(win_info_cv_mutex_);
+                win_info_stop_ = true;
+            }
+            win_info_cv_.notify_all();
+            if (win_info_thread_.joinable())
+                win_info_thread_.join();
+#endif
+        }
+
+        void RunWindowsInfoLoop()
+        {
+#ifdef _WIN32
+            // Handles for the already-registered "Windows OS info" sensors; AddDefaultSensor is
+            // idempotent and returns the existing handle. These typed (TimeSpan/Version) sensors
+            // cannot ride the double-only metric path, so this thread posts their values directly.
+            std::shared_ptr<NativeSensor> last_restart, install_date, win_version;
+            hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_LAST_RESTART, &params, last_restart);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_INSTALL_DATE, &params, install_date);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_VERSION, &params, win_version);
+
+            const auto period = std::chrono::milliseconds(win_info_period_ms_);
+
+            while (true)
+            {
+                try
+                {
+                    const auto info = hsm::collector::ReadWindowsInfo();
+
+                    if (last_restart && info.has_uptime)
+                        PostStartValue(last_restart->Path(), last_restart->Type(),
+                                       "\"" + EscapeJson(TimeSpanCFormat(info.uptime_ticks)) + "\"",
+                                       HSM_SENSOR_STATUS_OK, std::string{});
+
+                    if (install_date && info.has_install_age)
+                        PostStartValue(install_date->Path(), install_date->Type(),
+                                       "\"" + EscapeJson(TimeSpanCFormat(info.install_age_ticks)) + "\"",
+                                       HSM_SENSOR_STATUS_OK, std::string{});
+
+                    if (win_version && info.has_version)
+                        PostStartValue(win_version->Path(), win_version->Type(),
+                                       "\"" + EscapeJson(VersionString(info.ver_major, info.ver_minor, info.ver_build, info.ver_ubr)) + "\"",
+                                       HSM_SENSOR_STATUS_OK, info.version_comment);
+                }
+                catch (...)
+                {
+                }
+
+                {
+                    std::unique_lock<std::mutex> lock(win_info_cv_mutex_);
+                    if (win_info_cv_.wait_for(lock, period, [this] { return win_info_stop_; }))
+                        return;
                 }
             }
 #endif
@@ -3939,6 +4037,15 @@ namespace
         std::mutex net_speed_cv_mutex_;
         std::condition_variable net_speed_cv_;
         bool net_speed_stop_ = false;
+
+        // Windows OS-info sampler (#1189 follow-up): a thread that periodically reads + posts the
+        // typed "Windows OS info" sensors (TimeSpan/Version), which the double-only metric path can't.
+        bool win_info_enabled_ = false;
+        int32_t win_info_period_ms_ = 0;
+        std::thread win_info_thread_;
+        std::mutex win_info_cv_mutex_;
+        std::condition_variable win_info_cv_;
+        bool win_info_stop_ = false;
 #endif
     };
 
@@ -5919,6 +6026,8 @@ hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector)
         hsm_collector_enable_top_cpu_sensors(collector, 10, 1.0, 60000);
     if (result == HSM_RESULT_OK)
         hsm_collector_enable_network_interface_speed_sensors(collector, 10000); // 10 s sample period
+    if (result == HSM_RESULT_OK)
+        collector->impl->EnableWindowsInfoSensors(60000); // Windows OS-info refresh: 60 s
 #endif
     return result;
 }
