@@ -378,6 +378,30 @@ img .tree-png-icon {
     background-color: #dee2e6
 }
 
+.templatedAlert .alert-delete-button,
+.templatedAlert .addCondition,
+.templatedAlert .addAction,
+.templatedAlert .deleteCondition,
+.templatedAlert .deleteAction,
+.templatedAlert .removeSchedule,
+.templatedAlert .addSchedule {
+    display: none !important;
+}
+
+.templatedAlert select,
+.templatedAlert input:not([name='IsDisabled']):not([name='Id']):not([name='EntityId']):not([name='TemplateId']) {
+    pointer-events: none;
+}
+
+.templatedAlert .bootstrap-select > .dropdown-toggle {
+    pointer-events: none;
+}
+
+.templatedAlert .emojionearea {
+    pointer-events: none;
+    opacity: 0.4;
+}
+
 .meta-info-label {
     min-width: 18rem;
 }

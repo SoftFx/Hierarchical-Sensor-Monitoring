@@ -1,0 +1,68 @@
+name: Native collector soak
+
+# Scheduled endurance / soak lane (#1101, epic #1093). NOT a per-PR required check —
+# it runs heavier, longer stress than the per-PR stress_*_contract fixtures: sustained
+# parallel volume, failing-sender endurance, and queue-overflow-under-load.
+#
+# The soak fixtures live in tests/conformance/collector/soak/ — a subdirectory that the
+# per-PR discovery (both drivers) deliberately does NOT scan, so they only run here. Both
+# the .NET and the native driver execute the SAME fixtures and must satisfy the SAME
+# deterministic assertions (delivered / dropped counts, each-value-once). That shared
+# pass/fail IS the cross-implementation drop-counter parity check: if one collector loses
+# or duplicates a value the other does not, the lane goes red.
+
+on:
+  schedule:
+    - cron: '23 3 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  soak:
+    # windows-latest runs BOTH drivers (the managed conformance driver targets net48; the
+    # value is two DRIVERS, not two OSes — same rationale as the differential-fuzzer lane).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build native driver
+        run: |
+          cmake -S src/native/collector -B build/native-soak -DHSM_COLLECTOR_WERROR=ON
+          cmake --build build/native-soak --config Release --parallel
+
+      - name: Run soak fixtures — native driver
+        shell: bash
+        run: |
+          bin=$(find build/native-soak \( -name 'hsm_collector_tests' -o -name 'hsm_collector_tests.exe' \) -type f | head -1)
+          echo "native driver: $bin"
+          status=0
+          for fixture in tests/conformance/collector/soak/*.hsmtest; do
+            echo "::group::native $fixture"
+            "$bin" conformance "$fixture" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+      - name: Run soak fixtures — .NET driver
+        shell: bash
+        # The managed runner's directory-driven entry point (Fuzz_fixture_executes) runs every
+        # *.hsmtest in HSM_CONFORMANCE_FUZZ_DIR — reused here to point at the soak corpus.
+        env:
+          HSM_CONFORMANCE_FUZZ_DIR: ${{ github.workspace }}/tests/conformance/collector/soak
+        run: |
+          dotnet test src/collector/HSMDataCollector.Tests/HSMDataCollector.Tests.csproj \
+            --filter "FullyQualifiedName~Fuzz_fixture_executes" \
+            --logger "console;verbosity=minimal" \
+            --logger "trx;LogFileName=soak.trx" \
+            --results-directory "${{ runner.temp }}/soak-results"
+
+      - name: Upload soak results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-soak-results
+          path: ${{ runner.temp }}/soak-results
+          if-no-files-found: ignore

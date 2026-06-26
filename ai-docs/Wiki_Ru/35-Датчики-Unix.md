@@ -65,11 +65,11 @@ IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options = null);
 
 ## System
 
-Датчики в этой категории собирают информацию о системе. Используются команды, выполняемые через bash.
+Датчики в этой категории собирают информацию о системе. Датчики CPU и RAM в Linux читают `/proc/stat` и `/proc/meminfo` напрямую; Bash, `top` и `free` не требуются.
 
 ### AddTotalCpu
 
-Метод создаёт датчик, собирающий данные об общем использовании ЦПУ в бар (используется команда `top`).
+Метод создаёт датчик, собирающий данные об общем использовании ЦПУ из `/proc/stat` в бар.
 
 ```csharp
 // BarSensorOptions: NodePath = "System monitoring", PostDataPeriod = 15 сек, BarPeriod = 5 мин, CollectBarPeriod = 5 сек.
@@ -78,7 +78,7 @@ IUnixCollection AddTotalCpu(BarSensorOptions options = null);
 
 ### AddFreeRamMemory
 
-Метод создаёт датчик, собирающий данные об объёме доступной оперативной памяти в бар (используется команда `free`).
+Метод создаёт датчик, собирающий данные об объёме доступной оперативной памяти из `/proc/meminfo` в бар.
 
 ```csharp
 IUnixCollection AddFreeRamMemory(BarSensorOptions options = null);
@@ -99,7 +99,7 @@ IUnixCollection AddSystemMonitoringSensors(BarSensorOptions options = null);
 
 ## Disk
 
-Датчики в этой категории собирают информацию о диске. Для датчиков используется команда `df`.
+Датчики в этой категории собирают информацию о диске. В Linux они используют управляемый `DriveInfo("/")` вместо команды `df`.
 
 ### AddFreeDiskSpace
 

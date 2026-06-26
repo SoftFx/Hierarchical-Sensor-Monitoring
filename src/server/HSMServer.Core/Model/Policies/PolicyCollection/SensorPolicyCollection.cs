@@ -75,6 +75,8 @@ namespace HSMServer.Core.Model.Policies
             base.Attach(sensor);
 
             _sensor = (BaseSensorModel)_model;
+            _sensor.Settings.TTL.SetIsSetOverride(() => TTLPolicies.Count > 0);
+
             _typePolicy = new CorrectTypePolicy<T>(_sensor);
 
             NotificationResult = new();
@@ -87,7 +89,9 @@ namespace HSMServer.Core.Model.Policies
         {
             base.BuildDefault(node, entity);
 
-            _typePolicy.Destination = node.Policies.TimeToLive.Destination;
+            var firstTtl = node.Policies.TTLPolicies.FirstOrDefault();
+            if (firstTtl != null)
+                _typePolicy.Destination = firstTtl.Destination;
             _typePolicy.RebuildState();
         }
 
@@ -102,33 +106,36 @@ namespace HSMServer.Core.Model.Policies
             if (value is null || value.Status.IsOfftime())
                 return false;
 
-            RemoveAlert(TimeToLive);
+            var ttlSnapshot = TTLPolicies;
 
-            var timeout = false;
+            foreach (var ttlPolicy in ttlSnapshot)
+                RemoveAlert(ttlPolicy);
 
-            if (TimeToLive is not null && !TimeToLive.IsDisabled)
+            var anyTimeout = false;
+
+            foreach (var ttlPolicy in ttlSnapshot)
             {
+                if (ttlPolicy is null || ttlPolicy.IsDisabled)
+                    continue;
+
                 bool schedulePassed = true;
-                if (TimeToLive.ScheduleId.HasValue)
-                {
-                    schedulePassed = _scheduleProvider.IsWorkingTime(TimeToLive.ScheduleId.Value, value.LastUpdateTime);
-                }
+                if (ttlPolicy.ScheduleId.HasValue)
+                    schedulePassed = _scheduleProvider.IsWorkingTime(ttlPolicy.ScheduleId.Value, value.LastUpdateTime);
 
                 if (!schedulePassed)
-                    return false;
+                    continue;
 
-                timeout = TimeToLive.HasTimeout(value.LastUpdateTime);
-
-                if (timeout)
+                if (ttlPolicy.HasTimeout(value.LastUpdateTime))
                 {
-                    PolicyResult.AddSingleAlert(TimeToLive);
-                    SensorResult += TimeToLive.SensorResult;
+                    anyTimeout = true;
+                    PolicyResult.AddAlert(ttlPolicy);
+                    SensorResult += ttlPolicy.SensorResult;
                 }
             }
 
-            SensorExpired?.Invoke(_sensor, timeout);
+            SensorExpired?.Invoke(_sensor, anyTimeout);
 
-            return timeout;
+            return anyTimeout;
         }
 
         private void RemoveAlert(Policy policy)
@@ -247,17 +254,33 @@ namespace HSMServer.Core.Model.Policies
                 {
                     if (AlertChangeTable[update.Id.ToString()].CanChange(initiator))
                     {
-                        var policy = new PolicyType();
-
-                        if (policy.TryUpdate(update, out var err, _sensor))
+                        if (_storage.TryGetValue(update.Id, out var existingPolicy))
                         {
-                            AddPolicy(policy);
-
-                            CallJournal(policy.Id, string.Empty, policy.ToString(), initiator);
-                            Uploaded?.Invoke(ActionType.Add, policy);
+                            // UPDATE existing template-created policy in-place
+                            var oldPolicy = existingPolicy.ToString();
+                            if (existingPolicy.TryUpdate(update, out var err))
+                            {
+                                CallJournal(update.Id, oldPolicy, existingPolicy.ToString(), initiator);
+                                Uploaded?.Invoke(ActionType.Update, existingPolicy);
+                            }
+                            else
+                                errors.AppendLine(err);
                         }
                         else
-                            errors.AppendLine(err);
+                        {
+                            // ADD new template-created policy
+                            var policy = new PolicyType();
+
+                            if (policy.TryUpdate(update, out var err, _sensor))
+                            {
+                                AddPolicy(policy);
+
+                                CallJournal(policy.Id, string.Empty, policy.ToString(), initiator);
+                                Uploaded?.Invoke(ActionType.Add, policy);
+                            }
+                            else
+                                errors.AppendLine(err);
+                        }
                     }
                 }
             }
@@ -268,18 +291,36 @@ namespace HSMServer.Core.Model.Policies
                     {
                         if (updates.TryGetValue(id, out var update))
                         {
-                            var oldPolicy = policy.ToString();
-
-                            if (policy.TryUpdate(update, out var err))
+                            if (policy.TemplateId != null && !initiator.IsForceUpdate && initiator != InitiatorInfo.AlertTemplate)
                             {
-                                CallJournal(id, oldPolicy, policy.ToString(), initiator);
-                                Uploaded?.Invoke(ActionType.Update, policy);
+                                if (policy.IsDisabled != update.IsDisabled)
+                                {
+                                    var oldPolicy = policy.ToString();
+                                    policy.SetDisabled(update.IsDisabled);
+                                    CallJournal(id, oldPolicy, policy.ToString(), initiator);
+                                    Uploaded?.Invoke(ActionType.Update, policy);
+                                }
                             }
                             else
-                                errors.AppendLine(err);
+                            {
+                                var oldPolicy = policy.ToString();
+
+                                if (policy.TryUpdate(update, out var err))
+                                {
+                                    CallJournal(id, oldPolicy, policy.ToString(), initiator);
+                                    Uploaded?.Invoke(ActionType.Update, policy);
+                                }
+                                else
+                                    errors.AppendLine(err);
+                            }
                         }
                         else
+                        {
+                            if (policy.TemplateId != null && !initiator.IsForceUpdate && initiator != InitiatorInfo.AlertTemplate)
+                                continue;
+
                             RemovePolicy(id, initiator);
+                        }
                     }
 
                 var prioritySensorsExist = _storage.Any(u => !AlertChangeTable[u.Key.ToString()].CanChange(initiator));

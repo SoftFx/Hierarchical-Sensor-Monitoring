@@ -2,6 +2,7 @@
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using System;
+using System.Linq;
 
 namespace HSMServer.Core
 {
@@ -36,7 +37,12 @@ namespace HSMServer.Core
         {
             BaseValue BuildDefault<T>() where T : BaseValue, new()
             {
-                var ttl = sensor.Settings.TTL.Value.Ticks;
+                var ttlTicks = sensor.Policies.TTLPolicies
+                    .Where(p => !p.IsDisabled && p.TTLTicks.HasValue)
+                    .Select(p => p.TTLTicks.Value)
+                    .DefaultIfEmpty(sensor.Settings.TTL.Value?.Ticks ?? 0)
+                    .Min();
+
                 var now = DateTime.UtcNow;
                 return sensor.LastValue with
                 {
@@ -44,7 +50,7 @@ namespace HSMServer.Core
                     Time = now,
                     ReceivingTime = now,
                     AggregatedValuesCount = 1,
-                    Comment = $"{TimeoutComment} - {sensor.LastUpdate.ToDefaultFormat()}, TTL = {new TimeSpan(ttl)}"
+                    Comment = $"{TimeoutComment} - {sensor.LastUpdate.ToDefaultFormat()}, TTL = {new TimeSpan(ttlTicks)}"
                 };
             }
 

@@ -1,4 +1,4 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +17,7 @@ namespace HSMServer.Core.TableOfChanges
         public ChangeCollection Policies { get; private set; } = new();
 
 
-        public ChangeInfo TtlPolicy { get; private set; } = new();
+        public ChangeCollection TtlPolicies { get; private set; } = new();
 
 
         public string Path => _getFullPath?.Invoke();
@@ -40,8 +40,27 @@ namespace HSMServer.Core.TableOfChanges
             Policies = BuildCollection(entity.Policies);
             Settings = BuildCollection(entity.Settings);
 
-            TtlPolicy = new ChangeInfo(entity.TTLPolicy);
+            // Migration: handle old single TTLPolicy field
+            TtlPolicies = entity.TTLPolicies?.Count > 0
+                ? BuildCollection(entity.TTLPolicies)
+                : entity.TTLPolicy != null
+                    ? new(new Dictionary<string, ChangeInfo> { ["0"] = new(entity.TTLPolicy) })
+                    : new();
         }
+
+        internal void MigrateLegacyTtlKey(List<Guid> policyIds)
+        {
+            if (!TtlPolicies.TryGetValue("0", out var legacyEntry))
+                return;
+
+            var entity = legacyEntry.ToEntity();
+
+            foreach (var id in policyIds)
+                TtlPolicies.TryAdd(id.ToString(), new ChangeInfo(entity));
+
+            TtlPolicies.TryRemove("0", out _);
+        }
+
 
         public ChangeInfoTableEntity ToEntity() =>
             new()
@@ -50,7 +69,7 @@ namespace HSMServer.Core.TableOfChanges
                 Settings = Settings.ToEntity(),
                 Properties = Properties.ToEntity(),
 
-                TTLPolicy = TtlPolicy.ToEntity(),
+                TTLPolicies = TtlPolicies.ToEntity(),
             };
     }
 }

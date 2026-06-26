@@ -1,9 +1,11 @@
-﻿using HSMCommon.Model;
+using HSMCommon.Model;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
+using HSMServer.Constants;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Schedule;
+using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.TreeViewModel;
@@ -71,7 +73,7 @@ namespace HSMServer.Controllers
             {
                 Keys = templates.Select(x =>
                 {
-                    var (type, sensors) = GetAffectedSensors(x.SensorType, x.Path, x.FolderId);
+                    var (type, sensors) = GetAffectedSensors(x.SensorType, x.Paths, x.FolderId);
                     return new DataAlertTemplateViewModel(x) { Sensors = sensors };
                 }).ToList(),
             };
@@ -83,31 +85,29 @@ namespace HSMServer.Controllers
 
         private class UpdateResponse
         {
-            private const int MAX_SENSORS = 4;
+            private const int PageSize = 10;
 
             public byte? Type { get; set; }
             public string Sensors { get; set; }
-            public string Name { get; set; }
             public List<ChatItem> Chats { get; set; }
+            public int TotalCount { get; set; }
+            public int Page { get; set; }
+            public int TotalPages { get; set; }
 
-            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, string name, List<ChatItem> chats)
+            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, List<ChatItem> chats, int page = 1)
             {
                 Type = type;
-                Name = name;
                 Chats = chats;
+                TotalCount = sensors.Count;
+                Page = page;
+                TotalPages = sensors.Count > 0 ? (int)Math.Ceiling((double)sensors.Count / PageSize) : 0;
 
                 if (sensors.Count > 0)
                 {
-                    var sb = new StringBuilder(128);
-                    for (int i = 0; i < sensors.Count; i++)
-                    {
-                        if (i == MAX_SENSORS && sensors.Count > MAX_SENSORS + 1)
-                        {
-                            sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">... and other {sensors.Count - MAX_SENSORS}</div>");
-                            break;
-                        }
-                        sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">{sensors[i].FullPath}</div>");
-                    }
+                    var pageSensors = sensors.Skip((page - 1) * PageSize).Take(PageSize).ToList();
+                    var sb = new StringBuilder(pageSensors.Count * 64);
+                    foreach (var sensor in pageSensors)
+                        sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">{System.Web.HttpUtility.HtmlEncode(sensor.FullPath)}</div>");
 
                     Sensors = sb.ToString();
                 }
@@ -117,11 +117,16 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult UpdateTemplate(byte type, string path, Guid folderId)
+        public IActionResult UpdateTemplate(byte type, string paths, Guid folderId, int page = 1)
         {
-            var (sensorType, sensors) = GetAffectedSensors(type, path, folderId);
+            List<string> pathList = [];
+            if (!string.IsNullOrWhiteSpace(paths))
+            {
+                try { pathList = JsonSerializer.Deserialize<List<string>>(paths)?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? []; }
+                catch (JsonException) { }
+            }
 
-            var name = GetTemplateName(path, folderId);
+            var (sensorType, sensors) = GetAffectedSensors(type, pathList, folderId);
 
             List<ChatItem> chats = [];
             if (_folders.TryGetValue(folderId, out var folder))
@@ -132,7 +137,7 @@ namespace HSMServer.Controllers
                     .ToList();
             }
 
-            var response = new UpdateResponse(sensorType, sensors, name, chats);
+            var response = new UpdateResponse(sensorType, sensors, chats, page);
 
             return Json(JsonSerializer.Serialize(response));
         }
@@ -153,9 +158,9 @@ namespace HSMServer.Controllers
                 if (sensor != null)
                 {
                     model.FolderId = sensor.Root.FolderId ?? folders.FirstOrDefault().Id;
-                    model.PathTemplate = $"*/{sensor.Path}";
+                    model.PathTemplates = [$"*/{sensor.Path}"];
                     model.Type = (byte)sensor.Type;
-                    model.Name = GetTemplateName(sensor.Path, model.FolderId);
+                    model.Name = string.Empty;
                 }
             }
 
@@ -188,9 +193,25 @@ namespace HSMServer.Controllers
             if (_cache.GetAlertTemplateModels().Any(x => x.Name == data.Name && x.Id != data.Id))
                 ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
 
+            if (data.PathTemplates == null || data.PathTemplates.All(string.IsNullOrWhiteSpace))
+                ModelState.AddModelError(nameof(data.PathTemplates), "At least one path template is required.");
+
+            Dictionary<Guid, string> availableChats = null;
+            if (_folders.TryGetValue(data.FolderId, out var folder) && folder.TelegramChats.Count > 0)
+                availableChats = folder.TelegramChats.GetAvailableChatsDictionary(_telegram);
+
+            AlertTemplateModel model = null;
+
             if (ModelState.IsValid)
             {
-                var model = data.ToModel();
+                model = data.ToModel(availableChats);
+
+                if (!model.TryApplyPathTemplates(out var pathError))
+                    ModelState.AddModelError(nameof(data.PathTemplates), $"Invalid path template: {pathError}");
+            }
+
+            if (ModelState.IsValid)
+            {
                 var (success, error) = await _cache.AddAlertTemplateAsync(model);
 
                 if (!success)
@@ -199,9 +220,10 @@ namespace HSMServer.Controllers
                 return Ok();
             }
 
-            data = new DataAlertTemplateViewModel(data.ToModel(), _folders.GetUserFolders(CurrentUser));
+            model ??= data.ToModel(availableChats);
+            data = new DataAlertTemplateViewModel(model, _folders.GetUserFolders(CurrentUser));
 
-            if (_folders.TryGetValue(data.FolderId, out var folder))
+            if (folder != null)
                 PopulateAvailableChats(data, folder.TelegramChats);
 
             foreach (var (_, alerts) in data.DataAlerts)
@@ -214,38 +236,40 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async ValueTask<IActionResult> Remove(Guid id)
         {
-            await _cache.RemoveAlertTemplateAsync(id);
+            var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
+
+            if (!success)
+                TempData[TextConstants.TempDataErrorText] = error;
 
             return RedirectToAction("Index");
         }
 
 
-        private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, string path, Guid folder)
+        private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, List<string> paths, Guid folder)
         {
-            byte? sensorType = null;
+            var allSensors = new Dictionary<Guid, BaseSensorModel>();
 
-            var sensors = _cache.GetSensors(path, type == DataAlertTemplateViewModel.AnyType ? null : (SensorType)type, folder);
-
-            if (sensors.Count > 0)
+            foreach (var path in paths.Where(p => !string.IsNullOrWhiteSpace(p)))
             {
-                sensorType = (byte)sensors.FirstOrDefault()?.Type;
-                sensors = sensors.Where(x => x.Type == (SensorType)sensorType).ToList();
+                foreach (var sensor in _cache.GetSensors(path, type == DataAlertTemplateViewModel.AnyType ? null : (SensorType)type, folder))
+                    allSensors.TryAdd(sensor.Id, sensor);
             }
 
-            return (sensorType, sensors);
-        }
+            var sensors = allSensors.Values.ToList();
 
-        private string GetTemplateName(string path, Guid folderId)
-        {
-            var folderName = _folders.GetUserFolders(CurrentUser).FirstOrDefault(x => x.Id == folderId)?.Name ?? string.Empty;
+            if (sensors.Count == 0)
+                return (null, sensors);
 
-            if (string.IsNullOrWhiteSpace(path))
-                return string.Empty;
+            if (type == DataAlertTemplateViewModel.AnyType)
+            {
+                // For "Any" type, show all matching sensors regardless of type.
+                // Auto-detect: if all sensors are the same type, return it; otherwise keep as Any.
+                var distinctTypes = sensors.Select(x => x.Type).Distinct().ToList();
+                byte? sensorType = distinctTypes.Count == 1 ? (byte)distinctTypes[0] : null;
+                return (sensorType, sensors);
+            }
 
-            var result = path.Split('/');
-
-            return $"{folderName}/{result[^1]}";
-
+            return ((byte)sensors.FirstOrDefault()!.Type, sensors);
         }
 
         private List<SelectListItem> GetAlertSchedulesSelectList()

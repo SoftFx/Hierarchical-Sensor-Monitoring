@@ -291,14 +291,18 @@ namespace HSMServer.Core.Cache
         private static bool TryMigrateTtlPolicy<T>(BaseNodeModel node, Predicate<Policy> isTarget, Func<PolicyUpdate, PolicyUpdate> migrator, out T update)
             where T : BaseNodeUpdate, new()
         {
-            var ttl = node.Policies.TimeToLive;
-            var needMigration = isTarget(ttl);
+            var ttlPolicies = node.Policies.TTLPolicies;
+            var isTargetAny = ttlPolicies.Any(t => isTarget(t));
+            var needForceMigration = node.ChangeTable.TtlPolicies.Values.Any(c => c.NeedMigrate);
+            var needMigration = isTargetAny || needForceMigration;
 
             update = !needMigration ? null : new T()
             {
                 Id = node.Id,
-                TTLPolicy = migrator(ToUpdate(ttl)),
-                Initiator = _softMigrator,
+                TTLPolicies = isTargetAny
+                    ? ttlPolicies.Select(t => isTarget(t) ? migrator(ToUpdate(t)) : ToUpdate(t)).ToList()
+                    : ttlPolicies.Select(t => ToUpdate(t)).ToList(),
+                Initiator = needForceMigration ? _forceMigrator : _softMigrator,
             };
 
             return needMigration;
@@ -306,15 +310,17 @@ namespace HSMServer.Core.Cache
 
         private static bool TryMigrateProductTtlPolicy(ProductModel node, Predicate<Policy> isTargetPredict, Func<PolicyUpdate, PolicyUpdate> migrator, out ProductUpdate update)
         {
-            var ttl = node.Policies.TimeToLive;
-            var isTarget = isTargetPredict(ttl);
-            var needForceMigration = node.ChangeTable.TtlPolicy.NeedMigrate;
+            var ttlPolicies = node.Policies.TTLPolicies;
+            var isTarget = ttlPolicies.Any(t => isTargetPredict(t));
+            var needForceMigration = node.ChangeTable.TtlPolicies.Values.Any(c => c.NeedMigrate);
             var needMigartion = isTarget || needForceMigration;
 
             update = !needMigartion ? null : new ProductUpdate()
             {
                 Id = node.Id,
-                TTLPolicy = isTarget ? migrator(ToUpdate(ttl)) : ToUpdate(ttl),
+                TTLPolicies = isTarget
+                    ? ttlPolicies.Select(t => isTargetPredict(t) ? migrator(ToUpdate(t)) : ToUpdate(t)).ToList()
+                    : ttlPolicies.Select(t => ToUpdate(t)).ToList(),
                 Initiator = needForceMigration ? _forceMigrator : _softMigrator,
             };
 
@@ -392,6 +398,7 @@ namespace HSMServer.Core.Cache
                 Template = policy.Template,
                 IsDisabled = policy.IsDisabled,
                 Icon = policy.Icon,
+                ScheduleId = policy.ScheduleId,
 
                 Initiator = _forceMigrator,
             };

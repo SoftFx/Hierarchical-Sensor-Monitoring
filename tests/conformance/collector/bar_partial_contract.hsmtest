@@ -1,0 +1,97 @@
+# HSM collector conformance v1 — pre-aggregated partial bar (AddPartial) contract.
+# Format: case|action|arg1|arg2|...
+# Actions:
+# add_int_bar_partial|bar_index|min|max|mean|first|last|count
+# add_double_bar_partial|bar_index|min|max|mean|first|last|count
+# Contract notes:
+# - Partials merge by min/max union, weighted mean (sum += mean*count), first-of-first, last-of-last.
+# - Int partials are validated strictly: count >= 1 and mean/first/last inside [min, max] inclusive.
+# - Double partials tolerate FP drift: tolerance = max(1e-12, |max-min| * 1e-9).
+# - An invalid partial is silently skipped — the call succeeds and the bar stays unchanged.
+
+int_partial_single_passthrough|create_collector
+int_partial_single_passthrough|create_int_bar_sensor|contract/partial/single|3600000|0
+int_partial_single_passthrough|start
+int_partial_single_passthrough|add_int_bar_partial|0|1|5|3|1|5|4
+int_partial_single_passthrough|stop
+int_partial_single_passthrough|expect_sent_count|1
+int_partial_single_passthrough|expect_bar_field|0|min|1
+int_partial_single_passthrough|expect_bar_field|0|max|5
+int_partial_single_passthrough|expect_bar_field|0|mean|3
+int_partial_single_passthrough|expect_bar_field|0|first|1
+int_partial_single_passthrough|expect_bar_field|0|last|5
+int_partial_single_passthrough|expect_bar_field|0|count|4
+
+int_partial_merge_weighted_mean_min_max_union|create_collector
+int_partial_merge_weighted_mean_min_max_union|create_int_bar_sensor|contract/partial/merge|3600000|0
+int_partial_merge_weighted_mean_min_max_union|start
+int_partial_merge_weighted_mean_min_max_union|add_int_bar_partial|0|1|5|3|1|5|4
+int_partial_merge_weighted_mean_min_max_union|add_int_bar_partial|0|0|10|6|2|8|2
+int_partial_merge_weighted_mean_min_max_union|stop
+int_partial_merge_weighted_mean_min_max_union|expect_sent_count|1
+int_partial_merge_weighted_mean_min_max_union|expect_bar_field|0|min|0
+int_partial_merge_weighted_mean_min_max_union|expect_bar_field|0|max|10
+int_partial_merge_weighted_mean_min_max_union|expect_bar_field|0|mean|4
+int_partial_merge_weighted_mean_min_max_union|expect_bar_field|0|first|1
+int_partial_merge_weighted_mean_min_max_union|expect_bar_field|0|last|8
+int_partial_merge_weighted_mean_min_max_union|expect_bar_field|0|count|6
+
+int_partial_then_values_merge|create_collector
+int_partial_then_values_merge|create_int_bar_sensor|contract/partial/mixed|3600000|0
+int_partial_then_values_merge|start
+int_partial_then_values_merge|add_int_bar_partial|0|1|5|3|1|5|4
+int_partial_then_values_merge|add_bar_int|0|10
+int_partial_then_values_merge|stop
+int_partial_then_values_merge|expect_sent_count|1
+int_partial_then_values_merge|expect_bar_field|0|min|1
+int_partial_then_values_merge|expect_bar_field|0|max|10
+int_partial_then_values_merge|expect_bar_field|0|mean|4
+int_partial_then_values_merge|expect_bar_field|0|first|1
+int_partial_then_values_merge|expect_bar_field|0|last|10
+int_partial_then_values_merge|expect_bar_field|0|count|5
+
+int_partial_mean_outside_range_rejected|create_collector
+int_partial_mean_outside_range_rejected|create_int_bar_sensor|contract/partial/bad-mean|3600000|0
+int_partial_mean_outside_range_rejected|start
+int_partial_mean_outside_range_rejected|add_int_bar_partial|0|1|5|7|1|5|2
+int_partial_mean_outside_range_rejected|stop
+int_partial_mean_outside_range_rejected|expect_sent_count|0
+
+int_partial_first_outside_range_rejected|create_collector
+int_partial_first_outside_range_rejected|create_int_bar_sensor|contract/partial/bad-first|3600000|0
+int_partial_first_outside_range_rejected|start
+int_partial_first_outside_range_rejected|add_int_bar_partial|0|1|5|3|7|5|2
+int_partial_first_outside_range_rejected|stop
+int_partial_first_outside_range_rejected|expect_sent_count|0
+
+int_partial_count_zero_rejected|create_collector
+int_partial_count_zero_rejected|create_int_bar_sensor|contract/partial/zero-count|3600000|0
+int_partial_count_zero_rejected|start
+int_partial_count_zero_rejected|add_int_bar_partial|0|1|5|3|1|5|0
+int_partial_count_zero_rejected|stop
+int_partial_count_zero_rejected|expect_sent_count|0
+
+double_partial_epsilon_just_inside_accepted|create_collector
+double_partial_epsilon_just_inside_accepted|create_double_bar_sensor|contract/partial/eps-in|3600000|0|2
+double_partial_epsilon_just_inside_accepted|start
+double_partial_epsilon_just_inside_accepted|add_double_bar_partial|0|0|1000|1000.0000005|0|1000|4
+double_partial_epsilon_just_inside_accepted|stop
+double_partial_epsilon_just_inside_accepted|expect_sent_count|1
+double_partial_epsilon_just_inside_accepted|expect_bar_field|0|count|4
+double_partial_epsilon_just_inside_accepted|expect_bar_field|0|mean|1000
+double_partial_epsilon_just_inside_accepted|expect_bar_field|0|min|0
+double_partial_epsilon_just_inside_accepted|expect_bar_field|0|max|1000
+
+double_partial_outside_tolerance_rejected|create_collector
+double_partial_outside_tolerance_rejected|create_double_bar_sensor|contract/partial/eps-out|3600000|0|2
+double_partial_outside_tolerance_rejected|start
+double_partial_outside_tolerance_rejected|add_double_bar_partial|0|0|1000|1000.01|0|1000|4
+double_partial_outside_tolerance_rejected|stop
+double_partial_outside_tolerance_rejected|expect_sent_count|0
+
+double_partial_nan_field_rejected|create_collector
+double_partial_nan_field_rejected|create_double_bar_sensor|contract/partial/nan-field|3600000|0|2
+double_partial_nan_field_rejected|start
+double_partial_nan_field_rejected|add_double_bar_partial|0|0|1000|NaN|0|1000|4
+double_partial_nan_field_rejected|stop
+double_partial_nan_field_rejected|expect_sent_count|0

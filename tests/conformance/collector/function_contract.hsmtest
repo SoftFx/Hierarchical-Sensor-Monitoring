@@ -1,0 +1,62 @@
+# HSM collector conformance v1 — function sensor contract (no-params + buffered values).
+# Format: case|action|arg1|arg2|...
+# Actions:
+# create_function_int_sensor|path|post_period_ms|constant   (harness callback returns `constant`)
+# create_values_function_int_sum_sensor|path|post_period_ms|max_cache_size
+#                                                            (harness callback sums the buffered snapshot)
+# add_function_value|idx|value                               (buffers; values survive across posts)
+# expect_no_new_payloads_for_ms|ms
+# Contract notes:
+# - The FIRST post fires immediately on Start, then every post period.
+# - The values-function buffer is a SLIDING WINDOW, not a drain: each post passes a snapshot of
+#   the buffered values to the callback; the buffer keeps them. Oldest values are evicted when
+#   max_cache_size is exceeded. Values may be buffered before Start.
+# - Cases that need an exact value use a long (inert) period and assert only the immediate
+#   initial post; periodic cases assert timing-immune invariants.
+
+function_posts_initial_value_immediately|create_collector
+function_posts_initial_value_immediately|create_function_int_sensor|contract/func/initial|60000|42
+function_posts_initial_value_immediately|start
+function_posts_initial_value_immediately|expect_sent_count|1|5
+function_posts_initial_value_immediately|expect_payload_contains|0|"Type":1,
+function_posts_initial_value_immediately|expect_payload_contains|0|"Value":42
+function_posts_initial_value_immediately|expect_no_new_payloads_for_ms|300
+
+function_posts_constant_periodically|create_collector
+function_posts_constant_periodically|create_function_int_sensor|contract/func/periodic|150|42
+function_posts_constant_periodically|start
+function_posts_constant_periodically|expect_sent_count_between|3|1000|10
+function_posts_constant_periodically|expect_all_payloads_contain|"Value":42
+
+values_function_receives_buffered_snapshot|create_collector
+values_function_receives_buffered_snapshot|create_values_function_int_sum_sensor|contract/func/sum|60000|100
+values_function_receives_buffered_snapshot|add_function_value|0|1
+values_function_receives_buffered_snapshot|add_function_value|0|2
+values_function_receives_buffered_snapshot|add_function_value|0|3
+values_function_receives_buffered_snapshot|add_function_value|0|4
+values_function_receives_buffered_snapshot|add_function_value|0|5
+values_function_receives_buffered_snapshot|start
+values_function_receives_buffered_snapshot|expect_sent_count|1|5
+values_function_receives_buffered_snapshot|expect_payload_contains|0|"Value":15
+
+values_function_cache_evicts_oldest|create_collector
+values_function_cache_evicts_oldest|create_values_function_int_sum_sensor|contract/func/evict|60000|3
+values_function_cache_evicts_oldest|add_function_value|0|1
+values_function_cache_evicts_oldest|add_function_value|0|2
+values_function_cache_evicts_oldest|add_function_value|0|3
+values_function_cache_evicts_oldest|add_function_value|0|4
+values_function_cache_evicts_oldest|add_function_value|0|5
+values_function_cache_evicts_oldest|start
+values_function_cache_evicts_oldest|expect_sent_count|1|5
+values_function_cache_evicts_oldest|expect_payload_contains|0|"Value":12
+
+values_function_cache_is_sliding_window|create_collector
+values_function_cache_is_sliding_window|create_values_function_int_sum_sensor|contract/func/window|150|100
+values_function_cache_is_sliding_window|add_function_value|0|1
+values_function_cache_is_sliding_window|add_function_value|0|2
+values_function_cache_is_sliding_window|add_function_value|0|3
+values_function_cache_is_sliding_window|add_function_value|0|4
+values_function_cache_is_sliding_window|add_function_value|0|5
+values_function_cache_is_sliding_window|start
+values_function_cache_is_sliding_window|expect_sent_count_between|2|1000|10
+values_function_cache_is_sliding_window|expect_all_payloads_contain|"Value":15

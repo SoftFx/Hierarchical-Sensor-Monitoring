@@ -19,7 +19,6 @@ namespace HSMDataCollector.DefaultSensors
         private readonly IDiskInfo _diskInfo;
         private readonly int _calibrationRequests;
 
-        private CancellationTokenSource _tokenSource;
         private DateTime _lastSpeedCheckTime;
         private TimeSpan _prevPrediction = TimeSpan.Zero;
 
@@ -28,7 +27,9 @@ namespace HSMDataCollector.DefaultSensors
         private long _requestsCount;
         private bool _isOffTime;
 
-        private Task _workTask;
+        // Composed scheduling lifecycle for the disk-speed sampling loop (replaces a hand-rolled
+        // ScheduledTask + lock). The base MonitoringSensorBase owns its own send-loop handle.
+        private readonly ScheduledTaskHandle _workHandle;
 
         private bool IsCalibration => _requestsCount <= _calibrationRequests;
 
@@ -41,24 +42,28 @@ namespace HSMDataCollector.DefaultSensors
             _calculateSpeedDelay = TimeSpan.FromSeconds(DefaultSpaceCheckPeriodInSec);
             _calibrationRequests = options.CalibrationRequests;
             _diskInfo = diskInfo;
+
+            _workHandle = new ScheduledTaskHandle(_dataProcessor.Scheduler);
         }
 
 
         public override ValueTask<bool> StartAsync()
         {
+            // Guard the per-start state reset so a repeated StartAsync does not re-zero the running
+            // sampler. _locker still serializes the reset; the handle owns the schedule lifecycle.
             lock (_locker)
             {
-                if (_workTask == null)
+                if (!_workHandle.IsScheduled)
                 {
-                    _tokenSource = new CancellationTokenSource();
+                    var utc = DateTime.UtcNow;
 
-                    _lastSpeedCheckTime = DateTime.UtcNow;
-                    _lastAvailableSpace = FreeSpace;
+                    _lastSpeedCheckTime = utc;
+                    _lastAvailableSpace = TryReadFreeSpace(out var freeSpace) ? freeSpace : 0L;
 
                     _currentChangeSpeed = 0.0;
                     _requestsCount = 0;
 
-                    _workTask = PeriodicTask.Run(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, _tokenSource.Token, HandleException);
+                    _workHandle.Start(UpdateDiskSpeed, utc.Ceil(_calculateSpeedDelay) - utc, _calculateSpeedDelay, HandleException);
                 }
             }
 
@@ -69,23 +74,8 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                Task taskToWait = null;
-                lock (_locker)
-                {
-                    if (_workTask != null)
-                    {
-                        _tokenSource?.Cancel();
-                        taskToWait = _workTask;
-                        _tokenSource?.Dispose();
-                        _workTask = null;
-                    }
-                }
+                await _workHandle.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
 
-                if (taskToWait != null)
-                {
-                    await taskToWait.ConfigureAwait(false);
-                    taskToWait.Dispose();
-                }
                 await base.StopAsync();
             }
             catch (OperationCanceledException) { }
@@ -137,8 +127,10 @@ namespace HSMDataCollector.DefaultSensors
 
         private void UpdateDiskSpeed()
         {
+            if (!TryReadFreeSpace(out var curSpace))
+                return;
+
             var utc = DateTime.UtcNow;
-            var curSpace = FreeSpace;
 
             var curSpeed = (_lastAvailableSpace - curSpace) / (utc - _lastSpeedCheckTime).TotalSeconds;
 
@@ -149,6 +141,21 @@ namespace HSMDataCollector.DefaultSensors
 
             _lastAvailableSpace = curSpace;
             _lastSpeedCheckTime = utc;
+        }
+
+        private bool TryReadFreeSpace(out long freeSpace)
+        {
+            try
+            {
+                freeSpace = FreeSpace;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                freeSpace = 0L;
+                HandleException(ex);
+                return false;
+            }
         }
     }
 }

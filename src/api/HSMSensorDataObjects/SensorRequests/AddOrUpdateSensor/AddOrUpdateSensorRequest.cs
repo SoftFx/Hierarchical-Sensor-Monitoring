@@ -81,7 +81,15 @@ namespace HSMSensorDataObjects.SensorRequests
 
         public List<AlertUpdateRequest> Alerts { get; set; }
 
-        public AlertUpdateRequest TtlAlert { get; set; }
+        public List<AlertUpdateRequest> TtlAlerts { get; set; }
+
+        /// <summary>Backward compat: maps single TtlAlert to TtlAlerts list.</summary>
+        [Obsolete("Use TtlAlerts instead")]
+        public AlertUpdateRequest TtlAlert
+        {
+            get => null;
+            set { if (value != null && TtlAlerts is null) TtlAlerts = new List<AlertUpdateRequest> { value }; }
+        }
 
 
         public SensorType? SensorType { get; set; }
@@ -96,7 +104,15 @@ namespace HSMSensorDataObjects.SensorRequests
 
         public long? SelfDestroy { get; set; }
 
-        public long? TTL { get; set; }
+        public List<long?> TTLs { get; set; }
+
+        /// <summary>Backward compat: maps single TTL to TTLs list.</summary>
+        [Obsolete("Use TTLs instead")]
+        public long? TTL
+        {
+            get => null;
+            set { if (value.HasValue && TTLs is null) TTLs = new List<long?> { value }; }
+        }
 
 
         public StatisticsOptions? Statistics { get; set; }

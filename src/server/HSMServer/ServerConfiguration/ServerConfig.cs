@@ -54,6 +54,8 @@ namespace HSMServer.ServerConfiguration
 
         public MonitoringOptions MonitoringOptions { get; }
 
+        public AgentConfig Agent { get; }
+
 
         static ServerConfig()
         {
@@ -86,6 +88,7 @@ namespace HSMServer.ServerConfiguration
             Telegram = Register<TelegramConfig>(nameof(Telegram));
             Kestrel = Register<KestrelConfig>(nameof(Kestrel));
             MonitoringOptions = Register<MonitoringOptions>(nameof(MonitoringOptions));
+            Agent = Register<AgentConfig>(nameof(Agent));
 
             ResaveSettings();
         }

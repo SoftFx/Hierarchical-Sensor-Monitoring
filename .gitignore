@@ -148,3 +148,16 @@ src/module/HSMPingModule/Config/*
 # Playwright test output (regenerable)
 src/tests/Autotests/playwright-report/
 src/tests/Autotests/test-results/
+
+#AI
+# Claude Code local state (permissions, worktrees) - machine-local, never commit
+.claude/
+
+# Conan/CMake user presets (generated, never committed)
+CMakeUserPresets.json
+
+# docker-compose.yml bind-mount volumes created at repo root by `docker compose up`
+/Logs/
+/Config/
+/Databases/
+/DatabasesBackups/

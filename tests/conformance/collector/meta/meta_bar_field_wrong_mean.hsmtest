@@ -1,0 +1,13 @@
+# MUST-FAIL: the bar aggregates 1..5 (mean 3) but the fixture demands mean 999.
+# Proves expect_bar_field reads the aggregated payload fields.
+meta_bar_field_wrong_mean|create_collector
+meta_bar_field_wrong_mean|create_int_bar_sensor|meta/bar/wrong-mean|3600000|0
+meta_bar_field_wrong_mean|start
+meta_bar_field_wrong_mean|add_bar_int|0|1
+meta_bar_field_wrong_mean|add_bar_int|0|2
+meta_bar_field_wrong_mean|add_bar_int|0|3
+meta_bar_field_wrong_mean|add_bar_int|0|4
+meta_bar_field_wrong_mean|add_bar_int|0|5
+meta_bar_field_wrong_mean|stop
+meta_bar_field_wrong_mean|expect_sent_count|1
+meta_bar_field_wrong_mean|expect_bar_field|0|mean|999

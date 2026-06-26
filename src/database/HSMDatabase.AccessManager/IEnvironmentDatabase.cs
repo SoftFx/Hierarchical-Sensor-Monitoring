@@ -84,6 +84,17 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
+        #region Slack destinations
+
+        List<byte[]> GetSlackDestinationsList();
+        SlackDestinationEntity GetSlackDestination(byte[] id);
+        void AddSlackDestination(SlackDestinationEntity destination);
+        void RemoveSlackDestination(byte[] id);
+        void AddSlackDestinationToList(byte[] id);
+        void RemoveSlackDestinationFromList(byte[] id);
+
+        #endregion
+
         #region Alert templates
 
         List<byte[]> GetAllAlertTemplatesIds();

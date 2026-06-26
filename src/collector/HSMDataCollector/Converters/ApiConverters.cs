@@ -62,7 +62,7 @@ namespace HSMDataCollector.Converters
         {
             return new AddOrUpdateSensorRequest
             {
-                TtlAlert = options.TtlAlert?.ToApi(),
+                TtlAlerts = options.TtlAlerts?.Select(a => a.ToApi()).ToList(),
 
                 SensorType = options.Type,
                 Path = options.Path,
@@ -70,7 +70,8 @@ namespace HSMDataCollector.Converters
                 OriginalUnit = options.SensorUnit,
                 Description = options.Description,
 
-                TTL = options.TtlAlert?.TtlValue?.Ticks ?? options.TTL?.Ticks,
+                TTLs = options.TtlAlerts?.Select(a => a.TtlValue?.Ticks).ToList()
+                    ?? options.TTLs?.Select(t => t?.Ticks).ToList(),
                 KeepHistory = options.KeepHistory?.Ticks,
                 SelfDestroy = options.SelfDestroy?.Ticks,
 

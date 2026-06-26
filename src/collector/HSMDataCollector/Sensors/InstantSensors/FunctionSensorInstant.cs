@@ -17,7 +17,7 @@ namespace HSMDataCollector.Sensors
 
         TimeSpan IBaseFuncSensor.GetInterval() => PostTimePeriod;
 
-        void IBaseFuncSensor.RestartTimer(TimeSpan timeSpan) => RestartTimerAsync(timeSpan);
+        void IBaseFuncSensor.RestartTimer(TimeSpan timeSpan) => _ = RestartTimerAsync(timeSpan);
 
 
         protected U CheckFunc<U>(U function)
@@ -50,12 +50,17 @@ namespace HSMDataCollector.Sensors
     internal sealed class ValuesFunctionSensorInstant<T, U> : BaseFunctionSensorInstant<T>, IParamsFuncSensor<T, U>
     {
         private readonly ConcurrentQueue<U> _cache = new ConcurrentQueue<U>();
+        private readonly object _cacheLock = new object();
         private readonly Func<List<U>, T> _getValue;
         private readonly int _cacheSize;
+        private int _cacheCount;
 
 
         public ValuesFunctionSensorInstant(Func<List<U>, T> getValue, ValuesFunctionSensorOptions options) : base(options)
         {
+            if (options.MaxCacheSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(options.MaxCacheSize), "Max cache size must be greater than zero.");
+
             _cacheSize = options.MaxCacheSize;
             _getValue = CheckFunc(getValue);
         }
@@ -63,17 +68,33 @@ namespace HSMDataCollector.Sensors
 
         public void AddValue(U value)
         {
-            _cache.Enqueue(value);
+            lock (_cacheLock)
+            {
+                _cache.Enqueue(value);
+                _cacheCount++;
 
-            while (_cache.Count > _cacheSize)
-                if (!_cache.TryDequeue(out _))
-                    break;
+                while (_cacheCount > _cacheSize)
+                {
+                    if (!_cache.TryDequeue(out _))
+                        break;
+
+                    _cacheCount--;
+                }
+            }
         }
 
 
         public Func<List<U>, T> GetFunc() => _getValue;
 
-        protected override T GetValue() => _getValue.Invoke(_cache.ToList());
+        protected override T GetValue()
+        {
+            List<U> values;
+
+            lock (_cacheLock)
+                values = _cache.ToList();
+
+            return _getValue.Invoke(values);
+        }
 
 
     }

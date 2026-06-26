@@ -1,13 +1,20 @@
-﻿using HSMDataCollector.Extensions;
+using System;
+using System.IO;
+using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.DefaultSensors.SystemInfo
 {
     internal sealed class UnixDiskInfo : IDiskInfo
     {
-        private const string AvailableSpaceCommand = @"df --output=avail / | sed 1d"; // get available space without header in /
+        private const string RootMount = "/";
 
 
-        public long FreeSpace => long.TryParse(AvailableSpaceCommand.BashExecute(), out var availableSpace) ? availableSpace : 0L;
+        // Available space on the root filesystem in kB. Uses the managed DriveInfo (statvfs under the
+        // hood) instead of shelling out to `df` — no external process, no locale-dependent text parsing.
+        public long FreeSpace
+        {
+            get { return new DriveInfo(RootMount).AvailableFreeSpace / 1024L; }
+        }
 
         public long FreeSpaceMb => FreeSpace.KilobytesToMegabytes();
 

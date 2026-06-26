@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -27,8 +27,7 @@ namespace HSMServer.Model.DataAlertTemplates
         [Required]
         public string Name { get; set; }
 
-        [Required]
-        public string PathTemplate { get; set; }
+        public List<string> PathTemplates { get; set; } = [];
 
         public List<BaseSensorModel> Sensors { get; set; }
 
@@ -54,7 +53,7 @@ namespace HSMServer.Model.DataAlertTemplates
         {
             Id = model.Id;
             Name = model.Name;
-            PathTemplate = model.Path;
+            PathTemplates = [.. model.Paths];
             Type = model.SensorType;
             FolderId = model.FolderId;
 
@@ -64,11 +63,17 @@ namespace HSMServer.Model.DataAlertTemplates
 
             DataAlerts = [];
 
-            if (model.TTLPolicy != null)
+            if (model.TtlEntries?.Count > 0)
             {
-                var interval = new TimeIntervalViewModel().FromModel(model.TTL, PredefinedIntervals.ForTimeout);
-                var ttl = new TimeToLiveAlertViewModel(model.TTLPolicy, interval) { IsModify = true };
-                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = [ttl];
+                var ttlAlerts = new List<DataAlertViewModelBase>();
+                foreach (var entry in model.TtlEntries)
+                {
+                    var ttlInterval = entry.Interval ?? TimeIntervalModel.None;
+                    var interval = new TimeIntervalViewModel().FromModel(ttlInterval, PredefinedIntervals.ForTimeout);
+                    var ttl = new TimeToLiveAlertViewModel(entry.Policy, interval) { IsModify = true };
+                    ttlAlerts.Add(ttl);
+                }
+                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = ttlAlerts;
             }
 
 
@@ -86,30 +91,35 @@ namespace HSMServer.Model.DataAlertTemplates
             SetAvailableFolders(availableFolders);
         }
 
-        public AlertTemplateModel ToModel()
+        public AlertTemplateModel ToModel(Dictionary<Guid, string> availableChats)
         {
-            AlertTemplateModel result = new AlertTemplateModel()
+            var result = new AlertTemplateModel()
             {
                 Id = Id,
                 Name = Name,
-                Path = PathTemplate,
+                Paths = PathTemplates?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [],
                 SensorType = Type,
                 FolderId = FolderId,
             };
 
-            result.TryApplyPathTemplate(PathTemplate, out _);
+            result.TryApplyPathTemplates(out _);
 
-            var ttl = DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+            var ttlAlerts = DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts : null;
 
-            if (ttl != null)
+            if (ttlAlerts != null)
             {
-                if (ttl.Id == Guid.Empty)
-                    ttl.Id = Guid.NewGuid();
+                foreach (var ttl in ttlAlerts)
+                {
+                    if (ttl.Id == Guid.Empty)
+                        ttl.Id = Guid.NewGuid();
 
-                result.TTLPolicy = new TTLPolicy();
-                var update = ttl.ToTimeToLiveUpdate(InitiatorInfo.AlertTemplate, []);
-                result.TTLPolicy.FullUpdate(update);
-                result.TTL = ttl.Conditions?[0].TimeToLive.ToModel() ?? TimeIntervalModel.None;
+                    var ttlPolicy = new TTLPolicy();
+                    var update = ttl.ToTimeToLiveUpdate(InitiatorInfo.AlertTemplate, availableChats ?? []);
+                    var interval = ttl.Conditions is { Count: > 0 } ? ttl.Conditions[0].TimeToLive.ToModel() : TimeIntervalModel.None;
+                    update = update with { TTL = interval?.Ticks };
+                    ttlPolicy.FullUpdate(update);
+                    result.TtlEntries.Add(new TtlEntry(ttlPolicy, interval ?? TimeIntervalModel.None));
+                }
             }
 
             byte key = DataAlerts.Keys.FirstOrDefault(x => x != TimeToLiveAlertViewModel.AlertKey);
@@ -125,7 +135,7 @@ namespace HSMServer.Model.DataAlertTemplates
                         item.Id = Guid.NewGuid();
 
                     var policy = Policy.BuildPolicy(key);
-                    var update = item.ToUpdate([]);
+                    var update = item.ToUpdate(availableChats ?? []);
                     policy.UpdatePolicy(update);
                     result.Policies.Add(policy);
                 }

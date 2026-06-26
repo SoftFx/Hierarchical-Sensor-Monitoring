@@ -16,6 +16,8 @@ namespace HSMServer.Model.Configuration
 
         public MonitoringSettingsViewModel Monitoring { get; } = new(config);
 
+        public AgentSettingsViewModel Agent { get; } = new(config);
+
         public double TotalDbSize => Math.Round(database.TotalDbSize / (double)(1<<20), 2, MidpointRounding.AwayFromZero);
 
         public bool IsCompactRunning => database.IsCompactRunning;

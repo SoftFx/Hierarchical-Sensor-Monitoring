@@ -1,0 +1,5 @@
+{
+  "_comment": "Regression-alert baseline for native-collector-benchmark.yml (#1101). Alert-only, NOT a hard gate. enqueue_ops_per_sec is a deliberately conservative floor so the lane only warns on a genuine regression (measured < floor*(1-tolerance)); it is not a target. Refresh from a representative green scheduled run on the CI runner, and bump deliberately when a real improvement lands.",
+  "enqueue_ops_per_sec": 120000,
+  "tolerance": 0.4
+}

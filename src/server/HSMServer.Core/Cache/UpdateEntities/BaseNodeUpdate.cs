@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.TableOfChanges;
 using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
@@ -22,6 +23,6 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public string Description { get; init; }
 
 
-        public PolicyUpdate TTLPolicy { get; init; }
+        public List<PolicyUpdate> TTLPolicies { get; init; }
     }
 }

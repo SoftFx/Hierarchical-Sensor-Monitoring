@@ -1,4 +1,4 @@
-﻿@using HSMCommon.Model
+@using HSMCommon.Model
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Core.Model
@@ -15,7 +15,6 @@
     ViewData["Title"] = "Alert Templates";
     Layout = "~/Views/Tree/_Layout.cshtml";
 
-    const byte booleanType = (byte)SensorType.Boolean;
     const byte ttlType = TimeToLiveAlertViewModel.AlertKey;
     var hasAlerts = Model.DataAlerts.Any(a => a.Value.Any(v => v.IsAlertDisplayed));
 }
@@ -31,7 +30,7 @@
 <script>
     $(document).ready(function() {
         initForm();
-        if($('#PathTemplate').val() != '')
+        if(getPaths().length > 0 && getPaths().some(p => p !== ''))
             updateForm(@(Model.IsNew.ToString().ToLower()));
     });
 
@@ -48,14 +47,86 @@
             updateForm(false);
         });
 
+        // Path template input events (debounced)
         let timeout = null;
-        document.getElementById("PathTemplate").addEventListener("input", () => {
+        $('#pathTemplatesContainer').on("input", ".path-template-input", function() {
             clearTimeout(timeout);
-
             timeout = setTimeout(() => {
                 updateForm();
             }, 500);
         });
+
+        // Add path button
+        $('#addPathBtn').off('click').on('click', function() {
+            addPathInput();
+        });
+
+        // Remove path buttons
+        $('#pathTemplatesContainer').on('click', '.remove-path-btn', function() {
+            var $row = $(this).closest('.path-template-row');
+            var pathValue = $row.find('.path-template-input').val();
+            if (pathValue && pathValue.trim() !== '') {
+                showConfirmationModal(
+                    'Remove path',
+                    'Remove this path?',
+                    function() {
+                        $row.remove();
+                        reindexPathInputs();
+                        updateRemoveButtons();
+                        updateForm();
+                    }
+                );
+                return;
+            }
+
+            $row.remove();
+            reindexPathInputs();
+            updateRemoveButtons();
+            updateForm();
+        });
+
+        updateRemoveButtons();
+
+        // Pagination click handler (delegated)
+        $('#sensors_pagination').off('click').on('click', '.page-link', function(e) {
+            e.preventDefault();
+            var page = $(this).data('page');
+            if (page)
+                updateForm(false, page);
+        });
+    }
+
+    function addPathInput() {
+        var container = $('#pathTemplatesContainer');
+        var index = container.find('.path-template-row').length;
+        var newRow = $(
+            '<div class="d-flex align-items-center mb-1 path-template-row">' +
+            '<input type="text" class="form-control path-template-input" name="PathTemplates[' + index + ']" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" value="" />' +
+            '<button type="button" class="btn btn-link remove-path-btn p-0 ms-1"><i class="fa-solid fa-xmark"></i></button>' +
+            '</div>'
+        );
+        container.append(newRow);
+        updateRemoveButtons();
+        newRow.find('.path-template-input').focus();
+    }
+
+    function reindexPathInputs() {
+        $('#pathTemplatesContainer .path-template-row').each(function(i) {
+            $(this).find('.path-template-input').attr('name', 'PathTemplates[' + i + ']');
+        });
+    }
+
+    function updateRemoveButtons() {
+        var rows = $('#pathTemplatesContainer .path-template-row');
+        rows.each(function() {
+            $(this).find('.remove-path-btn').toggle(rows.length > 1);
+        });
+    }
+
+    function getPaths() {
+        return $('#pathTemplatesContainer .path-template-input').map(function() {
+            return $(this).val();
+        }).get();
     }
 
     function onSensorTypeChanged(needUpdateForm = true) {
@@ -65,34 +136,42 @@
 
         var val = $('#Type').val();
 
+        // Rename the unified alerts container to track the current type. For Any templates
+        // the container is keyed by ttlType (only TTL alerts are addable).
+        var listType = val == @DataAlertTemplateViewModel.AnyType ? @ttlType : val;
+
         $("[id^='dataAlertsList_']").each(function () {
-            var type = $(this).attr('id').replace('dataAlertsList_', '');
-            if (type != @ttlType && type != val) {
+            var currentId = $(this).attr('id');
+            var currentType = currentId.replace('dataAlertsList_', '');
+            if (currentType != listType) {
                 $(this).empty();
-                $(this).attr('id', 'dataAlertsList_' + val);
+                $(this).attr('id', 'dataAlertsList_' + listType);
             }
         });
     }
 
-    function addDataAlert(isTtl, entityId) {
-        var type = @ttlType;
-
-        if (isTtl === 'False')
-            type = $('#Type').val();
-
-        var sendType = type;
-
-        if (type == @DataAlertTemplateViewModel.AnyType)
-            sendType = @booleanType;
+    function addDataAlert(entityId) {
+        // For Type=Any templates, only TTL alerts are addable (regular alerts need a concrete type).
+        // For concrete types, a regular alert is created and the property is then flipped to
+        // Inactivity Period client-side so the default new alert is TTL. The user can switch
+        // back to a regular property via the condition dropdown.
+        var selectedType = $('#Type').val();
+        var isAny = selectedType == @DataAlertTemplateViewModel.AnyType;
+        var listType = isAny ? @ttlType : selectedType;
+        var sendType = isAny ? @ttlType : selectedType;
 
         $.ajax({
             url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${sendType}&entityId=${entityId}&folderId=${$('#FolderId').val()}`,
             cache: false
         }).done(function (viewData) {
-            if (type == '@ttlType') {
-                $('#addTtlAlert').addClass('disabled');
+            var $container = $(`#dataAlertsList_${listType}`);
+            $container.append(viewData);
+            var ttlValue = '@nameof(AlertProperty.TimeToLive)';
+            var $newRow = $container.find('div.dataAlertRow').last();
+            var $property = $newRow.find('select[name="Property"]:first');
+            if ($property.length && $property.find(`option[value="${ttlValue}"]`).length) {
+                $property.val(ttlValue).trigger('change');
             }
-            $(`#dataAlertsList_${type}`).append(viewData);
         });
     }
 
@@ -130,13 +209,14 @@
         });
     }
 
-    function updateForm(needChangeType = true) {
+    function updateForm(needChangeType = true, page = 1) {
         var type = $('#Type').val();
-        var path = $('#PathTemplate').val();
+        var paths = getPaths().filter(p => p !== '');
         var folderId = $('#FolderId').val();
 
         $.ajax({
-            url: `@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)?type=${type}&path=${path}&folderId=${folderId}`,
+            url: '@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)',
+            data: { type: type, paths: JSON.stringify(paths), folderId: folderId, page: page },
             cache: false,
             success: (viewData) => {
 
@@ -147,20 +227,17 @@
                     onSensorTypeChanged(false);
                 }
 
-                var dataName = data['Name'];
-                if (dataName){
-                    $('#Name').val(dataName);
-                }
-
                 if (data['Sensors'] != null) {
                     $('#affected_sensors_cardbody').empty();
                     $('#affected_sensors_cardbody').append(data['Sensors']);
                     $('#affected_sensors').removeClass('d-none');
+                    renderSensorsPagination(data['Page'], data['TotalPages']);
                 }
                 else {
                     $('#affected_sensors_cardbody').empty();
                     $('#affected_sensors_cardbody').html("No sensors were found along the specified path.");
                     $('#affected_sensors').removeClass('d-none');
+                    $('#sensors_pagination').addClass('d-none');
                 }
 
                 if (data['Chats'] != null) {
@@ -178,109 +255,7 @@
         });
     }
 
-    function setFormDataAlerts(formData, type, alertsList) {
-        alertsList.find(`div.dataAlertRow`).each(function (i) {
-            setFormDataAlertsProperty(formData, "input", type, i, $(this), "Id");
-            setFormDataAlertsProperty(formData, "input", type, i, $(this), "EntityId");
-            setFormDataAlertsProperty(formData, "input", type, i, $(this), "IsDisabled");
-            setFormDataAlertsProperty(formData, "input", type, i, $(this), "TemplateId");
-            setFormDataAlertsProperty(formData, "select", type, i, $(this), "ScheduleId");
-
-
-            $(this).find(`div[name='alertCondition']`).each(function (j) {
-                setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
-
-                let intervalOperationBlock = $(this).find('div.interval-operation');
-                if (intervalOperationBlock.hasClass("d-flex")) {
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, intervalOperationBlock, "select", "Interval");
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, intervalOperationBlock, "input", "CustomString");
-                }
-                else {
-                    let operationBlock = $(this).find('div.operation');
-
-                    setFormDataAlertsListProperty(formData, type, i, j, operationBlock, "Conditions", "select", "Operation");
-                    setFormDataAlertsListProperty(formData, type, i, j, operationBlock, "Conditions", "input", "Target");
-                }
-            });
-
-            $(this).find(`div[name='alertAction']`).each(function (j) {
-                setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "select", "Action");
-
-                let sendBlock = $(this).find('div[name="sendNotificationAction"]');
-                if (sendBlock.hasClass('d-flex')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, sendBlock, "Actions", "input", "Comment");
-                    setFormDataAlertsSendNotificationChats(formData, type, i, j, sendBlock);
-
-                    let scheduleBlock = sendBlock.find('div[name="schedule"]');
-                    if (scheduleBlock.hasClass('d-flex')) {
-                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "select", "ScheduleRepeatMode");
-                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "input", "ScheduleStartTime");
-                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "input", "ScheduleInstantSend", 'checkbox');
-                    }
-                }
-
-                let showBlock = $(this).find('div[name="showIconAction"]');
-                if (showBlock.hasClass('d-flex')) {
-                    showBlock.find(`div[name='emoji']`).each(function () {
-                        formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Icon`, $(this)[0].innerText);
-                    });
-                }
-            });
-        });
-    }
-
-    function setFormDataAlertsProperty(formData, element, type, i, block, propertyName) {
-        block.find(`${element}[name='${propertyName}']:first`).each(function () {
-            formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
-        });
-    }
-
-    function setFormDataAlertsListProperty(formData, type, i, j, block, list, element, propertyName, elementType = undefined) {
-        block.find(`${element}[name='${propertyName}']`).each(function () {
-            let value = $(this).val();
-            if (elementType == 'checkbox') {
-                value = this.checked;
-            }
-
-            formData.append(`DataAlerts[${type}][${i}].${list}[${j}].${propertyName}`, value);
-        });
-    }
-
-    function setFormDataAlertsConditionIntervals(formData, type, i, j, block, element, propertyName) {
-        var targetName = block.attr("name");
-
-        block.find(`${element}[name='Target.${propertyName}']`).each(function () {
-            formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${targetName}.${propertyName}`, $(this).val());
-        });
-    }
-
-    function setFormDataAlertsSendNotificationChats(formData, type, i, j, block) {
-        let chatsMode = '@ChatsMode.Custom';
-        let chats = [];
-
-        block.find("select[name='Chats']:first option").each(function () {
-            if ($(this).is(':selected')) {
-                if ($(this).val() === '@ChatsMode.FromParent' || $(this).val() === '@ChatsMode.NotInitialized' ||
-                    $(this).val() === '@ChatsMode.Empty' || $(this).val() === '@ChatsMode.All') {
-                    chatsMode = $(this).val();
-                    chats = [];
-                    return;
-                }
-
-                chats.push($(this).val());
-            }
-        });
-
-        block.find("div[name='Chats']").each(function () {
-            chatsMode = '@ChatsMode.FromParent';
-        });
-
-        formData.append(`DataAlerts[${type}][${i}].Actions[${j}].ChatsMode`, chatsMode);
-
-        for (let k = 0; k < chats.length; ++k){
-            formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${k}]`, chats[k]);
-        }
-    }
+    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertsFormCollection.cshtml")
 
     function updateTemplateChatDropdowns(chats) {
         var groups = chats.filter(c => c.Type === 1);
@@ -308,6 +283,56 @@
 
             $select.selectpicker('refresh');
         });
+    }
+
+    function renderSensorsPagination(currentPage, totalPages) {
+        var $nav = $('#sensors_pagination');
+        var $ul = $nav.find('ul');
+        $ul.empty();
+
+        if (totalPages <= 1) {
+            $nav.addClass('d-none');
+            return;
+        }
+
+        $nav.removeClass('d-none');
+
+        // Previous
+        if (currentPage > 1)
+            $ul.append('<li class="page-item"><a class="page-link" href="#" data-page="' + (currentPage - 1) + '">&laquo;</a></li>');
+        else
+            $ul.append('<li class="page-item disabled"><span class="page-link">&laquo;</span></li>');
+
+        // Page window (show up to 5 pages around current)
+        var startPage = Math.max(1, currentPage - 2);
+        var endPage = Math.min(totalPages, startPage + 4);
+        if (endPage - startPage < 4)
+            startPage = Math.max(1, endPage - 4);
+
+        if (startPage > 1) {
+            $ul.append('<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>');
+            if (startPage > 2)
+                $ul.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+        }
+
+        for (var i = startPage; i <= endPage; i++) {
+            if (i === currentPage)
+                $ul.append('<li class="page-item active"><span class="page-link">' + i + '</span></li>');
+            else
+                $ul.append('<li class="page-item"><a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>');
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1)
+                $ul.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+            $ul.append('<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>');
+        }
+
+        // Next
+        if (currentPage < totalPages)
+            $ul.append('<li class="page-item"><a class="page-link" href="#" data-page="' + (currentPage + 1) + '">&raquo;</a></li>');
+        else
+            $ul.append('<li class="page-item disabled"><span class="page-link">&raquo;</span></li>');
     }
 
 </script>

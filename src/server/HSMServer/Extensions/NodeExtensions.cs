@@ -37,6 +37,11 @@ namespace HSMServer.Extensions
             return availableChats;
         }
 
+        internal static Dictionary<Guid, string> GetAvailableChatsDictionary(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager)
+        {
+            return folderChats.GetAvailableChats(chatsManager).ToDictionary(k => k.Id, v => v.Name);
+        }
+
         internal static bool TryGetChats(this BaseNodeViewModel model, out HashSet<Guid> chats)
         {
             if (model is FolderModel folder)
@@ -62,7 +67,7 @@ namespace HSMServer.Extensions
 
 
             return sensor.HasData && sensor.State is not Core.Model.SensorState.Muted &&
-                   (sensor.DataAlerts.Values.Any(d => d.Any(a => IsUnconfigured(a))) || (!sensor.TTL.IsIntervalNone && IsUnconfigured(sensor.TTLAlert)));
+                   (sensor.DataAlerts.Values.Any(d => d.Any(a => IsUnconfigured(a))) || (!sensor.TTL.IsIntervalNone && sensor.TTLAlerts.Any(a => IsUnconfigured(a))));
         }
 
 

@@ -15,6 +15,7 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
@@ -93,7 +94,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             for (int i = 0; i < count; ++i)
             {
-                var productName = RandomGenerator.GetRandomString();
+                // GUID-based names: the cache now rejects duplicate DisplayNames
+                // (see AddProductWithDuplicateNameThrowsTest), and the DB persists
+                // between test runs, so RandomGenerator.GetRandomString() — which
+                // uses a fixed seed — would collide with products from prior runs.
+                var productName = $"prod_{Guid.NewGuid():N}";
                 productNames.Add(productName);
 
                 addedProducts.Add(await _valuesCache.AddProductAsync(productName, Guid.Empty));
@@ -130,7 +135,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var addedProducts = new List<Guid>(count);
             for (int i = 0; i < count; ++i)
-                addedProducts.Add((await _valuesCache.AddProductAsync(RandomGenerator.GetRandomString(), Guid.Empty)).Id);
+                addedProducts.Add((await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty)).Id);
 
             //await Task.Delay(100);
 
@@ -142,6 +147,163 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                                    _valuesCache.TryGetProductNameById,
                                    _valuesCache.GetProduct,
                                    _databaseCoreManager.DatabaseCore.GetProduct);
+        }
+
+        [Fact]
+        [Trait("Category", "Concurrency")]
+        public async Task ConcurrentProductRenameTest()
+        {
+            const int productCount = 5;
+            const int threadCount = 10;
+            const int iterationsPerThread = 50;
+
+            var createdProducts = new List<ProductModel>(productCount);
+            for (int i = 0; i < productCount; ++i)
+                createdProducts.Add(await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty));
+
+            // Each rename picks a globally-unique target name, so TryAdd always
+            // succeeds and the final state is fully determined: every created
+            // product must resolve through _productsByName under its DisplayName.
+            var nameCounter = 0;
+            var tasks = Enumerable.Range(0, threadCount).Select(_ => Task.Run(async () =>
+            {
+                for (int i = 0; i < iterationsPerThread; ++i)
+                {
+                    var product = createdProducts[Random.Shared.Next(productCount)];
+                    var newName = $"target_{Interlocked.Increment(ref nameCounter)}";
+                    await _valuesCache.UpdateProductAsync(new ProductUpdate
+                    {
+                        Id = product.Id,
+                        Name = newName,
+                    }, default);
+                }
+            })).ToArray();
+            await Task.WhenAll(tasks);
+
+            // _productsByName must never hold duplicate product references.
+            var currentRoots = _valuesCache.GetProducts();
+            Assert.Equal(currentRoots.Count, currentRoots.Distinct().Count());
+
+            // The real invariant: every created product must be reachable via its
+            // current DisplayName. Iterating GetProducts() (= _productsByName.Values)
+            // instead would be tautological — an orphaned product never reaches
+            // Values, so the loop wouldn't inspect it.
+            foreach (var created in createdProducts)
+                Assert.Same(created, _valuesCache.GetProductByName(created.DisplayName));
+        }
+
+        [Fact]
+        [Trait("Category", "Concurrency")]
+        public async Task ConcurrentProductRenameToSameNameTest()
+        {
+            var initialRootCount = _valuesCache.GetProducts().Count;
+
+            var p1 = await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty);
+            var p2 = await _valuesCache.AddProductAsync($"prod_{Guid.NewGuid():N}", Guid.Empty);
+            var sharedName = $"shared_{Guid.NewGuid():N}";
+
+            using var barrier = new Barrier(2);
+            var t1 = Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = p1.Id, Name = sharedName }, default);
+            });
+            var t2 = Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                await _valuesCache.UpdateProductAsync(new ProductUpdate { Id = p2.Id, Name = sharedName }, default);
+            });
+            await Task.WhenAll(t1, t2);
+
+            // Collision: exactly one product can own sharedName. The loser must
+            // keep its original name in _productsByName — neither p1 nor p2 is
+            // allowed to be orphaned by the collision.
+            Assert.Equal(initialRootCount + 2, _valuesCache.GetProducts().Count);
+
+            foreach (var created in new[] { p1, p2 })
+            {
+                var current = _valuesCache.GetProduct(created.Id);
+                Assert.Same(current, _valuesCache.GetProductByName(current.DisplayName));
+            }
+        }
+
+        [Fact]
+        [Trait("Category", "Add product(s)")]
+        public async Task AddProductWithDuplicateNameThrowsTest()
+        {
+            var sharedName = $"dup_{Guid.NewGuid():N}";
+
+            var first = await _valuesCache.AddProductAsync(sharedName, Guid.Empty);
+
+            // Second add with the same DisplayName must throw — without this
+            // guard the second root would land in _tree but never in
+            // _productsByName, becoming unreachable until a restart.
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                _valuesCache.AddProductAsync(sharedName, Guid.Empty));
+
+            // The first root must still be reachable under the shared name.
+            Assert.Same(first, _valuesCache.GetProductByName(sharedName));
+
+            // The rejected add must not have leaked into the tree: the root
+            // count is exactly one for this name.
+            Assert.Equal(1, _valuesCache.GetProducts().Count(p => p.DisplayName == sharedName));
+        }
+
+        [Fact]
+        [Trait("Category", "Update product(s)")]
+        public async Task RenameToTakenNameReturnsErrorTest()
+        {
+            var keeper = await _valuesCache.AddProductAsync($"keeper_{Guid.NewGuid():N}", Guid.Empty);
+            var challenger = await _valuesCache.AddProductAsync($"challenger_{Guid.NewGuid():N}", Guid.Empty);
+            var challengerOriginalName = challenger.DisplayName;
+
+            var result = await _valuesCache.UpdateProductAsync(
+                new ProductUpdate { Id = challenger.Id, Name = keeper.DisplayName }, default);
+
+            Assert.False(result.IsOk);
+            Assert.Contains("already in use", result.Error);
+
+            // The challenger must keep its original name and remain reachable.
+            var current = _valuesCache.GetProduct(challenger.Id);
+            Assert.Equal(challengerOriginalName, current.DisplayName);
+            Assert.Same(current, _valuesCache.GetProductByName(current.DisplayName));
+        }
+
+        [Fact]
+        [Trait("Category", "Concurrency")]
+        public async Task ConcurrentAddProductWithSameNameTest()
+        {
+            var initialRootCount = _valuesCache.GetProducts().Count;
+            var sharedName = $"race_{Guid.NewGuid():N}";
+
+            // Two threads add a root with the same DisplayName. Exactly one
+            // must win; the loser must throw and leave no unreachable orphan.
+            ProductModel winner = null;
+            InvalidOperationException loserError = null;
+
+            using var barrier = new Barrier(2);
+            var tasks = Enumerable.Range(0, 2).Select(_ => Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                try
+                {
+                    var added = await _valuesCache.AddProductAsync(sharedName, Guid.Empty);
+                    Interlocked.CompareExchange(ref winner, added, null);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Interlocked.CompareExchange(ref loserError, ex, null);
+                }
+            })).ToArray();
+            await Task.WhenAll(tasks);
+
+            Assert.NotNull(winner);
+            Assert.NotNull(loserError);
+            Assert.Contains("already in use", loserError.Message);
+
+            // Exactly one root was added under the shared name.
+            Assert.Equal(initialRootCount + 1, _valuesCache.GetProducts().Count);
+            Assert.Same(winner, _valuesCache.GetProductByName(sharedName));
         }
 
         [Fact]

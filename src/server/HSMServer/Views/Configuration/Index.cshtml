@@ -30,6 +30,9 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="database-tab" data-bs-toggle="tab" data-bs-target="#database" type="button" role="tab" aria-controls="database" aria-selected="false">Database</button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="agent-tab" data-bs-toggle="tab" data-bs-target="#agent" type="button" role="tab" aria-controls="agent" aria-selected="false">Agent</button>
+            </li>
         </ul>
         <div class="tab-content w-100">
             <div class="tab-pane fade show active" id="server" role="tabpanel" aria-labelledby="server-tab">
@@ -58,6 +61,12 @@
 
             <div class="tab-pane fade" id="database" role="tabpanel" aria-labelledby="database-tab">
                     @await Html.PartialAsync("_Database", Model)
+            </div>
+
+            <div class="tab-pane fade" id="agent" role="tabpanel" aria-labelledby="agent-tab">
+                <form id="agentSettings_form" method="post" asp-action="@nameof(ConfigurationController.SaveAgentSettings)">
+                    @await Html.PartialAsync("_Agent", Model.Agent)
+                </form>
             </div>
         </div>
     </div>
@@ -89,6 +98,7 @@
         obs["backupSettings_form"] = createFormObserver("backupSettings_form");
         obs["selfMonitoringSettings_form"] = createFormObserver("selfMonitoringSettings_form");
         obs["telegramSettings_form"] = createFormObserver("telegramSettings_form");
+        obs["agentSettings_form"] = createFormObserver("agentSettings_form");
     });
     
     function savingFormSubscribe(formId, successMessage) {

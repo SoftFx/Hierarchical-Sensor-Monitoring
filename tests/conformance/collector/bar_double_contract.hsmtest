@@ -1,0 +1,101 @@
+# HSM collector conformance v1 — double bar aggregation contract.
+# Format: case|action|arg1|arg2|...
+# Bar actions:
+# create_double_bar_sensor|path|bar_period_ms|post_period_ms|precision
+# add_bar_double|bar_index|value   (NaN / Infinity / -Infinity are silently skipped without corrupting the bar)
+# expect_bar_field|payload_index|field|expected
+# Contract notes:
+# - Double bar fields are rounded to `precision` digits with round-half-away-from-zero on Complete.
+# - Inputs below are binary-exact (x.5/x.25) except the dedicated rounding cases; numeric expects
+#   compare with relative tolerance 1e-9 to absorb formatting differences between harnesses.
+
+double_bar_basic_aggregation|create_collector
+double_bar_basic_aggregation|create_double_bar_sensor|contract/dbar/basic|3600000|0|2
+double_bar_basic_aggregation|start
+double_bar_basic_aggregation|add_bar_double|0|0.5
+double_bar_basic_aggregation|add_bar_double|0|1.5
+double_bar_basic_aggregation|add_bar_double|0|2.5
+double_bar_basic_aggregation|add_bar_double|0|3.5
+double_bar_basic_aggregation|stop
+double_bar_basic_aggregation|expect_sent_count|1
+double_bar_basic_aggregation|expect_bar_field|0|type|5
+double_bar_basic_aggregation|expect_bar_field|0|min|0.5
+double_bar_basic_aggregation|expect_bar_field|0|max|3.5
+double_bar_basic_aggregation|expect_bar_field|0|mean|2
+double_bar_basic_aggregation|expect_bar_field|0|first|0.5
+double_bar_basic_aggregation|expect_bar_field|0|last|3.5
+double_bar_basic_aggregation|expect_bar_field|0|count|4
+
+double_bar_precision_rounding|create_collector
+double_bar_precision_rounding|create_double_bar_sensor|contract/dbar/precision|3600000|0|2
+double_bar_precision_rounding|start
+double_bar_precision_rounding|add_bar_double|0|1
+double_bar_precision_rounding|add_bar_double|0|1
+double_bar_precision_rounding|add_bar_double|0|2
+double_bar_precision_rounding|stop
+double_bar_precision_rounding|expect_sent_count|1
+double_bar_precision_rounding|expect_bar_field|0|mean|1.33
+double_bar_precision_rounding|expect_bar_field|0|count|3
+
+double_bar_precision_zero_rounds_away_from_zero|create_collector
+double_bar_precision_zero_rounds_away_from_zero|create_double_bar_sensor|contract/dbar/precision-zero|3600000|0|0
+double_bar_precision_zero_rounds_away_from_zero|start
+double_bar_precision_zero_rounds_away_from_zero|add_bar_double|0|1
+double_bar_precision_zero_rounds_away_from_zero|add_bar_double|0|2
+double_bar_precision_zero_rounds_away_from_zero|stop
+double_bar_precision_zero_rounds_away_from_zero|expect_sent_count|1
+double_bar_precision_zero_rounds_away_from_zero|expect_bar_field|0|mean|2
+double_bar_precision_zero_rounds_away_from_zero|expect_bar_field|0|count|2
+
+double_bar_nan_value_skipped_without_corruption|create_collector
+double_bar_nan_value_skipped_without_corruption|create_double_bar_sensor|contract/dbar/nan|3600000|0|2
+double_bar_nan_value_skipped_without_corruption|start
+double_bar_nan_value_skipped_without_corruption|add_bar_double|0|1.5
+double_bar_nan_value_skipped_without_corruption|add_bar_double|0|NaN
+double_bar_nan_value_skipped_without_corruption|add_bar_double|0|2.5
+double_bar_nan_value_skipped_without_corruption|stop
+double_bar_nan_value_skipped_without_corruption|expect_sent_count|1
+double_bar_nan_value_skipped_without_corruption|expect_bar_field|0|count|2
+double_bar_nan_value_skipped_without_corruption|expect_bar_field|0|mean|2
+double_bar_nan_value_skipped_without_corruption|expect_bar_field|0|min|1.5
+double_bar_nan_value_skipped_without_corruption|expect_bar_field|0|max|2.5
+
+double_bar_positive_infinity_skipped|create_collector
+double_bar_positive_infinity_skipped|create_double_bar_sensor|contract/dbar/pos-inf|3600000|0|2
+double_bar_positive_infinity_skipped|start
+double_bar_positive_infinity_skipped|add_bar_double|0|1.5
+double_bar_positive_infinity_skipped|add_bar_double|0|Infinity
+double_bar_positive_infinity_skipped|add_bar_double|0|2.5
+double_bar_positive_infinity_skipped|stop
+double_bar_positive_infinity_skipped|expect_sent_count|1
+double_bar_positive_infinity_skipped|expect_bar_field|0|count|2
+double_bar_positive_infinity_skipped|expect_bar_field|0|max|2.5
+
+double_bar_negative_infinity_skipped|create_collector
+double_bar_negative_infinity_skipped|create_double_bar_sensor|contract/dbar/neg-inf|3600000|0|2
+double_bar_negative_infinity_skipped|start
+double_bar_negative_infinity_skipped|add_bar_double|0|1.5
+double_bar_negative_infinity_skipped|add_bar_double|0|-Infinity
+double_bar_negative_infinity_skipped|add_bar_double|0|2.5
+double_bar_negative_infinity_skipped|stop
+double_bar_negative_infinity_skipped|expect_sent_count|1
+double_bar_negative_infinity_skipped|expect_bar_field|0|count|2
+double_bar_negative_infinity_skipped|expect_bar_field|0|min|1.5
+
+double_bar_negative_values|create_collector
+double_bar_negative_values|create_double_bar_sensor|contract/dbar/negative|3600000|0|2
+double_bar_negative_values|start
+double_bar_negative_values|add_bar_double|0|-1.5
+double_bar_negative_values|add_bar_double|0|-0.5
+double_bar_negative_values|stop
+double_bar_negative_values|expect_sent_count|1
+double_bar_negative_values|expect_bar_field|0|min|-1.5
+double_bar_negative_values|expect_bar_field|0|max|-0.5
+double_bar_negative_values|expect_bar_field|0|mean|-1
+double_bar_negative_values|expect_bar_field|0|count|2
+
+double_bar_empty_bar_sends_no_payload|create_collector
+double_bar_empty_bar_sends_no_payload|create_double_bar_sensor|contract/dbar/empty|3600000|0|2
+double_bar_empty_bar_sends_no_payload|start
+double_bar_empty_bar_sends_no_payload|stop
+double_bar_empty_bar_sends_no_payload|expect_sent_count|0

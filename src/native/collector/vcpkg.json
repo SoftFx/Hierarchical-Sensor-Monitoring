@@ -1,0 +1,13 @@
+{
+  "name": "hsm-collector-native",
+  "version-string": "0.1.0",
+  "description": "Native HSM DataCollector core — HTTP transport dependency (#1096).",
+  "builtin-baseline": "6f29f12e82a8293156836ad81cc9bf5af41fe836",
+  "dependencies": [
+    {
+      "name": "curl",
+      "default-features": false,
+      "features": ["ssl"]
+    }
+  ]
+}

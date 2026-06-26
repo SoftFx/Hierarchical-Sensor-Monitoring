@@ -15,7 +15,7 @@ namespace HSMDataCollector.DefaultSensors
 
         private static readonly NotSupportedException _notSupportedException = new NotSupportedException(NotSupportedSensor);
 
-        private readonly SensorsStorage _storage;
+        protected readonly SensorsStorage _storage;
         protected readonly PrototypesCollection _prototype;
 
 
@@ -149,8 +149,8 @@ namespace HSMDataCollector.DefaultSensors
             PackageProcessTimeSensor?.Dispose();
             PackageDataCountSensor?.Dispose();
             PackageSizeSensor?.Dispose();
-            QueueOverflowSensor.Dispose();
-            CollectorErrors.Dispose();
+            QueueOverflowSensor?.Dispose();
+            CollectorErrors?.Dispose();
         }
     }
 }

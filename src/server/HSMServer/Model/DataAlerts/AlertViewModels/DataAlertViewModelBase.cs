@@ -48,6 +48,8 @@ namespace HSMServer.Model.DataAlerts
 
         public Guid? ScheduleId { get; set; }
 
+        public Guid? TemplateAlertId { get; set; }
+
         public List<SelectListItem> Schedules { get; set; }
 
 
@@ -102,6 +104,7 @@ namespace HSMServer.Model.DataAlerts
                 Destination = actions.Destination,
                 TemplateId = TemplateId,
                 ScheduleId = ScheduleId,
+                TemplateAlertId = TemplateAlertId,
             };
         }
 
@@ -121,6 +124,7 @@ namespace HSMServer.Model.DataAlerts
                 Initiator = initiator,
                 TemplateId = TemplateId,
                 ScheduleId = ScheduleId,
+                TemplateAlertId = TemplateAlertId,
             };
         }
 
@@ -144,7 +148,7 @@ namespace HSMServer.Model.DataAlerts
                         InstantSend = action.ScheduleInstantSend
                     };
 
-                    destination = new PolicyDestinationUpdate(action.Chats?.ToDictionary(k => k, v => availableChats[v]) ?? new(0), action.ChatsMode.ToCore());
+                    destination = new PolicyDestinationUpdate(action.Chats?.Where(availableChats.ContainsKey).ToDictionary(k => k, v => availableChats[v]) ?? new(0), action.ChatsMode.ToCore());
                     comment = action.Comment;
                 }
                 else if (action.Action == ActionType.ShowIcon)
@@ -325,6 +329,7 @@ namespace HSMServer.Model.DataAlerts
             Id = policy.Id;
             TemplateId = policy.TemplateId;
             ScheduleId = policy.ScheduleId;
+            TemplateAlertId = policy.TemplateAlertId;
 
             IsDisabled = policy.IsDisabled;
 

@@ -1,0 +1,146 @@
+# HSM collector conformance v1 — default-sensor registration catalog (#1099).
+# Verb:
+#   add_default_sensor|<id>   register a built-in sensor by its stable id name (see the native
+#                             DefaultSensorIdFromName / C# BuildDefaultSensorRequest maps). The native
+#                             driver calls hsm_collector_add_default_sensor; the C# driver records the
+#                             real managed prototype's AddOrUpdateSensorRequest. Both satisfy the same
+#                             registration substrings below.
+# Notes:
+# - Registration Path is asserted by SUFFIX (.computer/... or .module/...): the native driver applies
+#   the collector ComputerName/Module prefix, while the C# driver records the prototype path; the
+#   shared, stable tail is the contract. The volatile "Process <name>" segment is sidestepped entirely
+#   (assert the trailing "/<SensorName>").
+# - Description is NOT pinned (the managed originals interpolate machine-specific data); byte-exact
+#   alert/payload parity is locked by WireFormatGoldenLockTests + NativeDefaultSensorWireMatchesNet.
+# - A default sensor registers on Start (the native publishes the deferred registration there), so each
+#   case starts the collector before asserting.
+
+# System: Total CPU — computer DoubleBar, EMA, Percents, IfEmaMean(>,50) InstantHourly, singleton.
+total_cpu_registers|create_collector
+total_cpu_registers|add_default_sensor|total_cpu
+total_cpu_registers|start
+total_cpu_registers|stop
+total_cpu_registers|expect_registration_count|1
+total_cpu_registers|expect_registration_contains|0|.computer/Total CPU"
+total_cpu_registers|expect_registration_contains|0|"SensorType":5,
+total_cpu_registers|expect_registration_contains|0|"OriginalUnit":100,
+total_cpu_registers|expect_registration_contains|0|"Statistics":1,
+total_cpu_registers|expect_registration_contains|0|"IsSingletonSensor":true
+total_cpu_registers|expect_registration_contains|0|"Property":213
+total_cpu_registers|expect_registration_contains|0|"Value":"50"
+total_cpu_registers|expect_registration_contains|0|"ScheduledRepeatMode":20
+
+# System: Free RAM — the prototype never sets Statistics, so None(0) (not EMA).
+free_ram_registers_none_statistics|create_collector
+free_ram_registers_none_statistics|add_default_sensor|free_ram
+free_ram_registers_none_statistics|start
+free_ram_registers_none_statistics|stop
+free_ram_registers_none_statistics|expect_registration_count|1
+free_ram_registers_none_statistics|expect_registration_contains|0|.computer/Free RAM memory"
+free_ram_registers_none_statistics|expect_registration_contains|0|"Statistics":0,
+free_ram_registers_none_statistics|expect_registration_contains|0|"Value":"2"
+
+# Process: CPU — module DoubleBar, Statistics None, NO data alert (Alerts:[] non-null empty list).
+process_cpu_registers_empty_alerts|create_collector
+process_cpu_registers_empty_alerts|add_default_sensor|process_cpu
+process_cpu_registers_empty_alerts|start
+process_cpu_registers_empty_alerts|stop
+process_cpu_registers_empty_alerts|expect_registration_count|1
+process_cpu_registers_empty_alerts|expect_registration_contains|0|/Process CPU"
+process_cpu_registers_empty_alerts|expect_registration_contains|0|"SensorType":5,
+process_cpu_registers_empty_alerts|expect_registration_contains|0|"OriginalUnit":100,
+process_cpu_registers_empty_alerts|expect_registration_contains|0|"Statistics":0,
+process_cpu_registers_empty_alerts|expect_registration_contains|0|"Alerts":[]
+
+# Disk: free space — instant DoubleSensor, IfEmaValue(<=,20480) + SensorError (Status 3).
+free_disk_space_registers|create_collector
+free_disk_space_registers|add_default_sensor|free_disk_space
+free_disk_space_registers|start
+free_disk_space_registers|stop
+free_disk_space_registers|expect_registration_count|1
+free_disk_space_registers|expect_registration_contains|0|.computer/Disks monitoring/Free space on C disk"
+free_disk_space_registers|expect_registration_contains|0|"SensorType":2,
+free_disk_space_registers|expect_registration_contains|0|"DisplayUnit":0,
+free_disk_space_registers|expect_registration_contains|0|"Property":210
+free_disk_space_registers|expect_registration_contains|0|"Value":"20480"
+free_disk_space_registers|expect_registration_contains|0|"Status":3,
+free_disk_space_registers|expect_registration_contains|0|is running out. Current free space is
+
+# Windows info: install date — TimeSpan, IfValue(>,1460d) plain notification (no schedule).
+windows_install_date_registers|create_collector
+windows_install_date_registers|add_default_sensor|windows_install_date
+windows_install_date_registers|start
+windows_install_date_registers|stop
+windows_install_date_registers|expect_registration_count|1
+windows_install_date_registers|expect_registration_contains|0|.computer/Windows OS info/Install date"
+windows_install_date_registers|expect_registration_contains|0|"SensorType":7,
+windows_install_date_registers|expect_registration_contains|0|"Property":20,"Target":{"Type":0,"Value":"1460.00:00:00"}
+windows_install_date_registers|expect_registration_contains|0|Windows was installed more than $value ago
+windows_install_date_registers|expect_registration_contains|0|"ScheduledNotificationTime":null
+
+# Module: service status — Enum, 7 EnumOptions, IfValue(!=,4) AndConfirmationPeriod(5m), AggregateData.
+service_status_registers_enum_options|create_collector
+service_status_registers_enum_options|add_default_sensor|service_status
+service_status_registers_enum_options|start
+service_status_registers_enum_options|stop
+service_status_registers_enum_options|expect_registration_count|1
+service_status_registers_enum_options|expect_registration_contains|0|.module/Service status"
+service_status_registers_enum_options|expect_registration_contains|0|"SensorType":10,
+service_status_registers_enum_options|expect_registration_contains|0|"Key":4,"Value":"Running","Color":65280
+service_status_registers_enum_options|expect_registration_contains|0|"Key":1,"Value":"Stopped","Color":16711680
+service_status_registers_enum_options|expect_registration_contains|0|"ConfirmationPeriod":3000000000
+service_status_registers_enum_options|expect_registration_contains|0|"AggregateData":true
+
+# Module: collector alive — Bool, TTL alert (Conditions:null) -> TtlAlerts, TTLTicks [null], KeepHistory 180d.
+collector_alive_registers_ttl_alert|create_collector
+collector_alive_registers_ttl_alert|add_default_sensor|collector_alive
+collector_alive_registers_ttl_alert|start
+collector_alive_registers_ttl_alert|stop
+collector_alive_registers_ttl_alert|expect_registration_count|1
+collector_alive_registers_ttl_alert|expect_registration_contains|0|.module/Service alive"
+collector_alive_registers_ttl_alert|expect_registration_contains|0|"SensorType":0,
+collector_alive_registers_ttl_alert|expect_registration_contains|0|"TTLTicks":[null]
+collector_alive_registers_ttl_alert|expect_registration_contains|0|"KeepHistory":155520000000000
+collector_alive_registers_ttl_alert|expect_registration_contains|0|"TtlAlerts":[{"Conditions":null
+collector_alive_registers_ttl_alert|expect_registration_contains|0|"Template":"[$product]$path"
+collector_alive_registers_ttl_alert|expect_registration_contains|0|"Alerts":[]
+
+# Module: collector version — Version, KeepHistory 365*5+1 days, no alert.
+collector_version_registers|create_collector
+collector_version_registers|add_default_sensor|collector_version
+collector_version_registers|start
+collector_version_registers|stop
+collector_version_registers|expect_registration_count|1
+collector_version_registers|expect_registration_contains|0|.module/Collector version"
+collector_version_registers|expect_registration_contains|0|"SensorType":8,
+collector_version_registers|expect_registration_contains|0|"KeepHistory":1577664000000000
+
+# Diagnostics: queue overflow — IntegerBar, Count unit.
+queue_overflow_registers|create_collector
+queue_overflow_registers|add_default_sensor|queue_overflow
+queue_overflow_registers|start
+queue_overflow_registers|stop
+queue_overflow_registers|expect_registration_count|1
+queue_overflow_registers|expect_registration_contains|0|.module/Collector queue stats/Queue overflow"
+queue_overflow_registers|expect_registration_contains|0|"SensorType":4,
+queue_overflow_registers|expect_registration_contains|0|"OriginalUnit":1100,
+
+# Network: established connections — Int, TTL 5 min, KeepHistory 90 d.
+network_established_registers|create_collector
+network_established_registers|add_default_sensor|network_established
+network_established_registers|start
+network_established_registers|stop
+network_established_registers|expect_registration_count|1
+network_established_registers|expect_registration_contains|0|.computer/Network/Connections Established Count"
+network_established_registers|expect_registration_contains|0|"SensorType":1,
+network_established_registers|expect_registration_contains|0|"TTLTicks":[3000000000]
+network_established_registers|expect_registration_contains|0|"KeepHistory":77760000000000
+
+# Each default sensor registers exactly once on Start.
+each_default_sensor_registers_once|create_collector
+each_default_sensor_registers_once|add_default_sensor|total_cpu
+each_default_sensor_registers_once|add_default_sensor|process_memory
+each_default_sensor_registers_once|add_default_sensor|collector_alive
+each_default_sensor_registers_once|start
+each_default_sensor_registers_once|stop
+each_default_sensor_registers_once|expect_registration_count|3

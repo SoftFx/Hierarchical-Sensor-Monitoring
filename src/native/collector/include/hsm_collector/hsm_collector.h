@@ -1,0 +1,817 @@
+#pragma once
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+/* ABI version. Bumped per the policy in docs/native-collector-c-abi.md: MINOR
+   for additive, backward-compatible growth (new functions, struct fields
+   appended); MAJOR for any breaking change (field reorder/removal, semantic
+   change). hsm_collector_version() returns the packed value at runtime. */
+#define HSM_COLLECTOR_VERSION_MAJOR 0
+#define HSM_COLLECTOR_VERSION_MINOR 5
+#define HSM_COLLECTOR_VERSION_PATCH 0
+#define HSM_COLLECTOR_VERSION \
+    ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
+
+typedef struct hsm_collector_t hsm_collector_t;
+typedef struct hsm_sensor_t hsm_sensor_t;
+
+/* Fixed underlying type so ANY int value is a valid object representation. The C ABI
+   receives untrusted integers for enum-typed parameters (e.g. a caller passing a bad
+   sensor status) and validates them at runtime; without a fixed type, merely loading an
+   out-of-range value would be UB (caught by -fsanitize=enum). C++ and C23 support the
+   syntax; older C is int-compatible already, so it falls back to a plain enum. */
+#if defined(__cplusplus) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L)
+#define HSM_ENUM_INT32 : int32_t
+#else
+#define HSM_ENUM_INT32
+#endif
+
+typedef enum hsm_result_t HSM_ENUM_INT32
+{
+    HSM_RESULT_OK = 0,
+    HSM_RESULT_INVALID_ARGUMENT = 1,
+    HSM_RESULT_INVALID_STATE = 2,
+    HSM_RESULT_NOT_FOUND = 3,
+    HSM_RESULT_LIMIT_EXCEEDED = 4,
+    HSM_RESULT_INTERNAL_ERROR = 255
+} hsm_result_t;
+
+/* Collector lifecycle status. Mirrors the managed CollectorStatus state machine
+   (overview.md "Lifecycle"): Stopped -> Starting -> Running -> Stopping ->
+   Stopped, and Any-except-Disposed -> Disposed (terminal). */
+typedef enum hsm_collector_status_t HSM_ENUM_INT32
+{
+    HSM_COLLECTOR_STATUS_STOPPED = 0,
+    HSM_COLLECTOR_STATUS_STARTING = 1,
+    HSM_COLLECTOR_STATUS_RUNNING = 2,
+    HSM_COLLECTOR_STATUS_STOPPING = 3,
+    HSM_COLLECTOR_STATUS_DISPOSED = 4
+} hsm_collector_status_t;
+
+typedef enum hsm_sensor_status_t HSM_ENUM_INT32
+{
+    HSM_SENSOR_STATUS_OFF_TIME = 0,
+    HSM_SENSOR_STATUS_OK = 1,
+    HSM_SENSOR_STATUS_WARNING = 2,
+    HSM_SENSOR_STATUS_ERROR = 3
+} hsm_sensor_status_t;
+
+typedef enum hsm_sensor_type_t HSM_ENUM_INT32
+{
+    HSM_SENSOR_TYPE_BOOLEAN = 0,
+    HSM_SENSOR_TYPE_INT = 1,
+    HSM_SENSOR_TYPE_DOUBLE = 2,
+    HSM_SENSOR_TYPE_STRING = 3,
+    HSM_SENSOR_TYPE_INT_BAR = 4,
+    HSM_SENSOR_TYPE_DOUBLE_BAR = 5,
+    HSM_SENSOR_TYPE_FILE = 6,
+    HSM_SENSOR_TYPE_TIMESPAN = 7,
+    HSM_SENSOR_TYPE_VERSION = 8,
+    HSM_SENSOR_TYPE_RATE = 9,
+    HSM_SENSOR_TYPE_ENUM = 10
+} hsm_sensor_type_t;
+
+/* ---- Alert DSL (mirrors HSMDataCollector.Alerts) -------------------------------------------
+   An alert is built before its sensor and attached at registration. The frozen enums below carry
+   the EXACT numeric values of the managed AlertOperation/AlertProperty/AlertCombination/TargetType/
+   AlertDestinationMode/AlertRepeatMode (HSMSensorDataObjects.SensorRequests) so the registration
+   payload is byte-identical on the wire. */
+typedef struct hsm_alert_t hsm_alert_t;
+
+/* Which list the alert lands in: a data alert (instant/bar conditions) goes to AddOrUpdate.Alerts;
+   a TTL alert (IfInactivityPeriodIs) goes to AddOrUpdate.TtlAlerts and its inactivity period also
+   populates AddOrUpdate.TTLs (ticks). The instant/bar split is purely which condition properties
+   are valid; both serialize into the same Alerts array. */
+typedef enum hsm_alert_kind_t HSM_ENUM_INT32
+{
+    HSM_ALERT_KIND_INSTANT = 0,
+    HSM_ALERT_KIND_BAR = 1,
+    HSM_ALERT_KIND_TTL = 2
+} hsm_alert_kind_t;
+
+typedef enum hsm_alert_combination_t HSM_ENUM_INT32
+{
+    HSM_ALERT_COMBINATION_AND = 0,
+    HSM_ALERT_COMBINATION_OR = 1
+} hsm_alert_combination_t;
+
+typedef enum hsm_alert_operation_t HSM_ENUM_INT32
+{
+    HSM_ALERT_OP_LESS_THAN_OR_EQUAL = 0,
+    HSM_ALERT_OP_LESS_THAN = 1,
+    HSM_ALERT_OP_GREATER_THAN = 2,
+    HSM_ALERT_OP_GREATER_THAN_OR_EQUAL = 3,
+    HSM_ALERT_OP_EQUAL = 4,
+    HSM_ALERT_OP_NOT_EQUAL = 5,
+    HSM_ALERT_OP_IS_CHANGED = 20,
+    HSM_ALERT_OP_IS_ERROR = 21,
+    HSM_ALERT_OP_IS_OK = 22,
+    HSM_ALERT_OP_IS_CHANGED_TO_ERROR = 23,
+    HSM_ALERT_OP_IS_CHANGED_TO_OK = 24,
+    HSM_ALERT_OP_CONTAINS = 30,
+    HSM_ALERT_OP_STARTS_WITH = 31,
+    HSM_ALERT_OP_ENDS_WITH = 32,
+    HSM_ALERT_OP_RECEIVED_NEW_VALUE = 50
+} hsm_alert_operation_t;
+
+typedef enum hsm_alert_property_t HSM_ENUM_INT32
+{
+    HSM_ALERT_PROP_STATUS = 0,
+    HSM_ALERT_PROP_COMMENT = 1,
+    HSM_ALERT_PROP_VALUE = 20,
+    HSM_ALERT_PROP_MIN = 101,
+    HSM_ALERT_PROP_MAX = 102,
+    HSM_ALERT_PROP_MEAN = 103,
+    HSM_ALERT_PROP_COUNT = 104,
+    HSM_ALERT_PROP_LAST_VALUE = 105,
+    HSM_ALERT_PROP_FIRST_VALUE = 106,
+    HSM_ALERT_PROP_LENGTH = 120,
+    HSM_ALERT_PROP_ORIGINAL_SIZE = 151,
+    HSM_ALERT_PROP_NEW_SENSOR_DATA = 200,
+    HSM_ALERT_PROP_EMA_VALUE = 210,
+    HSM_ALERT_PROP_EMA_MIN = 211,
+    HSM_ALERT_PROP_EMA_MAX = 212,
+    HSM_ALERT_PROP_EMA_MEAN = 213,
+    HSM_ALERT_PROP_EMA_COUNT = 214
+} hsm_alert_property_t;
+
+typedef enum hsm_alert_target_type_t HSM_ENUM_INT32
+{
+    HSM_ALERT_TARGET_CONST = 0,
+    HSM_ALERT_TARGET_LAST_VALUE = 1
+} hsm_alert_target_type_t;
+
+typedef enum hsm_alert_destination_mode_t HSM_ENUM_INT32
+{
+    HSM_ALERT_DESTINATION_NOT_INITIALIZED = 1,
+    HSM_ALERT_DESTINATION_EMPTY = 2,
+    HSM_ALERT_DESTINATION_FROM_PARENT = 3,
+    HSM_ALERT_DESTINATION_ALL_CHATS = 200
+} hsm_alert_destination_mode_t;
+
+typedef enum hsm_alert_repeat_mode_t HSM_ENUM_INT32
+{
+    HSM_ALERT_REPEAT_FIVE_MINUTES = 5,
+    HSM_ALERT_REPEAT_TEN_MINUTES = 6,
+    HSM_ALERT_REPEAT_FIFTEEN_MINUTES = 7,
+    HSM_ALERT_REPEAT_THIRTY_MINUTES = 10,
+    HSM_ALERT_REPEAT_HOURLY = 20,
+    HSM_ALERT_REPEAT_DAILY = 50,
+    HSM_ALERT_REPEAT_WEEKLY = 100
+} hsm_alert_repeat_mode_t;
+
+/* Built-in alert icons. hsm_alert_set_icon maps these to the same UTF-8 emoji the managed
+   AlertIcon.ToUtf8() produces; pass an arbitrary emoji with hsm_alert_set_icon_raw instead. */
+typedef enum hsm_alert_icon_t HSM_ENUM_INT32
+{
+    HSM_ALERT_ICON_OK = 0,
+    HSM_ALERT_ICON_WARNING = 1,
+    HSM_ALERT_ICON_ERROR = 2,
+    HSM_ALERT_ICON_PAUSE = 3,
+    HSM_ALERT_ICON_ARROW_UP = 10,
+    HSM_ALERT_ICON_ARROW_DOWN = 11,
+    HSM_ALERT_ICON_CLOCK = 100,
+    HSM_ALERT_ICON_HOURGLASS = 101
+} hsm_alert_icon_t;
+
+/* User callbacks for function sensors. Invoked on the collector's scheduler thread OUTSIDE any
+   collector/sensor lock (re-entering the same sensor from a callback is safe); they must not
+   throw across the C ABI boundary, and must NOT call a collector lifecycle method
+   (start/stop/dispose) — doing so from the scheduler thread would join that thread on itself.
+   LIFETIME: `user_data` must outlive the COLLECTOR, not just the sensor handle —
+   hsm_sensor_release frees only the handle, the collector keeps the sensor registered and the
+   scheduler keeps invoking the callback until the collector is destroyed. */
+typedef int32_t (*hsm_int_function_t)(void* user_data);
+typedef int32_t (*hsm_int_values_function_t)(const int32_t* values, int32_t count, void* user_data);
+
+/* Mirrors the managed CollectorOptions (public-api/feature.md). Every numeric
+   field uses 0 to mean "take the managed default" shown in [brackets]; pass an
+   explicit value to override. Validation (hsm_collector_create) rejects a blank
+   access_key/server_address, a port outside 1..65535, and any negative numeric
+   field. The DataSender transport seam is not exposed here — it arrives with the
+   HTTP transport (#1096). */
+typedef struct hsm_collector_options_t
+{
+    /* Connection. */
+    const char* access_key;     /* required, non-blank */
+    const char* server_address; /* required, non-blank */
+    int32_t port;               /* 1..65535 */
+    const char* client_name;    /* may be NULL */
+    const char* module;         /* path prefix; may be NULL/blank */
+    const char* computer_name;  /* path prefix; may be NULL/blank */
+
+    /* Pipeline. The queue evicts its oldest value when max_queue_size is exceeded.
+       NOTE: the managed package/period defaults dispatch every 15 s; the
+       conformance harness sets a small package/period explicitly so the corpus
+       stays fast — the 0-default here is the production value, not the test one. */
+    int32_t max_queue_size;            /* [20000]  > 0 */
+    int32_t max_values_in_package;     /* [1000]   > 0 */
+    int32_t package_collect_period_ms; /* [15000]  > 0 */
+    int32_t request_timeout_ms;        /* [30000]  > 0 */
+    int32_t max_sensors;               /* [100000] > 0 — registration cap */
+
+    /* Transport flags (consumed once the HTTP sender lands, #1096). */
+    bool allow_untrusted_server_certificate; /* [false] */
+    bool allow_plaintext_transport;          /* [false] */
+
+    /* Error deduplication (see hsm_collector_set_logger). A window of 0 logs
+       every message immediately with no dedup. */
+    int64_t exception_deduplicator_window_ms; /* [3600000] >= 0 */
+    int32_t max_deduplicated_messages;        /* [1000]    > 0 */
+} hsm_collector_options_t;
+
+/* Packed ABI version (see HSM_COLLECTOR_VERSION). Lets a consumer built against
+   one header verify the linked library is compatible. */
+int32_t hsm_collector_version(void);
+
+hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_collector_t** out_collector);
+void hsm_collector_destroy(hsm_collector_t* collector);
+
+/* Start/Stop should be driven from one thread (or serialized externally), same
+   assumption as the managed collector. Both are idempotent: Start while Running
+   and Stop while Stopped are no-ops returning OK. Start/Stop on a Disposed
+   collector are rejected with HSM_RESULT_INVALID_STATE. */
+hsm_result_t hsm_collector_start(hsm_collector_t* collector);
+hsm_result_t hsm_collector_stop(hsm_collector_t* collector);
+
+/* Current lifecycle status. Safe to call from any thread/state. */
+hsm_collector_status_t hsm_collector_status(const hsm_collector_t* collector);
+
+/* Dispose: terminal and idempotent, never fails, callable from any thread/state.
+   Stops the collector if it is running — joining an in-flight Stop on another
+   thread rather than issuing a duplicate, so exactly one stopped-notification
+   fires and the terminal mode wins — then moves to Disposed. After dispose,
+   create/start/stop/registration are rejected without crashing the host.
+   destroy() still frees the handle; dispose() is the graceful terminal
+   transition and may be called before destroy(). */
+void hsm_collector_dispose(hsm_collector_t* collector);
+
+/* TestConnection: callable in any lifecycle state (mirrors the managed
+   ConnectionResult.IsOk). Returns OK when the sender reports the server
+   reachable. Until the HTTP transport lands (#1096) the in-memory sender always
+   reports reachable. */
+hsm_result_t hsm_collector_test_connection(hsm_collector_t* collector);
+
+/* Switch the collector from the in-memory recording sender to the real libcurl
+   HTTP transport: values serialize to the .NET server WIRE format and are POSTed
+   to /list, and every sensor is registered (wire AddOrUpdate batch -> /commands)
+   at Start. Call BEFORE Start. Returns HSM_RESULT_OK on success, or
+   HSM_RESULT_INVALID_STATE when the library was built without the HTTP transport
+   (HSM_COLLECTOR_HTTP off). Default builds stay on the in-memory sender (#1165). */
+hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collector);
+
+/* Install the ready-made Windows PDH / Win32 metric-source factory (#1164): the value-typed default
+   sensors (Total CPU, Free RAM, disk gauges, free disk, process counters, TCP connections) read live
+   values via PDH/Win32 each post period. Call BEFORE Start. Returns HSM_RESULT_OK on Windows, or
+   HSM_RESULT_INVALID_STATE on other platforms. Equivalent to installing the Windows factory through
+   hsm_collector_set_metric_source_factory; a custom factory may be installed instead. */
+hsm_result_t hsm_collector_install_windows_metric_sources(hsm_collector_t* collector);
+
+/* Lifecycle observer (portable ILifecycleListener equivalent). The callback
+   fires on the thread driving the transition, under the lifecycle lock, AFTER
+   the status changes; only transitions after registration are delivered (no
+   replay). A throwing/crashing callback is isolated — it can neither cross the
+   C ABI boundary nor break the collector. The callback may read collector state
+   and may add another listener, but must NOT call a lifecycle method
+   (start/stop/dispose) — that thread already holds the lifecycle lock.
+   `user_data` must outlive the collector. NULL callback returns INVALID_ARGUMENT. */
+typedef void (*hsm_lifecycle_callback_t)(hsm_collector_status_t status, void* user_data);
+hsm_result_t hsm_collector_add_lifecycle_listener(
+    hsm_collector_t* collector,
+    hsm_lifecycle_callback_t callback,
+    void* user_data);
+
+/* Pluggable log sink. Levels mirror the managed ICollectorLogger (debug/info/
+   error). The callback is wrapped swallow-all: an exception escaping it is
+   caught and dropped (a broken logger must never break the collector). Error
+   messages pass through the MessageDeduplicator first (window/capacity from the
+   options). Passing a NULL callback clears the sink. */
+typedef enum hsm_log_level_t HSM_ENUM_INT32
+{
+    HSM_LOG_LEVEL_DEBUG = 0,
+    HSM_LOG_LEVEL_INFO = 1,
+    HSM_LOG_LEVEL_ERROR = 2
+} hsm_log_level_t;
+typedef void (*hsm_log_callback_t)(hsm_log_level_t level, const char* message, void* user_data);
+hsm_result_t hsm_collector_set_logger(hsm_collector_t* collector, hsm_log_callback_t callback, void* user_data);
+
+hsm_result_t hsm_collector_create_int_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_bool_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_double_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+/* A custom Double sensor driven by the installed metric-source factory (#1164 value-source plugin):
+   the factory supplies the value each post_period_ms instead of the app calling AddValue. The crypto-
+   quote plugin is the canonical use. post_period_ms must be > 0. */
+hsm_result_t hsm_collector_create_metric_double_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_string_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_enum_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+/* TimeSpan (type 7) and Version (type 8) instant sensors. TimeSpan values are 100-ns ticks
+   (TimeSpan.Ticks); Version values are the four components (major.minor[.build[.revision]]) with
+   a negative component meaning "absent" — both serialize exactly like the managed DTOs
+   ("1.02:03:04.0050000" / "1.2.3.4"). */
+hsm_result_t hsm_collector_create_timespan_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_version_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+/* Sensor registration metadata (the AddOrUpdate command in the managed collector).
+   Every sensor registers on every collector start, and immediately when created while
+   the collector is running. The recorded registration JSON is the canonical
+   cross-language registration text (see registration_contract.hsmtest). */
+typedef struct hsm_enum_option_t
+{
+    int32_t key;
+    const char* value;
+    int32_t color;
+    const char* description;
+} hsm_enum_option_t;
+
+/* ttl_ms <= 0 => no TTL; unit < 0 => unset (codes per the managed Unit enum);
+   description may be NULL (instant sensors default to an empty description). */
+hsm_result_t hsm_collector_create_int_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t ttl_ms,
+    int32_t unit,
+    const char* description,
+    hsm_sensor_t** out_sensor);
+/* Service-commands sensor (CreateServiceCommandsSensor): a string sensor reporting fixed lifecycle
+   commands with an initiator comment. Registers at ".module/Service commands" with the managed
+   Description and an implicit alert (IfReceivedNewValue -> ThenSendNotification("[$product] $value -
+   $comment")). The send helpers post the exact managed command strings; the comment is always
+   "Initiator: <initiator>". send_update_version omits the "from <old>" clause when old_version is
+   NULL/empty ("Service update to <new>" vs "Service update from <old> to <new>"). */
+hsm_result_t hsm_collector_create_service_commands_sensor(hsm_collector_t* collector, hsm_sensor_t** out_sensor);
+hsm_result_t hsm_service_commands_send_custom(hsm_sensor_t* sensor, const char* command, const char* initiator);
+hsm_result_t hsm_service_commands_send_restart(hsm_sensor_t* sensor, const char* initiator);
+hsm_result_t hsm_service_commands_send_start(hsm_sensor_t* sensor, const char* initiator);
+hsm_result_t hsm_service_commands_send_stop(hsm_sensor_t* sensor, const char* initiator);
+hsm_result_t hsm_service_commands_send_update(hsm_sensor_t* sensor, const char* initiator);
+hsm_result_t hsm_service_commands_send_update_version(
+    hsm_sensor_t* sensor,
+    const char* initiator,
+    const char* new_version,
+    const char* old_version);
+
+/* ---- Default-sensor catalog (#1099) --------------------------------------------------------
+   The built-in sensors of IWindowsCollection/IUnixCollection (managed Prototypes/Collections). Each
+   id maps 1:1 to a managed prototype and registers a byte-identical AddOrUpdateSensorRequest:
+   path (.computer/.module + category + name), SensorType, OriginalUnit, Statistics, KeepHistory,
+   TTLs, AggregateData/EnableGrafana/IsSingleton, EnumOptions, and the default alert(s). The
+   per-sensor Description is NOT part of the byte contract: the managed originals interpolate
+   machine-specific data (process name, readable periods) and are non-deterministic.
+
+   LIVE VALUES are out of scope here — a default sensor reads from the metric-source seam
+   (hsm_metric_source_*), whose production factory is a no-op; the real PDH/WMI/registry/EventLog
+   (Windows) and procfs (Linux) readers are the #1099 live-value follow-up. The .NET-specific
+   time-in-GC sensors are intentionally dropped (no managed GC in a native host). The Unix surface
+   is the managed parity subset (process / total CPU / free RAM / root free-disk + prediction). */
+typedef enum hsm_default_sensor_t HSM_ENUM_INT32
+{
+    /* Process (.module/Process <name>/...). DoubleBar; EMA except CPU. */
+    HSM_DEFAULT_PROCESS_CPU = 0,
+    HSM_DEFAULT_PROCESS_MEMORY = 1,
+    HSM_DEFAULT_PROCESS_THREAD_COUNT = 2,
+    HSM_DEFAULT_PROCESS_THREADPOOL_THREAD_COUNT = 3,
+    /* System (.computer/...). DoubleBar; EMA. */
+    HSM_DEFAULT_TOTAL_CPU = 10,
+    HSM_DEFAULT_FREE_RAM_MEMORY = 11,
+    /* Disks (.computer/Disks monitoring/...). disk_letter substitutes the {letter} segment. */
+    HSM_DEFAULT_FREE_DISK_SPACE = 20,
+    HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION = 21,
+    HSM_DEFAULT_ACTIVE_DISK_TIME = 22,
+    HSM_DEFAULT_DISK_QUEUE_LENGTH = 23,
+    HSM_DEFAULT_DISK_AVERAGE_WRITE_SPEED = 24,
+    /* Windows OS info (.computer/Windows OS info/..., 12 h). */
+    HSM_DEFAULT_WINDOWS_LAST_RESTART = 30,
+    HSM_DEFAULT_WINDOWS_INSTALL_DATE = 31,
+    HSM_DEFAULT_WINDOWS_LAST_UPDATE = 32,
+    HSM_DEFAULT_WINDOWS_VERSION = 33,
+    /* Windows event logs (.computer/Windows OS info/Windows <Status> Logs (<Category>)). */
+    HSM_DEFAULT_WINDOWS_APPLICATION_ERROR_LOGS = 40,
+    HSM_DEFAULT_WINDOWS_SYSTEM_ERROR_LOGS = 41,
+    HSM_DEFAULT_WINDOWS_APPLICATION_WARNING_LOGS = 42,
+    HSM_DEFAULT_WINDOWS_SYSTEM_WARNING_LOGS = 43,
+    /* Network (.computer/Network/..., 1 min, KeepHistory 90 d). */
+    HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED = 50,
+    HSM_DEFAULT_NETWORK_CONNECTION_FAILURES = 51,
+    HSM_DEFAULT_NETWORK_CONNECTIONS_RESET = 52,
+    /* Module info (.module/...). */
+    HSM_DEFAULT_COLLECTOR_ALIVE = 60,
+    HSM_DEFAULT_COLLECTOR_VERSION = 61,
+    HSM_DEFAULT_COLLECTOR_ERRORS = 62,
+    HSM_DEFAULT_PRODUCT_VERSION = 63,
+    HSM_DEFAULT_SERVICE_STATUS = 64,
+    /* Queue self-diagnostics (.module/Collector queue stats/..., priority). */
+    HSM_DEFAULT_QUEUE_OVERFLOW = 70,
+    HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT = 71,
+    HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME = 72,
+    HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE = 73
+} hsm_default_sensor_t;
+
+/* Deterministic substitutions for the volatile path/alert segments (the managed prototypes read
+   these from the live machine). All fields are optional: NULL/sentinel takes the documented
+   default. Start from hsm_default_sensor_params_default(). Only process_name and disk_letter affect
+   the registration today; the remaining fields are RESERVED for the #1099 live-value follow-up
+   (the readers + non-host service placement) and are currently ignored. */
+typedef struct hsm_default_sensor_params_t
+{
+    const char* process_name;    /* "Process <name>" category; NULL => "process" */
+    const char* disk_letter;     /* the {letter} in a disk sensor name; NULL => "C" */
+    const char* service_name;    /* RESERVED (not yet honored): service-status resolution */
+    int is_host_service;         /* RESERVED (not yet honored): service-status registers under .module
+                                    regardless — non-host placement lands with the live readers */
+    const char* product_version; /* The connected application's version. In
+                                    hsm_collector_add_all_module_sensors it both gates WHETHER the
+                                    product-version sensor registers (NULL/empty => skip) and is parsed
+                                    + emitted as the sensor's value ("M.m[.b[.r]]") with a "Start: <utc>"
+                                    comment. Ignored by hsm_collector_add_default_sensor (no emission
+                                    there). */
+} hsm_default_sensor_params_t;
+
+hsm_default_sensor_params_t hsm_default_sensor_params_default(void);
+
+/* Register one built-in sensor. `params` may be NULL (all defaults). The handle is owned by the
+   collector like any other sensor; out_sensor may be NULL if the caller does not need it. */
+hsm_result_t hsm_collector_add_default_sensor(
+    hsm_collector_t* collector,
+    hsm_default_sensor_t id,
+    const hsm_default_sensor_params_t* params,
+    hsm_sensor_t** out_sensor);
+
+/* Group helpers mirroring the managed AddAll* surface. The Windows-only categories (disk /
+   windows-info / network) are registered by add_all_computer_sensors on every platform here
+   because the registration payload is platform-agnostic text; the live readers gate per OS.
+   product_version may be NULL to skip the product-version sensor. */
+hsm_result_t hsm_collector_add_all_default_sensors(hsm_collector_t* collector, const char* product_version);
+hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_all_module_sensors(hsm_collector_t* collector, const char* product_version);
+hsm_result_t hsm_collector_add_process_monitoring_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_system_monitoring_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_disk_monitoring_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_windows_info_monitoring_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_all_network_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* collector);
+hsm_result_t hsm_collector_add_all_queue_diagnostic_sensors(hsm_collector_t* collector);
+
+/* ---- Metric-source seam (#1099) ------------------------------------------------------------
+   The native equivalent of IPerformanceCounterFactory/IPerformanceCounter: the value source a
+   default monitoring sensor reads on each scheduled tick. A source returns a double sample or
+   signals "no value this tick"; on a read error the collector disposes and recreates it (managed
+   recreate-on-InvalidOperationException), and disposes it on stop. The DEFAULT factory is a no-op
+   that never yields a value — installing a real factory (or a fake, for tests) is what feeds live
+   data. Callbacks run on the scheduler thread outside any collector lock and must not throw across
+   the boundary or call a lifecycle method. */
+typedef enum hsm_metric_read_t HSM_ENUM_INT32
+{
+    HSM_METRIC_READ_OK = 0,       /* *out_value holds this tick's sample */
+    HSM_METRIC_READ_NO_VALUE = 1, /* no sample this tick (skip the post) */
+    HSM_METRIC_READ_ERROR = 2     /* read failed: the collector recreates the source */
+} hsm_metric_read_t;
+
+/* Create a source for `sensor_path` (the full registered path). Return NULL to leave the sensor
+   without a live source (it still registers). `factory_user_data` is the pointer registered with
+   the factory; `out_source_user_data` receives a per-source pointer handed back to read/dispose. */
+typedef hsm_metric_read_t (*hsm_metric_read_fn)(void* source_user_data, double* out_value);
+typedef void (*hsm_metric_dispose_fn)(void* source_user_data);
+typedef int (*hsm_metric_source_factory_fn)(
+    void* factory_user_data,
+    const char* sensor_path,
+    hsm_metric_read_fn* out_read,
+    hsm_metric_dispose_fn* out_dispose,
+    void** out_source_user_data);
+
+/* Install the metric-source factory (replaces the no-op default). Passing NULL restores the no-op.
+   At Start each value-typed default/candidate sensor asks the factory for a reader for its path; a
+   bound sensor then posts live values each post period (DoubleBar/IntBar as a one-sample bar,
+   Double/Int as a value), recreating its source on a READ_ERROR and disposing it on Stop (#1164).
+   For Windows, `hsm_collector_install_windows_metric_sources` installs a ready-made PDH factory. */
+hsm_result_t hsm_collector_set_metric_source_factory(
+    hsm_collector_t* collector,
+    hsm_metric_source_factory_fn factory,
+    void* factory_user_data);
+
+hsm_result_t hsm_collector_create_enum_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    const char* description,
+    const hsm_enum_option_t* enum_options,
+    size_t enum_option_count,
+    hsm_sensor_t** out_sensor);
+
+/* Full SensorOptions registration surface (#1098 §6). Every nullable field uses a sentinel for
+   "emit null / take the managed default": ttl_ms/keep_history_ms/self_destroy_ms = 0 => null;
+   unit/display_unit/statistics < 0 => null; the tri-state bools is_singleton/aggregate_data/
+   enable_grafana use -1 => null, 0 => false, 1 => true. is_computer_sensor anchors the path at the
+   computer node AND forces IsSingletonSensor=true on the wire (managed `singleton | computer`).
+   sensor_location (0 = Module, 1 = Product) selects a non-computer sensor's path anchor. */
+typedef struct hsm_sensor_options_t
+{
+    int64_t ttl_ms;
+    int32_t unit;
+    const char* description; /* NULL => instant default "" */
+    int64_t keep_history_ms;
+    int64_t self_destroy_ms;
+    int32_t display_unit;
+    int32_t statistics; /* StatisticsOptions flags: EMA = 1 */
+    int32_t is_singleton;
+    int32_t aggregate_data;
+    int32_t enable_grafana;
+    bool is_computer_sensor;
+    int32_t sensor_location;
+} hsm_sensor_options_t;
+
+/* Returns an options value pre-filled with the managed defaults (every nullable field at its
+   "emit null / take default" sentinel: unit/display_unit/statistics = -1, the tri-states = -1,
+   numerics = 0, description = NULL, is_computer_sensor = false, sensor_location = Module). ALWAYS
+   start from this rather than zero-initializing — a `{0}` would wrongly set the tri-state bools to
+   false instead of null. Override the fields you care about, then pass to create_sensor_with_options. */
+hsm_sensor_options_t hsm_sensor_options_default(void);
+
+/* Generic instant-sensor create with the full options surface. `type` is any instant kind
+   (bool/int/double/string/enum/timespan/version). The recorded registration reflects every option. */
+hsm_result_t hsm_collector_create_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_type_t type,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor);
+
+size_t hsm_collector_registration_count(const hsm_collector_t* collector);
+hsm_result_t hsm_collector_get_registration_json(
+    const hsm_collector_t* collector,
+    size_t index,
+    const char** out_json);
+
+/* ---- Alert builders ------------------------------------------------------------------------
+   Lifetime: an alert handle is owned by the collector and freed when the collector is destroyed
+   (no separate release). Build conditions/actions, then attach to a sensor with
+   hsm_sensor_attach_alert BEFORE the collector starts (or before the sensor is created while the
+   collector is already running) — attaching rebuilds the sensor's registration payload, so an
+   alert added after the registration was already emitted is not retroactively applied. A NULL
+   handle argument returns INVALID_ARGUMENT; the builder setters never throw across the boundary. */
+hsm_result_t hsm_collector_create_alert(
+    hsm_collector_t* collector,
+    hsm_alert_kind_t kind,
+    hsm_alert_t** out_alert);
+
+/* Append one condition with an explicit AND/OR combination. The managed fluent DSL always stamps
+   And on every condition; an Or combination only arises through the lower-level template builder
+   (which the conformance harness exercises), so this ABI honors an arbitrary per-condition value to
+   match the DTO contract. target_value is the Const comparand as text (the managed DSL calls
+   value.ToString()); it is ignored — and may be NULL — when target_type is LAST_VALUE. */
+hsm_result_t hsm_alert_add_condition(
+    hsm_alert_t* alert,
+    hsm_alert_combination_t combination,
+    hsm_alert_property_t property,
+    hsm_alert_operation_t operation,
+    hsm_alert_target_type_t target_type,
+    const char* target_value);
+
+/* Actions (AlertAction<T>). set_notification mirrors ThenSendNotification; set_scheduled_notification
+   mirrors ThenSendScheduledNotification (time is unix-ms, serialized as ISO-8601-Z). set_icon maps a
+   built-in AlertIcon to its emoji; set_icon_raw takes an arbitrary UTF-8 string. set_sensor_error
+   raises the alert Status to Error. set_confirmation_period stores AndConfirmationPeriod (ms, encoded
+   as ticks). set_disabled marks the alert IsDisabled (BuildAndDisable). For a TTL alert,
+   set_inactivity_period sets the inactivity window (ms) that feeds TTLs/TtlAlerts. */
+hsm_result_t hsm_alert_set_notification(
+    hsm_alert_t* alert,
+    const char* notification_template,
+    hsm_alert_destination_mode_t destination);
+hsm_result_t hsm_alert_set_scheduled_notification(
+    hsm_alert_t* alert,
+    const char* notification_template,
+    int64_t time_unix_ms,
+    hsm_alert_repeat_mode_t repeat_mode,
+    bool instant_send,
+    hsm_alert_destination_mode_t destination);
+hsm_result_t hsm_alert_set_icon(hsm_alert_t* alert, hsm_alert_icon_t icon);
+hsm_result_t hsm_alert_set_icon_raw(hsm_alert_t* alert, const char* utf8_icon);
+hsm_result_t hsm_alert_set_sensor_error(hsm_alert_t* alert);
+hsm_result_t hsm_alert_set_confirmation_period(hsm_alert_t* alert, int64_t period_ms);
+hsm_result_t hsm_alert_set_disabled(hsm_alert_t* alert, bool disabled);
+hsm_result_t hsm_alert_set_inactivity_period(hsm_alert_t* alert, int64_t period_ms);
+
+/* Attach a built alert to a sensor and rebuild its registration payload. */
+hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert);
+
+hsm_result_t hsm_collector_create_last_value_int_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int32_t default_value,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_last_value_bool_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    bool default_value,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_last_value_double_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    double default_value,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_last_value_string_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    const char* default_value,
+    hsm_sensor_t** out_sensor);
+
+/* Bar sensors aggregate values into [open, close) windows aligned to bar_period_ms in unix-ms
+   space. A bar is published when a value arrives past the current close time (roll-on-add) and
+   when the collector stops with a non-empty bar (flush-on-stop). post_period_ms mirrors the C#
+   option but periodic partial posting is outside the conformance contract and not implemented. */
+hsm_result_t hsm_collector_create_int_bar_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_double_bar_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    int32_t precision,
+    hsm_sensor_t** out_sensor);
+
+/* Periodic sensors (rate / function): the FIRST post fires immediately on collector Start,
+   then every post_period_ms. Rate = accumulated sum / measured elapsed seconds since the
+   previous post (fallback: the configured period for the first sample); the sum resets on
+   every post; status/comment are sticky from the last accepted increment. Stop does NOT
+   flush the pending rate sum or trigger an extra function post. */
+hsm_result_t hsm_collector_create_rate_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_function_int_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_int_function_t function,
+    void* user_data,
+    hsm_sensor_t** out_sensor);
+/* Values-function: AddValue buffers into a sliding window (oldest evicted past
+   max_cache_size); every post passes a snapshot of the window to the callback — the buffer
+   is NOT drained. Values may be buffered before Start. */
+hsm_result_t hsm_collector_create_values_function_int_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    int32_t max_cache_size,
+    hsm_int_values_function_t function,
+    void* user_data,
+    hsm_sensor_t** out_sensor);
+/* File sensor (string-content path only; disk reads are not part of the portable contract). */
+hsm_result_t hsm_collector_create_file_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    const char* default_file_name,
+    const char* extension,
+    hsm_sensor_t** out_sensor);
+
+void hsm_sensor_release(hsm_sensor_t* sensor);
+
+hsm_result_t hsm_sensor_add_int(
+    hsm_sensor_t* sensor,
+    int32_t value,
+    hsm_sensor_status_t status,
+    const char* comment);
+hsm_result_t hsm_sensor_add_bool(
+    hsm_sensor_t* sensor,
+    bool value,
+    hsm_sensor_status_t status,
+    const char* comment);
+hsm_result_t hsm_sensor_add_double(
+    hsm_sensor_t* sensor,
+    double value,
+    hsm_sensor_status_t status,
+    const char* comment);
+hsm_result_t hsm_sensor_add_string(
+    hsm_sensor_t* sensor,
+    const char* value,
+    hsm_sensor_status_t status,
+    const char* comment);
+hsm_result_t hsm_sensor_add_enum(
+    hsm_sensor_t* sensor,
+    int32_t value,
+    hsm_sensor_status_t status,
+    const char* comment);
+/* TimeSpan value = 100-ns ticks. Version value = components; pass -1 for an absent build/revision
+   (Version.ToString() drops trailing absent components, so major.minor is the minimum). A NULL
+   string is never produced — these always serialize a value. */
+hsm_result_t hsm_sensor_add_timespan(
+    hsm_sensor_t* sensor,
+    int64_t ticks,
+    hsm_sensor_status_t status,
+    const char* comment);
+hsm_result_t hsm_sensor_add_version(
+    hsm_sensor_t* sensor,
+    int32_t major,
+    int32_t minor,
+    int32_t build,
+    int32_t revision,
+    hsm_sensor_status_t status,
+    const char* comment);
+
+/* Rate increment: a non-finite value or an invalid status is silently dropped (the call
+   returns HSM_RESULT_OK and neither the sum nor the sticky status/comment change). */
+hsm_result_t hsm_sensor_add_rate(
+    hsm_sensor_t* sensor,
+    double value,
+    hsm_sensor_status_t status,
+    const char* comment);
+
+/* Values-function buffer append (works before Start as well). */
+hsm_result_t hsm_sensor_add_function_int(hsm_sensor_t* sensor, int32_t value);
+
+/* File content publish: NULL content is silently ignored (returns HSM_RESULT_OK). */
+hsm_result_t hsm_sensor_add_file(
+    hsm_sensor_t* sensor,
+    const char* utf8_content,
+    hsm_sensor_status_t status,
+    const char* comment);
+
+/* Bar accumulation. A non-finite double value (NaN/Infinity) and an inconsistent partial
+   (count < 1 or mean/first/last outside [min, max] — strict for int bars, FP-tolerant for
+   double bars) are silently skipped: the call returns HSM_RESULT_OK and the bar is unchanged. */
+hsm_result_t hsm_sensor_add_bar_int(hsm_sensor_t* sensor, int32_t value);
+hsm_result_t hsm_sensor_add_bar_double(hsm_sensor_t* sensor, double value);
+hsm_result_t hsm_sensor_add_bar_int_partial(
+    hsm_sensor_t* sensor,
+    int32_t min,
+    int32_t max,
+    int32_t mean,
+    int32_t first,
+    int32_t last,
+    int32_t count);
+hsm_result_t hsm_sensor_add_bar_double_partial(
+    hsm_sensor_t* sensor,
+    double min,
+    double max,
+    double mean,
+    double first,
+    double last,
+    int32_t count);
+
+/* Test/failure injection: the next `count` send attempts fail before recording anything;
+   the queue re-enqueues the batch at the tail and retries on a later dispatch cycle. */
+void hsm_collector_set_send_fail_next(hsm_collector_t* collector, int32_t count);
+
+/* Test/failure injection: while enabled, every send attempt blocks until the stop path cancels
+   in-flight sends (models a dead/black-holed transport). A cancelled hung send counts as a
+   failed send, so the bounded stop drain drops the pending data instead of waiting it out —
+   collector shutdown must never block the host's restart. */
+void hsm_collector_set_send_hang(hsm_collector_t* collector, bool hang);
+
+size_t hsm_collector_sent_count(const hsm_collector_t* collector);
+hsm_result_t hsm_collector_get_sent_json(const hsm_collector_t* collector, size_t index, const char** out_json);
+
+const char* hsm_collector_last_error(const hsm_collector_t* collector);
+
+/* Enable per-process CPU-usage sensors (Windows only, #1179). Starts a background thread that
+   samples all processes at intervals of `period_ms` milliseconds, filters to the `count` busiest
+   above `min_percent`% of total machine CPU, and posts a Double sensor for each at path
+   "Top CPU processes/<exe-name>". Call BEFORE Start().
+   The number of distinct per-process sensors is capped (max(count * 8, 64)) so a host that churns
+   through many distinctly named processes cannot grow the sensor namespace without bound or exhaust
+   the global MaxSensors cap; once the cap is reached, newly seen process names are skipped.
+   Returns HSM_RESULT_INVALID_ARGUMENT if count <= 0 or period_ms <= 0.
+   Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
+hsm_result_t hsm_collector_enable_top_cpu_sensors(
+    hsm_collector_t* collector,
+    int32_t count,
+    double min_percent,
+    int32_t period_ms);
+
+#ifdef __cplusplus
+}
+#endif

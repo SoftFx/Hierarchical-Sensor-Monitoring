@@ -40,6 +40,7 @@ namespace HSMDataCollector.Client.HttpsClient
                 MaxDelay = TimeSpan.FromMinutes(2),
                 Delay    = TimeSpan.FromSeconds(1),
 
+                ShouldHandle = ShouldRetry,
                 OnRetry  = LogException,
             };
 
@@ -59,13 +60,32 @@ namespace HSMDataCollector.Client.HttpsClient
         internal abstract string GetUri(object rawData);
 
 
+        // Retry predicate (#1096). The default Polly pipeline only retried on EXCEPTIONS, so a
+        // returned non-success HttpResponseMessage (4xx/5xx) was treated as success and the data
+        // was dropped (silent loss). We now also retry server-side 5xx — but ONLY on the bounded
+        // pipelines (data/priority/file, MaxRetryAttempts = 10). The command pipeline retries
+        // unboundedly (for connection failures while the server restarts); applying result-retry
+        // there would let a persistent 5xx hang a command send forever, so commands stay
+        // exceptions-only and rely on the per-sensor error dictionary in the response. Client 4xx
+        // are permanent (bad payload/auth) and are never retried.
+        private ValueTask<bool> ShouldRetry(RetryPredicateArguments<HttpResponseMessage> args)
+        {
+            if (args.Outcome.Exception != null)
+                return new ValueTask<bool>(true);
+
+            var response = args.Outcome.Result;
+            var isServerError = response != null && (int)response.StatusCode >= 500;
+
+            return new ValueTask<bool>(isServerError && MaxRequestAttempts != int.MaxValue);
+        }
+
         private ValueTask LogException(OnRetryArguments<HttpResponseMessage> args)
         {
             if (args.Outcome.Result != null)
                 _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Code = {args.Outcome.Result.StatusCode}");
 
             else if (args.Outcome.Exception != null)
-                    _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Exception = {args.Outcome.Exception.Message} Inner = {args.Outcome.Exception.InnerException.Message}");
+                    _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Exception = {args.Outcome.Exception.Message} Inner = {args.Outcome.Exception.InnerException?.Message}");
 
             return default;
         }
@@ -75,13 +95,24 @@ namespace HSMDataCollector.Client.HttpsClient
             HttpRequest<T> request = new HttpRequest<T>(values, GetUri(values));
             try
             {
-                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false);
-                await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
-                return new PackageSendingInfo(request.Length, response);
+                using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
+                {
+                    await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
+                    return new PackageSendingInfo(request.Length, response);
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // Caller-driven cancellation (e.g. queue stop): propagate so the queue processor's
+                // ShutdownMode policy can decide whether to re-enqueue or drop the package.
+                // HttpClient's own request timeout also surfaces as OperationCanceledException but
+                // without the caller's token being cancelled — that path falls through to the
+                // generic catch and becomes a normal retryable Error.
+                throw;
             }
             catch (Exception ex)
             {
-                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.Content}");
+                LogSendFailure(ex, request);
                 return new PackageSendingInfo(request.Length, null, exception: ex.Message);
             }
         }
@@ -91,20 +122,38 @@ namespace HSMDataCollector.Client.HttpsClient
             HttpRequest<T> request = new HttpRequest<T>(value, GetUri(value));
             try
             {
-                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false);
-                await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
-                return new PackageSendingInfo(request.Length, response);
+                using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
+                {
+                    await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
+                    return new PackageSendingInfo(request.Length, response);
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // See IEnumerable overload above.
+                throw;
             }
             catch (Exception ex)
             {
-                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.Content}");
+                LogSendFailure(ex, request);
                 return new PackageSendingInfo(request.Length, null, exception: ex.Message);
             }
         }
 
 
-        private ValueTask<HttpResponseMessage> ExecutePipelineAsync(HttpRequest<T> request, CancellationToken token) =>
-            _client.SendRequestAsync(request.Uri, request.GetContent(), token);
+        private void LogSendFailure(Exception ex, HttpRequest<T> request)
+        {
+            _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
+        }
+
+
+        private async ValueTask<HttpResponseMessage> ExecutePipelineAsync(HttpRequest<T> request, CancellationToken token)
+        {
+            using (var content = request.GetContent())
+            {
+                return await _client.SendRequestAsync(request.Uri, content, token).ConfigureAwait(false);
+            }
+        }
 
 
         public void Dispose()

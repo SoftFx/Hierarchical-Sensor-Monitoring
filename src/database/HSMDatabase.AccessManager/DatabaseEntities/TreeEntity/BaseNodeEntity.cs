@@ -28,6 +28,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public ChangeInfoTableEntity ChangeTable { get; init; }
 
+        public List<PolicyEntity> TTLPolicies { get; init; } = [];
+
+        // Legacy field for backward-compatible deserialization of old DB records
         public PolicyEntity TTLPolicy { get; init; }
     }
 

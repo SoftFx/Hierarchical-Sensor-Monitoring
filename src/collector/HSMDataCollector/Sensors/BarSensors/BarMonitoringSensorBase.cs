@@ -19,10 +19,10 @@ namespace HSMDataCollector.DefaultSensors
         private readonly TimeSpan _barPeriod;
         private readonly int _precision;
 
-        private readonly object _locker = new object();
+        // Composed scheduling lifecycle for the bar-collect loop (the send loop is owned by the
+        // MonitoringSensorBase base via its own handle). Replaces a hand-rolled ScheduledTask + lock.
+        private readonly ScheduledTaskHandle _collectHandle;
 
-        private Task _collectTask;
-        private CancellationTokenSource _cancellationTokenSource;
         protected BarType _internalBar;
 
         public override BarType Current => (BarType)_internalBar.Copy().Complete();
@@ -32,9 +32,20 @@ namespace HSMDataCollector.DefaultSensors
 
         protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
+            if (options.BarTickPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(options.BarTickPeriod), "Bar tick period must be greater than zero.");
+
+            if (options.BarPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(options.BarPeriod), "Bar period must be greater than zero.");
+
+            if (typeof(BarType) == typeof(DoubleMonitoringBar) && (options.Precision < 0 || options.Precision > 15))
+                throw new ArgumentOutOfRangeException(nameof(options.Precision), "Precision must be between 0 and 15.");
+
             _collectBarPeriod = options.BarTickPeriod;
             _barPeriod = options.BarPeriod;
             _precision = options.Precision;
+
+            _collectHandle = new ScheduledTaskHandle(_dataProcessor.Scheduler);
 
             BuildNewBar();
         }
@@ -42,48 +53,35 @@ namespace HSMDataCollector.DefaultSensors
 
         public override ValueTask<bool> InitAsync()
         {
-            lock (_locker)
-            {
-                if (_collectTask == null)
-                {
-                    _cancellationTokenSource = new CancellationTokenSource();
-                    _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token, HandleException);
-                }
-            }
+            _collectHandle.Start(CollectBar, _collectBarPeriod, _collectBarPeriod, HandleException);
 
             return base.InitAsync();
         }
 
-        public override async ValueTask StopAsync()
+        public override ValueTask StopAsync() => StopCoreAsync(flushPartialBar: true);
+
+        // Sensor disposal (without a collector Stop) must not flush — mirrors
+        // LastValueSensorInstant.DisposeAsyncCore: releasing a handle is not a data point.
+        protected override ValueTask DisposeAsyncCore() => StopCoreAsync(flushPartialBar: false);
+
+        private async ValueTask StopCoreAsync(bool flushPartialBar)
         {
-            Task taskToWait = null;
-            CancellationTokenSource cts = null;
-
-            lock (_locker)
-            {
-                if (_collectTask != null)
-                {
-                    cts = _cancellationTokenSource;
-                    _cancellationTokenSource = null;
-
-                    taskToWait = _collectTask;
-                    _collectTask = null;
-
-                    cts?.Cancel();
-                }
-            }
-
             try
             {
-                if (taskToWait != null)
+                await _collectHandle.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
+
+                if (flushPartialBar)
                 {
-                    try
+                    // Flush the in-progress partial bar before base.StopAsync bumps the lifecycle
+                    // epoch and the data queues drain — otherwise everything accumulated since the
+                    // last CloseTime is lost at shutdown. Same roll-on-successful-send contract as
+                    // CheckCurrentBar: if a periodic send is in flight (TrySendValue returns false),
+                    // that send publishes the snapshot itself and the bar intentionally stays
+                    // un-rolled (the server merges partial bars by OpenTime).
+                    lock (_lockBar)
                     {
-                        await taskToWait.ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        taskToWait.Dispose();
+                        if (_internalBar.Count > 0 && TrySendValue())
+                            BuildNewBar();
                     }
                 }
 
@@ -93,10 +91,6 @@ namespace HSMDataCollector.DefaultSensors
             catch (Exception ex)
             {
                 HandleException(ex);
-            }
-            finally
-            {
-                cts?.Dispose();
             }
         }
 
@@ -126,12 +120,28 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
+                // Capture the generation once: if the sensor stops or restarts between this entry
+                // and the lock acquisition, we drop the bar instead of sending an obsolete one.
+                var capturedEpoch = LifecycleEpoch;
+
                 lock (_lockBar)
                 {
+                    if (LifecycleEpoch != capturedEpoch)
+                        return;
+
                     if (_internalBar.CloseTime < DateTime.UtcNow)
                     {
-                        SendValueAction();
-                        BuildNewBar();
+                        // Roll the bar ONLY if we actually sent its snapshot. The periodic send
+                        // schedule shares _sendValueInProgress with us, and may already be in
+                        // SendValueAction at this moment without having taken _lockBar yet to
+                        // snapshot. If we blindly BuildNewBar after a guard-skipped no-op, the
+                        // periodic send's GetValue lands on the freshly-reset (empty) bar and
+                        // the closed bar's aggregated data is lost. Deferring the roll keeps the
+                        // bar intact: either the periodic send finishes its snapshot (data sent
+                        // by the other thread), or our next CheckCurrentBar tick rolls cleanly
+                        // once the guard releases.
+                        if (TrySendValue())
+                            BuildNewBar();
                     }
                 }
             }

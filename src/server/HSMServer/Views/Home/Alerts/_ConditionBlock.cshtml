@@ -48,10 +48,62 @@
         let dataAlert = $(this).parents("div.dataAlertRow:first");
         let type = $(this).data('type');
 
+        // Container ID prefix is the actual sensor/template type. For TTL alerts loaded from
+        // storage, Model.Type (and therefore data-type on the select) is Boolean (1), not the
+        // real sensor type — so reading data-type for demote would route the row to the wrong
+        // dictionary key and the server would silently drop it. The container always reflects
+        // the parent context's type.
+        let container = dataAlert.closest("[id^='dataAlertsList_']");
+        let containerType = container.length ? container.attr("id").replace("dataAlertsList_", "") : type;
+
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
+        let conditionsBlock = conditionBlock.parent();
         let operation = conditionBlock.find($(`div.operation`));
 
         let property = $(this).val();
+        let isMainCondition = conditionsBlock.find("div[name='alertCondition']").first().is(conditionBlock);
+        let isTtlProperty = property === '@nameof(AlertProperty.TimeToLive)';
+
+        if (isMainCondition) {
+            if (isTtlProperty) {
+                // Promote row to TTL: TTL alerts are single-condition, so drop any non-main
+                // conditions, hide the add-condition button, and tag the row's action block
+                // so the schedule UI restricts to TTL mode. data-alert-type drives form
+                // collection routing on submit. The schedule-ttl-gated inputs are also hidden
+                // via the .ttlAction CSS rule and disabled here as defense-in-depth — the
+                // real submission gate is the alertType !== ttlKey check in setFormDataAlerts
+                // (_MetaInfo.cshtml / AlertTemplate.cshtml), which skips ScheduleStartTime /
+                // ScheduleInstantSend for TTL-routed rows regardless of DOM state.
+                conditionsBlock.find("div[name='alertCondition']").not(conditionBlock).remove();
+                conditionsBlock.find("a.addCondition").addClass("d-none");
+                dataAlert.find("div.fullAction").addClass("ttlAction");
+                dataAlert.find(".schedule-ttl-gated input").prop("disabled", true);
+                dataAlert.attr("data-alert-type", @TimeToLiveAlertViewModel.AlertKey);
+            } else {
+                // Inside an Any-template TTL container (the only container Any templates
+                // render, id dataAlertsList_<ttlKey>) there is no concrete sensor type to
+                // demote to — Any templates only allow TTL alerts. Revert the dropdown to
+                // TimeToLive and skip both the state change and the operation-refetch ajax
+                // so the row stays routed as TTLPolicy. Without this guard the demote would
+                // set data-alert-type back to containerType (== ttlKey) but flip the visual
+                // state to regular, leaving a row with a non-TTL property persisted as a
+                // malformed TTLPolicy.
+                if (containerType == @TimeToLiveAlertViewModel.AlertKey) {
+                    $(this).val('@nameof(AlertProperty.TimeToLive)');
+                    return;
+                }
+
+                // Demote from TTL: restore the add-condition button and regular schedule UI.
+                // Re-enable the gated schedule inputs. Route the row back to its container's
+                // sensor type so the server matches it against sensor.Type. Note: a TTL alert
+                // loaded from storage never rendered these inputs (server-side Model.IsTtl gate),
+                // so demote cannot recreate them — see feature.md known limitations.
+                conditionsBlock.find("a.addCondition").removeClass("d-none");
+                dataAlert.find("div.fullAction").removeClass("ttlAction");
+                dataAlert.find(".schedule-ttl-gated input").prop("disabled", false);
+                dataAlert.attr("data-alert-type", containerType);
+            }
+        }
 
         $.ajax({
             url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?type=${type}&property=${property}`,

@@ -1,0 +1,9 @@
+# MUST-FAIL: the payload carries Value 1 but the fixture demands Value 999.
+# Proves expect_payload_contains actually inspects the serialized payload.
+meta_payload_contains_wrong_value|create_collector
+meta_payload_contains_wrong_value|create_int_sensor|meta/payload/contains
+meta_payload_contains_wrong_value|start
+meta_payload_contains_wrong_value|add_int|0|1|Ok|real value is one
+meta_payload_contains_wrong_value|stop
+meta_payload_contains_wrong_value|expect_sent_count|1
+meta_payload_contains_wrong_value|expect_payload_contains|0|"Value":999

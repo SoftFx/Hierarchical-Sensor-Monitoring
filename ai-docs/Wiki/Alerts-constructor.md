@@ -33,8 +33,8 @@ A set of events that are executed when certain conditions are met. Actions block
 
 ## Special
 
-### Time to Live Alert
-Time to live alert has special condition with Property = **Inactivity period** and **Interval** target. If you want to set TTL you should click **Add TTL** link and select needed interval and actions. If you want to set **TTL = Never** you should remove TTL alert.
+### Inactivity Period Alert
+Inactivity Period alert has special condition with Property = **Inactivity Period** and **Interval** target. If you want to set an inactivity period you should click **Add Inactivity Period** link and select needed interval and actions. If you want to set **Inactivity Period = Never** you should remove the inactivity period alert.
 
 ---
 

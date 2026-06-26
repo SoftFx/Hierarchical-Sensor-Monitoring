@@ -1,0 +1,9 @@
+# MUST-FAIL: the forbidden substring IS present in the payload. Proves
+# expect_payload_not_contains is a real negative assertion, not a no-op.
+meta_payload_not_contains_present|create_collector
+meta_payload_not_contains_present|create_int_sensor|meta/payload/not-contains
+meta_payload_not_contains_present|start
+meta_payload_not_contains_present|add_int|0|1|Ok|present
+meta_payload_not_contains_present|stop
+meta_payload_not_contains_present|expect_sent_count|1
+meta_payload_not_contains_present|expect_payload_not_contains|0|"Value":1

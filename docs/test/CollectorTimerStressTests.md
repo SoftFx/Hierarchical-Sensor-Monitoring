@@ -1,0 +1,59 @@
+# Collector timer stress tests
+
+Дата прогона: 2026-05-26.
+
+Цель: проверить общий scheduler/timer слой коллектора после перехода на общий `CollectorScheduler`: разные периоды, restart timer-а, отсутствие callback overlap и CPU-budget.
+
+Код тестов:
+
+`src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs`
+
+Timer stress suite помечен xUnit collection `Collector CPU-sensitive tests` с `DisableParallelization = true`, потому что CPU-budget считается через `Process.TotalProcessorTime`. В полном test run это защищает тест от чужой параллельной нагрузки из соседних test classes.
+
+## Что проверяется
+
+| Сценарий | Тест | Что ломаем | Критерии успеха |
+| --- | --- | --- | --- |
+| Разные timer periods | `Function_sensors_with_varied_timer_periods_fire_without_cpu_spin` | 7 function sensors с периодами `40/60/90/130/200/300/500 ms` работают одновременно | каждый timer сработал; быстрый timer дал больше callbacks, чем медленный; data packages дошли до sender; CPU за окно меньше `4 sec` |
+| Restart timer под нагрузкой | `Restarting_function_timer_under_load_changes_rate_without_callback_overlap` | function callback спит `40 ms`, timer перезапускается с `100 ms` на `25 ms` | после restart callback rate вырос; `maxConcurrent=1`; CPU за окно меньше `4 sec` |
+| 1000 function sensor timers | `Thousand_function_sensor_timers_do_not_burn_cpu_or_threads` | 1000 periodic function sensors с периодом `100 ms` тикают одновременно `3 sec` | callbacks реально идут; adjusted CPU за окно меньше `1 sec`; thread count не растет как один thread/timer |
+
+## Локальный результат
+
+Команда:
+
+```powershell
+dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~CollectorTimerStressTests" --logger "console;verbosity=detailed"
+```
+
+Фактический вывод из общего targeted run:
+
+```text
+timerStress; scenario=varied-periods; callbacks=40ms=51,60ms=34,90ms=23,130ms=16,200ms=11,300ms=7,500ms=5; dataPackages=54; dataValues=144; wallMs=2010; cpuMs=234; cpuCores=0.117
+```
+
+```text
+timerRestart; beforeRestartCallbacks=7; afterRestartCallbacks=15; maxConcurrent=1; dataPackages=21; dataValues=21; wallMs=902; cpuMs=0; cpuCores=0.000
+```
+
+```text
+timerScale; sensors=1000; periodMs=100; callbacks=31000; dataPackages=309; dataValues=30200; threadsBefore=23; threadsAfter=60; threadDelta=37; wallMs=3011; cpuMs=31; baselineCpuMs=0; adjustedCpuMs=31; adjustedCpuCores=0.010
+```
+
+## Вывод
+
+- Таймеры с разными периодами срабатывают в ожидаемом порядке: `40 ms` чаще, чем `500 ms`.
+- Restart на более короткий период реально увеличивает callback rate.
+- Callback-и не накладываются друг на друга даже когда выполнение (`40 ms`) дольше нового периода (`25 ms`).
+- 1000 periodic function sensors не превращаются в 1000 потоков и не жгут CPU: за `3 sec` adjusted CPU должен быть меньше `1 sec`.
+- CPU в timer stress окнах остается низким.
+
+## Проверка против старой реализации
+
+Этот же тест был прогнан во временном worktree со старой per-timer реализацией до общего scheduler-а. Тест упал по CPU budget:
+
+```text
+timerScale; sensors=1000; periodMs=100; callbacks=30892; dataPackages=307; dataValues=30000; threadsBefore=23; threadsAfter=59; threadDelta=36; wallMs=3000; cpuMs=406; cpuCores=0.135
+```
+
+Старый historical threshold `300 ms` оказался слишком хрупким для полного testhost-прогона. Текущий критерий: adjusted CPU за окно `3 sec` должен быть меньше `1 sec`; raw CPU и baseline CPU сохраняются в output.

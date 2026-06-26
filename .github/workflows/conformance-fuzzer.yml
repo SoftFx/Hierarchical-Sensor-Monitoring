@@ -1,0 +1,54 @@
+name: Conformance differential fuzzer
+
+# Nightly differential fuzzing of the two collector drivers (#1094, epic #1093):
+# seeded random .hsmtest fixtures run through BOTH collectors; canonical payload
+# dumps must agree byte-for-byte. Scheduled lane, not a per-PR check — divergences
+# produce a minimized repro artifact to turn into a permanent corpus fixture.
+
+on:
+  schedule:
+    - cron: '17 4 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: 'Generator seed (default: the run number)'
+        required: false
+      iterations:
+        description: 'Fixtures per run'
+        required: false
+        default: '40'
+
+jobs:
+  fuzz:
+    # windows-latest only: the differential fuzzer needs BOTH drivers, and the
+    # managed driver test project targets net48 — running it on Linux would need
+    # mono. The value is two DRIVERS, not two OSes, and both run on Windows.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build native driver
+        run: |
+          cmake -S src/native/collector -B build/native-collector
+          cmake --build build/native-collector --config Release --parallel
+
+      - name: Run differential fuzzer
+        shell: pwsh
+        run: |
+          $seed = '${{ github.event.inputs.seed }}'
+          if (-not $seed) { $seed = '${{ github.run_number }}' }
+          $iterations = '${{ github.event.inputs.iterations }}'
+          if (-not $iterations) { $iterations = '40' }
+          ./scripts/fuzz-conformance.ps1 -Seed ([int]$seed) -Iterations ([int]$iterations) -NativeTestBinary 'build/native-collector/Release/hsm_collector_tests.exe'
+
+      - name: Upload divergence repros
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-repros
+          path: tests/conformance/fuzz-repros/
+          if-no-files-found: ignore

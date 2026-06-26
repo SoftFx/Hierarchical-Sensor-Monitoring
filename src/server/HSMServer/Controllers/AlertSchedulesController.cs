@@ -83,6 +83,9 @@ namespace HSMServer.Controllers
         [ValidateAntiForgeryToken]
         public IActionResult SavePartial(AlertScheduleViewModel model)
         {
+            if (_scheduleProvider.GetAllSchedules().Any(x => x.Name == model.Name && x.Id != model.Id))
+                ModelState.AddModelError(nameof(model.Name), "The schedule name must be unique.");
+
             if (ModelState.IsValid)
             {
                 if (model.Id == Guid.Empty)

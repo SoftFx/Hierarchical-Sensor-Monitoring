@@ -1,0 +1,47 @@
+# HSM collector conformance v1 — file sensor contract (string content path).
+# Format: case|action|arg1|arg2|...
+# Actions:
+# create_file_sensor|path|default_file_name|extension
+# add_file_value|idx|content|status|comment   (content is UTF-8; token:null content is silently ignored)
+# Contract notes:
+# - AddValue(string) publishes the UTF-8 bytes as a file payload (Type 6) with the sensor
+#   options' default name/extension. Disk-based SendFile stays language-specific and is NOT
+#   part of this portable contract.
+# - File payloads are PUSH-DRIVEN: they dispatch promptly while running and are NOT gated by
+#   the package collect period (the C# file queue wakes on enqueue, unlike the batched data
+#   queue). There is no orchestrable "pending at stop" state for files.
+# - A null content is silently ignored; values added before Start are dropped (instant
+#   sensor gating).
+
+file_add_value_utf8_roundtrip|create_collector
+file_add_value_utf8_roundtrip|create_file_sensor|contract/file/basic|report|txt
+file_add_value_utf8_roundtrip|start
+file_add_value_utf8_roundtrip|add_file_value|0|hello file|Ok|file-comment
+file_add_value_utf8_roundtrip|expect_sent_count|1|5
+file_add_value_utf8_roundtrip|expect_payload_contains|0|"Type":6,
+file_add_value_utf8_roundtrip|expect_payload_contains|0|"Value":"hello file"
+file_add_value_utf8_roundtrip|expect_payload_contains|0|"Name":"report"
+file_add_value_utf8_roundtrip|expect_payload_contains|0|"Extension":"txt"
+file_add_value_utf8_roundtrip|expect_payload_contains|0|"Comment":"file-comment"
+
+file_value_before_start_is_dropped|create_collector
+file_value_before_start_is_dropped|create_file_sensor|contract/file/prestart|early|log
+file_value_before_start_is_dropped|add_file_value|0|too early|Ok|prestart
+file_value_before_start_is_dropped|expect_sent_count|0
+file_value_before_start_is_dropped|start
+file_value_before_start_is_dropped|stop
+file_value_before_start_is_dropped|expect_sent_count|0
+
+file_null_value_is_ignored|create_collector
+file_null_value_is_ignored|create_file_sensor|contract/file/null|nulls|txt
+file_null_value_is_ignored|start
+file_null_value_is_ignored|add_file_value|0|token:null|Ok|null-content
+file_null_value_is_ignored|stop
+file_null_value_is_ignored|expect_sent_count|0
+
+file_dispatches_promptly_despite_collect_period|create_collector_with_limits|20000|50|60000
+file_dispatches_promptly_despite_collect_period|create_file_sensor|contract/file/prompt|prompt|log
+file_dispatches_promptly_despite_collect_period|start
+file_dispatches_promptly_despite_collect_period|add_file_value|0|prompt file|Ok|prompt-comment
+file_dispatches_promptly_despite_collect_period|expect_sent_count|1|5
+file_dispatches_promptly_despite_collect_period|expect_payload_contains|0|"Value":"prompt file"

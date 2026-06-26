@@ -17,6 +17,15 @@
             </summary>
             <param name="user">User object (password field must be password hash).</param>
         </member>
+        <member name="T:HSMServer.Controllers.AgentController">
+            <summary>
+            Per-product HSM Agent download (epic #1167, W6/W7). The admin opens a product, clicks "Download
+            Windows agent", and gets a zip with the byte-identical signed exe + a generated config.json
+            (this server's address + the product's access key) + silent install scripts. The server ONLY
+            generates + serves the zip — it is not an installer; the client install is the C++ exe's own
+            <c>--install</c> (no .NET/MSI on the client).
+            </summary>
+        </member>
         <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.TestConnection">
             <summary>
             with 200 status code response. Used for "Test connection" on the datasource config page.
@@ -91,6 +100,13 @@
             <param name="rateValue"></param>
             <returns></returns>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.EnumSensorValue)">
+            <summary>
+            Receives value of enum sensor
+            </summary>
+            <param name="enumValue"></param>
+            <returns></returns>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleBarSensorValue)">
             <summary>
             Receives value of double bar sensor
@@ -144,6 +160,12 @@
             <param name="sensorCommands"></param>
             <returns>Dictionary that contains commands error. Key is path to sensor, Value is error</returns>
         </member>
+        <member name="P:HSMServer.DTOs.AddOrUpdateSensorRequestDto.TtlAlert">
+            <summary>Backward compat: maps single TtlAlert to TtlAlerts list.</summary>
+        </member>
+        <member name="P:HSMServer.DTOs.AddOrUpdateSensorRequestDto.TTL">
+            <summary>Backward compat: maps single TTL to TTLs list.</summary>
+        </member>
         <member name="M:HSMServer.Extensions.ColorExtensions.GetDefaultColor(System.Int32)">
             <summary>
             Get specified color in HTML format #RRGGBB for numbers from 0 to 8
@@ -168,6 +190,70 @@
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
             </summary>
         </member>
+        <member name="T:HSMServer.Model.Agent.AgentConnectionResolver">
+            <summary>
+            Resolves the (address, port) the agent bundle's config.json points at. Prefers the admin-set
+            external URL (the externally-reachable Sensor-API base; the server can't infer it behind
+            Docker/NAT); when blank, falls back to the request host + the configured Sensor port. Pure
+            (primitives only) so it is unit-tested without a web host.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.Agent.AgentBundleOptions">
+            <summary>
+            Parameters baked into one per-product agent bundle. <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.AccessKey"/> is the product's
+            access-key GUID (string) the agent sends in the <c>Key</c> header. <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.EnableTopCpu"/>
+            adds a <c>topCpu</c> block so the installed agent also reports the top processes by CPU (#1175).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentBundleOptions.#ctor(System.String,System.Int32,System.String,System.Boolean,System.Boolean)">
+            <summary>
+            Parameters baked into one per-product agent bundle. <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.AccessKey"/> is the product's
+            access-key GUID (string) the agent sends in the <c>Key</c> header. <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.EnableTopCpu"/>
+            adds a <c>topCpu</c> block so the installed agent also reports the top processes by CPU (#1175).
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.Agent.AgentInstallerBundle">
+            <summary>
+            Builds the downloadable HSM Agent bundle (epic #1167, W7): a zip of the byte-identical signed
+            <c>hsm-agent.exe</c> + a generated <c>config.json</c> (server address + key) + silent
+            install/uninstall scripts. The exe is NEVER modified — all per-product data lives in
+            <c>config.json</c> (Authenticode invariant). Install is 100% native C++ (the exe self-installs);
+            no .NET/MSI on the client. Pure + side-effect-free so it is unit-tested without a web host.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildConfigJson(HSMServer.Model.Agent.AgentBundleOptions)">
+            <summary>The generated config.json — matches the agent's config schema (only address + key required).</summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildInstallScript">
+            <summary>
+            Installer script: stops any running service, copies the exe, copies config on first install
+            only (never overwrites a user-customised config), registers and starts the service.
+            Requires Administrator (prints an error and pauses if not elevated).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildUninstallScript">
+            <summary>Uninstaller script: deregisters the service and removes the installed exe. Requires Administrator.</summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildZip(System.Byte[],HSMServer.Model.Agent.AgentBundleOptions)">
+            <summary>Assemble the zip in memory: the unmodified exe + generated config + install scripts.</summary>
+        </member>
+        <member name="T:HSMServer.Model.Agent.AgentKeySelector">
+            <summary>
+            Picks the access key baked into a product's agent bundle. The agent registers its default
+            sensors at start and streams values, so it needs add-node/add-sensor + send-data permissions —
+            the product DefaultKey has all of them and never expires. Pure (Core types only) so it is
+            unit-tested without a web host.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.AgentKeySelector.Select(HSMServer.Core.Model.ProductModel)">
+            <summary>
+            Returns the best agent key for the product, or null when none actually satisfies
+            <see cref="F:HSMServer.Model.Agent.AgentKeySelector.AgentPermissions"/>. We never hand back an expired/under-permissioned key as a
+            "last resort": it would bake a credential that fails to authenticate at runtime into the
+            bundle with no signal to the admin. Null instead lets the caller refuse the download
+            (BadRequest) so the admin fixes the key first.
+            </summary>
+        </member>
         <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.AddValueFromLists(HSMServer.Model.History.SummaryBarItem{`0})">
             <summary>
             Set fields, for which collecting lists of values is required
@@ -188,6 +274,46 @@
             </summary>
             <param name="means"></param>
             <returns></returns>
+        </member>
+        <member name="T:HSMServer.ServerConfiguration.AgentConfig">
+            <summary>
+            Settings for the downloadable HSM Agent (epic #1167). The externally-reachable Sensor-API base URL
+            is baked into each per-product agent bundle so the client connects with zero configuration. The
+            server cannot infer this behind Docker/NAT, so an admin sets it; when blank, the download endpoint
+            falls back to the request host + the configured Sensor port.
+            </summary>
+        </member>
+        <member name="P:HSMServer.ServerConfiguration.AgentConfig.AllowUntrustedCertificate">
+            <summary>
+            Baked into downloaded bundles as <c>server.allowUntrustedCertificate</c> so an agent accepts a
+            self-signed server certificate (the typical self-hosted / Docker eval case). Default false.
+            </summary>
+        </member>
+        <member name="P:HSMServer.ServerConfiguration.AgentConfig.EnableTopCpuProcesses">
+            <summary>
+            When true, downloaded bundles carry a <c>topCpu</c> block (issue #1175) so the installed agent
+            also reports the top processes by CPU once a minute. The admin opts in here (server-side); the
+            client agent has no UI and simply runs whatever config.json the bundle ships. Default false.
+            </summary>
+        </member>
+        <member name="P:HSMServer.ServerConfiguration.AgentConfig.AutoUpdateEnabled">
+            <summary>
+            Global kill-switch for the agent self-update channel (epic #1174). When false the
+            <c>GET /api/agent/version</c> manifest returns <c>updateEnabled: false</c> and every agent
+            that polls it will stay on its current version. Default false (opt-in).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentController.GetVersion">
+            <summary>
+            Agent self-update manifest (epic #1174). Returns version, SHA-256 of the staged exe, and
+            whether the server permits auto-updates. No authentication. Returns 503 when no exe is staged.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentController.GetExe">
+            <summary>
+            Serve the staged agent binary for self-update (epic #1174). Requires a valid product access
+            key in the <c>Key</c> request header. Sets <c>X-Agent-Sha256</c> on the response.
+            </summary>
         </member>
     </members>
 </doc>

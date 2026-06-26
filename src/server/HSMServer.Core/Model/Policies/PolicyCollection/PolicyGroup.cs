@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 
 namespace HSMServer.Core.Model.Policies
@@ -12,16 +12,16 @@ namespace HSMServer.Core.Model.Policies
 
         public bool IsEmpty => Policies.IsEmpty;
 
-        public string Template { get; private set; }
+        public string Template { get; }
 
 
-        public void AddPolicy(Policy policy)
+        public PolicyGroup(string template)
         {
-            if (IsEmpty)
-                Template = policy.ToString();
-
-            Policies.TryAdd(policy.Id, policy);
+            Template = template;
         }
+
+
+        public void AddPolicy(Policy policy) => Policies.TryAdd(policy.Id, policy);
 
         public void RemovePolicy(Guid id) => Policies.TryRemove(id, out _);
     }

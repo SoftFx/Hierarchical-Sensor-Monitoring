@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -47,7 +48,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             _alertScheduleProvider = new AlertScheduleProvider(_databaseCoreManager.DatabaseCore);
 
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, snaphot.Object, _journalService, _alertScheduleProvider);
+            var database = WrapDatabase(_databaseCoreManager.DatabaseCore);
+
+            _valuesCache = new TreeValuesCache(database, snaphot.Object, _journalService, _alertScheduleProvider);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, _valuesCache, userManagerLogger);
@@ -57,5 +60,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public Task InitializeAsync() => _userManager.Initialize();
 
         public Task DisposeAsync() => Task.CompletedTask;
+
+
+        protected virtual IDatabaseCore WrapDatabase(IDatabaseCore inner) => inner;
     }
 }

@@ -1,0 +1,58 @@
+# HSM collector conformance v1 — bar period rollover contract (the only wall-clock fixture).
+# Format: case|action|arg1|arg2|...
+# Actions:
+# sleep_ms|milliseconds
+# expect_all_bars_aligned|period_ms
+# expect_bar_open_times_increasing
+# expect_bar_count_total|expected
+# expect_sent_count_between|min|max|timeout_seconds
+# Contract notes:
+# - A bar rolls when a value arrives after the current bar's CloseTime: the closed bar is
+#   published and a fresh aligned bar opens. Idle periods publish nothing (no empty bars).
+# - Only the first case asserts an exact value distribution; the rest use timing-immune
+#   invariants (count total, alignment, monotone open times) to stay flake-free.
+
+bar_rolls_on_add_after_close_strict|create_collector
+bar_rolls_on_add_after_close_strict|create_int_bar_sensor|contract/roll/strict|2000|0
+bar_rolls_on_add_after_close_strict|start
+bar_rolls_on_add_after_close_strict|add_bar_int|0|1
+bar_rolls_on_add_after_close_strict|add_bar_int|0|2
+bar_rolls_on_add_after_close_strict|add_bar_int|0|3
+bar_rolls_on_add_after_close_strict|sleep_ms|2600
+bar_rolls_on_add_after_close_strict|add_bar_int|0|10
+bar_rolls_on_add_after_close_strict|stop
+bar_rolls_on_add_after_close_strict|expect_sent_count|2
+bar_rolls_on_add_after_close_strict|expect_bar_field|0|count|3
+bar_rolls_on_add_after_close_strict|expect_bar_field|0|min|1
+bar_rolls_on_add_after_close_strict|expect_bar_field|0|max|3
+bar_rolls_on_add_after_close_strict|expect_bar_field|1|count|1
+bar_rolls_on_add_after_close_strict|expect_bar_field|1|last|10
+bar_rolls_on_add_after_close_strict|expect_all_bars_aligned|2000
+bar_rolls_on_add_after_close_strict|expect_bar_open_times_increasing
+
+bar_rollover_no_value_lost_invariants|create_collector
+bar_rollover_no_value_lost_invariants|create_int_bar_sensor|contract/roll/invariant|500|0
+bar_rollover_no_value_lost_invariants|start
+bar_rollover_no_value_lost_invariants|add_bar_int|0|1
+bar_rollover_no_value_lost_invariants|add_bar_int|0|2
+bar_rollover_no_value_lost_invariants|sleep_ms|700
+bar_rollover_no_value_lost_invariants|add_bar_int|0|9
+bar_rollover_no_value_lost_invariants|add_bar_int|0|10
+bar_rollover_no_value_lost_invariants|stop
+bar_rollover_no_value_lost_invariants|expect_sent_count_between|2|4|10
+bar_rollover_no_value_lost_invariants|expect_bar_count_total|4
+bar_rollover_no_value_lost_invariants|expect_all_bars_aligned|500
+bar_rollover_no_value_lost_invariants|expect_bar_open_times_increasing
+bar_rollover_no_value_lost_invariants|expect_bar_field|-1|last|10
+
+bar_rollover_gap_produces_no_empty_bars|create_collector
+bar_rollover_gap_produces_no_empty_bars|create_int_bar_sensor|contract/roll/gap|500|0
+bar_rollover_gap_produces_no_empty_bars|start
+bar_rollover_gap_produces_no_empty_bars|add_bar_int|0|1
+bar_rollover_gap_produces_no_empty_bars|sleep_ms|1200
+bar_rollover_gap_produces_no_empty_bars|add_bar_int|0|2
+bar_rollover_gap_produces_no_empty_bars|stop
+bar_rollover_gap_produces_no_empty_bars|expect_sent_count|2
+bar_rollover_gap_produces_no_empty_bars|expect_bar_count_total|2
+bar_rollover_gap_produces_no_empty_bars|expect_all_bars_aligned|500
+bar_rollover_gap_produces_no_empty_bars|expect_bar_open_times_increasing

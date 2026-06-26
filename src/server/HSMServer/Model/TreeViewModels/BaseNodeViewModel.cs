@@ -27,7 +27,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public TimeIntervalViewModel TTL { get; protected set; }
 
-        public TimeToLiveAlertViewModel TTLAlert { get; protected set; }
+        public List<TimeToLiveAlertViewModel> TTLAlerts { get; protected set; } = [];
 
         public DefaultChatViewModel DefaultChats { get; protected set; }
 

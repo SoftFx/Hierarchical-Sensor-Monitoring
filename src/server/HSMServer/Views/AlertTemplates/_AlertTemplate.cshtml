@@ -1,4 +1,4 @@
-﻿@using HSMCommon.Model
+@using HSMCommon.Model
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Core.Model
@@ -37,6 +37,10 @@
     }
 
     ViewBag.IsTemplate = true;
+
+    var pathTemplates = Model.PathTemplates != null && Model.PathTemplates.Count > 0
+        ? Model.PathTemplates
+        : new List<string> { "" };
 }
 <form id="addAlertTemplate_form" method="post" action="@Html.Raw(Url.Action(nameof(AlertTemplatesController.AlertTemplate), ViewConstants.AlertTemplatesController))">
     <div class="row">
@@ -50,10 +54,19 @@
         </div>
     </div>
     <div class="row py-2">
-        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="PathTemplate"></label>
-        <div class="col w-auto">
-            <input type='text' class='form-control' asp-for="PathTemplate" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" />
-            <span asp-validation-for="PathTemplate"></span>
+        <div class="col-1 col-form-label text-end">Path Templates</div>
+        <div class="col w-auto" id="pathTemplatesContainer">
+            @for (int i = 0; i < pathTemplates.Count; i++)
+            {
+                <div class="d-flex align-items-center mb-1 path-template-row">
+                    <input type='text' class='form-control path-template-input' name='PathTemplates[@i]' placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" value="@pathTemplates[i]" />
+                    <button type="button" class="btn btn-link remove-path-btn p-0 ms-1" style="@(pathTemplates.Count > 1 ? "" : "display:none")"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            }
+            <span class="text-danger field-validation-valid" data-valmsg-for="PathTemplates" data-valmsg-replace="true"></span>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-link p-0" id="addPathBtn"><i class="fa-solid fa-plus"></i> Add path</button>
         </div>
     </div>
     <div class="row py-2">
@@ -71,52 +84,43 @@
         <input type='text' class='d-none' asp-for="Id" />
 
         <div class="d-flex align-items-center">
-            <label class="col-form-label fw-bold">Alerts:</label>
+            <label class="col-form-label fw-bold">Alerts</label>
 
-            <a id="addDataAlert" href="javascript:addDataAlert('@false', '@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2">
+            <a id="addDataAlert" href="javascript:addDataAlert('@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2">
                 <i class="fa-solid fa-plus"></i> Add
-            </a>
-
-            <a id="addTtlAlert" href="javascript:addDataAlert('@true', '@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2 @(Model.HasTimeToLive ? "disabled" : string.Empty)">
-                <i class="fa-solid fa-plus"></i> Add TTL
             </a>
         </div>
 
         <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()" class="d-none help-popover">
             Comment help
         </a>
-        <div id="dataAlertsList_@ttlType">
-            @if (Model.HasTimeToLive && Model.DataAlerts.TryGetValue(ttlType, out var ttlAlerts) && ttlAlerts.Count > 0)
+
+        @{
+            // Unified list container. For Type=Any templates the container is keyed by ttlType
+            // (only TTL alerts are addable); for concrete types it's keyed by the sensor type.
+            // TTL alerts loaded from storage render inline; each row's data-alert-type attribute
+            // tells form collection whether to route to TTL (255) or sensor-type storage.
+            var templateListType = sensorType == DataAlertTemplateViewModel.AnyType ? ttlType : sensorType;
+        }
+        <div id="dataAlertsList_@templateListType">
+            @foreach (var (_, alerts) in Model.DataAlerts)
             {
-                @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", ttlAlerts[0])
+                @foreach (var alert in alerts)
+                {
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
+                }
             }
         </div>
-        @if (Model.DataAlerts.Count > 0)
-        {
-            @foreach (var (type, alerts) in Model.DataAlerts)
-            {
-                if (type == ttlType)
-                    continue;
-
-                <div id="dataAlertsList_@type">
-                    @foreach (var alert in alerts)
-                    {
-                        @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
-                    }
-                </div>
-            }
-        }
-        else
-        {
-            <div id="dataAlertsList_@sensorType">
-            </div>
-        }
     </div>
     <div id="affected_sensors" class="form-group mt-3 d-none">
+        <label class="form-label fw-bold">Affected Sensors</label>
         <div class="card mb-2 w-100">
             <div id="affected_sensors_cardbody" class="card-body py-2">
             </div>
         </div>
+        <nav id="sensors_pagination" class="d-none">
+            <ul class="pagination pagination-sm justify-content-center mb-0 mt-1"></ul>
+        </nav>
     </div>
     <div class="form-group mt-3">
         <div align="right">

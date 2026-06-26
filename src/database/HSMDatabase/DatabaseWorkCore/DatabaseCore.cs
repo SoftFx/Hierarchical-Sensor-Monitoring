@@ -549,6 +549,41 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
+        #region Environment database : Slack destination
+
+        public void AddSlackDestination(SlackDestinationEntity destination)
+        {
+            _environmentDatabase.AddSlackDestinationToList(destination.Id);
+            _environmentDatabase.AddSlackDestination(destination);
+        }
+
+        public void UpdateSlackDestination(SlackDestinationEntity destination) => _environmentDatabase.AddSlackDestination(destination);
+
+        public void RemoveSlackDestination(byte[] id)
+        {
+            _environmentDatabase.RemoveSlackDestination(id);
+            _environmentDatabase.RemoveSlackDestinationFromList(id);
+        }
+
+        public SlackDestinationEntity GetSlackDestination(byte[] id) => _environmentDatabase.GetSlackDestination(id);
+
+        public List<SlackDestinationEntity> GetSlackDestinations()
+        {
+            var destinations = new List<SlackDestinationEntity>(1 << 4);
+            var ids = _environmentDatabase.GetSlackDestinationsList();
+
+            foreach (var id in ids)
+            {
+                var entity = _environmentDatabase.GetSlackDestination(id);
+                if (entity != null)
+                    destinations.Add(entity);
+            }
+
+            return destinations;
+        }
+
+        #endregion
+
         #region Journal
 
         public void AddJournalValue(JournalKey journalKey, JournalRecordEntity value)

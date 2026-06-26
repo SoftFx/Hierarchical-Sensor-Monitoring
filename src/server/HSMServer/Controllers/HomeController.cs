@@ -112,6 +112,11 @@ namespace HSMServer.Controllers
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 {
                     viewModel = node;
+                    var schedulesList = GetAlertSchedulesSelectList();
+                    node.TTLAlerts.ForEach(a => a.Schedules = schedulesList);
+                    foreach (var (_, alerts) in node.DataAlerts)
+                        foreach (var alert in alerts)
+                            alert.Schedules = schedulesList;
                     StoredUser.SelectedNode.ConnectNode(node);
                     CurrentUser.Tree.AddOpenedNode(id);
                 }
@@ -120,7 +125,7 @@ namespace HSMServer.Controllers
                     viewModel = sensor;
                     var schedulesList = GetAlertSchedulesSelectList();
                     StoredUser.History.ConnectSensor(_treeValuesCache.GetSensor(id));
-                    sensor.TTLAlert.Schedules = schedulesList;
+                    sensor.TTLAlerts.ForEach(a => a.Schedules = schedulesList);
                     foreach (var (key, alerts) in sensor.DataAlerts)
                         foreach (var alert in alerts)
                         {
@@ -286,7 +291,7 @@ namespace HSMServer.Controllers
                     };
 
                     if (isExpectedFromParent)
-                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Time to live", TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Inactivity Period", TimeInterval.FromParent);
                     else
                     {
                         toastViewModel.AddItem(folder);
@@ -313,7 +318,7 @@ namespace HSMServer.Controllers
                     };
 
                     if (!expectedUpdate)
-                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Inactivity Period", TimeInterval.FromParent);
                     else
                     {
                         toastViewModel.AddItem(product);
@@ -590,7 +595,9 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor))
                 return _emptyResult;
 
-            return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+            var model = new SensorInfoViewModel(sensor);
+            PopulateAlertSchedules(model);
+            return PartialView("_MetaInfo", model);
         }
 
 
@@ -664,21 +671,34 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
             if (!ModelState.IsValid)
-                return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+            {
+                var invalidModel = new SensorInfoViewModel(sensor);
+                PopulateAlertSchedules(invalidModel);
+                return PartialView("_MetaInfo", invalidModel);
+            }
 
             var availableChats = sensor.GetAvailableChats(_telegramChatsManager);
 
-            var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+            newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var ttlAlertList);
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
                 ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
 
+
+            var ttlPolicies = ttlAlertList?.Select(t =>
+            {
+                var interval = t.Conditions is { Count: > 0 } ? t.Conditions[0].TimeToLive : null;
+                var fromParent = interval?.TimeInterval.IsParent() ?? false;
+                return t.ToTimeToLiveUpdate(CurrentInitiator, availableChats) with
+                {
+                    TTL = fromParent ? null : interval?.ToModel()?.Ticks
+                };
+            }).ToList() ?? [];
 
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
-                TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
+                TTLPolicies = ttlPolicies,
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
@@ -721,17 +741,16 @@ namespace HSMServer.Controllers
 
         public IActionResult AddDataPolicy(byte type, Guid entityId, Guid? folderId = null)
         {
-            TryGetSelectedNode(entityId, out var entity);
+            // entityId may be a template id (Alert Template authoring) rather than a sensor
+            // id — in that case sensor is null and BuildAlert produces a default block.
+            _treeViewModel.Sensors.TryGetValue(entityId, out var sensor);
 
-            DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, entity);
+            DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, sensor);
             viewModel.Schedules = GetAlertSchedulesSelectList();
 
-            if (entity is null && folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
-            {
-                var folderChats = folder.TelegramChats;
+            if (sensor is null && folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
                 foreach (var action in viewModel.Actions)
-                    action.AvailableChats.UnionWith(folderChats);
-            }
+                    action.AvailableChats.UnionWith(folder.TelegramChats);
 
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
@@ -744,8 +763,8 @@ namespace HSMServer.Controllers
         public IActionResult AddAlertAction(Guid entityId, bool isMain, bool isTtl, Guid? folderId = null)
         {
             HashSet<Guid> chats = [];
-            if (TryGetSelectedNode(entityId, out var entity))
-                entity.TryGetChats(out chats);
+            if (_treeViewModel.Sensors.TryGetValue(entityId, out var sensor))
+                sensor.TryGetChats(out chats);
             else if (folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
                 chats = folder.TelegramChats;
 
@@ -785,18 +804,6 @@ namespace HSMServer.Controllers
                 (byte)SensorType.Enum => new NumericConditionViewModel(false),
                 _ => null,
             };
-
-        private bool TryGetSelectedNode(Guid entityId, out NodeViewModel entity)
-        {
-            entity = null;
-
-            if (_treeViewModel.Sensors.TryGetValue(entityId, out var sensor))
-                entity = sensor;
-            if (_treeViewModel.Nodes.TryGetValue(entityId, out var node))
-                entity = node;
-
-            return entity is not null;
-        }
 
 
         [HttpPost]
@@ -892,7 +899,9 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var product))
                 return _emptyResult;
 
-            return PartialView("_MetaInfo", new ProductInfoViewModel(product));
+            var model = new ProductInfoViewModel(product);
+            PopulateAlertSchedules(model);
+            return PartialView("_MetaInfo", model);
         }
 
         [HttpPost]
@@ -902,16 +911,16 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
             if (!ModelState.IsValid)
-                return PartialView("_MetaInfo", new ProductInfoViewModel(product));
-
-            var availableChats = product.GetAvailableChats(_telegramChatsManager);
-            var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+            {
+                var invalidModel = new ProductInfoViewModel(product);
+                PopulateAlertSchedules(invalidModel);
+                return PartialView("_MetaInfo", invalidModel);
+            }
 
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
+                TTL = newModel.ExpectedUpdateInterval.ToModel(product.TTL),
                 DefaultChats = newModel.DefaultChats?.ToUpdate(product, _telegramChatsManager, _folderManager),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
@@ -921,7 +930,9 @@ namespace HSMServer.Controllers
 
             await _treeValuesCache.UpdateProductAsync(update);
 
-            return PartialView("_MetaInfo", new ProductInfoViewModel(product.RecalculateCharacteristics()));
+            var model = new ProductInfoViewModel(product.RecalculateCharacteristics());
+            PopulateAlertSchedules(model);
+            return PartialView("_MetaInfo", model);
         }
 
         [HttpGet]
@@ -1001,6 +1012,14 @@ namespace HSMServer.Controllers
                 Value = tz.Id.ToString(),
                 Text = $"{tz.Name}"
             })];
+        }
+
+        private void PopulateAlertSchedules(NodeInfoBaseViewModel model)
+        {
+            var schedulesList = GetAlertSchedulesSelectList();
+            foreach (var (_, alerts) in model.DataAlerts)
+                foreach (var alert in alerts)
+                    alert.Schedules = schedulesList;
         }
     }
 }

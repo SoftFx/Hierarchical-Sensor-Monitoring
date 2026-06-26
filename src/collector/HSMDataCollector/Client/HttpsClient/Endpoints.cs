@@ -27,6 +27,8 @@ namespace HSMDataCollector.Client
 
         internal string Rate => $"{ConnectionAddress}/rate";
 
+        internal string Enum => $"{ConnectionAddress}/enum";
+
 
         internal string DoubleBar => $"{ConnectionAddress}/doubleBar";
 
@@ -43,12 +45,19 @@ namespace HSMDataCollector.Client
 
         internal Endpoints(CollectorOptions options)
         {
+            var hasExplicitScheme = Uri.TryCreate(options.ServerUrl, UriKind.Absolute, out var explicitUri)
+                                    && !string.IsNullOrEmpty(explicitUri.Scheme);
             var builder = new UriBuilder(options.ServerUrl)
             {
                 Port = options.Port,
-                Scheme = "https",
                 Path = "api/sensors",
             };
+
+            if (!hasExplicitScheme)
+                builder.Scheme = "https";
+            else if (string.Equals(builder.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                     && !options.AllowPlaintextTransport)
+                builder.Scheme = Uri.UriSchemeHttps;
 
             ConnectionAddress = $"{builder.Uri}";
         }

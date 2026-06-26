@@ -161,6 +161,20 @@ namespace HSMServer.Controllers
 
 
         /// <summary>
+        /// Receives value of enum sensor
+        /// </summary>
+        /// <param name="enumValue"></param>
+        /// <returns></returns>
+        [HttpPost("enum")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [SendDataKeyPermissionFilter]
+        public Task<ActionResult<EnumSensorValue>> Post([FromBody] EnumSensorValue enumValue) => GetAddDataResult(enumValue);
+
+
+        /// <summary>
         /// Receives value of double bar sensor
         /// </summary>
         /// <param name="doubleBarValue"></param>

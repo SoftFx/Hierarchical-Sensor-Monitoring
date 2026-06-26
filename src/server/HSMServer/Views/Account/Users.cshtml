@@ -4,7 +4,10 @@
 @using HSMServer.Model.Authentication
 @model List<UserViewModel>
 
-@{ ViewData["Title"] = "Users"; }
+@{
+    ViewData["Title"] = "Users";
+    var products = TempData[TextConstants.TempDataProductsText] as Dictionary<Guid, string>;
+}
 
 <script>
     var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateUserAction, ViewConstants.AccountController))";
@@ -12,131 +15,190 @@
     var updateAction = "@Html.Raw(Url.Action(ViewConstants.UpdateUserAction, ViewConstants.AccountController))";
 </script>
 
-<div class="container">
-    <div class="row justify-content-center">
-        @if (TempData[TextConstants.TempDataErrorText] != null)
+<style>
+    .members-container { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; }
+    .member-row { display: flex; align-items: center; justify-content: space-between; padding: 1rem; border-bottom: 1px solid #e5e7eb; }
+    .member-row:last-child { border-bottom: none; }
+    .member-row:hover { background-color: #f9fafb; }
+    .member-avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 500; font-size: 0.875rem; }
+    .member-info { display: flex; align-items: center; gap: 0.75rem; }
+    .products-grid { display: flex; flex-wrap: wrap; gap: 0.25rem; max-width: 320px; justify-content: flex-end; }
+    .product-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; background-color: #f5f5f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 150px; }
+    .admin-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; }
+    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; background: none; border: 1px solid #d1d5db; border-radius: 0.5rem; cursor: pointer; color: #6b7280; font-size: 1rem; }
+    .action-btn:hover:not(:disabled) { background-color: #f9fafb; }
+    .action-btn.danger { color: #ef4444; }
+    .action-btn.danger:hover:not(:disabled) { background-color: #fef2f2; border-color: #fca5a5; }
+    .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .list-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 0.875rem; color: #6b7280; border-radius: 0.5rem 0.5rem 0 0; }
+    .member-list { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
+    .products-more-link { font-size: 0.75rem; color: #3b82f6; text-decoration: none; cursor: pointer; line-height: 2; white-space: nowrap; }
+    .products-more-link:hover { text-decoration: underline; }
+    .modal-password-field { -webkit-text-security: disc; -moz-text-security: disc; text-security: disc; }
+</style>
+
+<div class="members-container">
+    @if (TempData[TextConstants.TempDataErrorText] != null)
+    {
+        <div class="alert alert-danger">@TempData[TextConstants.TempDataErrorText].ToString()</div>
+    }
+
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <h1 class="h4 fw-semibold mb-0">Members</h1>
+        <button id="toggleAddForm" type="button" class="btn d-flex align-items-center gap-1" style="background-color: #16a34a; color: #fff; border-color: #16a34a;">
+            <i class="fas fa-plus"></i> Add member
+        </button>
+    </div>
+    <p class="text-secondary mb-3">Manage your organization's members and their access to products.</p>
+
+    <div class="d-flex gap-2 mb-3">
+        <div class="position-relative flex-grow-1">
+            <input id="searchInput" type="text" class="form-control pe-4" placeholder="Find a member..." autocomplete="off" name="search-filter" data-lpignore="true" />
+            <button id="clearSearch" type="button" class="btn btn-link position-absolute top-50 end-0 translate-middle-y text-secondary text-decoration-none p-0 me-2 d-none" style="font-size: 0.875rem; line-height: 1;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <select id="roleFilter" class="form-select" style="max-width: 140px;">
+            <option value="">Role</option>
+            <option value="admin">Admin</option>
+            <option value="user">User</option>
+        </select>
+    </div>
+
+    <div class="member-list">
+        <div class="list-header">
+            <span>@(Model?.Count ?? 0) members</span>
+        </div>
+
+        @if (Model != null && Model.Count > 0)
         {
-            <span class="font-weight-normal text-danger h1">@TempData[TextConstants.TempDataErrorText].ToString()</span>
+            for (var i = 0; i < Model.Count; i++)
+            {
+                var userItem = Model[i];
+                var trimmed = userItem.Username?.Trim() ?? string.Empty;
+                var initials = trimmed.Length >= 2 ? trimmed.Substring(0, 2).ToUpper()
+                    : trimmed.Length == 1 ? trimmed.ToUpper()
+                    : "??";
+                var avatarColors = new[] { "#9ca3af", "#8b95b0", "#7a87c5", "#6979da", "#586bef", "#4659f5", "#3b4de0", "#2d3fc7" };
+                var avatarColor = avatarColors[(userItem.UserId.GetHashCode() & 0x7FFFFFFF) % avatarColors.Length];
+
+                <div class="member-row" data-username="@userItem.Username.Trim().ToLower()" data-isadmin="@(userItem.IsAdmin ? "true" : "false")">
+                    <div class="member-info">
+                        <div class="member-avatar" style="background-color: @avatarColor;">@initials</div>
+                        <div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fw-medium">@userItem.Username.Trim()</span>
+                                @if (userItem.IsAdmin)
+                                {
+                                    <span class="admin-badge">Admin</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="products-grid">
+                            @{
+                                if (userItem.ProductsRoles == null || userItem.ProductsRoles.Count == 0)
+                                {
+                                    <span class="text-secondary" style="font-size: 0.75rem;">No products</span>
+                                }
+                                else
+                                {
+                                    var limit = userItem.ProductsRoles.Count <= 4 ? 4 : 3;
+                                    foreach (var right in userItem.ProductsRoles.Take(limit))
+                                    {
+                                        string name = string.Empty;
+                                        products?.TryGetValue(right.Item1, out name);
+                                        <span class="product-badge">@(name ?? right.Item1.ToString()) (@right.Item2)</span>
+                                    }
+                                    if (userItem.ProductsRoles.Count > limit)
+                                    {
+                                        var allProducts = string.Join("<br/>", userItem.ProductsRoles.Select(r =>
+                                        {
+                                            string n = string.Empty;
+                                            products?.TryGetValue(r.Item1, out n);
+                                            return (n ?? r.Item1.ToString()) + " (" + r.Item2 + ")";
+                                        }));
+                                        <a href="javascript:void(0)" class="products-more-link" tabindex="0"
+                                           data-bs-content="@allProducts">+@(userItem.ProductsRoles.Count - limit) more</a>
+                                    }
+                                }
+                            }
+                        </div>
+
+                        <div class="d-flex align-items-center gap-1">
+                            <button id='change_@userItem.UserId' type='button' class='action-btn' title='Edit'
+                                    data-userid="@userItem.UserId" data-username="@userItem.Username.Trim()" data-isadmin="@(userItem.IsAdmin ? "true" : "false")">
+                                <i class='fa-regular fa-pen-to-square'></i>
+                            </button>
+                            @if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
+                            {
+                                <button id='delete_@userItem.UserId' name="@userItem.Username"
+                                        type='button' class='action-btn danger' title='Remove'>
+                                    <i class='fa-regular fa-trash-can'></i>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
         }
-        
-        <div class="m-2">
-            <div class='row justify-content-start'>
-                <div class='col-2'>
-                    <h5 class="mx-4 my-2">Users</h5>
+        else
+        {
+            <div class="text-center text-secondary py-5">No members found.</div>
+        }
+    </div>
+</div>
+
+<!-- User Modal (Create / Edit) -->
+<div class="modal fade" id="modalUser" tabindex="-1" aria-labelledby="modalUserLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalUserLabel">Add member</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+            <div id="modalError" class="alert alert-danger d-none"></div>
+                <div class="mb-3">
+                    <span class="form-label">Username</span>
+                    <input id="modalUsername" type="text" class="form-control" autocomplete="off" readonly onfocus="this.removeAttribute('readonly');" />
+                </div>
+                <div class="mb-3">
+                    <span class="form-label">Password</span>
+                    <div class="position-relative">
+                        <input id="modalPassword" type="text" class="form-control modal-password-field pe-5" autocomplete="off" readonly onfocus="this.removeAttribute('readonly');" placeholder="Enter new password" />
+                        <button id="togglePassword" type="button" class="btn btn-link position-absolute top-50 end-0 translate-middle-y text-secondary text-decoration-none p-0 me-2" style="font-size: 0.875rem;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-check">
+                    <input id="modalIsAdmin" type="checkbox" class="form-check-input" />
+                    <span class="form-check-label">Admin</span>
                 </div>
             </div>
-        </div>
-        
-        <div class='col-xxl'>
-            <table class='table table-striped'>
-                <thead>
-                <tr>
-                <th scope='col'>#</th>
-                <th scope='col'>Username</th>
-                <th scope='col'>Password</th>
-                <th dcope='col'>IsAdmin</th>
-                <th scope='col'>Products</th>
-                <th scope='col'>Action</th>
-                <tbody>
-                @if (Model != null && Model.Count > 0)
-                {
-                    <tr>
-                        <th>0</th>
-                        <th>
-                            <input id='createName' type='text' class='form-control'/>
-                        </th>
-                        <th>
-                            <input id='createPassword' type='password' class='form-control'/>
-                        </th>
-                        <th>
-                            <input id='createIsAdmin' type='checkbox' class='form-check-input ms-0'/>
-                        </th>
-                        <th>---</th>
-                        <th>
-                            <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
-                                <i class='fas fa-plus'></i>
-                            </button>
-                        </th>
-                    </tr>
-                    for (var i = 0; i < Model.Count; i++)
-                    {
-                        var userItem = Model[i];
-                        <tr>
-                            <th scope='row'>@(i + 1)</th>
-                            <td class="text-break">@userItem.Username.Trim()</td>
-                            <td>
-                                <span id="hiddenPassword_@userItem.UserId">**************</span>
-                                <input id="password_@userItem.UserId" class="form-control d-none"/>
-                            </td>
-                            <td>
-                                <input id='isAdmin_@userItem.UserId' type='checkbox' class='form-check-input ms-0'
-                                       disabled value='@userItem.IsAdmin' @(userItem.IsAdmin ? "checked" : "")/>
-                            </td>
-                            <td class="text-break">
-                                @{
-                                    var products = TempData[TextConstants.TempDataProductsText] as Dictionary<Guid, string>;
-                                    if (userItem.ProductsRoles == null || userItem.ProductsRoles.Count == 0)
-                                    {
-                                        <span>---</span>
-                                    }
-                                    else
-                                    {
-                                        foreach (var right in userItem.ProductsRoles)
-                                        {
-                                            string name = string.Empty;
-                                            products?.TryGetValue(right.Item1, out name);
-                                            <span>@(name ?? right.Item1.ToString()) (@right.Item2)</span>
-                                            <br>
-                                        }
-                                    }
-                                }
-                            </td>
-                            <td class="w-25">
-                                @if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
-                                {
-                                    <button id='delete_@userItem.UserId' name="@userItem.Username"
-                                            type='button' class='btn btn-secondary ms-1' title='remove'>
-                                        <i class='fas fa-trash-alt'></i>
-                                    </button>
-                                }
-                                <button id='change_@userItem.UserId'
-                                        type='button' class='btn btn-secondary ms-1' title='change'>
-                                    <i class='fas fa-user-edit'></i>
-                                </button>
-                                
-                                <button disabled id='ok_@userItem.UserId' name="@userItem.Username"
-                                        type='button' class='btn btn-secondary ms-1' title='ok'>
-                                    <i class='fas fa-check'></i>
-                                </button>
-                                
-                                <button disabled id='cancel_@userItem.UserId'
-                                        type='button' class='btn btn-secondary ms-1' title='cancel'>
-                                    <i class='fas fa-times'></i>
-                                </button>
-                            </td>
-                        </tr>
-                    }
-                }
-                </tbody>
-            </table>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" style="min-width: 100px;" data-bs-dismiss="modal">Cancel</button>
+                <button id="modalSaveButton" type="button" class="btn" style="background-color: #16a34a; color: #fff; border-color: #16a34a; min-width: 100px;">Save</button>
+            </div>
         </div>
     </div>
 </div>
 
+<!-- Delete Modal -->
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="display: inline-table">
+        <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalDeleteLabel">Remove user</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-
-            <div id="modalDeleteBody" class="modal-body text-break">
-
-            </div>
-
+            <div id="modalDeleteBody" class="modal-body text-break"></div>
             <div class="modal-footer">
-                <button id="closeDeleteButton" type="button" class="btn btn-secondary col-2" data-bs-dismiss="modalDelete">Close</button>
-                <button id="confirmDeleteButton" type="button" class="btn btn-secondary col-2">Confirm</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                <button id="confirmDeleteButton" type="button" class="btn btn-danger">Confirm</button>
             </div>
         </div>
     </div>
@@ -152,54 +214,148 @@
         }
     }
 
-    //fix checked attribute
-    $('#createIsAdmin').on('click', function () {
-        if (this.checked)
-            this.setAttribute("checked", "checked");
-        else this.removeAttribute("checked");
+    var userModal = new bootstrap.Modal(document.getElementById('modalUser'));
+    var modalMode = 'create';
+    var passwordChanged = false;
+
+    var usernameRegex = /^[a-zA-Z0-9._@@+-]+$/;
+
+    function showModalError(msg) {
+        $('#modalError').text(msg).removeClass('d-none');
+    }
+    function hideModalError() {
+        $('#modalError').addClass('d-none');
+    }
+
+    function updateTogglePassword() {
+        var val = $('#modalPassword').val();
+        if (val) {
+            $('#togglePassword').removeClass('d-none');
+            $('#modalPassword').addClass('modal-password-field');
+            $('#togglePassword').find('i').removeClass('fa-eye-slash').addClass('fa-eye');
+        } else {
+            $('#togglePassword').addClass('d-none');
+            $('#modalPassword').removeClass('modal-password-field');
+            $('#togglePassword').find('i').removeClass('fa-eye-slash').addClass('fa-eye');
+        }
+    }
+
+    $('#modalPassword').on('input', function () {
+        passwordChanged = true;
+        updateTogglePassword();
     });
 
-    $('[id^=isAdmin_]').on('click', function () {
-        if (this.checked)
-            this.setAttribute("checked", "checked");
-        else this.removeAttribute("checked");
+    $('#togglePassword').on('click', function () {
+        var input = $('#modalPassword');
+        var icon = $(this).find('i');
+        if (input.hasClass('modal-password-field')) {
+            input.removeClass('modal-password-field');
+            icon.removeClass('fa-eye').addClass('fa-eye-slash');
+        } else {
+            input.addClass('modal-password-field');
+            icon.removeClass('fa-eye-slash').addClass('fa-eye');
+        }
     });
 
-    //create action
-    $('#createButton').on('click', function () {
-        username = $('#createName').val();
-        password = $('#createPassword').val();
-        isAdmin = $('#createIsAdmin').is(":checked");
-
-        var data = createData(username, password, isAdmin, null);
-        
-        $.ajax({
-            type: 'POST',
-            url: createAction,
-            data: JSON.stringify(data),
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function(result) {
-            document.location.reload();
-        });
+    // Add member
+    $('#toggleAddForm').on('click', function () {
+        modalMode = 'create';
+        passwordChanged = false;
+        hideModalError();
+        $('#modalUserLabel').text('Add member');
+        $('#modalUsername').val('').prop('disabled', false);
+        $('#modalPassword').val('');
+        updateTogglePassword();
+        $('#modalIsAdmin').prop('checked', false);
+        $('#modalSaveButton').text('Create');
+        userModal.show();
     });
 
-    //delete action
+    // Edit member
+    $('[id^=change_]').on('click', function () {
+        modalMode = 'edit';
+        var username = $(this).data('username');
+        var isAdmin = $(this).attr('data-isadmin') === 'true';
+        passwordChanged = false;
+        hideModalError();
+        $('#modalUserLabel').text('Edit member');
+        $('#modalUsername').val(username).prop('disabled', true);
+        $('#modalPassword').val('');
+        updateTogglePassword();
+        document.getElementById('modalIsAdmin').checked = isAdmin;
+        $('#modalSaveButton').text('Save');
+        userModal.show();
+    });
+
+    // Save (create or update)
+    $('#modalSaveButton').on('click', function () {
+        hideModalError();
+
+        var username = $('#modalUsername').val().trim();
+        var password = $('#modalPassword').val();
+        var isAdmin = $('#modalIsAdmin').is(':checked');
+
+        if (modalMode === 'create') {
+            if (!username) { showModalError('Username must be not null.'); return; }
+            if (username.length > 100) { showModalError('Username max length is 100 characters.'); return; }
+            if (!usernameRegex.test(username)) { showModalError('Username contains invalid symbols.'); return; }
+            if (!password) { showModalError('Password must be not null.'); return; }
+            if (password.length < 8) { showModalError('Password min length is 8 characters.'); return; }
+
+            var data = createData(username, password, isAdmin, null);
+            $.ajax({
+                type: 'POST',
+                url: createAction,
+                data: JSON.stringify(data),
+                contentType: 'application/json',
+                cache: false,
+                async: true
+            }).fail(function(xhr) {
+                if (xhr.responseText) showModalError(xhr.responseText);
+                else showModalError('Failed to create user.');
+            }).done(function () {
+                userModal.hide();
+                document.location.reload();
+            });
+        } else {
+            if (passwordChanged && password.length < 8) {
+                showModalError('Password min length is 8 characters.');
+                return;
+            }
+
+            var actualPassword = passwordChanged ? password : '';
+            var data = createData(username, actualPassword, isAdmin, null);
+            $.ajax({
+                type: 'POST',
+                url: updateAction,
+                data: JSON.stringify(data),
+                contentType: 'application/json',
+                cache: false,
+                async: true
+            }).fail(function(xhr) {
+                if (xhr.responseText) showModalError(xhr.responseText);
+                else showModalError('Failed to update user.');
+            }).done(function () {
+                userModal.hide();
+                document.location.reload();
+            });
+        }
+    });
+
+    // Delete action
     $('[id^=delete_]').on('click', function () {
-        userId = this.id.substring('delete_'.length, this.id.length);
-        username = this.name;
+        var userId = this.id.substring('delete_'.length);
+        var username = this.name;
 
-        $('#modalDeleteBody').empty();
-        $('#modalDeleteBody').append('Do you really want to remove "' + username.substring(0,100) + '" user?');
+        $('#modalDeleteBody').empty()
+            .append(document.createTextNode('Do you really want to remove "' + username.substring(0, 100) + '" user?'));
 
-        var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-        modal.show();
+        var deleteModal = new bootstrap.Modal(document.getElementById('modalDelete'));
+        deleteModal.show();
 
-        //modal confirm
-        $('#confirmDeleteButton').on('click', function () {
-            modal.hide();
-            
+        $('#confirmDeleteButton').off('click').on('click', function () {
+            deleteModal.hide();
+
             $.ajax({
                 type: 'POST',
                 url: `${deleteAction}?id=${userId}`,
@@ -211,53 +367,47 @@
                 }
             });
         });
+    });
 
-        //modal close
-        $('#closeDeleteButton').on('click', function () {
-            modal.hide();
+    // Search / Filter
+    function applyFilters() {
+        var q = $('#searchInput').val().toLowerCase();
+        var role = $('#roleFilter').val();
+        $('#clearSearch').toggleClass('d-none', !q);
+        $('.member-row').each(function () {
+            var name = $(this).data('username');
+            var isAdmin = $(this).data('isadmin').toString();
+            var matchSearch = name.indexOf(q) !== -1;
+            var matchRole = !role || (role === 'admin' ? isAdmin === 'true' : isAdmin === 'false');
+            $(this).toggle(matchSearch && matchRole);
+        });
+    }
+
+    $('#searchInput').on('input', applyFilters);
+    $('#roleFilter').on('change', applyFilters);
+
+    $('#clearSearch').on('click', function () {
+        $('#searchInput').val('');
+        applyFilters();
+    });
+
+    $('.products-more-link').each(function () {
+        var el = this;
+        new bootstrap.Popover(el, {
+            html: true,
+            trigger: 'focus',
+            placement: 'left',
+            content: function () {
+                var raw = el.getAttribute('data-bs-content');
+                var div = document.createElement('div');
+                div.textContent = raw;
+                return div.innerHTML.replace(/&lt;br\/&gt;/g, '<br/>');
+            }
         });
     });
 
-    //change action
-    $('[id^=change_]').on('click', function () {
-        userId = this.id.substring('change_'.length, this.id.length);
-
-        $('[id^=ok_]').attr('disabled', true);
-        $('[id^=cancel_]').attr('disabled', true);
-        $('[id^=isAdmin_]').attr('disabled', true);
-
-        $('[id^=password_]').addClass("d-none");
-        $('[id^=hiddenPassword_]').removeClass("d-none");
-
-
-        $('#ok_' + userId).removeAttr("disabled");
-        $('#cancel_' + userId).removeAttr("disabled");
-        $('#isAdmin_' + userId).removeAttr("disabled");
-
-        $(`#password_${userId}`).removeClass("d-none");
-        $(`#hiddenPassword_${userId}`).addClass("d-none");
-    });
-
-    $('[id^=cancel_]').on('click', function() {
-        document.location.reload();
-    });
-
-    $('[id^=ok_]').on('click', function () {
-        userId = this.id.substring('ok_'.length, this.id.length);
-
-        isAdmin = $('#isAdmin_' + userId).is(":checked");
-        let password = $(`#password_${userId}`).val();
-
-        var data = createData(this.name, password, isAdmin, null);
-        $.ajax({
-            type: 'POST',
-            url: updateAction,
-            data: JSON.stringify(data),
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (result) {
-            document.location.reload();
-        })
+    $('.products-more-link').on('click', function (e) {
+        e.preventDefault();
+        this.focus();
     });
 </script>

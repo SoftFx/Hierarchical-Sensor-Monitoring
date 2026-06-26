@@ -44,7 +44,7 @@ namespace HSMServer.Core.Cache
         List<AccessKeyModel> GetAccessKeys();
 
         Task<ProductModel> AddProductAsync(string productName, Guid authorId, CancellationToken token = default);
-        Task UpdateProductAsync(ProductUpdate product, CancellationToken token = default);
+        Task<TaskResult> UpdateProductAsync(ProductUpdate product, CancellationToken token = default);
         Task RemoveProductAsync(Guid id, InitiatorInfo initiator = null, CancellationToken token = default);
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);
@@ -105,7 +105,7 @@ namespace HSMServer.Core.Cache
 
         Task SaveLastStateToDbAsync(CancellationToken token = default);
 
-        void RemoveChatsFromPolicies(Guid folderId, List<Guid> chats, InitiatorInfo initiator);
+        Task RemoveChatsFromPoliciesAsync(Guid folderId, List<Guid> chats, InitiatorInfo initiator);
 
         List<AlertTemplateModel> GetAlertTemplateModels();
 
@@ -113,7 +113,7 @@ namespace HSMServer.Core.Cache
 
         AlertTemplateModel GetAlertTemplate(Guid id);
 
-        Task RemoveAlertTemplateAsync(Guid id, CancellationToken token = default);
+        Task<(bool Success, string Error)> RemoveAlertTemplateAsync(Guid id, CancellationToken token = default);
 
         Task RunSensorsSelfDestroyAsync(CancellationToken token = default);
 

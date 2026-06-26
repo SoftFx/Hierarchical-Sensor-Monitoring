@@ -38,7 +38,7 @@ namespace HSMServer.Model.DataAlerts
         NewSensorData,
         [Display(Name = "Alert confirmation period")]
         ConfirmationPeriod,
-        [Display(Name = "Inactivity period")]
+        [Display(Name = "Inactivity Period")]
         TimeToLive,
     }
 

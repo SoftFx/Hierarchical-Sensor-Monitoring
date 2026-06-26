@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Extensions;
+using HSMServer.Core.Notifications;
 using HSMServer.Core.TreeStateSnapshot.States;
 using System;
 using System.Collections.Generic;
@@ -13,12 +14,17 @@ namespace HSMServer.Core.Model.Policies
 
         public bool AllChats { get; init; }
 
+        public NotificationKind Kind { get; init; }
+
         public AlertDestination(Policy policy)
         {
             var target = policy.TargetChats;
             Chats = new HashSet<Guid>(target.Chats.Keys);
             AllChats = target.IsAllChats;
+            Kind = policy.Destination.Kind;
         }
+
+        internal AlertDestination() { }
 
 
         internal bool HasChats => AllChats || Chats.Count > 0;
@@ -73,7 +79,7 @@ namespace HSMServer.Core.Model.Policies
         internal AlertResult(Policy policy, bool isReplace = false)
         {
             Destination = new(policy);
-            
+
             ConfirmationPeriod = policy.ConfirmationPeriod;
             SendTime = policy.Schedule.GetSendTime();
             BuildDate = DateTime.UtcNow;
@@ -94,6 +100,16 @@ namespace HSMServer.Core.Model.Policies
                 RetryCount = ttlPolicy.RetryCount;
 
             AddPolicyResult(policy);
+        }
+
+        internal AlertResult(AlertDestination destination, string icon, string comment, Guid policyId)
+        {
+            Destination = destination;
+            Icon = icon;
+            LastComment = comment;
+            PolicyId = policyId;
+            BuildDate = DateTime.UtcNow;
+            SendTime = DateTime.UtcNow;
         }
 
 

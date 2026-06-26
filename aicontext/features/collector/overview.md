@@ -1,0 +1,279 @@
+# DataCollector Overview
+
+> Owner: collector | Last reviewed: 2026-05-26 | Canonical: yes
+
+## Purpose
+
+`HSMDataCollector` is a NuGet library embedded into .NET applications to collect monitoring data and send it to HSMServer. It targets both `net8.0` and `net472`.
+
+## Architecture
+
+```
+User Application
+    |
+    v
+DataCollector (public API)
+    |
+    +-- SensorsStorage (creates/manages sensors)
+    |       |
+    |       +-- MonitoringSensorBase<T> (bar, rate, function sensors)
+    |       +-- SensorInstant<T> (instant, file sensors)
+    |       +-- Default sensors (CPU, RAM, disk, threads, GC, service status)
+    |
+    +-- DataProcessor (data pipeline orchestrator)
+    |       |
+    |       +-- DataQueueProcessor (regular sensor values)
+    |       +-- PriorityDataQueueProcessor (priority values)
+    |       +-- FileQueueProcessor (file sensor values)
+    |       +-- CommandQueueProcessor (server commands)
+    |       +-- MessageDeduplicator (error deduplication)
+    |
+    +-- ICollectorScheduler (per-collector instance, bucketed timer wheel)
+    |       |
+    |       +-- ScheduledTask (per-sensor periodic action)
+    |
+    +-- HsmHttpsClient (HTTP transport)
+            |
+            +-- Polly retry pipeline
+            +-- DataHandlers / CommandHandler (endpoint routing)
+```
+
+## Lifecycle
+
+```
+[Stopped] --Start()--> [Starting] --InitAsync()--> [Running]
+[Starting] --error--> [Stopped]
+[Starting] --Stop()--> [Stopping]
+[Running] --Stop()---> [Stopping] --StopAsync()--> [Stopped]
+[Any non-Disposed] --Dispose()--> [Disposed] (terminal)
+```
+
+Allowed transitions:
+
+| From | To | Trigger |
+|---|---|---|
+| Stopped | Starting | `Start()` |
+| Starting | Running | start completed |
+| Starting | Stopping | `Stop()` during start |
+| Starting | Stopped | error during start |
+| Running | Stopping | `Stop()` |
+| Stopping | Stopped | stop completed |
+| Any except Disposed | Disposed | `Dispose()` |
+
+State is managed by `CollectorLifecycle` (internal), shared between `DataCollector` and `DataProcessor`.
+
+Key rules:
+- `Dispose()` works from any state, is idempotent, never throws. Terminal state is `Disposed`.
+- `Start()` is rejected if already running or disposed
+- `Stop()` can be called during Starting (cancels initialization)
+- Values are dropped (not queued) while collector is stopped
+- Values CAN be enqueued during Stopping (sensors flush their last values)
+- Lifecycle events (`ToStarting`, `ToRunning`, etc.) isolate subscriber exceptions
+- `Dispose()` from active states fires `ToStopping`/`ToStopped` for backward compatibility
+
+### Sensor registration (two-phase contract)
+
+Sensor registration is gated by `CollectorLifecycle.CanRegisterSensors` and follows two phases:
+
+| Phase | Status | `CanRegisterSensors` | Behavior of `Register` |
+|---|---|---|---|
+| Configuration | Stopped | true | Sensor is **queued**. It is initialized and started by `SensorsStorage.InitAsync`/`StartAsync` on the next `Start()`. |
+| Operational | Starting / Running | true | Sensor is added and **started immediately** (fire-and-forget `InitAndStart`). |
+| Shutdown | Stopping | false | **Rejected** — logged, disposed, not added. |
+| Terminal | Disposed | false | **Rejected** — logged, disposed, not added. |
+
+`CanRegisterSensors` = `!disposed && status != Stopping` (i.e. the union of configuration and operational phases). `CanStartNewSensors` = `!disposed && (Starting || Running)` — the narrower gate that decides immediate start vs. deferred queueing. The registration decision is serialized with collector stop/dispose transitions, and dynamically started sensors are tracked so shutdown waits for their init/start path before stopping sensor storage.
+
+Rejection is non-throwing: the rejected sensor is disposed and returned inert, so late `collector.CreateXxxSensor(...)` / `collector.Windows.AddXxx(...)` calls during shutdown do not crash the host. Consumers can pre-check `DataCollector.IsAcceptingRegistrations` (or the optional `ICollectorRegistrationState` capability), which mirrors `CanRegisterSensors`.
+
+Registration is idempotent on path: registering a path that already exists returns the existing sensor without starting a duplicate.
+
+### Public API surface (portability-oriented)
+
+Two additive, portable-friendly APIs sit alongside the legacy surface (nothing removed):
+
+- **`ILifecycleListener`** — observer interface (`OnStarting`/`OnRunning`/`OnStopping`/`OnStopped`) registered via `DataCollector.AddLifecycleListener(...)`, the `IDataCollector` extension method, or the optional `ILifecycleObservableCollector` capability. The extension delegates only when the collector exposes that optional capability; custom `IDataCollector` implementations without it are left unchanged. This is the portable equivalent of the `ToStarting`/`ToRunning`/`ToStopping`/`ToStopped` C# events (which still fire). Listeners are invoked from `LogAndRaise` under `_opLock` with per-listener exception isolation; only transitions after registration are delivered (no replay).
+- **Fluent sensor builders** — `collector.InstantSensor<T>(path)`, `BarSensor<T>(path)`, `RateSensor(path)` extension methods returning fluent builders whose `Build()` dispatches to the existing options-based `CreateXxx(path, options)` factory methods. Implemented as extension methods, so the `IDataCollector` interface is unchanged; the legacy per-type overloads remain. The builders give ports a single `path → type → kind → options → Build` mental model instead of 100+ overloads.
+
+### Data gating
+
+`CanAcceptData` returns true during `Starting`, `Running`, and `Stopping` states. This allows sensors to flush pending values during stop. `CanStartNewSensors` returns true only during `Starting` and `Running` (and not when disposed).
+
+Note the asymmetry between `Status` and `CanAcceptData` after `Dispose()`:
+- `Status` reports `Disposed` immediately when `Dispose()` is entered.
+- `CanAcceptData` is computed from the *internal* (pre-dispose) status. While the stop is still in flight it returns true so sensors can flush final values. Once `CompleteStop` fires (`internal _status = Stopped`), `CanAcceptData` returns false.
+- Values enqueued after the sender is disposed are unreachable. The window is small (between `_lifecycle.CompleteStop()` and `_dataSender.Dispose()`); sensors should not call `SendValue` after subscribing to `ToStopped`.
+
+### Lifecycle event ordering
+
+`DataCollector` serializes the `(state-transition, lifecycle-event-raise)` pair under `_opLock` so that subscribers observe events in the same order as the underlying status changes. Subscribers should not block in handlers — `_opLock` is held while handlers run, which can stall concurrent `Start`/`Stop`/`Dispose` calls.
+
+### Dispose racing Stop
+
+If `Dispose()` is called while a `Stop()` is in flight, the disposer captures the in-flight processor stop task (`_currentProcessorStopTask`) and awaits it instead of issuing a duplicate `StopAsync`. The original `Stop()` is responsible for firing `ToStopped` and calling `CompleteStop`. `_dataSender.Dispose()` is only invoked after the in-flight stop completes, preventing `ObjectDisposedException` in queue processors that are still draining.
+
+If `Stop()` or `Dispose()` races with `Start()` while sensor initialization is already in flight, the stopping path waits for `_currentStartInitTask` before stopping and disposing components. It does not wait for the user-supplied pre-init `customStartingTask`; if stop/dispose happens while that task is pending, the later `Start()` continuation observes that lifecycle is no longer starting/running and exits without entering initialization.
+
+### Queue state machine
+
+Each `QueueProcessorBase` maintains its own `QueueState` (Stopped/Running/Stopping). If `StopAsync` times out (IDataSender ignores cancellation), the queue stays in `Stopping` and blocks subsequent `Start()` until the background task completes. As a defensive measure, `Start()` will reset and restart a queue whose `_task` exited unexpectedly while `_state` is still `Running` — this only fires if a subclass overrides `ProcessingLoop` and breaks the "loop until cancellation" contract.
+
+### Shutdown boundedness (dead/hung transport)
+
+Contract: collector `Stop()` must return within a small bounded time even when the server is unreachable or the sender hangs — the collector must never block its host's restart; pending data is dropped instead. The bound is layered:
+
+- The bar partial-bar flush on sensor stop only **enqueues** (no network) — it cannot block.
+- `QueueProcessorBase.StopAsync` races the processing loop against `ShutdownMode.StopWaitTimeout` (graceful: `min(RequestTimeout, 5s)` — the 5 s cap is deliberate and independent of the default 30 s `RequestTimeout`; terminal dispose: `min(RequestTimeout, 1s)`). A sender hung **in the run loop** while ignoring cancellation makes StopAsync return `false` and the flush for that queue is **skipped**.
+- `FlushAsync` runs under a `CancellationTokenSource` with timeout `clamp(RequestTimeout, 1s, 5s)`; a token-respecting sender (the real HTTP client) gets cancelled mid-send (`OperationCanceledException` → graceful re-enqueue → `ClearQueue` logs the discard).
+- A sender that ignores cancellation and hangs **for the first time on the flush dispatch itself** is handled inside `FlushAsync`: each dispatch is raced against the flush token via `Task.WhenAny`, and the in-flight dispatch is abandoned (fault observed, error logged, its items lost) when the timeout fires.
+
+Every transport-facing wait in the graceful stop path is therefore capped at 5 s, regardless of `RequestTimeout`. Tests: `CollectorStopBoundednessTests` (four hang scenarios incl. pending partial bar and the default-`RequestTimeout` cap), conformance `flush_contract.hsmtest` (`stop_with_hanging_sender_*` cases, cross-language via `set_sender_hang` + `stop_expect_under_ms`), transport-level coverage in `CollectorTransportChaosTests`.
+
+### Scheduler ownership
+
+Each `DataCollector` owns its own `CollectorScheduler` instance (implementing `ICollectorScheduler`). The scheduler is constructed in `DataCollector`'s constructor, threaded through `DataProcessor.Scheduler`, and disposed at the end of `Dispose()` after `_dataProcessor` and `_dataSender`. Sensors and `MessageDeduplicator` schedule periodic work through this injected instance — there is no process-global scheduler. Two collectors in the same process have independent timer wheels and worker tasks.
+
+### Callback exception isolation (host-crash safety)
+
+Invariant: **a throwing host callback must never crash the host process or break the collector
+component that invoked it** (#1102 A1/A2, #1103). Isolation layers:
+
+- `CollectorScheduler.ExecuteQueuedTask` (async void dispatch) has a last-resort catch-all — an
+  exception escaping `async void` is rethrown on the ThreadPool and kills the process.
+- `ScheduledTask.ExecuteAttachedAsync` guards the `onError` invocation (sensors pass
+  `HandleException` here; hosts subscribe `ExceptionThrowing` inside it).
+- `SensorBase.HandleException` isolates each `ExceptionThrowing` subscriber individually (same
+  policy as lifecycle events); a throwing subscriber does not starve later subscribers or stop the
+  sensor send loop.
+- `ProcessEventListener` (net6 time-in-gc counters) guards `OnEventSourceCreated`/`OnEventWritten`
+  and parses counter payloads null-safely (null `EventName`, missing `Name`/`Mean` keys, non-double
+  `Mean` are all skipped). The callback body is extracted into the internal `ProcessEventCounters`
+  method for direct adversarial testing.
+- `LoggerManager` and lifecycle events/`ILifecycleListener` dispatch were already isolated.
+
+Verification is three-layered because a host-process crash cannot be asserted in-process:
+`HSMDataCollector.CrashTests.Host` (a console host wiring deliberately throwing callbacks) is
+spawned by `CollectorCrashIsolationTests` and must print its survival sentinel; the host-callback
+adversarial matrix in `CollectorAdversarialTests` and `ProcessEventListenerTests` cover the
+in-process behavior. CI lane: `.github/workflows/collector-unit-tests.yml` (windows runner). This
+invariant is not expressible in `.hsmtest` and is tracked in the cross-cutting port invariants of
+`docs/initiatives/cpp-collector-port-spike.md`.
+
+Note (empirical, net6): the in-proc `EventSource` dispatch swallows `EventListener` callback
+exceptions (`ThrowOnEventWriteErrors=false`), so the unguarded A2 listener silently lost counter
+values rather than crashing in-proc; the guard removes the dependence on that runtime behavior.
+
+### Reliability hardening (#1102 wave, 2026-06-11)
+
+Fixed test-first on the cpp-port-spike branch (each item has a dedicated unit-test file):
+
+- **E1, perf-counter instance binding**: multi-instance categories ("Process", ".NET CLR Memory")
+  bind by PID via the category's PID counter ("ID Process" / "Process ID"), never by name alone, and
+  re-validate the binding on every read — an instance-index reshuffle after a neighbor process exit
+  re-resolves instead of silently reporting another process's data. Name-only categories prefer an
+  exact instance-name match over a substring match. Logic lives in
+  `PerformanceCounterInstanceResolver` / `ProcessAwarePerformanceCounter` behind the
+  `IPerformanceCounterSource` seam (`PerformanceCounterInstanceResolutionTests`).
+- **B1, scheduler worker backstop**: `CollectorScheduler.Loop` restarts the worker with a 1 s backoff
+  on unexpected exceptions instead of dying silently; cancellation/dispose races exit normally.
+- **B2, bounded OS calls**: `PerformanceCounterCategory.GetInstanceNames()` and
+  `ServiceController.GetServices()` run through `BoundedBlockingCall` (30 s default) so a corrupted
+  counter registry or hung SCM cannot stall sensor init forever (`BoundedBlockingCallTests`).
+- **C1, file sensor OOM bound**: user-settable `MaxFileSizeBytes` is clamped to
+  `FileSensorOptions.MaxAllowedFileSizeBytes` (128 MB) at send time, and the duplicate
+  byte[]→List copy is eliminated via `ByteCollectionExtensions.AsList` (zero-copy wrap with a safe
+  fallback; the buffer ownership transfers to the list) (`FileSensorBoundsTests`).
+- **E2, rate sensor elapsed time**: `MonitoringRateSensor` divides the accumulated sum by the time
+  actually elapsed since the previous sample (monotonic Stopwatch, injectable in tests), falling back
+  to the configured period for the first sample / zero gap — no more inflated samples after machine
+  sleep (`RateSensorElapsedTimeTests`).
+- **E4, DNS staleness**: net6+ uses `SocketsHttpHandler` with `PooledConnectionLifetime = 5 min`;
+  net472 bounds the endpoint's `ServicePoint.ConnectionLeaseTimeout` — keep-alive connections
+  periodically re-resolve DNS (`TransportAndTimeNormalizationTests`).
+- **E5, Local time normalization**: `SensorBase.SendValue` converts `DateTimeKind.Local` values of
+  `SensorValueBase.Time` to UTC at the send boundary; the wire DTO is untouched.
+- **C2, BuildDate mirror atomicity** (fixed after merging master's #1090/#1091 queue followups):
+  the mirror exists because `Channel<T>` cannot Peek the head BuildDate that the stale-retry filter
+  needs, so it cannot be dropped — instead every channel write/read is paired with its mirror
+  update under `_mirrorLock`. Without that atomicity a consumer could pop the channel while the
+  producer's mirror write had not landed, leaving a permanent orphan tick that skews the peeked
+  head forever (deterministically reproduced by `QueueMirrorConsistencyTests` before the fix).
+
+Deliberately not fixed: D2 (Polly `ShouldHandle`) is a [decide] item in #1096; E3 (cgroup awareness)
+belongs to #1099; D1/D3/D4 are recorded architectural trade-offs, not point fixes.
+
+### Sensor scheduling via composition
+
+Sensors do not own scheduling boilerplate inline. The "schedule one periodic action; start/stop/restart it once" lifecycle is extracted into `ScheduledTaskHandle` (a composable wrapper over a single `ScheduledTask`). Sensors *compose* one handle per periodic action rather than inheriting the timer plumbing:
+- `MonitoringSensorBase` composes a send-loop handle (the periodic `SendValueAction`).
+- `BarMonitoringSensorBase` composes a second handle for the bar-collect loop, on top of the inherited send handle.
+- `FreeDiskSpacePredictionBase` composes a handle for its disk-speed sampling loop.
+
+`ScheduledTaskHandle.Start` and `StopAsync` are idempotent and thread-safe. `WindowsServiceStatusSensor` deliberately keeps a raw `ScheduledTask` because it needs `ScheduledTask.CurrentRun`/`IsRunning` to defer `ServiceController` disposal until the in-flight run completes — a specialization the simple handle intentionally does not expose.
+
+Disk free-space read failures are sensor errors, not lifecycle failures. The regular free-space sensor emits an `Error` value with the exception message, while disk prediction startup and sampling report the exception through the normal collector error path, keep the sensor started, and allow later scheduled samples to recover if the OS metric becomes readable again.
+
+### Platform metric sources
+
+The Windows-only `System.Diagnostics.PerformanceCounter` API is isolated behind `IPerformanceCounterFactory` / `IPerformanceCounter`. `WindowsSensorBase` (CPU/RAM/disk bars) and `BaseSocketsSensor` (TCP connection counts) depend on the factory via an `internal virtual PerformanceCounterFactory` seam that defaults to `WindowsPerformanceCounterFactory` (the only place real `PerformanceCounter`/`PerformanceCounterCategory` calls live). Tests substitute a fake factory, so these sensors are now unit-testable on any OS.
+
+Linux default sensors read metrics from the kernel directly — no external process spawning:
+- `UnixTotalCpu` → `/proc/stat` (busy % from the idle/total delta across collect ticks, via `ProcStatCpuUsage`).
+- `UnixFreeRamMemory` → `/proc/meminfo` (`MemAvailable`, via `ProcMeminfo`).
+- `UnixDiskInfo` → managed `DriveInfo("/").AvailableFreeSpace` (statvfs) instead of `df`.
+- Process sensors (`UnixProcessCpu`/`Memory`/`ThreadCount`) already used the managed `System.Diagnostics.Process` API.
+
+The parsing logic (`ProcStat`, `ProcMeminfo`) is split from file I/O so it is unit-tested with sample text on any OS. The old `top`/`free`/`df` bash-shelling (`BashCommandExtension`) has been removed.
+
+#### Verifying the platform sensors
+
+Two complementary layers:
+
+1. **Parser unit tests** — `HSMDataCollector.Tests/ProcParsersTests.cs` (Windows-targeted net48 suite) and `PerformanceCounterIsolationTests.cs` feed sample text / fake counters. These prove the parsing and the counter-factory wiring on any OS, but do not touch real `/proc`.
+2. **Linux-gated real-read test** — `HSMDataCollector.IntegrationTests/Tests/LinuxProcSensorTests.cs` (net8.0) runs the actual `ProcStatCpuUsage` / `ProcMeminfo` parsers against the real `/proc` plus `DriveInfo("/")`, asserting sane ranges. It is a no-op off Linux and runs for real on the ubuntu CI runner (the integration-tests workflow). This requires `InternalsVisibleTo("HSMDataCollector.IntegrationTests")`.
+
+Manual one-off check on a dev box without Linux: run the net8 parsers against live `/proc` in a container, e.g.
+`docker run --rm -v "<repo>:/repo" -w /repo mcr.microsoft.com/dotnet/sdk:8.0 dotnet test src/collector/HSMDataCollector.IntegrationTests/HSMDataCollector.IntegrationTests.csproj --filter FullyQualifiedName~LinuxProcSensorTests`.
+Cross-checking against `df -k /` and `grep MemAvailable /proc/meminfo` confirms the values match (disk matches `df` avail to ~1 MiB).
+
+## Features
+
+| Feature | Folder | Description |
+|---|---|---|
+| Public API | [`public-api/`](./public-api/feature.md) | Construction, CollectorOptions, lifecycle methods, sensor-creation surface, builders |
+| Sensors | [`sensors/`](./sensors/feature.md) | Sensor kinds, value-flow mechanics, validation, options/path model |
+| Default Sensors | [`default-sensors/`](./default-sensors/feature.md) | Built-in Windows/Unix/module/diagnostic sensors, prototypes, group helpers |
+| Alerts | [`alerts/`](./alerts/feature.md) | Fluent alert DSL → registration payloads |
+| Data Pipeline | [`data-pipeline/`](./data-pipeline/feature.md) | Queues, batching, overflow/retry policy (#1088/#1090), shutdown modes |
+| HTTP Client | [`http-client/`](./http-client/feature.md) | HTTPS transport, Polly retry, TLS configuration |
+| Scheduling | [`scheduling/`](./scheduling/feature.md) | Per-collector timer wheel, ScheduledTaskHandle |
+| Error Handling | [`error-handling/`](./error-handling/feature.md) | Exception isolation, MessageDeduplicator, diagnostic sensors |
+
+Wire contract (shared with server/wrapper/ports): [`../api/wire-contract/feature.md`](../api/wire-contract/feature.md).
+C++ port coverage tracker: [`docs/initiatives/cpp-collector-port-functional-inventory.md`](../../../docs/initiatives/cpp-collector-port-functional-inventory.md) — **frozen index** as of #1101; the conformance corpus (`tests/conformance/collector/*.hsmtest`) is the source of truth, and the CI `checklist-gate` job enforces it. Add a scenario, don't reopen a box.
+
+## Thread Safety Model
+
+- All public sensor methods (`AddValue`, `SendValue`) can be called from any thread
+- `CollectorScheduler` (per-collector instance) fires callbacks on ThreadPool threads
+- `CollectorLifecycle` uses a single `lock` for atomic state transitions (shared by DataCollector and DataProcessor)
+- `QueueProcessorBase` uses its own `lock` for queue lifecycle (Start/Stop) + `Interlocked` for queue count
+- Shared mutable state uses: `Interlocked` (counters, flags), `Volatile` (reads/writes), `lock` (complex operations)
+- `Channel<T>` for value queuing; tracked count via `Interlocked` (not channel internal count)
+
+## Configuration
+
+`CollectorOptions` (all with sensible defaults):
+- `ServerAddress`, `Port`, `AccessKey` — connection
+- `MaxQueueSize` (20000) — max values in each queue before dropping
+- `MaxValuesInPackage` (1000) — batch size per HTTP request
+- `PackageCollectPeriod` (15s) — interval between batch sends
+- `RequestTimeout` (30s) — HTTP request timeout
+- `AllowUntrustedServerCertificate` (false) — opt-in for self-signed certs
+- `ExceptionDeduplicatorWindow` (1h) — deduplication window for error messages
+- `MaxDeduplicatedMessages` (1000) — max unique messages in deduplicator cache
+
+## Known Issues
+
+- Polly retry does not handle HTTP 4xx/5xx (`ShouldHandle` not configured) — data silently lost on server errors
+- Queue overflow drops oldest items without per-drop logging (only aggregate overflow count via `QueueOverflowSensor`; retry-path drops are counted there too since #1088/#1090)

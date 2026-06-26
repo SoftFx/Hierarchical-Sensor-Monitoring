@@ -1,0 +1,57 @@
+@using HSMServer.Model.Configuration
+
+@model AgentSettingsViewModel
+
+
+<div class="row mt-3">
+    <div class="col-3">
+        <label class="col-form-label" asp-for="ExternalConnectionUrl"></label>
+    </div>
+    <div class="col">
+        <input class="form-control" asp-for="ExternalConnectionUrl" placeholder="https://hsm.company.com:44330">
+    </div>
+</div>
+<div class="row">
+    <div class="offset-3 col-9">
+        <label class="note">The externally-reachable Sensor-API URL baked into downloaded agent bundles so a client connects with zero configuration. Behind Docker/NAT the server cannot infer this. When blank, the download falls back to the request host and the configured Sensors API port.</label>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-3">
+        <label class="col-form-label" asp-for="AllowUntrustedCertificate"></label>
+    </div>
+    <div class="col-auto form-check form-switch ms-3 mt-2">
+        <input class="form-check-input" type="checkbox" asp-for="AllowUntrustedCertificate">
+    </div>
+</div>
+<div class="row">
+    <div class="offset-3 col-9">
+        <label class="note">Bake <code>allowUntrustedCertificate</code> into downloaded bundles so the agent accepts a self-signed server certificate (typical for self-hosted / Docker servers). Leave off when the server presents a trusted certificate.</label>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-3">
+        <label class="col-form-label" asp-for="EnableTopCpuProcesses"></label>
+    </div>
+    <div class="col-auto form-check form-switch ms-3 mt-2">
+        <input class="form-check-input" type="checkbox" asp-for="EnableTopCpuProcesses">
+    </div>
+</div>
+<div class="row">
+    <div class="offset-3 col-9">
+        <label class="note">Bake a <code>topCpu</code> block into downloaded bundles so the agent also reports the top processes by CPU once a minute (one <code>Top CPU processes/&lt;exe&gt;</code> sensor per busy app). Off by default.</label>
+    </div>
+</div>
+
+<div class="d-flex justify-content-end mt-2">
+    <button type="submit" class="btn btn-primary independentSizeButton mt-1">Save</button>
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        savingFormSubscribe("agentSettings_form", "Agent settings have been successfully saved!");
+    });
+</script>
