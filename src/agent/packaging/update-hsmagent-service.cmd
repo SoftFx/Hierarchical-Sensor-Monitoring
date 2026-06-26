@@ -41,6 +41,9 @@ copy /Y "%~dp0hsm-agent.exe" "%INSTALL_DIR%\hsm-agent.exe" >nul
 if %errorlevel% neq 0 (
   echo ERROR: copy failed — is the exe locked? & pause & exit /b 1
 )
+:: Copy runtime DLLs if present next to the script (dynamic-linked build).
+if exist "%~dp0libcurl.dll"  copy /Y "%~dp0libcurl.dll"  "%INSTALL_DIR%\" >nul
+if exist "%~dp0zlib1.dll"    copy /Y "%~dp0zlib1.dll"    "%INSTALL_DIR%\" >nul
 
 echo Starting HSMAgent...
 sc start HSMAgent >nul

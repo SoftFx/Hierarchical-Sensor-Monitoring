@@ -2954,6 +2954,17 @@ namespace
             hang_cv_.notify_all();
         }
 
+        void AddExtraRequestHeader(std::string name, std::string value)
+        {
+            extra_request_headers_.push_back({std::move(name), std::move(value)});
+        }
+
+        void SetServerDirectiveHandler(hsm_server_directive_callback_t callback, void* user_data)
+        {
+            directive_callback_ = callback;
+            directive_user_data_ = user_data;
+        }
+
         static std::string BuildValueJson(
             const std::string& path,
             hsm_sensor_type_t type,
@@ -5222,7 +5233,7 @@ hsm_result_t hsm_collector_set_extra_request_header(hsm_collector_t* collector, 
 {
     if (collector == nullptr || name == nullptr || value == nullptr)
         return HSM_RESULT_INVALID_ARGUMENT;
-    collector->impl->extra_request_headers_.push_back({name, value});
+    collector->impl->AddExtraRequestHeader(name, value);
     return HSM_RESULT_OK;
 }
 
@@ -5233,8 +5244,7 @@ hsm_result_t hsm_collector_set_server_directive_handler(
 {
     if (collector == nullptr)
         return HSM_RESULT_INVALID_ARGUMENT;
-    collector->impl->directive_callback_ = callback;
-    collector->impl->directive_user_data_ = user_data;
+    collector->impl->SetServerDirectiveHandler(callback, user_data);
     return HSM_RESULT_OK;
 }
 

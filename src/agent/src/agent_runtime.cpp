@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <exception>
+#include <filesystem>
 #include <utility>
 
 #ifdef _WIN32
@@ -143,7 +144,7 @@ namespace hsm::agent
                     // Persist the change so it survives the restart we are about to trigger.
                     std::string cfg_err;
                     const auto cfg_path_w = DefaultConfigPath();
-                    const std::string cfg_path(cfg_path_w.begin(), cfg_path_w.end());
+                    const std::string cfg_path = std::filesystem::path(cfg_path_w).string();
                     if (!WriteAgentConfig(cfg_path, updated, cfg_err))
                         Log(hc::LogLevel::Error, "directive: failed to update config.json: " + cfg_err);
                     else
