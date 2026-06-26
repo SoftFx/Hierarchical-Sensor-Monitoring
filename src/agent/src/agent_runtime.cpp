@@ -184,7 +184,16 @@ namespace hsm::agent
             }
 
             if (config_.sensors_process)
-                collector.AddProcessMonitoringSensors();
+            {
+                // Register the process sensors individually and SKIP the managed-only
+                // "ThreadPool thread count" — it is a .NET CLR concept (no managed thread pool
+                // exists in a native C++ process, so the native source can only report 0).
+                // The collector library still exposes it via AddProcessMonitoringSensors for
+                // managed consumers, so parity/conformance is untouched; only this agent omits it.
+                collector.AddDefaultSensor(hc::DefaultSensor::ProcessCpu);
+                collector.AddDefaultSensor(hc::DefaultSensor::ProcessMemory);
+                collector.AddDefaultSensor(hc::DefaultSensor::ProcessThreadCount);
+            }
 
             if (config_.sensors_module)
                 // The agent IS the monitored application, so report its own build version
