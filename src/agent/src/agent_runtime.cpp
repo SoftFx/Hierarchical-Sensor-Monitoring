@@ -128,7 +128,14 @@ namespace hsm::agent
                 collector.AddProcessMonitoringSensors();
 
             if (config_.sensors_module)
-                collector.AddAllModuleSensors(config_.product_version);
+                // The agent IS the monitored application, so report its own build version
+                // (HSM_AGENT_VERSION) as ".module/Version" — it then tracks every self-update,
+                // instead of the static config placeholder. Falls back to config only if a custom
+                // productVersion was explicitly set to a non-default value.
+                collector.AddAllModuleSensors(
+                    (config_.product_version.empty() || config_.product_version == "1.0.0.0")
+                        ? HSM_AGENT_VERSION
+                        : config_.product_version);
 
             // Periodic "top processes by CPU" sensors (#1175/#1179). Windows-only; the collector
             // rejects the call on non-Windows, so guard here to avoid a fatal throw on Linux builds.
