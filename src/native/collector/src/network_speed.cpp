@@ -54,6 +54,14 @@ namespace hsm::collector
                 continue;
             if (row.Type == IF_TYPE_SOFTWARE_LOOPBACK)
                 continue;
+            // Skip NDIS lightweight-filter pseudo-interfaces (QoS Packet Scheduler, WFP 802.3 /
+            // Native MAC filters, Hyper-V Virtual Switch / VMSwitch extensions). GetIfTable2 returns
+            // these as Up, non-loopback rows whose Alias is "<adapter>-<filter>-NNNN"; they merely
+            // mirror their parent adapter's octet counters and are not real interfaces. The managed
+            // collector never sees them (NetworkInterface wraps GetAdaptersAddresses, which omits
+            // filter modules), so excluding them here also restores cross-collector parity.
+            if (row.InterfaceAndOperStatusFlags.FilterInterface)
+                continue;
 
             const std::string alias = AliasToUtf8(row.Alias);
             if (alias.empty())
