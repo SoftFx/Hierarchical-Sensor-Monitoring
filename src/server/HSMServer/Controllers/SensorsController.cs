@@ -255,6 +255,11 @@ namespace HSMServer.Controllers
                     _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(values.Count);
                     _collector.WebRequestsSensors.Total.AddReceiveData(values.Count);
 
+                    // The agent sends data as batches to /list, so directives must ride this response
+                    // too — not only the typed single-value endpoints. Without this the agent never
+                    // sees update-available/sensor-* directives (its data path is /list).
+                    EmitAgentDirectives();
+
                     return Ok(response);
                 }
 
