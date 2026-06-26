@@ -573,6 +573,15 @@ namespace hsm::collector
                 "Failed to add module sensors.");
         }
 
+        // Make ".module/Collector version" report this version instead of the compile-time library
+        // version. Call before AddAllModuleSensors. Used by the agent so the collector version tracks
+        // the agent build (#1189 follow-up).
+        void SetCollectorVersionOverride(const std::string& version)
+        {
+            Check(hsm_collector_set_collector_version_override(handle_, version.c_str()),
+                  "Failed to set collector version override.");
+        }
+
         void AddProcessMonitoringSensors()
         {
             Check(hsm_collector_add_process_monitoring_sensors(handle_), "Failed to add process sensors.");

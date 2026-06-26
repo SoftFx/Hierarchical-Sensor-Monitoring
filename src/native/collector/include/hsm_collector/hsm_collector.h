@@ -805,6 +805,14 @@ hsm_result_t hsm_collector_set_extra_request_header(
     const char* name,
     const char* value);
 
+/* Override the ".module/Collector version" value (#1189 follow-up). By default that sensor reports
+   the compile-time HSM_COLLECTOR_VERSION_* library version; a host that embeds the collector (e.g.
+   the agent) can set its own build version here so the reported collector version tracks each
+   deploy. Call before AddAllModuleSensors / Start. Empty or unset keeps the library default. */
+hsm_result_t hsm_collector_set_collector_version_override(
+    hsm_collector_t* collector,
+    const char* version);
+
 /* Server-directive callback. Called on the worker thread for every X-Hsm-Directive header in
    a successful data-POST response. `verb` is the directive name (e.g. "update-available");
    `payload` is the colon-separated argument (e.g. "0.5.2") or an empty string when absent.

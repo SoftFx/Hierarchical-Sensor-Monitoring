@@ -195,6 +195,11 @@ namespace hsm::agent
                 collector.AddDefaultSensor(hc::DefaultSensor::ProcessThreadCount);
             }
 
+            // The native collector is compiled into the agent, so report the agent's own build
+            // version as ".module/Collector version" too (instead of the static library define) —
+            // it then tracks every deploy, matching ".module/Version". Must precede AddAllModuleSensors.
+            collector.SetCollectorVersionOverride(HSM_AGENT_VERSION);
+
             if (config_.sensors_module)
                 // The agent IS the monitored application, so report its own build version
                 // (HSM_AGENT_VERSION) as ".module/Version" — it then tracks every self-update,

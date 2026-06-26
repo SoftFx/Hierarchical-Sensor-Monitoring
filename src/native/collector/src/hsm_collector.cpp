@@ -2980,6 +2980,12 @@ namespace
             extra_request_headers_.push_back({std::move(name), std::move(value)});
         }
 
+        // Host override for the reported ".module/Collector version" (#1189 follow-up). The agent sets
+        // this to its own build version so the embedded-collector version tracks each deploy instead of
+        // the static HSM_COLLECTOR_VERSION_* defines. Empty -> use the compile-time library version.
+        void SetCollectorVersionOverride(std::string version) { collector_version_override_ = std::move(version); }
+        const std::string& CollectorVersionOverride() const { return collector_version_override_; }
+
         void SetServerDirectiveHandler(hsm_server_directive_callback_t callback, void* user_data)
         {
             directive_callback_ = callback;
@@ -3989,6 +3995,7 @@ namespace
         // {name, value} pairs; kept http-free so this compiles in non-HTTP builds (converted to
         // hsm::http::HttpHeader only in the HTTP-guarded send path).
         std::vector<std::pair<std::string, std::string>> extra_request_headers_;
+        std::string collector_version_override_; // host-set; overrides HSM_COLLECTOR_VERSION_* for "Collector version"
         // Server-directive callback: called when a data-POST response carries X-Hsm-Directive headers.
         hsm_server_directive_callback_t directive_callback_ = nullptr;
         void* directive_user_data_ = nullptr;
@@ -5532,6 +5539,14 @@ hsm_result_t hsm_collector_set_extra_request_header(hsm_collector_t* collector, 
     return HSM_RESULT_OK;
 }
 
+hsm_result_t hsm_collector_set_collector_version_override(hsm_collector_t* collector, const char* version)
+{
+    if (collector == nullptr || version == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+    collector->impl->SetCollectorVersionOverride(version);
+    return HSM_RESULT_OK;
+}
+
 hsm_result_t hsm_collector_set_server_directive_handler(
     hsm_collector_t* collector,
     hsm_server_directive_callback_t callback,
@@ -6027,8 +6042,11 @@ hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* col
         std::shared_ptr<NativeSensor> collector_version;
         if (collector->impl->AddDefaultSensor(HSM_DEFAULT_COLLECTOR_VERSION, &params, collector_version) == HSM_RESULT_OK)
         {
-            const std::string version = std::to_string(HSM_COLLECTOR_VERSION_MAJOR) + "." +
-                                        std::to_string(HSM_COLLECTOR_VERSION_MINOR) + "." + std::to_string(HSM_COLLECTOR_VERSION_PATCH);
+            const std::string& override_ver = collector->impl->CollectorVersionOverride();
+            const std::string version = !override_ver.empty()
+                ? override_ver
+                : std::to_string(HSM_COLLECTOR_VERSION_MAJOR) + "." +
+                      std::to_string(HSM_COLLECTOR_VERSION_MINOR) + "." + std::to_string(HSM_COLLECTOR_VERSION_PATCH);
             EmitVersionStartValue(collector->impl.get(), collector_version, version.c_str());
         }
     }
