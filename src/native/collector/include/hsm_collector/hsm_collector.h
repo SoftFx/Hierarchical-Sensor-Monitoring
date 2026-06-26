@@ -19,6 +19,13 @@ extern "C"
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
+/* Collector PRODUCT version — the value reported as ".module/Collector version". This is the
+   HSMDataCollector product line and is DISTINCT from the C ABI version above (and from any host
+   application's own version). Keep it in sync with the managed collector's version
+   (src/collector/HSMDataCollector/HSMDataCollector.csproj <Version>) so the native port and the
+   C# collector report the same product version. */
+#define HSM_COLLECTOR_PRODUCT_VERSION "3.4.12"
+
 typedef struct hsm_collector_t hsm_collector_t;
 typedef struct hsm_sensor_t hsm_sensor_t;
 

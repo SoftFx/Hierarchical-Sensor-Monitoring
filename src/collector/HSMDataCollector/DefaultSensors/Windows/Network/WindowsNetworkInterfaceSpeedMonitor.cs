@@ -38,6 +38,11 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             PostDataPeriod = TimeSpan.FromSeconds(15),
         };
 
+        // Smallest MB/sec that does not round to 0 at the bar's precision; sub-threshold trickle
+        // (WSL/Hyper-V keepalives, a few bytes/interval) would post as 0.00 bars that read as
+        // "sending zeros", so treat it as no traffic. 0.5 / 10^2 = 0.005 MB/s (~5 KB/s) at Precision=2.
+        private static readonly double MinDisplayableMbPerSec = 0.5 / Math.Pow(10, InterfaceBarOptions.Precision);
+
         private readonly SensorsStorage _storage;
 
         // interface name -> bar sensor, per direction. Created independently so a direction with no
@@ -151,16 +156,17 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
                             var deltaRx = curRx - prev.rx;
                             var deltaTx = curTx - prev.tx;
 
-                            // Post each direction ONLY when it carried traffic this interval (>0):
-                            // negative delta (counter reset) and zero delta (idle) are both skipped, so
-                            // an idle direction never creates a permanently-zero sensor. A direction
-                            // that goes quiet stops posting and expires by TTL.
-                            if (deltaRx > 0)
-                                GetOrCreate(_rxSensors, name, "Received MB,sec", "Average received")
-                                    .AddValue(deltaRx / elapsedSec / (1024.0 * 1024.0));
-                            if (deltaTx > 0)
-                                GetOrCreate(_txSensors, name, "Sent MB,sec", "Average sent")
-                                    .AddValue(deltaTx / elapsedSec / (1024.0 * 1024.0));
+                            // Post each direction ONLY when it carries enough traffic to show as
+                            // non-zero at the bar's precision (>= MinDisplayableMbPerSec). Negative
+                            // delta (counter reset), zero, and sub-threshold trickle (keepalives) are
+                            // all skipped, so a direction never creates a zero sensor. A direction that
+                            // goes quiet stops posting and expires by TTL.
+                            var rxMbPerSec = deltaRx / elapsedSec / (1024.0 * 1024.0);
+                            var txMbPerSec = deltaTx / elapsedSec / (1024.0 * 1024.0);
+                            if (rxMbPerSec >= MinDisplayableMbPerSec)
+                                GetOrCreate(_rxSensors, name, "Received MB,sec", "Average received").AddValue(rxMbPerSec);
+                            if (txMbPerSec >= MinDisplayableMbPerSec)
+                                GetOrCreate(_txSensors, name, "Sent MB,sec", "Average sent").AddValue(txMbPerSec);
                         }
 
                         _prevBytes[name] = (curRx, curTx);

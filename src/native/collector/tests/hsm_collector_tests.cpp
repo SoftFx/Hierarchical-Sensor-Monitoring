@@ -3748,6 +3748,9 @@ namespace
                 saw_collector = true;
                 Contains(payload, "\"Type\":8");
                 Contains(payload, "Start:");
+                // Collector PRODUCT version (HSM_COLLECTOR_PRODUCT_VERSION) — NOT the C ABI version
+                // and NOT any host/agent version. Collector is a distinct product (#1189 follow-up).
+                Contains(payload, HSM_COLLECTOR_PRODUCT_VERSION);
             }
         }
 

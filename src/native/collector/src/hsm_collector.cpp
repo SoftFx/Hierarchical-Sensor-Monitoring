@@ -2980,9 +2980,10 @@ namespace
             extra_request_headers_.push_back({std::move(name), std::move(value)});
         }
 
-        // Host override for the reported ".module/Collector version" (#1189 follow-up). The agent sets
-        // this to its own build version so the embedded-collector version tracks each deploy instead of
-        // the static HSM_COLLECTOR_VERSION_* defines. Empty -> use the compile-time library version.
+        // Optional host override for the reported ".module/Collector version". Empty (default) ->
+        // HSM_COLLECTOR_PRODUCT_VERSION (the collector product line). A host must NOT set this to its
+        // own application version: collector and host (e.g. the agent) are distinct products with
+        // distinct version lines. Reserved for embedders that genuinely re-brand the collector build.
         void SetCollectorVersionOverride(std::string version) { collector_version_override_ = std::move(version); }
         const std::string& CollectorVersionOverride() const { return collector_version_override_; }
 
@@ -3407,6 +3408,15 @@ namespace
             std::map<std::string, std::shared_ptr<NativeSensor>> tx_cache;
             const auto period = std::chrono::milliseconds(net_speed_period_ms_);
 
+            // Smallest MB/sec that does NOT round to 0 at the bar's display precision
+            // (kDefaultBarPrecision). Sub-threshold trickle (e.g. WSL/Hyper-V keepalives, a few
+            // bytes/interval) would post as 0.00 bars that read as "sending zeros", so treat it as
+            // no traffic. 0.5/10^2 = 0.005 MB/s (~5 KB/s) at precision 2.
+            double bar_scale = 1.0;
+            for (int p = 0; p < kDefaultBarPrecision; ++p)
+                bar_scale *= 10.0;
+            const double min_displayable = 0.5 / bar_scale;
+
             sampler.Sample(); // seed baseline — first call returns empty map
 
             while (true)
@@ -3421,15 +3431,15 @@ namespace
                 {
                     const auto speeds = sampler.Sample();
 
-                    // Create + post one direction's bar lazily, and ONLY when it actually carries
-                    // traffic (>0) this interval — a direction with no data never spawns an always-zero
-                    // sensor. Leaf uses "MB,sec" (not "MB/sec") so the unit isn't split into an extra
-                    // tree node by the path separator.
+                    // Create + post one direction's bar lazily, and ONLY when it carries enough
+                    // traffic to show as non-zero (>= min_displayable) this interval — a direction
+                    // with no meaningful data never spawns a zero/always-zero sensor. Leaf uses
+                    // "MB,sec" (not "MB/sec") so the unit isn't split into an extra tree node.
                     auto post_direction = [&](std::map<std::string, std::shared_ptr<NativeSensor>>& cache,
                                               const std::string& iface, const std::string& leaf,
                                               const std::string& descr, double value)
                     {
-                        if (value <= 0.0)
+                        if (value < min_displayable)
                             return;
 
                         auto it = cache.find(iface);
@@ -6040,11 +6050,13 @@ hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* col
         std::shared_ptr<NativeSensor> collector_version;
         if (collector->impl->AddDefaultSensor(HSM_DEFAULT_COLLECTOR_VERSION, &params, collector_version) == HSM_RESULT_OK)
         {
+            // Report the collector PRODUCT version (HSMDataCollector line), NOT the C ABI version
+            // and NOT the host application's version — collector and host (e.g. the agent) are
+            // distinct products. An explicit host override still wins if set.
             const std::string& override_ver = collector->impl->CollectorVersionOverride();
-            const std::string version = !override_ver.empty()
-                ? override_ver
-                : std::to_string(HSM_COLLECTOR_VERSION_MAJOR) + "." +
-                      std::to_string(HSM_COLLECTOR_VERSION_MINOR) + "." + std::to_string(HSM_COLLECTOR_VERSION_PATCH);
+            const std::string version = override_ver.empty()
+                ? std::string(HSM_COLLECTOR_PRODUCT_VERSION)
+                : override_ver;
             EmitVersionStartValue(collector->impl.get(), collector_version, version.c_str());
         }
     }
