@@ -24,6 +24,8 @@ namespace hsm::http
         long status_code = 0;
         std::string body;
         std::string error;
+        // Response headers captured by the libcurl header callback. Names are lowercased.
+        std::vector<HttpHeader> response_headers;
 
         bool IsSuccess() const { return transport_ok && status_code >= 200 && status_code < 300; }
     };

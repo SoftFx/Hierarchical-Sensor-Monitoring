@@ -39,6 +39,10 @@ namespace hsm::agent
         /// Signal the thread to exit and block until it does.
         void Stop();
 
+        /// Wake up the poll thread to run an immediate check instead of waiting for the scheduled
+        /// interval. No-op if the checker is not running (update_enabled=false / not started).
+        void TriggerCheck();
+
         // Called by the background thread only; public so the file-scope thread proc
         // can invoke it without pulling Win32 types into this header.
         void Run();
@@ -51,6 +55,7 @@ namespace hsm::agent
         std::function<void()> request_stop_;
 
         void* thread_handle_ = nullptr; // HANDLE, void* to avoid Win32 headers in this header
-        void* stop_event_ = nullptr;    // HANDLE
+        void* stop_event_ = nullptr;    // HANDLE — signals thread exit
+        void* check_event_ = nullptr;   // HANDLE — wakes the thread for an immediate check
     };
 } // namespace hsm::agent

@@ -36,6 +36,10 @@ namespace HSMServer.Core.Model
 
         public Guid? FolderId { get; private set; }
 
+        /// Sensor groups that agents for this product should NOT collect (#1198 server-directive channel).
+        /// Valid group names: "computer", "system", "disk", "network", "module", "process".
+        public HashSet<string> DisabledSensorGroups { get; private set; } = new();
+
 
         public bool IsEmpty => SubProducts.IsEmpty && Sensors.IsEmpty;
 
@@ -55,6 +59,9 @@ namespace HSMServer.Core.Model
 
             State = (ProductState)entity.State;
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
+
+            if (entity.DisabledSensorGroups is { Count: > 0 })
+                DisabledSensorGroups = new HashSet<string>(entity.DisabledSensorGroups, StringComparer.OrdinalIgnoreCase);
 
             Policies.Attach(this);
             Policies.BuildDefault(this, entity.TTLPolicies);
@@ -135,7 +142,13 @@ namespace HSMServer.Core.Model
             Settings = Settings.ToEntity(),
             TTLPolicies = Policies.TTLPolicies.Select(p => p.ToEntity()).ToList(),
             ChangeTable = ChangeTable.ToEntity(),
+            DisabledSensorGroups = DisabledSensorGroups.Count > 0 ? DisabledSensorGroups.ToList() : null,
         };
+
+        internal void UpdateDisabledSensorGroups(IEnumerable<string> disabled)
+        {
+            DisabledSensorGroups = new HashSet<string>(disabled, StringComparer.OrdinalIgnoreCase);
+        }
 
 
         protected override void UpdateTTLs(List<PolicyUpdate> updates, InitiatorInfo initiator)

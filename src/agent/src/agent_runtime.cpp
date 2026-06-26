@@ -1,12 +1,14 @@
 #include "agent/agent_runtime.hpp"
 
 #ifdef _WIN32
+#include "agent/config.hpp"
 #include "agent/paths.hpp"
 #include "agent/update_checker.hpp"
 #endif
 
 #include <chrono>
 #include <exception>
+#include <filesystem>
 #include <utility>
 
 #ifdef _WIN32
@@ -96,7 +98,64 @@ namespace hsm::agent
                 DeleteFileW(old_exe.c_str());
 #endif
 
-            hc::Collector collector(BuildOptions());
+#ifdef _WIN32
+            // Create the UpdateChecker before the collector so the directive callback can reference
+            // it by address. The thread is not started until updater.Start() below.
+            UpdateChecker updater(
+                config_,
+                [this](int level, const std::string& msg) {
+                    Log(static_cast<hc::LogLevel>(level), msg);
+                },
+                [this] { RequestStop(); });
+#endif
+
+            hc::CollectorOptions opts = BuildOptions();
+
+#ifdef _WIN32
+            // X-Agent-Version: server uses it to decide whether to emit update-available directives.
+            opts.extra_request_headers.push_back({"X-Agent-Version", HSM_AGENT_VERSION});
+
+            // Handle server directives delivered via data-POST response headers (#1198).
+            opts.on_server_directive = [this, &updater](const std::string& verb, const std::string& payload)
+            {
+                if (verb == "update-available")
+                {
+                    // Server knows there is a newer binary; wake the UpdateChecker immediately
+                    // instead of waiting for the next scheduled poll.
+                    updater.TriggerCheck();
+                }
+                else if (verb == "sensor-disable" || verb == "sensor-enable")
+                {
+                    const bool enable = (verb == "sensor-enable");
+                    AgentConfig updated = config_;
+                    const std::string& group = payload;
+                    if      (group == "computer") updated.sensors_computer = enable;
+                    else if (group == "system")   updated.sensors_system   = enable;
+                    else if (group == "disk")     updated.sensors_disk     = enable;
+                    else if (group == "network")  updated.sensors_network  = enable;
+                    else if (group == "module")   updated.sensors_module   = enable;
+                    else if (group == "process")  updated.sensors_process  = enable;
+                    else
+                    {
+                        Log(hc::LogLevel::Error, "directive: unknown sensor group '" + group + "'");
+                        return;
+                    }
+
+                    // Persist the change so it survives the restart we are about to trigger.
+                    std::string cfg_err;
+                    const auto cfg_path_w = DefaultConfigPath();
+                    const std::string cfg_path = std::filesystem::path(cfg_path_w).string();
+                    if (!WriteAgentConfig(cfg_path, updated, cfg_err))
+                        Log(hc::LogLevel::Error, "directive: failed to update config.json: " + cfg_err);
+                    else
+                        Log(hc::LogLevel::Info, "directive: " + verb + ":" + group + " — restarting to apply");
+
+                    RequestStop();
+                }
+            };
+#endif
+
+            hc::Collector collector(opts);
 
             // Install the log sink first so configuration/transport diagnostics are captured.
             if (log_)
@@ -156,14 +215,6 @@ namespace hsm::agent
                 on_started();
 
 #ifdef _WIN32
-            // Start the self-update checker after the collector is running (it may call RequestStop
-            // to trigger a service restart when an update is applied).
-            UpdateChecker updater(
-                config_,
-                [this](int level, const std::string& msg) {
-                    Log(static_cast<hc::LogLevel>(level), msg);
-                },
-                [this] { RequestStop(); });
             updater.Start();
 #endif
 

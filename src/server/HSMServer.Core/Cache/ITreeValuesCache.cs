@@ -46,6 +46,7 @@ namespace HSMServer.Core.Cache
         Task<ProductModel> AddProductAsync(string productName, Guid authorId, CancellationToken token = default);
         Task<TaskResult> UpdateProductAsync(ProductUpdate product, CancellationToken token = default);
         Task RemoveProductAsync(Guid id, InitiatorInfo initiator = null, CancellationToken token = default);
+        TaskResult UpdateDisabledSensorGroups(Guid productId, IEnumerable<string> disabled);
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);
         bool TryGetProductByName(string name, out ProductModel product);

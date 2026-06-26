@@ -29,6 +29,9 @@ namespace HSMServer.Model.TreeViewModel
 
         public Guid? FolderId => Parent is FolderModel folder ? folder?.Id : null;
 
+        /// Sensor groups currently disabled for agents of this product (#1198).
+        public HashSet<string> DisabledSensorGroups { get; private set; } = new();
+
 
         public ProductNodeViewModel(ProductModel model, ProductNodeViewModel parent, FolderModel folder) : base(model)
         {
@@ -36,6 +39,8 @@ namespace HSMServer.Model.TreeViewModel
 
             if (folder != null)
                 AddFolder(folder);
+
+            DisabledSensorGroups = model.DisabledSensorGroups;
         }
 
 
@@ -44,6 +49,7 @@ namespace HSMServer.Model.TreeViewModel
             base.Update(model);
 
             _ = DefaultChats.FromModel(model.Settings.DefaultChats.CurValue);
+            DisabledSensorGroups = model.DisabledSensorGroups;
         }
 
 
