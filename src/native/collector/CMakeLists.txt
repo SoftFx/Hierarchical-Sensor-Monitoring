@@ -375,6 +375,10 @@ if(WIN32)
     add_test(NAME native_windows_process_metric_resolves_current_process
         COMMAND hsm_collector_tests native_windows_process_metric_resolves_current_process
     )
+    # #1189 follow-up: host sensors must actually emit, not register empty.
+    add_test(NAME native_windows_info_sensors_emit_values
+        COMMAND hsm_collector_tests native_windows_info_sensors_emit_values
+    )
 endif()
 
 function(add_conformance_test name fixture)

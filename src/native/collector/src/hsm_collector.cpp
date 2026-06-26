@@ -3920,7 +3920,8 @@ namespace
                 { "Content-Type", "application/json" },
             };
             // Append extra headers set by the host (e.g. X-Agent-Version from the agent).
-            headers.insert(headers.end(), extra_request_headers_.begin(), extra_request_headers_.end());
+            for (const auto& [hdr_name, hdr_value] : extra_request_headers_)
+                headers.push_back({ hdr_name, hdr_value });
 
             const auto response = http_transport_->Post(endpoints_.List(), body, headers);
 
@@ -3985,7 +3986,9 @@ namespace
 
         // Extra HTTP request headers injected into every data POST (#1198 agent-directive channel).
         // Set before Start; read only by the worker thread after Start — no lock needed.
-        std::vector<hsm::http::HttpHeader> extra_request_headers_;
+        // {name, value} pairs; kept http-free so this compiles in non-HTTP builds (converted to
+        // hsm::http::HttpHeader only in the HTTP-guarded send path).
+        std::vector<std::pair<std::string, std::string>> extra_request_headers_;
         // Server-directive callback: called when a data-POST response carries X-Hsm-Directive headers.
         hsm_server_directive_callback_t directive_callback_ = nullptr;
         void* directive_user_data_ = nullptr;

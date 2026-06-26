@@ -3147,6 +3147,46 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
         hsm_sensor_release(sensor);
     }
+
+    // #1189 follow-up guard against registered-but-empty host sensors. The "Windows OS info" sensors
+    // were registered (so registration conformance stayed green) yet never produced values, because
+    // the periodic value path is double-only while they are TimeSpan/Version. They are now driven by
+    // the WindowsInfoSampler that AddAllComputerSensors starts. Assert they actually emit — if a
+    // future change leaves a host sensor registered without a reader, this fails loudly instead of
+    // silently shipping an empty sensor. Deterministic: polls for the values rather than fixed-sleep.
+    void NativeWindowsInfoSensorsEmitValues()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_add_all_computer_sensors(collector.value) == HSM_RESULT_OK,
+            "add all computer sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(30000);
+        bool found = false;
+        while (!found && std::chrono::steady_clock::now() < deadline)
+        {
+            std::string all;
+            const size_t count = hsm_collector_sent_count(collector.value);
+            for (size_t i = 0; i < count; ++i)
+            {
+                const char* json = nullptr;
+                if (hsm_collector_get_sent_json(collector.value, i, &json) == HSM_RESULT_OK && json != nullptr)
+                    all += json;
+            }
+            found = all.find("Last restart") != std::string::npos &&
+                    all.find("Install date") != std::string::npos &&
+                    all.find("Version & patch") != std::string::npos;
+            if (!found)
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+
+        Require(found,
+                "Windows OS-info sensors (Last restart/Install date/Version & patch) must emit values, "
+                "not register empty");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
 #endif
 
     void NativeSchedulerOnErrorIsolatesThrowingCallback()
@@ -4588,6 +4628,8 @@ namespace
             { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
             { "native_windows_process_metric_resolves_current_process",
               [](const std::string&) { NativeWindowsProcessMetricResolvesCurrentProcess(); } },
+            { "native_windows_info_sensors_emit_values",
+              [](const std::string&) { NativeWindowsInfoSensorsEmitValues(); } },
 #endif
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
