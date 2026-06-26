@@ -7,6 +7,9 @@
 #endif
 #include <windows.h>
 
+#include <cstdio>
+#include <cwchar>
+
 namespace hsm::collector
 {
     namespace
@@ -91,7 +94,159 @@ namespace hsm::collector
             s.has_version = true;
         }
 
+        // Last update = now - last successful Windows Update. The managed sensor uses WMI QFE
+        // (InstalledOn); to stay COM-free, read the Automatic-Update last-success timestamp from the
+        // registry ("yyyy-MM-dd HH:mm:ss", UTC). Absent key (AU never ran) -> leave empty.
+        const std::string last_success = RegReadStringUtf8(
+            L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\Results\\Install",
+            L"LastSuccessTime");
+        if (!last_success.empty())
+        {
+            int y = 0, mo = 0, d = 0, h = 0, mi = 0, se = 0;
+            if (sscanf_s(last_success.c_str(), "%d-%d-%d %d:%d:%d", &y, &mo, &d, &h, &mi, &se) == 6)
+            {
+                SYSTEMTIME st{};
+                st.wYear = static_cast<WORD>(y);
+                st.wMonth = static_cast<WORD>(mo);
+                st.wDay = static_cast<WORD>(d);
+                st.wHour = static_cast<WORD>(h);
+                st.wMinute = static_cast<WORD>(mi);
+                st.wSecond = static_cast<WORD>(se);
+
+                FILETIME update_ft;
+                if (SystemTimeToFileTime(&st, &update_ft)) // SYSTEMTIME is interpreted as UTC
+                {
+                    ULARGE_INTEGER update100;
+                    update100.LowPart = update_ft.dwLowDateTime;
+                    update100.HighPart = update_ft.dwHighDateTime;
+
+                    FILETIME now_ft;
+                    GetSystemTimeAsFileTime(&now_ft);
+                    ULARGE_INTEGER now100b;
+                    now100b.LowPart = now_ft.dwLowDateTime;
+                    now100b.HighPart = now_ft.dwHighDateTime;
+
+                    if (now100b.QuadPart > update100.QuadPart)
+                    {
+                        s.last_update_age_ticks = static_cast<std::int64_t>(now100b.QuadPart - update100.QuadPart);
+                        s.has_last_update_age = true;
+                    }
+                }
+            }
+        }
+
         return s;
+    }
+
+    namespace
+    {
+        // Read new Error/Warning records from one classic event log since *cursor (next unread
+        // RecordNumber). On the seeding pass, only advance the cursor to the newest record (no
+        // backfill), matching the managed event-driven sensor which reports only entries written
+        // while it runs. Message is a best-effort join of the insertion strings (the fully-rendered
+        // text needs the source's message DLL, intentionally skipped here).
+        void PollOneLog(const wchar_t* log_name, std::uint32_t& cursor, bool seeded,
+                        EventLogKind error_kind, EventLogKind warning_kind,
+                        std::vector<EventLogRecordData>& out)
+        {
+            HANDLE log = OpenEventLogW(nullptr, log_name);
+            if (log == nullptr)
+                return;
+
+            DWORD oldest = 0, count = 0;
+            if (!GetOldestEventLogRecord(log, &oldest) || !GetNumberOfEventLogRecords(log, &count))
+            {
+                CloseEventLog(log);
+                return;
+            }
+            const std::uint32_t newest_next = (count == 0) ? oldest : (oldest + count); // one past newest
+
+            if (!seeded)
+            {
+                cursor = newest_next;
+                CloseEventLog(log);
+                return;
+            }
+            if (cursor < oldest)
+                cursor = oldest; // records aged out — resync
+
+            std::vector<BYTE> buffer(64 * 1024);
+            DWORD flags = EVENTLOG_SEEK_READ | EVENTLOG_FORWARDS_READ;
+            while (cursor < newest_next)
+            {
+                DWORD bytes_read = 0, bytes_needed = 0;
+                if (!ReadEventLogW(log, flags, cursor, buffer.data(),
+                                   static_cast<DWORD>(buffer.size()), &bytes_read, &bytes_needed))
+                {
+                    if (GetLastError() == ERROR_INSUFFICIENT_BUFFER && bytes_needed > buffer.size())
+                    {
+                        buffer.resize(bytes_needed);
+                        continue;
+                    }
+                    break; // EOF or error
+                }
+                flags = EVENTLOG_SEQUENTIAL_READ | EVENTLOG_FORWARDS_READ; // after the initial seek
+
+                BYTE* p = buffer.data();
+                BYTE* const stop = buffer.data() + bytes_read;
+                while (p + sizeof(EVENTLOGRECORD) <= stop)
+                {
+                    auto* rec = reinterpret_cast<EVENTLOGRECORD*>(p);
+                    if (rec->Length == 0)
+                        break;
+
+                    const bool is_error = rec->EventType == EVENTLOG_ERROR_TYPE;
+                    const bool is_warning = rec->EventType == EVENTLOG_WARNING_TYPE;
+                    if (is_error || is_warning)
+                    {
+                        EventLogRecordData data;
+                        data.kind = is_error ? error_kind : warning_kind;
+                        data.event_id = std::to_string(rec->EventID & 0xFFFF);
+
+                        // SourceName is a wide string immediately after the fixed struct.
+                        const auto* src = reinterpret_cast<const wchar_t*>(p + sizeof(EVENTLOGRECORD));
+                        const int src_need = WideCharToMultiByte(CP_UTF8, 0, src, -1, nullptr, 0, nullptr, nullptr);
+                        if (src_need > 1)
+                        {
+                            data.source.resize(static_cast<std::size_t>(src_need - 1));
+                            WideCharToMultiByte(CP_UTF8, 0, src, -1, data.source.data(), src_need, nullptr, nullptr);
+                        }
+
+                        // Insertion strings: NumStrings null-separated wide strings at StringOffset.
+                        const wchar_t* str = reinterpret_cast<const wchar_t*>(p + rec->StringOffset);
+                        for (WORD i = 0; i < rec->NumStrings; ++i)
+                        {
+                            const int need = WideCharToMultiByte(CP_UTF8, 0, str, -1, nullptr, 0, nullptr, nullptr);
+                            if (need > 1)
+                            {
+                                std::string piece(static_cast<std::size_t>(need - 1), '\0');
+                                WideCharToMultiByte(CP_UTF8, 0, str, -1, piece.data(), need, nullptr, nullptr);
+                                if (!data.message.empty())
+                                    data.message += " ";
+                                data.message += piece;
+                            }
+                            str += wcslen(str) + 1;
+                        }
+
+                        out.push_back(std::move(data));
+                    }
+
+                    cursor = rec->RecordNumber + 1;
+                    p += rec->Length;
+                }
+            }
+
+            CloseEventLog(log);
+        }
+    } // namespace
+
+    std::vector<EventLogRecordData> WindowsEventLogReader::PollNew()
+    {
+        std::vector<EventLogRecordData> out;
+        PollOneLog(L"Application", app_cursor_, seeded_, EventLogKind::ApplicationError, EventLogKind::ApplicationWarning, out);
+        PollOneLog(L"System", sys_cursor_, seeded_, EventLogKind::SystemError, EventLogKind::SystemWarning, out);
+        seeded_ = true;
+        return out;
     }
 }
 
@@ -100,6 +255,7 @@ namespace hsm::collector
 namespace hsm::collector
 {
     WindowsInfoSample ReadWindowsInfo() { return WindowsInfoSample{}; }
+    std::vector<EventLogRecordData> WindowsEventLogReader::PollNew() { return {}; }
 }
 
 #endif // _WIN32

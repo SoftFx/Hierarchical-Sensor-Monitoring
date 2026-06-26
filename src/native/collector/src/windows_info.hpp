@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace hsm::collector
 {
@@ -20,6 +21,10 @@ namespace hsm::collector
         bool has_install_age = false;
         std::int64_t install_age_ticks = 0;
 
+        // Last update: age since the last successful Windows Update (TimeSpan), .NET 100-ns ticks.
+        bool has_last_update_age = false;
+        std::int64_t last_update_age_ticks = 0;
+
         // Version & patch: Windows full build version (Major.Minor.Build.UBR) + product comment.
         bool has_version = false;
         std::int32_t ver_major = 0;
@@ -32,4 +37,36 @@ namespace hsm::collector
     // Reads the current Windows OS info. Windows-only; returns an all-empty sample on other
     // platforms (each field gated by its has_* flag), so callers stay cross-platform.
     WindowsInfoSample ReadWindowsInfo();
+
+    // Which event-log sensor a record belongs to.
+    enum class EventLogKind
+    {
+        ApplicationError = 0,
+        SystemError = 1,
+        ApplicationWarning = 2,
+        SystemWarning = 3,
+    };
+
+    struct EventLogRecordData
+    {
+        EventLogKind kind = EventLogKind::ApplicationError;
+        std::string event_id; // InstanceId (matches managed record.InstanceId.ToString())
+        std::string source;   // event source name
+        std::string message;  // best-effort: joined insertion strings
+    };
+
+    // Stateful poller for the Application/System event logs (mirrors the managed event-driven
+    // WindowsLogsSensorBase). The first poll only seeds cursors at the newest record (no backfill);
+    // each later poll returns the Error/Warning records written since. Windows-only; a no-op
+    // returning {} elsewhere.
+    class WindowsEventLogReader
+    {
+    public:
+        std::vector<EventLogRecordData> PollNew();
+
+    private:
+        std::uint32_t app_cursor_ = 0; // next unread RecordNumber for "Application"
+        std::uint32_t sys_cursor_ = 0; // next unread RecordNumber for "System"
+        bool seeded_ = false;
+    };
 }

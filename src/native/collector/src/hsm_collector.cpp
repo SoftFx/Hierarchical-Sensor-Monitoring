@@ -3505,12 +3505,19 @@ namespace
             // Handles for the already-registered "Windows OS info" sensors; AddDefaultSensor is
             // idempotent and returns the existing handle. These typed (TimeSpan/Version) sensors
             // cannot ride the double-only metric path, so this thread posts their values directly.
-            std::shared_ptr<NativeSensor> last_restart, install_date, win_version;
+            std::shared_ptr<NativeSensor> last_restart, install_date, win_version, last_update;
+            std::shared_ptr<NativeSensor> app_error, sys_error, app_warning, sys_warning;
             hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
             AddDefaultSensor(HSM_DEFAULT_WINDOWS_LAST_RESTART, &params, last_restart);
             AddDefaultSensor(HSM_DEFAULT_WINDOWS_INSTALL_DATE, &params, install_date);
             AddDefaultSensor(HSM_DEFAULT_WINDOWS_VERSION, &params, win_version);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_LAST_UPDATE, &params, last_update);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_APPLICATION_ERROR_LOGS, &params, app_error);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_SYSTEM_ERROR_LOGS, &params, sys_error);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_APPLICATION_WARNING_LOGS, &params, app_warning);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_SYSTEM_WARNING_LOGS, &params, sys_warning);
 
+            hsm::collector::WindowsEventLogReader event_reader;
             const auto period = std::chrono::milliseconds(win_info_period_ms_);
 
             while (true)
@@ -3533,6 +3540,30 @@ namespace
                         PostStartValue(win_version->Path(), win_version->Type(),
                                        "\"" + EscapeJson(VersionString(info.ver_major, info.ver_minor, info.ver_build, info.ver_ubr)) + "\"",
                                        HSM_SENSOR_STATUS_OK, info.version_comment);
+
+                    if (last_update && info.has_last_update_age)
+                        PostStartValue(last_update->Path(), last_update->Type(),
+                                       "\"" + EscapeJson(TimeSpanCFormat(info.last_update_age_ticks)) + "\"",
+                                       HSM_SENSOR_STATUS_OK, std::string{});
+
+                    // Event logs: one String value per new Error/Warning entry (Value=eventId,
+                    // comment=source+message), mirroring the managed event-driven sensor.
+                    for (const auto& rec : event_reader.PollNew())
+                    {
+                        std::shared_ptr<NativeSensor> target;
+                        switch (rec.kind)
+                        {
+                            case hsm::collector::EventLogKind::ApplicationError:   target = app_error; break;
+                            case hsm::collector::EventLogKind::SystemError:        target = sys_error; break;
+                            case hsm::collector::EventLogKind::ApplicationWarning: target = app_warning; break;
+                            case hsm::collector::EventLogKind::SystemWarning:      target = sys_warning; break;
+                        }
+                        if (target)
+                            PostStartValue(target->Path(), target->Type(),
+                                           "\"" + EscapeJson(rec.event_id) + "\"",
+                                           HSM_SENSOR_STATUS_OK,
+                                           "Source: " + rec.source + ". Message: " + rec.message);
+                    }
                 }
                 catch (...)
                 {
