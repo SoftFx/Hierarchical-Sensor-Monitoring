@@ -1173,8 +1173,8 @@ namespace
         { HSM_DEFAULT_NETWORK_CONNECTION_FAILURES, "Network", "Connection Failures Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, true, 0, false, 60000, "TCP connection failures.", {} },
         { HSM_DEFAULT_NETWORK_CONNECTIONS_RESET, "Network", "Connections Reset Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, true, 0, false, 60000, "TCP connections reset.", {} },
         // ---- Per-interface network speed (.computer/Network/{iface}/..., DoubleBar, MB/sec, 1 min, KeepHistory 90 d, TTL 5 min) ----
-        { HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC, "Network", "{iface}/Received MB/sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average received network speed on interface.", {} },
-        { HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC, "Network", "{iface}/Sent MB/sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average sent network speed on interface.", {} },
+        { HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC, "Network", "{iface}/Received MB,sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average received network speed on interface.", {} },
+        { HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC, "Network", "{iface}/Sent MB,sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average sent network speed on interface.", {} },
         // ---- Module info (.module/...) ----
         { HSM_DEFAULT_COLLECTOR_ALIVE, "", "Service alive", HSM_SENSOR_TYPE_BOOLEAN, false, false, -1, false, true, kKeepHistory180dMs, false, 0, false, 15000, "DataCollector heartbeat.", { DefaultAlertKind::ServiceAliveTtl, HSM_ALERT_PROP_VALUE, HSM_ALERT_OP_EQUAL, nullptr, "[$product]$path" } },
         { HSM_DEFAULT_COLLECTOR_VERSION, "", "Collector version", HSM_SENSOR_TYPE_VERSION, false, false, -1, false, false, kKeepHistory1826dMs, true, 0, false, 15000, "DataCollector version and start time.", {} },
@@ -3420,56 +3420,54 @@ namespace
                 try
                 {
                     const auto speeds = sampler.Sample();
-                    for (const auto& [iface, speed] : speeds)
+
+                    // Create + post one direction's bar lazily, and ONLY when it actually carries
+                    // traffic (>0) this interval — a direction with no data never spawns an always-zero
+                    // sensor. Leaf uses "MB,sec" (not "MB/sec") so the unit isn't split into an extra
+                    // tree node by the path separator.
+                    auto post_direction = [&](std::map<std::string, std::shared_ptr<NativeSensor>>& cache,
+                                              const std::string& iface, const std::string& leaf,
+                                              const std::string& descr, double value)
                     {
-                        auto rx_it = rx_cache.find(iface);
-                        if (rx_it == rx_cache.end())
+                        if (value <= 0.0)
+                            return;
+
+                        auto it = cache.find(iface);
+                        if (it == cache.end())
                         {
-                            // Build registration options matching the catalog prototype (#1189).
-                            // Bar sensors emit null DisplayUnit (managed BarSensorOptions.ToApi).
-                            RegistrationOptions rx_opts;
-                            rx_opts.unit = 2103; // MBytes_sec
-                            rx_opts.has_statistics = true;
-                            rx_opts.statistics = 1;           // EMA
-                            rx_opts.has_display_unit = false; // bar → null on wire
-                            rx_opts.has_keep_history = true;
-                            rx_opts.keep_history_ms = kKeepHistory90dMs;
-                            rx_opts.ttl_ms = 300000; // 5 min
-                            rx_opts.has_description = true;
-                            rx_opts.description = "Average received network speed on interface **" + iface + "**.";
-                            rx_opts.has_alerts_list = true;
-                            rx_opts.enable_grafana = TriBool::True;
-                            rx_opts.is_computer_sensor = true;
+                            RegistrationOptions opts;
+                            opts.unit = 2103; // MBytes_sec
+                            opts.has_statistics = true;
+                            opts.statistics = 1;           // EMA
+                            opts.has_display_unit = false; // bar → null on wire
+                            opts.has_keep_history = true;
+                            opts.keep_history_ms = kKeepHistory90dMs;
+                            opts.ttl_ms = 300000; // 5 min
+                            opts.has_description = true;
+                            opts.description = descr + " network speed on interface **" + iface + "**.";
+                            opts.has_alerts_list = true;
+                            opts.enable_grafana = TriBool::True;
+                            opts.is_computer_sensor = true;
 
-                            RegistrationOptions tx_opts = rx_opts;
-                            tx_opts.description = "Average sent network speed on interface **" + iface + "**.";
+                            std::shared_ptr<NativeSensor> sensor;
+                            const std::string path = "Network/" + iface + "/" + leaf;
+                            if (CreateDefaultBarSensor(path, HSM_SENSOR_TYPE_DOUBLE_BAR, 60000, kDefaultBarPrecision, opts, sensor) != HSM_RESULT_OK)
+                                return;
 
-                            // Path mirrors managed: CreateDoubleBarSensor("Network/<iface>/Received MB/sec", IsComputerSensor=true).
-                            // CalculateSystemPath prepends computer_name_, producing the same wire path as C#.
-                            std::shared_ptr<NativeSensor> rx_sensor, tx_sensor;
-                            const std::string rx_path = "Network/" + iface + "/Received MB/sec";
-                            const std::string tx_path = "Network/" + iface + "/Sent MB/sec";
-
-                            if (CreateDefaultBarSensor(rx_path, HSM_SENSOR_TYPE_DOUBLE_BAR, 60000, kDefaultBarPrecision, rx_opts, rx_sensor) != HSM_RESULT_OK)
-                                continue;
-                            if (CreateDefaultBarSensor(tx_path, HSM_SENSOR_TYPE_DOUBLE_BAR, 60000, kDefaultBarPrecision, tx_opts, tx_sensor) != HSM_RESULT_OK)
-                                continue;
-
-                            rx_it = rx_cache.emplace(iface, rx_sensor).first;
-                            tx_cache.emplace(iface, tx_sensor);
+                            it = cache.emplace(iface, sensor).first;
 #if defined(HSM_COLLECTOR_HTTP)
                             if (send_wire_)
-                            {
-                                PostRegistrationsWire({ std::move(rx_sensor) });
-                                PostRegistrationsWire({ std::move(tx_sensor) });
-                            }
+                                PostRegistrationsWire({ sensor });
 #endif
                         }
 
-                        rx_it->second->AddBarDouble(speed.rx_mb_per_sec);
-                        auto tx_it = tx_cache.find(iface);
-                        if (tx_it != tx_cache.end())
-                            tx_it->second->AddBarDouble(speed.tx_mb_per_sec);
+                        it->second->AddBarDouble(value);
+                    };
+
+                    for (const auto& [iface, speed] : speeds)
+                    {
+                        post_direction(rx_cache, iface, "Received MB,sec", "Average received", speed.rx_mb_per_sec);
+                        post_direction(tx_cache, iface, "Sent MB,sec", "Average sent", speed.tx_mb_per_sec);
                     }
                 }
                 catch (...)

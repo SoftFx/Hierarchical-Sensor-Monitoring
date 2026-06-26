@@ -116,7 +116,7 @@ namespace HSMDataCollector.PublicInterface
         /// <summary>
         /// Enable per-interface network speed monitoring. Samples received/sent byte counters on all
         /// active (Up, non-loopback) network interfaces every 10 seconds and posts Double bar sensors at
-        /// "Network/&lt;interface-name&gt;/{Received,Sent} MB/sec" (computer-level sensors, 1-minute bars).
+        /// "Network/&lt;interface-name&gt;/{Received,Sent} MB,sec" (computer-level sensors, 1-minute bars).
         /// A disappeared interface expires by TTL (5 min). Windows only.
         /// </summary>
         IWindowsCollection AddNetworkInterfacesSpeed();

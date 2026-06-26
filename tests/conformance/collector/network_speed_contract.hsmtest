@@ -1,7 +1,7 @@
 # HSM collector conformance v1 — per-interface network speed monitoring (#1189).
 # New verbs:
 #   enable_network_interface_speed_sensors|period_ms
-#     configure per-interface MB/sec sampling; must be called before start.
+#     configure per-interface MB,sec sampling; must be called before start.
 #     Windows-only; both drivers are no-ops on other platforms so the fixture
 #     parses cross-platform without an unsupported marker.
 #     period_ms — sampling interval in milliseconds
@@ -10,7 +10,7 @@
 #   add_default_sensor|network_interface_sent||<iface>
 #     Register the DoubleBar catalog prototype for the named interface
 #     (step[2]=disk_letter is empty; step[3]=interface_name).
-#     Path: .computer/Network/<iface>/{Received,Sent} MB/sec (suffix-checked).
+#     Path: .computer/Network/<iface>/{Received,Sent} MB,sec (suffix-checked).
 #
 # Notes:
 #   - Data posting is OS-sourced (real NIC counters); live assertions go through
@@ -30,7 +30,7 @@ network_interface_received_registers|add_default_sensor|network_interface_receiv
 network_interface_received_registers|start
 network_interface_received_registers|stop
 network_interface_received_registers|expect_registration_count|1
-network_interface_received_registers|expect_registration_contains|0|Network/Ethernet/Received MB/sec"
+network_interface_received_registers|expect_registration_contains|0|Network/Ethernet/Received MB,sec"
 network_interface_received_registers|expect_registration_contains|0|"SensorType":5,
 network_interface_received_registers|expect_registration_contains|0|"Statistics":1,
 network_interface_received_registers|expect_registration_contains|0|"OriginalUnit":2103,
@@ -42,7 +42,7 @@ network_interface_sent_registers|add_default_sensor|network_interface_sent||Ethe
 network_interface_sent_registers|start
 network_interface_sent_registers|stop
 network_interface_sent_registers|expect_registration_count|1
-network_interface_sent_registers|expect_registration_contains|0|Network/Ethernet/Sent MB/sec"
+network_interface_sent_registers|expect_registration_contains|0|Network/Ethernet/Sent MB,sec"
 network_interface_sent_registers|expect_registration_contains|0|"SensorType":5,
 network_interface_sent_registers|expect_registration_contains|0|"Statistics":1,
 network_interface_sent_registers|expect_registration_contains|0|"OriginalUnit":2103,

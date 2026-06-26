@@ -15,7 +15,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
     /// <summary>
     /// Periodically samples per-interface cumulative byte counters (via
     /// <see cref="NetworkInterface.GetIPStatistics"/>) and posts Double bar sensors at
-    /// "Network/&lt;interface-name&gt;/{Received,Sent} MB/sec" for every active (Up, non-loopback)
+    /// "Network/&lt;interface-name&gt;/{Received,Sent} MB,sec" for every active (Up, non-loopback)
     /// interface. Sensor pairs are created lazily on first sighting; a disappeared interface
     /// (VPN down, cable unplugged) expires by TTL. Windows only.
     /// </summary>
@@ -40,9 +40,10 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
 
         private readonly SensorsStorage _storage;
 
-        // interface name -> (rx bar, tx bar)
-        private readonly Dictionary<string, (IBarSensor<double> rx, IBarSensor<double> tx)> _sensors =
-            new Dictionary<string, (IBarSensor<double>, IBarSensor<double>)>();
+        // interface name -> bar sensor, per direction. Created independently so a direction with no
+        // traffic never spawns an always-zero sensor.
+        private readonly Dictionary<string, IBarSensor<double>> _rxSensors = new Dictionary<string, IBarSensor<double>>();
+        private readonly Dictionary<string, IBarSensor<double>> _txSensors = new Dictionary<string, IBarSensor<double>>();
 
         // interface name -> previous cumulative (BytesReceived, BytesSent)
         private readonly Dictionary<string, (long rx, long tx)> _prevBytes =
@@ -150,20 +151,16 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
                             var deltaRx = curRx - prev.rx;
                             var deltaTx = curTx - prev.tx;
 
-                            // Negative delta = counter reset or interface restarted; skip interval.
-                            // Zero delta = idle this interval — do not surface the interface. A
-                            // perpetually-quiet interface (Hyper-V vSwitch binding, Wi-Fi Direct
-                            // virtual with no peer) never creates a sensor; the pair appears as soon
-                            // as traffic flows and expires by TTL once it goes quiet again.
-                            if (deltaRx >= 0 && deltaTx >= 0 && (deltaRx > 0 || deltaTx > 0))
-                            {
-                                var rxMbPerSec = deltaRx / elapsedSec / (1024.0 * 1024.0);
-                                var txMbPerSec = deltaTx / elapsedSec / (1024.0 * 1024.0);
-
-                                var pair = GetOrCreatePair(name);
-                                pair.rx.AddValue(rxMbPerSec);
-                                pair.tx.AddValue(txMbPerSec);
-                            }
+                            // Post each direction ONLY when it carried traffic this interval (>0):
+                            // negative delta (counter reset) and zero delta (idle) are both skipped, so
+                            // an idle direction never creates a permanently-zero sensor. A direction
+                            // that goes quiet stops posting and expires by TTL.
+                            if (deltaRx > 0)
+                                GetOrCreate(_rxSensors, name, "Received MB,sec", "Average received")
+                                    .AddValue(deltaRx / elapsedSec / (1024.0 * 1024.0));
+                            if (deltaTx > 0)
+                                GetOrCreate(_txSensors, name, "Sent MB,sec", "Average sent")
+                                    .AddValue(deltaTx / elapsedSec / (1024.0 * 1024.0));
                         }
 
                         _prevBytes[name] = (curRx, curTx);
@@ -176,25 +173,18 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             _prevTime = now;
         }
 
-        private (IBarSensor<double> rx, IBarSensor<double> tx) GetOrCreatePair(string name)
+        private IBarSensor<double> GetOrCreate(Dictionary<string, IBarSensor<double>> sensors, string name, string leaf, string descr)
         {
-            if (_sensors.TryGetValue(name, out var existing))
+            if (sensors.TryGetValue(name, out var existing))
                 return existing;
 
-            var rxOpts = (BarSensorOptions)InterfaceBarOptions.Copy();
-            rxOpts.Description = $"Average received network speed on interface **{name}**. " +
-                                 InterfaceBarOptions.GetBarOptionsInfo();
+            var opts = (BarSensorOptions)InterfaceBarOptions.Copy();
+            opts.Description = $"{descr} network speed on interface **{name}**. " + InterfaceBarOptions.GetBarOptionsInfo();
 
-            var txOpts = (BarSensorOptions)InterfaceBarOptions.Copy();
-            txOpts.Description = $"Average sent network speed on interface **{name}**. " +
-                                 InterfaceBarOptions.GetBarOptionsInfo();
-
-            var rx = (IBarSensor<double>)_storage.CreateDoubleBarSensor($"Network/{name}/Received MB/sec", rxOpts);
-            var tx = (IBarSensor<double>)_storage.CreateDoubleBarSensor($"Network/{name}/Sent MB/sec", txOpts);
-
-            var pair = (rx, tx);
-            _sensors[name] = pair;
-            return pair;
+            // Leaf uses "MB,sec" (not "MB/sec") so the unit isn't split into an extra tree node.
+            var sensor = (IBarSensor<double>)_storage.CreateDoubleBarSensor($"Network/{name}/{leaf}", opts);
+            sensors[name] = sensor;
+            return sensor;
         }
 
         private static bool IsActive(NetworkInterface nic) =>

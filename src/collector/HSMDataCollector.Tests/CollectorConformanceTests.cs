@@ -1302,7 +1302,7 @@ namespace HSMDataCollector.Tests
             var direction = received ? "Received" : "Sent";
             var opts = new BarSensorOptions
             {
-                Path = $".computer/Network/{iface}/{direction} MB/sec",
+                Path = $".computer/Network/{iface}/{direction} MB,sec",
                 IsComputerSensor = true,
                 Type = HSMSensorDataObjects.SensorType.DoubleBarSensor,
                 TTL = TimeSpan.FromMinutes(5),

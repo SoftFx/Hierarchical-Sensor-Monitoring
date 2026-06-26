@@ -61,7 +61,7 @@ Network (`.computer/Network/...`):
 | `AddNetworkConnectionsEstablished` | TCPv4+v6 established (gauge) | perf counter summed | 1 min period |
 | `AddNetworkConnectionFailures` | TCPv4+v6 failures (delta) | perf counter summed | 1 min period |
 | `AddNetworkConnectionsReset` | TCPv4+v6 resets (delta) | perf counter summed | 1 min period |
-| `AddNetworkInterfacesSpeed` | Per-interface received/sent MB/sec (DoubleBar) | `NetworkInterface.GetIPStatistics()` delta / 10 s | Dynamic — one sensor pair per Up, non-loopback, **non-filter** NIC **that actually carries traffic**, discovered at runtime; paths `Network/<iface>/{Received,Sent} MB/sec`; `IsComputerSensor=true`; bar period 1 min; EMA; TTL 5 min; KeepHistory 90 d; counter reset/negative delta **or a zero-delta (idle) interval → interface not surfaced**; idle/disappeared interfaces expire by TTL. NO PDH. |
+| `AddNetworkInterfacesSpeed` | Per-interface received/sent MB,sec (DoubleBar) | `NetworkInterface.GetIPStatistics()` delta / 10 s | Dynamic — one DoubleBar **per direction (received/sent) that actually carries traffic**, on each Up, non-loopback, **non-filter** NIC, discovered at runtime; paths `Network/<iface>/{Received,Sent} MB,sec` (comma, not `/`, so the unit isn't a separate tree node); `IsComputerSensor=true`; bar period 1 min; EMA; TTL 5 min; KeepHistory 90 d; per direction, counter reset/negative delta **or a zero (idle) interval → not posted, no sensor created**; idle/disappeared directions expire by TTL. NO PDH. |
 
 Bulk `AddAllNetworkSensors` calls all four methods above.
 
