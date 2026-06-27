@@ -452,10 +452,15 @@ namespace HSMServer.Controllers
             if (!HttpContext.TryGetPublicApiInfo(out var info))
                 return;
 
+            // Emit the FULL desired state (enable OR disable) for every known group, not just the
+            // disabled ones — otherwise re-enabling a group in the UI never reaches the agent: the
+            // server would simply stop sending the disable, leaving the agent's persisted config
+            // stuck disabled. The agent no-ops a directive whose state is unchanged, so the extra
+            // headers are cheap.
             foreach (var group in _knownSensorGroups)
             {
-                if (info.Product.DisabledSensorGroups.Contains(group))
-                    Response.Headers.Append(DirectiveHeader, $"sensor-disable:{group}");
+                var verb = info.Product.DisabledSensorGroups.Contains(group) ? "sensor-disable" : "sensor-enable";
+                Response.Headers.Append(DirectiveHeader, $"{verb}:{group}");
             }
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net.NetworkInformation;
 using System.Threading;
 using System.Threading.Tasks;
@@ -55,7 +56,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         private readonly Dictionary<string, (long rx, long tx)> _prevBytes =
             new Dictionary<string, (long, long)>();
 
-        private DateTime _prevTime = DateTime.MinValue;
+        private long _prevTimestamp; // Stopwatch.GetTimestamp() — monotonic, immune to NTP/DST jumps
         private CancellationTokenSource _cts;
         private Task _loopTask;
 
@@ -103,7 +104,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         {
             try
             {
-                _prevTime = DateTime.UtcNow;
+                _prevTimestamp = Stopwatch.GetTimestamp();
                 foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
                 {
                     if (!IsActive(nic))
@@ -133,8 +134,10 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
 
         private void Sample()
         {
-            var now = DateTime.UtcNow;
-            var elapsedSec = (now - _prevTime).TotalSeconds;
+            // Monotonic clock (matches the native sampler's GetTickCount64) so an NTP/DST wall-clock
+            // jump can't spike or understate the rate, and the two collectors stay in parity.
+            var nowTimestamp = Stopwatch.GetTimestamp();
+            var elapsedSec = (nowTimestamp - _prevTimestamp) / (double)Stopwatch.Frequency;
             if (elapsedSec <= 0)
                 return;
 
@@ -177,7 +180,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             }
             catch { }
 
-            _prevTime = now;
+            _prevTimestamp = nowTimestamp;
         }
 
         private IBarSensor<double> GetOrCreate(Dictionary<string, IBarSensor<double>> sensors, string name, string leaf, string descr)

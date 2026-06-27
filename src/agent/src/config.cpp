@@ -621,17 +621,38 @@ namespace hsm::agent
         // that diverges from what was active when this config was written.
         const auto b = [](bool v) -> const char* { return v ? "true" : "false"; };
 
+        // JSON-escape string values: a stray '"' or '\' (e.g. in a module name or access key) would
+        // otherwise emit invalid JSON. Since this write is immediately followed by a service restart,
+        // a malformed file would make the agent fail to parse its own config and not come back up.
+        const auto esc = [](const std::string& s) -> std::string {
+            std::string r;
+            r.reserve(s.size());
+            for (char ch : s)
+            {
+                switch (ch)
+                {
+                    case '"': r += "\\\""; break;
+                    case '\\': r += "\\\\"; break;
+                    case '\n': r += "\\n"; break;
+                    case '\r': r += "\\r"; break;
+                    case '\t': r += "\\t"; break;
+                    default: r += ch; break;
+                }
+            }
+            return r;
+        };
+
         std::ostringstream out;
         out << "{\n"
             << "  \"server\": {\n"
-            << "    \"address\": \"" << c.server_address << "\",\n"
+            << "    \"address\": \"" << esc(c.server_address) << "\",\n"
             << "    \"port\": " << c.port << ",\n"
-            << "    \"accessKey\": \"" << c.access_key << "\",\n"
+            << "    \"accessKey\": \"" << esc(c.access_key) << "\",\n"
             << "    \"allowUntrustedCertificate\": " << b(c.allow_untrusted_certificate) << "\n"
             << "  },\n"
             << "  \"identity\": {\n"
-            << "    \"computerName\": \"" << c.computer_name << "\",\n"
-            << "    \"module\": \"" << c.module << "\"\n"
+            << "    \"computerName\": \"" << esc(c.computer_name) << "\",\n"
+            << "    \"module\": \"" << esc(c.module) << "\"\n"
             << "  },\n"
             << "  \"sensors\": {\n"
             << "    \"computer\": " << b(c.sensors_computer) << ",\n"

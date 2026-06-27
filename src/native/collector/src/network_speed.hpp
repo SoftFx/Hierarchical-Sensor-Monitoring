@@ -5,6 +5,7 @@
 /// Samples GetIfTable2 cumulative octet counters, computes MB/sec deltas.
 /// Portable header; implementation is #if _WIN32 guarded.
 
+#include <cstdint>
 #include <map>
 #include <string>
 
