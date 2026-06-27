@@ -53,7 +53,7 @@ namespace hsm::http
             while (!raw.empty() && (raw.back() == '\r' || raw.back() == '\n' || raw.back() == ' '))
                 raw.remove_suffix(1);
 
-            static_cast<std::vector<HttpHeader>*>(userdata)->push_back({std::move(name), std::string(raw)});
+            static_cast<std::vector<HttpHeader>*>(userdata)->push_back({ std::move(name), std::string(raw) });
             return total;
         }
 

@@ -260,14 +260,20 @@ namespace hsm::collector
         seeded_ = true;
         return out;
     }
-}
+} // namespace hsm::collector
 
 #else // !_WIN32
 
 namespace hsm::collector
 {
-    WindowsInfoSample ReadWindowsInfo() { return WindowsInfoSample{}; }
-    std::vector<EventLogRecordData> WindowsEventLogReader::PollNew() { return {}; }
-}
+    WindowsInfoSample ReadWindowsInfo()
+    {
+        return WindowsInfoSample{};
+    }
+    std::vector<EventLogRecordData> WindowsEventLogReader::PollNew()
+    {
+        return {};
+    }
+} // namespace hsm::collector
 
 #endif // _WIN32

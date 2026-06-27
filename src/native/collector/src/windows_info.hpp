@@ -65,8 +65,10 @@ namespace hsm::collector
         std::vector<EventLogRecordData> PollNew();
 
     private:
-        std::uint32_t app_cursor_ = 0; // next unread RecordNumber for "Application"
-        std::uint32_t sys_cursor_ = 0; // next unread RecordNumber for "System"
-        bool seeded_ = false;
+        // Used only by the Windows PollNew() body; on other platforms PollNew() is a stub that
+        // never touches them, so mark maybe_unused to satisfy clang -Werror,-Wunused-private-field.
+        [[maybe_unused]] std::uint32_t app_cursor_ = 0; // next unread RecordNumber for "Application"
+        [[maybe_unused]] std::uint32_t sys_cursor_ = 0; // next unread RecordNumber for "System"
+        [[maybe_unused]] bool seeded_ = false;
     };
-}
+} // namespace hsm::collector

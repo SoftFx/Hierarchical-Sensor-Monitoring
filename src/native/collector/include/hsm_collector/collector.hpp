@@ -114,8 +114,7 @@ namespace hsm::collector
                 auto holder = std::make_unique<std::function<void(const std::string&, const std::string&)>>(options.on_server_directive);
                 Check(hsm_collector_set_server_directive_handler(
                           handle_,
-                          [](const char* verb, const char* payload, void* ud)
-                          {
+                          [](const char* verb, const char* payload, void* ud) {
                               auto* fn = static_cast<std::function<void(const std::string&, const std::string&)>*>(ud);
                               (*fn)(std::string{ verb }, std::string{ payload });
                           },

@@ -2979,7 +2979,7 @@ namespace
 
         void AddExtraRequestHeader(std::string name, std::string value)
         {
-            extra_request_headers_.push_back({std::move(name), std::move(value)});
+            extra_request_headers_.push_back({ std::move(name), std::move(value) });
         }
 
         // Optional host override for the reported ".module/Collector version". Empty (default) ->
@@ -3529,8 +3529,7 @@ namespace
                     // "MB,sec" (not "MB/sec") so the unit isn't split into an extra tree node.
                     auto post_direction = [&](std::map<std::string, std::shared_ptr<NativeSensor>>& cache,
                                               const std::string& iface, const std::string& leaf,
-                                              const std::string& descr, double value)
-                    {
+                                              const std::string& descr, double value) {
                         if (value < min_displayable)
                             return;
 
@@ -3662,10 +3661,18 @@ namespace
                         std::shared_ptr<NativeSensor> target;
                         switch (rec.kind)
                         {
-                            case hsm::collector::EventLogKind::ApplicationError:   target = app_error; break;
-                            case hsm::collector::EventLogKind::SystemError:        target = sys_error; break;
-                            case hsm::collector::EventLogKind::ApplicationWarning: target = app_warning; break;
-                            case hsm::collector::EventLogKind::SystemWarning:      target = sys_warning; break;
+                        case hsm::collector::EventLogKind::ApplicationError:
+                            target = app_error;
+                            break;
+                        case hsm::collector::EventLogKind::SystemError:
+                            target = sys_error;
+                            break;
+                        case hsm::collector::EventLogKind::ApplicationWarning:
+                            target = app_warning;
+                            break;
+                        case hsm::collector::EventLogKind::SystemWarning:
+                            target = sys_warning;
+                            break;
                         }
                         if (target)
                             PostStartValue(target->Path(), target->Type(),
@@ -6174,8 +6181,8 @@ hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* col
             // distinct products. An explicit host override still wins if set.
             const std::string& override_ver = collector->impl->CollectorVersionOverride();
             const std::string version = override_ver.empty()
-                ? std::string(HSM_COLLECTOR_PRODUCT_VERSION)
-                : override_ver;
+                                            ? std::string(HSM_COLLECTOR_PRODUCT_VERSION)
+                                            : override_ver;
             EmitVersionStartValue(collector->impl.get(), collector_version, version.c_str());
         }
 
