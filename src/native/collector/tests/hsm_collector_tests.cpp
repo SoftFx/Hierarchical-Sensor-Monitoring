@@ -3189,6 +3189,37 @@ namespace
     }
 #endif
 
+    // Service alive heartbeat must emit a VALUE, not sit registered-but-empty (#1198 follow-up).
+    // Cross-platform: the heartbeat is OS-independent. add_all_module_sensors wires both the
+    // collector-monitoring group (Service alive) and the queue-diagnostics group.
+    void NativeCollectorSelfMonitoringEmits()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_add_all_module_sensors(collector.value, "1.0.0.0") == HSM_RESULT_OK,
+            "add all module sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+        bool found = false;
+        while (!found && std::chrono::steady_clock::now() < deadline)
+        {
+            const size_t count = hsm_collector_sent_count(collector.value);
+            for (size_t i = 0; i < count && !found; ++i)
+            {
+                const char* json = nullptr;
+                if (hsm_collector_get_sent_json(collector.value, i, &json) == HSM_RESULT_OK && json != nullptr &&
+                    std::string(json).find("Service alive") != std::string::npos)
+                    found = true;
+            }
+            if (!found)
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+
+        Require(found, "Service alive heartbeat must emit a value, not register empty");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
     void NativeSchedulerOnErrorIsolatesThrowingCallback()
     {
         auto collector = CreateCollector();
@@ -4634,6 +4665,8 @@ namespace
             { "native_windows_info_sensors_emit_values",
               [](const std::string&) { NativeWindowsInfoSensorsEmitValues(); } },
 #endif
+            { "native_collector_self_monitoring_emits",
+              [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },

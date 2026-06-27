@@ -2305,6 +2305,7 @@ namespace
             StartTopCpuSampler();
             StartNetworkSpeedSampler();
             StartWindowsInfoSampler();
+            StartSelfMonitor();
 
             // Drain the one-shot Start values (e.g. product/collector version) now the worker is up.
             for (auto& json : start_values)
@@ -2360,6 +2361,7 @@ namespace
             StopTopCpuSampler();
             StopNetworkSpeedSampler();
             StopWindowsInfoSampler();
+            StopSelfMonitor();
 
             // Dispose bound metric sources now the scheduler has stopped reading them (managed
             // dispose-on-stop; #1164). A restart rebinds via the factory.
@@ -3136,6 +3138,28 @@ namespace
 #endif
         }
 
+        // Capture the registered ".module/Service alive" handle and arm the heartbeat (#1198 follow-up):
+        // its value was never posted, so the sensor sat registered-but-empty. Idempotent re-registration
+        // returns the handle the collector group already created.
+        void CaptureCollectorMonitoringHandles()
+        {
+            hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
+            if (AddDefaultSensor(HSM_DEFAULT_COLLECTOR_ALIVE, &params, service_alive_sensor_) == HSM_RESULT_OK)
+                collector_monitoring_enabled_ = true;
+        }
+
+        // Capture the ".module/Collector queue stats" handles so the dispatch path + heartbeat thread
+        // post live values instead of leaving the whole category registered-but-empty.
+        void CaptureQueueDiagnosticHandles()
+        {
+            hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_OVERFLOW, &params, queue_overflow_sensor_);
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT, &params, queue_items_sensor_);
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME, &params, queue_time_sensor_);
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, &params, queue_size_sensor_);
+            queue_diagnostics_enabled_ = true;
+        }
+
     private:
         hsm_result_t SetError(hsm_result_t result, std::string message) const
         {
@@ -3329,8 +3353,13 @@ namespace
             // This is the ONLY place a value is dropped: the (large) buffer is full. Monitoring
             // history keeps every value until then; on overflow the oldest is evicted first
             // (position-based FIFO, newest value kept) — same policy as the C# QueueProcessorBase.
+            // Count evictions for the ".module/Collector queue stats/Queue overflow" sensor (posted
+            // by the self-monitor thread; counting here keeps the hot path lock-free of sensor posts).
             while (queue_.size() > static_cast<size_t>(max_queue_size_))
+            {
                 queue_.pop_front();
+                queue_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+            }
         }
 
         // Retry re-enqueue (caller holds queue_mutex_). A failed package rotates to the TAIL and is
@@ -3398,6 +3427,69 @@ namespace
             if (net_speed_thread_.joinable())
                 net_speed_thread_.join();
 #endif
+        }
+
+        // Per-package queue stats, posted from the dispatch send path's UNLOCKED window. Bars only
+        // aggregate (AccumulateBar) — they never enqueue or touch queue_mutex_ — so this is safe there.
+        void PostPackageStats(const std::vector<std::string>& batch, std::chrono::steady_clock::duration send_duration)
+        {
+            if (queue_items_sensor_)
+                queue_items_sensor_->AddBarInt(static_cast<int32_t>(batch.size()));
+            if (queue_time_sensor_)
+                queue_time_sensor_->AddBarDouble(std::chrono::duration<double>(send_duration).count());
+            if (queue_size_sensor_)
+            {
+                std::size_t bytes = 0;
+                for (const auto& json : batch)
+                    bytes += json.size();
+                queue_size_sensor_->AddBarDouble(static_cast<double>(bytes) / (1024.0 * 1024.0));
+            }
+        }
+
+        void StartSelfMonitor()
+        {
+            if (!collector_monitoring_enabled_ && !queue_diagnostics_enabled_)
+                return;
+            {
+                std::lock_guard<std::mutex> guard(self_monitor_cv_mutex_);
+                self_monitor_stop_ = false;
+            }
+            self_monitor_thread_ = std::thread([this] { RunSelfMonitorLoop(); });
+        }
+
+        void StopSelfMonitor()
+        {
+            {
+                std::lock_guard<std::mutex> guard(self_monitor_cv_mutex_);
+                self_monitor_stop_ = true;
+            }
+            self_monitor_cv_.notify_all();
+            if (self_monitor_thread_.joinable())
+                self_monitor_thread_.join();
+        }
+
+        // Heartbeat + queue-overflow delta on a dedicated thread (no queue_mutex_ held, so AddBool —
+        // which enqueues — is safe). Posts Service alive immediately on start, then every collect period.
+        void RunSelfMonitorLoop()
+        {
+            const auto period = std::chrono::milliseconds(collect_period_ms_);
+            while (true)
+            {
+                if (service_alive_sensor_)
+                    service_alive_sensor_->AddBool(true, HSM_SENSOR_STATUS_OK, nullptr);
+
+                // Overflow since the last tick — post only when non-zero so the bar isn't all-zeros.
+                if (queue_overflow_sensor_)
+                {
+                    const std::int64_t overflowed = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
+                    if (overflowed > 0)
+                        queue_overflow_sensor_->AddBarInt(static_cast<int32_t>(std::min<std::int64_t>(overflowed, INT32_MAX)));
+                }
+
+                std::unique_lock<std::mutex> lock(self_monitor_cv_mutex_);
+                if (self_monitor_cv_.wait_for(lock, period, [this] { return self_monitor_stop_; }))
+                    return;
+            }
         }
 
         void RunNetworkSpeedLoop()
@@ -3852,7 +3944,13 @@ namespace
                 }
 
                 lock.unlock();
+                const auto send_start = std::chrono::steady_clock::now();
                 const auto sent = TrySendBatch(batch);
+                // Per-package queue stats — only on a real send (not the stop-flush drop path), posted
+                // here in the UNLOCKED window: bars only aggregate, so there's no re-entrancy on
+                // queue_mutex_ and no enqueue from within dispatch.
+                if (sent && queue_diagnostics_enabled_ && !clear_remainder_on_failure)
+                    PostPackageStats(batch, std::chrono::steady_clock::now() - send_start);
                 lock.lock();
 
                 if (!sent)
@@ -3995,6 +4093,24 @@ namespace
         bool dispatch_kick_ = false;
         std::thread worker_;
         std::atomic<int32_t> fail_next_{ 0 };
+
+        // Collector self-monitoring (#1198 follow-up): wires VALUES for the registered-but-empty
+        // ".module/Service alive" heartbeat and the ".module/Collector queue stats" sensors. Handles
+        // are captured when the groups are added. Service alive (a heartbeat) and the queue-overflow
+        // delta are posted by a dedicated thread; the per-package stats (items/time/size) are posted
+        // from the dispatch send path in its UNLOCKED window (bars only aggregate, never enqueue).
+        bool collector_monitoring_enabled_ = false;
+        bool queue_diagnostics_enabled_ = false;
+        std::shared_ptr<NativeSensor> service_alive_sensor_;
+        std::shared_ptr<NativeSensor> queue_overflow_sensor_;
+        std::shared_ptr<NativeSensor> queue_items_sensor_;
+        std::shared_ptr<NativeSensor> queue_time_sensor_;
+        std::shared_ptr<NativeSensor> queue_size_sensor_;
+        std::atomic<std::int64_t> queue_overflow_count_{ 0 };
+        std::thread self_monitor_thread_;
+        std::mutex self_monitor_cv_mutex_;
+        std::condition_variable self_monitor_cv_;
+        bool self_monitor_stop_ = false;
 
         std::mutex hang_mutex_;
         std::condition_variable hang_cv_;
@@ -6062,6 +6178,10 @@ hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* col
                 : override_ver;
             EmitVersionStartValue(collector->impl.get(), collector_version, version.c_str());
         }
+
+        // Wire the Service alive heartbeat — the group registered it above but its value was never
+        // posted (registered-but-empty); the self-monitor thread now posts it.
+        collector->impl->CaptureCollectorMonitoringHandles();
     }
 
     return result;
@@ -6069,7 +6189,14 @@ hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* col
 
 hsm_result_t hsm_collector_add_all_queue_diagnostic_sensors(hsm_collector_t* collector)
 {
-    return collector != nullptr ? AddGroup(collector, kQueueGroup) : HSM_RESULT_INVALID_ARGUMENT;
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const hsm_result_t result = AddGroup(collector, kQueueGroup);
+    if (result == HSM_RESULT_OK)
+        collector->impl->CaptureQueueDiagnosticHandles(); // wire the queue-stat values (were empty)
+
+    return result;
 }
 
 hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector)

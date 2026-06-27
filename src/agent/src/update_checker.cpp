@@ -32,11 +32,14 @@
 #include <string>
 #include <vector>
 
-// LogLevel values mirror hsm::collector::LogLevel (info=2, error=4) without pulling in the
-// collector header from this platform-specific translation unit.
-static constexpr int kLogInfo = 2;
-static constexpr int kLogWarn = 3;
-static constexpr int kLogError = 4;
+// These MUST match hsm::collector::LogLevel (HSM_LOG_LEVEL_*): Debug=0, Info=1, Error=2. The level
+// int is cast straight to that enum in AgentRuntime, so a wrong value mislabels the line. (Bug: Info
+// was 2 == Error, so benign "already up to date" update messages were emitted as errors, written to
+// the Windows Event Log, and surfaced by the "Windows Error Logs" sensor.) There is no Warn level —
+// non-fatal update-check hiccups log as Info, not Error.
+static constexpr int kLogInfo = 1;
+static constexpr int kLogWarn = 1;
+static constexpr int kLogError = 2;
 
 namespace hsm::agent
 {
