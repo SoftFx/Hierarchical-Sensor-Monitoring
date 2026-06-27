@@ -123,6 +123,23 @@ On next startup, `AgentRuntime::Run()` deletes `hsm-agent.old.exe` to confirm th
 when ready to roll out; flip back to halt. Per-machine opt-out: set `update.enabled: false` in the
 machine's `config.json`.
 
+## Server directive channel (issue #1198)
+
+The server piggybacks `X-Hsm-Directive` response headers on data-POST responses to push config to the
+agent without extra polling. The agent advertises its build via an `X-Agent-Version` request header;
+directives are emitted on **both** the typed value endpoints and the `/list` batch endpoint — the
+agent's real data path, so emitting only on the typed endpoints means it never sees them.
+- `update-available:<version>` — sent when `AutoUpdateEnabled` and a newer binary is staged
+  (`wwwroot/agent/version.txt`, read through a short-TTL cache so the hot `/list` path avoids
+  per-POST disk I/O). The agent wakes its `UpdateChecker` immediately instead of waiting for the next
+  poll, and treats a repeat as a no-op while an update is already in flight.
+- `sensor-disable:<group>` / `sensor-enable:<group>` (groups: computer/system/disk/network/module/
+  process) — re-sent on **every** response while the group stays toggled, so the agent acts **only
+  when the flag actually changes**: it rewrites `config.json` and restarts once, then ignores the
+  re-sent directive (otherwise it would restart-loop on every POST).
+- Toggling a product's sensor groups (server `ProductController.UpdateSensorGroups`) is gated by the
+  **ProductManager** role on that product, like every other product mutation.
+
 ## Top processes by CPU (issue #1175)
 
 Opt-in (`topCpu.enabled`). A dedicated thread in `AgentRuntime` (started after `Start()`, joined

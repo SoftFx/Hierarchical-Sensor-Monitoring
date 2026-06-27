@@ -261,7 +261,10 @@ namespace HSMServer.Core.Cache
                 return TaskResult.FromError("Product not found.");
 
             product.UpdateDisabledSensorGroups(disabled);
-            _database.UpdateProduct(product.ToEntity());
+            // Route through UpdateProduct so ChangeProductEvent fires — otherwise the tree view-model
+            // keeps its stale (by-reference) DisabledSensorGroups set and the Edit Product checkboxes
+            // show outdated state until the next unrelated product update.
+            UpdateProduct(product);
             return TaskResult.Ok;
         }
 

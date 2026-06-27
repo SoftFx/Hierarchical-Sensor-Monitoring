@@ -435,9 +435,12 @@ namespace HSMServer.Controllers
         {
             // Phase 1: update-available — only when X-Agent-Version request header is present and
             // the server has a newer binary staged in wwwroot/agent/.
+            // NOTE: agent/staged versions are plain numeric "x.y.z"; a semver pre-release/build suffix
+            // would fail Version.TryParse and silently skip the directive (acceptable by contract).
+            var agentVersionHeader = Request.Headers[AgentVersionHeader].ToString();
             if (_config.Agent.AutoUpdateEnabled
-                && !string.IsNullOrEmpty(Request.Headers[AgentVersionHeader].ToString())
-                && Version.TryParse(Request.Headers[AgentVersionHeader].ToString(), out var agentVer)
+                && !string.IsNullOrEmpty(agentVersionHeader)
+                && Version.TryParse(agentVersionHeader, out var agentVer)
                 && !string.IsNullOrEmpty(_environment?.WebRootPath))
             {
                 var staged = ReadStagedVersion(_environment.WebRootPath);
@@ -456,17 +459,39 @@ namespace HSMServer.Controllers
             }
         }
 
+        private static string _stagedVersionCache = "0.0.0";
+        private static long _stagedVersionReadAtTicks; // DateTime.UtcNow.Ticks of last disk read; 0 = never
+        private static readonly object _stagedVersionLock = new();
+        private const long StagedVersionCacheTtlTicks = 15 * TimeSpan.TicksPerSecond;
+
+        // wwwroot/agent/version.txt is consulted on every data POST (the /list batch endpoint is the
+        // server's hottest path), but only changes when ops stage a new binary. Cache it with a short
+        // TTL so the hot path hits memory instead of synchronous disk I/O, while still picking up a
+        // newly staged version within the TTL window. Cache hits are lock-free.
         private static string ReadStagedVersion(string webRootPath)
         {
-            try
+            var nowTicks = DateTime.UtcNow.Ticks;
+            if (nowTicks - System.Threading.Interlocked.Read(ref _stagedVersionReadAtTicks) < StagedVersionCacheTtlTicks)
+                return _stagedVersionCache;
+
+            lock (_stagedVersionLock)
             {
-                var path = System.IO.Path.Combine(webRootPath, "agent", "version.txt");
-                var text = System.IO.File.ReadAllText(path).Trim();
-                return string.IsNullOrEmpty(text) ? "0.0.0" : text;
-            }
-            catch
-            {
-                return "0.0.0";
+                if (nowTicks - _stagedVersionReadAtTicks < StagedVersionCacheTtlTicks)
+                    return _stagedVersionCache; // another thread refreshed while we waited
+
+                try
+                {
+                    var path = System.IO.Path.Combine(webRootPath, "agent", "version.txt");
+                    var text = System.IO.File.ReadAllText(path).Trim();
+                    _stagedVersionCache = string.IsNullOrEmpty(text) ? "0.0.0" : text;
+                }
+                catch
+                {
+                    _stagedVersionCache = "0.0.0";
+                }
+
+                System.Threading.Interlocked.Exchange(ref _stagedVersionReadAtTicks, nowTicks);
+                return _stagedVersionCache;
             }
         }
 

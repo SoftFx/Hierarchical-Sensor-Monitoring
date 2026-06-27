@@ -129,17 +129,27 @@ namespace hsm::agent
                     const bool enable = (verb == "sensor-enable");
                     AgentConfig updated = config_;
                     const std::string& group = payload;
-                    if      (group == "computer") updated.sensors_computer = enable;
-                    else if (group == "system")   updated.sensors_system   = enable;
-                    else if (group == "disk")     updated.sensors_disk     = enable;
-                    else if (group == "network")  updated.sensors_network  = enable;
-                    else if (group == "module")   updated.sensors_module   = enable;
-                    else if (group == "process")  updated.sensors_process  = enable;
+                    bool* flag = nullptr;
+                    if      (group == "computer") flag = &updated.sensors_computer;
+                    else if (group == "system")   flag = &updated.sensors_system;
+                    else if (group == "disk")     flag = &updated.sensors_disk;
+                    else if (group == "network")  flag = &updated.sensors_network;
+                    else if (group == "module")   flag = &updated.sensors_module;
+                    else if (group == "process")  flag = &updated.sensors_process;
                     else
                     {
                         Log(hc::LogLevel::Error, "directive: unknown sensor group '" + group + "'");
                         return;
                     }
+
+                    // The server re-sends this directive on EVERY data POST while the group stays
+                    // toggled, so act only when it actually changes our state — otherwise we would
+                    // rewrite config.json and restart on every response (an endless restart loop).
+                    if (*flag == enable)
+                        return;
+
+                    *flag = enable;
+                    config_ = updated; // keep in-memory state in sync so re-sent directives are no-ops
 
                     // Persist the change so it survives the restart we are about to trigger.
                     std::string cfg_err;

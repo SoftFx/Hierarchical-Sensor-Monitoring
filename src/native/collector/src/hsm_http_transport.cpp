@@ -2,6 +2,9 @@
 
 #include <curl/curl.h>
 
+#include <cctype>      // std::tolower in the header-name comparison
+#include <string_view> // std::string_view used when splitting response headers
+
 namespace hsm::http
 {
     namespace

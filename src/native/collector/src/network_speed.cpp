@@ -40,6 +40,10 @@ namespace hsm::collector
         MIB_IF_TABLE2* table = nullptr;
         if (GetIfTable2(&table) != NO_ERROR || table == nullptr)
         {
+            // Drop the stale octet baseline: the next successful sample must re-baseline rather than
+            // divide a delta spanning this failure gap by only the short post-failure elapsed time
+            // (which would spike the reported rate for one interval).
+            prev_.clear();
             prev_wall_ms_ = wall_ms;
             have_baseline_ = true;
             return {};

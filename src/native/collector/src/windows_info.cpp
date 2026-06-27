@@ -192,8 +192,13 @@ namespace hsm::collector
                 while (p + sizeof(EVENTLOGRECORD) <= stop)
                 {
                     auto* rec = reinterpret_cast<EVENTLOGRECORD*>(p);
-                    if (rec->Length == 0)
+                    // Trust rec->Length only if it is sane and the whole record fits in the bytes we
+                    // actually read; a truncated/garbage tail could otherwise re-parse overlapping
+                    // memory or walk strings past the record.
+                    if (rec->Length < sizeof(EVENTLOGRECORD) || p + rec->Length > stop)
                         break;
+
+                    const BYTE* const rec_end = p + rec->Length;
 
                     const bool is_error = rec->EventType == EVENTLOG_ERROR_TYPE;
                     const bool is_warning = rec->EventType == EVENTLOG_WARNING_TYPE;
@@ -201,7 +206,9 @@ namespace hsm::collector
                     {
                         EventLogRecordData data;
                         data.kind = is_error ? error_kind : warning_kind;
-                        data.event_id = std::to_string(rec->EventID & 0xFFFF);
+                        // Full 32-bit event identifier — matches managed record.InstanceId.ToString().
+                        // (The low 16 bits alone would be the legacy EventLogEntry.EventID.)
+                        data.event_id = std::to_string(rec->EventID);
 
                         // SourceName is a wide string immediately after the fixed struct.
                         const auto* src = reinterpret_cast<const wchar_t*>(p + sizeof(EVENTLOGRECORD));
@@ -213,19 +220,24 @@ namespace hsm::collector
                         }
 
                         // Insertion strings: NumStrings null-separated wide strings at StringOffset.
+                        // Bound the walk to within this record so a bogus offset/count can't read past it.
+                        const auto* const str_limit = reinterpret_cast<const wchar_t*>(rec_end);
                         const wchar_t* str = reinterpret_cast<const wchar_t*>(p + rec->StringOffset);
-                        for (WORD i = 0; i < rec->NumStrings; ++i)
+                        if (rec->StringOffset >= sizeof(EVENTLOGRECORD) && rec->StringOffset < rec->Length)
                         {
-                            const int need = WideCharToMultiByte(CP_UTF8, 0, str, -1, nullptr, 0, nullptr, nullptr);
-                            if (need > 1)
+                            for (WORD i = 0; i < rec->NumStrings && str < str_limit; ++i)
                             {
-                                std::string piece(static_cast<std::size_t>(need - 1), '\0');
-                                WideCharToMultiByte(CP_UTF8, 0, str, -1, piece.data(), need, nullptr, nullptr);
-                                if (!data.message.empty())
-                                    data.message += " ";
-                                data.message += piece;
+                                const int need = WideCharToMultiByte(CP_UTF8, 0, str, -1, nullptr, 0, nullptr, nullptr);
+                                if (need > 1)
+                                {
+                                    std::string piece(static_cast<std::size_t>(need - 1), '\0');
+                                    WideCharToMultiByte(CP_UTF8, 0, str, -1, piece.data(), need, nullptr, nullptr);
+                                    if (!data.message.empty())
+                                        data.message += " ";
+                                    data.message += piece;
+                                }
+                                str += wcslen(str) + 1;
                             }
-                            str += wcslen(str) + 1;
                         }
 
                         out.push_back(std::move(data));

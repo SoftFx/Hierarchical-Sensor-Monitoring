@@ -1172,7 +1172,7 @@ namespace
         { HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED, "Network", "Connections Established Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Established TCP connections.", {} },
         { HSM_DEFAULT_NETWORK_CONNECTION_FAILURES, "Network", "Connection Failures Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, true, 0, false, 60000, "TCP connection failures.", {} },
         { HSM_DEFAULT_NETWORK_CONNECTIONS_RESET, "Network", "Connections Reset Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, true, 0, false, 60000, "TCP connections reset.", {} },
-        // ---- Per-interface network speed (.computer/Network/{iface}/..., DoubleBar, MB/sec, 1 min, KeepHistory 90 d, TTL 5 min) ----
+        // ---- Per-interface network speed (.computer/Network/{iface}/..., DoubleBar, MB,sec leaf, 1 min, KeepHistory 90 d, TTL 5 min) ----
         { HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC, "Network", "{iface}/Received MB,sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average received network speed on interface.", {} },
         { HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC, "Network", "{iface}/Sent MB,sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average sent network speed on interface.", {} },
         // ---- Module info (.module/...) ----
@@ -3551,8 +3551,11 @@ namespace
                                        HSM_SENSOR_STATUS_OK, std::string{});
 
                     if (win_version && info.has_version)
+                        // Major.Minor.Build only (revision = -1 drops it) — matches managed
+                        // RegistryInfo.GetCurrentWindowsFullBuildVersion() (new Version(maj, min, build),
+                        // no UBR). UBR stays available in info.ver_ubr if ever needed in the comment.
                         PostStartValue(win_version->Path(), win_version->Type(),
-                                       "\"" + EscapeJson(VersionString(info.ver_major, info.ver_minor, info.ver_build, info.ver_ubr)) + "\"",
+                                       "\"" + EscapeJson(VersionString(info.ver_major, info.ver_minor, info.ver_build, -1)) + "\"",
                                        HSM_SENSOR_STATUS_OK, info.version_comment);
 
                     if (last_update && info.has_last_update_age)

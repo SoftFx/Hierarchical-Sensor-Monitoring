@@ -257,6 +257,7 @@ namespace HSMServer.Controllers
 
         /// <summary>Update which sensor groups agents under this product should collect (#1198).</summary>
         [HttpPost]
+        [ProductRoleFilterBySensorGroups(nameof(request), ProductRoleEnum.ProductManager)]
         public IActionResult UpdateSensorGroups([FromBody] SensorGroupsRequest request)
         {
             if (!_treeValuesCache.TryGetProduct(request.ProductId, out _))

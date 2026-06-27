@@ -36,6 +36,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             BarPeriod = TimeSpan.FromMinutes(1),
             BarTickPeriod = TimeSpan.FromSeconds(15),
             PostDataPeriod = TimeSpan.FromSeconds(15),
+            EnableForGrafana = true, // parity: native + every default prototype register EnableGrafana=true
         };
 
         // Smallest MB/sec that does not round to 0 at the bar's precision; sub-threshold trickle
@@ -185,7 +186,9 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
                 return existing;
 
             var opts = (BarSensorOptions)InterfaceBarOptions.Copy();
-            opts.Description = $"{descr} network speed on interface **{name}**. " + InterfaceBarOptions.GetBarOptionsInfo();
+            // No GetBarOptionsInfo() suffix: keep the description byte-identical to the native collector
+            // and the conformance driver (parity). Native has no equivalent bar-options sentence.
+            opts.Description = $"{descr} network speed on interface **{name}**.";
 
             // Leaf uses "MB,sec" (not "MB/sec") so the unit isn't split into an extra tree node.
             var sensor = (IBarSensor<double>)_storage.CreateDoubleBarSensor($"Network/{name}/{leaf}", opts);

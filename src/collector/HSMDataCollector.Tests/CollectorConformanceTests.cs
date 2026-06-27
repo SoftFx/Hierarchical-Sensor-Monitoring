@@ -237,7 +237,10 @@ namespace HSMDataCollector.Tests
                     // Build the REAL default-sensor prototype's registration request (#1099) and record
                     // it. The native driver registers the same id via hsm_collector_add_default_sensor;
                     // both satisfy the fixture's expect_registration_contains substrings.
-                    state.Sender.RecordRegistration(BuildDefaultSensorRequest(step.Arg(0)));
+                    // arg(0)=id, arg(1)=disk_letter, arg(2)=interface_name — thread the interface
+                    // through so a non-"Ethernet" fixture (or the fuzzer) registers the same path the
+                    // native driver does, instead of always hardcoding "Ethernet".
+                    state.Sender.RecordRegistration(BuildDefaultSensorRequest(step.Arg(0), step.TryArg(2, out var ifaceArg) ? ifaceArg : null));
                     break;
 
                 case "service_send_custom":
@@ -1253,7 +1256,7 @@ namespace HSMDataCollector.Tests
         // its managed prototype (Prototypes/Collections/**), the same source the production AddX path
         // uses. The AddAll* path passes null to Get; service status needs a non-null host-service
         // options object. Names mirror the native DefaultSensorIdFromName map.
-        private static AddOrUpdateSensorRequest BuildDefaultSensorRequest(string id)
+        private static AddOrUpdateSensorRequest BuildDefaultSensorRequest(string id, string interfaceName = null)
         {
             switch (id)
             {
@@ -1279,8 +1282,8 @@ namespace HSMDataCollector.Tests
                 case "network_established": return new ConnectionsEstablishedCountPrototype().Get(null).ApiRequest;
                 case "network_failures": return new ConnectionsFailuresCountPrototype().Get(null).ApiRequest;
                 case "network_reset": return new ConnectionsResetCountPrototype().Get(null).ApiRequest;
-                case "network_interface_received": return BuildNetworkInterfaceSpeedRequest("Ethernet", received: true);
-                case "network_interface_sent": return BuildNetworkInterfaceSpeedRequest("Ethernet", received: false);
+                case "network_interface_received": return BuildNetworkInterfaceSpeedRequest(string.IsNullOrEmpty(interfaceName) ? "Ethernet" : interfaceName, received: true);
+                case "network_interface_sent": return BuildNetworkInterfaceSpeedRequest(string.IsNullOrEmpty(interfaceName) ? "Ethernet" : interfaceName, received: false);
                 case "collector_alive": return new ServiceAlivePrototype().Get(null).ApiRequest;
                 case "collector_version": return new CollectorVersionPrototype().Get(null).ApiRequest;
                 case "collector_errors": return new CollectorErrorsPrototype().Get(null).ApiRequest;
