@@ -132,7 +132,10 @@ agent's real data path, so emitting only on the typed endpoints means it never s
 - `update-available:<version>` — sent when `AutoUpdateEnabled` and a newer binary is staged
   (`wwwroot/agent/version.txt`, read through a short-TTL cache so the hot `/list` path avoids
   per-POST disk I/O). The agent wakes its `UpdateChecker` immediately instead of waiting for the next
-  poll, and treats a repeat as a no-op while an update is already in flight.
+  poll. Because the server re-sends this on every POST while a newer build is staged, the checker
+  **debounces** directive-driven checks (a trigger within ~60 s of the last attempt is ignored), so a
+  persistently-failing update (download error / hash mismatch) doesn't re-download the exe every batch;
+  the first trigger after a quiet period still applies promptly. The scheduled poll is unaffected.
 - `sensor-disable:<group>` / `sensor-enable:<group>` (groups: computer/system/disk/network/module/
   process) — re-sent on **every** response while the group stays toggled, so the agent acts **only
   when the flag actually changes**: it rewrites `config.json` and restarts once, then ignores the

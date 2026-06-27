@@ -41,6 +41,14 @@ static constexpr int kLogInfo = 1;
 static constexpr int kLogWarn = 1;
 static constexpr int kLogError = 2;
 
+// Minimum interval between DIRECTIVE-driven update checks. The server re-sends update-available on
+// every data POST while a newer build is staged, so without this a persistently-failing update
+// (download error / hash mismatch) would re-attempt the version GET + full exe download on every
+// ~15 s batch. A trigger within this window of the last attempt is ignored; the scheduled poll is
+// unaffected. The first trigger after a quiet period (the normal "new version staged" case) is not
+// debounced, so live staging still applies promptly.
+static constexpr unsigned long long kMinDirectiveCheckIntervalMs = 60000; // 60 s
+
 namespace hsm::agent
 {
     // ---- Version comparison -----------------------------------------------------------------------
@@ -439,6 +447,7 @@ namespace hsm::agent
 
         // Check immediately on startup — restarting the Windows service is the admin's "check now"
         // gesture; no need to wait the full period to pick up a freshly staged binary.
+        ULONGLONG last_check_ticks = GetTickCount64();
         if (CheckAndUpdate())
             return; // update triggered — the service will be restarted by --apply-update
 
@@ -450,7 +459,17 @@ namespace hsm::agent
 
             // WAIT_OBJECT_0 + 1: TriggerCheck() was called (directive from server).
             // WAIT_TIMEOUT: scheduled period elapsed.
-            ResetEvent(static_cast<HANDLE>(check_event_));
+            const bool directive = (result == WAIT_OBJECT_0 + 1);
+            if (directive)
+                ResetEvent(static_cast<HANDLE>(check_event_));
+
+            // Debounce directive-driven checks so a persistently-failing update doesn't re-download on
+            // every ~15 s batch (see kMinDirectiveCheckIntervalMs). Scheduled (timeout) checks always run.
+            const ULONGLONG now = GetTickCount64();
+            if (directive && (now - last_check_ticks) < kMinDirectiveCheckIntervalMs)
+                continue;
+
+            last_check_ticks = now;
             if (CheckAndUpdate())
                 return;
         }
