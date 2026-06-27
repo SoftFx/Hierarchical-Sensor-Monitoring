@@ -149,17 +149,24 @@ namespace hsm::agent
                         return;
 
                     *flag = enable;
-                    config_ = updated; // keep in-memory state in sync so re-sent directives are no-ops
+                    // Do NOT copy `updated` back into config_: UpdateChecker holds config_ by reference
+                    // and reads its std::string members (server_address/access_key) on its own thread,
+                    // so a whole-struct reassign here is a data race / use-after-free. The persisted
+                    // file is the source of truth; the restart below reloads it.
 
                     // Persist the change so it survives the restart we are about to trigger.
                     std::string cfg_err;
                     const auto cfg_path_w = DefaultConfigPath();
                     const std::string cfg_path = std::filesystem::path(cfg_path_w).string();
                     if (!WriteAgentConfig(cfg_path, updated, cfg_err))
-                        Log(hc::LogLevel::Error, "directive: failed to update config.json: " + cfg_err);
-                    else
-                        Log(hc::LogLevel::Info, "directive: " + verb + ":" + group + " — restarting to apply");
+                    {
+                        // Persist failed — do NOT restart: a restart would reload the unchanged config
+                        // and the re-sent directive would just fail to write and restart again (a loop).
+                        Log(hc::LogLevel::Error, "directive: failed to update config.json (not restarting): " + cfg_err);
+                        return;
+                    }
 
+                    Log(hc::LogLevel::Info, "directive: " + verb + ":" + group + " — restarting to apply");
                     RequestStop();
                 }
             };

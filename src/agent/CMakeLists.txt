@@ -18,7 +18,7 @@ if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg triplet for the self-contained agent build")
 endif()
 
-project(HsmAgent VERSION 0.5.17 LANGUAGES CXX)
+project(HsmAgent VERSION 0.5.18 LANGUAGES CXX)
 
 if(MSVC)
     # Static CRT (/MT) to match the static triplet — the exe must run on a clean machine with no VC++
@@ -67,6 +67,7 @@ if(HSM_AGENT_BUILD_TESTS)
             agent_config_rejects_wrong_typed_field
             agent_config_ignores_unknown_fields
             agent_config_decodes_string_escapes
+            agent_config_write_read_roundtrip
             agent_topcpu_config_parses_and_defaults
             agent_topcpu_rejects_bad_config
             agent_update_config_parses_and_defaults

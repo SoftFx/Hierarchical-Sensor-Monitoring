@@ -3,7 +3,9 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
+#include <system_error>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -674,19 +676,38 @@ namespace hsm::agent
             << "  \"update\": {\n"
             << "    \"enabled\": " << b(c.update_enabled) << ",\n"
             << "    \"checkPeriodHours\": " << c.update_check_period_hours << "\n"
-            << "  }\n"
+            << "  },\n"
+            // productVersion MUST be mirrored here (the parser reads it): omitting it would reset an
+            // operator-set value to the default on the first directive-driven rewrite.
+            << "  \"productVersion\": \"" << esc(c.product_version) << "\"\n"
             << "}\n";
 
-        std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-        if (!stream)
+        // Atomic replace: write a temp file, flush/close it, then rename over the target. A crash or
+        // power loss mid-write then leaves only the temp file — the live config.json is never observed
+        // truncated/partial (which would brick the agent on its next parse).
+        const std::string tmp_path = path + ".tmp";
         {
-            error = "cannot open config file for writing: " + path;
-            return false;
-        }
-        stream << out.str();
-        if (!stream)
+            std::ofstream stream(tmp_path, std::ios::binary | std::ios::trunc);
+            if (!stream)
+            {
+                error = "cannot open config file for writing: " + tmp_path;
+                return false;
+            }
+            stream << out.str();
+            if (!stream)
+            {
+                error = "write error on config file: " + tmp_path;
+                return false;
+            }
+        } // close (flush) before rename
+
+        std::error_code ec;
+        std::filesystem::rename(tmp_path, path, ec);
+        if (ec)
         {
-            error = "write error on config file: " + path;
+            std::error_code rm;
+            std::filesystem::remove(tmp_path, rm); // best-effort cleanup of the temp file
+            error = "cannot replace config file '" + path + "': " + ec.message();
             return false;
         }
         return true;
