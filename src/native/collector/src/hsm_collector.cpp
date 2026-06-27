@@ -2221,10 +2221,17 @@ namespace
 
         ~NativeCollector()
         {
-            // Terminal teardown (destroy without an explicit dispose/stop): only the
-            // threads are reclaimed — there is no observable place left to drain into.
-            // Idempotent with Dispose() via the joinable() guards.
+            // Terminal teardown (destroy without an explicit dispose/stop): reclaim ALL worker
+            // threads — there is no observable place left to drain into. Every Stop* is idempotent
+            // via its joinable()/stop-flag guard, so this is safe whether or not Dispose() ran. The
+            // samplers MUST be joined here too: a still-running thread (e.g. the self-monitor, which
+            // starts on the module/queue groups) left joinable would make its std::thread member's
+            // destructor call std::terminate.
             StopScheduler();
+            StopTopCpuSampler();
+            StopNetworkSpeedSampler();
+            StopWindowsInfoSampler();
+            StopSelfMonitor();
             StopWorker();
         }
 
@@ -3433,16 +3440,23 @@ namespace
         // aggregate (AccumulateBar) — they never enqueue or touch queue_mutex_ — so this is safe there.
         void PostPackageStats(const std::vector<std::string>& batch, std::chrono::steady_clock::duration send_duration)
         {
-            if (queue_items_sensor_)
-                queue_items_sensor_->AddBarInt(static_cast<int32_t>(batch.size()));
-            if (queue_time_sensor_)
-                queue_time_sensor_->AddBarDouble(std::chrono::duration<double>(send_duration).count());
-            if (queue_size_sensor_)
+            try
             {
-                std::size_t bytes = 0;
-                for (const auto& json : batch)
-                    bytes += json.size();
-                queue_size_sensor_->AddBarDouble(static_cast<double>(bytes) / (1024.0 * 1024.0));
+                if (queue_items_sensor_)
+                    queue_items_sensor_->AddBarInt(static_cast<int32_t>(batch.size()));
+                if (queue_time_sensor_)
+                    queue_time_sensor_->AddBarDouble(std::chrono::duration<double>(send_duration).count());
+                if (queue_size_sensor_)
+                {
+                    std::size_t bytes = 0;
+                    for (const auto& json : batch)
+                        bytes += json.size();
+                    queue_size_sensor_->AddBarDouble(static_cast<double>(bytes) / (1024.0 * 1024.0));
+                }
+            }
+            catch (...)
+            {
+                // Runs on the dispatch/worker thread — a stats post must never escape it.
             }
         }
 
@@ -3475,15 +3489,22 @@ namespace
             const auto period = std::chrono::milliseconds(collect_period_ms_);
             while (true)
             {
-                if (service_alive_sensor_)
-                    service_alive_sensor_->AddBool(true, HSM_SENSOR_STATUS_OK, nullptr);
-
-                // Overflow since the last tick — post only when non-zero so the bar isn't all-zeros.
-                if (queue_overflow_sensor_)
+                try
                 {
-                    const std::int64_t overflowed = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
-                    if (overflowed > 0)
-                        queue_overflow_sensor_->AddBarInt(static_cast<int32_t>(std::min<std::int64_t>(overflowed, INT32_MAX)));
+                    if (service_alive_sensor_)
+                        service_alive_sensor_->AddBool(true, HSM_SENSOR_STATUS_OK, nullptr);
+
+                    // Overflow since the last tick — post only when non-zero so the bar isn't all-zeros.
+                    if (queue_overflow_sensor_)
+                    {
+                        const std::int64_t overflowed = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
+                        if (overflowed > 0)
+                            queue_overflow_sensor_->AddBarInt(static_cast<int32_t>(std::min<std::int64_t>(overflowed, INT32_MAX)));
+                    }
+                }
+                catch (...)
+                {
+                    // A post must never let an exception escape this thread (-> std::terminate).
                 }
 
                 std::unique_lock<std::mutex> lock(self_monitor_cv_mutex_);
