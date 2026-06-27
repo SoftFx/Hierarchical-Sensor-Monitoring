@@ -38,7 +38,9 @@ namespace HSMServer.Core.Model
 
         /// Sensor groups that agents for this product should NOT collect (#1198 server-directive channel).
         /// Valid group names: "computer", "system", "disk", "network", "module", "process".
-        public HashSet<string> DisabledSensorGroups { get; private set; } = new();
+        // OrdinalIgnoreCase to match the entity-load path and UpdateDisabledSensorGroups — otherwise a
+        // never-persisted product's Contains() check would be case-sensitive until the first update.
+        public HashSet<string> DisabledSensorGroups { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
 
 
         public bool IsEmpty => SubProducts.IsEmpty && Sensors.IsEmpty;

@@ -210,33 +210,41 @@ namespace hsm::collector
                         // (The low 16 bits alone would be the legacy EventLogEntry.EventID.)
                         data.event_id = std::to_string(rec->EventID);
 
+                        // Every wide-string scan below is length-bounded to rec_end (wcsnlen) and
+                        // converted with an explicit length (not -1), so a record whose strings aren't
+                        // NUL-terminated within their length can't make the scan read past the record.
+                        const auto* const rec_wend = reinterpret_cast<const wchar_t*>(rec_end);
+
                         // SourceName is a wide string immediately after the fixed struct.
                         const auto* src = reinterpret_cast<const wchar_t*>(p + sizeof(EVENTLOGRECORD));
-                        const int src_need = WideCharToMultiByte(CP_UTF8, 0, src, -1, nullptr, 0, nullptr, nullptr);
-                        if (src_need > 1)
+                        const int src_len = static_cast<int>(wcsnlen(src, static_cast<std::size_t>(rec_wend - src)));
+                        const int src_need = src_len > 0 ? WideCharToMultiByte(CP_UTF8, 0, src, src_len, nullptr, 0, nullptr, nullptr) : 0;
+                        if (src_need > 0)
                         {
-                            data.source.resize(static_cast<std::size_t>(src_need - 1));
-                            WideCharToMultiByte(CP_UTF8, 0, src, -1, data.source.data(), src_need, nullptr, nullptr);
+                            data.source.resize(static_cast<std::size_t>(src_need));
+                            WideCharToMultiByte(CP_UTF8, 0, src, src_len, data.source.data(), src_need, nullptr, nullptr);
                         }
 
                         // Insertion strings: NumStrings null-separated wide strings at StringOffset.
-                        // Bound the walk to within this record so a bogus offset/count can't read past it.
-                        const auto* const str_limit = reinterpret_cast<const wchar_t*>(rec_end);
                         const wchar_t* str = reinterpret_cast<const wchar_t*>(p + rec->StringOffset);
                         if (rec->StringOffset >= sizeof(EVENTLOGRECORD) && rec->StringOffset < rec->Length)
                         {
-                            for (WORD i = 0; i < rec->NumStrings && str < str_limit; ++i)
+                            for (WORD i = 0; i < rec->NumStrings && str < rec_wend; ++i)
                             {
-                                const int need = WideCharToMultiByte(CP_UTF8, 0, str, -1, nullptr, 0, nullptr, nullptr);
-                                if (need > 1)
+                                const int slen = static_cast<int>(wcsnlen(str, static_cast<std::size_t>(rec_wend - str)));
+                                if (slen > 0)
                                 {
-                                    std::string piece(static_cast<std::size_t>(need - 1), '\0');
-                                    WideCharToMultiByte(CP_UTF8, 0, str, -1, piece.data(), need, nullptr, nullptr);
-                                    if (!data.message.empty())
-                                        data.message += " ";
-                                    data.message += piece;
+                                    const int need = WideCharToMultiByte(CP_UTF8, 0, str, slen, nullptr, 0, nullptr, nullptr);
+                                    if (need > 0)
+                                    {
+                                        std::string piece(static_cast<std::size_t>(need), '\0');
+                                        WideCharToMultiByte(CP_UTF8, 0, str, slen, piece.data(), need, nullptr, nullptr);
+                                        if (!data.message.empty())
+                                            data.message += " ";
+                                        data.message += piece;
+                                    }
                                 }
-                                str += wcslen(str) + 1;
+                                str += slen + 1; // past this string + its NUL (bounded)
                             }
                         }
 

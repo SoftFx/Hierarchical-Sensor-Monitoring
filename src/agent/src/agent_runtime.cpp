@@ -127,45 +127,47 @@ namespace hsm::agent
                 else if (verb == "sensor-disable" || verb == "sensor-enable")
                 {
                     const bool enable = (verb == "sensor-enable");
-                    AgentConfig updated = config_;
                     const std::string& group = payload;
-                    bool* flag = nullptr;
-                    if      (group == "computer") flag = &updated.sensors_computer;
-                    else if (group == "system")   flag = &updated.sensors_system;
-                    else if (group == "disk")     flag = &updated.sensors_disk;
-                    else if (group == "network")  flag = &updated.sensors_network;
-                    else if (group == "module")   flag = &updated.sensors_module;
-                    else if (group == "process")  flag = &updated.sensors_process;
+                    bool AgentConfig::* member = nullptr;
+                    if      (group == "computer") member = &AgentConfig::sensors_computer;
+                    else if (group == "system")   member = &AgentConfig::sensors_system;
+                    else if (group == "disk")     member = &AgentConfig::sensors_disk;
+                    else if (group == "network")  member = &AgentConfig::sensors_network;
+                    else if (group == "module")   member = &AgentConfig::sensors_module;
+                    else if (group == "process")  member = &AgentConfig::sensors_process;
                     else
                     {
                         Log(hc::LogLevel::Error, "directive: unknown sensor group '" + group + "'");
                         return;
                     }
 
-                    // The server re-sends this directive on EVERY data POST while the group stays
-                    // toggled, so act only when it actually changes our state — otherwise we would
-                    // rewrite config.json and restart on every response (an endless restart loop).
-                    if (*flag == enable)
+                    // The server re-sends the full desired state (all six groups) on EVERY data POST,
+                    // delivered as separate headers processed one-by-one. Act only when THIS group
+                    // actually changes — checked against the live config_, which we update in place
+                    // below so a second changed group in the SAME response accumulates instead of
+                    // clobbering the first. Unchanged groups return here (no restart loop).
+                    if (config_.*member == enable)
                         return;
 
-                    *flag = enable;
-                    // Do NOT copy `updated` back into config_: UpdateChecker holds config_ by reference
-                    // and reads its std::string members (server_address/access_key) on its own thread,
-                    // so a whole-struct reassign here is a data race / use-after-free. The persisted
-                    // file is the source of truth; the restart below reloads it.
+                    // Persist a copy with this one flag flipped. config_ itself is only ever bool-mutated
+                    // (below, after a successful write), never whole-struct reassigned: UpdateChecker
+                    // holds config_ by reference and reads its std::string members on its own thread, so
+                    // a string-reallocating assign here would be a data race / use-after-free.
+                    AgentConfig updated = config_;
+                    updated.*member = enable;
 
-                    // Persist the change so it survives the restart we are about to trigger.
                     std::string cfg_err;
                     const auto cfg_path_w = DefaultConfigPath();
                     const std::string cfg_path = std::filesystem::path(cfg_path_w).string();
                     if (!WriteAgentConfig(cfg_path, updated, cfg_err))
                     {
-                        // Persist failed — do NOT restart: a restart would reload the unchanged config
-                        // and the re-sent directive would just fail to write and restart again (a loop).
+                        // Persist failed — do NOT restart and do NOT touch config_: a restart would
+                        // reload the unchanged file and the re-sent directive would just fail again.
                         Log(hc::LogLevel::Error, "directive: failed to update config.json (not restarting): " + cfg_err);
                         return;
                     }
 
+                    config_.*member = enable; // bool-only mutation (no string realloc -> no data race)
                     Log(hc::LogLevel::Info, "directive: " + verb + ":" + group + " — restarting to apply");
                     RequestStop();
                 }
