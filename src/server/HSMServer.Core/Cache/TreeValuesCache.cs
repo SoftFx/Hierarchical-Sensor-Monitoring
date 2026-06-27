@@ -255,6 +255,19 @@ namespace HSMServer.Core.Cache
             ChangeProductEvent?.Invoke(product, ActionType.Update);
         }
 
+        public TaskResult UpdateDisabledSensorGroups(Guid productId, IEnumerable<string> disabled)
+        {
+            if (!_tree.TryGetValue(productId, out var product))
+                return TaskResult.FromError("Product not found.");
+
+            product.UpdateDisabledSensorGroups(disabled);
+            // Route through UpdateProduct so ChangeProductEvent fires — otherwise the tree view-model
+            // keeps its stale (by-reference) DisabledSensorGroups set and the Edit Product checkboxes
+            // show outdated state until the next unrelated product update.
+            UpdateProduct(product);
+            return TaskResult.Ok;
+        }
+
         public bool TryGetProduct(Guid productId, out ProductModel product)
         {
             return _tree.TryGetValue(productId, out product);

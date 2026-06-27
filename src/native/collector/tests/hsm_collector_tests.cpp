@@ -647,6 +647,8 @@ namespace
             { "network_established", HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED },
             { "network_failures", HSM_DEFAULT_NETWORK_CONNECTION_FAILURES },
             { "network_reset", HSM_DEFAULT_NETWORK_CONNECTIONS_RESET },
+            { "network_interface_received", HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC },
+            { "network_interface_sent", HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC },
             { "collector_alive", HSM_DEFAULT_COLLECTOR_ALIVE },
             { "collector_version", HSM_DEFAULT_COLLECTOR_VERSION },
             { "collector_errors", HSM_DEFAULT_COLLECTOR_ERRORS },
@@ -852,6 +854,8 @@ namespace
             auto params = hsm_default_sensor_params_default();
             if (step.size() >= 3 && !step[2].empty())
                 params.disk_letter = step[2].c_str();
+            if (step.size() >= 4 && !step[3].empty())
+                params.interface_name = step[3].c_str();
             SensorHandle sensor;
             Require(
                 hsm_collector_add_default_sensor(state.collector.value, DefaultSensorIdFromName(step[1]), &params, &sensor.value) == HSM_RESULT_OK,
@@ -2325,6 +2329,21 @@ namespace
             return;
         }
 
+        if (action == "enable_network_interface_speed_sensors")
+        {
+            // (#1189) period_ms — Windows-only; no-op on non-Windows so the fixture parses
+            // on Linux without an unsupported marker.
+            Require(step.size() >= 2, "enable_network_interface_speed_sensors requires period_ms");
+#ifdef _WIN32
+            Require(
+                hsm_collector_enable_network_interface_speed_sensors(
+                    state.collector.value,
+                    ToInt(step[1])) == HSM_RESULT_OK,
+                "enable_network_interface_speed_sensors failed");
+#endif
+            return;
+        }
+
         throw std::runtime_error("Unknown conformance action: " + action);
     }
 
@@ -3128,7 +3147,78 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
         hsm_sensor_release(sensor);
     }
+
+    // #1189 follow-up guard against registered-but-empty host sensors. The "Windows OS info" sensors
+    // were registered (so registration conformance stayed green) yet never produced values, because
+    // the periodic value path is double-only while they are TimeSpan/Version. They are now driven by
+    // the WindowsInfoSampler that AddAllComputerSensors starts. Assert they actually emit — if a
+    // future change leaves a host sensor registered without a reader, this fails loudly instead of
+    // silently shipping an empty sensor. Deterministic: polls for the values rather than fixed-sleep.
+    void NativeWindowsInfoSensorsEmitValues()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_add_all_computer_sensors(collector.value) == HSM_RESULT_OK,
+            "add all computer sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(30000);
+        bool found = false;
+        while (!found && std::chrono::steady_clock::now() < deadline)
+        {
+            std::string all;
+            const size_t count = hsm_collector_sent_count(collector.value);
+            for (size_t i = 0; i < count; ++i)
+            {
+                const char* json = nullptr;
+                if (hsm_collector_get_sent_json(collector.value, i, &json) == HSM_RESULT_OK && json != nullptr)
+                    all += json;
+            }
+            found = all.find("Last restart") != std::string::npos &&
+                    all.find("Install date") != std::string::npos &&
+                    all.find("Version & patch") != std::string::npos;
+            if (!found)
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+
+        Require(found,
+                "Windows OS-info sensors (Last restart/Install date/Version & patch) must emit values, "
+                "not register empty");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
 #endif
+
+    // Service alive heartbeat must emit a VALUE, not sit registered-but-empty (#1198 follow-up).
+    // Cross-platform: the heartbeat is OS-independent. add_all_module_sensors wires both the
+    // collector-monitoring group (Service alive) and the queue-diagnostics group.
+    void NativeCollectorSelfMonitoringEmits()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_add_all_module_sensors(collector.value, "1.0.0.0") == HSM_RESULT_OK,
+            "add all module sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+        bool found = false;
+        while (!found && std::chrono::steady_clock::now() < deadline)
+        {
+            const size_t count = hsm_collector_sent_count(collector.value);
+            for (size_t i = 0; i < count && !found; ++i)
+            {
+                const char* json = nullptr;
+                if (hsm_collector_get_sent_json(collector.value, i, &json) == HSM_RESULT_OK && json != nullptr &&
+                    std::string(json).find("Service alive") != std::string::npos)
+                    found = true;
+            }
+            if (!found)
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+
+        Require(found, "Service alive heartbeat must emit a value, not register empty");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
 
     void NativeSchedulerOnErrorIsolatesThrowingCallback()
     {
@@ -3689,6 +3779,9 @@ namespace
                 saw_collector = true;
                 Contains(payload, "\"Type\":8");
                 Contains(payload, "Start:");
+                // Collector PRODUCT version (HSM_COLLECTOR_PRODUCT_VERSION) — NOT the C ABI version
+                // and NOT any host/agent version. Collector is a distinct product (#1189 follow-up).
+                Contains(payload, HSM_COLLECTOR_PRODUCT_VERSION);
             }
         }
 
@@ -4569,7 +4662,11 @@ namespace
             { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
             { "native_windows_process_metric_resolves_current_process",
               [](const std::string&) { NativeWindowsProcessMetricResolvesCurrentProcess(); } },
+            { "native_windows_info_sensors_emit_values",
+              [](const std::string&) { NativeWindowsInfoSensorsEmitValues(); } },
 #endif
+            { "native_collector_self_monitoring_emits",
+              [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
@@ -4657,6 +4754,7 @@ namespace
             { "conformance_service_commands_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_top_cpu_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_network_speed_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };

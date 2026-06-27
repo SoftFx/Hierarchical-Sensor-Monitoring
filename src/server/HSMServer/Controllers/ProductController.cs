@@ -255,6 +255,18 @@ namespace HSMServer.Controllers
         //    Task.Run(() => sender.Send("Invitation link HSM", link));
         //}
 
+        /// <summary>Update which sensor groups agents under this product should collect (#1198).</summary>
+        [HttpPost]
+        [ProductRoleFilterBySensorGroups(nameof(request), ProductRoleEnum.ProductManager)]
+        public IActionResult UpdateSensorGroups([FromBody] SensorGroupsRequest request)
+        {
+            if (!_treeValuesCache.TryGetProduct(request.ProductId, out _))
+                return NotFound("Product not found.");
+
+            var result = _treeValuesCache.UpdateDisabledSensorGroups(request.ProductId, request.DisabledGroups ?? []);
+            return result.IsOk ? Ok() : StatusCode(500, result.Error);
+        }
+
         #endregion
 
         private Dictionary<string, string> GetUserFolders()

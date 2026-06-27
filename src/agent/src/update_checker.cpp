@@ -32,11 +32,22 @@
 #include <string>
 #include <vector>
 
-// LogLevel values mirror hsm::collector::LogLevel (info=2, error=4) without pulling in the
-// collector header from this platform-specific translation unit.
-static constexpr int kLogInfo = 2;
-static constexpr int kLogWarn = 3;
-static constexpr int kLogError = 4;
+// These MUST match hsm::collector::LogLevel (HSM_LOG_LEVEL_*): Debug=0, Info=1, Error=2. The level
+// int is cast straight to that enum in AgentRuntime, so a wrong value mislabels the line. (Bug: Info
+// was 2 == Error, so benign "already up to date" update messages were emitted as errors, written to
+// the Windows Event Log, and surfaced by the "Windows Error Logs" sensor.) There is no Warn level —
+// non-fatal update-check hiccups log as Info, not Error.
+static constexpr int kLogInfo = 1;
+static constexpr int kLogWarn = 1;
+static constexpr int kLogError = 2;
+
+// Minimum interval between DIRECTIVE-driven update checks. The server re-sends update-available on
+// every data POST while a newer build is staged, so without this a persistently-failing update
+// (download error / hash mismatch) would re-attempt the version GET + full exe download on every
+// ~15 s batch. A trigger within this window of the last attempt is ignored; the scheduled poll is
+// unaffected. The first trigger after a quiet period (the normal "new version staged" case) is not
+// debounced, so live staging still applies promptly.
+static constexpr unsigned long long kMinDirectiveCheckIntervalMs = 60000; // 60 s
 
 namespace hsm::agent
 {
@@ -381,7 +392,8 @@ namespace hsm::agent
     UpdateChecker::UpdateChecker(const AgentConfig& config, LogFn log, std::function<void()> request_stop)
         : config_(config), log_(std::move(log)), request_stop_(std::move(request_stop))
     {
-        stop_event_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        stop_event_  = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        check_event_ = CreateEventW(nullptr, TRUE, FALSE, nullptr); // manual-reset, wakes for TriggerCheck
     }
 
     UpdateChecker::~UpdateChecker()
@@ -389,6 +401,8 @@ namespace hsm::agent
         Stop();
         if (stop_event_)
             CloseHandle(static_cast<HANDLE>(stop_event_));
+        if (check_event_)
+            CloseHandle(static_cast<HANDLE>(check_event_));
     }
 
     void UpdateChecker::Start()
@@ -398,6 +412,7 @@ namespace hsm::agent
         if (stop_event_ == nullptr)
             return;
         ResetEvent(static_cast<HANDLE>(stop_event_));
+        ResetEvent(static_cast<HANDLE>(check_event_));
         thread_handle_ = CreateThread(nullptr, 0, UpdateThreadProc, this, 0, nullptr);
     }
 
@@ -413,24 +428,48 @@ namespace hsm::agent
         }
     }
 
+    void UpdateChecker::TriggerCheck()
+    {
+        if (check_event_)
+            SetEvent(static_cast<HANDLE>(check_event_));
+    }
+
     void UpdateChecker::Run()
     {
         if (!config_.update_enabled)
             return;
 
         const DWORD period_ms = static_cast<DWORD>(config_.update_check_period_hours) * 3600000UL;
-        HANDLE ev = static_cast<HANDLE>(stop_event_);
+        HANDLE handles[2] = {
+            static_cast<HANDLE>(stop_event_),
+            static_cast<HANDLE>(check_event_),
+        };
 
         // Check immediately on startup — restarting the Windows service is the admin's "check now"
         // gesture; no need to wait the full period to pick up a freshly staged binary.
+        ULONGLONG last_check_ticks = GetTickCount64();
         if (CheckAndUpdate())
             return; // update triggered — the service will be restarted by --apply-update
 
         while (true)
         {
-            if (WaitForSingleObject(ev, period_ms) == WAIT_OBJECT_0)
-                return;
+            const DWORD result = WaitForMultipleObjects(2, handles, FALSE, period_ms);
+            if (result == WAIT_OBJECT_0)
+                return; // stop_event_ fired — service is shutting down
 
+            // WAIT_OBJECT_0 + 1: TriggerCheck() was called (directive from server).
+            // WAIT_TIMEOUT: scheduled period elapsed.
+            const bool directive = (result == WAIT_OBJECT_0 + 1);
+            if (directive)
+                ResetEvent(static_cast<HANDLE>(check_event_));
+
+            // Debounce directive-driven checks so a persistently-failing update doesn't re-download on
+            // every ~15 s batch (see kMinDirectiveCheckIntervalMs). Scheduled (timeout) checks always run.
+            const ULONGLONG now = GetTickCount64();
+            if (directive && (now - last_check_ticks) < kMinDirectiveCheckIntervalMs)
+                continue;
+
+            last_check_ticks = now;
             if (CheckAndUpdate())
                 return;
         }

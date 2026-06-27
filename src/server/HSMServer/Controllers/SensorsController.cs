@@ -16,6 +16,7 @@ using HSMServer.ApiObjectsConverters;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model.Requests;
+using HSMServer.ServerConfiguration;
 using HSMServer.Extensions;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
@@ -23,6 +24,7 @@ using HSMServer.ModelBinders;
 using HSMServer.ObsoleteUnitedSensorValue;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using HSMSensorDataObjects.SensorRequests;
@@ -42,19 +44,26 @@ namespace HSMServer.Controllers
 
         private static readonly TaskResult _invalidRequestResult = TaskResult.FromError(InvalidRequest);
 
+        private const string DirectiveHeader = "X-Hsm-Directive";
+        private const string AgentVersionHeader = "X-Agent-Version";
+        private static readonly string[] _knownSensorGroups = ["computer", "system", "disk", "network", "module", "process"];
+
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly DataCollectorWrapper _collector;
         private readonly TelemetryCollector _telemetry;
-
         private readonly ITreeValuesCache _cache;
+        private readonly IWebHostEnvironment _environment;
+        private readonly IServerConfig _config;
 
 
-        public SensorsController(DataCollectorWrapper dataCollector, ITreeValuesCache cache, TelemetryCollector telemetry)
+        public SensorsController(DataCollectorWrapper dataCollector, ITreeValuesCache cache,
+            TelemetryCollector telemetry, IWebHostEnvironment environment, IServerConfig config)
         {
             _telemetry = telemetry;
-
             _collector = dataCollector;
             _cache = cache;
+            _environment = environment;
+            _config = config;
         }
 
 
@@ -246,6 +255,11 @@ namespace HSMServer.Controllers
                     _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(values.Count);
                     _collector.WebRequestsSensors.Total.AddReceiveData(values.Count);
 
+                    // The agent sends data as batches to /list, so directives must ride this response
+                    // too — not only the typed single-value endpoints. Without this the agent never
+                    // sees update-available/sensor-* directives (its data path is /list).
+                    EmitAgentDirectives();
+
                     return Ok(response);
                 }
 
@@ -403,13 +417,88 @@ namespace HSMServer.Controllers
             {
                 var result = await TryBuildAndAddData(value);
 
-                return result.IsOk ? Ok(value) : StatusCode(406, result.Error);
+                if (!result.IsOk)
+                    return StatusCode(406, result.Error);
+
+                EmitAgentDirectives();
+                return Ok(value);
             }
             catch (Exception ex)
             {
                 _logger.Error("Failed to put data!", ex);
 
                 return BadRequest(value);
+            }
+        }
+
+        private void EmitAgentDirectives()
+        {
+            // Phase 1: update-available — only when X-Agent-Version request header is present and
+            // the server has a newer binary staged in wwwroot/agent/.
+            // NOTE: agent/staged versions are plain numeric "x.y.z"; a semver pre-release/build suffix
+            // would fail Version.TryParse and silently skip the directive (acceptable by contract).
+            var agentVersionHeader = Request.Headers[AgentVersionHeader].ToString();
+            if (_config.Agent.AutoUpdateEnabled
+                && !string.IsNullOrEmpty(agentVersionHeader)
+                && Version.TryParse(agentVersionHeader, out var agentVer)
+                && !string.IsNullOrEmpty(_environment?.WebRootPath))
+            {
+                var staged = ReadStagedVersion(_environment.WebRootPath);
+                if (Version.TryParse(staged, out var stagedVer) && stagedVer > agentVer)
+                    Response.Headers.Append(DirectiveHeader, $"update-available:{staged}");
+            }
+
+            // Phase 2: sensor-disable / sensor-enable — driven by per-product DisabledSensorGroups.
+            // Only for directive-aware agents (those that send X-Agent-Version); ordinary
+            // HSMDataCollector clients ignore these, so don't append six headers to their every POST.
+            if (string.IsNullOrEmpty(agentVersionHeader) || !HttpContext.TryGetPublicApiInfo(out var info))
+                return;
+
+            // Emit the FULL desired state (enable OR disable) for every known group, not just the
+            // disabled ones — otherwise re-enabling a group in the UI never reaches the agent: the
+            // server would simply stop sending the disable, leaving the agent's persisted config
+            // stuck disabled. The agent no-ops a directive whose state is unchanged, so the extra
+            // headers are cheap.
+            foreach (var group in _knownSensorGroups)
+            {
+                var verb = info.Product.DisabledSensorGroups.Contains(group) ? "sensor-disable" : "sensor-enable";
+                Response.Headers.Append(DirectiveHeader, $"{verb}:{group}");
+            }
+        }
+
+        private static string _stagedVersionCache = "0.0.0";
+        private static long _stagedVersionReadAtTicks; // DateTime.UtcNow.Ticks of last disk read; 0 = never
+        private static readonly object _stagedVersionLock = new();
+        private const long StagedVersionCacheTtlTicks = 15 * TimeSpan.TicksPerSecond;
+
+        // wwwroot/agent/version.txt is consulted on every data POST (the /list batch endpoint is the
+        // server's hottest path), but only changes when ops stage a new binary. Cache it with a short
+        // TTL so the hot path hits memory instead of synchronous disk I/O, while still picking up a
+        // newly staged version within the TTL window. Cache hits are lock-free.
+        private static string ReadStagedVersion(string webRootPath)
+        {
+            var nowTicks = DateTime.UtcNow.Ticks;
+            if (nowTicks - System.Threading.Interlocked.Read(ref _stagedVersionReadAtTicks) < StagedVersionCacheTtlTicks)
+                return _stagedVersionCache;
+
+            lock (_stagedVersionLock)
+            {
+                if (nowTicks - _stagedVersionReadAtTicks < StagedVersionCacheTtlTicks)
+                    return _stagedVersionCache; // another thread refreshed while we waited
+
+                try
+                {
+                    var path = System.IO.Path.Combine(webRootPath, "agent", "version.txt");
+                    var text = System.IO.File.ReadAllText(path).Trim();
+                    _stagedVersionCache = string.IsNullOrEmpty(text) ? "0.0.0" : text;
+                }
+                catch
+                {
+                    _stagedVersionCache = "0.0.0";
+                }
+
+                System.Threading.Interlocked.Exchange(ref _stagedVersionReadAtTicks, nowTicks);
+                return _stagedVersionCache;
             }
         }
 

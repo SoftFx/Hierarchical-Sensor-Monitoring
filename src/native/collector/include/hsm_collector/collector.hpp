@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <future>
 #include <memory>
 #include <string>
@@ -46,6 +47,16 @@ namespace hsm::collector
 
         std::int64_t exception_deduplicator_window_ms = 0; ///< [3600000]
         int max_deduplicated_messages = 0;                 ///< [1000]
+
+        // Server-directive channel (#1198). Each pair is injected as an HTTP request header into
+        // every sensor-data POST (e.g. {"X-Agent-Version", "0.5.1"} so the server can decide
+        // whether to return an update-available directive).
+        std::vector<std::pair<std::string, std::string>> extra_request_headers;
+
+        // Called on the send thread whenever the server returns an X-Hsm-Directive response
+        // header. First arg: verb ("update-available", "sensor-disable", …). Second arg: payload
+        // after the colon, or empty string when absent.
+        std::function<void(const std::string&, const std::string&)> on_server_directive;
     };
 
     /// Owning RAII handle to a native collector. Move-only. The destructor disposes and frees the
@@ -93,6 +104,24 @@ namespace hsm::collector
             const auto result = hsm_collector_create(&native, &handle_);
             if (result != HSM_RESULT_OK)
                 throw Error(std::string{ "Failed to create collector. (" } + detail::ResultName(result) + ")");
+
+            for (const auto& [name, value] : options.extra_request_headers)
+                Check(hsm_collector_set_extra_request_header(handle_, name.c_str(), value.c_str()),
+                      "Failed to set extra request header.");
+
+            if (options.on_server_directive)
+            {
+                auto holder = std::make_unique<std::function<void(const std::string&, const std::string&)>>(options.on_server_directive);
+                Check(hsm_collector_set_server_directive_handler(
+                          handle_,
+                          [](const char* verb, const char* payload, void* ud) {
+                              auto* fn = static_cast<std::function<void(const std::string&, const std::string&)>*>(ud);
+                              (*fn)(std::string{ verb }, std::string{ payload });
+                          },
+                          holder.get()),
+                      "Failed to set server directive handler.");
+                directive_holders_.push_back(std::move(holder));
+            }
         }
 
         Collector(const Collector&) = delete;
@@ -543,6 +572,15 @@ namespace hsm::collector
                 "Failed to add module sensors.");
         }
 
+        // Make ".module/Collector version" report this version instead of the compile-time library
+        // version. Call before AddAllModuleSensors. Used by the agent so the collector version tracks
+        // the agent build (#1189 follow-up).
+        void SetCollectorVersionOverride(const std::string& version)
+        {
+            Check(hsm_collector_set_collector_version_override(handle_, version.c_str()),
+                  "Failed to set collector version override.");
+        }
+
         void AddProcessMonitoringSensors()
         {
             Check(hsm_collector_add_process_monitoring_sensors(handle_), "Failed to add process sensors.");
@@ -678,5 +716,7 @@ namespace hsm::collector
         std::vector<std::unique_ptr<MetricSourceFactory>> metric_factories_;
         std::vector<std::unique_ptr<IntFunction>> int_functions_;
         std::vector<std::unique_ptr<IntValuesFunction>> int_values_functions_;
+        // Keeps on_server_directive closures alive after they are handed to the C ABI.
+        std::vector<std::unique_ptr<std::function<void(const std::string&, const std::string&)>>> directive_holders_;
     };
 } // namespace hsm::collector

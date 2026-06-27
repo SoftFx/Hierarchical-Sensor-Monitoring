@@ -19,6 +19,13 @@ extern "C"
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
+/* Collector PRODUCT version — the value reported as ".module/Collector version". This is the
+   HSMDataCollector product line and is DISTINCT from the C ABI version above (and from any host
+   application's own version). Keep it in sync with the managed collector's version
+   (src/collector/HSMDataCollector/HSMDataCollector.csproj <Version>) so the native port and the
+   C# collector report the same product version. */
+#define HSM_COLLECTOR_PRODUCT_VERSION "3.4.12"
+
 typedef struct hsm_collector_t hsm_collector_t;
 typedef struct hsm_sensor_t hsm_sensor_t;
 
@@ -424,6 +431,10 @@ typedef enum hsm_default_sensor_t HSM_ENUM_INT32
     HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED = 50,
     HSM_DEFAULT_NETWORK_CONNECTION_FAILURES = 51,
     HSM_DEFAULT_NETWORK_CONNECTIONS_RESET = 52,
+    /* Per-interface network speed (.computer/Network/{iface}/..., DoubleBar, MB/sec, 1 min, TTL 5 min).
+       interface_name in params substitutes the {iface} segment; NULL => "Ethernet". */
+    HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC = 53,
+    HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC = 54,
     /* Module info (.module/...). */
     HSM_DEFAULT_COLLECTOR_ALIVE = 60,
     HSM_DEFAULT_COLLECTOR_VERSION = 61,
@@ -446,6 +457,7 @@ typedef struct hsm_default_sensor_params_t
 {
     const char* process_name;    /* "Process <name>" category; NULL => "process" */
     const char* disk_letter;     /* the {letter} in a disk sensor name; NULL => "C" */
+    const char* interface_name;  /* the {iface} in a per-interface network sensor name; NULL => "Ethernet" */
     const char* service_name;    /* RESERVED (not yet honored): service-status resolution */
     int is_host_service;         /* RESERVED (not yet honored): service-status registers under .module
                                     regardless — non-host placement lands with the live readers */
@@ -792,6 +804,36 @@ void hsm_collector_set_send_fail_next(hsm_collector_t* collector, int32_t count)
    collector shutdown must never block the host's restart. */
 void hsm_collector_set_send_hang(hsm_collector_t* collector, bool hang);
 
+/* Server-directive channel (#1198). Extra headers are injected into every sensor-data HTTP
+   POST. The agent uses this to send X-Agent-Version so the server can emit directives
+   conditionally. Multiple calls append multiple headers. Call before Start(). */
+hsm_result_t hsm_collector_set_extra_request_header(
+    hsm_collector_t* collector,
+    const char* name,
+    const char* value);
+
+/* Override the ".module/Collector version" value (#1189 follow-up). By default that sensor reports
+   the compile-time HSM_COLLECTOR_VERSION_* library version; a host that embeds the collector (e.g.
+   the agent) can set its own build version here so the reported collector version tracks each
+   deploy. Call before AddAllModuleSensors / Start. Empty or unset keeps the library default. */
+hsm_result_t hsm_collector_set_collector_version_override(
+    hsm_collector_t* collector,
+    const char* version);
+
+/* Server-directive callback. Called on the worker thread for every X-Hsm-Directive header in
+   a successful data-POST response. `verb` is the directive name (e.g. "update-available");
+   `payload` is the colon-separated argument (e.g. "0.5.2") or an empty string when absent.
+   `user_data` must outlive the collector. NULL callback clears the handler. */
+typedef void (*hsm_server_directive_callback_t)(
+    const char* verb,
+    const char* payload,
+    void* user_data);
+
+hsm_result_t hsm_collector_set_server_directive_handler(
+    hsm_collector_t* collector,
+    hsm_server_directive_callback_t callback,
+    void* user_data);
+
 size_t hsm_collector_sent_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_sent_json(const hsm_collector_t* collector, size_t index, const char** out_json);
 
@@ -810,6 +852,16 @@ hsm_result_t hsm_collector_enable_top_cpu_sensors(
     hsm_collector_t* collector,
     int32_t count,
     double min_percent,
+    int32_t period_ms);
+
+/* Enable per-interface network speed sensors (Windows only, #1189). Starts a background thread that
+   samples GetIfTable2 cumulative octet counters at intervals of `period_ms` milliseconds, computes
+   MB/sec deltas for every active (Up, non-loopback) interface, and posts DoubleBar sensors at
+   "Network/<interface-name>/{Received,Sent} MB/sec". Call BEFORE Start().
+   Returns HSM_RESULT_INVALID_ARGUMENT if period_ms <= 0.
+   Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
+hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
+    hsm_collector_t* collector,
     int32_t period_ms);
 
 #ifdef __cplusplus

@@ -103,12 +103,26 @@ endfunction()
 add_library(hsm_collector_core STATIC
     src/hsm_collector.cpp
     src/cpu_top.cpp                              # per-process CPU sampling (#1179; SelectTopN portable, WindowsCpuSampler #if _WIN32)
+    src/network_speed.cpp                        # per-interface network speed (#1189; WindowsNetworkSampler #if _WIN32)
+    src/windows_info.cpp                          # Windows OS-info readers (#1189 follow-up; ReadWindowsInfo #if _WIN32)
     src/platform/hsm_windows_metric_sources.cpp  # self-guarded #if _WIN32 (#1164)
 )
 
 # Windows live metric readers (#1164) link PDH (perf counters) + Win32.
+# Network speed uses GetIfTable2 from iphlpapi (#1189).
+# iphlpapi is PUBLIC: GetIfTable2/FreeMibTable are called from network_speed.cpp whose object
+# is pulled into the static lib; Conan/vcpkg consumers must link iphlpapi to resolve them.
+# pdh stays PRIVATE: it is only used when the live metric-source factory is active (no-op
+# default), so the pdh object files are not linked into typical consumers.
 if(WIN32)
+    target_link_libraries(hsm_collector_core PUBLIC iphlpapi)
     target_link_libraries(hsm_collector_core PRIVATE pdh)
+    # GetIfTable2 / MIB_IF_TABLE2 require NTDDI_VERSION >= Vista. Set Windows 10 target so
+    # all modern Win32 APIs are available without per-file version guard hacks.
+    target_compile_definitions(hsm_collector_core PRIVATE
+        _WIN32_WINNT=0x0A00
+        NTDDI_VERSION=0x0A000000
+    )
 endif()
 
 target_include_directories(hsm_collector_core
@@ -325,6 +339,7 @@ set(NATIVE_REGRESSION_TESTS
     native_default_sensor_group_composition
     native_module_version_sensors_emit_start_value
     native_module_version_skips_product_when_missing
+    native_collector_self_monitoring_emits
     native_metric_source_seam_lifecycle
     native_metric_source_drives_default_bar_sensor
     native_metric_source_drives_custom_double_sensor
@@ -360,6 +375,10 @@ if(WIN32)
     )
     add_test(NAME native_windows_process_metric_resolves_current_process
         COMMAND hsm_collector_tests native_windows_process_metric_resolves_current_process
+    )
+    # #1189 follow-up: host sensors must actually emit, not register empty.
+    add_test(NAME native_windows_info_sensors_emit_values
+        COMMAND hsm_collector_tests native_windows_info_sensors_emit_values
     )
 endif()
 
@@ -398,6 +417,7 @@ add_conformance_test(conformance_options_surface_contract options_surface_contra
 add_conformance_test(conformance_service_commands_contract service_commands_contract.hsmtest)
 add_conformance_test(conformance_default_sensors_contract default_sensors_contract.hsmtest)
 add_conformance_test(conformance_top_cpu_contract top_cpu_contract.hsmtest)
+add_conformance_test(conformance_network_speed_contract network_speed_contract.hsmtest)
 
 add_test(
     NAME native_default_sensors_wire_golden

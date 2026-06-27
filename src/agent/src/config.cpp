@@ -3,7 +3,9 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
+#include <system_error>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -613,5 +615,101 @@ namespace hsm::agent
         std::ostringstream buffer;
         buffer << stream.rdbuf();
         return ParseAgentConfig(buffer.str(), out, error);
+    }
+
+    bool WriteAgentConfig(const std::string& path, const AgentConfig& c, std::string& error)
+    {
+        // Emit minimal but complete config.json; every key present so a reader never hits a default
+        // that diverges from what was active when this config was written.
+        const auto b = [](bool v) -> const char* { return v ? "true" : "false"; };
+
+        // JSON-escape string values: a stray '"' or '\' (e.g. in a module name or access key) would
+        // otherwise emit invalid JSON. Since this write is immediately followed by a service restart,
+        // a malformed file would make the agent fail to parse its own config and not come back up.
+        const auto esc = [](const std::string& s) -> std::string {
+            std::string r;
+            r.reserve(s.size());
+            for (char ch : s)
+            {
+                switch (ch)
+                {
+                    case '"': r += "\\\""; break;
+                    case '\\': r += "\\\\"; break;
+                    case '\n': r += "\\n"; break;
+                    case '\r': r += "\\r"; break;
+                    case '\t': r += "\\t"; break;
+                    default: r += ch; break;
+                }
+            }
+            return r;
+        };
+
+        std::ostringstream out;
+        out << "{\n"
+            << "  \"server\": {\n"
+            << "    \"address\": \"" << esc(c.server_address) << "\",\n"
+            << "    \"port\": " << c.port << ",\n"
+            << "    \"accessKey\": \"" << esc(c.access_key) << "\",\n"
+            << "    \"allowUntrustedCertificate\": " << b(c.allow_untrusted_certificate) << "\n"
+            << "  },\n"
+            << "  \"identity\": {\n"
+            << "    \"computerName\": \"" << esc(c.computer_name) << "\",\n"
+            << "    \"module\": \"" << esc(c.module) << "\"\n"
+            << "  },\n"
+            << "  \"sensors\": {\n"
+            << "    \"computer\": " << b(c.sensors_computer) << ",\n"
+            << "    \"system\": " << b(c.sensors_system) << ",\n"
+            << "    \"disk\": " << b(c.sensors_disk) << ",\n"
+            << "    \"network\": " << b(c.sensors_network) << ",\n"
+            << "    \"module\": " << b(c.sensors_module) << ",\n"
+            << "    \"process\": " << b(c.sensors_process) << "\n"
+            << "  },\n"
+            << "  \"periods\": {\n"
+            << "    \"collectMs\": " << c.collect_period_ms << "\n"
+            << "  },\n"
+            << "  \"topCpu\": {\n"
+            << "    \"enabled\": " << b(c.top_cpu_enabled) << ",\n"
+            << "    \"periodMs\": " << c.top_cpu_period_ms << ",\n"
+            << "    \"minPercent\": " << c.top_cpu_min_percent << ",\n"
+            << "    \"count\": " << c.top_cpu_count << "\n"
+            << "  },\n"
+            << "  \"update\": {\n"
+            << "    \"enabled\": " << b(c.update_enabled) << ",\n"
+            << "    \"checkPeriodHours\": " << c.update_check_period_hours << "\n"
+            << "  },\n"
+            // productVersion MUST be mirrored here (the parser reads it): omitting it would reset an
+            // operator-set value to the default on the first directive-driven rewrite.
+            << "  \"productVersion\": \"" << esc(c.product_version) << "\"\n"
+            << "}\n";
+
+        // Atomic replace: write a temp file, flush/close it, then rename over the target. A crash or
+        // power loss mid-write then leaves only the temp file — the live config.json is never observed
+        // truncated/partial (which would brick the agent on its next parse).
+        const std::string tmp_path = path + ".tmp";
+        {
+            std::ofstream stream(tmp_path, std::ios::binary | std::ios::trunc);
+            if (!stream)
+            {
+                error = "cannot open config file for writing: " + tmp_path;
+                return false;
+            }
+            stream << out.str();
+            if (!stream)
+            {
+                error = "write error on config file: " + tmp_path;
+                return false;
+            }
+        } // close (flush) before rename
+
+        std::error_code ec;
+        std::filesystem::rename(tmp_path, path, ec);
+        if (ec)
+        {
+            std::error_code rm;
+            std::filesystem::remove(tmp_path, rm); // best-effort cleanup of the temp file
+            error = "cannot replace config file '" + path + "': " + ec.message();
+            return false;
+        }
+        return true;
     }
 } // namespace hsm::agent

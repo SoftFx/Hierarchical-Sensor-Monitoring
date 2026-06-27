@@ -1,6 +1,8 @@
 #include "hsm_collector/hsm_collector.h"
 
 #include "cpu_top.hpp"                             // per-process CPU sampling (#1179; _WIN32 only for WindowsCpuSampler)
+#include "network_speed.hpp"                       // per-interface network speed sampling (#1189; _WIN32 only for WindowsNetworkSampler)
+#include "windows_info.hpp"                        // Windows OS-info readers (#1189 follow-up; _WIN32 only for ReadWindowsInfo)
 #include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
 
 #include <algorithm>
@@ -1170,6 +1172,9 @@ namespace
         { HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED, "Network", "Connections Established Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Established TCP connections.", {} },
         { HSM_DEFAULT_NETWORK_CONNECTION_FAILURES, "Network", "Connection Failures Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, true, 0, false, 60000, "TCP connection failures.", {} },
         { HSM_DEFAULT_NETWORK_CONNECTIONS_RESET, "Network", "Connections Reset Count", HSM_SENSOR_TYPE_INT, false, true, -1, false, false, kKeepHistory90dMs, true, 0, false, 60000, "TCP connections reset.", {} },
+        // ---- Per-interface network speed (.computer/Network/{iface}/..., DoubleBar, MB,sec leaf, 1 min, KeepHistory 90 d, TTL 5 min) ----
+        { HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC, "Network", "{iface}/Received MB,sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average received network speed on interface.", {} },
+        { HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC, "Network", "{iface}/Sent MB,sec", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, kKeepHistory90dMs, false, 300000 /*TTL 5 min*/, false, 60000, "Average sent network speed on interface.", {} },
         // ---- Module info (.module/...) ----
         { HSM_DEFAULT_COLLECTOR_ALIVE, "", "Service alive", HSM_SENSOR_TYPE_BOOLEAN, false, false, -1, false, true, kKeepHistory180dMs, false, 0, false, 15000, "DataCollector heartbeat.", { DefaultAlertKind::ServiceAliveTtl, HSM_ALERT_PROP_VALUE, HSM_ALERT_OP_EQUAL, nullptr, "[$product]$path" } },
         { HSM_DEFAULT_COLLECTOR_VERSION, "", "Collector version", HSM_SENSOR_TYPE_VERSION, false, false, -1, false, false, kKeepHistory1826dMs, true, 0, false, 15000, "DataCollector version and start time.", {} },
@@ -1191,18 +1196,29 @@ namespace
         return nullptr;
     }
 
-    // Substitute "{letter}" in a per-disk sensor name (default "C", matching the managed
-    // DriveInfo("C:\\").Name[0]); a non-disk name is returned unchanged.
-    std::string ResolveDefaultSensorName(const DefaultSensorDef& def, const char* disk_letter)
+    // Substitute "{letter}" / "{iface}" in a per-disk / per-interface sensor name.
+    // Unknown names are returned unchanged.
+    std::string ResolveDefaultSensorName(
+        const DefaultSensorDef& def, const char* disk_letter, const char* interface_name = nullptr)
     {
         std::string name = def.name;
-        const std::string ph = "{letter}";
-        const auto pos = name.find(ph);
-        if (pos != std::string::npos)
+
+        const std::string letter_ph = "{letter}";
+        const auto letter_pos = name.find(letter_ph);
+        if (letter_pos != std::string::npos)
         {
             std::string letter = (disk_letter && *disk_letter) ? disk_letter : "C";
-            name.replace(pos, ph.size(), letter);
+            name.replace(letter_pos, letter_ph.size(), letter);
         }
+
+        const std::string iface_ph = "{iface}";
+        const auto iface_pos = name.find(iface_ph);
+        if (iface_pos != std::string::npos)
+        {
+            std::string iface = (interface_name && *interface_name) ? interface_name : "Ethernet";
+            name.replace(iface_pos, iface_ph.size(), iface);
+        }
+
         return name;
     }
 
@@ -2205,10 +2221,17 @@ namespace
 
         ~NativeCollector()
         {
-            // Terminal teardown (destroy without an explicit dispose/stop): only the
-            // threads are reclaimed — there is no observable place left to drain into.
-            // Idempotent with Dispose() via the joinable() guards.
+            // Terminal teardown (destroy without an explicit dispose/stop): reclaim ALL worker
+            // threads — there is no observable place left to drain into. Every Stop* is idempotent
+            // via its joinable()/stop-flag guard, so this is safe whether or not Dispose() ran. The
+            // samplers MUST be joined here too: a still-running thread (e.g. the self-monitor, which
+            // starts on the module/queue groups) left joinable would make its std::thread member's
+            // destructor call std::terminate.
             StopScheduler();
+            StopTopCpuSampler();
+            StopNetworkSpeedSampler();
+            StopWindowsInfoSampler();
+            StopSelfMonitor();
             StopWorker();
         }
 
@@ -2287,6 +2310,9 @@ namespace
             StartWorker();
             StartScheduler();
             StartTopCpuSampler();
+            StartNetworkSpeedSampler();
+            StartWindowsInfoSampler();
+            StartSelfMonitor();
 
             // Drain the one-shot Start values (e.g. product/collector version) now the worker is up.
             for (auto& json : start_values)
@@ -2340,6 +2366,9 @@ namespace
             // preserve data at stop).
             StopScheduler();
             StopTopCpuSampler();
+            StopNetworkSpeedSampler();
+            StopWindowsInfoSampler();
+            StopSelfMonitor();
 
             // Dispose bound metric sources now the scheduler has stopped reading them (managed
             // dispose-on-stop; #1164). A restart rebinds via the factory.
@@ -2738,8 +2767,9 @@ namespace
 
             const char* process_name = params != nullptr ? params->process_name : nullptr;
             const char* disk_letter = params != nullptr ? params->disk_letter : nullptr;
+            const char* interface_name = params != nullptr ? params->interface_name : nullptr;
 
-            const std::string name = ResolveDefaultSensorName(*def, disk_letter);
+            const std::string name = ResolveDefaultSensorName(*def, disk_letter, interface_name);
             const std::string category = ResolveDefaultCategory(*def, process_name);
             RegistrationOptions registration = BuildDefaultRegistration(*def, name);
             const std::string prototype_path = RevealDefaultPath(category, name, def->is_computer);
@@ -2954,6 +2984,24 @@ namespace
             hang_cv_.notify_all();
         }
 
+        void AddExtraRequestHeader(std::string name, std::string value)
+        {
+            extra_request_headers_.push_back({ std::move(name), std::move(value) });
+        }
+
+        // Optional host override for the reported ".module/Collector version". Empty (default) ->
+        // HSM_COLLECTOR_PRODUCT_VERSION (the collector product line). A host must NOT set this to its
+        // own application version: collector and host (e.g. the agent) are distinct products with
+        // distinct version lines. Reserved for embedders that genuinely re-brand the collector build.
+        void SetCollectorVersionOverride(std::string version) { collector_version_override_ = std::move(version); }
+        const std::string& CollectorVersionOverride() const { return collector_version_override_; }
+
+        void SetServerDirectiveHandler(hsm_server_directive_callback_t callback, void* user_data)
+        {
+            directive_callback_ = callback;
+            directive_user_data_ = user_data;
+        }
+
         static std::string BuildValueJson(
             const std::string& path,
             hsm_sensor_type_t type,
@@ -3052,6 +3100,71 @@ namespace
             ClearError();
             return HSM_RESULT_OK;
 #endif
+        }
+
+        // --- Per-interface network speed sampling (#1189) ---
+
+        hsm_result_t EnableNetworkInterfaceSpeedSensors(int32_t period_ms)
+        {
+            if (period_ms <= 0)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+#ifndef _WIN32
+            (void)period_ms;
+            return SetError(HSM_RESULT_INVALID_STATE, "Network speed sensors are only supported on Windows.");
+#else
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (state_ != CollectorState::Stopped)
+                return SetError(HSM_RESULT_INVALID_STATE, "EnableNetworkInterfaceSpeedSensors must be called before Start.");
+
+            net_speed_enabled_ = true;
+            net_speed_period_ms_ = period_ms;
+            ClearError();
+            return HSM_RESULT_OK;
+#endif
+        }
+
+        // Enable the Windows OS-info sampler (#1189 follow-up). Must be called before Start.
+        hsm_result_t EnableWindowsInfoSensors(int32_t period_ms)
+        {
+            if (period_ms <= 0)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+#ifndef _WIN32
+            (void)period_ms;
+            return SetError(HSM_RESULT_INVALID_STATE, "Windows OS-info sensors are only supported on Windows.");
+#else
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (state_ != CollectorState::Stopped)
+                return SetError(HSM_RESULT_INVALID_STATE, "EnableWindowsInfoSensors must be called before Start.");
+
+            win_info_enabled_ = true;
+            win_info_period_ms_ = period_ms;
+            ClearError();
+            return HSM_RESULT_OK;
+#endif
+        }
+
+        // Capture the registered ".module/Service alive" handle and arm the heartbeat (#1198 follow-up):
+        // its value was never posted, so the sensor sat registered-but-empty. Idempotent re-registration
+        // returns the handle the collector group already created.
+        void CaptureCollectorMonitoringHandles()
+        {
+            hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
+            if (AddDefaultSensor(HSM_DEFAULT_COLLECTOR_ALIVE, &params, service_alive_sensor_) == HSM_RESULT_OK)
+                collector_monitoring_enabled_ = true;
+        }
+
+        // Capture the ".module/Collector queue stats" handles so the dispatch path + heartbeat thread
+        // post live values instead of leaving the whole category registered-but-empty.
+        void CaptureQueueDiagnosticHandles()
+        {
+            hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_OVERFLOW, &params, queue_overflow_sensor_);
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT, &params, queue_items_sensor_);
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME, &params, queue_time_sensor_);
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, &params, queue_size_sensor_);
+            queue_diagnostics_enabled_ = true;
         }
 
     private:
@@ -3247,8 +3360,13 @@ namespace
             // This is the ONLY place a value is dropped: the (large) buffer is full. Monitoring
             // history keeps every value until then; on overflow the oldest is evicted first
             // (position-based FIFO, newest value kept) — same policy as the C# QueueProcessorBase.
+            // Count evictions for the ".module/Collector queue stats/Queue overflow" sensor (posted
+            // by the self-monitor thread; counting here keeps the hot path lock-free of sensor posts).
             while (queue_.size() > static_cast<size_t>(max_queue_size_))
+            {
                 queue_.pop_front();
+                queue_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+            }
         }
 
         // Retry re-enqueue (caller holds queue_mutex_). A failed package rotates to the TAIL and is
@@ -3289,6 +3407,311 @@ namespace
             top_cpu_cv_.notify_all();
             if (top_cpu_thread_.joinable())
                 top_cpu_thread_.join();
+#endif
+        }
+
+        void StartNetworkSpeedSampler()
+        {
+#ifdef _WIN32
+            if (!net_speed_enabled_)
+                return;
+            {
+                std::lock_guard<std::mutex> guard(net_speed_cv_mutex_);
+                net_speed_stop_ = false;
+            }
+            net_speed_thread_ = std::thread([this] { RunNetworkSpeedLoop(); });
+#endif
+        }
+
+        void StopNetworkSpeedSampler()
+        {
+#ifdef _WIN32
+            {
+                std::lock_guard<std::mutex> guard(net_speed_cv_mutex_);
+                net_speed_stop_ = true;
+            }
+            net_speed_cv_.notify_all();
+            if (net_speed_thread_.joinable())
+                net_speed_thread_.join();
+#endif
+        }
+
+        // Per-package queue stats, posted from the dispatch send path's UNLOCKED window. Bars only
+        // aggregate (AccumulateBar) — they never enqueue or touch queue_mutex_ — so this is safe there.
+        void PostPackageStats(const std::vector<std::string>& batch, std::chrono::steady_clock::duration send_duration)
+        {
+            try
+            {
+                if (queue_items_sensor_)
+                    queue_items_sensor_->AddBarInt(static_cast<int32_t>(batch.size()));
+                if (queue_time_sensor_)
+                    queue_time_sensor_->AddBarDouble(std::chrono::duration<double>(send_duration).count());
+                if (queue_size_sensor_)
+                {
+                    std::size_t bytes = 0;
+                    for (const auto& json : batch)
+                        bytes += json.size();
+                    queue_size_sensor_->AddBarDouble(static_cast<double>(bytes) / (1024.0 * 1024.0));
+                }
+            }
+            catch (...)
+            {
+                // Runs on the dispatch/worker thread — a stats post must never escape it.
+            }
+        }
+
+        void StartSelfMonitor()
+        {
+            if (!collector_monitoring_enabled_ && !queue_diagnostics_enabled_)
+                return;
+            {
+                std::lock_guard<std::mutex> guard(self_monitor_cv_mutex_);
+                self_monitor_stop_ = false;
+            }
+            self_monitor_thread_ = std::thread([this] { RunSelfMonitorLoop(); });
+        }
+
+        void StopSelfMonitor()
+        {
+            {
+                std::lock_guard<std::mutex> guard(self_monitor_cv_mutex_);
+                self_monitor_stop_ = true;
+            }
+            self_monitor_cv_.notify_all();
+            if (self_monitor_thread_.joinable())
+                self_monitor_thread_.join();
+        }
+
+        // Heartbeat + queue-overflow delta on a dedicated thread (no queue_mutex_ held, so AddBool —
+        // which enqueues — is safe). Posts Service alive immediately on start, then every collect period.
+        void RunSelfMonitorLoop()
+        {
+            const auto period = std::chrono::milliseconds(collect_period_ms_);
+            while (true)
+            {
+                try
+                {
+                    if (service_alive_sensor_)
+                        service_alive_sensor_->AddBool(true, HSM_SENSOR_STATUS_OK, nullptr);
+
+                    // Overflow since the last tick — post only when non-zero so the bar isn't all-zeros.
+                    if (queue_overflow_sensor_)
+                    {
+                        const std::int64_t overflowed = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
+                        if (overflowed > 0)
+                            queue_overflow_sensor_->AddBarInt(static_cast<int32_t>(std::min<std::int64_t>(overflowed, INT32_MAX)));
+                    }
+                }
+                catch (...)
+                {
+                    // A post must never let an exception escape this thread (-> std::terminate).
+                }
+
+                std::unique_lock<std::mutex> lock(self_monitor_cv_mutex_);
+                if (self_monitor_cv_.wait_for(lock, period, [this] { return self_monitor_stop_; }))
+                    return;
+            }
+        }
+
+        void RunNetworkSpeedLoop()
+        {
+#ifdef _WIN32
+            hsm::collector::WindowsNetworkSampler sampler;
+            std::map<std::string, std::shared_ptr<NativeSensor>> rx_cache;
+            std::map<std::string, std::shared_ptr<NativeSensor>> tx_cache;
+            const auto period = std::chrono::milliseconds(net_speed_period_ms_);
+
+            // Smallest MB/sec that does NOT round to 0 at the bar's display precision
+            // (kDefaultBarPrecision). Sub-threshold trickle (e.g. WSL/Hyper-V keepalives, a few
+            // bytes/interval) would post as 0.00 bars that read as "sending zeros", so treat it as
+            // no traffic. 0.5/10^2 = 0.005 MB/s (~5 KB/s) at precision 2.
+            double bar_scale = 1.0;
+            for (int p = 0; p < kDefaultBarPrecision; ++p)
+                bar_scale *= 10.0;
+            const double min_displayable = 0.5 / bar_scale;
+
+            sampler.Sample(); // seed baseline — first call returns empty map
+
+            while (true)
+            {
+                {
+                    std::unique_lock<std::mutex> lock(net_speed_cv_mutex_);
+                    if (net_speed_cv_.wait_for(lock, period, [this] { return net_speed_stop_; }))
+                        return;
+                }
+
+                try
+                {
+                    const auto speeds = sampler.Sample();
+
+                    // Create + post one direction's bar lazily, and ONLY when it carries enough
+                    // traffic to show as non-zero (>= min_displayable) this interval — a direction
+                    // with no meaningful data never spawns a zero/always-zero sensor. Leaf uses
+                    // "MB,sec" (not "MB/sec") so the unit isn't split into an extra tree node.
+                    auto post_direction = [&](std::map<std::string, std::shared_ptr<NativeSensor>>& cache,
+                                              const std::string& iface, const std::string& leaf,
+                                              const std::string& descr, double value) {
+                        if (value < min_displayable)
+                            return;
+
+                        auto it = cache.find(iface);
+                        if (it == cache.end())
+                        {
+                            RegistrationOptions opts;
+                            opts.unit = 2103; // MBytes_sec
+                            opts.has_statistics = true;
+                            opts.statistics = 1;           // EMA
+                            opts.has_display_unit = false; // bar → null on wire
+                            opts.has_keep_history = true;
+                            opts.keep_history_ms = kKeepHistory90dMs;
+                            opts.ttl_ms = 300000; // 5 min
+                            opts.has_description = true;
+                            opts.description = descr + " network speed on interface **" + iface + "**.";
+                            opts.has_alerts_list = true;
+                            opts.enable_grafana = TriBool::True;
+                            opts.is_computer_sensor = true;
+
+                            std::shared_ptr<NativeSensor> sensor;
+                            const std::string path = "Network/" + iface + "/" + leaf;
+                            if (CreateDefaultBarSensor(path, HSM_SENSOR_TYPE_DOUBLE_BAR, 60000, kDefaultBarPrecision, opts, sensor) != HSM_RESULT_OK)
+                                return;
+
+                            it = cache.emplace(iface, sensor).first;
+#if defined(HSM_COLLECTOR_HTTP)
+                            if (send_wire_)
+                                PostRegistrationsWire({ sensor });
+#endif
+                        }
+
+                        it->second->AddBarDouble(value);
+                    };
+
+                    for (const auto& [iface, speed] : speeds)
+                    {
+                        post_direction(rx_cache, iface, "Received MB,sec", "Average received", speed.rx_mb_per_sec);
+                        post_direction(tx_cache, iface, "Sent MB,sec", "Average sent", speed.tx_mb_per_sec);
+                    }
+                }
+                catch (...)
+                {
+                }
+            }
+#endif
+        }
+
+        void StartWindowsInfoSampler()
+        {
+#ifdef _WIN32
+            if (!win_info_enabled_)
+                return;
+            {
+                std::lock_guard<std::mutex> guard(win_info_cv_mutex_);
+                win_info_stop_ = false;
+            }
+            win_info_thread_ = std::thread([this] { RunWindowsInfoLoop(); });
+#endif
+        }
+
+        void StopWindowsInfoSampler()
+        {
+#ifdef _WIN32
+            {
+                std::lock_guard<std::mutex> guard(win_info_cv_mutex_);
+                win_info_stop_ = true;
+            }
+            win_info_cv_.notify_all();
+            if (win_info_thread_.joinable())
+                win_info_thread_.join();
+#endif
+        }
+
+        void RunWindowsInfoLoop()
+        {
+#ifdef _WIN32
+            // Handles for the already-registered "Windows OS info" sensors; AddDefaultSensor is
+            // idempotent and returns the existing handle. These typed (TimeSpan/Version) sensors
+            // cannot ride the double-only metric path, so this thread posts their values directly.
+            std::shared_ptr<NativeSensor> last_restart, install_date, win_version, last_update;
+            std::shared_ptr<NativeSensor> app_error, sys_error, app_warning, sys_warning;
+            hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_LAST_RESTART, &params, last_restart);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_INSTALL_DATE, &params, install_date);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_VERSION, &params, win_version);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_LAST_UPDATE, &params, last_update);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_APPLICATION_ERROR_LOGS, &params, app_error);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_SYSTEM_ERROR_LOGS, &params, sys_error);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_APPLICATION_WARNING_LOGS, &params, app_warning);
+            AddDefaultSensor(HSM_DEFAULT_WINDOWS_SYSTEM_WARNING_LOGS, &params, sys_warning);
+
+            hsm::collector::WindowsEventLogReader event_reader;
+            const auto period = std::chrono::milliseconds(win_info_period_ms_);
+
+            while (true)
+            {
+                try
+                {
+                    const auto info = hsm::collector::ReadWindowsInfo();
+
+                    if (last_restart && info.has_uptime)
+                        PostStartValue(last_restart->Path(), last_restart->Type(),
+                                       "\"" + EscapeJson(TimeSpanCFormat(info.uptime_ticks)) + "\"",
+                                       HSM_SENSOR_STATUS_OK, std::string{});
+
+                    if (install_date && info.has_install_age)
+                        PostStartValue(install_date->Path(), install_date->Type(),
+                                       "\"" + EscapeJson(TimeSpanCFormat(info.install_age_ticks)) + "\"",
+                                       HSM_SENSOR_STATUS_OK, std::string{});
+
+                    if (win_version && info.has_version)
+                        // Major.Minor.Build only (revision = -1 drops it) — matches managed
+                        // RegistryInfo.GetCurrentWindowsFullBuildVersion() (new Version(maj, min, build),
+                        // no UBR). UBR stays available in info.ver_ubr if ever needed in the comment.
+                        PostStartValue(win_version->Path(), win_version->Type(),
+                                       "\"" + EscapeJson(VersionString(info.ver_major, info.ver_minor, info.ver_build, -1)) + "\"",
+                                       HSM_SENSOR_STATUS_OK, info.version_comment);
+
+                    if (last_update && info.has_last_update_age)
+                        PostStartValue(last_update->Path(), last_update->Type(),
+                                       "\"" + EscapeJson(TimeSpanCFormat(info.last_update_age_ticks)) + "\"",
+                                       HSM_SENSOR_STATUS_OK, std::string{});
+
+                    // Event logs: one String value per new Error/Warning entry (Value=eventId,
+                    // comment=source+message), mirroring the managed event-driven sensor.
+                    for (const auto& rec : event_reader.PollNew())
+                    {
+                        std::shared_ptr<NativeSensor> target;
+                        switch (rec.kind)
+                        {
+                        case hsm::collector::EventLogKind::ApplicationError:
+                            target = app_error;
+                            break;
+                        case hsm::collector::EventLogKind::SystemError:
+                            target = sys_error;
+                            break;
+                        case hsm::collector::EventLogKind::ApplicationWarning:
+                            target = app_warning;
+                            break;
+                        case hsm::collector::EventLogKind::SystemWarning:
+                            target = sys_warning;
+                            break;
+                        }
+                        if (target)
+                            PostStartValue(target->Path(), target->Type(),
+                                           "\"" + EscapeJson(rec.event_id) + "\"",
+                                           HSM_SENSOR_STATUS_OK,
+                                           "Source: " + rec.source + ". Message: " + rec.message);
+                    }
+                }
+                catch (...)
+                {
+                }
+
+                {
+                    std::unique_lock<std::mutex> lock(win_info_cv_mutex_);
+                    if (win_info_cv_.wait_for(lock, period, [this] { return win_info_stop_; }))
+                        return;
+                }
+            }
 #endif
         }
 
@@ -3549,7 +3972,13 @@ namespace
                 }
 
                 lock.unlock();
+                const auto send_start = std::chrono::steady_clock::now();
                 const auto sent = TrySendBatch(batch);
+                // Per-package queue stats — only on a real send (not the stop-flush drop path), posted
+                // here in the UNLOCKED window: bars only aggregate, so there's no re-entrancy on
+                // queue_mutex_ and no enqueue from within dispatch.
+                if (sent && queue_diagnostics_enabled_ && !clear_remainder_on_failure)
+                    PostPackageStats(batch, std::chrono::steady_clock::now() - send_start);
                 lock.lock();
 
                 if (!sent)
@@ -3628,13 +4057,33 @@ namespace
             }
             body += "]";
 
-            const std::vector<hsm::http::HttpHeader> headers = {
+            std::vector<hsm::http::HttpHeader> headers = {
                 { "Key", access_key_ },
                 { "ClientName", client_name_ },
                 { "Content-Type", "application/json" },
             };
+            // Append extra headers set by the host (e.g. X-Agent-Version from the agent).
+            for (const auto& [hdr_name, hdr_value] : extra_request_headers_)
+                headers.push_back({ hdr_name, hdr_value });
 
             const auto response = http_transport_->Post(endpoints_.List(), body, headers);
+
+            // Dispatch any X-Hsm-Directive headers the server included in the response.
+            if (directive_callback_ != nullptr && response.IsSuccess())
+            {
+                for (const auto& h : response.response_headers)
+                {
+                    if (h.name == "x-hsm-directive")
+                    {
+                        const auto colon = h.value.find(':');
+                        if (colon != std::string::npos)
+                            directive_callback_(h.value.substr(0, colon).c_str(), h.value.substr(colon + 1).c_str(), directive_user_data_);
+                        else
+                            directive_callback_(h.value.c_str(), "", directive_user_data_);
+                    }
+                }
+            }
+
             return response.IsSuccess();
         }
 #endif
@@ -3673,10 +4122,38 @@ namespace
         std::thread worker_;
         std::atomic<int32_t> fail_next_{ 0 };
 
+        // Collector self-monitoring (#1198 follow-up): wires VALUES for the registered-but-empty
+        // ".module/Service alive" heartbeat and the ".module/Collector queue stats" sensors. Handles
+        // are captured when the groups are added. Service alive (a heartbeat) and the queue-overflow
+        // delta are posted by a dedicated thread; the per-package stats (items/time/size) are posted
+        // from the dispatch send path in its UNLOCKED window (bars only aggregate, never enqueue).
+        bool collector_monitoring_enabled_ = false;
+        bool queue_diagnostics_enabled_ = false;
+        std::shared_ptr<NativeSensor> service_alive_sensor_;
+        std::shared_ptr<NativeSensor> queue_overflow_sensor_;
+        std::shared_ptr<NativeSensor> queue_items_sensor_;
+        std::shared_ptr<NativeSensor> queue_time_sensor_;
+        std::shared_ptr<NativeSensor> queue_size_sensor_;
+        std::atomic<std::int64_t> queue_overflow_count_{ 0 };
+        std::thread self_monitor_thread_;
+        std::mutex self_monitor_cv_mutex_;
+        std::condition_variable self_monitor_cv_;
+        bool self_monitor_stop_ = false;
+
         std::mutex hang_mutex_;
         std::condition_variable hang_cv_;
         bool send_hang_ = false;
         bool send_cancelled_ = false;
+
+        // Extra HTTP request headers injected into every data POST (#1198 agent-directive channel).
+        // Set before Start; read only by the worker thread after Start — no lock needed.
+        // {name, value} pairs; kept http-free so this compiles in non-HTTP builds (converted to
+        // hsm::http::HttpHeader only in the HTTP-guarded send path).
+        std::vector<std::pair<std::string, std::string>> extra_request_headers_;
+        std::string collector_version_override_; // host-set; overrides HSM_COLLECTOR_VERSION_* for "Collector version"
+        // Server-directive callback: called when a data-POST response carries X-Hsm-Directive headers.
+        hsm_server_directive_callback_t directive_callback_ = nullptr;
+        void* directive_user_data_ = nullptr;
 
         // Send seam: TrySendBatch delegates here. Default records into sent_values_; the public HTTP
         // transport (UseHttpTransport) swaps in a libcurl POST (installed before Start, read only by
@@ -3748,6 +4225,23 @@ namespace
         std::mutex top_cpu_cv_mutex_;
         std::condition_variable top_cpu_cv_;
         bool top_cpu_stop_ = false;
+
+        // Per-interface network speed sampling (#1189): optional background thread, Windows-only.
+        bool net_speed_enabled_ = false;
+        int32_t net_speed_period_ms_ = 0;
+        std::thread net_speed_thread_;
+        std::mutex net_speed_cv_mutex_;
+        std::condition_variable net_speed_cv_;
+        bool net_speed_stop_ = false;
+
+        // Windows OS-info sampler (#1189 follow-up): a thread that periodically reads + posts the
+        // typed "Windows OS info" sensors (TimeSpan/Version), which the double-only metric path can't.
+        bool win_info_enabled_ = false;
+        int32_t win_info_period_ms_ = 0;
+        std::thread win_info_thread_;
+        std::mutex win_info_cv_mutex_;
+        std::condition_variable win_info_cv_;
+        bool win_info_stop_ = false;
 #endif
     };
 
@@ -5190,6 +5684,35 @@ void hsm_collector_set_send_hang(hsm_collector_t* collector, bool hang)
         collector->impl->SetSendHang(hang);
 }
 
+// ---- Agent-directive channel (#1198) -------------------------------------------------------
+
+hsm_result_t hsm_collector_set_extra_request_header(hsm_collector_t* collector, const char* name, const char* value)
+{
+    if (collector == nullptr || name == nullptr || value == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+    collector->impl->AddExtraRequestHeader(name, value);
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_collector_set_collector_version_override(hsm_collector_t* collector, const char* version)
+{
+    if (collector == nullptr || version == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+    collector->impl->SetCollectorVersionOverride(version);
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_collector_set_server_directive_handler(
+    hsm_collector_t* collector,
+    hsm_server_directive_callback_t callback,
+    void* user_data)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+    collector->impl->SetServerDirectiveHandler(callback, user_data);
+    return HSM_RESULT_OK;
+}
+
 size_t hsm_collector_sent_count(const hsm_collector_t* collector)
 {
     if (collector == nullptr)
@@ -5486,6 +6009,7 @@ hsm_default_sensor_params_t hsm_default_sensor_params_default(void)
     hsm_default_sensor_params_t params{};
     params.process_name = nullptr;
     params.disk_letter = nullptr;
+    params.interface_name = nullptr;
     params.service_name = nullptr;
     params.is_host_service = 1;
     params.product_version = nullptr;
@@ -5673,10 +6197,19 @@ hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* col
         std::shared_ptr<NativeSensor> collector_version;
         if (collector->impl->AddDefaultSensor(HSM_DEFAULT_COLLECTOR_VERSION, &params, collector_version) == HSM_RESULT_OK)
         {
-            const std::string version = std::to_string(HSM_COLLECTOR_VERSION_MAJOR) + "." +
-                                        std::to_string(HSM_COLLECTOR_VERSION_MINOR) + "." + std::to_string(HSM_COLLECTOR_VERSION_PATCH);
+            // Report the collector PRODUCT version (HSMDataCollector line), NOT the C ABI version
+            // and NOT the host application's version — collector and host (e.g. the agent) are
+            // distinct products. An explicit host override still wins if set.
+            const std::string& override_ver = collector->impl->CollectorVersionOverride();
+            const std::string version = override_ver.empty()
+                                            ? std::string(HSM_COLLECTOR_PRODUCT_VERSION)
+                                            : override_ver;
             EmitVersionStartValue(collector->impl.get(), collector_version, version.c_str());
         }
+
+        // Wire the Service alive heartbeat — the group registered it above but its value was never
+        // posted (registered-but-empty); the self-monitor thread now posts it.
+        collector->impl->CaptureCollectorMonitoringHandles();
     }
 
     return result;
@@ -5684,7 +6217,14 @@ hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* col
 
 hsm_result_t hsm_collector_add_all_queue_diagnostic_sensors(hsm_collector_t* collector)
 {
-    return collector != nullptr ? AddGroup(collector, kQueueGroup) : HSM_RESULT_INVALID_ARGUMENT;
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const hsm_result_t result = AddGroup(collector, kQueueGroup);
+    if (result == HSM_RESULT_OK)
+        collector->impl->CaptureQueueDiagnosticHandles(); // wire the queue-stat values (were empty)
+
+    return result;
 }
 
 hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector)
@@ -5700,10 +6240,14 @@ hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector)
     if (result == HSM_RESULT_OK)
         result = hsm_collector_add_all_network_sensors(collector);
 #ifdef _WIN32
-    // Best-effort: top-CPU requires pre-Start setup; ignore the error when called after
-    // Start (e.g. from a test that starts first, then adds sensors).
+    // Best-effort: top-CPU and network speed require pre-Start setup; ignore errors when called
+    // after Start (e.g. from a test that starts first, then adds sensors).
     if (result == HSM_RESULT_OK)
         hsm_collector_enable_top_cpu_sensors(collector, 10, 1.0, 60000);
+    if (result == HSM_RESULT_OK)
+        hsm_collector_enable_network_interface_speed_sensors(collector, 10000); // 10 s sample period
+    if (result == HSM_RESULT_OK)
+        collector->impl->EnableWindowsInfoSensors(60000); // Windows OS-info refresh: 60 s
 #endif
     return result;
 }
@@ -5752,6 +6296,16 @@ hsm_result_t hsm_collector_enable_top_cpu_sensors(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return collector->impl->EnableTopCpuSensors(count, min_percent, period_ms);
+}
+
+hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
+    hsm_collector_t* collector,
+    int32_t period_ms)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->EnableNetworkInterfaceSpeedSensors(period_ms);
 }
 
 hsm_result_t hsm_collector_set_metric_source_factory(

@@ -77,6 +77,9 @@ class HsmCollectorConan(ConanFile):
             # components, so propagate it to consumers explicitly (the in-tree/vcpkg CMake export does
             # this automatically as a static-lib LINK_ONLY dependency).
             core.system_libs.append("pdh")
+            # Network speed sampler (#1189) calls GetIfTable2/FreeMibTable from iphlpapi; consumers
+            # of the static lib must link it at their own link step.
+            core.system_libs.append("iphlpapi")
         if self.options.http:
             core.requires.append("libcurl::libcurl")
 

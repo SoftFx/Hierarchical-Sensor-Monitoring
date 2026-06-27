@@ -1,0 +1,50 @@
+# HSM collector conformance v1 — per-interface network speed monitoring (#1189).
+# New verbs:
+#   enable_network_interface_speed_sensors|period_ms
+#     configure per-interface MB,sec sampling; must be called before start.
+#     Windows-only; both drivers are no-ops on other platforms so the fixture
+#     parses cross-platform without an unsupported marker.
+#     period_ms — sampling interval in milliseconds
+#
+#   add_default_sensor|network_interface_received||<iface>
+#   add_default_sensor|network_interface_sent||<iface>
+#     Register the DoubleBar catalog prototype for the named interface
+#     (step[2]=disk_letter is empty; step[3]=interface_name).
+#     Path: .computer/Network/<iface>/{Received,Sent} MB,sec (suffix-checked).
+#
+# Notes:
+#   - Data posting is OS-sourced (real NIC counters); live assertions go through
+#     the integration path, not here.
+#   - Registration path is asserted by SUFFIX: native prepends computer+module prefix.
+
+# The API call is accepted before start; lifecycle completes normally.
+network_speed_is_accepted_before_start|create_collector
+network_speed_is_accepted_before_start|enable_network_interface_speed_sensors|10000
+network_speed_is_accepted_before_start|start
+network_speed_is_accepted_before_start|stop
+
+# Catalog prototype registration: DoubleBar, MBytes_sec (2103), EMA, TTL 5 min, KeepHistory 90 d.
+# Uses "Ethernet" as the deterministic fixture interface name.
+network_interface_received_registers|create_collector
+network_interface_received_registers|add_default_sensor|network_interface_received||Ethernet
+network_interface_received_registers|start
+network_interface_received_registers|stop
+network_interface_received_registers|expect_registration_count|1
+network_interface_received_registers|expect_registration_contains|0|Network/Ethernet/Received MB,sec"
+network_interface_received_registers|expect_registration_contains|0|"SensorType":5,
+network_interface_received_registers|expect_registration_contains|0|"Statistics":1,
+network_interface_received_registers|expect_registration_contains|0|"OriginalUnit":2103,
+network_interface_received_registers|expect_registration_contains|0|"TTLTicks":[3000000000]
+network_interface_received_registers|expect_registration_contains|0|"KeepHistory":77760000000000
+
+network_interface_sent_registers|create_collector
+network_interface_sent_registers|add_default_sensor|network_interface_sent||Ethernet
+network_interface_sent_registers|start
+network_interface_sent_registers|stop
+network_interface_sent_registers|expect_registration_count|1
+network_interface_sent_registers|expect_registration_contains|0|Network/Ethernet/Sent MB,sec"
+network_interface_sent_registers|expect_registration_contains|0|"SensorType":5,
+network_interface_sent_registers|expect_registration_contains|0|"Statistics":1,
+network_interface_sent_registers|expect_registration_contains|0|"OriginalUnit":2103,
+network_interface_sent_registers|expect_registration_contains|0|"TTLTicks":[3000000000]
+network_interface_sent_registers|expect_registration_contains|0|"KeepHistory":77760000000000

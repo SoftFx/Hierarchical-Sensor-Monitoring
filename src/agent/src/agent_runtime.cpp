@@ -1,12 +1,14 @@
 #include "agent/agent_runtime.hpp"
 
 #ifdef _WIN32
+#include "agent/config.hpp"
 #include "agent/paths.hpp"
 #include "agent/update_checker.hpp"
 #endif
 
 #include <chrono>
 #include <exception>
+#include <filesystem>
 #include <utility>
 
 #ifdef _WIN32
@@ -96,7 +98,83 @@ namespace hsm::agent
                 DeleteFileW(old_exe.c_str());
 #endif
 
-            hc::Collector collector(BuildOptions());
+#ifdef _WIN32
+            // Create the UpdateChecker before the collector so the directive callback can reference
+            // it by address. The thread is not started until updater.Start() below.
+            UpdateChecker updater(
+                config_,
+                [this](int level, const std::string& msg) {
+                    Log(static_cast<hc::LogLevel>(level), msg);
+                },
+                [this] { RequestStop(); });
+#endif
+
+            hc::CollectorOptions opts = BuildOptions();
+
+#ifdef _WIN32
+            // X-Agent-Version: server uses it to decide whether to emit update-available directives.
+            opts.extra_request_headers.push_back({"X-Agent-Version", HSM_AGENT_VERSION});
+
+            // Handle server directives delivered via data-POST response headers (#1198).
+            opts.on_server_directive = [this, &updater](const std::string& verb, const std::string& payload)
+            {
+                if (verb == "update-available")
+                {
+                    // Server knows there is a newer binary; wake the UpdateChecker immediately
+                    // instead of waiting for the next scheduled poll.
+                    updater.TriggerCheck();
+                }
+                else if (verb == "sensor-disable" || verb == "sensor-enable")
+                {
+                    const bool enable = (verb == "sensor-enable");
+                    const std::string& group = payload;
+                    bool AgentConfig::* member = nullptr;
+                    if      (group == "computer") member = &AgentConfig::sensors_computer;
+                    else if (group == "system")   member = &AgentConfig::sensors_system;
+                    else if (group == "disk")     member = &AgentConfig::sensors_disk;
+                    else if (group == "network")  member = &AgentConfig::sensors_network;
+                    else if (group == "module")   member = &AgentConfig::sensors_module;
+                    else if (group == "process")  member = &AgentConfig::sensors_process;
+                    else
+                    {
+                        Log(hc::LogLevel::Error, "directive: unknown sensor group '" + group + "'");
+                        return;
+                    }
+
+                    // The server re-sends the full desired state (all six groups) on EVERY data POST,
+                    // delivered as separate headers processed one-by-one. Act only when THIS group
+                    // actually changes — checked against the live config_, which we update in place
+                    // below so a second changed group in the SAME response accumulates instead of
+                    // clobbering the first. Unchanged groups return here (no restart loop).
+                    if (config_.*member == enable)
+                        return;
+
+                    // Persist a copy with this one flag flipped. config_ itself is only ever bool-mutated
+                    // (below, after a successful write), never whole-struct reassigned: UpdateChecker
+                    // holds config_ by reference and reads its std::string members on its own thread, so
+                    // a string-reallocating assign here would be a data race / use-after-free.
+                    AgentConfig updated = config_;
+                    updated.*member = enable;
+
+                    std::string cfg_err;
+                    const auto cfg_path_w = DefaultConfigPath();
+                    const std::string cfg_path = std::filesystem::path(cfg_path_w).string();
+                    if (!WriteAgentConfig(cfg_path, updated, cfg_err))
+                    {
+                        // Persist failed — do NOT restart and do NOT touch config_: a restart would
+                        // reload the unchanged file and the re-sent directive would just fail again.
+                        Log(hc::LogLevel::Error, "directive: failed to update config.json (not restarting): " + cfg_err);
+                        return;
+                    }
+
+                    config_.*member = enable; // bool-only mutation (no string realloc -> no data race)
+                    Log(hc::LogLevel::Info, "directive: " + verb + ":" + group + " — restarting to apply");
+                    RequestStop();
+                }
+            };
+#endif
+
+            hc::Collector collector(opts);
 
             // Install the log sink first so configuration/transport diagnostics are captured.
             if (log_)
@@ -125,10 +203,31 @@ namespace hsm::agent
             }
 
             if (config_.sensors_process)
-                collector.AddProcessMonitoringSensors();
+            {
+                // Register the process sensors individually and SKIP the managed-only
+                // "ThreadPool thread count" — it is a .NET CLR concept (no managed thread pool
+                // exists in a native C++ process, so the native source can only report 0).
+                // The collector library still exposes it via AddProcessMonitoringSensors for
+                // managed consumers, so parity/conformance is untouched; only this agent omits it.
+                collector.AddDefaultSensor(hc::DefaultSensor::ProcessCpu);
+                collector.AddDefaultSensor(hc::DefaultSensor::ProcessMemory);
+                collector.AddDefaultSensor(hc::DefaultSensor::ProcessThreadCount);
+            }
 
+            // NOTE: do NOT override ".module/Collector version" with the agent's version — the
+            // collector is a separate product (HSMDataCollector line, reported via
+            // HSM_COLLECTOR_PRODUCT_VERSION) from this agent (HSM_AGENT_VERSION). They carry
+            // distinct version numbers on purpose: ".module/Collector version" = collector product,
+            // ".module/Version" = this agent.
             if (config_.sensors_module)
-                collector.AddAllModuleSensors(config_.product_version);
+                // The agent IS the monitored application, so report its own build version
+                // (HSM_AGENT_VERSION) as ".module/Version" — it then tracks every self-update,
+                // instead of the static config placeholder. Falls back to config only if a custom
+                // productVersion was explicitly set to a non-default value.
+                collector.AddAllModuleSensors(
+                    (config_.product_version.empty() || config_.product_version == "1.0.0.0")
+                        ? HSM_AGENT_VERSION
+                        : config_.product_version);
 
             // Periodic "top processes by CPU" sensors (#1175/#1179). Windows-only; the collector
             // rejects the call on non-Windows, so guard here to avoid a fatal throw on Linux builds.
@@ -149,14 +248,6 @@ namespace hsm::agent
                 on_started();
 
 #ifdef _WIN32
-            // Start the self-update checker after the collector is running (it may call RequestStop
-            // to trigger a service restart when an update is applied).
-            UpdateChecker updater(
-                config_,
-                [this](int level, const std::string& msg) {
-                    Log(static_cast<hc::LogLevel>(level), msg);
-                },
-                [this] { RequestStop(); });
             updater.Start();
 #endif
 
