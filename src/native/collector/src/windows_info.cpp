@@ -167,8 +167,11 @@ namespace hsm::collector
                 CloseEventLog(log);
                 return;
             }
-            if (cursor < oldest)
-                cursor = oldest; // records aged out — resync
+            // Resync when the cursor falls outside the current record range: below oldest = records
+            // aged out; above newest = the log was cleared (RecordNumbers restart from 1), which would
+            // otherwise stall the cursor forever and silently drop every new event.
+            if (cursor < oldest || cursor > newest_next)
+                cursor = oldest;
 
             std::vector<BYTE> buffer(64 * 1024);
             DWORD flags = EVENTLOG_SEEK_READ | EVENTLOG_FORWARDS_READ;

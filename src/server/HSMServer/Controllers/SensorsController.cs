@@ -449,7 +449,9 @@ namespace HSMServer.Controllers
             }
 
             // Phase 2: sensor-disable / sensor-enable — driven by per-product DisabledSensorGroups.
-            if (!HttpContext.TryGetPublicApiInfo(out var info))
+            // Only for directive-aware agents (those that send X-Agent-Version); ordinary
+            // HSMDataCollector clients ignore these, so don't append six headers to their every POST.
+            if (string.IsNullOrEmpty(agentVersionHeader) || !HttpContext.TryGetPublicApiInfo(out var info))
                 return;
 
             // Emit the FULL desired state (enable OR disable) for every known group, not just the
