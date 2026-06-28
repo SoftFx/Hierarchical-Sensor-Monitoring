@@ -712,4 +712,15 @@ namespace hsm::agent
         }
         return true;
     }
+
+    bool AgentConfig::* SensorGroupFlag(const std::string& group)
+    {
+        if (group == "computer") return &AgentConfig::sensors_computer;
+        if (group == "system")   return &AgentConfig::sensors_system;
+        if (group == "disk")     return &AgentConfig::sensors_disk;
+        if (group == "network")  return &AgentConfig::sensors_network;
+        if (group == "module")   return &AgentConfig::sensors_module;
+        if (group == "process")  return &AgentConfig::sensors_process;
+        return nullptr;
+    }
 } // namespace hsm::agent

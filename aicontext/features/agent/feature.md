@@ -137,9 +137,16 @@ agent's real data path, so emitting only on the typed endpoints means it never s
   persistently-failing update (download error / hash mismatch) doesn't re-download the exe every batch;
   the first trigger after a quiet period still applies promptly. The scheduled poll is unaffected.
 - `sensor-disable:<group>` / `sensor-enable:<group>` (groups: computer/system/disk/network/module/
-  process) — re-sent on **every** response while the group stays toggled, so the agent acts **only
-  when the flag actually changes**: it rewrites `config.json` and restarts once, then ignores the
-  re-sent directive (otherwise it would restart-loop on every POST).
+  process, mapped by `SensorGroupFlag` — the single source of truth shared with its unit test) —
+  re-sent on **every** response while the group stays toggled, so the agent acts **only when the flag
+  actually changes**: it rewrites `config.json`, then **restarts the service to apply it** (the
+  collector's sensor set is fixed at `Start`). A graceful (exit-0) stop is *not* auto-restarted by the
+  SCM, so the agent spawns a detached **`--restart-service`** helper — the no-swap twin of
+  `--apply-update` (wait for `STOPPED` → `StartService`) — *before* `RequestStop()`. Unchanged groups
+  are ignored so it never restart-loops; if several groups change in one response only the first
+  spawns the helper (which re-reads the fully-updated config), the rest just record their flag. If the
+  helper can't be spawned the agent does **not** stop (so it never strands itself down) and retries on
+  the next re-send.
 - Toggling a product's sensor groups (server `ProductController.UpdateSensorGroups`) is gated by the
   **ProductManager** role on that product, like every other product mutation.
 
@@ -179,8 +186,8 @@ stderr. The collector's own dedup window keeps a flapping server from spamming t
 
 ## Verification
 
-- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 13 cases — config parser + topCpu config + update config) — run on every
-  platform, registered in `ctest`.
+- Portable unit tests (`tests/agent_tests.cpp`, name-dispatched, 15 cases — config parser + topCpu/update
+  config + the sensor-group directive name↔field map) — run on every platform, registered in `ctest`.
 - **CI build lane (W8):** `.github/workflows/agent-windows-build.yml` — windows-latest, vcpkg curl,
   configures + builds `src/agent` Release with warnings-as-errors, runs the config `ctest`, and uploads
   the bundle payload (`hsm-agent.exe` + `config.json` template + `install.cmd`/`uninstall.cmd`) as an

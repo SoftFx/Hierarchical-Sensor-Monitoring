@@ -1,6 +1,7 @@
 #include "agent/agent_runtime.hpp"
 
 #ifdef _WIN32
+#include "agent/apply_update.hpp"
 #include "agent/config.hpp"
 #include "agent/paths.hpp"
 #include "agent/update_checker.hpp"
@@ -128,14 +129,8 @@ namespace hsm::agent
                 {
                     const bool enable = (verb == "sensor-enable");
                     const std::string& group = payload;
-                    bool AgentConfig::* member = nullptr;
-                    if      (group == "computer") member = &AgentConfig::sensors_computer;
-                    else if (group == "system")   member = &AgentConfig::sensors_system;
-                    else if (group == "disk")     member = &AgentConfig::sensors_disk;
-                    else if (group == "network")  member = &AgentConfig::sensors_network;
-                    else if (group == "module")   member = &AgentConfig::sensors_module;
-                    else if (group == "process")  member = &AgentConfig::sensors_process;
-                    else
+                    bool AgentConfig::* member = SensorGroupFlag(group);
+                    if (member == nullptr)
                     {
                         Log(hc::LogLevel::Error, "directive: unknown sensor group '" + group + "'");
                         return;
@@ -167,9 +162,34 @@ namespace hsm::agent
                         return;
                     }
 
+                    // A sensor-group change only takes effect on a fresh process — the collector's
+                    // sensor set is built once at Start. RequestStop() alone just stops the service:
+                    // the SCM does NOT auto-restart a graceful (exit-0) stop, only a crash. So spawn the
+                    // detached --restart-service helper FIRST; it outlives this process, waits for
+                    // STOPPED, then StartService()s us back up (the no-swap twin of the self-update
+                    // --apply-update path). If several groups change in ONE response, only the first
+                    // spawns the helper and calls RequestStop — the helper re-reads the now fully
+                    // updated config.json, so the rest just record their flag.
+                    bool already_stopping;
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        already_stopping = stop_requested_;
+                    }
+                    if (!already_stopping && !SpawnRestartService())
+                    {
+                        // Could not spawn the restarter: do NOT stop (that would leave the agent down)
+                        // and do NOT mark config_ applied, so the server's next re-send retries the
+                        // spawn. The new value is already on disk, so a manual restart also applies it.
+                        Log(hc::LogLevel::Error, "directive: could not spawn restart helper; config saved, will apply on next restart");
+                        return;
+                    }
+
                     config_.*member = enable; // bool-only mutation (no string realloc -> no data race)
-                    Log(hc::LogLevel::Info, "directive: " + verb + ":" + group + " — restarting to apply");
-                    RequestStop();
+                    Log(hc::LogLevel::Info,
+                        "directive: " + verb + ":" + group +
+                            (already_stopping ? " — applies on the pending restart" : " — restarting to apply"));
+                    if (!already_stopping)
+                        RequestStop();
                 }
             };
 #endif
