@@ -4740,6 +4740,51 @@ namespace
     }
 #endif
 
+    // A user/agent can raise the built-in Total CPU sensor to Error (on top of its default Warning) by
+    // attaching an extra EmaMean > threshold alert before Start — WITHOUT touching the shared default
+    // catalog. add_default_sensor is idempotent by path, AttachAlert rebuilds the registration in place,
+    // and it rides the AddOrUpdate emitted at Start. Mirrors what the agent does. Cross-platform.
+    void NativeTotalCpuErrorAlertAttaches()
+    {
+        hc::Collector collector(WrapperTestOptions());
+
+        hsm_sensor_t* cpu = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.handle(), HSM_DEFAULT_TOTAL_CPU, nullptr, &cpu) == HSM_RESULT_OK && cpu != nullptr,
+            "Total CPU default sensor must be addable");
+
+        const hc::Alert alert =
+            collector.CreateAlert(hc::AlertKind::Bar)
+                .If(hc::AlertProperty::EmaMean, hc::AlertOperation::GreaterThan, "50")
+                .AsSensorError()
+                .ThenNotify("[$product]$path CPU sustained above 50% (EMA mean $value$unit)")
+                .WithIcon(hc::AlertIcon::Error)
+                .WithConfirmationPeriod(std::chrono::minutes(5))
+                .Build();
+        hsm_sensor_attach_alert(cpu, alert.handle());
+        hsm_sensor_release(cpu);
+
+        collector.Start();
+
+        bool found = false;
+        for (std::size_t i = 0; i < collector.RegistrationCount(); ++i)
+        {
+            const std::string json = collector.RegistrationJson(i);
+            if (json.find("Total CPU") != std::string::npos)
+            {
+                // The attached Error alert rides the registration alongside the built-in Warning:
+                // EmaMean (213) property, Error (3) status, 5-min confirmation, our template.
+                Contains(json, "\"Property\":213");
+                Contains(json, "\"Status\":3");
+                Contains(json, "\"ConfirmationPeriod\":3000000000");
+                Contains(json, "CPU sustained above 50%");
+                found = true;
+            }
+        }
+        collector.Stop();
+        Require(found, "Total CPU registration must carry the attached Error alert");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
@@ -4773,6 +4818,7 @@ namespace
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_rate_options_parity", [](const std::string&) { NativeRateOptionsParity(); } },
+            { "native_total_cpu_error_alert_attaches", [](const std::string&) { NativeTotalCpuErrorAlertAttaches(); } },
 #if defined(_WIN32)
             { "native_tcp_failure_rate_sensor_registers", [](const std::string&) { NativeTcpFailureRateSensorRegisters(); } },
 #endif
