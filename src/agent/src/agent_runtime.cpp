@@ -259,6 +259,41 @@ namespace hsm::agent
                     std::chrono::milliseconds(config_.top_cpu_period_ms));
 #endif
 
+            // TCP connection failure rate (failures/min) — an admin "velocity of failure" signal
+            // (service down / port exhaustion). Windows-only; the collector rejects the call on other
+            // platforms, so guard here. Lightweight single sensor, enabled by default.
+#ifdef _WIN32
+            collector.EnableTcpConnectionFailureRateSensor(std::chrono::milliseconds(60000));
+#endif
+
+            // Raise the built-in Total CPU sensor to Error when CPU stays high. The default catalog
+            // already WARNS at EmaMean > 50%; here we additionally flip it to ERROR at the same point
+            // (5-min confirmation suppresses transient bursts). Done by attaching an extra alert to the
+            // existing sensor — NOT a catalog change, so the shared default/golden/managed stay put.
+            // add_default_sensor is idempotent by path: AddAllComputerSensors already created Total CPU,
+            // this returns that same handle; we attach before Start (rebuilds its registration) and free
+            // the handle (the collector still owns the sensor). Cross-platform (Total CPU is universal).
+            {
+                // Build the alert BEFORE acquiring the sensor handle so a throw from the fluent builder
+                // (CreateAlert/Build use ThrowIfFailed) can't leak the handle.
+                const hc::Alert cpu_error_alert =
+                    collector.CreateAlert(hc::AlertKind::Bar)
+                        .If(hc::AlertProperty::EmaMean, hc::AlertOperation::GreaterThan, "50")
+                        .AsSensorError()
+                        .ThenNotify("[$product]$path CPU sustained above 50% (EMA mean $value$unit)")
+                        .WithIcon(hc::AlertIcon::Error)
+                        .WithConfirmationPeriod(std::chrono::minutes(5))
+                        .Build();
+
+                hsm_sensor_t* cpu_sensor = nullptr;
+                if (hsm_collector_add_default_sensor(collector.handle(), HSM_DEFAULT_TOTAL_CPU, nullptr, &cpu_sensor) == HSM_RESULT_OK &&
+                    cpu_sensor != nullptr)
+                {
+                    hsm_sensor_attach_alert(cpu_sensor, cpu_error_alert.handle());
+                    hsm_sensor_release(cpu_sensor);
+                }
+            }
+
             Log(hc::LogLevel::Info,
                 "HSM Agent starting: streaming to " + config_.server_address + ":" + std::to_string(config_.port));
 

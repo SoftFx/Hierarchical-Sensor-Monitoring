@@ -876,6 +876,18 @@ hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
     hsm_collector_t* collector,
     int32_t period_ms);
 
+/* Enable the TCP connection failure rate sensor (Windows only). Starts a background thread that every
+   `period_ms` milliseconds reads the cumulative failed-connection-attempt counter
+   (MIB_TCPSTATS.dwAttemptFails, IPv4+IPv6) and pushes the per-interval delta into a Rate sensor at
+   ".computer/Network/Connection failures rate" (OriginalUnit ValueInSecond, DisplayUnit per-minute).
+   The rate sensor is created synchronously at Start, so it is registered the moment Start returns.
+   Call BEFORE Start().
+   Returns HSM_RESULT_INVALID_ARGUMENT if period_ms <= 0.
+   Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
+hsm_result_t hsm_collector_enable_tcp_connection_failure_rate_sensor(
+    hsm_collector_t* collector,
+    int32_t period_ms);
+
 #ifdef __cplusplus
 }
 #endif

@@ -648,6 +648,16 @@ namespace hsm::collector
                 "Failed to enable top-CPU sensors.");
         }
 
+        /// Enable the TCP connection failure rate sensor (Windows only, push-fed Rate). Call BEFORE
+        /// Start(). Each `period` it reads the failed-connection-attempt counter delta (IPv4+IPv6) and
+        /// posts a Rate sensor at ".computer/Network/Connection failures rate" (displayed per minute).
+        void EnableTcpConnectionFailureRateSensor(std::chrono::milliseconds period)
+        {
+            Check(
+                hsm_collector_enable_tcp_connection_failure_rate_sensor(handle_, static_cast<int32_t>(period.count())),
+                "Failed to enable TCP connection failure rate sensor.");
+        }
+
         // ---- Introspection ------------------------------------------------------------------
 
         std::size_t SentCount() const
