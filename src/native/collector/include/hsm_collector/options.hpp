@@ -90,10 +90,76 @@ namespace hsm::collector
         int precision = 2;
     };
 
-    /// Period for a rate sensor (mirrors HSMRateSensorOptions::post_data_period).
+    /// Display cadence for a rate sensor's value (mirrors the managed RateDisplayUnit). Lowers to
+    /// `hsm_sensor_options_t::display_unit`; an unset RateOptions::display_unit registers PerSecond (0),
+    /// matching the managed Convert.ToInt32((RateDisplayUnit?)null) == 0.
+    enum class RateDisplayUnit
+    {
+        PerSecond = 0,
+        PerMinute = 1,
+        PerHour = 2,
+        PerDay = 3,
+        PerWeek = 4,
+        PerMonth = 5,
+    };
+
+    /// Registration + scheduling options for a rate sensor (mirrors the managed RateSensorOptions).
+    /// `post_period` is the periodic post cadence (managed PostDataPeriod, default 1 minute). The
+    /// remaining fields are the SensorOptions registration surface; every one is optional and an
+    /// unset field takes the managed default. Two rate-specific defaults apply at the C ABI when a
+    /// field is left unset: OriginalUnit registers ValueInSecond (3000) and DisplayUnit registers 0 —
+    /// both are ALWAYS emitted (never null), matching RateSensorOptions.ToApi(). Description stays
+    /// null unless set.
     struct RateOptions
     {
-        std::chrono::milliseconds post_period = std::chrono::seconds(15);
+        std::chrono::milliseconds post_period = std::chrono::minutes(1);
+        std::optional<std::chrono::milliseconds> ttl;
+        std::optional<Unit> unit;                    // OriginalUnit; unset => ValueInSecond (3000)
+        std::optional<RateDisplayUnit> display_unit; // unset => PerSecond (0)
+        std::optional<std::string> description;      // unset => null (managed RateSensorOptions.Description default)
+        std::optional<std::chrono::milliseconds> keep_history;
+        std::optional<std::chrono::milliseconds> self_destroy;
+        std::optional<bool> ema_statistics; // managed StatisticsOptions.EMA
+        std::optional<bool> is_singleton;
+        std::optional<bool> aggregate_data;
+        std::optional<bool> enable_grafana;
+        bool is_computer_sensor = false;
+        SensorLocation location = SensorLocation::Module;
+
+        /// Lower to the C options struct. `unit`/`display_unit` are left at the "unset" sentinel when
+        /// not set so the C ABI applies the rate defaults (3000 / 0). The returned value borrows
+        /// `description`'s storage, so this RateOptions must outlive the create call that consumes the
+        /// result (the wrapper consumes it inline).
+        hsm_sensor_options_t ToNative() const
+        {
+            hsm_sensor_options_t native = hsm_sensor_options_default();
+
+            if (ttl.has_value())
+                native.ttl_ms = static_cast<std::int64_t>(ttl->count());
+            if (unit.has_value())
+                native.unit = static_cast<std::int32_t>(*unit);
+            if (display_unit.has_value())
+                native.display_unit = static_cast<std::int32_t>(*display_unit);
+            if (description.has_value())
+                native.description = description->c_str();
+            if (keep_history.has_value())
+                native.keep_history_ms = static_cast<std::int64_t>(keep_history->count());
+            if (self_destroy.has_value())
+                native.self_destroy_ms = static_cast<std::int64_t>(self_destroy->count());
+            if (ema_statistics.has_value())
+                native.statistics = *ema_statistics ? 1 : 0;
+            if (is_singleton.has_value())
+                native.is_singleton = *is_singleton ? 1 : 0;
+            if (aggregate_data.has_value())
+                native.aggregate_data = *aggregate_data ? 1 : 0;
+            if (enable_grafana.has_value())
+                native.enable_grafana = *enable_grafana ? 1 : 0;
+
+            native.is_computer_sensor = is_computer_sensor;
+            native.sensor_location = static_cast<std::int32_t>(location);
+
+            return native;
+        }
     };
 
     /// One entry of an enum sensor's EnumOptions table (mirrors hsm_enum_option_t): the integer

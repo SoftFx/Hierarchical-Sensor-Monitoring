@@ -704,6 +704,32 @@ namespace HSMDataCollector.Tests
                         new RateSensorOptions { PostDataPeriod = TimeSpan.FromMilliseconds(int.Parse(step.Arg(1))) }));
                     break;
 
+                case "create_rate_sensor_full_options":
+                {
+                    var rateOptions = new RateSensorOptions
+                    {
+                        PostDataPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))),
+                        TTL = long.Parse(step.Arg(2)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(2))) : (TimeSpan?)null,
+                        DisplayUnit = int.Parse(step.Arg(4)) >= 0 ? (RateDisplayUnit)int.Parse(step.Arg(4)) : (RateDisplayUnit?)null,
+                        KeepHistory = long.Parse(step.Arg(5)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(5))) : (TimeSpan?)null,
+                        SelfDestroy = long.Parse(step.Arg(6)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(6))) : (TimeSpan?)null,
+                        Statistics = int.Parse(step.Arg(7)) >= 0 ? (StatisticsOptions)int.Parse(step.Arg(7)) : StatisticsOptions.None,
+                        IsSingletonSensor = ParseTriBool(step.Arg(8)),
+                        AggregateData = ParseTriBool(step.Arg(9)),
+                        EnableForGrafana = ParseTriBool(step.Arg(10)),
+                        IsComputerSensor = bool.Parse(step.Arg(11)),
+                        SensorLocation = (SensorLocation)int.Parse(step.Arg(12)),
+                        Description = ExpandTextToken(step.Arg(13)),
+                    };
+                    // RateSensorOptions ctor sets SensorUnit = ValueInSecond; override ONLY when the
+                    // fixture specifies a unit (>= 0) so the -1 sentinel preserves the 3000 default —
+                    // mirrors the native unit < 0 => ValueInSecond rate default.
+                    if (int.Parse(step.Arg(3)) >= 0)
+                        rateOptions.SensorUnit = (Unit)int.Parse(step.Arg(3));
+                    AddSensor(state, state.RateSensors, state.Collector.CreateRateSensor(ExpandTextToken(step.Arg(0)), rateOptions));
+                    break;
+                }
+
                 case "add_rate":
                     state.RateSensors[int.Parse(step.Arg(0))]
                         .AddValue(ParseDouble(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));

@@ -452,15 +452,37 @@ namespace hsm::collector
 
         RateSensor CreateRateSensor(const std::string& path, const RateOptions& options = {})
         {
+            const auto native = options.ToNative();
             hsm_sensor_t* sensor = nullptr;
             Check(
-                hsm_collector_create_rate_sensor(
+                hsm_collector_create_rate_sensor_with_options(
                     handle_,
                     path.c_str(),
                     static_cast<std::int64_t>(options.post_period.count()),
+                    &native,
                     &sensor),
                 "Failed to create rate sensor.");
             return RateSensor(sensor);
+        }
+
+        /// Rate sensor posting every minute (mirrors CreateM1RateSensor). `description` is always
+        /// registered — empty by default, matching the managed convenience overload (which sets
+        /// RateSensorOptions.Description = description, "" by default, vs null for CreateRateSensor).
+        RateSensor CreateM1RateSensor(const std::string& path, const std::string& description = "")
+        {
+            RateOptions options;
+            options.post_period = std::chrono::minutes(1);
+            options.description = description;
+            return CreateRateSensor(path, options);
+        }
+
+        /// Rate sensor posting every five minutes (mirrors CreateM5RateSensor).
+        RateSensor CreateM5RateSensor(const std::string& path, const std::string& description = "")
+        {
+            RateOptions options;
+            options.post_period = std::chrono::minutes(5);
+            options.description = description;
+            return CreateRateSensor(path, options);
         }
 
         /// Pull int function sensor: `function` is invoked every period on the scheduler thread.
