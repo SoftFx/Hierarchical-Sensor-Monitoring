@@ -30,6 +30,12 @@ namespace hsm
                 PDH_HQUERY query = nullptr;
                 std::vector<PDH_HCOUNTER> counters;
                 double scale = 1.0;
+
+                // Delta-mode state (PdhReadDelta only): the previous summed reading, so a cumulative
+                // counter can be reported as the change since the last read (managed
+                // ConnectionsDifferenceSensor). Unused by the gauge PdhRead.
+                bool has_prev = false;
+                double prev = 0.0;
             };
 
             struct DiskSource
@@ -80,6 +86,54 @@ namespace hsm
                 }
 
                 *out_value = sum * source->scale;
+                return HSM_METRIC_READ_OK;
+            }
+
+            // Delta variant of PdhRead for a cumulative counter reported as the change-since-last-read
+            // (managed ConnectionsDifferenceSensor: TCP Connection Failures / Connections Reset). The
+            // first read sets the baseline and posts NOTHING; later reads post the difference, and ONLY
+            // when it is non-zero — a quiet period (no new failures/resets, the healthy-host norm) posts
+            // no value, mirroring the managed sensor.
+            hsm_metric_read_t PdhReadDelta(void* user_data, double* out_value)
+            {
+                auto* source = static_cast<PdhSource*>(user_data);
+                if (source == nullptr || source->query == nullptr)
+                    return HSM_METRIC_READ_ERROR;
+
+                const PDH_STATUS collect = PdhCollectQueryData(source->query);
+                if (collect != ERROR_SUCCESS)
+                {
+                    if (collect == PDH_NO_DATA || collect == PDH_INVALID_DATA || collect == PDH_CSTATUS_NO_INSTANCE ||
+                        collect == PDH_CSTATUS_NO_OBJECT || collect == PDH_CSTATUS_NO_COUNTER)
+                        return HSM_METRIC_READ_NO_VALUE;
+                    return HSM_METRIC_READ_ERROR;
+                }
+
+                double sum = 0.0;
+                for (auto counter : source->counters)
+                {
+                    PDH_FMT_COUNTERVALUE value{};
+                    const PDH_STATUS status = PdhGetFormattedCounterValue(counter, PDH_FMT_DOUBLE, nullptr, &value);
+                    // Any non-success (incl. a priming/transient hiccup): skip this tick WITHOUT touching
+                    // the baseline, so a glitch can't manufacture a bogus delta on the next read.
+                    if (status != ERROR_SUCCESS)
+                        return HSM_METRIC_READ_NO_VALUE;
+                    sum += value.doubleValue;
+                }
+
+                const bool had_prev = source->has_prev;
+                const double prev = source->prev;
+                source->prev = sum;
+                source->has_prev = true;
+
+                if (!had_prev)
+                    return HSM_METRIC_READ_NO_VALUE; // first read: set baseline, post nothing
+
+                const double delta = sum - prev;
+                if (delta == 0.0)
+                    return HSM_METRIC_READ_NO_VALUE; // no change this period -> post nothing
+
+                *out_value = delta * source->scale;
                 return HSM_METRIC_READ_OK;
             }
 
@@ -290,6 +344,10 @@ namespace hsm
             const auto pdh = [&](const std::vector<std::wstring>& paths, double scale) {
                 return Finish(MakePdhSource(paths, scale), &PdhRead, &PdhDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
             };
+            // Same source, but reports the change since the previous read (cumulative counter -> delta).
+            const auto pdh_delta = [&](const std::vector<std::wstring>& paths, double scale) {
+                return Finish(MakePdhSource(paths, scale), &PdhReadDelta, &PdhDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
+            };
 
             // ---- System (unambiguous _Total / instance-less counters) ----
             if (Contains(name, "Total CPU"))
@@ -337,9 +395,15 @@ namespace hsm
             if (Contains(name, "Process thread count"))
                 return pdh({ L"\\Process(" + CurrentProcessInstance() + L")\\Thread Count" }, 1.0);
 
-            // ---- Network (established gauge = TCPv4 + TCPv6; failure/reset deltas are a follow-up) ----
+            // ---- Network (TCP connection counters = TCPv4 + TCPv6 summed, English paths). Established is
+            // a gauge (current count); Failures/Reset are the change since the last read (managed
+            // ConnectionsDifferenceSensor), posting only a non-zero delta. ----
             if (Contains(name, "Connections Established"))
                 return pdh({ L"\\TCPv4\\Connections Established", L"\\TCPv6\\Connections Established" }, 1.0);
+            if (Contains(name, "Connection Failures"))
+                return pdh_delta({ L"\\TCPv4\\Connection Failures", L"\\TCPv6\\Connection Failures" }, 1.0);
+            if (Contains(name, "Connections Reset"))
+                return pdh_delta({ L"\\TCPv4\\Connections Reset", L"\\TCPv6\\Connections Reset" }, 1.0);
 
             return 0; // not recognized -> stays registration-only
         }
