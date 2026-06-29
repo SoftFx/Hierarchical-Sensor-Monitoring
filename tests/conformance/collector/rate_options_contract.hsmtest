@@ -1,0 +1,35 @@
+# HSM collector conformance — rate sensor full registration surface (RateSensorOptions parity, #1096/§6).
+# create_rate_sensor_full_options|path|post_period_ms|ttl_ms|unit|display_unit|keep_history_ms|
+#     self_destroy_ms|statistics|is_singleton|aggregate|grafana|is_computer|sensor_location|description
+#   unit: -1 => default OriginalUnit ValueInSecond (3000); else an HSMUnit code.
+#   display_unit: -1 => default DisplayUnit 0 (ALWAYS emitted, never null); else a RateDisplayUnit code.
+#   tri-state (is_singleton/aggregate/grafana): -1 => null, 0 => false, 1 => true.
+#   statistics: -1 => None (0), else StatisticsOptions flags (EMA=1). Ticks on the wire = ms * 10000.
+# Both drivers feed the SAME options through RateSensorOptions.ToApi() (managed) and
+# hsm_collector_create_rate_sensor_with_options (native) — the substrings pin the byte-identical
+# registration text for the rate type.
+
+rate_full_options_register_in_payload|create_collector
+rate_full_options_register_in_payload|create_rate_sensor_full_options|contract/rate/full|60000|120000|3|1|600000|1200000|1|1|1|1|false|0|ratedesc
+rate_full_options_register_in_payload|start
+rate_full_options_register_in_payload|stop
+rate_full_options_register_in_payload|expect_registration_count|1
+rate_full_options_register_in_payload|expect_registration_contains|0|"SensorType":9,
+rate_full_options_register_in_payload|expect_registration_contains|0|"OriginalUnit":3,
+rate_full_options_register_in_payload|expect_registration_contains|0|"DisplayUnit":1
+rate_full_options_register_in_payload|expect_registration_contains|0|"TTLTicks":[1200000000]
+rate_full_options_register_in_payload|expect_registration_contains|0|"KeepHistory":6000000000
+rate_full_options_register_in_payload|expect_registration_contains|0|"SelfDestroy":12000000000
+rate_full_options_register_in_payload|expect_registration_contains|0|"Statistics":1
+rate_full_options_register_in_payload|expect_registration_contains|0|"AggregateData":true
+rate_full_options_register_in_payload|expect_registration_contains|0|"EnableGrafana":true
+rate_full_options_register_in_payload|expect_registration_contains|0|"Description":"ratedesc"
+
+rate_default_options_keep_value_in_second_unit|create_collector
+rate_default_options_keep_value_in_second_unit|create_rate_sensor_full_options|contract/rate/defaults|60000|0|-1|-1|0|0|-1|-1|-1|-1|false|0|d
+rate_default_options_keep_value_in_second_unit|start
+rate_default_options_keep_value_in_second_unit|stop
+rate_default_options_keep_value_in_second_unit|expect_registration_count|1
+rate_default_options_keep_value_in_second_unit|expect_registration_contains|0|"OriginalUnit":3000
+rate_default_options_keep_value_in_second_unit|expect_registration_contains|0|"DisplayUnit":0
+rate_default_options_keep_value_in_second_unit|expect_registration_contains|0|"Statistics":0

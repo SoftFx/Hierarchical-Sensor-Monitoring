@@ -2158,6 +2158,35 @@ namespace
             return;
         }
 
+        if (action == "create_rate_sensor_full_options")
+        {
+            Require(step.size() >= 15, "create_rate_sensor_full_options requires 14 args");
+            const auto path = ExpandTextToken(step[1]);
+            const auto description = ExpandTextToken(step[14]);
+
+            hsm_sensor_options_t options = hsm_sensor_options_default();
+            options.ttl_ms = static_cast<int64_t>(std::stoll(step[3]));
+            options.unit = ToInt(step[4]);         // -1 => rate default OriginalUnit ValueInSecond (3000)
+            options.display_unit = ToInt(step[5]); // -1 => rate default DisplayUnit 0 (always emitted)
+            options.description = description.c_str();
+            options.keep_history_ms = static_cast<int64_t>(std::stoll(step[6]));
+            options.self_destroy_ms = static_cast<int64_t>(std::stoll(step[7]));
+            options.statistics = ToInt(step[8]);
+            options.is_singleton = ToInt(step[9]);
+            options.aggregate_data = ToInt(step[10]);
+            options.enable_grafana = ToInt(step[11]);
+            options.is_computer_sensor = ToBool(step[12]);
+            options.sensor_location = ToInt(step[13]);
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_rate_sensor_with_options(
+                    state.collector.value, path.c_str(), std::stoll(step[2]), &options, &sensor.value) == HSM_RESULT_OK,
+                "create_rate_sensor_full_options failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
         if (action == "add_rate")
         {
             Require(step.size() >= 5, "add_rate requires sensor index, value, status, and comment");
@@ -4637,6 +4666,47 @@ namespace
         Require(tie3[2].name == "z.exe", "SelectTopN tie-break: z last");
     }
 
+    // Rate API parity with the managed RateSensorOptions: the default cadence (1 minute, not the
+    // generic 15 s), the M1/M5 convenience creators (which always register an empty Description, vs
+    // null for a bare CreateRateSensor), and the full registration surface lowered onto a rate sensor.
+    void NativeRateOptionsParity()
+    {
+        Require(
+            hc::RateOptions{}.post_period == std::chrono::minutes(1),
+            "RateOptions default post period must be 1 minute (managed RateSensorOptions parity)");
+
+        hc::Collector collector(WrapperTestOptions());
+
+        // Bare CreateRateSensor: OriginalUnit ValueInSecond (3000), DisplayUnit 0, Description null.
+        auto def = collector.CreateRateSensor("rate/def");
+        const std::string def_json = hsm_sensor_test_wire_registration_json(def.handle());
+        Contains(def_json, "\"SensorType\":9");
+        Contains(def_json, "\"OriginalUnit\":3000");
+        Contains(def_json, "\"DisplayUnit\":0");
+        Contains(def_json, "\"Description\":null");
+
+        // M1/M5: empty Description (the managed convenience overloads set Description = "").
+        auto m1 = collector.CreateM1RateSensor("rate/m1");
+        Contains(hsm_sensor_test_wire_registration_json(m1.handle()), "\"Description\":\"\"");
+        auto m5 = collector.CreateM5RateSensor("rate/m5");
+        Contains(hsm_sensor_test_wire_registration_json(m5.handle()), "\"Description\":\"\"");
+
+        // Full surface lowers onto the rate registration (TTL / unit / display-unit / aggregate / EMA).
+        hc::RateOptions opts;
+        opts.ttl = std::chrono::milliseconds(120000);
+        opts.unit = hc::Unit::MB;
+        opts.display_unit = hc::RateDisplayUnit::PerMinute;
+        opts.aggregate_data = true;
+        opts.ema_statistics = true;
+        auto full = collector.CreateRateSensor("rate/full", opts);
+        const std::string full_json = hsm_sensor_test_wire_registration_json(full.handle());
+        Contains(full_json, "\"OriginalUnit\":3,");
+        Contains(full_json, "\"DisplayUnit\":1");
+        Contains(full_json, "\"AggregateData\":true");
+        Contains(full_json, "\"Statistics\":1");
+        Contains(full_json, "\"TTLs\":[1200000000]");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
@@ -4669,6 +4739,7 @@ namespace
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
+            { "native_rate_options_parity", [](const std::string&) { NativeRateOptionsParity(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
             { "native_alert_scheduled_notification_matches_net", [](const std::string&) { NativeAlertScheduledNotificationMatchesNet(); } },
             { "native_prototype_merge_pins_identity_overrides_metadata", [](const std::string&) { NativePrototypeMergePinsIdentityOverridesMetadata(); } },

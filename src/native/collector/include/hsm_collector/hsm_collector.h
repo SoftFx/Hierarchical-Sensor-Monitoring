@@ -684,6 +684,18 @@ hsm_result_t hsm_collector_create_rate_sensor(
     const char* path,
     int64_t post_period_ms,
     hsm_sensor_t** out_sensor);
+/* Rate sensor with the full registration surface (mirrors RateSensorOptions). Like
+   hsm_collector_create_rate_sensor, but `options` carries TTL/unit/display_unit/keep_history/
+   self_destroy/statistics/aggregate/grafana/singleton/location. Start from
+   hsm_sensor_options_default(); for each field left at its sentinel the rate defaults apply:
+   OriginalUnit = ValueInSecond (3000) and DisplayUnit = 0 are ALWAYS emitted (never null), and
+   Description stays null unless set. `options` must not be NULL. */
+hsm_result_t hsm_collector_create_rate_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor);
 hsm_result_t hsm_collector_create_function_int_sensor(
     hsm_collector_t* collector,
     const char* path,

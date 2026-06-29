@@ -2596,7 +2596,8 @@ namespace
             hsm_int_values_function_t int_values_function,
             void* function_user_data,
             int32_t max_cache_size,
-            std::shared_ptr<NativeSensor>& out_sensor)
+            std::shared_ptr<NativeSensor>& out_sensor,
+            const RegistrationOptions* registration_override = nullptr)
         {
             if (!IsValidPath(path))
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
@@ -2643,7 +2644,9 @@ namespace
                 weak_from_this(), sensor_path, type, post_period_ms,
                 int_function, int_values_function, function_user_data, max_cache_size);
             RegistrationOptions periodic_registration; // Statistics:0, DisplayUnit:0 (member defaults)
-            if (type == HSM_SENSOR_TYPE_RATE)
+            if (registration_override != nullptr)
+                periodic_registration = *registration_override; // rate-with-options: full surface
+            else if (type == HSM_SENSOR_TYPE_RATE)
                 periodic_registration.unit = 3000; // RateSensorOptions default Unit = ValueInSecond
             RegisterSensorLocked(sensor, type, sensor_path, periodic_registration);
             sensors_.emplace(sensor_path, sensor);
@@ -5415,7 +5418,8 @@ static hsm_result_t CreatePeriodicSensorHandle(
     hsm_int_values_function_t values_function,
     void* user_data,
     int32_t max_cache_size,
-    hsm_sensor_t** out_sensor)
+    hsm_sensor_t** out_sensor,
+    const RegistrationOptions* registration_override = nullptr)
 {
     if (out_sensor != nullptr)
         *out_sensor = nullptr;
@@ -5428,7 +5432,7 @@ static hsm_result_t CreatePeriodicSensorHandle(
 
     std::shared_ptr<NativeSensor> sensor;
     const auto result = collector->impl->CreatePeriodicSensor(
-        path, type, post_period_ms, function, values_function, user_data, max_cache_size, sensor);
+        path, type, post_period_ms, function, values_function, user_data, max_cache_size, sensor, registration_override);
     if (result != HSM_RESULT_OK)
         return result;
 
@@ -5443,6 +5447,55 @@ hsm_result_t hsm_collector_create_rate_sensor(
     hsm_sensor_t** out_sensor)
 {
     return CreatePeriodicSensorHandle(collector, path, HSM_SENSOR_TYPE_RATE, post_period_ms, nullptr, nullptr, nullptr, 0, out_sensor);
+}
+
+hsm_result_t hsm_collector_create_rate_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
+    if (options == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    // Mirror RateSensorOptions.ToApi(): start from the rate defaults (Description null,
+    // DisplayUnit 0, Statistics 0; all member defaults of RegistrationOptions) and apply the
+    // caller's overrides. Two rate-specific defaults differ from the generic instant mapping:
+    // OriginalUnit defaults to ValueInSecond (3000) and DisplayUnit is always emitted (never null).
+    RegistrationOptions registration;
+    registration.ttl_ms = options->ttl_ms;
+    registration.unit = options->unit >= 0 ? options->unit : 3000; // OriginalUnit default ValueInSecond
+    if (options->description != nullptr)
+    {
+        registration.has_description = true;
+        registration.description = CopyString(options->description);
+    }
+    if (options->keep_history_ms > 0)
+    {
+        registration.has_keep_history = true;
+        registration.keep_history_ms = options->keep_history_ms;
+    }
+    if (options->self_destroy_ms > 0)
+    {
+        registration.has_self_destroy = true;
+        registration.self_destroy_ms = options->self_destroy_ms;
+    }
+    if (options->display_unit >= 0)
+        registration.display_unit = options->display_unit; // has_display_unit stays true (member default)
+    if (options->statistics >= 0)
+        registration.statistics = options->statistics; // has_statistics stays true (member default)
+    registration.is_singleton = static_cast<TriBool>(options->is_singleton);
+    registration.aggregate_data = static_cast<TriBool>(options->aggregate_data);
+    registration.enable_grafana = static_cast<TriBool>(options->enable_grafana);
+    registration.is_computer_sensor = options->is_computer_sensor;
+    registration.sensor_location = options->sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
+
+    return CreatePeriodicSensorHandle(
+        collector, path, HSM_SENSOR_TYPE_RATE, post_period_ms, nullptr, nullptr, nullptr, 0, out_sensor, &registration);
 }
 
 hsm_result_t hsm_collector_create_function_int_sensor(
