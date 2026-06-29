@@ -3572,7 +3572,11 @@ namespace
                             opts.is_computer_sensor = true;
 
                             std::shared_ptr<NativeSensor> sensor;
-                            const std::string path = "Network/" + iface + "/" + leaf;
+                            // MUST match the catalog network entries: RevealDefaultPath nests this under
+                            // ".computer/Network/..." like every other host sensor. A bare "Network/..."
+                            // here (skipping RevealDefaultPath) put the per-interface speed sensors in a
+                            // SEPARATE top-level "Network" node next to .computer instead (#1189 bug).
+                            const std::string path = RevealDefaultPath("Network", iface + "/" + leaf, /*is_computer_sensor=*/true);
                             if (CreateDefaultBarSensor(path, HSM_SENSOR_TYPE_DOUBLE_BAR, 60000, kDefaultBarPrecision, opts, sensor) != HSM_RESULT_OK)
                                 return;
 
