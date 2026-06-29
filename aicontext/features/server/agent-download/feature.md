@@ -8,7 +8,7 @@
 
 ## Description
 
-An admin opens a product's access-keys view and clicks **Download agent**; the server streams a zip
+An admin opens a product's edit page ("HSM Agent" section) and clicks **Download agent**; the server streams a zip
 containing the byte-identical signed `hsm-agent.exe` + a generated `config.json` (this server's address
 + the product's access key) + silent `install.cmd`/`uninstall.cmd`. The client runs `install.cmd` → the
 **C++ exe self-installs** as an auto-start Windows service and connects — zero configuration.
@@ -34,7 +34,7 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 | Bundle builder (config.json + scripts + zip; pure/testable) | `HSMServer/Model/Agent/AgentInstallerBundle.cs` |
 | Server settings "Agent connection URL" + "Allow untrusted server certificate" + "Report top processes by CPU" | `HSMServer/ServerConfiguration/Sections/AgentConfig.cs` (`ExternalConnectionUrl`, `AllowUntrustedCertificate`, `EnableTopCpuProcesses`) (+ `IServerConfig`/`ServerConfig`) |
 | Settings UI (Agent tab) | `Views/Configuration/_Agent.cshtml`, `Views/Configuration/Index.cshtml`, `AgentSettingsViewModel`, `ConfigurationController.SaveAgentSettings` |
-| Download button | `Views/AccessKeys/_ProductAccessKeys.cshtml` (admin-only) |
+| Download button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
 | Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` (staged by `server-build.yml` before publish, W9) |
 | Key selection / URL resolution (pure, testable) | `Model/Agent/AgentKeySelector.cs`, `Model/Agent/AgentConnectionResolver.cs` |
 | Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (7: incl. topCpu on/off) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
