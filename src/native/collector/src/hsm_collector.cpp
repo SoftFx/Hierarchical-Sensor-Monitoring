@@ -610,6 +610,22 @@ namespace
         }
     }
 
+    // Join a worker thread, but NEVER the calling thread itself: a self-join throws
+    // std::system_error(resource_deadlock_would_occur), and these joins run inside noexcept teardown
+    // (Stop() / destructors), so the throw would std::terminate the process. A self-join only arises if
+    // a stop is re-entered from within the worker's own action/callback; detach the already-exiting
+    // thread instead of aborting. The normal cross-thread case joins exactly as before (no behavior
+    // change), so this is a defensive guard against an EDEADLK teardown crash.
+    inline void JoinWorkerSelfSafe(std::thread& worker)
+    {
+        if (!worker.joinable())
+            return;
+        if (worker.get_id() == std::this_thread::get_id())
+            worker.detach();
+        else
+            worker.join();
+    }
+
     // Single-worker periodic task — the portable ScheduledTaskHandle (issue #1095 §13).
     // Idempotent Start/Stop; the worker sleeps until the next due time reported by the
     // injected clock (event-driven, not a busy poll — bounded by kMaxWaitMs so a dynamic
@@ -656,8 +672,7 @@ namespace
             }
 
             cv_.notify_all();
-            if (worker_.joinable())
-                worker_.join();
+            JoinWorkerSelfSafe(worker_);
 
             std::lock_guard<std::mutex> guard(mutex_);
             running_ = false;
@@ -4096,8 +4111,7 @@ namespace
 
             queue_cv_.notify_all();
 
-            if (worker_.joinable())
-                worker_.join();
+            JoinWorkerSelfSafe(worker_);
         }
 
         void WorkerLoop()
