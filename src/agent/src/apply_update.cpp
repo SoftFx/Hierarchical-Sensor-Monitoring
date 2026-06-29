@@ -194,4 +194,73 @@ namespace hsm::agent
         return 0;
     }
 
+    // ---- --restart-service: bounce the service to apply a config change (no binary swap) ----------
+
+    int RunRestartService()
+    {
+        SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+        if (!scm)
+        {
+            LogErr("restart: cannot open SCM");
+            return 1;
+        }
+
+        SC_HANDLE svc = OpenServiceW(scm, kServiceName, SERVICE_QUERY_STATUS | SERVICE_START);
+        if (!svc)
+        {
+            CloseServiceHandle(scm);
+            LogErr("restart: cannot open HSMAgent service");
+            return 1;
+        }
+
+        // The caller RequestStop()s right after spawning us, so wait for the graceful shutdown to
+        // finish before starting a fresh process (which re-reads config.json).
+        Log("restart: waiting for HSMAgent to stop (up to 60 s)...");
+        if (!WaitForServiceState(svc, SERVICE_STOPPED, 60000))
+        {
+            CloseServiceHandle(svc);
+            CloseServiceHandle(scm);
+            LogErr("restart: HSMAgent did not stop within 60 s — leaving it as-is");
+            return 1;
+        }
+
+        if (!StartServiceW(svc, 0, nullptr))
+        {
+            const DWORD err = GetLastError();
+            // ALREADY_RUNNING: a second --restart-service helper (several groups toggled in one
+            // response) already started it — that is success, not failure.
+            if (err != ERROR_SERVICE_ALREADY_RUNNING)
+            {
+                CloseServiceHandle(svc);
+                CloseServiceHandle(scm);
+                LogErr("restart: StartService failed (" + std::to_string(err) + ") — service is stopped");
+                return 1;
+            }
+        }
+
+        Log("restart: HSMAgent restarted to apply a configuration change");
+        CloseServiceHandle(svc);
+        CloseServiceHandle(scm);
+        return 0;
+    }
+
+    bool SpawnRestartService()
+    {
+        wchar_t exe_path[MAX_PATH] = {};
+        if (!GetModuleFileNameW(nullptr, exe_path, MAX_PATH))
+            return false;
+
+        std::wstring cmd_line = std::wstring(L"\"") + exe_path + L"\" --restart-service";
+        STARTUPINFOW si = {};
+        si.cb = sizeof(si);
+        PROCESS_INFORMATION pi = {};
+        if (!CreateProcessW(nullptr, cmd_line.data(), nullptr, nullptr, FALSE,
+                            DETACHED_PROCESS | CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
+            return false;
+
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        return true;
+    }
+
 } // namespace hsm::agent

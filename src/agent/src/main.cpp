@@ -4,6 +4,8 @@
 //   --install / --uninstall register/remove the auto-start service (requires elevation)
 //   --apply-update          detached helper: waits for service to stop, swaps binaries, restarts
 //                           with health gate (epic #1174)
+//   --restart-service       detached helper: waits for service to stop, then restarts it (no swap) —
+//                           applies a config change pushed by a server directive (#1198)
 //   --config <path>         override the config.json location (default %ProgramData%\HSM Agent)
 //
 // The single signed binary is identical across every product download; only the bundled config.json
@@ -62,6 +64,7 @@ namespace
                      "  --install      register the auto-start service (requires elevation)\n"
                      "  --uninstall    remove the service (requires elevation)\n"
                      "  --apply-update apply a staged update (spawned automatically by the agent)\n"
+                     "  --restart-service  bounce the service to apply a config change (spawned automatically)\n"
                      "  --config <p>   use config file <p> (default: %ProgramData%\\HSM Agent\\config.json)\n"
                      "  --version      print version and exit\n";
     }
@@ -112,7 +115,7 @@ int wmain(int argc, wchar_t** argv)
     for (int i = 1; i < argc; ++i)
     {
         const std::wstring arg = argv[i];
-        if (arg == L"--install" || arg == L"--uninstall" || arg == L"--console" || arg == L"--service" || arg == L"--apply-update")
+        if (arg == L"--install" || arg == L"--uninstall" || arg == L"--console" || arg == L"--service" || arg == L"--apply-update" || arg == L"--restart-service")
         {
             mode = arg;
         }
@@ -145,6 +148,8 @@ int wmain(int argc, wchar_t** argv)
         return UninstallService();
     if (mode == L"--apply-update")
         return RunApplyUpdate();
+    if (mode == L"--restart-service")
+        return RunRestartService();
 
     // Console + service runs must be single-instance so they never double-send. A Global mutex may
     // fail for a non-elevated user (no SeCreateGlobalPrivilege); in that case skip the guard rather

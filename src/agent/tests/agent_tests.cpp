@@ -255,6 +255,29 @@ namespace
         ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "update": "on" })", "non-object update");
     }
 
+    // Guards the sensor-group directive name<->field mapping (#1198): a typo (e.g. "disk" pointing at
+    // sensors_network) would silently toggle the wrong group. SensorGroupFlag is the single source of
+    // truth shared with the runtime directive handler, so testing it here covers both.
+    void SensorGroupFlagMapsNames()
+    {
+        using hsm::agent::SensorGroupFlag;
+        Check(SensorGroupFlag("computer") == &AgentConfig::sensors_computer, "computer -> sensors_computer");
+        Check(SensorGroupFlag("system") == &AgentConfig::sensors_system, "system -> sensors_system");
+        Check(SensorGroupFlag("disk") == &AgentConfig::sensors_disk, "disk -> sensors_disk");
+        Check(SensorGroupFlag("network") == &AgentConfig::sensors_network, "network -> sensors_network");
+        Check(SensorGroupFlag("module") == &AgentConfig::sensors_module, "module -> sensors_module");
+        Check(SensorGroupFlag("process") == &AgentConfig::sensors_process, "process -> sensors_process");
+        Check(SensorGroupFlag("bogus") == nullptr, "unknown group -> nullptr");
+        Check(SensorGroupFlag("") == nullptr, "empty group -> nullptr");
+
+        // The returned pointer-to-member reads and writes the intended field.
+        AgentConfig c; // defaults: process off, the rest on
+        auto process = SensorGroupFlag("process");
+        Check(process != nullptr && !(c.*process), "process flag reads its default (off)");
+        c.*process = true;
+        Check(c.sensors_process, "writing via the pointer flips the right field");
+    }
+
     const std::map<std::string, std::function<void()>>& Tests()
     {
         static const std::map<std::string, std::function<void()>> tests = {
@@ -272,6 +295,7 @@ namespace
             { "agent_topcpu_rejects_bad_config", TopCpuRejectsBadConfig },
             { "agent_update_config_parses_and_defaults", UpdateConfigParsesAndDefaults },
             { "agent_update_config_rejects_bad_period", UpdateConfigRejectsBadPeriod },
+            { "agent_sensor_group_flag_maps_names", SensorGroupFlagMapsNames },
         };
         return tests;
     }
