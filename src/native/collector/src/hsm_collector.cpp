@@ -3534,6 +3534,30 @@ namespace
             opts.enable_grafana = TriBool::True;
             opts.is_computer_sensor = true;
 
+            // Alert: a sustained high failure rate is a real problem (a crash-looping service, port
+            // exhaustion, a client hammering a dead port). Raise the sensor to Error and notify when the
+            // value stays above 1 failed attempt/sec (== 60/min) for 5 minutes — the confirmation period
+            // suppresses transient spikes. The threshold is in the sensor's base unit (failures/sec).
+            AlertData alert;
+            alert.kind = HSM_ALERT_KIND_INSTANT;
+            AlertConditionData condition;
+            condition.combination = HSM_ALERT_COMBINATION_AND;
+            condition.property = HSM_ALERT_PROP_VALUE;
+            condition.operation = HSM_ALERT_OP_GREATER_THAN;
+            condition.target_type = HSM_ALERT_TARGET_CONST;
+            condition.target_is_null = false;
+            condition.target_value = "1"; // 1 failed attempt/sec == 60/min
+            alert.conditions.push_back(condition);
+            alert.status = HSM_SENSOR_STATUS_ERROR; // AndSetSensorError
+            alert.has_template = true;
+            alert.template_text = "[$product] TCP connection failures elevated: $value/sec failed connection attempts";
+            alert.has_icon = true;
+            alert.icon = AlertIconUtf8(HSM_ALERT_ICON_ERROR);
+            alert.has_confirmation = true;
+            alert.confirmation_ms = 300000; // 5 minutes
+            opts.has_alerts_list = true;
+            opts.alerts.push_back(std::move(alert));
+
             const std::string path = RevealDefaultPath("Network", "Connection failures rate", /*is_computer_sensor=*/true);
             if (CreateDefaultRateSensor(path, tcp_fail_rate_period_ms_, opts, tcp_fail_rate_sensor_) != HSM_RESULT_OK)
                 return;

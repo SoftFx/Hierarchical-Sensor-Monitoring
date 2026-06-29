@@ -4727,6 +4727,11 @@ namespace
                 Contains(json, "\"SensorType\":9");
                 Contains(json, "\"OriginalUnit\":3000");
                 Contains(json, "\"DisplayUnit\":1");
+                // Threshold alert rides the registration: Value (20) > (2) const "1", Error, 5-min confirm.
+                Contains(json, "\"Operation\":2,\"Property\":20");
+                Contains(json, "\"Target\":{\"Type\":0,\"Value\":\"1\"}");
+                Contains(json, "\"ConfirmationPeriod\":3000000000");
+                Contains(json, "TCP connection failures elevated");
                 found = true;
             }
         }
