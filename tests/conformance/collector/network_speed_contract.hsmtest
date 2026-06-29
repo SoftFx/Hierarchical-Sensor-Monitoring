@@ -30,7 +30,7 @@ network_interface_received_registers|add_default_sensor|network_interface_receiv
 network_interface_received_registers|start
 network_interface_received_registers|stop
 network_interface_received_registers|expect_registration_count|1
-network_interface_received_registers|expect_registration_contains|0|Network/Ethernet/Received MB,sec"
+network_interface_received_registers|expect_registration_contains|0|.computer/Network/Ethernet/Received MB,sec"
 network_interface_received_registers|expect_registration_contains|0|"SensorType":5,
 network_interface_received_registers|expect_registration_contains|0|"Statistics":1,
 network_interface_received_registers|expect_registration_contains|0|"OriginalUnit":2103,
@@ -42,7 +42,7 @@ network_interface_sent_registers|add_default_sensor|network_interface_sent||Ethe
 network_interface_sent_registers|start
 network_interface_sent_registers|stop
 network_interface_sent_registers|expect_registration_count|1
-network_interface_sent_registers|expect_registration_contains|0|Network/Ethernet/Sent MB,sec"
+network_interface_sent_registers|expect_registration_contains|0|.computer/Network/Ethernet/Sent MB,sec"
 network_interface_sent_registers|expect_registration_contains|0|"SensorType":5,
 network_interface_sent_registers|expect_registration_contains|0|"Statistics":1,
 network_interface_sent_registers|expect_registration_contains|0|"OriginalUnit":2103,

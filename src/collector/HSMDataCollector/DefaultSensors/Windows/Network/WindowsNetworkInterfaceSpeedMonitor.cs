@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
+using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects.SensorRequests;
 
@@ -16,7 +17,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
     /// <summary>
     /// Periodically samples per-interface cumulative byte counters (via
     /// <see cref="NetworkInterface.GetIPStatistics"/>) and posts Double bar sensors at
-    /// "Network/&lt;interface-name&gt;/{Received,Sent} MB,sec" for every active (Up, non-loopback)
+    /// ".computer/Network/&lt;interface-name&gt;/{Received,Sent} MB,sec" for every active (Up, non-loopback)
     /// interface. Sensor pairs are created lazily on first sighting; a disappeared interface
     /// (VPN down, cable unplugged) expires by TTL. Windows only.
     /// </summary>
@@ -194,7 +195,11 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             opts.Description = $"{descr} network speed on interface **{name}**.";
 
             // Leaf uses "MB,sec" (not "MB/sec") so the unit isn't split into an extra tree node.
-            var sensor = (IBarSensor<double>)_storage.CreateDoubleBarSensor($"Network/{name}/{leaf}", opts);
+            // RevealDefaultPath nests under ".computer/Network/..." like every default host sensor (and
+            // the native collector + conformance) — a bare "Network/..." here would create a SEPARATE
+            // top-level "Network" node next to .computer (#1189 bug).
+            var path = DefaultPrototype.RevealDefaultPath(opts, "Network", $"{name}/{leaf}");
+            var sensor = (IBarSensor<double>)_storage.CreateDoubleBarSensor(path, opts);
             sensors[name] = sensor;
             return sensor;
         }
