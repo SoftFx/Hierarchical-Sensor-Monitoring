@@ -19,47 +19,43 @@ namespace hsm::collector
     std::optional<double> WindowsTcpFailureSampler::Sample()
     {
         // dwAttemptFails is the cumulative count of failed connection attempts — the same quantity the
-        // managed/PDH "TCPv4|TCPv6 / Connection Failures" counter reports. Sum IPv4 + IPv6.
-        std::uint64_t current = 0;
-        bool any = false;
+        // managed/PDH "TCPv4|TCPv6 / Connection Failures" counter reports. Track a SEPARATE baseline per
+        // address family and sum the per-family deltas, so an intermittently-unreadable family just
+        // contributes 0 for that tick (and resumes cleanly from its own baseline) instead of poisoning a
+        // shared baseline.
+        bool any_readable = false;
+        std::uint64_t total_delta = 0;
 
-        MIB_TCPSTATS v4{};
-        if (GetTcpStatisticsEx(&v4, AF_INET) == NO_ERROR)
-        {
-            current += v4.dwAttemptFails;
-            any = true;
-        }
+        const auto sample_family = [&](FamilyBaseline& family, int address_family) {
+            MIB_TCPSTATS stats{};
+            if (GetTcpStatisticsEx(&stats, address_family) != NO_ERROR)
+                return; // unreadable this tick: contribute 0, keep the baseline so it resumes cleanly
 
-        MIB_TCPSTATS v6{};
-        if (GetTcpStatisticsEx(&v6, AF_INET6) == NO_ERROR)
-        {
-            current += v6.dwAttemptFails;
-            any = true;
-        }
+            any_readable = true;
+            const std::uint64_t current = stats.dwAttemptFails;
 
-        if (!any)
-            return std::nullopt; // both reads failed — skip this tick, keep the baseline
+            if (!family.have_baseline)
+            {
+                family.prev = current;
+                family.have_baseline = true;
+                return; // first reading of this family seeds its baseline, contributes nothing
+            }
 
-        if (!have_baseline_)
-        {
-            prev_ = current;
-            have_baseline_ = true;
-            return std::nullopt; // first call seeds the baseline, posts nothing
-        }
+            if (current >= family.prev)
+                total_delta += current - family.prev;
+            // else: counter reset/wrap for this family — add nothing, just re-baseline below.
+            family.prev = current;
+        };
 
-        if (current < prev_)
-        {
-            prev_ = current; // counter reset/wrap — re-baseline, skip
-            return std::nullopt;
-        }
+        sample_family(v4_, AF_INET);
+        sample_family(v6_, AF_INET6);
 
-        const std::uint64_t delta = current - prev_;
-        prev_ = current;
+        if (!any_readable)
+            return std::nullopt; // neither family readable this tick — skip, keep baselines
+        if (total_delta == 0)
+            return std::nullopt; // quiet interval (or baseline seeding) — nothing pushed, rate stays 0
 
-        if (delta == 0)
-            return std::nullopt; // quiet interval — nothing pushed, the rate window stays 0
-
-        return static_cast<double>(delta);
+        return static_cast<double>(total_delta);
     }
 } // namespace hsm::collector
 

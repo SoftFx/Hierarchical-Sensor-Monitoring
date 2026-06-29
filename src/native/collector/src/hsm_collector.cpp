@@ -3526,9 +3526,8 @@ namespace
             // the registration gate open, so it is deterministically registered the moment Start
             // returns; the sampler thread below only PUSHES deltas to it.
             RegistrationOptions opts;
-            opts.unit = 3000; // OriginalUnit = ValueInSecond (rate)
-            opts.has_display_unit = true;
-            opts.display_unit = 1; // RateDisplayUnit::PerMinute — admins read it as failures/min
+            opts.unit = 3000;      // OriginalUnit = ValueInSecond (rate)
+            opts.display_unit = 1; // RateDisplayUnit::PerMinute — admins read it as failures/min (has_display_unit defaults true)
             opts.has_description = true;
             opts.description = "Failed TCP connection attempts per minute (MIB_TCPSTATS.dwAttemptFails, IPv4+IPv6).";
             opts.enable_grafana = TriBool::True;

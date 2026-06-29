@@ -274,18 +274,21 @@ namespace hsm::agent
             // this returns that same handle; we attach before Start (rebuilds its registration) and free
             // the handle (the collector still owns the sensor). Cross-platform (Total CPU is universal).
             {
+                // Build the alert BEFORE acquiring the sensor handle so a throw from the fluent builder
+                // (CreateAlert/Build use ThrowIfFailed) can't leak the handle.
+                const hc::Alert cpu_error_alert =
+                    collector.CreateAlert(hc::AlertKind::Bar)
+                        .If(hc::AlertProperty::EmaMean, hc::AlertOperation::GreaterThan, "50")
+                        .AsSensorError()
+                        .ThenNotify("[$product]$path CPU sustained above 50% (EMA mean $value$unit)")
+                        .WithIcon(hc::AlertIcon::Error)
+                        .WithConfirmationPeriod(std::chrono::minutes(5))
+                        .Build();
+
                 hsm_sensor_t* cpu_sensor = nullptr;
                 if (hsm_collector_add_default_sensor(collector.handle(), HSM_DEFAULT_TOTAL_CPU, nullptr, &cpu_sensor) == HSM_RESULT_OK &&
                     cpu_sensor != nullptr)
                 {
-                    const hc::Alert cpu_error_alert =
-                        collector.CreateAlert(hc::AlertKind::Bar)
-                            .If(hc::AlertProperty::EmaMean, hc::AlertOperation::GreaterThan, "50")
-                            .AsSensorError()
-                            .ThenNotify("[$product]$path CPU sustained above 50% (EMA mean $value$unit)")
-                            .WithIcon(hc::AlertIcon::Error)
-                            .WithConfirmationPeriod(std::chrono::minutes(5))
-                            .Build();
                     hsm_sensor_attach_alert(cpu_sensor, cpu_error_alert.handle());
                     hsm_sensor_release(cpu_sensor);
                 }

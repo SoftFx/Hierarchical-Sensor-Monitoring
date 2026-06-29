@@ -23,8 +23,18 @@ namespace hsm::collector
         std::optional<double> Sample();
 
     private:
-        std::uint64_t prev_ = 0;
-        bool have_baseline_ = false;
+        // One monotonic baseline PER address family. Summing both families into a single baseline
+        // (the previous design) let an intermittently-unreadable family poison the shared baseline:
+        // a family dropping out then returning would read as a counter reset, dumping its whole
+        // cumulative count as one spurious delta (false spike) or silently dropping real failures.
+        struct FamilyBaseline
+        {
+            std::uint64_t prev = 0;
+            bool have_baseline = false;
+        };
+
+        FamilyBaseline v4_;
+        FamilyBaseline v6_;
     };
 #endif // _WIN32
 } // namespace hsm::collector

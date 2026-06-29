@@ -4748,11 +4748,6 @@ namespace
     {
         hc::Collector collector(WrapperTestOptions());
 
-        hsm_sensor_t* cpu = nullptr;
-        Require(
-            hsm_collector_add_default_sensor(collector.handle(), HSM_DEFAULT_TOTAL_CPU, nullptr, &cpu) == HSM_RESULT_OK && cpu != nullptr,
-            "Total CPU default sensor must be addable");
-
         const hc::Alert alert =
             collector.CreateAlert(hc::AlertKind::Bar)
                 .If(hc::AlertProperty::EmaMean, hc::AlertOperation::GreaterThan, "50")
@@ -4761,6 +4756,11 @@ namespace
                 .WithIcon(hc::AlertIcon::Error)
                 .WithConfirmationPeriod(std::chrono::minutes(5))
                 .Build();
+
+        hsm_sensor_t* cpu = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.handle(), HSM_DEFAULT_TOTAL_CPU, nullptr, &cpu) == HSM_RESULT_OK && cpu != nullptr,
+            "Total CPU default sensor must be addable");
         hsm_sensor_attach_alert(cpu, alert.handle());
         hsm_sensor_release(cpu);
 
