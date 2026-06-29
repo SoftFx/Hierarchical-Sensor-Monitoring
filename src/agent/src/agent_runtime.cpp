@@ -259,6 +259,13 @@ namespace hsm::agent
                     std::chrono::milliseconds(config_.top_cpu_period_ms));
 #endif
 
+            // TCP connection failure rate (failures/min) — an admin "velocity of failure" signal
+            // (service down / port exhaustion). Windows-only; the collector rejects the call on other
+            // platforms, so guard here. Lightweight single sensor, enabled by default.
+#ifdef _WIN32
+            collector.EnableTcpConnectionFailureRateSensor(std::chrono::milliseconds(60000));
+#endif
+
             Log(hc::LogLevel::Info,
                 "HSM Agent starting: streaming to " + config_.server_address + ":" + std::to_string(config_.port));
 

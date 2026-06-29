@@ -4707,6 +4707,34 @@ namespace
         Contains(full_json, "\"TTLs\":[1200000000]");
     }
 
+#if defined(_WIN32)
+    // The opt-in TCP connection failure rate sensor registers a Rate sensor (type 9) synchronously at
+    // Start, anchored under .computer/Network, displayed per minute. The live PDH/Win32 delta is
+    // non-deterministic host state, so only the registration is asserted — the same approach the
+    // network-speed / top-CPU owned-thread features take (no deterministic value assertion).
+    void NativeTcpFailureRateSensorRegisters()
+    {
+        hc::Collector collector(WrapperTestOptions());
+        collector.EnableTcpConnectionFailureRateSensor(std::chrono::milliseconds(60000));
+        collector.Start();
+
+        bool found = false;
+        for (std::size_t i = 0; i < collector.RegistrationCount(); ++i)
+        {
+            const std::string json = collector.RegistrationJson(i);
+            if (json.find("Connection failures rate") != std::string::npos)
+            {
+                Contains(json, "\"SensorType\":9");
+                Contains(json, "\"OriginalUnit\":3000");
+                Contains(json, "\"DisplayUnit\":1");
+                found = true;
+            }
+        }
+        collector.Stop();
+        Require(found, "TCP connection failure rate sensor must register a Rate sensor at Start");
+    }
+#endif
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
@@ -4740,6 +4768,9 @@ namespace
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_rate_options_parity", [](const std::string&) { NativeRateOptionsParity(); } },
+#if defined(_WIN32)
+            { "native_tcp_failure_rate_sensor_registers", [](const std::string&) { NativeTcpFailureRateSensorRegisters(); } },
+#endif
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
             { "native_alert_scheduled_notification_matches_net", [](const std::string&) { NativeAlertScheduledNotificationMatchesNet(); } },
             { "native_prototype_merge_pins_identity_overrides_metadata", [](const std::string&) { NativePrototypeMergePinsIdentityOverridesMetadata(); } },

@@ -2,6 +2,7 @@
 
 #include "cpu_top.hpp"                             // per-process CPU sampling (#1179; _WIN32 only for WindowsCpuSampler)
 #include "network_speed.hpp"                       // per-interface network speed sampling (#1189; _WIN32 only for WindowsNetworkSampler)
+#include "tcp_connection_stats.hpp"                // TCP connection failure rate sampling (_WIN32 only for WindowsTcpFailureSampler)
 #include "windows_info.hpp"                        // Windows OS-info readers (#1189 follow-up; _WIN32 only for ReadWindowsInfo)
 #include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
 
@@ -2230,6 +2231,7 @@ namespace
             StopScheduler();
             StopTopCpuSampler();
             StopNetworkSpeedSampler();
+            StopTcpFailureRateSampler();
             StopWindowsInfoSampler();
             StopSelfMonitor();
             StopWorker();
@@ -2311,6 +2313,7 @@ namespace
             StartScheduler();
             StartTopCpuSampler();
             StartNetworkSpeedSampler();
+            StartTcpFailureRateSampler();
             StartWindowsInfoSampler();
             StartSelfMonitor();
 
@@ -2367,6 +2370,7 @@ namespace
             StopScheduler();
             StopTopCpuSampler();
             StopNetworkSpeedSampler();
+            StopTcpFailureRateSampler();
             StopWindowsInfoSampler();
             StopSelfMonitor();
 
@@ -2814,6 +2818,57 @@ namespace
                 CalculateSystemPath(prototype_path, registration), type, bar_period_ms, precision, registration, out_sensor);
         }
 
+        // Create a default (computer/module-anchored) periodic RATE sensor with a caller-built
+        // registration — the periodic analogue of CreateDefaultBarSensor (path via CalculateSystemPath,
+        // not BuildSensorPath). Used by the TCP-failure-rate sampler.
+        hsm_result_t CreateDefaultRateSensor(
+            const std::string& prototype_path,
+            int64_t post_period_ms,
+            const RegistrationOptions& registration,
+            std::shared_ptr<NativeSensor>& out_sensor)
+        {
+            if (!IsValidPath(prototype_path.c_str()))
+                return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            const auto sensor_path = CalculateSystemPath(prototype_path, registration);
+
+            if (!CanRegisterSensorsLocked())
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is not accepting sensor registrations.");
+            }
+
+            const auto existing = sensors_.find(sensor_path);
+            if (existing != sensors_.end())
+            {
+                if (existing->second->Type() != HSM_SENSOR_TYPE_RATE)
+                {
+                    out_sensor.reset();
+                    return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path is already registered with a different type.");
+                }
+
+                out_sensor = existing->second;
+                ClearError();
+                return HSM_RESULT_OK;
+            }
+
+            if (sensors_.size() >= static_cast<size_t>(max_sensors_))
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_LIMIT_EXCEEDED, "MaxSensors limit reached.");
+            }
+
+            auto sensor = std::make_shared<NativeSensor>(
+                weak_from_this(), sensor_path, HSM_SENSOR_TYPE_RATE, post_period_ms, nullptr, nullptr, nullptr, 0);
+            RegisterSensorLocked(sensor, HSM_SENSOR_TYPE_RATE, sensor_path, registration);
+            sensors_.emplace(sensor_path, sensor);
+            out_sensor = std::move(sensor);
+
+            ClearError();
+            return HSM_RESULT_OK;
+        }
+
         void SetMetricSourceFactory(hsm_metric_source_factory_fn factory, void* user_data)
         {
             std::lock_guard<std::mutex> guard(mutex_);
@@ -3122,6 +3177,28 @@ namespace
 
             net_speed_enabled_ = true;
             net_speed_period_ms_ = period_ms;
+            ClearError();
+            return HSM_RESULT_OK;
+#endif
+        }
+
+        // --- TCP connection failure rate (push-fed Rate sensor) ---
+
+        hsm_result_t EnableTcpConnectionFailureRateSensor(int32_t period_ms)
+        {
+            if (period_ms <= 0)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+#ifndef _WIN32
+            (void)period_ms;
+            return SetError(HSM_RESULT_INVALID_STATE, "TCP connection failure rate sensor is only supported on Windows.");
+#else
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (state_ != CollectorState::Stopped)
+                return SetError(HSM_RESULT_INVALID_STATE, "EnableTcpConnectionFailureRateSensor must be called before Start.");
+
+            tcp_fail_rate_enabled_ = true;
+            tcp_fail_rate_period_ms_ = period_ms;
             ClearError();
             return HSM_RESULT_OK;
 #endif
@@ -3439,6 +3516,53 @@ namespace
 #endif
         }
 
+        void StartTcpFailureRateSampler()
+        {
+#ifdef _WIN32
+            if (!tcp_fail_rate_enabled_)
+                return;
+
+            // Create the single rate sensor synchronously here — Start() runs this outside mutex_ with
+            // the registration gate open, so it is deterministically registered the moment Start
+            // returns; the sampler thread below only PUSHES deltas to it.
+            RegistrationOptions opts;
+            opts.unit = 3000; // OriginalUnit = ValueInSecond (rate)
+            opts.has_display_unit = true;
+            opts.display_unit = 1; // RateDisplayUnit::PerMinute — admins read it as failures/min
+            opts.has_description = true;
+            opts.description = "Failed TCP connection attempts per minute (MIB_TCPSTATS.dwAttemptFails, IPv4+IPv6).";
+            opts.enable_grafana = TriBool::True;
+            opts.is_computer_sensor = true;
+
+            const std::string path = RevealDefaultPath("Network", "Connection failures rate", /*is_computer_sensor=*/true);
+            if (CreateDefaultRateSensor(path, tcp_fail_rate_period_ms_, opts, tcp_fail_rate_sensor_) != HSM_RESULT_OK)
+                return;
+#if defined(HSM_COLLECTOR_HTTP)
+            if (send_wire_)
+                PostRegistrationsWire({ tcp_fail_rate_sensor_ });
+#endif
+
+            {
+                std::lock_guard<std::mutex> guard(tcp_fail_rate_cv_mutex_);
+                tcp_fail_rate_stop_ = false;
+            }
+            tcp_fail_rate_thread_ = std::thread([this] { RunTcpFailureRateLoop(); });
+#endif
+        }
+
+        void StopTcpFailureRateSampler()
+        {
+#ifdef _WIN32
+            {
+                std::lock_guard<std::mutex> guard(tcp_fail_rate_cv_mutex_);
+                tcp_fail_rate_stop_ = true;
+            }
+            tcp_fail_rate_cv_.notify_all();
+            if (tcp_fail_rate_thread_.joinable())
+                tcp_fail_rate_thread_.join();
+#endif
+        }
+
         // Per-package queue stats, posted from the dispatch send path's UNLOCKED window. Bars only
         // aggregate (AccumulateBar) — they never enqueue or touch queue_mutex_ — so this is safe there.
         void PostPackageStats(const std::vector<std::string>& batch, std::chrono::steady_clock::duration send_duration)
@@ -3598,6 +3722,36 @@ namespace
                         post_direction(rx_cache, iface, "Received MB,sec", "Average received", speed.rx_mb_per_sec);
                         post_direction(tx_cache, iface, "Sent MB,sec", "Average sent", speed.tx_mb_per_sec);
                     }
+                }
+                catch (...)
+                {
+                }
+            }
+#endif
+        }
+
+        void RunTcpFailureRateLoop()
+        {
+#ifdef _WIN32
+            hsm::collector::WindowsTcpFailureSampler sampler;
+            const auto period = std::chrono::milliseconds(tcp_fail_rate_period_ms_);
+
+            sampler.Sample(); // seed baseline — first call returns nullopt
+
+            while (true)
+            {
+                {
+                    std::unique_lock<std::mutex> lock(tcp_fail_rate_cv_mutex_);
+                    if (tcp_fail_rate_cv_.wait_for(lock, period, [this] { return tcp_fail_rate_stop_; }))
+                        return;
+                }
+
+                try
+                {
+                    // Push the interval's failed-attempt delta; the scheduler posts delta/elapsed each
+                    // post period. A quiet interval pushes nothing, so the posted rate is 0.
+                    if (const auto delta = sampler.Sample())
+                        tcp_fail_rate_sensor_->AddRate(*delta, HSM_SENSOR_STATUS_OK, "");
                 }
                 catch (...)
                 {
@@ -4240,6 +4394,17 @@ namespace
         std::mutex net_speed_cv_mutex_;
         std::condition_variable net_speed_cv_;
         bool net_speed_stop_ = false;
+
+        // TCP connection failure rate (Windows-only): optional background thread that reads the
+        // failed-connection-attempt counter delta each period and pushes it to a single Rate sensor
+        // (created synchronously at Start, stored here so the loop only pushes).
+        bool tcp_fail_rate_enabled_ = false;
+        int32_t tcp_fail_rate_period_ms_ = 0;
+        std::shared_ptr<NativeSensor> tcp_fail_rate_sensor_;
+        std::thread tcp_fail_rate_thread_;
+        std::mutex tcp_fail_rate_cv_mutex_;
+        std::condition_variable tcp_fail_rate_cv_;
+        bool tcp_fail_rate_stop_ = false;
 
         // Windows OS-info sampler (#1189 follow-up): a thread that periodically reads + posts the
         // typed "Windows OS info" sensors (TimeSpan/Version), which the double-only metric path can't.
@@ -6363,6 +6528,16 @@ hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return collector->impl->EnableNetworkInterfaceSpeedSensors(period_ms);
+}
+
+hsm_result_t hsm_collector_enable_tcp_connection_failure_rate_sensor(
+    hsm_collector_t* collector,
+    int32_t period_ms)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->EnableTcpConnectionFailureRateSensor(period_ms);
 }
 
 hsm_result_t hsm_collector_set_metric_source_factory(

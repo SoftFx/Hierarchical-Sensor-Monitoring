@@ -104,6 +104,7 @@ add_library(hsm_collector_core STATIC
     src/hsm_collector.cpp
     src/cpu_top.cpp                              # per-process CPU sampling (#1179; SelectTopN portable, WindowsCpuSampler #if _WIN32)
     src/network_speed.cpp                        # per-interface network speed (#1189; WindowsNetworkSampler #if _WIN32)
+    src/tcp_connection_stats.cpp                 # TCP connection failure rate sampler (WindowsTcpFailureSampler #if _WIN32)
     src/windows_info.cpp                          # Windows OS-info readers (#1189 follow-up; ReadWindowsInfo #if _WIN32)
     src/platform/hsm_windows_metric_sources.cpp  # self-guarded #if _WIN32 (#1164)
 )
