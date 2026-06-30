@@ -39,8 +39,10 @@ jobs:
         shell: cmd
 
       - name: Configure
+        # No -G: use the runner's default (multi-config VS) generator — pinning a VS version breaks
+        # when the image upgrades Visual Studio (same approach as the native-collector lanes).
         run: >
-          cmake -G "Visual Studio 17 2022" -A x64 -S src/wrapper -B build/wrapper
+          cmake -S src/wrapper -B build/wrapper
           -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%/scripts/buildsystems/vcpkg.cmake
           -DVCPKG_TARGET_TRIPLET=x64-windows
         shell: cmd
