@@ -19,10 +19,10 @@ namespace hsm_wrapper
 	}
 
 	template<class T, class U>
-	void HSMParamsFuncSensorImpl<T, U>::RestartTimer(std::chrono::milliseconds time_interval)
+	void HSMParamsFuncSensorImpl<T, U>::RestartTimer(std::chrono::milliseconds /*time_interval*/)
 	{
-		// Fixed native period (see the no-params impl); record but do not re-arm.
-		interval = time_interval;
+		// True no-op (see the no-params impl): the native period is fixed at creation and GetInterval
+		// keeps reporting the actual period rather than echoing an interval that never took effect.
 	}
 
 	template<class T, class U>

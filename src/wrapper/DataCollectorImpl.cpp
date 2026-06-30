@@ -27,6 +27,10 @@ namespace hsm_wrapper
 		{
 			return static_cast<hsm::collector::SensorStatus>(status);
 		}
+
+		// Poll cadence for AddServiceStateMonitoring's live SCM query (the managed wrapper had no
+		// explicit period here; 5 s is a responsive default for a status sensor).
+		constexpr std::chrono::seconds kServiceStatusScanPeriod{ 5 };
 	}
 
 	DataCollectorImpl::DataCollectorImpl(const std::string& product_key, const std::string& address, int port, const std::string& module)
@@ -126,7 +130,7 @@ namespace hsm_wrapper
 
 	void DataCollectorImpl::AddServiceStateMonitoring(const std::string& service_name)
 	{
-		collector_.EnableServiceStatusMonitoring(service_name, std::chrono::seconds(5));
+		collector_.EnableServiceStatusMonitoring(service_name, kServiceStatusScanPeriod);
 	}
 
 	void DataCollectorImpl::SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status, const std::string& description)

@@ -95,9 +95,9 @@ native backend rather than the old managed one:
   `CreateParamsFuncSensor<int,int>` are backed by the native int function sensor; any other result or
   element type (`double`/`bool`/`string`) **throws `hsm::collector::Error` at creation** rather than
   silently truncating the value to `int32`. The aggregator only uses `<int,int>`.
-- **Function-sensor `RestartTimer`/`GetInterval` are best-effort.** The native function sensor's post
-  period is fixed at creation; `RestartTimer` records the requested interval (so `GetInterval`
-  reflects it) but does not re-arm the underlying timer.
+- **Function-sensor `RestartTimer` is a no-op.** The native function sensor's post period is fixed at
+  creation and cannot be re-armed, so `RestartTimer` does nothing and `GetInterval` reports the actual
+  (creation-time) period — it does not echo an interval that never took effect.
 - **Values-function buffer is a bounded sliding window** (100 000 entries) vs the managed unbounded
   buffer — sized for the aggregator's per-window accumulators.
 - **`SendFileAsync` is synchronous despite its name.** The native `FileSensor::SendFile` reads the

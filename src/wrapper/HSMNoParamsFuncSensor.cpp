@@ -19,11 +19,11 @@ namespace hsm_wrapper
 	}
 
 	template<class T>
-	void HSMNoParamsFuncSensorImpl<T>::RestartTimer(std::chrono::milliseconds time_interval)
+	void HSMNoParamsFuncSensorImpl<T>::RestartTimer(std::chrono::milliseconds /*time_interval*/)
 	{
-		// The native function sensor's post period is fixed at creation; record the requested interval
-		// so GetInterval reflects it, but the underlying timer is not re-armed (no native API for it).
-		interval = time_interval;
+		// The native function sensor's post period is fixed at creation and cannot be re-armed. This is
+		// a true no-op: deliberately NOT caching the requested interval, so GetInterval keeps reporting
+		// the actual (creation-time) period rather than echoing a value that never took effect.
 	}
 
 	template<class T>
