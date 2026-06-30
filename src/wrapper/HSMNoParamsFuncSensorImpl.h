@@ -1,29 +1,26 @@
 #pragma once
 
-#include "msclr/auto_gcroot.h"
+// Native backend for HSMNoParamsFuncSensor. The managed build bridged the C++ callable to a managed
+// Func<>^ via a delegate-wrapper + base class; natively the callable is passed straight to
+// hsm::collector::FunctionSensor, so that machinery is gone. The native function sensor's period is
+// fixed at creation, so the interval is cached here (RestartTimer cannot re-arm the native timer).
 
-#include "HSMBaseNoParamsFuncSensor.h"
+#include "hsm_collector/hsm_collector.hpp"
 
-using namespace HSMDataCollector::PublicInterface;
-using System::Func;
-using System::String;
-using System::TimeSpan;
-using System::Collections::Generic::List;
+#include <chrono>
 
 namespace hsm_wrapper
 {
 	template<class T>
-	class HSMNoParamsFuncSensorImpl : public HSMBaseNoParamsFuncSensor<T>
+	class HSMNoParamsFuncSensorImpl
 	{
 	public:
-		using Type = typename std::conditional<std::is_arithmetic_v<T>, T, String^>::type;
-
-		void SetParamsFuncSensor(INoParamsFuncSensor<Type>^ new_sensor);
+		void SetParamsFuncSensor(hsm::collector::FunctionSensor new_sensor, std::chrono::milliseconds interval);
 		std::chrono::milliseconds GetInterval();
 		void RestartTimer(std::chrono::milliseconds time_interval);
 
 	private:
-		msclr::auto_gcroot<INoParamsFuncSensor<Type>^> sensor;
+		hsm::collector::FunctionSensor sensor;
+		std::chrono::milliseconds interval{};
 	};
-
 }

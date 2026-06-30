@@ -15,6 +15,11 @@
 #include "HSMNoParamsFuncSensor.h"
 #include "HSMSensorOptions.h"
 
+// Forward declaration only: DataCollectorProxy::Native() hands back the underlying native collector
+// for consumers migrating new sensors off the wrapper. Code that calls Native() includes
+// <hsm_collector/hsm_collector.hpp> itself; consumers that don't never pull in the native headers.
+namespace hsm { namespace collector { class Collector; } }
+
 namespace hsm_wrapper
 {
 	void HSMWRAPPER_API RedirectAssembly();
@@ -32,6 +37,7 @@ namespace hsm_wrapper
 		void StartAsync();
 		void Stop();
 		void StopAsync();
+		hsm::collector::Collector& Native();
 		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, bool is_time_in_gc);
 		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght, bool is_average_speed);
 		void InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght, bool is_average_speed);
@@ -80,6 +86,15 @@ namespace hsm_wrapper
 		friend DataCollectorProxy;
 	};
 
+	// NOTE (native backend): this DLL now runs on the native hsm::collector C++ API, not C++/CLI over
+	// the managed HSMDataCollector. The ABI is unchanged, but a few behaviors differ behind it — see
+	// docs/native-collector-migration.md. The surprising ones for a relinking consumer:
+	//   * Initialize(config_path, write_debug) is a no-op (the collector is configured via the ctor).
+	//   * Initialize*Monitoring boolean sub-flags are ignored — the whole native group is registered;
+	//     InitializeDiskMonitoring's `target` is ignored, so it is equivalent to InitializeAllDisksMonitoring.
+	//   * SendFileAsync is synchronous (it reads the file on the calling thread despite the name).
+	//   * Function/values-function sensors are int-only: CreateNoParamsFuncSensor<T>/CreateParamsFuncSensor<T,U>
+	//     throw at creation unless T (and U) is int.
 	class HSMWRAPPER_API DataCollectorProxy
 	{
 	public:
@@ -90,6 +105,14 @@ namespace hsm_wrapper
 		void StartAsync();
 		void Stop();
 		void StopAsync();
+
+		// Escape hatch for incremental migration off the wrapper: returns the underlying native
+		// collector so new sensors can be created directly against hsm::collector on the SAME
+		// connection (e.g. proxy.Native().CreateDoubleSensor("path", options)). Existing sensors keep
+		// using the wrapper API. Include <hsm_collector/hsm_collector.hpp> to use the returned object.
+		// The wrapper owns the collector; the reference stays valid for the proxy's lifetime.
+		hsm::collector::Collector& Native();
+
 		void InitializeSystemMonitoring(bool is_cpu = true, bool is_free_ram = true, bool is_time_in_gc = true);
 		void InitializeDiskMonitoring(const std::string& target, bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true, bool is_average_speed = true);
 		void InitializeAllDisksMonitoring(bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true, bool is_average_speed = true);
