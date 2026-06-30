@@ -25,11 +25,12 @@ surface to its native equivalent.
 | `CreateIntSensor` / `CreateDoubleSensor` / `CreateStringSensor` | same names | shim — options type |
 | — | `CreateEnumSensor` (+ `EnumOption` table) | new (wrapper had no enum sensor) |
 | `CreateLastValue{Bool,Int,Double,String}Sensor` | `CreateLastValue{Bool,Int,Double,String}Sensor` | unchanged spelling |
-| `CreateIntBarSensor` / `CreateDoubleBarSensor(timeout, small_period[, precision])` | same names, `BarOptions{bar_period, post_period, precision}` | shim — chrono in a struct |
+| `CreateIntBarSensor` / `CreateDoubleBarSensor(timeout, small_period[, precision])` | same names, `BarOptions{bar_period, post_period, precision, + full SensorOptions surface}` | shim — `BarOptions` now carries the full registration surface (TTL/unit/description/keep-history/self-destroy/statistics/singleton/aggregate/grafana/computer/location/`default_alert_options`) via `hsm_collector_create_*_bar_sensor_with_options`; bars register `DisplayUnit:null` |
+| `HSMDefaultAlertsOptions` (`DisableTtl`/`DisableStatusChange`) on options | `SensorOptions` / `RateOptions` / `BarOptions::default_alert_options` (`DefaultAlertsOptions`) | shim — instant + rate + bar; the server attaches its default TTL + status-change alerts, these flags register them disabled |
 | `CreateIntRateSensor` / `CreateDoubleRateSensor` | `CreateRateSensor` (double) | **partial** — rate is double-only (matches .NET); the wrapper's int-rate is dropped |
 | `CreateNoParamsFuncSensor<T>` / `CreateParamsFuncSensor<T,U>` | `CreateFunctionSensor` / `CreateValuesFunctionSensor` (int) | **partial** — int / int-values only; no templated `T/U` (C ABI is int-only) |
-| `SendFileAsync(sensor_path, file_path, …)` | `CreateFileSensor(...)` + `FileSensor::AddContent(string)` | shim — string content, not a disk read |
-| `AddServiceStateMonitoring(service_name)` | `AddDefaultSensor(DefaultSensor::ServiceStatus)` | shim — via the default-sensor catalog |
+| `SendFileAsync(sensor_path, file_path, …)` | `CreateFileSensor(...)` + `FileSensor::SendFile(path)` (or `AddContent(string)`) | shim — `SendFile` reads the file and derives `Name`/`Extension` from the path (host I/O, 10 MiB cap, UTF-8 text); `AddContent` publishes raw string content |
+| `AddServiceStateMonitoring(service_name)` | `EnableServiceStatusMonitoring(service_name, scan_period)` | shim — registers `.module/Service status` and starts a live SCM poller (Win32 `OpenService`/`QueryServiceStatus`, Windows only) that posts the service's `ServiceControllerStatus` on change; registration-only via `AddDefaultSensor(DefaultSensor::ServiceStatus)` |
 | `InitializeSystemMonitoring` / `…ProcessMonitoring` / `…DiskMonitoring` / `…OsMonitoring` / `…NetworkMonitoring` / `…QueueDiagnostic` / `…CollectorMonitoring` | `AddSystemMonitoringSensors` / `AddProcessMonitoringSensors` / `AddDiskMonitoringSensors` / `AddWindowsInfoMonitoringSensors` / `AddAllNetworkSensors` / `AddAllQueueDiagnosticSensors` / `AddCollectorMonitoringSensors` (or `AddAllComputerSensors` / `AddAllModuleSensors` / `AddAllDefaultSensors`) | shim — group helpers instead of boolean flags |
 | `InitializeProductVersion(version)` | `AddAllModuleSensors(product_version)` / `AddDefaultSensor(DefaultSensor::ProductVersion, …)` | shim |
 | `Initialize*TimeInGC(...)` (time-in-GC) | — | **dropped** (#1099) — no managed GC in a native host |
@@ -60,7 +61,6 @@ sensor.AttachAlert(alert);
 |---|---|
 | Templated function sensors (`T/U`) | The C ABI exposes int / int-values function sensors only; supporting arbitrary `T` would be ABI growth, out of scope for the developer layer. |
 | Int rate sensors | .NET rate is double-only; the wrapper's int-rate was a wrapper-local convenience. |
-| `SendFileAsync` disk reads | Reading a file from disk is platform/IO policy, not part of the portable wire contract; publish string content instead. |
 | `RedirectAssembly` / `Initialize(config_path)` | CLR-hosting concerns with no native analogue. |
 | Time-in-GC sensors | No managed GC in a native host (#1099). |
 

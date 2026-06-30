@@ -539,6 +539,17 @@ hsm_result_t hsm_collector_create_enum_sensor_with_options(
     size_t enum_option_count,
     hsm_sensor_t** out_sensor);
 
+/* Default-alert suppression flags (mirrors the managed [Flags] DefaultAlertsOptions). The SERVER
+   auto-attaches a default TTL inactivity alert and a default status-change notification to every new
+   sensor; the collector only forwards these flags so the server registers those defaults disabled.
+   Combine with bitwise OR. */
+typedef enum hsm_default_alerts_options_t HSM_ENUM_INT32
+{
+    HSM_DEFAULT_ALERTS_NONE = 0,
+    HSM_DEFAULT_ALERTS_DISABLE_TTL = 1,
+    HSM_DEFAULT_ALERTS_DISABLE_STATUS_CHANGE = 2,
+} hsm_default_alerts_options_t;
+
 /* Full SensorOptions registration surface (#1098 §6). Every nullable field uses a sentinel for
    "emit null / take the managed default": ttl_ms/keep_history_ms/self_destroy_ms = 0 => null;
    unit/display_unit/statistics < 0 => null; the tri-state bools is_singleton/aggregate_data/
@@ -559,6 +570,8 @@ typedef struct hsm_sensor_options_t
     int32_t enable_grafana;
     bool is_computer_sensor;
     int32_t sensor_location;
+    /* DefaultAlertsOptions bitmask (hsm_default_alerts_options_t flags); 0 => None. */
+    int64_t default_alert_options;
 } hsm_sensor_options_t;
 
 /* Returns an options value pre-filled with the managed defaults (every nullable field at its
@@ -674,6 +687,26 @@ hsm_result_t hsm_collector_create_double_bar_sensor(
     int32_t precision,
     hsm_sensor_t** out_sensor);
 
+/* Bar create carrying the full SensorOptions registration surface (TTL/unit/description/keep-history/
+   self-destroy/statistics/singleton/aggregate/grafana/computer/location/DefaultAlertsOptions). Bars
+   always emit DisplayUnit:null unless `display_unit` is set; a default-initialized options struct
+   (hsm_sensor_options_default) reproduces the plain create_*_bar_sensor registration byte-for-byte. */
+hsm_result_t hsm_collector_create_int_bar_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_double_bar_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    int32_t precision,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor);
+
 /* Periodic sensors (rate / function): the FIRST post fires immediately on collector Start,
    then every post_period_ms. Rate = accumulated sum / measured elapsed seconds since the
    previous post (fallback: the configured period for the first sample); the sum resets on
@@ -784,6 +817,21 @@ hsm_result_t hsm_sensor_add_file(
     hsm_sensor_status_t status,
     const char* comment);
 
+/* File publish from a filesystem path (host-I/O convenience mirroring managed FileSensor.SendFile):
+   reads the file, derives Name (file stem) and Extension from the path — overriding the sensor's
+   creation-time defaults — and publishes it with the given status/comment. Content is treated as
+   UTF-8 text, like hsm_sensor_add_file. Returns HSM_RESULT_NOT_FOUND if the file cannot be opened or
+   is truncated mid-read, HSM_RESULT_LIMIT_EXCEEDED if it exceeds 10 MiB (the managed
+   FileSensorOptions.MaxFileSizeBytes default), HSM_RESULT_INVALID_ARGUMENT for a NULL sensor/path or
+   an invalid status (the send fails, matching managed SendFile — NOT a silent no-op), and
+   HSM_RESULT_INVALID_STATE if the collector cannot accept data (not started / stopped) — checked
+   BEFORE the file is read, so a no-op never performs the disk read. */
+hsm_result_t hsm_sensor_add_file_from_path(
+    hsm_sensor_t* sensor,
+    const char* file_path,
+    hsm_sensor_status_t status,
+    const char* comment);
+
 /* Bar accumulation. A non-finite double value (NaN/Infinity) and an inconsistent partial
    (count < 1 or mean/first/last outside [min, max] — strict for int bars, FP-tolerant for
    double bars) are silently skipped: the call returns HSM_RESULT_OK and the bar is unchanged. */
@@ -887,6 +935,20 @@ hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
 hsm_result_t hsm_collector_enable_tcp_connection_failure_rate_sensor(
     hsm_collector_t* collector,
     int32_t period_ms);
+
+/* Enable live monitoring of a Windows service's status (Windows only; mirrors the managed
+   WindowsServiceStatusSensor). Registers the ".module/Service status" enum sensor and starts a
+   background thread that every `scan_period_ms` milliseconds queries the named service via the SCM
+   (Win32 OpenService/QueryServiceStatus) and posts its ServiceControllerStatus (Stopped=1..Paused=7)
+   to the sensor ON CHANGE. A missing/unqueryable service posts -1 with Error ("Service not found!")
+   and then backs off for an hour. `service_name` is the service NAME (case-insensitive), not the
+   display name; it drives the query only and is not part of the registration. Call BEFORE Start().
+   Returns HSM_RESULT_INVALID_ARGUMENT if service_name is NULL/empty or scan_period_ms <= 0.
+   Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
+hsm_result_t hsm_collector_enable_service_status_monitoring(
+    hsm_collector_t* collector,
+    const char* service_name,
+    int32_t scan_period_ms);
 
 #ifdef __cplusplus
 }

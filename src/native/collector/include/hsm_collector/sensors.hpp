@@ -310,6 +310,15 @@ namespace hsm::collector
                 hsm_sensor_add_file(handle_, content.c_str(), static_cast<hsm_sensor_status_t>(status), comment.c_str()),
                 "Failed to add file content.");
         }
+
+        /// Reads a file from disk and publishes it, deriving Name/Extension from the path (mirrors the
+        /// managed FileSensor.SendFile). Returns false on a missing/oversize file instead of throwing,
+        /// so a failed read is an expected runtime outcome rather than an error.
+        bool SendFile(const std::string& file_path, SensorStatus status = SensorStatus::Ok, const std::string& comment = "")
+        {
+            return hsm_sensor_add_file_from_path(
+                       handle_, file_path.c_str(), static_cast<hsm_sensor_status_t>(status), comment.c_str()) == HSM_RESULT_OK;
+        }
     };
 
     /// Service-commands sensor: reports fixed lifecycle commands with an initiator comment.

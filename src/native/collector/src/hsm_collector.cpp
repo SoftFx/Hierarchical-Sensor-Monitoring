@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <deque>
 #include <exception>
+#include <fstream>
 #include <iomanip>
 #include <functional>
 #include <initializer_list>
@@ -39,6 +40,32 @@
 namespace
 {
     constexpr size_t MaxCommentLength = 1024;
+
+    // Operative size limit for hsm_sensor_add_file_from_path: the managed FileSensor.SendFile rejects
+    // files larger than FileSensorOptions.MaxFileSizeBytes, which DEFAULTS to 10 MiB (clamped to the
+    // 128 MiB MaxAllowedFileSizeBytes ceiling). The native file sensor exposes no per-sensor max yet,
+    // so it enforces the managed default. The file is buffered in memory and its wire array expands
+    // ~4x, so the cap is also the OOM guard.
+    constexpr uint64_t MaxFileSensorBytes = 10ull * 1024 * 1024;
+
+    // Splits a filesystem path into file stem + extension, mirroring the managed FileSensor.SendFile
+    // (Path.GetFileNameWithoutExtension + FileInfo.Extension.TrimStart('.')).
+    void SplitFileStemExtension(const std::string& file_path, std::string& stem, std::string& extension)
+    {
+        const auto sep = file_path.find_last_of("/\\");
+        const std::string file_name = sep == std::string::npos ? file_path : file_path.substr(sep + 1);
+        const auto dot = file_name.find_last_of('.');
+        if (dot == std::string::npos)
+        {
+            stem = file_name;
+            extension.clear();
+        }
+        else
+        {
+            stem = file_name.substr(0, dot);
+            extension = file_name.substr(dot + 1);
+        }
+    }
 
     // Full lifecycle state machine (overview.md "Lifecycle"), mirroring the managed
     // CollectorStatus: Stopped -> Starting -> Running -> Stopping -> Stopped, and
@@ -998,6 +1025,8 @@ namespace
         TriBool is_singleton = TriBool::Unset;
         bool is_computer_sensor = false;
         SensorLocation sensor_location = SensorLocation::Module;
+        // DefaultAlertsOptions bitmask (managed [Flags]: DisableTtl=1, DisableStatusChange=2); 0 => None.
+        int64_t default_alert_options = 0;
     };
 
     // Prototype merge (DefaultPrototype.Merge): the identity fields (IsComputerSensor / SensorLocation
@@ -1494,7 +1523,8 @@ namespace
                ",\"DisplayUnit\":" + (options.has_display_unit ? std::to_string(options.display_unit) : "null") +
                ",\"IsSingletonSensor\":" + SingletonWireText(options) +
                ",\"AggregateData\":" + TriBoolWireText(options.aggregate_data) +
-               ",\"EnableGrafana\":" + TriBoolWireText(options.enable_grafana) + "}";
+               ",\"EnableGrafana\":" + TriBoolWireText(options.enable_grafana) +
+               ",\"DefaultAlertsOptions\":" + std::to_string(options.default_alert_options) + "}";
     }
 
     // Real wire JSON for AddOrUpdateSensorRequest (#1096 §15) — byte-identical to net8
@@ -1541,7 +1571,7 @@ namespace
              << ",\"EnableGrafana\":" << TriBoolWireText(options.enable_grafana)
              << ",\"OriginalUnit\":" << (options.unit >= 0 ? std::to_string(options.unit) : "null")
              << ",\"DisplayUnit\":" << (options.has_display_unit ? std::to_string(options.display_unit) : "null")
-             << ",\"DefaultAlertsOptions\":0"
+             << ",\"DefaultAlertsOptions\":" << options.default_alert_options
              << ",\"IsForceUpdate\":false"
              << ",\"EnumOptions\":" << enums
              << ",\"Key\":null"
@@ -1900,6 +1930,13 @@ namespace
         hsm_result_t AddRate(double value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddFunctionInt(int32_t value);
         hsm_result_t AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment);
+        hsm_result_t AddFileFromPath(const char* file_path, hsm_sensor_status_t status, const char* comment);
+        hsm_result_t EnqueueFileValue(
+            const std::string& content,
+            const std::string& name,
+            const std::string& extension,
+            hsm_sensor_status_t status,
+            const char* comment);
         bool TryGetLastValueSnapshot(SensorSnapshot& snapshot) const;
         bool TryFlushBarJson(std::string& out_json);
         void ResetPeriodicBaseline();
@@ -2248,6 +2285,7 @@ namespace
             StopNetworkSpeedSampler();
             StopTcpFailureRateSampler();
             StopWindowsInfoSampler();
+            StopServiceStatusSampler();
             StopSelfMonitor();
             StopWorker();
         }
@@ -2330,6 +2368,7 @@ namespace
             StartNetworkSpeedSampler();
             StartTcpFailureRateSampler();
             StartWindowsInfoSampler();
+            StartServiceStatusSampler();
             StartSelfMonitor();
 
             // Drain the one-shot Start values (e.g. product/collector version) now the worker is up.
@@ -2387,6 +2426,7 @@ namespace
             StopNetworkSpeedSampler();
             StopTcpFailureRateSampler();
             StopWindowsInfoSampler();
+            StopServiceStatusSampler();
             StopSelfMonitor();
 
             // Dispose bound metric sources now the scheduler has stopped reading them (managed
@@ -2605,6 +2645,23 @@ namespace
             RegistrationOptions bar_registration; // Statistics:0 default; bars emit DisplayUnit:null
             bar_registration.has_display_unit = false;
             return RegisterBarSensorLocked(BuildSensorPath(path), type, bar_period_ms, precision, bar_registration, out_sensor);
+        }
+
+        // Bar create with a caller-built registration (full SensorOptions surface). The bar-specific
+        // baseline (DisplayUnit:null) is applied by the caller before this; shares RegisterBarSensorLocked.
+        hsm_result_t CreateBarSensor(
+            const char* path,
+            hsm_sensor_type_t type,
+            int64_t bar_period_ms,
+            int32_t precision,
+            RegistrationOptions registration,
+            std::shared_ptr<NativeSensor>& out_sensor)
+        {
+            if (!IsValidPath(path))
+                return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            return RegisterBarSensorLocked(BuildSensorPath(path), type, bar_period_ms, precision, registration, out_sensor);
         }
 
         hsm_result_t CreatePeriodicSensor(
@@ -3041,6 +3098,14 @@ namespace
             queue_cv_.notify_all();
         }
 
+        // Public liveness/running check for sensors that want to avoid expensive work (e.g. a disk
+        // read) when the collector cannot accept data anyway.
+        bool CanAcceptData()
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return CanAcceptDataLocked();
+        }
+
         void SetSendFailNext(int32_t count)
         {
             if (count > 0)
@@ -3214,6 +3279,28 @@ namespace
 
             tcp_fail_rate_enabled_ = true;
             tcp_fail_rate_period_ms_ = period_ms;
+            ClearError();
+            return HSM_RESULT_OK;
+#endif
+        }
+
+        // --- Windows service status (polled enum sensor) ---
+
+        hsm_result_t EnableServiceStatusMonitoring(const char* service_name, int32_t scan_period_ms)
+        {
+            if (service_name == nullptr || *service_name == '\0' || scan_period_ms <= 0)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+#ifndef _WIN32
+            return SetError(HSM_RESULT_INVALID_STATE, "Service status monitoring is only supported on Windows.");
+#else
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (state_ != CollectorState::Stopped)
+                return SetError(HSM_RESULT_INVALID_STATE, "EnableServiceStatusMonitoring must be called before Start.");
+
+            service_status_enabled_ = true;
+            service_name_ = service_name;
+            service_status_scan_period_ms_ = scan_period_ms;
             ClearError();
             return HSM_RESULT_OK;
 #endif
@@ -3821,6 +3908,98 @@ namespace
             win_info_cv_.notify_all();
             if (win_info_thread_.joinable())
                 win_info_thread_.join();
+#endif
+        }
+
+        void StartServiceStatusSampler()
+        {
+#ifdef _WIN32
+            if (!service_status_enabled_)
+                return;
+
+            // Register the standard ".module/Service status" enum sensor (catalog id, byte-identical
+            // to managed) synchronously here — Start() runs this with the registration gate open, so it
+            // is registered the moment Start returns; the sampler thread only posts to it. The service
+            // name drives the live query only, it is not part of the registration.
+            hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
+            if (AddDefaultSensor(HSM_DEFAULT_SERVICE_STATUS, &params, service_status_sensor_) != HSM_RESULT_OK)
+                return;
+#if defined(HSM_COLLECTOR_HTTP)
+            if (send_wire_)
+                PostRegistrationsWire({ service_status_sensor_ });
+#endif
+
+            {
+                std::lock_guard<std::mutex> guard(service_status_cv_mutex_);
+                service_status_stop_ = false;
+            }
+            service_status_thread_ = std::thread([this] { RunServiceStatusLoop(); });
+#endif
+        }
+
+        void StopServiceStatusSampler()
+        {
+#ifdef _WIN32
+            {
+                std::lock_guard<std::mutex> guard(service_status_cv_mutex_);
+                service_status_stop_ = true;
+            }
+            service_status_cv_.notify_all();
+            if (service_status_thread_.joinable())
+                service_status_thread_.join();
+#endif
+        }
+
+        void RunServiceStatusLoop()
+        {
+#ifdef _WIN32
+            const auto scan_period = std::chrono::milliseconds(service_status_scan_period_ms_);
+            // When the service is missing, post once and then back off for an hour, mirroring the
+            // managed WindowsServiceStatusSensor fault-state delay (don't hammer the SCM).
+            const auto fault_period = std::chrono::hours(1);
+
+            int last_state = 0; // 0 matches no ServiceControllerStatus, so the first real read posts.
+            bool fault = false;
+
+            // Read+post FIRST, then wait: the initial status is published promptly on Start (PR review)
+            // rather than one scan period later.
+            while (true)
+            {
+                try
+                {
+                    const int status = hsm::collector::ReadWindowsServiceStatus(service_name_);
+                    if (status >= 1)
+                    {
+                        fault = false;
+                        // Change-detection: only post when the status actually changes (managed parity).
+                        if (status != last_state)
+                        {
+                            service_status_sensor_->AddEnum(status, HSM_SENSOR_STATUS_OK, "");
+                            last_state = status;
+                        }
+                    }
+                    else
+                    {
+                        // Not found / query failure: re-post -1/Error on EVERY fault-period wake. Managed
+                        // WindowsServiceStatusSensor re-emits "Service not found!" each time the back-off
+                        // expires (no change-suppression on the fault path), so a long-missing service
+                        // stays a fresh Error instead of going stale and tripping a TTL inactivity alert.
+                        service_status_sensor_->AddEnum(-1, HSM_SENSOR_STATUS_ERROR, "Service not found!");
+                        last_state = -1;
+                        fault = true;
+                    }
+                }
+                catch (...)
+                {
+                }
+
+                {
+                    std::unique_lock<std::mutex> lock(service_status_cv_mutex_);
+                    const auto wait = fault ? std::chrono::duration_cast<std::chrono::milliseconds>(fault_period) : scan_period;
+                    if (service_status_cv_.wait_for(lock, wait, [this] { return service_status_stop_; }))
+                        return;
+                }
+            }
 #endif
         }
 
@@ -4451,6 +4630,19 @@ namespace
         std::mutex win_info_cv_mutex_;
         std::condition_variable win_info_cv_;
         bool win_info_stop_ = false;
+
+        // Windows service-status sampler (wrapper-parity gap #2): polls a named service via the Win32
+        // SCM each scan period and posts the ".module/Service status" enum on change. Mirrors the
+        // managed WindowsServiceStatusSensor — change-detection, and -1/Error + a long back-off when
+        // the service is missing.
+        bool service_status_enabled_ = false;
+        std::string service_name_;
+        int32_t service_status_scan_period_ms_ = 0;
+        std::shared_ptr<NativeSensor> service_status_sensor_;
+        std::thread service_status_thread_;
+        std::mutex service_status_cv_mutex_;
+        std::condition_variable service_status_cv_;
+        bool service_status_stop_ = false;
 #endif
     };
 
@@ -4654,15 +4846,13 @@ namespace
         return HSM_RESULT_OK;
     }
 
-    hsm_result_t NativeSensor::AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment)
+    hsm_result_t NativeSensor::EnqueueFileValue(
+        const std::string& content,
+        const std::string& name,
+        const std::string& extension,
+        hsm_sensor_status_t status,
+        const char* comment)
     {
-        if (type_ != HSM_SENSOR_TYPE_FILE)
-            return HSM_RESULT_INVALID_ARGUMENT;
-
-        // Mirrors C# FileSensorInstant.AddValue: null content and invalid status are silent no-ops.
-        if (utf8_content == nullptr || !IsValidStatus(status))
-            return HSM_RESULT_OK;
-
         const auto collector = collector_.lock();
         if (!collector)
             return HSM_RESULT_INVALID_STATE;
@@ -4674,9 +4864,9 @@ namespace
         json << "{"
              << "\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE) << ","
              << "\"Path\":\"" << EscapeJson(path_) << "\","
-             << "\"Value\":\"" << EscapeJson(CopyString(utf8_content)) << "\","
-             << "\"Name\":\"" << EscapeJson(file_name_) << "\","
-             << "\"Extension\":\"" << EscapeJson(file_extension_) << "\","
+             << "\"Value\":\"" << EscapeJson(content) << "\","
+             << "\"Name\":\"" << EscapeJson(name) << "\","
+             << "\"Extension\":\"" << EscapeJson(extension) << "\","
              << "\"Status\":" << static_cast<int>(status) << ","
              << "\"Comment\":\"" << EscapeJson(normalized_comment) << "\","
              << "\"UnixTimeMs\":" << UnixTimeMilliseconds()
@@ -4686,6 +4876,68 @@ namespace
         // lost). File payloads dispatch promptly — not gated by the package collect period.
         collector->EnqueueFileIfRunning(json.str());
         return HSM_RESULT_OK;
+    }
+
+    hsm_result_t NativeSensor::AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment)
+    {
+        if (type_ != HSM_SENSOR_TYPE_FILE)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        // Mirrors C# FileSensorInstant.AddValue: null content and invalid status are silent no-ops.
+        if (utf8_content == nullptr || !IsValidStatus(status))
+            return HSM_RESULT_OK;
+
+        // AddValue keeps the sensor's creation-time name/extension (it does not override them).
+        return EnqueueFileValue(CopyString(utf8_content), file_name_, file_extension_, status, comment);
+    }
+
+    hsm_result_t NativeSensor::AddFileFromPath(const char* file_path, hsm_sensor_status_t status, const char* comment)
+    {
+        if (type_ != HSM_SENSOR_TYPE_FILE)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        if (file_path == nullptr)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        // Mirrors C# FileSensorInstant.SendFile, which returns false for an invalid status — so the
+        // send fails (the C++ SendFile wrapper returns false), unlike hsm_sensor_add_file which
+        // silently no-ops an invalid status.
+        if (!IsValidStatus(status))
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        // Short-circuit BEFORE the disk read: a SendFile before Start (or after Stop) would read the
+        // whole file only for the enqueue to drop it. Mirrors C# SendFile, which returns false on
+        // !CanAcceptData before touching the file. Keeping `collector` alive also guards the read.
+        const auto collector = collector_.lock();
+        if (!collector || !collector->CanAcceptData())
+            return HSM_RESULT_INVALID_STATE;
+
+        // A specific result code (NOT_FOUND / LIMIT_EXCEEDED) is returned to the caller instead of
+        // logging the reason, so a failed read is observable without the collector's logger.
+        std::ifstream file(file_path, std::ios::binary | std::ios::ate);
+        if (!file)
+            return HSM_RESULT_NOT_FOUND;
+
+        const std::streamoff size = file.tellg();
+        if (size < 0)
+            return HSM_RESULT_NOT_FOUND;
+
+        if (static_cast<uint64_t>(size) > MaxFileSensorBytes)
+            return HSM_RESULT_LIMIT_EXCEEDED;
+
+        std::string content(static_cast<size_t>(size), '\0');
+        file.seekg(0);
+        // A short read (file truncated/shrunk between tellg() and read()) is reported as NOT_FOUND,
+        // so the C ABI never surfaces an undocumented code for a transient read failure.
+        if (size > 0 && !file.read(&content[0], static_cast<std::streamsize>(size)))
+            return HSM_RESULT_NOT_FOUND;
+
+        // SendFile overrides the sensor's creation-time name/extension with the file's own.
+        std::string stem;
+        std::string extension;
+        SplitFileStemExtension(file_path, stem, extension);
+
+        return EnqueueFileValue(content, stem, extension, status, comment);
     }
 
     void NativeSensor::ResetPeriodicBaseline()
@@ -5462,6 +5714,7 @@ hsm_sensor_options_t hsm_sensor_options_default(void)
     options.enable_grafana = -1;
     options.is_computer_sensor = false;
     options.sensor_location = 0;
+    options.default_alert_options = 0;
     return options;
 }
 
@@ -5508,6 +5761,7 @@ hsm_result_t hsm_collector_create_sensor_with_options(
     registration.enable_grafana = static_cast<TriBool>(options->enable_grafana);
     registration.is_computer_sensor = options->is_computer_sensor;
     registration.sensor_location = options->sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
+    registration.default_alert_options = options->default_alert_options;
 
     return CreateSensor(collector, path, type, false, std::string{}, out_sensor, registration);
 }
@@ -5590,6 +5844,73 @@ static hsm_result_t CreateBarSensor(
     return HSM_RESULT_OK;
 }
 
+static hsm_result_t CreateBarSensorWithOptions(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_type_t type,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    int32_t precision,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
+    if (collector == nullptr || out_sensor == nullptr || options == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    if (bar_period_ms <= 0 || post_period_ms < 0)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    if (precision < 0 || precision > 15)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    // Start from the bar baseline (Statistics:0, DisplayUnit:null — identical to the no-options bar
+    // path) and apply the caller's SensorOptions overrides, so a default options struct reproduces the
+    // no-options bar registration byte-for-byte.
+    RegistrationOptions registration;
+    registration.has_display_unit = false;
+    registration.ttl_ms = options->ttl_ms;
+    registration.unit = options->unit;
+    if (options->description != nullptr)
+    {
+        registration.has_description = true;
+        registration.description = CopyString(options->description);
+    }
+    if (options->keep_history_ms > 0)
+    {
+        registration.has_keep_history = true;
+        registration.keep_history_ms = options->keep_history_ms;
+    }
+    if (options->self_destroy_ms > 0)
+    {
+        registration.has_self_destroy = true;
+        registration.self_destroy_ms = options->self_destroy_ms;
+    }
+    // options->display_unit is intentionally ignored: managed BarSensorOptions is
+    // SensorOptions<NoDisplayUnit>, so bars always register DisplayUnit:null.
+    if (options->statistics >= 0)
+    {
+        registration.has_statistics = true;
+        registration.statistics = options->statistics;
+    }
+    registration.is_singleton = static_cast<TriBool>(options->is_singleton);
+    registration.aggregate_data = static_cast<TriBool>(options->aggregate_data);
+    registration.enable_grafana = static_cast<TriBool>(options->enable_grafana);
+    registration.is_computer_sensor = options->is_computer_sensor;
+    registration.sensor_location = options->sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
+    registration.default_alert_options = options->default_alert_options;
+
+    std::shared_ptr<NativeSensor> sensor;
+    const auto result = collector->impl->CreateBarSensor(path, type, bar_period_ms, precision, std::move(registration), sensor);
+    if (result != HSM_RESULT_OK)
+        return result;
+
+    *out_sensor = new hsm_sensor_t{ std::move(sensor) };
+    return HSM_RESULT_OK;
+}
+
 hsm_result_t hsm_collector_create_int_bar_sensor(
     hsm_collector_t* collector,
     const char* path,
@@ -5609,6 +5930,29 @@ hsm_result_t hsm_collector_create_double_bar_sensor(
     hsm_sensor_t** out_sensor)
 {
     return CreateBarSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE_BAR, bar_period_ms, post_period_ms, precision, out_sensor);
+}
+
+hsm_result_t hsm_collector_create_int_bar_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateBarSensorWithOptions(collector, path, HSM_SENSOR_TYPE_INT_BAR, bar_period_ms, post_period_ms, 0, options, out_sensor);
+}
+
+hsm_result_t hsm_collector_create_double_bar_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    int32_t precision,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateBarSensorWithOptions(collector, path, HSM_SENSOR_TYPE_DOUBLE_BAR, bar_period_ms, post_period_ms, precision, options, out_sensor);
 }
 
 static hsm_result_t CreatePeriodicSensorHandle(
@@ -5695,6 +6039,7 @@ hsm_result_t hsm_collector_create_rate_sensor_with_options(
     registration.enable_grafana = static_cast<TriBool>(options->enable_grafana);
     registration.is_computer_sensor = options->is_computer_sensor;
     registration.sensor_location = options->sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
+    registration.default_alert_options = options->default_alert_options;
 
     return CreatePeriodicSensorHandle(
         collector, path, HSM_SENSOR_TYPE_RATE, post_period_ms, nullptr, nullptr, nullptr, 0, out_sensor, &registration);
@@ -5929,6 +6274,18 @@ hsm_result_t hsm_sensor_add_file(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return sensor->impl->AddFile(utf8_content, status, comment);
+}
+
+hsm_result_t hsm_sensor_add_file_from_path(
+    hsm_sensor_t* sensor,
+    const char* file_path,
+    hsm_sensor_status_t status,
+    const char* comment)
+{
+    if (sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return sensor->impl->AddFileFromPath(file_path, status, comment);
 }
 
 void hsm_collector_set_send_fail_next(hsm_collector_t* collector, int32_t count)
@@ -6575,6 +6932,17 @@ hsm_result_t hsm_collector_enable_tcp_connection_failure_rate_sensor(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return collector->impl->EnableTcpConnectionFailureRateSensor(period_ms);
+}
+
+hsm_result_t hsm_collector_enable_service_status_monitoring(
+    hsm_collector_t* collector,
+    const char* service_name,
+    int32_t scan_period_ms)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->EnableServiceStatusMonitoring(service_name, scan_period_ms);
 }
 
 hsm_result_t hsm_collector_set_metric_source_factory(

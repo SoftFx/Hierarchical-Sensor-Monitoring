@@ -8,6 +8,8 @@
 
 #include "hsm_collector/hsm_collector.h"
 
+#include <cstdint>
+
 namespace hsm::collector
 {
     /// Sensor value status (mirrors hsm_sensor_status_t / the managed SensorStatus).
@@ -150,4 +152,20 @@ namespace hsm::collector
         Clock = HSM_ALERT_ICON_CLOCK,
         Hourglass = HSM_ALERT_ICON_HOURGLASS,
     };
+
+    /// Default-alert suppression flags (mirrors hsm_default_alerts_options_t / the managed [Flags]
+    /// DefaultAlertsOptions). The server auto-attaches a default TTL inactivity alert and a default
+    /// status-change notification to every new sensor; these flags register them disabled. Combine
+    /// with operator|.
+    enum class DefaultAlertsOptions : std::int64_t
+    {
+        None = HSM_DEFAULT_ALERTS_NONE,
+        DisableTtl = HSM_DEFAULT_ALERTS_DISABLE_TTL,
+        DisableStatusChange = HSM_DEFAULT_ALERTS_DISABLE_STATUS_CHANGE,
+    };
+
+    constexpr DefaultAlertsOptions operator|(DefaultAlertsOptions a, DefaultAlertsOptions b)
+    {
+        return static_cast<DefaultAlertsOptions>(static_cast<std::int64_t>(a) | static_cast<std::int64_t>(b));
+    }
 } // namespace hsm::collector

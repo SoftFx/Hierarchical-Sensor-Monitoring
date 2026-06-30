@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <limits>
 #include <map>
@@ -831,6 +832,9 @@ namespace
             options.enable_grafana = ToInt(step[9]);
             options.is_computer_sensor = ToBool(step[10]);
             options.sensor_location = ToInt(step[11]);
+            // Optional trailing DefaultAlertsOptions bitmask (absent => 0, the {}-init default).
+            if (step.size() >= 14)
+                options.default_alert_options = static_cast<int64_t>(std::stoll(step[13]));
 
             SensorHandle sensor;
             Require(
@@ -1837,6 +1841,39 @@ namespace
             return;
         }
 
+        if (action == "create_double_bar_sensor_full_options")
+        {
+            Require(step.size() >= 17, "create_double_bar_sensor_full_options requires 16 args");
+            const auto path = ExpandTextToken(step[1]);
+            const auto description = ExpandTextToken(step[16]);
+
+            hsm_sensor_options_t options = hsm_sensor_options_default();
+            options.ttl_ms = static_cast<int64_t>(std::stoll(step[5]));
+            options.unit = ToInt(step[6]);
+            // step[7] (display_unit) is reserved/ignored for bars (always DisplayUnit:null); fixtures pass -1.
+            options.description = description.c_str();
+            options.keep_history_ms = static_cast<int64_t>(std::stoll(step[8]));
+            options.self_destroy_ms = static_cast<int64_t>(std::stoll(step[9]));
+            options.statistics = ToInt(step[10]);
+            options.is_singleton = ToInt(step[11]);
+            options.aggregate_data = ToInt(step[12]);
+            options.enable_grafana = ToInt(step[13]);
+            options.is_computer_sensor = ToBool(step[14]);
+            options.sensor_location = ToInt(step[15]);
+            // Optional trailing DefaultAlertsOptions bitmask (absent => 0).
+            if (step.size() >= 18)
+                options.default_alert_options = static_cast<int64_t>(std::stoll(step[17]));
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_double_bar_sensor_with_options(
+                    state.collector.value, path.c_str(), std::stoll(step[2]), std::stoll(step[3]), ToInt(step[4]), &options, &sensor.value) ==
+                    HSM_RESULT_OK,
+                "create_double_bar_sensor_full_options failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
         if (action == "add_bar_int")
         {
             Require(step.size() >= 3, "add_bar_int requires sensor index and value");
@@ -2177,6 +2214,9 @@ namespace
             options.enable_grafana = ToInt(step[11]);
             options.is_computer_sensor = ToBool(step[12]);
             options.sensor_location = ToInt(step[13]);
+            // Optional trailing DefaultAlertsOptions bitmask (absent => 0, the default()).
+            if (step.size() >= 16)
+                options.default_alert_options = static_cast<int64_t>(std::stoll(step[15]));
 
             SensorHandle sensor;
             Require(
@@ -2702,6 +2742,76 @@ namespace
         Contains(WaitForFirstPayload(collector.value), "host\\u0003/module\\u0004/native/json/options");
     }
 
+    // hsm_sensor_add_file_from_path reads the file, overrides the creation-time name/extension with
+    // the file's own stem/extension (mirrors managed FileSensor.SendFile), and posts the content.
+    void NativeFileFromPathDerivesNameExtensionAndContent()
+    {
+        auto collector = CreateCollector();
+        hsm_sensor_t* raw = nullptr;
+        Require(
+            hsm_collector_create_file_sensor(collector.value, "native/file/frompath", "deflt", "txt", &raw) == HSM_RESULT_OK,
+            "file sensor create failed");
+        SensorHandle sensor{ raw };
+
+        const std::string file_path = "hsm_from_path_unit.log";
+        const std::string content = "coefficient changed: 1.5";
+        {
+            std::ofstream out(file_path, std::ios::binary | std::ios::trunc);
+            Require(static_cast<bool>(out), "could not create temp file");
+            out << content;
+        }
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(
+            hsm_sensor_add_file_from_path(sensor.value, file_path.c_str(), HSM_SENSOR_STATUS_OK, "report") == HSM_RESULT_OK,
+            "add file from path failed");
+
+        const auto payload = WaitForFirstPayload(collector.value);
+        std::remove(file_path.c_str());
+
+        Contains(payload, "\"Name\":\"hsm_from_path_unit\"");
+        Contains(payload, "\"Extension\":\"log\"");
+        Contains(payload, "\"Value\":\"coefficient changed: 1.5\"");
+        Contains(payload, "\"Comment\":\"report\"");
+        // The creation-time defaults must be overridden by the file's own name/extension.
+        NotContains(payload, "\"Name\":\"deflt\"");
+        NotContains(payload, "\"Extension\":\"txt\"");
+    }
+
+    void NativeFileFromPathMissingFileReturnsNotFoundAndSendsNothing()
+    {
+        auto collector = CreateCollector();
+        hsm_sensor_t* raw = nullptr;
+        Require(
+            hsm_collector_create_file_sensor(collector.value, "native/file/missing", "deflt", "txt", &raw) == HSM_RESULT_OK,
+            "file sensor create failed");
+        SensorHandle sensor{ raw };
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(
+            hsm_sensor_add_file_from_path(sensor.value, "hsm_no_such_file_xyz.dat", HSM_SENSOR_STATUS_OK, "") ==
+                HSM_RESULT_NOT_FOUND,
+            "missing file should return NOT_FOUND");
+        Require(hsm_collector_sent_count(collector.value) == 0, "missing file must not enqueue a payload");
+    }
+
+    void NativeFileFromPathBeforeStartIsRejectedWithoutReading()
+    {
+        auto collector = CreateCollector();
+        hsm_sensor_t* raw = nullptr;
+        Require(
+            hsm_collector_create_file_sensor(collector.value, "native/file/prestart", "deflt", "txt", &raw) == HSM_RESULT_OK,
+            "file sensor create failed");
+        SensorHandle sensor{ raw };
+
+        // No Start(): SendFile short-circuits on !CanAcceptData BEFORE touching the file, so even a
+        // nonexistent path returns INVALID_STATE (not NOT_FOUND) and nothing is enqueued.
+        Require(
+            hsm_sensor_add_file_from_path(sensor.value, "hsm_unused_prestart.dat", HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_INVALID_STATE,
+            "SendFile before Start must be rejected");
+        Require(hsm_collector_sent_count(collector.value) == 0, "pre-Start SendFile must not enqueue a payload");
+    }
+
     void NativeDoubleNanIsRejectedAndNotSent()
     {
         auto collector = CreateCollector();
@@ -3214,6 +3324,72 @@ namespace
                 "Windows OS-info sensors (Last restart/Install date/Version & patch) must emit values, "
                 "not register empty");
 
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
+    // Live service-status sampler (wrapper-parity gap #2): an always-running service posts Running (4)
+    // to ".module/Service status". RpcSs (Remote Procedure Call) is a critical service that is always
+    // running on any Windows host, including CI runners.
+    void NativeServiceStatusSensorEmitsRunningForCriticalService()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_enable_service_status_monitoring(collector.value, "RpcSs", 50) == HSM_RESULT_OK,
+            "enable service status failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(10000);
+        bool found = false;
+        while (!found && std::chrono::steady_clock::now() < deadline)
+        {
+            const size_t count = hsm_collector_sent_count(collector.value);
+            for (size_t i = 0; i < count && !found; ++i)
+            {
+                const char* json = nullptr;
+                if (hsm_collector_get_sent_json(collector.value, i, &json) == HSM_RESULT_OK && json != nullptr)
+                {
+                    const std::string payload(json);
+                    if (payload.find("Service status") != std::string::npos && payload.find("\"Value\":4") != std::string::npos)
+                        found = true;
+                }
+            }
+            if (!found)
+                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        }
+
+        Require(found, "service status sensor must post Running (4) for the always-running RpcSs service");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
+    // A missing service posts -1 with Error and the "Service not found!" comment (managed parity).
+    void NativeServiceStatusSensorReportsMissingService()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_enable_service_status_monitoring(collector.value, "HsmNoSuchService_ZZZ", 50) == HSM_RESULT_OK,
+            "enable service status failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(10000);
+        bool found = false;
+        while (!found && std::chrono::steady_clock::now() < deadline)
+        {
+            const size_t count = hsm_collector_sent_count(collector.value);
+            for (size_t i = 0; i < count && !found; ++i)
+            {
+                const char* json = nullptr;
+                if (hsm_collector_get_sent_json(collector.value, i, &json) == HSM_RESULT_OK && json != nullptr)
+                {
+                    const std::string payload(json);
+                    if (payload.find("Service not found!") != std::string::npos)
+                        found = true;
+                }
+            }
+            if (!found)
+                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        }
+
+        Require(found, "missing service must post -1 with the \"Service not found!\" comment");
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
     }
 #endif
@@ -4812,6 +4988,10 @@ namespace
               [](const std::string&) { NativeWindowsProcessMetricResolvesCurrentProcess(); } },
             { "native_windows_info_sensors_emit_values",
               [](const std::string&) { NativeWindowsInfoSensorsEmitValues(); } },
+            { "native_service_status_sensor_emits_running_for_critical_service",
+              [](const std::string&) { NativeServiceStatusSensorEmitsRunningForCriticalService(); } },
+            { "native_service_status_sensor_reports_missing_service",
+              [](const std::string&) { NativeServiceStatusSensorReportsMissingService(); } },
 #endif
             { "native_collector_self_monitoring_emits",
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
@@ -4868,6 +5048,9 @@ namespace
             { "native_json_escapes_control_chars_in_comment", [](const std::string&) { NativeJsonEscapesControlCharsInComment(); } },
             { "native_json_escapes_control_chars_in_path", [](const std::string&) { NativeJsonEscapesControlCharsInPath(); } },
             { "native_json_escapes_control_chars_in_options_path_prefix", [](const std::string&) { NativeJsonEscapesControlCharsInOptionsPathPrefix(); } },
+            { "native_file_from_path_derives_name_extension_and_content", [](const std::string&) { NativeFileFromPathDerivesNameExtensionAndContent(); } },
+            { "native_file_from_path_missing_file_returns_not_found_and_sends_nothing", [](const std::string&) { NativeFileFromPathMissingFileReturnsNotFoundAndSendsNothing(); } },
+            { "native_file_from_path_before_start_is_rejected_without_reading", [](const std::string&) { NativeFileFromPathBeforeStartIsRejectedWithoutReading(); } },
             { "native_double_nan_is_rejected_and_not_sent", [](const std::string&) { NativeDoubleNanIsRejectedAndNotSent(); } },
             { "native_double_positive_infinity_is_rejected_and_not_sent", [](const std::string&) { NativeDoublePositiveInfinityIsRejectedAndNotSent(); } },
             { "native_double_negative_infinity_is_rejected_and_not_sent", [](const std::string&) { NativeDoubleNegativeInfinityIsRejectedAndNotSent(); } },
@@ -4893,6 +5076,7 @@ namespace
             { "conformance_bar_double_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_partial_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_rollover_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_bar_options_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_queue_overflow_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_sender_retry_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_flush_contract", [](const std::string& path) { RunConformanceContract(path); } },

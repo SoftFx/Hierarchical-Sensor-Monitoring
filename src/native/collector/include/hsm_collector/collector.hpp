@@ -421,13 +421,15 @@ namespace hsm::collector
 
         IntBarSensor CreateIntBarSensor(const std::string& path, const BarOptions& options = {})
         {
+            const hsm_sensor_options_t native = options.ToNative();
             hsm_sensor_t* sensor = nullptr;
             Check(
-                hsm_collector_create_int_bar_sensor(
+                hsm_collector_create_int_bar_sensor_with_options(
                     handle_,
                     path.c_str(),
                     static_cast<std::int64_t>(options.bar_period.count()),
                     static_cast<std::int64_t>(options.post_period.count()),
+                    &native,
                     &sensor),
                 "Failed to create int bar sensor.");
             return IntBarSensor(sensor);
@@ -435,14 +437,16 @@ namespace hsm::collector
 
         DoubleBarSensor CreateDoubleBarSensor(const std::string& path, const BarOptions& options = {})
         {
+            const hsm_sensor_options_t native = options.ToNative();
             hsm_sensor_t* sensor = nullptr;
             Check(
-                hsm_collector_create_double_bar_sensor(
+                hsm_collector_create_double_bar_sensor_with_options(
                     handle_,
                     path.c_str(),
                     static_cast<std::int64_t>(options.bar_period.count()),
                     static_cast<std::int64_t>(options.post_period.count()),
                     options.precision,
+                    &native,
                     &sensor),
                 "Failed to create double bar sensor.");
             return DoubleBarSensor(sensor);
@@ -656,6 +660,17 @@ namespace hsm::collector
             Check(
                 hsm_collector_enable_tcp_connection_failure_rate_sensor(handle_, static_cast<int32_t>(period.count())),
                 "Failed to enable TCP connection failure rate sensor.");
+        }
+
+        /// Enable live monitoring of a Windows service's status (Windows only; mirrors the managed
+        /// WindowsServiceStatusSensor). Call BEFORE Start(). Registers ".module/Service status" and,
+        /// every `scan_period`, posts the named service's ServiceControllerStatus on change (-1/Error
+        /// when missing). `service_name` is the service name (case-insensitive), not the display name.
+        void EnableServiceStatusMonitoring(const std::string& service_name, std::chrono::milliseconds scan_period)
+        {
+            Check(
+                hsm_collector_enable_service_status_monitoring(handle_, service_name.c_str(), static_cast<int32_t>(scan_period.count())),
+                "Failed to enable service status monitoring.");
         }
 
         // ---- Introspection ------------------------------------------------------------------

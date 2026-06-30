@@ -315,6 +315,9 @@ set(NATIVE_REGRESSION_TESTS
     native_json_escapes_control_chars_in_comment
     native_json_escapes_control_chars_in_path
     native_json_escapes_control_chars_in_options_path_prefix
+    native_file_from_path_derives_name_extension_and_content
+    native_file_from_path_missing_file_returns_not_found_and_sends_nothing
+    native_file_from_path_before_start_is_rejected_without_reading
     native_double_nan_is_rejected_and_not_sent
     native_double_positive_infinity_is_rejected_and_not_sent
     native_double_negative_infinity_is_rejected_and_not_sent
@@ -381,6 +384,13 @@ if(WIN32)
     add_test(NAME native_windows_info_sensors_emit_values
         COMMAND hsm_collector_tests native_windows_info_sensors_emit_values
     )
+    # Wrapper-parity gap #2: the live service-status sampler posts a named service's status.
+    add_test(NAME native_service_status_sensor_emits_running_for_critical_service
+        COMMAND hsm_collector_tests native_service_status_sensor_emits_running_for_critical_service
+    )
+    add_test(NAME native_service_status_sensor_reports_missing_service
+        COMMAND hsm_collector_tests native_service_status_sensor_reports_missing_service
+    )
 endif()
 
 function(add_conformance_test name fixture)
@@ -404,6 +414,7 @@ add_conformance_test(conformance_bar_int_contract bar_int_contract.hsmtest)
 add_conformance_test(conformance_bar_double_contract bar_double_contract.hsmtest)
 add_conformance_test(conformance_bar_partial_contract bar_partial_contract.hsmtest)
 add_conformance_test(conformance_bar_rollover_contract bar_rollover_contract.hsmtest)
+add_conformance_test(conformance_bar_options_contract bar_options_contract.hsmtest)
 add_conformance_test(conformance_queue_overflow_contract queue_overflow_contract.hsmtest)
 add_conformance_test(conformance_sender_retry_contract sender_retry_contract.hsmtest)
 add_conformance_test(conformance_flush_contract flush_contract.hsmtest)

@@ -38,6 +38,14 @@ namespace hsm::collector
     // platforms (each field gated by its has_* flag), so callers stay cross-platform.
     WindowsInfoSample ReadWindowsInfo();
 
+    // Reads a Windows service's current status as a .NET ServiceControllerStatus code (Stopped=1,
+    // StartPending=2, StopPending=3, Running=4, ContinuePending=5, PausePending=6, Paused=7 —
+    // identical to the Win32 SERVICE_STATUS.dwCurrentState values). The service name is matched
+    // case-insensitively (Win32 service-name semantics, mirroring managed ServiceController).
+    // Returns -1 if the service does not exist or cannot be queried. Windows-only; returns -1
+    // elsewhere.
+    int ReadWindowsServiceStatus(const std::string& service_name);
+
     // Which event-log sensor a record belongs to.
     enum class EventLogKind
     {
