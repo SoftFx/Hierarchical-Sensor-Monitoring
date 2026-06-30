@@ -46,7 +46,7 @@ namespace hsm_wrapper
 
 		std::chrono::milliseconds GetInterval()
 		{
-			impl_wrapper->GetInterval();
+			return impl_wrapper->GetInterval();
 		}
 
 		void RestartTimer(std::chrono::milliseconds time_interval)
