@@ -2795,6 +2795,23 @@ namespace
         Require(hsm_collector_sent_count(collector.value) == 0, "missing file must not enqueue a payload");
     }
 
+    void NativeFileFromPathBeforeStartIsRejectedWithoutReading()
+    {
+        auto collector = CreateCollector();
+        hsm_sensor_t* raw = nullptr;
+        Require(
+            hsm_collector_create_file_sensor(collector.value, "native/file/prestart", "deflt", "txt", &raw) == HSM_RESULT_OK,
+            "file sensor create failed");
+        SensorHandle sensor{ raw };
+
+        // No Start(): SendFile short-circuits on !CanAcceptData BEFORE touching the file, so even a
+        // nonexistent path returns INVALID_STATE (not NOT_FOUND) and nothing is enqueued.
+        Require(
+            hsm_sensor_add_file_from_path(sensor.value, "hsm_unused_prestart.dat", HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_INVALID_STATE,
+            "SendFile before Start must be rejected");
+        Require(hsm_collector_sent_count(collector.value) == 0, "pre-Start SendFile must not enqueue a payload");
+    }
+
     void NativeDoubleNanIsRejectedAndNotSent()
     {
         auto collector = CreateCollector();
@@ -5033,6 +5050,7 @@ namespace
             { "native_json_escapes_control_chars_in_options_path_prefix", [](const std::string&) { NativeJsonEscapesControlCharsInOptionsPathPrefix(); } },
             { "native_file_from_path_derives_name_extension_and_content", [](const std::string&) { NativeFileFromPathDerivesNameExtensionAndContent(); } },
             { "native_file_from_path_missing_file_returns_not_found_and_sends_nothing", [](const std::string&) { NativeFileFromPathMissingFileReturnsNotFoundAndSendsNothing(); } },
+            { "native_file_from_path_before_start_is_rejected_without_reading", [](const std::string&) { NativeFileFromPathBeforeStartIsRejectedWithoutReading(); } },
             { "native_double_nan_is_rejected_and_not_sent", [](const std::string&) { NativeDoubleNanIsRejectedAndNotSent(); } },
             { "native_double_positive_infinity_is_rejected_and_not_sent", [](const std::string&) { NativeDoublePositiveInfinityIsRejectedAndNotSent(); } },
             { "native_double_negative_infinity_is_rejected_and_not_sent", [](const std::string&) { NativeDoubleNegativeInfinityIsRejectedAndNotSent(); } },

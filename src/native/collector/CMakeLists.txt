@@ -317,6 +317,7 @@ set(NATIVE_REGRESSION_TESTS
     native_json_escapes_control_chars_in_options_path_prefix
     native_file_from_path_derives_name_extension_and_content
     native_file_from_path_missing_file_returns_not_found_and_sends_nothing
+    native_file_from_path_before_start_is_rejected_without_reading
     native_double_nan_is_rejected_and_not_sent
     native_double_positive_infinity_is_rejected_and_not_sent
     native_double_negative_infinity_is_rejected_and_not_sent

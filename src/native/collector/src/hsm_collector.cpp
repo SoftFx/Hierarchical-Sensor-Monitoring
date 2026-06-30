@@ -3096,6 +3096,14 @@ namespace
             queue_cv_.notify_all();
         }
 
+        // Public liveness/running check for sensors that want to avoid expensive work (e.g. a disk
+        // read) when the collector cannot accept data anyway.
+        bool CanAcceptData()
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return CanAcceptDataLocked();
+        }
+
         void SetSendFailNext(int32_t count)
         {
             if (count > 0)
@@ -3952,15 +3960,10 @@ namespace
             int last_state = 0; // 0 matches no ServiceControllerStatus, so the first real read posts.
             bool fault = false;
 
+            // Read+post FIRST, then wait: the initial status is published promptly on Start (PR review)
+            // rather than one scan period later.
             while (true)
             {
-                {
-                    std::unique_lock<std::mutex> lock(service_status_cv_mutex_);
-                    const auto wait = fault ? std::chrono::duration_cast<std::chrono::milliseconds>(fault_period) : scan_period;
-                    if (service_status_cv_.wait_for(lock, wait, [this] { return service_status_stop_; }))
-                        return;
-                }
-
                 try
                 {
                     const int status = hsm::collector::ReadWindowsServiceStatus(service_name_);
@@ -3989,6 +3992,13 @@ namespace
                 }
                 catch (...)
                 {
+                }
+
+                {
+                    std::unique_lock<std::mutex> lock(service_status_cv_mutex_);
+                    const auto wait = fault ? std::chrono::duration_cast<std::chrono::milliseconds>(fault_period) : scan_period;
+                    if (service_status_cv_.wait_for(lock, wait, [this] { return service_status_stop_; }))
+                        return;
                 }
             }
 #endif
@@ -4893,6 +4903,13 @@ namespace
         // Mirrors C# FileSensorInstant.SendFile: an invalid status is a silent no-op.
         if (!IsValidStatus(status))
             return HSM_RESULT_OK;
+
+        // Short-circuit BEFORE the disk read: a SendFile before Start (or after Stop) would read the
+        // whole file only for the enqueue to drop it. Mirrors C# SendFile, which returns false on
+        // !CanAcceptData before touching the file. Keeping `collector` alive also guards the read.
+        const auto collector = collector_.lock();
+        if (!collector || !collector->CanAcceptData())
+            return HSM_RESULT_INVALID_STATE;
 
         // A specific result code (NOT_FOUND / LIMIT_EXCEEDED) is returned to the caller instead of
         // logging the reason, so a failed read is observable without the collector's logger.
