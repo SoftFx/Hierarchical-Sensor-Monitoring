@@ -48,6 +48,35 @@ if(MSVC)
     target_compile_options(HSMCppWrapper PRIVATE /EHsc /W3)
 endif()
 
+# Re-export the native C ABI from the DLL so a consumer can call hsm::collector directly via
+# DataCollectorProxy::Native() (incremental migration off the wrapper) without a second copy of the
+# collector runtime. The C ABI lives in the statically-linked hsm_collector_core, so a module-
+# definition file re-exports its extern-C functions; it combines with the wrapper's __declspec
+# exports. The .def is generated from the frozen ABI header so it never drifts out of sync.
+if(MSVC)
+    set(_hsm_abi_header ${CMAKE_CURRENT_SOURCE_DIR}/../native/collector/include/hsm_collector/hsm_collector.h)
+    file(STRINGS ${_hsm_abi_header} _hsm_abi_lines REGEX "hsm_[A-Za-z0-9_]+[ \t]*\\(")
+    set(_hsm_def_body "EXPORTS\n")
+    set(_hsm_seen "")
+    foreach(_line IN LISTS _hsm_abi_lines)
+        # Skip typedefs (callback function-pointer types like `(*hsm_metric_read_t)(...)`): the C ABI
+        # convention is that types end in `_t` and functions do not, so only real functions get exported.
+        if(_line MATCHES "typedef")
+            continue()
+        endif()
+        if(_line MATCHES "(hsm_[A-Za-z0-9_]+)[ \t]*\\(")
+            set(_fn ${CMAKE_MATCH_1})
+            if(NOT _fn MATCHES "_t$" AND NOT _fn IN_LIST _hsm_seen)
+                list(APPEND _hsm_seen ${_fn})
+                string(APPEND _hsm_def_body "    ${_fn}\n")
+            endif()
+        endif()
+    endforeach()
+    set(_hsm_def ${CMAKE_CURRENT_BINARY_DIR}/hsm_abi_exports.def)
+    file(WRITE ${_hsm_def} "${_hsm_def_body}")
+    target_sources(HSMCppWrapper PRIVATE ${_hsm_def})
+endif()
+
 # Statically pull the collector core + (where the CURL package is static) libcurl into the DLL so the
 # only runtime dependency is the C/C++ runtime. With a shared CURL package, ship libcurl next to the
 # DLL (the agent already vendors libcurl.dll / zlib1.dll under src/agent/packaging).
@@ -56,7 +85,12 @@ endif()
 option(HSMWRAPPER_BUILD_SMOKE "Build the WrapperConsole smoke executable" ON)
 if(HSMWRAPPER_BUILD_SMOKE)
     add_executable(WrapperConsole WrapperConsole/WrapperSmoke.cpp)
-    target_include_directories(WrapperConsole PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    # Wrapper public headers + the native collector headers (for the Native()/variant-A path). Note it
+    # links ONLY HSMCppWrapper (NOT hsm_collector_core) — the native C ABI is resolved from the wrapper
+    # DLL's re-exports, proving a consumer needs no second copy of the collector runtime.
+    target_include_directories(WrapperConsole PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../native/collector/include)
     target_link_libraries(WrapperConsole PRIVATE HSMCppWrapper)
     if(MSVC)
         target_compile_options(WrapperConsole PRIVATE /EHsc)

@@ -5,6 +5,11 @@
 
 #include "HSMCppWrapper.h"
 
+// Variant A: a consumer that wants to create new sensors directly against the native collector
+// includes this and calls proxy.Native(). It links the wrapper DLL only — the native C ABI comes
+// from the DLL's re-exports, no second copy of the collector runtime.
+#include "hsm_collector/hsm_collector.hpp"
+
 #include <chrono>
 #include <iostream>
 #include <list>
@@ -53,6 +58,13 @@ int main()
 			[](const std::list<int>& values) { return std::accumulate(values.begin(), values.end(), 0); },
 			std::chrono::seconds(60));
 
+		// Variant A: create a NEW sensor directly on the native collector (the way new aggregator
+		// sensors will be written) — same collector, same connection, no wrapper sensor type.
+		hsm::collector::Collector& native = collector.Native();
+		hsm::collector::SensorOptions nativeOptions;
+		nativeOptions.description = "created directly via Native()";
+		hsm::collector::DoubleSensor nativeSensor = native.CreateDoubleSensor("smoke/native_direct", nativeOptions);
+
 		collector.StartAsync();
 
 		boolSensor.AddValue(true);
@@ -67,6 +79,7 @@ int main()
 		summator.AddValue(1);
 		summator.AddValue(2);
 		summator.AddValue(3);
+		nativeSensor.AddValue(1.23);
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		collector.Stop();

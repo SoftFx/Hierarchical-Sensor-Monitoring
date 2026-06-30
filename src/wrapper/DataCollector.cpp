@@ -46,6 +46,11 @@ void DataCollectorImplWrapper::StopAsync()
 	impl->StopAsync();
 }
 
+hsm::collector::Collector& DataCollectorImplWrapper::Native()
+{
+	return impl->Native();
+}
+
 void DataCollectorImplWrapper::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, bool is_time_in_gc)
 {
 	impl->InitializeSystemMonitoring(is_cpu, is_free_ram, is_time_in_gc);
@@ -251,6 +256,11 @@ void DataCollectorProxy::StartAsync()
 void DataCollectorProxy::StopAsync()
 {
 	impl_wrapper->StopAsync();
+}
+
+hsm::collector::Collector& DataCollectorProxy::Native()
+{
+	return impl_wrapper->Native();
 }
 
 void DataCollectorProxy::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, bool is_time_in_gc)

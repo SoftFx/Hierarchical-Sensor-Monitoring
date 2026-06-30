@@ -110,6 +110,45 @@ native backend rather than the old managed one:
 - **`Initialize(config_path, write_debug)` and `RedirectAssembly()` are no-ops** — kept for source
   compatibility; the collector is configured entirely through the constructor.
 
+## Incremental migration off the wrapper — `DataCollectorProxy::Native()`
+
+If the goal is to *stop* using the wrapper over time (write new sensors directly against
+`hsm::collector`, then delete the wrapper once nothing calls it), you don't need a big-bang rewrite.
+`DataCollectorProxy::Native()` returns the wrapper's underlying `hsm::collector::Collector&`, so new
+sensors are created directly on the **same collector and the same server connection** while existing
+sensors keep going through the wrapper:
+
+```cpp
+#include "HSMCppWrapper.h"
+#include <hsm_collector/hsm_collector.hpp>   // only needed where you call Native()
+
+hsm_wrapper::DataCollectorProxy proxy(key, address, port, module);
+// ... existing sensors via the wrapper API ...
+
+// New sensors — native, no wrapper sensor types:
+hsm::collector::SensorOptions opts;
+opts.description = "…";
+auto sensor = proxy.Native().CreateDoubleSensor("computer/module/path", opts);
+sensor.AddValue(42.0);
+```
+
+Key points:
+
+- **One collector, one connection.** `Native()` hands back the wrapper's own collector — there is no
+  second collector, no second registration batch, no second access-key. Do **not** construct a
+  separate `hsm::collector::Collector` alongside the wrapper.
+- **No second runtime copy.** The wrapper DLL re-exports the native C ABI (a generated module-
+  definition file lists the `extern "C"` `hsm_*` functions), so a consumer includes the
+  `hsm_collector` headers and links **only** `HSMCppWrapper` — the inline `hsm::collector` calls
+  resolve against the DLL's exports. The consumer does **not** link `hsm_collector_core`.
+- **Lifecycle stays with the wrapper.** Keep driving `Start`/`StartAsync`/`Stop` through the proxy;
+  it installs the Windows metric sources + HTTP transport on that collector. Native sensors created
+  before or after Start register correctly (the native collector accepts sensor creation while
+  running).
+- **Endgame.** When the last wrapper sensor/lifecycle call is gone, the consumer already holds a real
+  `hsm::collector::Collector` (just reached via `proxy.Native()`); swapping the proxy for a directly
+  owned collector and dropping the wrapper is then a mechanical change, not a rewrite.
+
 ## Building against the native API
 
 Whichever package manager you use, the CMake usage is identical:

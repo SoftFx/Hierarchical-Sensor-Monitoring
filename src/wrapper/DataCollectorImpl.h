@@ -39,6 +39,11 @@ namespace hsm_wrapper
 		void StartAsync();
 		void Stop();
 		void StopAsync();
+
+		// The underlying native collector — lets a consumer create new sensors directly against
+		// hsm::collector while existing sensors still go through the wrapper (same collector, same
+		// connection). The wrapper owns it; the reference is valid for the wrapper's lifetime.
+		hsm::collector::Collector& Native() { return collector_; }
 		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, bool is_time_in_gc);
 		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght, bool is_average_speed);
 		void InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght, bool is_average_speed);
