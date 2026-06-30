@@ -1023,6 +1023,8 @@ namespace
         TriBool is_singleton = TriBool::Unset;
         bool is_computer_sensor = false;
         SensorLocation sensor_location = SensorLocation::Module;
+        // DefaultAlertsOptions bitmask (managed [Flags]: DisableTtl=1, DisableStatusChange=2); 0 => None.
+        int64_t default_alert_options = 0;
     };
 
     // Prototype merge (DefaultPrototype.Merge): the identity fields (IsComputerSensor / SensorLocation
@@ -1519,7 +1521,8 @@ namespace
                ",\"DisplayUnit\":" + (options.has_display_unit ? std::to_string(options.display_unit) : "null") +
                ",\"IsSingletonSensor\":" + SingletonWireText(options) +
                ",\"AggregateData\":" + TriBoolWireText(options.aggregate_data) +
-               ",\"EnableGrafana\":" + TriBoolWireText(options.enable_grafana) + "}";
+               ",\"EnableGrafana\":" + TriBoolWireText(options.enable_grafana) +
+               ",\"DefaultAlertsOptions\":" + std::to_string(options.default_alert_options) + "}";
     }
 
     // Real wire JSON for AddOrUpdateSensorRequest (#1096 §15) — byte-identical to net8
@@ -1566,7 +1569,7 @@ namespace
              << ",\"EnableGrafana\":" << TriBoolWireText(options.enable_grafana)
              << ",\"OriginalUnit\":" << (options.unit >= 0 ? std::to_string(options.unit) : "null")
              << ",\"DisplayUnit\":" << (options.has_display_unit ? std::to_string(options.display_unit) : "null")
-             << ",\"DefaultAlertsOptions\":0"
+             << ",\"DefaultAlertsOptions\":" << options.default_alert_options
              << ",\"IsForceUpdate\":false"
              << ",\"EnumOptions\":" << enums
              << ",\"Key\":null"
@@ -5543,6 +5546,7 @@ hsm_sensor_options_t hsm_sensor_options_default(void)
     options.enable_grafana = -1;
     options.is_computer_sensor = false;
     options.sensor_location = 0;
+    options.default_alert_options = 0;
     return options;
 }
 
@@ -5589,6 +5593,7 @@ hsm_result_t hsm_collector_create_sensor_with_options(
     registration.enable_grafana = static_cast<TriBool>(options->enable_grafana);
     registration.is_computer_sensor = options->is_computer_sensor;
     registration.sensor_location = options->sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
+    registration.default_alert_options = options->default_alert_options;
 
     return CreateSensor(collector, path, type, false, std::string{}, out_sensor, registration);
 }
@@ -5776,6 +5781,7 @@ hsm_result_t hsm_collector_create_rate_sensor_with_options(
     registration.enable_grafana = static_cast<TriBool>(options->enable_grafana);
     registration.is_computer_sensor = options->is_computer_sensor;
     registration.sensor_location = options->sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
+    registration.default_alert_options = options->default_alert_options;
 
     return CreatePeriodicSensorHandle(
         collector, path, HSM_SENSOR_TYPE_RATE, post_period_ms, nullptr, nullptr, nullptr, 0, out_sensor, &registration);

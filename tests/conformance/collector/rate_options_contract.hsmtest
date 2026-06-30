@@ -1,6 +1,8 @@
 # HSM collector conformance — rate sensor full registration surface (RateSensorOptions parity, #1096/§6).
 # create_rate_sensor_full_options|path|post_period_ms|ttl_ms|unit|display_unit|keep_history_ms|
-#     self_destroy_ms|statistics|is_singleton|aggregate|grafana|is_computer|sensor_location|description
+#     self_destroy_ms|statistics|is_singleton|aggregate|grafana|is_computer|sensor_location|description[|default_alert_options]
+#   default_alert_options (optional trailing field, absent => 0): managed [Flags] DefaultAlertsOptions
+#     bitmask (DisableTtl=1, DisableStatusChange=2); rate sensors carry it like any instant sensor.
 #   unit: -1 => default OriginalUnit ValueInSecond (3000); else an HSMUnit code.
 #   display_unit: -1 => default DisplayUnit 0 (ALWAYS emitted, never null); else a RateDisplayUnit code.
 #   tri-state (is_singleton/aggregate/grafana): -1 => null, 0 => false, 1 => true.
@@ -33,3 +35,11 @@ rate_default_options_keep_value_in_second_unit|expect_registration_count|1
 rate_default_options_keep_value_in_second_unit|expect_registration_contains|0|"OriginalUnit":3000
 rate_default_options_keep_value_in_second_unit|expect_registration_contains|0|"DisplayUnit":0
 rate_default_options_keep_value_in_second_unit|expect_registration_contains|0|"Statistics":0
+
+# DefaultAlertsOptions flows through the rate registration like any instant sensor (DisableStatusChange=2).
+rate_default_alerts_disable_status_change|create_collector
+rate_default_alerts_disable_status_change|create_rate_sensor_full_options|contract/rate/da_status|60000|0|-1|-1|0|0|-1|-1|-1|-1|false|0|d|2
+rate_default_alerts_disable_status_change|start
+rate_default_alerts_disable_status_change|stop
+rate_default_alerts_disable_status_change|expect_registration_count|1
+rate_default_alerts_disable_status_change|expect_registration_contains|0|"DefaultAlertsOptions":2}

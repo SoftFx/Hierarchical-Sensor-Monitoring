@@ -1,10 +1,13 @@
 # HSM collector conformance — full SensorOptions registration surface + path model (#1098 §6).
 # create_int_sensor_full_options|path|ttl_ms|unit|keep_history_ms|self_destroy_ms|statistics|
-#     is_singleton|aggregate|grafana|is_computer|sensor_location|description
+#     is_singleton|aggregate|grafana|is_computer|sensor_location|description[|default_alert_options]
 #   tri-state (is_singleton/aggregate/grafana): -1 => null, 0 => false, 1 => true
 #   statistics: -1 => null, else StatisticsOptions flags (EMA=1)
 #   is_computer: true => path anchors at ComputerName node AND forces IsSingletonSensor=true
 #   sensor_location: 0 => Module (ComputerName/Module/Path), 1 => Product (bare Path)
+#   default_alert_options (optional trailing field, absent => 0): managed [Flags] DefaultAlertsOptions
+#     bitmask — DisableTtl=1, DisableStatusChange=2. The server auto-attaches a default TTL +
+#     status-change alert to every new sensor; these flags register them disabled.
 # Ticks on the wire = ms * 10000 (KeepHistory/SelfDestroy).
 
 full_options_register_in_payload|create_collector
@@ -37,3 +40,35 @@ product_sensor_anchors_at_root|stop
 product_sensor_anchors_at_root|expect_registration_count|1
 product_sensor_anchors_at_root|expect_registration_contains|0|"Path":"contract/opts/product"
 product_sensor_anchors_at_root|expect_registration_contains|0|"IsSingletonSensor":null
+
+# DefaultAlertsOptions: absent trailing field => 0 (None); the server attaches its default alerts.
+default_alerts_none|create_collector
+default_alerts_none|create_int_sensor_full_options|contract/opts/da_none|0|-1|0|0|-1|-1|-1|-1|false|0|d
+default_alerts_none|start
+default_alerts_none|stop
+default_alerts_none|expect_registration_count|1
+default_alerts_none|expect_registration_contains|0|"DefaultAlertsOptions":0}
+
+# DisableTtl=1 registers the default TTL inactivity alert disabled.
+default_alerts_disable_ttl|create_collector
+default_alerts_disable_ttl|create_int_sensor_full_options|contract/opts/da_ttl|0|-1|0|0|-1|-1|-1|-1|false|0|d|1
+default_alerts_disable_ttl|start
+default_alerts_disable_ttl|stop
+default_alerts_disable_ttl|expect_registration_count|1
+default_alerts_disable_ttl|expect_registration_contains|0|"DefaultAlertsOptions":1}
+
+# DisableStatusChange=2 registers the default status-change notification disabled.
+default_alerts_disable_status_change|create_collector
+default_alerts_disable_status_change|create_int_sensor_full_options|contract/opts/da_status|0|-1|0|0|-1|-1|-1|-1|false|0|d|2
+default_alerts_disable_status_change|start
+default_alerts_disable_status_change|stop
+default_alerts_disable_status_change|expect_registration_count|1
+default_alerts_disable_status_change|expect_registration_contains|0|"DefaultAlertsOptions":2}
+
+# DisableTtl | DisableStatusChange = 3 registers both defaults disabled.
+default_alerts_disable_both|create_collector
+default_alerts_disable_both|create_int_sensor_full_options|contract/opts/da_both|0|-1|0|0|-1|-1|-1|-1|false|0|d|3
+default_alerts_disable_both|start
+default_alerts_disable_both|stop
+default_alerts_disable_both|expect_registration_count|1
+default_alerts_disable_both|expect_registration_contains|0|"DefaultAlertsOptions":3}

@@ -44,6 +44,9 @@ namespace hsm::collector
         /// Anchor the path at the computer node AND force IsSingletonSensor on the wire.
         bool is_computer_sensor = false;
         SensorLocation location = SensorLocation::Module;
+        /// Default-alert suppression (managed DefaultAlertsOptions). None => the server attaches its
+        /// default TTL + status-change alerts; combine flags with operator|.
+        DefaultAlertsOptions default_alert_options = DefaultAlertsOptions::None;
 
         /// Lower to the C struct. The returned value borrows `description`'s storage, so this
         /// SensorOptions must outlive the create call that consumes the result (it always does —
@@ -75,6 +78,7 @@ namespace hsm::collector
 
             native.is_computer_sensor = is_computer_sensor;
             native.sensor_location = static_cast<std::int32_t>(location);
+            native.default_alert_options = static_cast<std::int64_t>(default_alert_options);
 
             return native;
         }
@@ -125,6 +129,8 @@ namespace hsm::collector
         std::optional<bool> enable_grafana;
         bool is_computer_sensor = false;
         SensorLocation location = SensorLocation::Module;
+        /// Default-alert suppression (managed DefaultAlertsOptions); combine flags with operator|.
+        DefaultAlertsOptions default_alert_options = DefaultAlertsOptions::None;
 
         /// Lower to the C options struct. `unit`/`display_unit` are left at the "unset" sentinel when
         /// not set so the C ABI applies the rate defaults (3000 / 0). The returned value borrows
@@ -157,6 +163,7 @@ namespace hsm::collector
 
             native.is_computer_sensor = is_computer_sensor;
             native.sensor_location = static_cast<std::int32_t>(location);
+            native.default_alert_options = static_cast<std::int64_t>(default_alert_options);
 
             return native;
         }

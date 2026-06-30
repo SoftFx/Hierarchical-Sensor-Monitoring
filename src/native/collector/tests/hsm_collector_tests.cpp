@@ -832,6 +832,9 @@ namespace
             options.enable_grafana = ToInt(step[9]);
             options.is_computer_sensor = ToBool(step[10]);
             options.sensor_location = ToInt(step[11]);
+            // Optional trailing DefaultAlertsOptions bitmask (absent => 0, the {}-init default).
+            if (step.size() >= 14)
+                options.default_alert_options = static_cast<int64_t>(std::stoll(step[13]));
 
             SensorHandle sensor;
             Require(
@@ -2178,6 +2181,9 @@ namespace
             options.enable_grafana = ToInt(step[11]);
             options.is_computer_sensor = ToBool(step[12]);
             options.sensor_location = ToInt(step[13]);
+            // Optional trailing DefaultAlertsOptions bitmask (absent => 0, the default()).
+            if (step.size() >= 16)
+                options.default_alert_options = static_cast<int64_t>(std::stoll(step[15]));
 
             SensorHandle sensor;
             Require(

@@ -178,7 +178,7 @@ Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/featu
 
 Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/feature.md) §Options & path model
 
-- [x] `SensorOptions` common: `Description`, `SensorUnit`, `TTLs`, `KeepHistory`, `SelfDestroy`, `EnableForGrafana`, `IsSingletonSensor`, `AggregateData`, `Statistics(EMA)`, `IsComputerSensor`, `SensorLocation(Module|Product)`, `TtlAlerts` — native `hsm_collector_create_sensor_with_options` + `hsm_sensor_options_t`; conformance: options_surface_contract:full_options_register_in_payload + paired golden `native_wire_registration_full_options_*`. (`DefaultAlertsOptions/IsForceUpdate/IsPrioritySensor` remain wire-default 0/false — diag/QoS, #1099.)
+- [x] `SensorOptions` common: `Description`, `SensorUnit`, `TTLs`, `KeepHistory`, `SelfDestroy`, `EnableForGrafana`, `IsSingletonSensor`, `AggregateData`, `Statistics(EMA)`, `IsComputerSensor`, `SensorLocation(Module|Product)`, `TtlAlerts` — native `hsm_collector_create_sensor_with_options` + `hsm_sensor_options_t`; conformance: options_surface_contract:full_options_register_in_payload + paired golden `native_wire_registration_full_options_*`. (`DefaultAlertsOptions` is configurable via `hsm_sensor_options_t.default_alert_options` (conformance options_surface_contract:default_alerts_*); `IsForceUpdate/IsPrioritySensor` remain wire-default false — diag/QoS, #1099.)
 - [x] Singular conveniences `SensorOptions.TTL` (→ `TTLs`, ttl_ms) and `TtlAlert` (→ `TtlAlerts`, the alert builder)
 - [x] `DisplayUnit` per options type → wire `DisplayUnit (int?)` — `hsm_sensor_options_t.display_unit`; pinned by `native_wire_registration_full_options_*` (the `RateDisplayUnit` enum values arrive with rate options, #1100)
 - [x] `InstantSensorOptions(+Alerts)`; `MonitoringInstantSensorOptions(+PostDataPeriod 15 s)` — conformance: registration_contract:default_fields_int_sensor, options_surface_contract:full_options_register_in_payload
@@ -208,7 +208,7 @@ Details: [`alerts/feature.md`](../../aicontext/features/collector/alerts/feature
 - [x] `AlertIcon { Ok=0 Warning=1 Error=2 Pause=3 ArrowUp=10 ArrowDown=11 Clock=100 Hourglass=101 }` → UTF-8 emoji string on the wire (`IconExtensions.ToUtf8`) — native `AlertIconUtf8`; Warning→⚠ pinned: alert_registration_contract:instant_alert_registers_in_payload + NativeWireRegistrationWithAlertsMatchesNetByteLayout
 - [x] `AndConfirmationPeriod(TimeSpan)` — `hsm_alert_set_confirmation_period` (ticks); conformance: alert_registration_contract:multi_condition_alert_combines_or
 - [x] `.Build()` / `.BuildAndDisable()` → Instant/Bar/Special templates — `hsm_alert_set_disabled`; the built `AlertData` attaches via `hsm_sensor_attach_alert`
-- [x] TTL alerts via `TtlAlerts`; `Alerts`/`TtlAlerts`/`TTLs` coupling matches `ApiConverters`. `DefaultAlertsOptions` flags (DisableTtl=1, DisableStatusChange=2) [decide] deferred to default sensors (#1099)
+- [x] TTL alerts via `TtlAlerts`; `Alerts`/`TtlAlerts`/`TTLs` coupling matches `ApiConverters`. `DefaultAlertsOptions` flags (DisableTtl=1, DisableStatusChange=2) via `hsm_sensor_options_t.default_alert_options`; conformance: options_surface_contract:default_alerts_disable_ttl, options_surface_contract:default_alerts_disable_status_change, options_surface_contract:default_alerts_disable_both
 
 ## 8. Default sensors — Windows
 
@@ -380,7 +380,7 @@ Details: [`api/wire-contract/feature.md`](../../aicontext/features/api/wire-cont
 - [x] `AlertCombination` And=0 Or=1; `TargetType` Const=0 LastValue=1; `AlertRepeatMode` 5/6/7/10/20/50/100 — conformance: alert_registration_contract:multi_condition_alert_combines_or
 - [ ] `AlertDestinationMode`: DefaultChats=0(obs) NotInitialized=1 Empty=2 FromParent=3 AllChats=200 — unit: native_wire_registration_with_alerts_matches_net_byte_layout
 - [ ] Display units: `NoDisplayUnit`; `RateDisplayUnit` PerSecond=0…PerMonth=5 → `DisplayUnit (int?)` — unit: native_wire_registration_full_options_matches_net_byte_layout
-- [ ] Flags `StatisticsOptions{EMA=1}`, `DefaultAlertsOptions{DisableTtl=1, DisableStatusChange=2}` — unit: native_wire_registration_full_options_matches_net_byte_layout
+- [x] Flags `StatisticsOptions{EMA=1}`, `DefaultAlertsOptions{DisableTtl=1, DisableStatusChange=2}` — unit: native_wire_registration_full_options_matches_net_byte_layout
 - [ ] `SensorValueBase` { Path, Comment?, Time(UTC now), Status(Ok) } + typed `Value` per DTO — unit: native_wire_value_json_matches_net_byte_layout
 - [ ] Bar DTOs: Min/Max/Mean/Count/FirstValue?/LastValue/OpenTime/CloseTime (obsolete `Percentiles` never populated but serialized as null) — unit: native_wire_bar_json_matches_net_byte_layout
 - [ ] `FileSensorValue`: Value = `List<byte>` → **numeric JSON array, NOT base64**; Name; Extension. No Counter DTO exists (`CounterSensorValue.cs` contains `RateSensorValue`) — unit: native_wire_file_json_matches_net_byte_layout

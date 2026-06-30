@@ -539,6 +539,17 @@ hsm_result_t hsm_collector_create_enum_sensor_with_options(
     size_t enum_option_count,
     hsm_sensor_t** out_sensor);
 
+/* Default-alert suppression flags (mirrors the managed [Flags] DefaultAlertsOptions). The SERVER
+   auto-attaches a default TTL inactivity alert and a default status-change notification to every new
+   sensor; the collector only forwards these flags so the server registers those defaults disabled.
+   Combine with bitwise OR. */
+typedef enum hsm_default_alerts_options_t HSM_ENUM_INT32
+{
+    HSM_DEFAULT_ALERTS_NONE = 0,
+    HSM_DEFAULT_ALERTS_DISABLE_TTL = 1,
+    HSM_DEFAULT_ALERTS_DISABLE_STATUS_CHANGE = 2,
+} hsm_default_alerts_options_t;
+
 /* Full SensorOptions registration surface (#1098 §6). Every nullable field uses a sentinel for
    "emit null / take the managed default": ttl_ms/keep_history_ms/self_destroy_ms = 0 => null;
    unit/display_unit/statistics < 0 => null; the tri-state bools is_singleton/aggregate_data/
@@ -559,6 +570,8 @@ typedef struct hsm_sensor_options_t
     int32_t enable_grafana;
     bool is_computer_sensor;
     int32_t sensor_location;
+    /* DefaultAlertsOptions bitmask (hsm_default_alerts_options_t flags); 0 => None. */
+    int64_t default_alert_options;
 } hsm_sensor_options_t;
 
 /* Returns an options value pre-filled with the managed defaults (every nullable field at its

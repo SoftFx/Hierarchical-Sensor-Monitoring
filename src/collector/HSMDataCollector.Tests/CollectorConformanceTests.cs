@@ -226,6 +226,8 @@ namespace HSMDataCollector.Tests
                             IsComputerSensor = bool.Parse(step.Arg(9)),
                             SensorLocation = (SensorLocation)int.Parse(step.Arg(10)),
                             Description = ExpandTextToken(step.Arg(11)),
+                            // Optional trailing DefaultAlertsOptions bitmask (absent => None).
+                            DefaultAlertsOptions = step.TryArg(12, out var intDao) ? (DefaultAlertsOptions)long.Parse(intDao) : DefaultAlertsOptions.None,
                         }));
                     break;
 
@@ -720,6 +722,8 @@ namespace HSMDataCollector.Tests
                         IsComputerSensor = bool.Parse(step.Arg(11)),
                         SensorLocation = (SensorLocation)int.Parse(step.Arg(12)),
                         Description = ExpandTextToken(step.Arg(13)),
+                        // Optional trailing DefaultAlertsOptions bitmask (absent => None).
+                        DefaultAlertsOptions = step.TryArg(14, out var rateDao) ? (DefaultAlertsOptions)long.Parse(rateDao) : DefaultAlertsOptions.None,
                     };
                     // RateSensorOptions ctor sets SensorUnit = ValueInSecond; override ONLY when the
                     // fixture specifies a unit (>= 0) so the -1 sentinel preserves the 3000 default —
@@ -1383,7 +1387,8 @@ namespace HSMDataCollector.Tests
                    $"\"DisplayUnit\":{Int(request.DisplayUnit)}," +
                    $"\"IsSingletonSensor\":{Bool(request.IsSingletonSensor)}," +
                    $"\"AggregateData\":{Bool(request.AggregateData)}," +
-                   $"\"EnableGrafana\":{Bool(request.EnableGrafana)}" +
+                   $"\"EnableGrafana\":{Bool(request.EnableGrafana)}," +
+                   $"\"DefaultAlertsOptions\":{((long)request.DefaultAlertsOptions).ToString(CultureInfo.InvariantCulture)}" +
                    "}";
         }
 

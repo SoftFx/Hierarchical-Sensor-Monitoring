@@ -25,7 +25,8 @@ surface to its native equivalent.
 | `CreateIntSensor` / `CreateDoubleSensor` / `CreateStringSensor` | same names | shim — options type |
 | — | `CreateEnumSensor` (+ `EnumOption` table) | new (wrapper had no enum sensor) |
 | `CreateLastValue{Bool,Int,Double,String}Sensor` | `CreateLastValue{Bool,Int,Double,String}Sensor` | unchanged spelling |
-| `CreateIntBarSensor` / `CreateDoubleBarSensor(timeout, small_period[, precision])` | same names, `BarOptions{bar_period, post_period, precision}` | shim — chrono in a struct |
+| `CreateIntBarSensor` / `CreateDoubleBarSensor(timeout, small_period[, precision])` | same names, `BarOptions{bar_period, post_period, precision}` | **partial** — `BarOptions` carries only period/precision; TTL/keep-history/`default_alert_options` and the rest of the registration surface are not wired at the bar C ABI (attach alerts via `AttachAlert`) |
+| `HSMDefaultAlertsOptions` (`DisableTtl`/`DisableStatusChange`) on options | `SensorOptions` / `RateOptions::default_alert_options` (`DefaultAlertsOptions`) | shim — instant + rate only; the server attaches its default TTL + status-change alerts, these flags register them disabled. Bar sensors do not carry it (see the bar row) |
 | `CreateIntRateSensor` / `CreateDoubleRateSensor` | `CreateRateSensor` (double) | **partial** — rate is double-only (matches .NET); the wrapper's int-rate is dropped |
 | `CreateNoParamsFuncSensor<T>` / `CreateParamsFuncSensor<T,U>` | `CreateFunctionSensor` / `CreateValuesFunctionSensor` (int) | **partial** — int / int-values only; no templated `T/U` (C ABI is int-only) |
 | `SendFileAsync(sensor_path, file_path, …)` | `CreateFileSensor(...)` + `FileSensor::SendFile(path)` (or `AddContent(string)`) | shim — `SendFile` reads the file and derives `Name`/`Extension` from the path (host I/O, 128 MiB cap, UTF-8 text); `AddContent` publishes raw string content |
