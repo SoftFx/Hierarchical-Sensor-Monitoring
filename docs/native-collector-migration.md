@@ -87,12 +87,24 @@ native backend rather than the old managed one:
   to the native group helper (`AddSystemMonitoringSensors`, …), which registers the standard catalog
   for the group; individual sub-sensors can't be toggled off. The aggregator passes the defaults
   (everything on), so this is a no-op in practice.
+- **`InitializeDiskMonitoring(target, …)` ignores `target`.** The native disk group helper
+  (`AddDiskMonitoringSensors`) registers the default disk catalog with no per-volume targeting, so
+  `InitializeDiskMonitoring("D:\\", …)` is now **equivalent to `InitializeAllDisksMonitoring`** — a
+  caller asking for one specific volume gets the default set instead.
+- **Function sensors are int-only and fail loudly otherwise.** Only `CreateNoParamsFuncSensor<int>` /
+  `CreateParamsFuncSensor<int,int>` are backed by the native int function sensor; any other result or
+  element type (`double`/`bool`/`string`) **throws `hsm::collector::Error` at creation** rather than
+  silently truncating the value to `int32`. The aggregator only uses `<int,int>`.
 - **Function-sensor `RestartTimer`/`GetInterval` are best-effort.** The native function sensor's post
   period is fixed at creation; `RestartTimer` records the requested interval (so `GetInterval`
-  reflects it) but does not re-arm the underlying timer. Function sensors are int / int-values only.
+  reflects it) but does not re-arm the underlying timer.
 - **Values-function buffer is a bounded sliding window** (100 000 entries) vs the managed unbounded
   buffer — sized for the aggregator's per-window accumulators.
-- **`SendFileAsync` reuses one file sensor per sensor path** (cached), creating it on first send.
+- **`SendFileAsync` is synchronous despite its name.** The native `FileSensor::SendFile` reads the
+  file on the calling thread (the managed version ran on a `Task`), so a large/slow file blocks the
+  caller. It reuses one cached file sensor per sensor path, creating it on first send.
+- **`HSMBarSensorOptions::bar_tick_period` is dropped.** The native `BarOptions` has no sub-bar tick
+  field (only `bar_period`/`post_period`/`precision`), so the managed `BarTickPeriod` is not applied.
 - **Last-value / function-sensor descriptions are dropped** — the native `CreateLastValue*` /
   `CreateFunctionSensor` factories take no description argument.
 - **`Initialize(config_path, write_debug)` and `RedirectAssembly()` are no-ops** — kept for source

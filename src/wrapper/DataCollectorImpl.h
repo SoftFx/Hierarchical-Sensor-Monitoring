@@ -83,10 +83,12 @@ namespace hsm_wrapper
 		std::conditional_t<std::is_arithmetic_v<T>, std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<T>>, std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<std::string>>>
 			CreateNoParamsFuncSensor(const std::string& path, const std::string& /*description*/, std::function<T()> function, const std::chrono::milliseconds& interval)
 		{
-			if constexpr (std::is_arithmetic_v<T>)
+			// The native function sensor is int-only. Restrict to T==int and fail loudly for any other
+			// result type (double/bool/string) rather than silently truncating it to int32.
+			if constexpr (std::is_same_v<T, int>)
 			{
 				auto native_sensor = collector_.CreateFunctionSensor(
-					path, interval, [function]() -> std::int32_t { return static_cast<std::int32_t>(function()); });
+					path, interval, [function]() -> std::int32_t { return function(); });
 				auto impl = std::make_shared<HSMNoParamsFuncSensorImpl<T>>();
 				impl->SetParamsFuncSensor(std::move(native_sensor), interval);
 				auto wrapper = std::make_shared<HSMNoParamsFuncSensorImplWrapper<T>>(impl);
@@ -95,7 +97,7 @@ namespace hsm_wrapper
 			}
 			else
 			{
-				throw hsm::collector::Error("Function sensors with a non-arithmetic result are not supported by the native collector (int-only).");
+				throw hsm::collector::Error("Function sensors are int-only in the native collector; a non-int result type is not supported.");
 			}
 		}
 
@@ -105,15 +107,14 @@ namespace hsm_wrapper
 			std::conditional_t<std::is_arithmetic_v<U>, std::shared_ptr<HSMParamsFuncSensorImplWrapper<std::string, U>>, std::shared_ptr<HSMParamsFuncSensorImplWrapper<std::string, std::string>>>>
 			CreateParamsFuncSensor(const std::string& path, const std::string& /*description*/, std::function<T(const std::list<U>&)> function, const std::chrono::milliseconds& interval)
 		{
-			if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>)
+			// The native values-function sensor is int-result / int-element only. Restrict to <int,int>
+			// and fail loudly for any other type rather than silently truncating elements or the result.
+			if constexpr (std::is_same_v<T, int> && std::is_same_v<U, int>)
 			{
 				auto native_sensor = collector_.CreateValuesFunctionSensor(
 					path, interval, kFuncSensorCacheSize,
 					[function](const std::vector<std::int32_t>& values) -> std::int32_t {
-						std::list<U> converted;
-						for (const std::int32_t value : values)
-							converted.push_back(static_cast<U>(value));
-						return static_cast<std::int32_t>(function(converted));
+						return function(std::list<U>(values.begin(), values.end()));
 					});
 				auto impl = std::make_shared<HSMParamsFuncSensorImpl<T, U>>();
 				impl->SetParamsFuncSensor(std::move(native_sensor), interval);
@@ -123,7 +124,7 @@ namespace hsm_wrapper
 			}
 			else
 			{
-				throw hsm::collector::Error("Values-function sensors with non-arithmetic result/element are not supported by the native collector (int-only).");
+				throw hsm::collector::Error("Values-function sensors are int-result / int-element only in the native collector; other types are not supported.");
 			}
 		}
 

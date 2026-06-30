@@ -12,6 +12,41 @@
 
 namespace hsm_wrapper
 {
+	// The wrapper enums are cast straight to the native hsm::collector enums across the boundary
+	// (ToNativeStatus, AttachWrapperAlert, the sensor AddValue paths). That is only correct while the
+	// numeric values match exactly — pin the contract so a renumber on either side fails to compile
+	// here instead of silently producing wrong statuses/alerts.
+#define HSM_ASSERT_ENUM_MATCH(wrapper_value, native_value) \
+	static_assert(static_cast<int>(wrapper_value) == static_cast<int>(native_value), "enum value drift: " #wrapper_value " != " #native_value)
+
+	HSM_ASSERT_ENUM_MATCH(HSMSensorStatus::OffTime, hsm::collector::SensorStatus::OffTime);
+	HSM_ASSERT_ENUM_MATCH(HSMSensorStatus::Ok, hsm::collector::SensorStatus::Ok);
+	HSM_ASSERT_ENUM_MATCH(HSMSensorStatus::Warning, hsm::collector::SensorStatus::Warning);
+	HSM_ASSERT_ENUM_MATCH(HSMSensorStatus::Error, hsm::collector::SensorStatus::Error);
+
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::LessThanOrEqual, hsm::collector::AlertOperation::LessThanOrEqual);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::GreaterThan, hsm::collector::AlertOperation::GreaterThan);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::NotEqual, hsm::collector::AlertOperation::NotEqual);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::Contains, hsm::collector::AlertOperation::Contains);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::ReceivedNewValue, hsm::collector::AlertOperation::ReceivedNewValue);
+
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Status, hsm::collector::AlertProperty::Status);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Value, hsm::collector::AlertProperty::Value);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Min, hsm::collector::AlertProperty::Min);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Max, hsm::collector::AlertProperty::Max);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::LastValue, hsm::collector::AlertProperty::LastValue);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::OriginalSize, hsm::collector::AlertProperty::OriginalSize);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::NewSensorData, hsm::collector::AlertProperty::NewSensorData);
+
+	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::Ok, hsm::collector::AlertIcon::Ok);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::Error, hsm::collector::AlertIcon::Error);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::ArrowDown, hsm::collector::AlertIcon::ArrowDown);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::Hourglass, hsm::collector::AlertIcon::Hourglass);
+
+	HSM_ASSERT_ENUM_MATCH(HSMTargetType::Const, hsm::collector::AlertTargetType::Const);
+	HSM_ASSERT_ENUM_MATCH(HSMTargetType::LastValue, hsm::collector::AlertTargetType::LastValue);
+#undef HSM_ASSERT_ENUM_MATCH
+
 	namespace
 	{
 		std::string WideToUtf8(const std::wstring& text)

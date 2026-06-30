@@ -131,11 +131,19 @@ namespace hsm_wrapper
 
 	void DataCollectorImpl::SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status, const std::string& description)
 	{
-		std::lock_guard<std::mutex> guard(file_sensors_mutex_);
-		auto it = file_sensors_.find(sensor_path);
-		if (it == file_sensors_.end())
-			it = file_sensors_.emplace(sensor_path, collector_.CreateFileSensor(sensor_path, "file", "txt")).first;
-		it->second.SendFile(file_path, ToNativeStatus(status), description);
+		// Resolve (create-or-reuse) the file sensor under the lock, then release it before the file
+		// read + send: SendFile reads from disk synchronously, and holding the lock across it would
+		// serialize concurrent sends to *different* sensors. unordered_map element pointers stay valid
+		// across inserts/rehashes, and the native FileSensor is itself thread-safe.
+		hsm::collector::FileSensor* sensor = nullptr;
+		{
+			std::lock_guard<std::mutex> guard(file_sensors_mutex_);
+			auto it = file_sensors_.find(sensor_path);
+			if (it == file_sensors_.end())
+				it = file_sensors_.emplace(sensor_path, collector_.CreateFileSensor(sensor_path, "file", "txt")).first;
+			sensor = &it->second;
+		}
+		sensor->SendFile(file_path, ToNativeStatus(status), description);
 	}
 
 	BoolSensor DataCollectorImpl::CreateBoolSensor(const std::string& path, const std::string& description)
