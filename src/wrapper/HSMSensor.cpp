@@ -3,16 +3,12 @@
 #include "HSMSensor.h"
 #include "HSMSensorImpl.h"
 
-#include "msclr/marshal_cppstd.h"
-
-using namespace std;
-
-using System::String;
-using namespace HSMDataCollector::PublicInterface;
-using namespace HSMSensorDataObjects;
-
 namespace hsm_wrapper
 {
+	// ---- HSMSensor<T> (public): forwards to the native pimpl. The C++/CLI build translated managed
+	// exceptions to std::exception here; native hsm::collector::Error already IS a std::exception, so
+	// the value path forwards directly and any failure propagates as std::exception unchanged.
+
 	template<class T>
 	HSMSensor<T>::HSMSensor(std::shared_ptr<HSMSensorImpl<T>> sensor_impl) : impl(sensor_impl)
 	{
@@ -21,79 +17,42 @@ namespace hsm_wrapper
 	template<class T>
 	void HSMSensor<T>::AddValue(ElementParameterType value)
 	{
-		try
-		{
-			impl->AddValue(value);
-		}
-		catch (System::Exception^ ex)
-		{
-			throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
-		}
+		impl->AddValue(value);
 	}
 
 	template<class T>
 	void HSMSensor<T>::AddValue(ElementParameterType value, const std::string& comment)
 	{
-		try
-		{
-			impl->AddValue(value, comment);
-		}
-		catch (System::Exception^ ex)
-		{
-			throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
-		}
+		impl->AddValue(value, comment);
 	}
 
 	template<class T>
 	void HSMSensor<T>::AddValue(ElementParameterType value, HSMSensorStatus status, const std::string& comment)
 	{
-		try
-		{
-			impl->AddValue(value, status, comment);
-		}
-		catch (System::Exception^ ex)
-		{
-			throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
-		}
+		impl->AddValue(value, status, comment);
 	}
 
-
-
-
-	template<class T>
-	HSMSensorImpl<T>::HSMSensorImpl(IInstantValueSensor<ElementType>^ sensor) : sensor(sensor)
-	{
-	}
+	// ---- HSMSensorImpl<T> (native): forwards to the hsm::collector instant sensor. The native AddValue
+	// signature is AddValue(value, SensorStatus = Ok, comment = ""); HSMSensorStatus has identical
+	// enumerator values to hsm::collector::SensorStatus, so the cast is exact.
 
 	template<class T>
 	void HSMSensorImpl<T>::AddValue(ElementParameterType value)
 	{
-		if constexpr (std::is_arithmetic_v<T>)
-			sensor->AddValue(value);
-		else
-			sensor->AddValue(gcnew String(value.c_str()));
+		sensor.AddValue(value);
 	}
 
 	template<class T>
 	void HSMSensorImpl<T>::AddValue(ElementParameterType value, const std::string& comment)
 	{
-		if constexpr (std::is_arithmetic_v<T>)
-			sensor->AddValue(value, gcnew String(comment.c_str()));
-		else
-			sensor->AddValue(gcnew String(value.c_str()), gcnew String(comment.c_str()));
+		sensor.AddValue(value, hsm::collector::SensorStatus::Ok, comment);
 	}
 
 	template<class T>
 	void HSMSensorImpl<T>::AddValue(ElementParameterType value, HSMSensorStatus status, const std::string& comment)
 	{
-		if constexpr (std::is_arithmetic_v<T>)
-			sensor->AddValue(value, SensorStatus(status), gcnew String(comment.c_str()));
-		else
-			sensor->AddValue(gcnew String(value.c_str()), SensorStatus(status), gcnew String(comment.c_str()));
+		sensor.AddValue(value, static_cast<hsm::collector::SensorStatus>(status), comment);
 	}
-
-
-
 
 	template class HSMSensor<bool>;
 	template class HSMSensorImpl<bool>;
@@ -101,6 +60,6 @@ namespace hsm_wrapper
 	template class HSMSensorImpl<int>;
 	template class HSMSensor<double>;
 	template class HSMSensorImpl<double>;
-	template class HSMSensor<string>;
-	template class HSMSensorImpl<string>;
+	template class HSMSensor<std::string>;
+	template class HSMSensorImpl<std::string>;
 }
