@@ -5868,11 +5868,8 @@ static hsm_result_t CreateBarSensorWithOptions(
         registration.has_self_destroy = true;
         registration.self_destroy_ms = options->self_destroy_ms;
     }
-    if (options->display_unit >= 0)
-    {
-        registration.has_display_unit = true;
-        registration.display_unit = options->display_unit;
-    }
+    // options->display_unit is intentionally ignored: managed BarSensorOptions is
+    // SensorOptions<NoDisplayUnit>, so bars always register DisplayUnit:null.
     if (options->statistics >= 0)
     {
         registration.has_statistics = true;

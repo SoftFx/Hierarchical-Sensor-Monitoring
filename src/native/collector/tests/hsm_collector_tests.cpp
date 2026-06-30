@@ -1850,7 +1850,7 @@ namespace
             hsm_sensor_options_t options = hsm_sensor_options_default();
             options.ttl_ms = static_cast<int64_t>(std::stoll(step[5]));
             options.unit = ToInt(step[6]);
-            options.display_unit = ToInt(step[7]); // -1 => bars emit DisplayUnit:null
+            // step[7] (display_unit) is reserved/ignored for bars (always DisplayUnit:null); fixtures pass -1.
             options.description = description.c_str();
             options.keep_history_ms = static_cast<int64_t>(std::stoll(step[8]));
             options.self_destroy_ms = static_cast<int64_t>(std::stoll(step[9]));

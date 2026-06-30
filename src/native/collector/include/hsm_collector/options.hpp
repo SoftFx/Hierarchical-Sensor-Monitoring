@@ -97,7 +97,8 @@ namespace hsm::collector
 
         std::optional<std::chrono::milliseconds> ttl;
         std::optional<Unit> unit;
-        std::optional<Unit> display_unit; // unset => null (managed bar DisplayUnit default)
+        // No display_unit: managed BarSensorOptions is SensorOptions<NoDisplayUnit> and always
+        // registers DisplayUnit:null, so a bar has no display-unit knob to expose.
         std::optional<std::string> description;
         std::optional<std::chrono::milliseconds> keep_history;
         std::optional<std::chrono::milliseconds> self_destroy;
@@ -122,8 +123,6 @@ namespace hsm::collector
                 native.ttl_ms = static_cast<std::int64_t>(ttl->count());
             if (unit.has_value())
                 native.unit = static_cast<std::int32_t>(*unit);
-            if (display_unit.has_value())
-                native.display_unit = static_cast<std::int32_t>(*display_unit);
             if (description.has_value())
                 native.description = description->c_str();
             if (keep_history.has_value())
