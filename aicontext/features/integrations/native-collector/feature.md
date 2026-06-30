@@ -93,7 +93,7 @@ CMake gates: `HSM_COLLECTOR_INSTALL`, `HSM_COLLECTOR_BUILD_EXAMPLES`, `HSM_COLLE
 Tracked in full in `docs/native-collector-migration.md`. Headlines:
 
 - **Function sensors are int / int-values only** — the C ABI is int-only; the .NET wrapper's templated `T/U` function sensors are not reproduced (would require ABI growth).
-- **`SendFileAsync(disk path)` → `FileSensor::AddContent(string)`** — disk reads are not part of the portable contract.
+- **`SendFileAsync(disk path)` → `FileSensor::SendFile(path)`** — `hsm_sensor_add_file_from_path` reads the file and derives `Name`/`Extension` from the path, overriding the creation-time defaults (mirrors managed `FileSensor.SendFile`; 128 MiB cap, content treated as UTF-8 text). The disk read itself is host I/O, not cross-language-portable, so it carries unit — not conformance — coverage; the file-value wire shape stays covered by the file conformance case. Raw-string content still goes through `FileSensor::AddContent(string)`.
 - **No `RedirectAssembly` / `Initialize(config_path)`** — those are CLR-hosting concerns with no native analogue.
 - **Time-in-GC sensors dropped** (#1099) — no managed GC in a native host.
 
@@ -105,6 +105,7 @@ Tracked in full in `docs/native-collector-migration.md`. Headlines:
 - `native_wrapper_lifetime_move_semantics` — move + Dispose correctness.
 - `native_wrapper_callbacks_bridge_std_function` — lifecycle listener, logger, function sensor, and metric-source factory all fire through their trampolines.
 - `native_rate_options_parity` — RateOptions default cadence (1 min), M1/M5 empty-Description vs bare-null, and the full registration surface (TTL/unit/display-unit/aggregate/EMA) lowered onto a rate sensor.
+- `native_file_from_path_derives_name_extension_and_content` — `SendFile(path)` overrides the creation-time name/extension with the file's own stem/extension and posts the content; `native_file_from_path_missing_file_returns_not_found_and_sends_nothing` — a missing file returns `NOT_FOUND` and enqueues nothing.
 - `rate_options_contract.hsmtest` — cross-language pin: the same options through `RateSensorOptions.ToApi()` (managed) and `hsm_collector_create_rate_sensor_with_options` (native) produce byte-identical registration text; includes the unset-`unit` ⇒ ValueInSecond(3000) default case.
 - `native_tcp_failure_rate_sensor_registers` (Windows) — `EnableTcpConnectionFailureRateSensor` + Start registers a Rate sensor (type 9, OriginalUnit 3000, DisplayUnit 1) under `.computer/Network`. Live delta is non-deterministic host state, so only the registration is asserted (same approach as the network-speed/top-CPU owned-thread features).
 - CI `install-consume` (Win+Linux) and `doxygen` lanes in `native-collector-conformance.yml`.

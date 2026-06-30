@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <deque>
 #include <exception>
+#include <fstream>
 #include <iomanip>
 #include <functional>
 #include <initializer_list>
@@ -39,6 +40,30 @@
 namespace
 {
     constexpr size_t MaxCommentLength = 1024;
+
+    // Hard ceiling for hsm_sensor_add_file_from_path, mirroring the managed
+    // FileSensorOptions.MaxAllowedFileSizeBytes (#1102-C1): the file is buffered in memory and the
+    // serialized wire array expands ~4x, so an unbounded read is an OOM vector.
+    constexpr uint64_t MaxFileSensorBytes = 128ull * 1024 * 1024;
+
+    // Splits a filesystem path into file stem + extension, mirroring the managed FileSensor.SendFile
+    // (Path.GetFileNameWithoutExtension + FileInfo.Extension.TrimStart('.')).
+    void SplitFileStemExtension(const std::string& file_path, std::string& stem, std::string& extension)
+    {
+        const auto sep = file_path.find_last_of("/\\");
+        const std::string file_name = sep == std::string::npos ? file_path : file_path.substr(sep + 1);
+        const auto dot = file_name.find_last_of('.');
+        if (dot == std::string::npos)
+        {
+            stem = file_name;
+            extension.clear();
+        }
+        else
+        {
+            stem = file_name.substr(0, dot);
+            extension = file_name.substr(dot + 1);
+        }
+    }
 
     // Full lifecycle state machine (overview.md "Lifecycle"), mirroring the managed
     // CollectorStatus: Stopped -> Starting -> Running -> Stopping -> Stopped, and
@@ -1900,6 +1925,13 @@ namespace
         hsm_result_t AddRate(double value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddFunctionInt(int32_t value);
         hsm_result_t AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment);
+        hsm_result_t AddFileFromPath(const char* file_path, hsm_sensor_status_t status, const char* comment);
+        hsm_result_t EnqueueFileValue(
+            const std::string& content,
+            const std::string& name,
+            const std::string& extension,
+            hsm_sensor_status_t status,
+            const char* comment);
         bool TryGetLastValueSnapshot(SensorSnapshot& snapshot) const;
         bool TryFlushBarJson(std::string& out_json);
         void ResetPeriodicBaseline();
@@ -4654,15 +4686,13 @@ namespace
         return HSM_RESULT_OK;
     }
 
-    hsm_result_t NativeSensor::AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment)
+    hsm_result_t NativeSensor::EnqueueFileValue(
+        const std::string& content,
+        const std::string& name,
+        const std::string& extension,
+        hsm_sensor_status_t status,
+        const char* comment)
     {
-        if (type_ != HSM_SENSOR_TYPE_FILE)
-            return HSM_RESULT_INVALID_ARGUMENT;
-
-        // Mirrors C# FileSensorInstant.AddValue: null content and invalid status are silent no-ops.
-        if (utf8_content == nullptr || !IsValidStatus(status))
-            return HSM_RESULT_OK;
-
         const auto collector = collector_.lock();
         if (!collector)
             return HSM_RESULT_INVALID_STATE;
@@ -4674,9 +4704,9 @@ namespace
         json << "{"
              << "\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE) << ","
              << "\"Path\":\"" << EscapeJson(path_) << "\","
-             << "\"Value\":\"" << EscapeJson(CopyString(utf8_content)) << "\","
-             << "\"Name\":\"" << EscapeJson(file_name_) << "\","
-             << "\"Extension\":\"" << EscapeJson(file_extension_) << "\","
+             << "\"Value\":\"" << EscapeJson(content) << "\","
+             << "\"Name\":\"" << EscapeJson(name) << "\","
+             << "\"Extension\":\"" << EscapeJson(extension) << "\","
              << "\"Status\":" << static_cast<int>(status) << ","
              << "\"Comment\":\"" << EscapeJson(normalized_comment) << "\","
              << "\"UnixTimeMs\":" << UnixTimeMilliseconds()
@@ -4686,6 +4716,57 @@ namespace
         // lost). File payloads dispatch promptly — not gated by the package collect period.
         collector->EnqueueFileIfRunning(json.str());
         return HSM_RESULT_OK;
+    }
+
+    hsm_result_t NativeSensor::AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment)
+    {
+        if (type_ != HSM_SENSOR_TYPE_FILE)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        // Mirrors C# FileSensorInstant.AddValue: null content and invalid status are silent no-ops.
+        if (utf8_content == nullptr || !IsValidStatus(status))
+            return HSM_RESULT_OK;
+
+        // AddValue keeps the sensor's creation-time name/extension (it does not override them).
+        return EnqueueFileValue(CopyString(utf8_content), file_name_, file_extension_, status, comment);
+    }
+
+    hsm_result_t NativeSensor::AddFileFromPath(const char* file_path, hsm_sensor_status_t status, const char* comment)
+    {
+        if (type_ != HSM_SENSOR_TYPE_FILE)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        if (file_path == nullptr)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        // Mirrors C# FileSensorInstant.SendFile: an invalid status is a silent no-op.
+        if (!IsValidStatus(status))
+            return HSM_RESULT_OK;
+
+        // A specific result code (NOT_FOUND / LIMIT_EXCEEDED) is returned to the caller instead of
+        // logging the reason, so a failed read is observable without the collector's logger.
+        std::ifstream file(file_path, std::ios::binary | std::ios::ate);
+        if (!file)
+            return HSM_RESULT_NOT_FOUND;
+
+        const std::streamoff size = file.tellg();
+        if (size < 0)
+            return HSM_RESULT_NOT_FOUND;
+
+        if (static_cast<uint64_t>(size) > MaxFileSensorBytes)
+            return HSM_RESULT_LIMIT_EXCEEDED;
+
+        std::string content(static_cast<size_t>(size), '\0');
+        file.seekg(0);
+        if (size > 0 && !file.read(&content[0], static_cast<std::streamsize>(size)))
+            return HSM_RESULT_INTERNAL_ERROR;
+
+        // SendFile overrides the sensor's creation-time name/extension with the file's own.
+        std::string stem;
+        std::string extension;
+        SplitFileStemExtension(file_path, stem, extension);
+
+        return EnqueueFileValue(content, stem, extension, status, comment);
     }
 
     void NativeSensor::ResetPeriodicBaseline()
@@ -5929,6 +6010,18 @@ hsm_result_t hsm_sensor_add_file(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return sensor->impl->AddFile(utf8_content, status, comment);
+}
+
+hsm_result_t hsm_sensor_add_file_from_path(
+    hsm_sensor_t* sensor,
+    const char* file_path,
+    hsm_sensor_status_t status,
+    const char* comment)
+{
+    if (sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return sensor->impl->AddFileFromPath(file_path, status, comment);
 }
 
 void hsm_collector_set_send_fail_next(hsm_collector_t* collector, int32_t count)

@@ -784,6 +784,18 @@ hsm_result_t hsm_sensor_add_file(
     hsm_sensor_status_t status,
     const char* comment);
 
+/* File publish from a filesystem path (host-I/O convenience mirroring managed FileSensor.SendFile):
+   reads the file, derives Name (file stem) and Extension from the path — overriding the sensor's
+   creation-time defaults — and publishes it with the given status/comment. Content is treated as
+   UTF-8 text, like hsm_sensor_add_file. Returns HSM_RESULT_NOT_FOUND if the file cannot be opened,
+   HSM_RESULT_LIMIT_EXCEEDED if it exceeds 128 MiB, HSM_RESULT_INVALID_ARGUMENT for a NULL sensor or
+   path. An invalid status is a silent no-op (returns HSM_RESULT_OK). */
+hsm_result_t hsm_sensor_add_file_from_path(
+    hsm_sensor_t* sensor,
+    const char* file_path,
+    hsm_sensor_status_t status,
+    const char* comment);
+
 /* Bar accumulation. A non-finite double value (NaN/Infinity) and an inconsistent partial
    (count < 1 or mean/first/last outside [min, max] — strict for int bars, FP-tolerant for
    double bars) are silently skipped: the call returns HSM_RESULT_OK and the bar is unchanged. */

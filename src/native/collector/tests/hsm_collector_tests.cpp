@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <limits>
 #include <map>
@@ -2702,6 +2703,59 @@ namespace
         Contains(WaitForFirstPayload(collector.value), "host\\u0003/module\\u0004/native/json/options");
     }
 
+    // hsm_sensor_add_file_from_path reads the file, overrides the creation-time name/extension with
+    // the file's own stem/extension (mirrors managed FileSensor.SendFile), and posts the content.
+    void NativeFileFromPathDerivesNameExtensionAndContent()
+    {
+        auto collector = CreateCollector();
+        hsm_sensor_t* raw = nullptr;
+        Require(
+            hsm_collector_create_file_sensor(collector.value, "native/file/frompath", "deflt", "txt", &raw) == HSM_RESULT_OK,
+            "file sensor create failed");
+        SensorHandle sensor{ raw };
+
+        const std::string file_path = "hsm_from_path_unit.log";
+        const std::string content = "coefficient changed: 1.5";
+        {
+            std::ofstream out(file_path, std::ios::binary | std::ios::trunc);
+            Require(static_cast<bool>(out), "could not create temp file");
+            out << content;
+        }
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(
+            hsm_sensor_add_file_from_path(sensor.value, file_path.c_str(), HSM_SENSOR_STATUS_OK, "report") == HSM_RESULT_OK,
+            "add file from path failed");
+
+        const auto payload = WaitForFirstPayload(collector.value);
+        std::remove(file_path.c_str());
+
+        Contains(payload, "\"Name\":\"hsm_from_path_unit\"");
+        Contains(payload, "\"Extension\":\"log\"");
+        Contains(payload, "\"Value\":\"coefficient changed: 1.5\"");
+        Contains(payload, "\"Comment\":\"report\"");
+        // The creation-time defaults must be overridden by the file's own name/extension.
+        NotContains(payload, "\"Name\":\"deflt\"");
+        NotContains(payload, "\"Extension\":\"txt\"");
+    }
+
+    void NativeFileFromPathMissingFileReturnsNotFoundAndSendsNothing()
+    {
+        auto collector = CreateCollector();
+        hsm_sensor_t* raw = nullptr;
+        Require(
+            hsm_collector_create_file_sensor(collector.value, "native/file/missing", "deflt", "txt", &raw) == HSM_RESULT_OK,
+            "file sensor create failed");
+        SensorHandle sensor{ raw };
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(
+            hsm_sensor_add_file_from_path(sensor.value, "hsm_no_such_file_xyz.dat", HSM_SENSOR_STATUS_OK, "") ==
+                HSM_RESULT_NOT_FOUND,
+            "missing file should return NOT_FOUND");
+        Require(hsm_collector_sent_count(collector.value) == 0, "missing file must not enqueue a payload");
+    }
+
     void NativeDoubleNanIsRejectedAndNotSent()
     {
         auto collector = CreateCollector();
@@ -4868,6 +4922,8 @@ namespace
             { "native_json_escapes_control_chars_in_comment", [](const std::string&) { NativeJsonEscapesControlCharsInComment(); } },
             { "native_json_escapes_control_chars_in_path", [](const std::string&) { NativeJsonEscapesControlCharsInPath(); } },
             { "native_json_escapes_control_chars_in_options_path_prefix", [](const std::string&) { NativeJsonEscapesControlCharsInOptionsPathPrefix(); } },
+            { "native_file_from_path_derives_name_extension_and_content", [](const std::string&) { NativeFileFromPathDerivesNameExtensionAndContent(); } },
+            { "native_file_from_path_missing_file_returns_not_found_and_sends_nothing", [](const std::string&) { NativeFileFromPathMissingFileReturnsNotFoundAndSendsNothing(); } },
             { "native_double_nan_is_rejected_and_not_sent", [](const std::string&) { NativeDoubleNanIsRejectedAndNotSent(); } },
             { "native_double_positive_infinity_is_rejected_and_not_sent", [](const std::string&) { NativeDoublePositiveInfinityIsRejectedAndNotSent(); } },
             { "native_double_negative_infinity_is_rejected_and_not_sent", [](const std::string&) { NativeDoubleNegativeInfinityIsRejectedAndNotSent(); } },
