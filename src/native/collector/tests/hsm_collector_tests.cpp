@@ -3276,6 +3276,72 @@ namespace
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
     }
+
+    // Live service-status sampler (wrapper-parity gap #2): an always-running service posts Running (4)
+    // to ".module/Service status". RpcSs (Remote Procedure Call) is a critical service that is always
+    // running on any Windows host, including CI runners.
+    void NativeServiceStatusSensorEmitsRunningForCriticalService()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_enable_service_status_monitoring(collector.value, "RpcSs", 50) == HSM_RESULT_OK,
+            "enable service status failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(10000);
+        bool found = false;
+        while (!found && std::chrono::steady_clock::now() < deadline)
+        {
+            const size_t count = hsm_collector_sent_count(collector.value);
+            for (size_t i = 0; i < count && !found; ++i)
+            {
+                const char* json = nullptr;
+                if (hsm_collector_get_sent_json(collector.value, i, &json) == HSM_RESULT_OK && json != nullptr)
+                {
+                    const std::string payload(json);
+                    if (payload.find("Service status") != std::string::npos && payload.find("\"Value\":4") != std::string::npos)
+                        found = true;
+                }
+            }
+            if (!found)
+                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        }
+
+        Require(found, "service status sensor must post Running (4) for the always-running RpcSs service");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
+    // A missing service posts -1 with Error and the "Service not found!" comment (managed parity).
+    void NativeServiceStatusSensorReportsMissingService()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_enable_service_status_monitoring(collector.value, "HsmNoSuchService_ZZZ", 50) == HSM_RESULT_OK,
+            "enable service status failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(10000);
+        bool found = false;
+        while (!found && std::chrono::steady_clock::now() < deadline)
+        {
+            const size_t count = hsm_collector_sent_count(collector.value);
+            for (size_t i = 0; i < count && !found; ++i)
+            {
+                const char* json = nullptr;
+                if (hsm_collector_get_sent_json(collector.value, i, &json) == HSM_RESULT_OK && json != nullptr)
+                {
+                    const std::string payload(json);
+                    if (payload.find("Service not found!") != std::string::npos)
+                        found = true;
+                }
+            }
+            if (!found)
+                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        }
+
+        Require(found, "missing service must post -1 with the \"Service not found!\" comment");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
 #endif
 
     // Service alive heartbeat must emit a VALUE, not sit registered-but-empty (#1198 follow-up).
@@ -4872,6 +4938,10 @@ namespace
               [](const std::string&) { NativeWindowsProcessMetricResolvesCurrentProcess(); } },
             { "native_windows_info_sensors_emit_values",
               [](const std::string&) { NativeWindowsInfoSensorsEmitValues(); } },
+            { "native_service_status_sensor_emits_running_for_critical_service",
+              [](const std::string&) { NativeServiceStatusSensorEmitsRunningForCriticalService(); } },
+            { "native_service_status_sensor_reports_missing_service",
+              [](const std::string&) { NativeServiceStatusSensorReportsMissingService(); } },
 #endif
             { "native_collector_self_monitoring_emits",
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },

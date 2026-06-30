@@ -913,6 +913,20 @@ hsm_result_t hsm_collector_enable_tcp_connection_failure_rate_sensor(
     hsm_collector_t* collector,
     int32_t period_ms);
 
+/* Enable live monitoring of a Windows service's status (Windows only; mirrors the managed
+   WindowsServiceStatusSensor). Registers the ".module/Service status" enum sensor and starts a
+   background thread that every `scan_period_ms` milliseconds queries the named service via the SCM
+   (Win32 OpenService/QueryServiceStatus) and posts its ServiceControllerStatus (Stopped=1..Paused=7)
+   to the sensor ON CHANGE. A missing/unqueryable service posts -1 with Error ("Service not found!")
+   and then backs off for an hour. `service_name` is the service NAME (case-insensitive), not the
+   display name; it drives the query only and is not part of the registration. Call BEFORE Start().
+   Returns HSM_RESULT_INVALID_ARGUMENT if service_name is NULL/empty or scan_period_ms <= 0.
+   Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
+hsm_result_t hsm_collector_enable_service_status_monitoring(
+    hsm_collector_t* collector,
+    const char* service_name,
+    int32_t scan_period_ms);
+
 #ifdef __cplusplus
 }
 #endif

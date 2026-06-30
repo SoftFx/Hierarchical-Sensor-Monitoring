@@ -658,6 +658,17 @@ namespace hsm::collector
                 "Failed to enable TCP connection failure rate sensor.");
         }
 
+        /// Enable live monitoring of a Windows service's status (Windows only; mirrors the managed
+        /// WindowsServiceStatusSensor). Call BEFORE Start(). Registers ".module/Service status" and,
+        /// every `scan_period`, posts the named service's ServiceControllerStatus on change (-1/Error
+        /// when missing). `service_name` is the service name (case-insensitive), not the display name.
+        void EnableServiceStatusMonitoring(const std::string& service_name, std::chrono::milliseconds scan_period)
+        {
+            Check(
+                hsm_collector_enable_service_status_monitoring(handle_, service_name.c_str(), static_cast<int32_t>(scan_period.count())),
+                "Failed to enable service status monitoring.");
+        }
+
         // ---- Introspection ------------------------------------------------------------------
 
         std::size_t SentCount() const

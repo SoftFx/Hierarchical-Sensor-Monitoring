@@ -383,6 +383,13 @@ if(WIN32)
     add_test(NAME native_windows_info_sensors_emit_values
         COMMAND hsm_collector_tests native_windows_info_sensors_emit_values
     )
+    # Wrapper-parity gap #2: the live service-status sampler posts a named service's status.
+    add_test(NAME native_service_status_sensor_emits_running_for_critical_service
+        COMMAND hsm_collector_tests native_service_status_sensor_emits_running_for_critical_service
+    )
+    add_test(NAME native_service_status_sensor_reports_missing_service
+        COMMAND hsm_collector_tests native_service_status_sensor_reports_missing_service
+    )
 endif()
 
 function(add_conformance_test name fixture)

@@ -2283,6 +2283,7 @@ namespace
             StopNetworkSpeedSampler();
             StopTcpFailureRateSampler();
             StopWindowsInfoSampler();
+            StopServiceStatusSampler();
             StopSelfMonitor();
             StopWorker();
         }
@@ -2365,6 +2366,7 @@ namespace
             StartNetworkSpeedSampler();
             StartTcpFailureRateSampler();
             StartWindowsInfoSampler();
+            StartServiceStatusSampler();
             StartSelfMonitor();
 
             // Drain the one-shot Start values (e.g. product/collector version) now the worker is up.
@@ -2422,6 +2424,7 @@ namespace
             StopNetworkSpeedSampler();
             StopTcpFailureRateSampler();
             StopWindowsInfoSampler();
+            StopServiceStatusSampler();
             StopSelfMonitor();
 
             // Dispose bound metric sources now the scheduler has stopped reading them (managed
@@ -3254,6 +3257,29 @@ namespace
 #endif
         }
 
+        // --- Windows service status (polled enum sensor) ---
+
+        hsm_result_t EnableServiceStatusMonitoring(const char* service_name, int32_t scan_period_ms)
+        {
+            if (service_name == nullptr || *service_name == '\0' || scan_period_ms <= 0)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+#ifndef _WIN32
+            (void)scan_period_ms;
+            return SetError(HSM_RESULT_INVALID_STATE, "Service status monitoring is only supported on Windows.");
+#else
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (state_ != CollectorState::Stopped)
+                return SetError(HSM_RESULT_INVALID_STATE, "EnableServiceStatusMonitoring must be called before Start.");
+
+            service_status_enabled_ = true;
+            service_name_ = service_name;
+            service_status_scan_period_ms_ = scan_period_ms;
+            ClearError();
+            return HSM_RESULT_OK;
+#endif
+        }
+
         // Enable the Windows OS-info sampler (#1189 follow-up). Must be called before Start.
         hsm_result_t EnableWindowsInfoSensors(int32_t period_ms)
         {
@@ -3856,6 +3882,98 @@ namespace
             win_info_cv_.notify_all();
             if (win_info_thread_.joinable())
                 win_info_thread_.join();
+#endif
+        }
+
+        void StartServiceStatusSampler()
+        {
+#ifdef _WIN32
+            if (!service_status_enabled_)
+                return;
+
+            // Register the standard ".module/Service status" enum sensor (catalog id, byte-identical
+            // to managed) synchronously here — Start() runs this with the registration gate open, so it
+            // is registered the moment Start returns; the sampler thread only posts to it. The service
+            // name drives the live query only, it is not part of the registration.
+            hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
+            if (AddDefaultSensor(HSM_DEFAULT_SERVICE_STATUS, &params, service_status_sensor_) != HSM_RESULT_OK)
+                return;
+#if defined(HSM_COLLECTOR_HTTP)
+            if (send_wire_)
+                PostRegistrationsWire({ service_status_sensor_ });
+#endif
+
+            {
+                std::lock_guard<std::mutex> guard(service_status_cv_mutex_);
+                service_status_stop_ = false;
+            }
+            service_status_thread_ = std::thread([this] { RunServiceStatusLoop(); });
+#endif
+        }
+
+        void StopServiceStatusSampler()
+        {
+#ifdef _WIN32
+            {
+                std::lock_guard<std::mutex> guard(service_status_cv_mutex_);
+                service_status_stop_ = true;
+            }
+            service_status_cv_.notify_all();
+            if (service_status_thread_.joinable())
+                service_status_thread_.join();
+#endif
+        }
+
+        void RunServiceStatusLoop()
+        {
+#ifdef _WIN32
+            const auto scan_period = std::chrono::milliseconds(service_status_scan_period_ms_);
+            // When the service is missing, post once and then back off for an hour, mirroring the
+            // managed WindowsServiceStatusSensor fault-state delay (don't hammer the SCM).
+            const auto fault_period = std::chrono::hours(1);
+
+            int last_state = 0; // 0 matches no ServiceControllerStatus, so the first real read posts.
+            bool fault = false;
+
+            while (true)
+            {
+                {
+                    std::unique_lock<std::mutex> lock(service_status_cv_mutex_);
+                    const auto wait = fault ? std::chrono::duration_cast<std::chrono::milliseconds>(fault_period) : scan_period;
+                    if (service_status_cv_.wait_for(lock, wait, [this] { return service_status_stop_; }))
+                        return;
+                }
+
+                try
+                {
+                    const int status = hsm::collector::ReadWindowsServiceStatus(service_name_);
+                    if (status >= 1)
+                    {
+                        fault = false;
+                        // Change-detection: only post when the status actually changes (managed parity).
+                        if (status != last_state)
+                        {
+                            service_status_sensor_->AddEnum(status, HSM_SENSOR_STATUS_OK, "");
+                            last_state = status;
+                        }
+                    }
+                    else if (last_state != -1)
+                    {
+                        // Not found / query failure: post -1 with Error once (mirrors managed
+                        // SendValue(-1, Error, "Service not found!")), then enter the back-off.
+                        service_status_sensor_->AddEnum(-1, HSM_SENSOR_STATUS_ERROR, "Service not found!");
+                        last_state = -1;
+                        fault = true;
+                    }
+                    else
+                    {
+                        fault = true; // still missing — keep backing off without re-posting.
+                    }
+                }
+                catch (...)
+                {
+                }
+            }
 #endif
         }
 
@@ -4486,6 +4604,19 @@ namespace
         std::mutex win_info_cv_mutex_;
         std::condition_variable win_info_cv_;
         bool win_info_stop_ = false;
+
+        // Windows service-status sampler (wrapper-parity gap #2): polls a named service via the Win32
+        // SCM each scan period and posts the ".module/Service status" enum on change. Mirrors the
+        // managed WindowsServiceStatusSensor — change-detection, and -1/Error + a long back-off when
+        // the service is missing.
+        bool service_status_enabled_ = false;
+        std::string service_name_;
+        int32_t service_status_scan_period_ms_ = 0;
+        std::shared_ptr<NativeSensor> service_status_sensor_;
+        std::thread service_status_thread_;
+        std::mutex service_status_cv_mutex_;
+        std::condition_variable service_status_cv_;
+        bool service_status_stop_ = false;
 #endif
     };
 
@@ -6674,6 +6805,17 @@ hsm_result_t hsm_collector_enable_tcp_connection_failure_rate_sensor(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return collector->impl->EnableTcpConnectionFailureRateSensor(period_ms);
+}
+
+hsm_result_t hsm_collector_enable_service_status_monitoring(
+    hsm_collector_t* collector,
+    const char* service_name,
+    int32_t scan_period_ms)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->EnableServiceStatusMonitoring(service_name, scan_period_ms);
 }
 
 hsm_result_t hsm_collector_set_metric_source_factory(

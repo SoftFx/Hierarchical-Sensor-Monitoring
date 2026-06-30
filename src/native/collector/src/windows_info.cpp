@@ -271,6 +271,32 @@ namespace hsm::collector
         seeded_ = true;
         return out;
     }
+
+    int ReadWindowsServiceStatus(const std::string& service_name)
+    {
+        // UTF-8 service name -> wide (Win32 service-name lookups are case-insensitive).
+        const int wlen = MultiByteToWideChar(CP_UTF8, 0, service_name.c_str(), -1, nullptr, 0);
+        if (wlen <= 1)
+            return -1;
+        std::wstring wname(static_cast<std::size_t>(wlen - 1), L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, service_name.c_str(), -1, wname.data(), wlen);
+
+        SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+        if (scm == nullptr)
+            return -1;
+
+        SC_HANDLE service = OpenServiceW(scm, wname.c_str(), SERVICE_QUERY_STATUS);
+        int result = -1;
+        if (service != nullptr)
+        {
+            SERVICE_STATUS status{};
+            if (QueryServiceStatus(service, &status))
+                result = static_cast<int>(status.dwCurrentState); // SERVICE_* values == ServiceControllerStatus 1..7
+            CloseServiceHandle(service);
+        }
+        CloseServiceHandle(scm);
+        return result;
+    }
 } // namespace hsm::collector
 
 #else // !_WIN32
@@ -284,6 +310,10 @@ namespace hsm::collector
     std::vector<EventLogRecordData> WindowsEventLogReader::PollNew()
     {
         return {};
+    }
+    int ReadWindowsServiceStatus(const std::string&)
+    {
+        return -1;
     }
 } // namespace hsm::collector
 
