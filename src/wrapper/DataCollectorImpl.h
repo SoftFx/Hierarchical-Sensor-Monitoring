@@ -132,7 +132,9 @@ namespace hsm_wrapper
 		hsm::collector::Collector collector_;
 		// Hold the async lifecycle futures so the caller isn't blocked: a discarded std::future from
 		// StartAsync/StopAsync blocks in its destructor until the task completes, which would make the
-		// call effectively synchronous (managed StartAsync/StopAsync are fire-and-forget).
+		// call effectively synchronous (managed StartAsync/StopAsync are fire-and-forget). Expected
+		// usage is one-shot (a single StartAsync, a single StopAsync); calling StartAsync again while a
+		// prior start is still pending blocks on the move-assignment until the prior task finishes.
 		std::future<void> start_future_;
 		std::future<void> stop_future_;
 		std::mutex file_sensors_mutex_;

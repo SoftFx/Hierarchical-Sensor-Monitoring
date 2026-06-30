@@ -80,6 +80,15 @@ namespace hsm_wrapper
 		friend DataCollectorProxy;
 	};
 
+	// NOTE (native backend): this DLL now runs on the native hsm::collector C++ API, not C++/CLI over
+	// the managed HSMDataCollector. The ABI is unchanged, but a few behaviors differ behind it — see
+	// docs/native-collector-migration.md. The surprising ones for a relinking consumer:
+	//   * Initialize(config_path, write_debug) is a no-op (the collector is configured via the ctor).
+	//   * Initialize*Monitoring boolean sub-flags are ignored — the whole native group is registered;
+	//     InitializeDiskMonitoring's `target` is ignored, so it is equivalent to InitializeAllDisksMonitoring.
+	//   * SendFileAsync is synchronous (it reads the file on the calling thread despite the name).
+	//   * Function/values-function sensors are int-only: CreateNoParamsFuncSensor<T>/CreateParamsFuncSensor<T,U>
+	//     throw at creation unless T (and U) is int.
 	class HSMWRAPPER_API DataCollectorProxy
 	{
 	public:

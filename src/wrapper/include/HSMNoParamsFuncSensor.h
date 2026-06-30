@@ -49,6 +49,9 @@ namespace hsm_wrapper
 			return impl_wrapper->GetInterval();
 		}
 
+		// NOTE (native backend): the native function sensor's post period is fixed at creation.
+		// RestartTimer records the new interval (GetInterval echoes it) but does NOT re-arm the timer —
+		// the sensor keeps firing at its original cadence. See docs/native-collector-migration.md.
 		void RestartTimer(std::chrono::milliseconds time_interval)
 		{
 			impl_wrapper->RestartTimer(time_interval);

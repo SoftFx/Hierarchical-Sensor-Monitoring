@@ -24,23 +24,44 @@ namespace hsm_wrapper
 	HSM_ASSERT_ENUM_MATCH(HSMSensorStatus::Warning, hsm::collector::SensorStatus::Warning);
 	HSM_ASSERT_ENUM_MATCH(HSMSensorStatus::Error, hsm::collector::SensorStatus::Error);
 
+	// Every HSMAlertOperation enumerator (condition.operation is cast straight through).
 	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::LessThanOrEqual, hsm::collector::AlertOperation::LessThanOrEqual);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::LessThan, hsm::collector::AlertOperation::LessThan);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::GreaterThan, hsm::collector::AlertOperation::GreaterThan);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::GreaterThanOrEqual, hsm::collector::AlertOperation::GreaterThanOrEqual);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::Equal, hsm::collector::AlertOperation::Equal);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::NotEqual, hsm::collector::AlertOperation::NotEqual);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::IsChanged, hsm::collector::AlertOperation::IsChanged);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::IsError, hsm::collector::AlertOperation::IsError);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::IsOk, hsm::collector::AlertOperation::IsOk);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::IsChangedToError, hsm::collector::AlertOperation::IsChangedToError);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::IsChangedToOk, hsm::collector::AlertOperation::IsChangedToOk);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::Contains, hsm::collector::AlertOperation::Contains);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::StartsWith, hsm::collector::AlertOperation::StartsWith);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::EndsWith, hsm::collector::AlertOperation::EndsWith);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertOperation::ReceivedNewValue, hsm::collector::AlertOperation::ReceivedNewValue);
 
+	// Every HSMAlertProperty enumerator (condition.property is cast straight through).
 	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Status, hsm::collector::AlertProperty::Status);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Comment, hsm::collector::AlertProperty::Comment);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Value, hsm::collector::AlertProperty::Value);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Min, hsm::collector::AlertProperty::Min);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Max, hsm::collector::AlertProperty::Max);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Mean, hsm::collector::AlertProperty::Mean);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Count, hsm::collector::AlertProperty::Count);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::LastValue, hsm::collector::AlertProperty::LastValue);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::Length, hsm::collector::AlertProperty::Length);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::OriginalSize, hsm::collector::AlertProperty::OriginalSize);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertProperty::NewSensorData, hsm::collector::AlertProperty::NewSensorData);
 
+	// Every HSMAlertIcon enumerator (builtin_icon is cast straight through).
 	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::Ok, hsm::collector::AlertIcon::Ok);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::Warning, hsm::collector::AlertIcon::Warning);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::Error, hsm::collector::AlertIcon::Error);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::Pause, hsm::collector::AlertIcon::Pause);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::ArrowUp, hsm::collector::AlertIcon::ArrowUp);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::ArrowDown, hsm::collector::AlertIcon::ArrowDown);
+	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::Clock, hsm::collector::AlertIcon::Clock);
 	HSM_ASSERT_ENUM_MATCH(HSMAlertIcon::Hourglass, hsm::collector::AlertIcon::Hourglass);
 
 	HSM_ASSERT_ENUM_MATCH(HSMTargetType::Const, hsm::collector::AlertTargetType::Const);
