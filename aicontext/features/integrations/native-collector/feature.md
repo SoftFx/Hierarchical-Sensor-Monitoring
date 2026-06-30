@@ -94,7 +94,7 @@ CMake gates: `HSM_COLLECTOR_INSTALL`, `HSM_COLLECTOR_BUILD_EXAMPLES`, `HSM_COLLE
 Tracked in full in `docs/native-collector-migration.md`. Headlines:
 
 - **Function sensors are int / int-values only** — the C ABI is int-only; the .NET wrapper's templated `T/U` function sensors are not reproduced (would require ABI growth).
-- **`SendFileAsync(disk path)` → `FileSensor::SendFile(path)`** — `hsm_sensor_add_file_from_path` reads the file and derives `Name`/`Extension` from the path, overriding the creation-time defaults (mirrors managed `FileSensor.SendFile`; 128 MiB cap, content treated as UTF-8 text). The disk read itself is host I/O, not cross-language-portable, so it carries unit — not conformance — coverage; the file-value wire shape stays covered by the file conformance case. Raw-string content still goes through `FileSensor::AddContent(string)`.
+- **`SendFileAsync(disk path)` → `FileSensor::SendFile(path)`** — `hsm_sensor_add_file_from_path` reads the file and derives `Name`/`Extension` from the path, overriding the creation-time defaults (mirrors managed `FileSensor.SendFile`; 10 MiB cap, content treated as UTF-8 text). The disk read itself is host I/O, not cross-language-portable, so it carries unit — not conformance — coverage; the file-value wire shape stays covered by the file conformance case. Raw-string content still goes through `FileSensor::AddContent(string)`.
 - **No `RedirectAssembly` / `Initialize(config_path)`** — those are CLR-hosting concerns with no native analogue.
 - **Time-in-GC sensors dropped** (#1099) — no managed GC in a native host.
 

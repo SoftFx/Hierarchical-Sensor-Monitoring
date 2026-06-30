@@ -41,10 +41,12 @@ namespace
 {
     constexpr size_t MaxCommentLength = 1024;
 
-    // Hard ceiling for hsm_sensor_add_file_from_path, mirroring the managed
-    // FileSensorOptions.MaxAllowedFileSizeBytes (#1102-C1): the file is buffered in memory and the
-    // serialized wire array expands ~4x, so an unbounded read is an OOM vector.
-    constexpr uint64_t MaxFileSensorBytes = 128ull * 1024 * 1024;
+    // Operative size limit for hsm_sensor_add_file_from_path: the managed FileSensor.SendFile rejects
+    // files larger than FileSensorOptions.MaxFileSizeBytes, which DEFAULTS to 10 MiB (clamped to the
+    // 128 MiB MaxAllowedFileSizeBytes ceiling). The native file sensor exposes no per-sensor max yet,
+    // so it enforces the managed default. The file is buffered in memory and its wire array expands
+    // ~4x, so the cap is also the OOM guard.
+    constexpr uint64_t MaxFileSensorBytes = 10ull * 1024 * 1024;
 
     // Splits a filesystem path into file stem + extension, mirroring the managed FileSensor.SendFile
     // (Path.GetFileNameWithoutExtension + FileInfo.Extension.TrimStart('.')).
@@ -3290,7 +3292,6 @@ namespace
                 return HSM_RESULT_INVALID_ARGUMENT;
 
 #ifndef _WIN32
-            (void)scan_period_ms;
             return SetError(HSM_RESULT_INVALID_STATE, "Service status monitoring is only supported on Windows.");
 #else
             std::lock_guard<std::mutex> guard(mutex_);
@@ -3977,17 +3978,15 @@ namespace
                             last_state = status;
                         }
                     }
-                    else if (last_state != -1)
+                    else
                     {
-                        // Not found / query failure: post -1 with Error once (mirrors managed
-                        // SendValue(-1, Error, "Service not found!")), then enter the back-off.
+                        // Not found / query failure: re-post -1/Error on EVERY fault-period wake. Managed
+                        // WindowsServiceStatusSensor re-emits "Service not found!" each time the back-off
+                        // expires (no change-suppression on the fault path), so a long-missing service
+                        // stays a fresh Error instead of going stale and tripping a TTL inactivity alert.
                         service_status_sensor_->AddEnum(-1, HSM_SENSOR_STATUS_ERROR, "Service not found!");
                         last_state = -1;
                         fault = true;
-                    }
-                    else
-                    {
-                        fault = true; // still missing — keep backing off without re-posting.
                     }
                 }
                 catch (...)
@@ -4900,9 +4899,11 @@ namespace
         if (file_path == nullptr)
             return HSM_RESULT_INVALID_ARGUMENT;
 
-        // Mirrors C# FileSensorInstant.SendFile: an invalid status is a silent no-op.
+        // Mirrors C# FileSensorInstant.SendFile, which returns false for an invalid status — so the
+        // send fails (the C++ SendFile wrapper returns false), unlike hsm_sensor_add_file which
+        // silently no-ops an invalid status.
         if (!IsValidStatus(status))
-            return HSM_RESULT_OK;
+            return HSM_RESULT_INVALID_ARGUMENT;
 
         // Short-circuit BEFORE the disk read: a SendFile before Start (or after Stop) would read the
         // whole file only for the enqueue to drop it. Mirrors C# SendFile, which returns false on
@@ -4926,8 +4927,10 @@ namespace
 
         std::string content(static_cast<size_t>(size), '\0');
         file.seekg(0);
+        // A short read (file truncated/shrunk between tellg() and read()) is reported as NOT_FOUND,
+        // so the C ABI never surfaces an undocumented code for a transient read failure.
         if (size > 0 && !file.read(&content[0], static_cast<std::streamsize>(size)))
-            return HSM_RESULT_INTERNAL_ERROR;
+            return HSM_RESULT_NOT_FOUND;
 
         // SendFile overrides the sensor's creation-time name/extension with the file's own.
         std::string stem;

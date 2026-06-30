@@ -820,11 +820,12 @@ hsm_result_t hsm_sensor_add_file(
 /* File publish from a filesystem path (host-I/O convenience mirroring managed FileSensor.SendFile):
    reads the file, derives Name (file stem) and Extension from the path — overriding the sensor's
    creation-time defaults — and publishes it with the given status/comment. Content is treated as
-   UTF-8 text, like hsm_sensor_add_file. Returns HSM_RESULT_NOT_FOUND if the file cannot be opened,
-   HSM_RESULT_LIMIT_EXCEEDED if it exceeds 128 MiB, HSM_RESULT_INVALID_ARGUMENT for a NULL sensor or
-   path, and HSM_RESULT_INVALID_STATE if the collector cannot accept data (not started / stopped) —
-   checked BEFORE the file is read, so a no-op never performs the disk read. An invalid status is a
-   silent no-op (returns HSM_RESULT_OK). */
+   UTF-8 text, like hsm_sensor_add_file. Returns HSM_RESULT_NOT_FOUND if the file cannot be opened or
+   is truncated mid-read, HSM_RESULT_LIMIT_EXCEEDED if it exceeds 10 MiB (the managed
+   FileSensorOptions.MaxFileSizeBytes default), HSM_RESULT_INVALID_ARGUMENT for a NULL sensor/path or
+   an invalid status (the send fails, matching managed SendFile — NOT a silent no-op), and
+   HSM_RESULT_INVALID_STATE if the collector cannot accept data (not started / stopped) — checked
+   BEFORE the file is read, so a no-op never performs the disk read. */
 hsm_result_t hsm_sensor_add_file_from_path(
     hsm_sensor_t* sensor,
     const char* file_path,
