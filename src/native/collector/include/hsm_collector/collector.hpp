@@ -421,13 +421,15 @@ namespace hsm::collector
 
         IntBarSensor CreateIntBarSensor(const std::string& path, const BarOptions& options = {})
         {
+            const hsm_sensor_options_t native = options.ToNative();
             hsm_sensor_t* sensor = nullptr;
             Check(
-                hsm_collector_create_int_bar_sensor(
+                hsm_collector_create_int_bar_sensor_with_options(
                     handle_,
                     path.c_str(),
                     static_cast<std::int64_t>(options.bar_period.count()),
                     static_cast<std::int64_t>(options.post_period.count()),
+                    &native,
                     &sensor),
                 "Failed to create int bar sensor.");
             return IntBarSensor(sensor);
@@ -435,14 +437,16 @@ namespace hsm::collector
 
         DoubleBarSensor CreateDoubleBarSensor(const std::string& path, const BarOptions& options = {})
         {
+            const hsm_sensor_options_t native = options.ToNative();
             hsm_sensor_t* sensor = nullptr;
             Check(
-                hsm_collector_create_double_bar_sensor(
+                hsm_collector_create_double_bar_sensor_with_options(
                     handle_,
                     path.c_str(),
                     static_cast<std::int64_t>(options.bar_period.count()),
                     static_cast<std::int64_t>(options.post_period.count()),
                     options.precision,
+                    &native,
                     &sensor),
                 "Failed to create double bar sensor.");
             return DoubleBarSensor(sensor);

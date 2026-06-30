@@ -598,6 +598,35 @@ namespace HSMDataCollector.Tests
                         BuildConformanceBarOptions(int.Parse(step.Arg(1)), int.Parse(step.Arg(2)), int.Parse(step.Arg(3)))));
                     break;
 
+                case "create_double_bar_sensor_full_options":
+                {
+                    // Arg(6) display_unit is ignored: BarSensorOptions is SensorOptions<NoDisplayUnit>,
+                    // so bars register DisplayUnit:null (fixtures pass -1 there).
+                    var inert = TimeSpan.FromDays(365);
+                    var barOptions = new BarSensorOptions
+                    {
+                        BarPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))),
+                        PostDataPeriod = long.Parse(step.Arg(2)) <= 0 ? inert : TimeSpan.FromMilliseconds(long.Parse(step.Arg(2))),
+                        BarTickPeriod = inert,
+                        Precision = int.Parse(step.Arg(3)),
+                        TTL = long.Parse(step.Arg(4)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(4))) : (TimeSpan?)null,
+                        SensorUnit = int.Parse(step.Arg(5)) >= 0 ? (Unit)int.Parse(step.Arg(5)) : (Unit?)null,
+                        KeepHistory = long.Parse(step.Arg(7)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(7))) : (TimeSpan?)null,
+                        SelfDestroy = long.Parse(step.Arg(8)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(8))) : (TimeSpan?)null,
+                        Statistics = int.Parse(step.Arg(9)) >= 0 ? (StatisticsOptions)int.Parse(step.Arg(9)) : StatisticsOptions.None,
+                        IsSingletonSensor = ParseTriBool(step.Arg(10)),
+                        AggregateData = ParseTriBool(step.Arg(11)),
+                        EnableForGrafana = ParseTriBool(step.Arg(12)),
+                        IsComputerSensor = bool.Parse(step.Arg(13)),
+                        SensorLocation = (SensorLocation)int.Parse(step.Arg(14)),
+                        Description = ExpandTextToken(step.Arg(15)),
+                        // Optional trailing DefaultAlertsOptions bitmask (absent => None).
+                        DefaultAlertsOptions = step.TryArg(16, out var barDao) ? (DefaultAlertsOptions)long.Parse(barDao) : DefaultAlertsOptions.None,
+                    };
+                    AddSensor(state, state.DoubleBarSensors, state.Collector.CreateDoubleBarSensor(step.Arg(0), barOptions));
+                    break;
+                }
+
                 case "add_bar_int":
                     state.IntBarSensors[int.Parse(step.Arg(0))].AddValue(int.Parse(step.Arg(1)));
                     break;

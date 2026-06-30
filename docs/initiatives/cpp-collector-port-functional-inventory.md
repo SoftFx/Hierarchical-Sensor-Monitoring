@@ -182,7 +182,7 @@ Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/featu
 - [x] Singular conveniences `SensorOptions.TTL` (→ `TTLs`, ttl_ms) and `TtlAlert` (→ `TtlAlerts`, the alert builder)
 - [x] `DisplayUnit` per options type → wire `DisplayUnit (int?)` — `hsm_sensor_options_t.display_unit`; pinned by `native_wire_registration_full_options_*` (the `RateDisplayUnit` enum values arrive with rate options, #1100)
 - [x] `InstantSensorOptions(+Alerts)`; `MonitoringInstantSensorOptions(+PostDataPeriod 15 s)` — conformance: registration_contract:default_fields_int_sensor, options_surface_contract:full_options_register_in_payload
-- [x] `BarSensorOptions(+BarPeriod/BarTickPeriod/Precision/BarAlerts)` — conformance: registration_contract:default_fields_bar_sensor
+- [x] `BarSensorOptions` full SensorOptions surface incl. `DefaultAlertsOptions` via `hsm_collector_create_*_bar_sensor_with_options` — conformance: registration_contract:default_fields_bar_sensor, bar_options_contract:bar_full_options_register_in_payload, bar_options_contract:bar_default_alerts_none
 - [x] `RateSensorOptions(PostDataPeriod 1 min, Unit=ValueInSecond)` — conformance: registration_contract:default_fields_rate_sensor
 - [ ] `FunctionSensorOptions` / `ValuesFunctionSensorOptions(+MaxCacheSize)` — both default `PostDataPeriod` 1 min (ms-param factory overloads default 15 s instead) — [decide]: C ABI exposes int / int-values function options only; templated overloads not ported (migration guide); behavior pinned by function_contract:*
 - [ ] `FileSensorOptions(+DefaultFileName/Extension/MaxFileSizeBytes)` — [decide]: `MaxFileSizeBytes` governs a disk read not in the portable contract; DefaultFileName/Extension pinned by file_contract:file_add_value_utf8_roundtrip

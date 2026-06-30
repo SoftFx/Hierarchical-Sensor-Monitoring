@@ -2645,6 +2645,23 @@ namespace
             return RegisterBarSensorLocked(BuildSensorPath(path), type, bar_period_ms, precision, bar_registration, out_sensor);
         }
 
+        // Bar create with a caller-built registration (full SensorOptions surface). The bar-specific
+        // baseline (DisplayUnit:null) is applied by the caller before this; shares RegisterBarSensorLocked.
+        hsm_result_t CreateBarSensor(
+            const char* path,
+            hsm_sensor_type_t type,
+            int64_t bar_period_ms,
+            int32_t precision,
+            RegistrationOptions registration,
+            std::shared_ptr<NativeSensor>& out_sensor)
+        {
+            if (!IsValidPath(path))
+                return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            return RegisterBarSensorLocked(BuildSensorPath(path), type, bar_period_ms, precision, registration, out_sensor);
+        }
+
         hsm_result_t CreatePeriodicSensor(
             const char* path,
             hsm_sensor_type_t type,
@@ -5807,6 +5824,76 @@ static hsm_result_t CreateBarSensor(
     return HSM_RESULT_OK;
 }
 
+static hsm_result_t CreateBarSensorWithOptions(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_type_t type,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    int32_t precision,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
+    if (collector == nullptr || out_sensor == nullptr || options == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    if (bar_period_ms <= 0 || post_period_ms < 0)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    if (precision < 0 || precision > 15)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    // Start from the bar baseline (Statistics:0, DisplayUnit:null — identical to the no-options bar
+    // path) and apply the caller's SensorOptions overrides, so a default options struct reproduces the
+    // no-options bar registration byte-for-byte.
+    RegistrationOptions registration;
+    registration.has_display_unit = false;
+    registration.ttl_ms = options->ttl_ms;
+    registration.unit = options->unit;
+    if (options->description != nullptr)
+    {
+        registration.has_description = true;
+        registration.description = CopyString(options->description);
+    }
+    if (options->keep_history_ms > 0)
+    {
+        registration.has_keep_history = true;
+        registration.keep_history_ms = options->keep_history_ms;
+    }
+    if (options->self_destroy_ms > 0)
+    {
+        registration.has_self_destroy = true;
+        registration.self_destroy_ms = options->self_destroy_ms;
+    }
+    if (options->display_unit >= 0)
+    {
+        registration.has_display_unit = true;
+        registration.display_unit = options->display_unit;
+    }
+    if (options->statistics >= 0)
+    {
+        registration.has_statistics = true;
+        registration.statistics = options->statistics;
+    }
+    registration.is_singleton = static_cast<TriBool>(options->is_singleton);
+    registration.aggregate_data = static_cast<TriBool>(options->aggregate_data);
+    registration.enable_grafana = static_cast<TriBool>(options->enable_grafana);
+    registration.is_computer_sensor = options->is_computer_sensor;
+    registration.sensor_location = options->sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
+    registration.default_alert_options = options->default_alert_options;
+
+    std::shared_ptr<NativeSensor> sensor;
+    const auto result = collector->impl->CreateBarSensor(path, type, bar_period_ms, precision, std::move(registration), sensor);
+    if (result != HSM_RESULT_OK)
+        return result;
+
+    *out_sensor = new hsm_sensor_t{ std::move(sensor) };
+    return HSM_RESULT_OK;
+}
+
 hsm_result_t hsm_collector_create_int_bar_sensor(
     hsm_collector_t* collector,
     const char* path,
@@ -5826,6 +5913,29 @@ hsm_result_t hsm_collector_create_double_bar_sensor(
     hsm_sensor_t** out_sensor)
 {
     return CreateBarSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE_BAR, bar_period_ms, post_period_ms, precision, out_sensor);
+}
+
+hsm_result_t hsm_collector_create_int_bar_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateBarSensorWithOptions(collector, path, HSM_SENSOR_TYPE_INT_BAR, bar_period_ms, post_period_ms, 0, options, out_sensor);
+}
+
+hsm_result_t hsm_collector_create_double_bar_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    int32_t precision,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateBarSensorWithOptions(collector, path, HSM_SENSOR_TYPE_DOUBLE_BAR, bar_period_ms, post_period_ms, precision, options, out_sensor);
 }
 
 static hsm_result_t CreatePeriodicSensorHandle(

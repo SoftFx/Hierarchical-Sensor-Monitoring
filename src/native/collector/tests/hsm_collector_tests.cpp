@@ -1841,6 +1841,39 @@ namespace
             return;
         }
 
+        if (action == "create_double_bar_sensor_full_options")
+        {
+            Require(step.size() >= 17, "create_double_bar_sensor_full_options requires 16 args");
+            const auto path = ExpandTextToken(step[1]);
+            const auto description = ExpandTextToken(step[16]);
+
+            hsm_sensor_options_t options = hsm_sensor_options_default();
+            options.ttl_ms = static_cast<int64_t>(std::stoll(step[5]));
+            options.unit = ToInt(step[6]);
+            options.display_unit = ToInt(step[7]); // -1 => bars emit DisplayUnit:null
+            options.description = description.c_str();
+            options.keep_history_ms = static_cast<int64_t>(std::stoll(step[8]));
+            options.self_destroy_ms = static_cast<int64_t>(std::stoll(step[9]));
+            options.statistics = ToInt(step[10]);
+            options.is_singleton = ToInt(step[11]);
+            options.aggregate_data = ToInt(step[12]);
+            options.enable_grafana = ToInt(step[13]);
+            options.is_computer_sensor = ToBool(step[14]);
+            options.sensor_location = ToInt(step[15]);
+            // Optional trailing DefaultAlertsOptions bitmask (absent => 0).
+            if (step.size() >= 18)
+                options.default_alert_options = static_cast<int64_t>(std::stoll(step[17]));
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_double_bar_sensor_with_options(
+                    state.collector.value, path.c_str(), std::stoll(step[2]), std::stoll(step[3]), ToInt(step[4]), &options, &sensor.value) ==
+                    HSM_RESULT_OK,
+                "create_double_bar_sensor_full_options failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
         if (action == "add_bar_int")
         {
             Require(step.size() >= 3, "add_bar_int requires sensor index and value");
@@ -5025,6 +5058,7 @@ namespace
             { "conformance_bar_double_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_partial_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_rollover_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_bar_options_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_queue_overflow_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_sender_retry_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_flush_contract", [](const std::string& path) { RunConformanceContract(path); } },

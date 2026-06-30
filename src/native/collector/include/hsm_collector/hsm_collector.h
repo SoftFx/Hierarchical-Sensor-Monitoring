@@ -687,6 +687,26 @@ hsm_result_t hsm_collector_create_double_bar_sensor(
     int32_t precision,
     hsm_sensor_t** out_sensor);
 
+/* Bar create carrying the full SensorOptions registration surface (TTL/unit/description/keep-history/
+   self-destroy/statistics/singleton/aggregate/grafana/computer/location/DefaultAlertsOptions). Bars
+   always emit DisplayUnit:null unless `display_unit` is set; a default-initialized options struct
+   (hsm_sensor_options_default) reproduces the plain create_*_bar_sensor registration byte-for-byte. */
+hsm_result_t hsm_collector_create_int_bar_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_double_bar_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    int32_t precision,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor);
+
 /* Periodic sensors (rate / function): the FIRST post fires immediately on collector Start,
    then every post_period_ms. Rate = accumulated sum / measured elapsed seconds since the
    previous post (fallback: the configured period for the first sample); the sum resets on
