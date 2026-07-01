@@ -138,6 +138,10 @@ jobs:
             echo "No .zip found in the downloaded bundle artifact." >&2
             exit 1
           fi
+          if [ ${#zips[@]} -gt 1 ]; then
+            echo "Expected exactly one bundle zip, found ${#zips[@]}: ${zips[*]}" >&2
+            exit 1
+          fi
           zip="${zips[0]}"
           notes='Native drop-in `HSMCppWrapper.dll` (no CLR) for tt-aggregator2 — relink only, same public ABI. Unzip the attached bundle and follow `MANIFEST.md` for the swap recipe. Behavioral residue vs the managed wrapper: `docs/native-collector-migration.md`.'
           # Idempotent: re-running a tag build re-uploads the asset instead of failing on an existing release.

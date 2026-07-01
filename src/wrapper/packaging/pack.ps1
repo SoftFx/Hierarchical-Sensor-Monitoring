@@ -41,7 +41,13 @@ $ver     = $Version -replace '^wrapper-v', '' -replace '^v', ''
 $triplet = 'x64-windows'
 $configs = @('Release', 'Debug')
 
-if (-not $Commit)    { $Commit    = (& git -C $SourceRoot rev-parse --short HEAD 2>$null); if (-not $Commit) { $Commit = 'unknown' } }
+if (-not $Commit) {
+    # try/catch, not just 2>$null: under PowerShell 7.4+ ($PSNativeCommandUseErrorActionPreference) a
+    # non-zero git exit raises a TERMINATING error with $ErrorActionPreference='Stop', so the
+    # `-> 'unknown'` fallback would otherwise be unreachable when packing outside a git checkout.
+    try { $Commit = (& git -C $SourceRoot rev-parse --short HEAD 2>$null) } catch { $Commit = $null }
+    if (-not $Commit) { $Commit = 'unknown' }
+}
 if (-not $BuildDate) { $BuildDate = (Get-Date -Format 'yyyy-MM-dd') }
 
 function New-Dir([string] $path) { New-Item -ItemType Directory -Force -Path $path | Out-Null; return $path }
