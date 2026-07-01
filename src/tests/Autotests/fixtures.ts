@@ -50,6 +50,21 @@ export const cleanup = {
       console.warn(`[cleanup] dashboard "${name}":`, e instanceof Error ? e.message : e);
     }
   },
+
+  async alertTemplate(page: Page, name: string): Promise<void> {
+    try {
+      await page.getByRole('link', { name: 'Alert Templates' }).click();
+      const row = page.getByRole('row', { name });
+      if (await row.count() === 0) return;
+      await row.first().locator('#actionButton').click();
+      await page.getByRole('link', { name: 'Remove' }).click();
+    } catch (e) {
+      console.warn(`[cleanup] alertTemplate "${name}":`, e instanceof Error ? e.message : e);
+    }
+  },
+
+  // Access keys are owned by a product, so they are removed together with it via cleanup.product();
+  // there is no standalone access-key cleanup helper (nothing leaks once the product is gone).
 };
 
 export const test = base.extend<{ adminPage: Page }>({

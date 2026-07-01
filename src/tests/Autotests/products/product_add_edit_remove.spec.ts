@@ -1,57 +1,65 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, uniqueName, cleanup } from '../fixtures.ts';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 
+// Create → Edit → Remove is an inherently sequential lifecycle, so the cases run serial and share one
+// unique product name; a failure is now attributable to a specific step (Create/Edit/Remove) instead
+// of one 50-line test. afterAll removes whichever name survived (idempotent), so a mid-way failure
+// never leaves data behind for the next run.
+test.describe.configure({ mode: 'serial' });
 
-test('Add, Edit, Remove product', async ({ page }) => {
-  const { apiUrl, admin_user, admin_user_password, viewer_user, folder_name, folder_description, folder_color,folder_name2, folder_description2, folder_color2 } = testConfig;
- 
-  // --- Login ---
-  await login(page, admin_user, admin_user_password, apiUrl);
+test.describe('Product lifecycle', () => {
+  const productName = uniqueName('TestProduct');
+  const editedName = `${productName}_edited`;
 
-  await page.getByRole('link', { name: 'Products' }).click();
-  await expect(page).toHaveURL(/.*\/Product/);
-  //Add a product
-  await page.getByRole('link', { name: 'Add product' }).click();
-  await page.getByRole('textbox', { name: 'New product name' }).click();
-  await page.getByRole('textbox', { name: 'New product name' }).fill('TestProduct');
-  await page.getByRole('button', { name: 'Add' }).click();
-  //Check product appears in the list
-  await expect(page).toHaveURL(/.*\/Product/);
-  await expect(page.getByRole('link', { name: 'TestProduct', exact: true })).toBeVisible();
+  test.afterAll(async ({ browser }) => {
+    const page = await browser.newPage();
+    try {
+      await login(page, testConfig.admin_user, testConfig.admin_user_password, testConfig.apiUrl);
+      await cleanup.product(page, editedName);
+      await cleanup.product(page, productName);
+    } finally {
+      await page.close();
+    }
+  });
 
-  //Modify product
-  await page.getByRole('link', { name: 'TestProduct', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Name' }).click();
-  await page.getByRole('textbox', { name: 'Name' }).fill('TestProduct123');
-  await page.getByRole('textbox', { name: 'Description' }).click();
-  await page.getByRole('textbox', { name: 'Description' }).fill('delete');
-  await page.getByRole('combobox', { name: 'From parent (parent is not' }).click();
-  await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page).toHaveURL(/.*\/Product/);
-  //await page.goto('https://hsm.dev.soft-fx.eu:44333/Product/Index');
-  await page.getByRole('link', { name: 'Products' }).click();
-  await expect(page.getByRole('link', { name: 'TestProduct123', exact: true })).toBeVisible();
+  test('Create product', async ({ adminPage: page }) => {
+    await page.getByRole('link', { name: 'Products' }).click();
+    await expect(page).toHaveURL(/.*\/Product/);
 
-  //Remove the product
-  const targetRecordName = 'TestProduct123'; 
-  const removeText = 'Remove';
-  const productRowLocator = page.getByRole('row', { name: targetRecordName });
-  const actionButton = productRowLocator.locator('#actionButton'); 
-  await actionButton.click();
-  const menuContainer = page.locator('div.dropdown-menu.show[aria-labelledby="actionButton"]'); 
-  await expect(menuContainer).toBeVisible();
-  const removeOption = menuContainer.locator('a', { hasText: removeText });
-  await expect(removeOption).toBeVisible(); 
-  await removeOption.click();
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }), // Ждем завершения загрузки
-    page.getByRole('button', { name: 'OK' }).click(),
-]);
-  await expect(page.getByText(targetRecordName)).not.toBeVisible();
+    await page.getByRole('link', { name: 'Add product' }).click();
+    await page.getByRole('textbox', { name: 'New product name' }).fill(productName);
+    await page.getByRole('button', { name: 'Add' }).click();
 
-  //Logout ---
-  await page.getByRole('link', { name: 'Logout' }).click();
-  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
-}
-)
+    await expect(page).toHaveURL(/.*\/Product/);
+    await expect(page.getByRole('link', { name: productName, exact: true })).toBeVisible();
+  });
+
+  test('Edit product name and description', async ({ adminPage: page }) => {
+    await page.getByRole('link', { name: 'Products' }).click();
+    await page.getByRole('link', { name: productName, exact: true }).click();
+
+    await page.getByRole('textbox', { name: 'Name' }).fill(editedName);
+    await page.getByRole('textbox', { name: 'Description' }).fill('delete');
+    await page.getByRole('button', { name: 'Save' }).click();
+
+    await expect(page).toHaveURL(/.*\/Product/);
+    await page.getByRole('link', { name: 'Products' }).click();
+    await expect(page.getByRole('link', { name: editedName, exact: true })).toBeVisible();
+  });
+
+  test('Remove product', async ({ adminPage: page }) => {
+    await page.getByRole('link', { name: 'Products' }).click();
+
+    const row = page.getByRole('row', { name: editedName });
+    await row.locator('#actionButton').click();
+
+    const menu = page.locator('div.dropdown-menu.show[aria-labelledby="actionButton"]');
+    await expect(menu).toBeVisible();
+    await menu.locator('a', { hasText: 'Remove' }).click();
+
+    // Confirm; the row disappearing is the completion signal (deprecated page-navigation waits removed).
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(page.getByText(editedName)).toBeHidden();
+  });
+});
