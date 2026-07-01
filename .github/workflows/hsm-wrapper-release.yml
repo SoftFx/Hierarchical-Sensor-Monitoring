@@ -110,23 +110,26 @@ jobs:
             -OutDir dist
 
       - name: Verify bundled runtime closure (post-pack smoke)
-        # Run WrapperConsole against ONLY the assembled bundle — its own dir (searched first for DLLs) +
-        # System32 for the CRT — with the vcpkg bin deliberately OFF the PATH. libcurl.dll is a load-time
-        # dependency of HSMCppWrapper.dll, so its transitive imports (zlib today; a future nghttp2 /
-        # brotli / ... if curl gains a feature) must resolve from the shipped dll/ folder. If pack.ps1's
-        # libcurl/zlib allow-list ever drops one, the exe fails to load HERE (red) instead of downstream
-        # in tt-aggregator2 — keeping the allow-list self-validating. (The pre-pack Smoke above exercises
-        # the ABI against the vcpkg runtime; this one exercises the exact SHIPPED closure.)
+        # Run WrapperConsole against ONLY the assembled bundle: copy the exe into the shipped Release
+        # dll/ dir (an exe's own directory is searched first for DLLs) and strip the vcpkg bin from PATH,
+        # so libcurl.dll/zlib1.dll — and any transitive curl dependency — MUST resolve from the bundle,
+        # not from vcpkg. The rest of PATH is kept so the MSVC CRT still resolves (only vcpkg carries
+        # libcurl/zlib on the runner; the aggregator's hosts carry the VC++ redist as well). libcurl.dll
+        # is a load-time import of HSMCppWrapper.dll, so if pack.ps1's libcurl/zlib allow-list ever drops
+        # a needed DLL the exe fails to load HERE (red) instead of downstream in tt-aggregator2 — keeping
+        # the allow-list self-validating. (The pre-pack Smoke above exercises the ABI against the vcpkg
+        # runtime; this one exercises the exact SHIPPED closure.)
         #
         # The zip was already written by pack.ps1 before this copy, so WrapperConsole.exe is not shipped.
-        shell: cmd
+        shell: pwsh
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          set "BUNDLE=%CD%\dist\HSMCppWrapper-%VERSION%\dll\HSMCppWrapper\x64\Release"
-          copy /y build\wrapper\Release\WrapperConsole.exe "%BUNDLE%\WrapperConsole.exe" >nul
-          set "PATH=%SystemRoot%\System32"
-          "%BUNDLE%\WrapperConsole.exe"
+          $bundle = "$PWD\dist\HSMCppWrapper-$env:VERSION\dll\HSMCppWrapper\x64\Release"
+          Copy-Item build\wrapper\Release\WrapperConsole.exe (Join-Path $bundle 'WrapperConsole.exe')
+          $env:PATH = (($env:PATH -split ';') | Where-Object { $_ -and $_ -notmatch 'vcpkg' }) -join ';'
+          & (Join-Path $bundle 'WrapperConsole.exe')
+          if ($LASTEXITCODE -ne 0) { throw "Bundled WrapperConsole failed to load/run (exit $LASTEXITCODE) - the shipped dll/ closure is incomplete." }
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
