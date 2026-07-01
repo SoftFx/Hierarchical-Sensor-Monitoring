@@ -1,18 +1,8 @@
 name: HSMServer E2E tests
 
+# Manual-only for now (run it from the Actions tab / `gh workflow run`); no automatic per-PR trigger.
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [master, Maria_test]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'aicontext/**'
-
-# A new push supersedes an in-flight run for the same ref (the E2E lane is ~18 min — don't stack them).
-concurrency:
-  group: e2e-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj

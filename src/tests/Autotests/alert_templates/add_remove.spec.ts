@@ -3,10 +3,16 @@ import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 
 
-// FIXME (#1199): the Alert Templates UI was redesigned (path field name="PathTemplates[0]", new
-// form layout) AND this flow is coupled to a pre-existing "BetaTTS" product/sensor tree that a fresh
-// server doesn't have. Needs a self-contained rewrite (create a product + post sensors via the API to
-// build the tree, then update the remaining selectors). Partial selector fixes are already applied.
+// FIXME (#1199): the Alert Templates form was fully redesigned (tree-based sensor selector; the Create
+// button is #submit_form -> AJAX to AlertTemplate). A template can only be saved for a folder that
+// CONTAINS a product with matching sensors — the server rejects otherwise with
+// "No products found in the selected folder." A self-contained rewrite must:
+//   1) create a folder and a product, and ADD the product to the folder (folder edit -> products
+//      multiselect -> AddProductToFolder);
+//   2) post a sensor to that product via the API (see tests_api_create_sensor for the DefaultKey trick);
+//   3) build the template: select the folder, fill PathTemplates[0] to match the sensor, add an alert
+//      (the "Add" button), then click #submit_form; assert the row in /AlertTemplates.
+// Partial selector fixes (folder-by-label, PathTemplates[0], #Name) are already applied.
 test.fixme('Create/remove alert and verify it appears on sensor', async ({ page }) => {
   // --- Login ---
   const { apiUrl, admin_user, admin_user_password } = testConfig;
