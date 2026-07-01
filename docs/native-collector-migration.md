@@ -78,6 +78,33 @@ sensor.AttachAlert(alert);
 | `RedirectAssembly` / `Initialize(config_path)` | CLR-hosting concerns with no native analogue. |
 | Time-in-GC sensors | No managed GC in a native host (#1099). |
 
+## Getting the native wrapper bundle (relink path)
+
+The prebuilt drop-in is published as a **GitHub Release tagged `wrapper-v<semver>`** with a single
+zip asset — a stable download URL, which is the practical cross-host channel (the aggregator builds on
+GitLab). The bundle mirrors the aggregator's vendored layout so it unzips straight over the checkout:
+
+```
+HSMCppWrapper-<ver>/
+  include/HSMCppWrapper/   public wrapper ABI headers (unchanged)
+  include/hsm_collector/   native headers (only for DataCollectorProxy::Native())
+  dll/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.dll + .pdb + libcurl(-d).dll + zlib(d)1.dll
+  lib/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.lib
+  MANIFEST.md              source commit + the drop-in swap recipe
+```
+
+The swap is: copy `include/`/`dll/`/`lib/` over the vendored dirs, add the libcurl/zlib runtime DLLs
+next to the wrapper, and **delete the managed leftovers** (`HSMDataCollector.dll`,
+`HSMSensorDataObjects.dll`). The exact recipe rides in `MANIFEST.md` inside each bundle. The headers
+are byte-identical to what is already vendored and the exported ABI matches (relink proven by
+`dumpbin /LINKERMEMBER`: 545 exports per config — 543 wrapper + 2 `Native()` C-ABI re-exports), so the
+link resolves with no source edits.
+
+The bundle is produced by the [`hsm-wrapper-release`](../.github/workflows/hsm-wrapper-release.yml)
+workflow (push a `wrapper-v*` tag → build both configs + smoke + publish the Release; or run it via
+`workflow_dispatch` for a dry-run artifact without cutting a release). It can also be built locally —
+see [`src/wrapper/packaging/README.md`](../src/wrapper/packaging/README.md).
+
 ## Native wrapper DLL — behavioral notes (relink path)
 
 The relinked `HSMCppWrapper.dll` preserves the public ABI but a few runtime behaviors follow the

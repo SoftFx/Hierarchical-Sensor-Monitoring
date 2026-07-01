@@ -1,0 +1,176 @@
+name: hsm-wrapper-release
+
+# Packages the native HSMCppWrapper.dll drop-in bundle (Release + Debug x64, headers, libcurl/zlib
+# runtime, import libs, PDBs) for the tt-aggregator2 handoff.
+#
+#   * push a tag `wrapper-v<semver>`  -> builds the bundle, then publishes a GitHub Release with it
+#   * manual `workflow_dispatch`      -> builds + uploads the bundle as a workflow artifact only
+#
+# Cutting the release is a human action (push the tag); this workflow just does the build+attach so the
+# artifact maps 1:1 to a commit. The fast PR/CI gate stays in hsm_cpp_wrapper_build.yml (Release+smoke).
+
+on:
+  push:
+    tags:
+      - 'wrapper-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Bundle version for a dry-run artifact (e.g. 1.0.0-rc1). Ignored on tag pushes.'
+        required: false
+        default: '0.0.0-dev'
+
+# Least privilege: the default token is read-only for every job. Only the `release` job (tag pushes)
+# elevates to contents: write, so a workflow_dispatch dry-run never holds a release-publishing token.
+permissions:
+  contents: read
+
+# Serialize runs for the same ref: two quick `wrapper-v*` tag pushes must not run overlapping release
+# jobs against the same tag (racing the create/upload). Never cancel an in-flight publish.
+concurrency:
+  group: hsm-wrapper-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # so pack.ps1 can stamp the source commit into the manifest
+
+      - name: Resolve and validate version
+        id: ver
+        shell: pwsh
+        env:
+          # Bind the attacker-influenceable inputs (dispatch input, ref/tag name) to env vars and read
+          # them via $env: — never interpolate ${{ }} into the run: body, where a value containing a
+          # quote would break out and execute on the runner (GitHub's script-injection hardening rule).
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF: ${{ github.ref }}
+        run: |
+          $v = if ($env:REF -like 'refs/tags/wrapper-v*') {
+                 $env:REF -replace '^refs/tags/wrapper-v', ''
+               } else {
+                 $env:INPUT_VERSION
+               }
+          # Reject anything that is not a clean semver: keeps the artifact/zip/release names well-formed
+          # and defensively closes the injection surface for every downstream consumer of the value.
+          if ($v -notmatch '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$') {
+              throw "Refusing to build: version '$v' is not a clean semver (tag must be wrapper-v<semver>)."
+          }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Bundle version: $v"
+
+      - name: Install libcurl (vcpkg)
+        run: vcpkg install curl:x64-windows
+        shell: cmd
+
+      - name: Configure
+        # No -G: use the runner's default multi-config VS generator (same as the native-collector lanes;
+        # pinning a VS version breaks when the image upgrades).
+        run: >
+          cmake -S src/wrapper -B build/wrapper
+          -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%/scripts/buildsystems/vcpkg.cmake
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+        shell: cmd
+
+      - name: Build (Release + Debug)
+        run: |
+          cmake --build build/wrapper --config Release
+          cmake --build build/wrapper --config Debug
+        shell: cmd
+
+      - name: Smoke (drive the public ABI in-process, no server needed)
+        run: |
+          set "PATH=%CD%\build\wrapper\Release;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%PATH%"
+          build\wrapper\Release\WrapperConsole.exe
+        shell: cmd
+
+      - name: Assemble bundle
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          ./src/wrapper/packaging/pack.ps1 `
+            -BuildDir build/wrapper `
+            -Version $env:VERSION `
+            -OutDir dist
+
+      - name: Verify bundled runtime closure (post-pack smoke)
+        # Run WrapperConsole against ONLY the assembled bundle: copy the exe into the shipped Release
+        # dll/ dir (an exe's own directory is searched first for DLLs) and strip the vcpkg bin from PATH,
+        # so libcurl.dll/zlib1.dll — and any transitive curl dependency — MUST resolve from the bundle,
+        # not from vcpkg. The rest of PATH is kept so the MSVC CRT still resolves (only vcpkg carries
+        # libcurl/zlib on the runner; the aggregator's hosts carry the VC++ redist as well). libcurl.dll
+        # is a load-time import of HSMCppWrapper.dll, so if pack.ps1's libcurl/zlib allow-list ever drops
+        # a needed DLL the exe fails to load HERE (red) instead of downstream in tt-aggregator2 — keeping
+        # the allow-list self-validating. (The pre-pack Smoke above exercises the ABI against the vcpkg
+        # runtime; this one exercises the exact SHIPPED closure.)
+        #
+        # The zip was already written by pack.ps1 before this copy, so WrapperConsole.exe is not shipped.
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          $bundle = "$PWD\dist\HSMCppWrapper-$env:VERSION\dll\HSMCppWrapper\x64\Release"
+          Copy-Item build\wrapper\Release\WrapperConsole.exe (Join-Path $bundle 'WrapperConsole.exe')
+          # Strip vcpkg from PATH so libcurl/zlib (+ any transitive dep) MUST resolve from the bundle dir
+          # (an exe's own directory is searched first), not from a stray vcpkg on PATH; the rest of PATH
+          # keeps the MSVC CRT.
+          $env:PATH = (($env:PATH -split ';') | Where-Object { $_ -and $_ -notmatch 'vcpkg' }) -join ';'
+          & (Join-Path $bundle 'WrapperConsole.exe')
+          if ($LASTEXITCODE -ne 0) { throw "Bundled WrapperConsole failed to load/run (exit $LASTEXITCODE) - the shipped dll/ closure is incomplete." }
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HSMCppWrapper-${{ steps.ver.outputs.version }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    # Publish a GitHub Release only on a tag push. A manual dispatch stops at the artifact above.
+    if: startsWith(github.ref, 'refs/tags/wrapper-v')
+    needs: bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # scoped to this job only — the release-publishing token
+
+    steps:
+      - name: Download bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: HSMCppWrapper-${{ needs.bundle.outputs.version }}
+          path: dist
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}   # gh targets the repo without a checkout
+          VERSION: ${{ needs.bundle.outputs.version }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(dist/*.zip)
+          if [ ${#zips[@]} -eq 0 ]; then
+            echo "No .zip found in the downloaded bundle artifact." >&2
+            exit 1
+          fi
+          if [ ${#zips[@]} -gt 1 ]; then
+            echo "Expected exactly one bundle zip, found ${#zips[@]}: ${zips[*]}" >&2
+            exit 1
+          fi
+          zip="${zips[0]}"
+          notes='Native drop-in `HSMCppWrapper.dll` (no CLR) for tt-aggregator2 — relink only, same public ABI. Unzip the attached bundle and follow `MANIFEST.md` for the swap recipe. Behavioral residue vs the managed wrapper: `docs/native-collector-migration.md`.'
+          # Idempotent: re-running a tag build re-uploads the asset instead of failing on an existing release.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$zip" --clobber
+          else
+            gh release create "$TAG" "$zip" --title "HSMCppWrapper $VERSION" --notes "$notes"
+          fi
