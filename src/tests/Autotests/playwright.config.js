@@ -32,12 +32,21 @@ export default defineConfig({
     video: 'on-first-retry',
   },
 
-  /* Configure projects for major browsers */
+  /* The add_environment/* specs seed the shared fixtures (test users, folders) that other specs
+     depend on, so they run first as a `setup` project; the main `chromium` project depends on it and
+     excludes them. Running `--project=chromium` therefore pulls in setup automatically. */
   projects: [
     {
-      name: 'chromium',
+      name: 'setup',
+      testMatch: /add_environment[\\/].*\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
     },
-   ],
+    {
+      name: 'chromium',
+      testIgnore: /add_environment[\\/].*\.spec\.ts$/,
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
 });
 

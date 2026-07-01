@@ -9,6 +9,11 @@ on:
       - 'docs/**'
       - 'aicontext/**'
 
+# A new push supersedes an in-flight run for the same ref (the E2E lane is ~18 min — don't stack them).
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
   DOCKER_DOCKERHUB_ORG: hsmonitoring
