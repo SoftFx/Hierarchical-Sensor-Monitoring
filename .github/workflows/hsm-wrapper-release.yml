@@ -19,6 +19,12 @@ on:
         description: 'Bundle version for a dry-run artifact (e.g. 1.0.0-rc1). Ignored on tag pushes.'
         required: false
         default: '0.0.0-dev'
+  # TEMP — validation only, REMOVE before merge: run the bundle job on PRs touching the wrapper so the
+  # new post-pack closure smoke is exercised pre-merge. The release job stays tag-gated (skipped on PRs).
+  pull_request:
+    paths:
+      - 'src/wrapper/**'
+      - '.github/workflows/hsm-wrapper-release.yml'
 
 # Least privilege: the default token is read-only for every job. Only the `release` job (tag pushes)
 # elevates to contents: write, so a workflow_dispatch dry-run never holds a release-publishing token.
@@ -54,8 +60,10 @@ jobs:
         run: |
           $v = if ($env:REF -like 'refs/tags/wrapper-v*') {
                  $env:REF -replace '^refs/tags/wrapper-v', ''
-               } else {
+               } elseif ($env:INPUT_VERSION) {
                  $env:INPUT_VERSION
+               } else {
+                 '0.0.0-ci'   # no tag and no dispatch input (a validation run): placeholder, never released
                }
           # Reject anything that is not a clean semver: keeps the artifact/zip/release names well-formed
           # and defensively closes the injection surface for every downstream consumer of the value.
@@ -100,6 +108,25 @@ jobs:
             -VcpkgRoot $env:VCPKG_INSTALLATION_ROOT `
             -Version $env:VERSION `
             -OutDir dist
+
+      - name: Verify bundled runtime closure (post-pack smoke)
+        # Run WrapperConsole against ONLY the assembled bundle — its own dir (searched first for DLLs) +
+        # System32 for the CRT — with the vcpkg bin deliberately OFF the PATH. libcurl.dll is a load-time
+        # dependency of HSMCppWrapper.dll, so its transitive imports (zlib today; a future nghttp2 /
+        # brotli / ... if curl gains a feature) must resolve from the shipped dll/ folder. If pack.ps1's
+        # libcurl/zlib allow-list ever drops one, the exe fails to load HERE (red) instead of downstream
+        # in tt-aggregator2 — keeping the allow-list self-validating. (The pre-pack Smoke above exercises
+        # the ABI against the vcpkg runtime; this one exercises the exact SHIPPED closure.)
+        #
+        # The zip was already written by pack.ps1 before this copy, so WrapperConsole.exe is not shipped.
+        shell: cmd
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set "BUNDLE=%CD%\dist\HSMCppWrapper-%VERSION%\dll\HSMCppWrapper\x64\Release"
+          copy /y build\wrapper\Release\WrapperConsole.exe "%BUNDLE%\WrapperConsole.exe" >nul
+          set "PATH=%SystemRoot%\System32"
+          "%BUNDLE%\WrapperConsole.exe"
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
