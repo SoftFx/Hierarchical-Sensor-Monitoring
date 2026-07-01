@@ -10,7 +10,7 @@ test.describe.configure({ mode: 'serial' });
 
 test.describe('Product lifecycle', () => {
   const productName = uniqueName('TestProduct');
-  const editedName = `${productName}_edited`;
+  const editedName = uniqueName('TestProduct'); // independent short name (avoids UI 30-char cap)
 
   test.afterAll(async ({ browser }) => {
     const page = await browser.newPage();

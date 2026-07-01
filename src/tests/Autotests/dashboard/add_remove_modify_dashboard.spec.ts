@@ -8,7 +8,7 @@ test.describe.configure({ mode: 'serial' });
 
 test.describe('Dashboard lifecycle', () => {
   const dashboardName = uniqueName('TestDashboard');
-  const editedName = `${dashboardName}_edited`;
+  const editedName = uniqueName('TestDashboard'); // independent short name (avoids UI 30-char cap)
 
   test.afterAll(async ({ browser }) => {
     const page = await browser.newPage();

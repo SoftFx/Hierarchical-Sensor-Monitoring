@@ -4,8 +4,10 @@ import { login } from './login.ts';
 
 let _counter = 0;
 
+// Keep unique names SHORT: several UI name fields cap at 30 chars, so a base-36 ms suffix (~8 chars)
+// plus a counter leaves room under the limit even for the longer prefixes (e.g. "TestDashboard").
 export function uniqueName(prefix: string): string {
-  return `${prefix}_${Date.now()}_${++_counter}`;
+  return `${prefix}_${Date.now().toString(36)}${++_counter}`;
 }
 
 export const cleanup = {
