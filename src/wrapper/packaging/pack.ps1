@@ -19,10 +19,9 @@
 #>
 [CmdletBinding()]
 param(
-    # CMake build directory that contains the Release/ and Debug/ output subfolders.
+    # CMake build directory that contains the Release/ and Debug/ output subfolders. The runtime
+    # dependency DLLs (libcurl/zlib) are taken from vcpkg's app-local deployment next to that output.
     [Parameter(Mandatory)] [string] $BuildDir,
-    # vcpkg root (its installed/x64-windows tree supplies the shared libcurl + zlib runtime DLLs).
-    [Parameter(Mandatory)] [string] $VcpkgRoot,
     # Bundle version, e.g. "1.0.0" (a leading "wrapper-v"/"v" is stripped).
     [Parameter(Mandatory)] [string] $Version,
     # Repo root; defaults to three levels up from this script (src/wrapper/packaging -> repo root).
@@ -38,7 +37,6 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $ver     = $Version -replace '^wrapper-v', '' -replace '^v', ''
-$triplet = 'x64-windows'
 $configs = @('Release', 'Debug')
 
 if (-not $Commit) {
@@ -79,22 +77,17 @@ foreach ($cfg in $configs) {
     else { Write-Warning "No PDB for ${cfg} ('$pdb') - bundle ships without it, though MANIFEST.md lists it." }
     Copy-Item $lib $libDst
 
-    # Shared libcurl + zlib runtime (schannel TLS, no OpenSSL): Release from bin/, Debug from debug/bin/.
-    # Copy an explicit libcurl/zlib allow-list rather than every *.dll, so a future transitive vcpkg
-    # dependency can't silently enlarge the handoff bundle — and it stays matched to MANIFEST.md.
-    $vcBin = if ($cfg -eq 'Debug') { Join-Path $VcpkgRoot "installed\$triplet\debug\bin" }
-             else                  { Join-Path $VcpkgRoot "installed\$triplet\bin" }
-    if (Test-Path $vcBin) {
-        $runtimeDlls = @(Get-ChildItem -Path $vcBin -Filter '*.dll' -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -match '^(libcurl|zlib)' })
-        if ($runtimeDlls.Count -eq 0) {
-            Write-Warning "No libcurl/zlib DLLs under '$vcBin' - runtime NOT bundled for $cfg."
-        }
-        foreach ($dllFile in $runtimeDlls) { Copy-Item $dllFile.FullName $dllDst }
+    # Runtime dependency DLLs: copy whatever vcpkg's app-local deployment placed next to the build
+    # output — the exact runtime closure of HSMCppWrapper.dll (libcurl + zlib today; auto-adapting if
+    # curl ever gains a dependency). This never guesses vcpkg's DLL names (its zlib is z.dll / zd.dll,
+    # NOT zlib1.dll — an earlier name-based allow-list silently dropped it) so it can't miss a needed
+    # DLL; the post-pack closure smoke in CI re-verifies the shipped set actually loads.
+    $deps = @(Get-ChildItem -Path (Join-Path $binSrc '*.dll') |
+        Where-Object { $_.Name -ne 'HSMCppWrapper.dll' })
+    if ($deps.Count -eq 0) {
+        Write-Warning "No runtime dependency DLLs next to '$binSrc' - was vcpkg's app-local deploy run for $cfg?"
     }
-    else {
-        Write-Warning "vcpkg bin not found for ${cfg}: '$vcBin' - libcurl/zlib runtime NOT bundled."
-    }
+    foreach ($depFile in $deps) { Copy-Item $depFile.FullName $dllDst }
 }
 
 # --- public headers (mirror the consumer include roots) ---------------------
@@ -126,7 +119,7 @@ include/
   HSMCppWrapper/      public wrapper ABI headers (DataCollector.h, HSMSensor.h, ...)
   hsm_collector/      native headers - needed ONLY if you call DataCollectorProxy::Native()
 dll/HSMCppWrapper/x64/{Release,Debug}/
-  HSMCppWrapper.dll   HSMCppWrapper.pdb   libcurl(-d).dll   zlib(d)1.dll
+  HSMCppWrapper.dll   HSMCppWrapper.pdb   + the vcpkg runtime: libcurl.dll + z.dll (Debug: libcurl-d.dll + zd.dll)
 lib/HSMCppWrapper/x64/{Release,Debug}/
   HSMCppWrapper.lib   import library
 ```
@@ -136,7 +129,7 @@ lib/HSMCppWrapper/x64/{Release,Debug}/
 1. Copy `include/`, `dll/`, `lib/` over your vendored tree (`aggregator/{include,dll,lib}/...`).
    The headers are **byte-identical** to what you already vendor - overwriting them is a no-op.
 2. Copy the new runtime DLLs next to the wrapper (your PostBuild xcopy of `dll/.../*.dll` -> OutDir
-   already picks them up): `libcurl.dll` + `zlib1.dll` (Release), `libcurl-d.dll` + `zlibd1.dll` (Debug).
+   already picks them up): `libcurl.dll` + `z.dll` (Release), `libcurl-d.dll` + `zd.dll` (Debug).
 3. **Delete the managed leftovers** from your build output / vendored dll dir - they are no longer
    loaded: `HSMDataCollector.dll`, `HSMSensorDataObjects.dll` (+ their `.pdb`).
 4. Rebuild. No CLR is loaded anymore. The exported ABI matches (relink proven by `dumpbin

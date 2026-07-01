@@ -48,7 +48,7 @@ cmake -S src/wrapper -B build/wrapper `
   -DVCPKG_TARGET_TRIPLET=x64-windows
 cmake --build build/wrapper --config Release
 cmake --build build/wrapper --config Debug
-pwsh src/wrapper/packaging/pack.ps1 -BuildDir build/wrapper -VcpkgRoot $env:VCPKG_INSTALLATION_ROOT -Version 1.0.0
+pwsh src/wrapper/packaging/pack.ps1 -BuildDir build/wrapper -Version 1.0.0
 # -> dist/HSMCppWrapper-1.0.0.zip
 ```
 
