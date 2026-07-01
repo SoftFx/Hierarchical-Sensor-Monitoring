@@ -58,8 +58,10 @@ test.describe('Product lifecycle', () => {
     await expect(menu).toBeVisible();
     await menu.locator('a', { hasText: 'Remove' }).click();
 
-    // Confirm; the row disappearing is the completion signal (deprecated page-navigation waits removed).
+    // Confirm; the product link disappearing from the list is the completion signal. Assert on the
+    // link specifically (getByText would also match the confirmation modal's title/body → strict-mode
+    // violation) and give the list refresh room via the default toBeHidden timeout.
     await page.getByRole('button', { name: 'OK' }).click();
-    await expect(page.getByText(editedName)).toBeHidden();
+    await expect(page.getByRole('link', { name: editedName, exact: true })).toBeHidden();
   });
 });
