@@ -1,26 +1,24 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
-import { userRow } from '../users.ts';
+import { setUserPassword } from '../users.ts';
 
 
 test('Смена пароля у пользователя maryia.pazniak.viewer', async ({ page }) => {
   const {apiUrl, admin_user, admin_user_password, userName1, user1password, viewer_user_password_permanent } = testConfig;
-  
+
   // Логинимся админом
   await login(page, admin_user, admin_user_password, apiUrl);
-  
-  // Заходим в Users и меняем пароль 
+
+  // Заходим в Users и меняем пароль через модалку "Edit member"
   await page.goto('/Account/Users');
-  await userRow(page, userName1).getByRole('button').nth(1).click();
-  await userRow(page, userName1).getByRole('textbox').fill(viewer_user_password_permanent);
-  await page.locator(`button[name='${userName1}'][title='ok']`).click();
+  await setUserPassword(page, userName1, viewer_user_password_permanent);
 
   await page.getByRole('link', { name: 'Logout' }).click();
-  
+
   // Логинимся под viewer с новым паролем
   await login(page, userName1, viewer_user_password_permanent, apiUrl);
-  
+
   // Проверяем доступность вкладок
   await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Dashboards' })).toBeVisible();
@@ -29,7 +27,7 @@ test('Смена пароля у пользователя maryia.pazniak.viewer'
   await expect(page.getByRole('link', { name: 'Access keys', includeHidden: true })).toBeAttached();
   await expect(page.getByRole('link', { name: 'Users', includeHidden: true })).not.toBeAttached();
   await expect(page.getByRole('link', { name: 'Configuration', includeHidden: true })).not.toBeAttached();
-  
+
   // Логаут
   await page.getByRole('link', { name: 'Logout' }).click();
 
@@ -38,9 +36,7 @@ test('Смена пароля у пользователя maryia.pazniak.viewer'
 
   // Возвращаем viewer старый пароль
   await page.goto('/Account/Users');
-  await userRow(page, userName1).getByRole('button').nth(1).click();
-  await userRow(page, userName1).getByRole('textbox').fill(user1password);
-  await page.locator(`button[name='${userName1}'][title='ok']`).click();
+  await setUserPassword(page, userName1, user1password);
 
   // Логаут
   await page.getByRole('link', { name: 'Logout' }).click();

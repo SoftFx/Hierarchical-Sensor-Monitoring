@@ -1,6 +1,20 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
+import { uniqueName, cleanup } from '../fixtures.ts';
+
+const folderName = uniqueName('Fldr');
+
+test.afterEach(async ({ browser }) => {
+  const page = await browser.newPage();
+  try {
+    await login(page, testConfig.admin_user, testConfig.admin_user_password, testConfig.apiUrl);
+    await cleanup.folder(page, folderName);
+  } finally {
+    await page.close();
+  }
+});
+
 
 
 test('Modify Folder General tabs', async ({ page }) => {
@@ -12,7 +26,7 @@ test('Modify Folder General tabs', async ({ page }) => {
   // --- Create Folder ---
   await page.getByRole('link', { name: 'Products' }).click();
   await page.getByRole('link', { name: 'Add folder' }).click();
-  await page.getByRole('textbox', { name: 'Name' }).fill(folder_name);
+  await page.getByRole('textbox', { name: 'Name' }).fill(folderName);
   await page.getByRole('textbox', { name: 'Description' }).fill(folder_description);
   await page.evaluate(
   ({ selector, value }) => {
@@ -77,7 +91,7 @@ test('Modify Folder General tabs', async ({ page }) => {
 
   //Check that folder remove from the product list
   await page.getByRole('link', { name: 'Products' }).click();
-  await expect(page.getByRole('button', { name: `${folder_name} ${folder_description}` })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: `${folderName} ${folder_description}` })).toHaveCount(0);
 
   // --- Logout ---
   await page.getByRole('link', { name: 'Logout' }).click();
