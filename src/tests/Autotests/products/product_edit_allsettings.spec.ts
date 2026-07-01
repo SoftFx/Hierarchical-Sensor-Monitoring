@@ -2,11 +2,6 @@ import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 
-test.use({
-  ignoreHTTPSErrors: true,
-  headless: false, // чтобы видеть, что происходит
-  viewport: { width: 1280, height: 720 }
-});
 
 test('Edit all products settings', async ({ page }) => {
   const { apiUrl, admin_user, admin_user_password, userName1, viewer_user, folder_name, folder_description, folder_color,folder_name2, folder_description2, folder_color2 } = testConfig;

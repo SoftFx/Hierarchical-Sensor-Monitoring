@@ -2,11 +2,6 @@ import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 
-test.use({
-  ignoreHTTPSErrors: true,
-  headless: false, // чтобы видеть, что происходит
-  viewport: { width: 1280, height: 720 }
-}); 
 
 // Утилита для проверки вкладок
 async function checkTabs(page: Page, tabs: string[]) {

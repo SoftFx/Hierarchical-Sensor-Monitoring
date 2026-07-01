@@ -1,7 +1,13 @@
-name: HSMServer tests (manual)
+name: HSMServer E2E tests
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'aicontext/**'
 
 env:
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
@@ -59,6 +65,13 @@ jobs:
             sleep 10
           done'
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('src/tests/Autotests/package-lock.json') }}
+
       - name: Setup Playwright
         working-directory: src/tests/Autotests
         run: |
@@ -69,9 +82,8 @@ jobs:
         working-directory: src/tests/Autotests
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://localhost:44333
-        # Мы добавляем xvfb-run и флаг --headed (на всякий случай)
-        # Это создаст виртуальный экран, и браузер "подумает", что монитор есть
-        run: xvfb-run npx playwright test --project=chromium
+        # Headless in CI (playwright.config: headless = !!CI); no xvfb/--headed shim needed anymore.
+        run: npx playwright test --project=chromium
         
       - name: Upload container logs
         if: always()

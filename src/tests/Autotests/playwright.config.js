@@ -12,8 +12,10 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   /* Run tests sequentially — all tests share the same admin session */
   workers: 1,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  /* Abort the whole suite well before the 6h GitHub Actions job cap so a hung test fails fast. */
+  globalTimeout: 20 * 60 * 1000,
+  /* GitHub annotations in the PR diff on CI; HTML report both locally and on CI (uploaded as artifact). */
+  reporter: process.env.CI ? [['github'], ['html']] : 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     // Явно указываем headless режим
@@ -27,6 +29,7 @@ export default defineConfig({
     ignoreHTTPSErrors: true,
     viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',
+    video: 'on-first-retry',
   },
 
   /* Configure projects for major browsers */
