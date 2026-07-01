@@ -3,11 +3,6 @@ import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 import { createUser, deleteUserIfPresent, openUsersPage } from '../users.ts';
 
-test.use({
-  ignoreHTTPSErrors: true,
-  headless: false, // чтобы видеть, что происходит
-  viewport: { width: 1280, height: 720 }
-});
 
   // Loging
 test('Add environment', async ({ page }) => {

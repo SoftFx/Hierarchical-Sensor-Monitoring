@@ -4,10 +4,6 @@ import { login } from '../login.ts';
 
 // Настройка для этого конкретного теста.
 // В TypeScript синтаксис остается тем же, что и в JavaScript.
-test.use({
-  ignoreHTTPSErrors: true,
-  headless: false
-});
 
 test('Unsuccessful Login', async ({ page }) => {
   const {apiUrl, admin_user, viewer_user_password } = testConfig;

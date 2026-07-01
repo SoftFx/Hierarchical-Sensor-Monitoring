@@ -1,12 +1,21 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
+import { uniqueName, cleanup } from '../fixtures.ts';
 
-test.use({
-  ignoreHTTPSErrors: true,
-  headless: false, // чтобы видеть, что происходит
-  viewport: { width: 1280, height: 720 }
+const folderName = uniqueName('Fldr');
+
+test.afterEach(async ({ browser }) => {
+  const page = await browser.newPage();
+  try {
+    await login(page, testConfig.admin_user, testConfig.admin_user_password, testConfig.apiUrl);
+    await cleanup.folder(page, folderName);
+  } finally {
+    await page.close();
+  }
 });
+
+
 
 test('Modify Folder General tabs', async ({ page }) => {
   const { apiUrl, admin_user, admin_user_password, viewer_user, folder_name, folder_description, folder_color,folder_name2, folder_description2, folder_color2 } = testConfig;
@@ -17,7 +26,7 @@ test('Modify Folder General tabs', async ({ page }) => {
   // --- Create Folder ---
   await page.getByRole('link', { name: 'Products' }).click();
   await page.getByRole('link', { name: 'Add folder' }).click();
-  await page.getByRole('textbox', { name: 'Name' }).fill(folder_name);
+  await page.getByRole('textbox', { name: 'Name' }).fill(folderName);
   await page.getByRole('textbox', { name: 'Description' }).fill(folder_description);
   await page.evaluate(
   ({ selector, value }) => {
@@ -53,7 +62,7 @@ test('Modify Folder General tabs', async ({ page }) => {
   await page.getByRole('button', { name: 'Save' }).click();
   const toastBodyLocator = page.locator('#toast_body');
   //await expect(toastBodyLocator).toBeVisible();
-  await expect(toastBodyLocator).toHaveText('Folder telegram chats have been succesfully saved!');
+  await expect(toastBodyLocator).toHaveText('Folder telegram chats have been successfully saved!');
   await expect(toastBodyLocator).not.toBeVisible(); 
 
   //Ckeck that modification saved

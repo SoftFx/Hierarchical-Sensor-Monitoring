@@ -1,11 +1,19 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
+import { uniqueName, cleanup } from '../fixtures.ts';
 
-test.use({
-  ignoreHTTPSErrors: true,
-  headless: false, // чтобы видеть, что происходит
-  viewport: { width: 1280, height: 720 }
+// Unique per run (the UI rejects duplicate product names, so a fixed name collided across retries/runs).
+const productName = uniqueName('TestProduct');
+
+test.afterEach(async ({ browser }) => {
+  const page = await browser.newPage();
+  try {
+    await login(page, testConfig.admin_user, testConfig.admin_user_password, testConfig.apiUrl);
+    await cleanup.product(page, productName);
+  } finally {
+    await page.close();
+  }
 });
 
 test('Edit all products settings', async ({ page }) => {
@@ -18,11 +26,11 @@ test('Edit all products settings', async ({ page }) => {
   //Add a product
   await page.getByRole('link', { name: 'Add product' }).click();
   await page.getByRole('textbox', { name: 'New product name' }).click();
-  await page.getByRole('textbox', { name: 'New product name' }).fill('TestProduct');
+  await page.getByRole('textbox', { name: 'New product name' }).fill(productName);
   await page.getByRole('button', { name: 'Add' }).click();
   
   //Modify product
-  await page.getByRole('link', { name: 'TestProduct', exact: true }).click();
+  await page.getByRole('link', { name: productName, exact: true }).click();
   //Add user
   await page.selectOption('#createUser', {label: userName1,});
   await page.getByRole('button', { name: 'create' }).click();
@@ -31,7 +39,7 @@ test('Edit all products settings', async ({ page }) => {
   await expect(page.getByText(userName1)).toBeVisible();
 
   //remove user
-  await page.getByRole('link', { name: 'TestProduct', exact: true }).click();
+  await page.getByRole('link', { name: productName, exact: true }).click();
   await page.getByRole('button', { name: 'remove' }).click();
   await page.getByRole('button', { name: 'Confirm' }).click();
   await expect(page.getByRole('cell', { name: userName1 })).toHaveCount(0);
@@ -84,7 +92,7 @@ test('Edit all products settings', async ({ page }) => {
   await page.getByRole('link', { name: 'Products' }).click();
   // найти строку именно с продуктом TestProduct
   const row4 = page.getByRole('row').filter({
-  has: page.getByRole('link', { name: 'TestProduct', exact: true })
+  has: page.getByRole('link', { name: productName, exact: true })
   });
   await expect(row4).toBeVisible();
 
@@ -100,7 +108,7 @@ test('Edit all products settings', async ({ page }) => {
   // убедиться, что продукта больше нет в таблице
   await expect(
   page.getByRole('row').filter({
-    has: page.getByRole('link', { name: 'TestProduct', exact: true })
+    has: page.getByRole('link', { name: productName, exact: true })
   })
   ).toHaveCount(0);
 

@@ -3,11 +3,6 @@ import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 import { createUser, deleteUserIfPresent, fillModalInput, openCreateUserModal, openUsersPage, userRow } from '../users.ts';
 
-test.use({
-  ignoreHTTPSErrors: true,
-  headless: false, // чтобы видеть, что происходит
-  viewport: { width: 1280, height: 720 }
-});
 
 // Фикстура для авторизации перед каждым тестом
 test.beforeEach(async ({ page }) => {

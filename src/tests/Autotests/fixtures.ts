@@ -4,8 +4,10 @@ import { login } from './login.ts';
 
 let _counter = 0;
 
+// Keep unique names SHORT: several UI name fields cap at 30 chars, so a base-36 ms suffix (~8 chars)
+// plus a counter leaves room under the limit even for the longer prefixes (e.g. "TestDashboard").
 export function uniqueName(prefix: string): string {
-  return `${prefix}_${Date.now()}_${++_counter}`;
+  return `${prefix}_${Date.now().toString(36)}${++_counter}`;
 }
 
 export const cleanup = {
@@ -50,6 +52,23 @@ export const cleanup = {
       console.warn(`[cleanup] dashboard "${name}":`, e instanceof Error ? e.message : e);
     }
   },
+
+  async alertTemplate(page: Page, name: string): Promise<void> {
+    try {
+      // "Alert Templates" is a dropdown-item in the collapsed #alertsDropdown (display:none), so a
+      // getByRole('link').click() would hang — navigate by route instead (as the specs do).
+      await page.goto('/AlertTemplates');
+      const row = page.getByRole('row', { name });
+      if (await row.count() === 0) return;
+      await row.first().locator('#actionButton').click();
+      await page.getByRole('link', { name: 'Remove' }).click();
+    } catch (e) {
+      console.warn(`[cleanup] alertTemplate "${name}":`, e instanceof Error ? e.message : e);
+    }
+  },
+
+  // Access keys are owned by a product, so they are removed together with it via cleanup.product();
+  // there is no standalone access-key cleanup helper (nothing leaks once the product is gone).
 };
 
 export const test = base.extend<{ adminPage: Page }>({

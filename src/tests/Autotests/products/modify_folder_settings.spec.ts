@@ -1,12 +1,21 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
+import { uniqueName, cleanup } from '../fixtures.ts';
 
-test.use({
-  ignoreHTTPSErrors: true,
-  headless: false, // чтобы видеть, что происходит
-  viewport: { width: 1280, height: 720 }
+const folderName = uniqueName('Fldr');
+
+test.afterEach(async ({ browser }) => {
+  const page = await browser.newPage();
+  try {
+    await login(page, testConfig.admin_user, testConfig.admin_user_password, testConfig.apiUrl);
+    await cleanup.folder(page, folderName);
+  } finally {
+    await page.close();
+  }
 });
+
+
 
 
 test('Modify Folder Settings', async ({ page }) => {
@@ -18,7 +27,7 @@ test('Modify Folder Settings', async ({ page }) => {
  // --- Create Folder ---
   await page.getByRole('link', { name: 'Products' }).click();
   await page.getByRole('link', { name: 'Add folder' }).click();
-  await page.getByRole('textbox', { name: 'Name' }).fill(folder_name);
+  await page.getByRole('textbox', { name: 'Name' }).fill(folderName);
   await page.getByRole('textbox', { name: 'Description' }).fill(folder_description);
   await page.evaluate(
   ({ selector, value }) => {
@@ -46,7 +55,7 @@ test('Modify Folder Settings', async ({ page }) => {
   
   //Safe and check
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('Folder settings have been succesfully saved!')).toBeVisible();
+  await expect(page.getByText('Folder settings have been successfully saved!')).toBeVisible();
 
   // Reload page  
   await page.reload();

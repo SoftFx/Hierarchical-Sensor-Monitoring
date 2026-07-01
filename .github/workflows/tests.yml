@@ -1,5 +1,6 @@
-name: HSMServer tests (manual)
+name: HSMServer E2E tests
 
+# Manual-only for now (run it from the Actions tab / `gh workflow run`); no automatic per-PR trigger.
 on:
   workflow_dispatch:
 
@@ -59,19 +60,37 @@ jobs:
             sleep 10
           done'
 
-      - name: Setup Playwright
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('src/tests/Autotests/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install npm dependencies
         working-directory: src/tests/Autotests
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
+        run: npm ci
+
+      # On an exact cache hit the browser binaries are already restored, so only (re)install the apt
+      # system libraries; on a miss (incl. a partial restore-keys hit) install the browser + its deps.
+      - name: Install Playwright browser (cache miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: src/tests/Autotests
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: src/tests/Autotests
+        run: npx playwright install-deps chromium
 
       - name: Run Playwright tests
         working-directory: src/tests/Autotests
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://localhost:44333
-        # Мы добавляем xvfb-run и флаг --headed (на всякий случай)
-        # Это создаст виртуальный экран, и браузер "подумает", что монитор есть
-        run: xvfb-run npx playwright test --project=chromium
+        # Headless in CI (playwright.config: headless = !!CI); no xvfb/--headed shim needed anymore.
+        run: npx playwright test --project=chromium
         
       - name: Upload container logs
         if: always()
