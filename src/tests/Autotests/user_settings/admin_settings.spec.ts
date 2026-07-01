@@ -8,14 +8,16 @@ test('Visible Tabs for an Admin user', async ({ page }) => {
   const {apiUrl, admin_user, admin_user_password } = testConfig;
   await login(page, admin_user, admin_user_password, apiUrl);
   
-  // Список ожидаемых вкладок
+  // Top-level tabs are visible; the rest live in collapsed "Alerts"/"Configuration" dropdowns, so
+  // assert they are present in the DOM (toBeAttached) — that reflects the admin's access regardless of
+  // whether the dropdown is open.
   await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Dashboards' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Products' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Alert Templates' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Access keys' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Users' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Configuration' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Alert Templates' })).toBeAttached();
+  await expect(page.getByRole('link', { name: 'Access keys' })).toBeAttached();
+  await expect(page.getByRole('link', { name: 'Users' })).toBeAttached();
+  await expect(page.getByRole('link', { name: 'Configuration' })).toBeAttached();
 
 
   // Логаут

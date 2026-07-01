@@ -22,7 +22,7 @@ test('Add, Edit, Block, Remove Access Keys', async ({ page }) => {
   console.log('Create productId =', productId);
 
   //Add Access Key
-  await page.getByRole('link', { name: 'Access keys' }).click();
+  await page.goto('/AccessKeys');
   await page.getByRole('button', { name: 'Add key' }).click();
   await page.getByLabel('Product').selectOption(productId);
   await page.getByRole('textbox', { name: 'Display name' }).click();

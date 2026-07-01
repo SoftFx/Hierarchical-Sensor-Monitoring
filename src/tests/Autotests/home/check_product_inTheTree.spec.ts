@@ -1,6 +1,20 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
+import { uniqueName, cleanup } from '../fixtures.ts';
+
+// Unique per run (the UI rejects duplicate product names, so a fixed name collided across retries/runs).
+const productName = uniqueName('TestProduct');
+
+test.afterEach(async ({ browser }) => {
+  const page = await browser.newPage();
+  try {
+    await login(page, testConfig.admin_user, testConfig.admin_user_password, testConfig.apiUrl);
+    await cleanup.product(page, productName);
+  } finally {
+    await page.close();
+  }
+});
 
 test('Home->Add Product and check it in the tree', async ({ page }) => {
   const { apiUrl, admin_user, admin_user_password } = testConfig;
@@ -14,7 +28,7 @@ test('Home->Add Product and check it in the tree', async ({ page }) => {
     await page.getByRole('link', { name: 'Products' }).click();
     await expect(page).toHaveURL(/.*\/Product/);
     await page.getByRole('link', { name: 'Add product' }).click();
-    await page.getByRole('textbox', { name: 'New product name' }).fill('TestProduct');
+    await page.getByRole('textbox', { name: 'New product name' }).fill(productName);
     await page.getByRole('button', { name: 'Add' }).click();
     console.log('✅ TestProduct created');
   });
@@ -29,14 +43,14 @@ test('Home->Add Product and check it in the tree', async ({ page }) => {
     await page.locator('#jstree[aria-busy="false"]').waitFor({ timeout: 10000 });
 
     // Проверяем что продукт появился в дереве
-    await expect(page.getByText('TestProduct', { exact: true }))
+    await expect(page.getByText(productName, { exact: true }))
       .toBeVisible({ timeout: 10000 });
     console.log('✅ TestProduct appered in the tree');
   });
 
   await test.step('Open TestProduct details', async () => {
     // Кликаем по продукту
-    await page.getByText('TestProduct', { exact: true }).dblclick();
+    await page.getByText(productName, { exact: true }).dblclick();
 
     // Ждём появления кнопки "edit meta info"
     const editBtn = page.locator('#editButtonMetaInfo');

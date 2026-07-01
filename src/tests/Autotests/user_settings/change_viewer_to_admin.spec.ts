@@ -7,7 +7,7 @@ import { login } from '../login.ts';
 async function checkTabs(page: Page, tabs: string[]) {
     //                             ^^^^^^^  ^^^^^^^^^ (Явная типизация)
   for (const tab of tabs) {
-    await expect(page.getByRole('link', { name: tab })).toBeVisible();
+    await expect(page.getByRole('link', { name: tab })).toBeAttached();
   }
 }
 
@@ -17,7 +17,7 @@ test('Успешная смена роли viewer → admin и проверка 
   await login(page, admin_user, admin_user_password, apiUrl);
   
   // Заходим в Users и меняем роль viewer → admin
-  await page.getByRole('link', { name: 'Users' }).click();
+  await page.goto('/Account/Users');
   await page.getByRole('row', { name: userName1 }).getByRole('button').nth(1).click();
   await page.getByRole('row', { name: userName1 }).getByRole('checkbox').check();
   await page.locator(`button[name='${userName1}'][title='ok']`).click();
@@ -42,7 +42,7 @@ test('Успешная смена роли viewer → admin и проверка 
   await login(page, admin_user, admin_user_password, apiUrl);
 
   // Возвращаем роль обратно (uncheck)
-  await page.getByRole('link', { name: 'Users' }).click();
+  await page.goto('/Account/Users');
   await page.getByRole('row', { name: userName1 }).getByRole('button').nth(1).click();
   await page.getByRole('row', { name: userName1 }).getByRole('checkbox').uncheck();
   await page.locator(`button[name='${userName1}'][title='ok']`).click();
@@ -61,7 +61,7 @@ test('Успешная смена роли viewer → admin и проверка 
   ]);
 
   //Проверяем что вкладок Use and Configuration нет
-  await expect(page.getByRole('link', { name: 'Users' })).not.toBeVisible();
-  await expect(page.getByRole('link', { name: 'Configuration' })).not.toBeVisible();
+  await expect(page.getByRole('link', { name: 'Users' })).not.toBeAttached();
+  await expect(page.getByRole('link', { name: 'Configuration' })).not.toBeAttached();
    
 });

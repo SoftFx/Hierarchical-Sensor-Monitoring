@@ -10,7 +10,7 @@ test('Check all templates fields', async ({ page }) => {
 
   await login(page, admin_user, admin_user_password, apiUrl);
 
-  await page.getByRole('link', { name: 'Alert Templates' }).click();
+  await page.goto('/AlertTemplates');
   await page.getByRole('link', { name: 'Add Template' }).click();
 
   await page.getByLabel('Folder').selectOption('c1727475-48e7-4850-8400-c65427de0b7c');
@@ -43,7 +43,7 @@ test('Check all templates fields', async ({ page }) => {
   await expect(page.getByText('The Name field is required.')).toBeVisible();
 
   //Редактирование алерта с сохранением
-  await page.getByRole('link', { name: 'Alert Templates' }).click();
+  await page.goto('/AlertTemplates');
   const alertRow1 = page.getByRole('row', { name: templateName });
   await expect(alertRow1).toBeVisible();
   await alertRow1.locator('#actionButton').click();
@@ -53,7 +53,7 @@ test('Check all templates fields', async ({ page }) => {
   await expect(page.getByRole('cell', { name: templateName2 })).toBeVisible();
 
   //Редактирование алерта без сохранения
-  await page.getByRole('link', { name: 'Alert Templates' }).click();
+  await page.goto('/AlertTemplates');
   const alertRow2 = page.getByRole('row', { name: templateName2 });
   await expect(alertRow2).toBeVisible();
   await alertRow2.locator('#actionButton').click();
@@ -63,7 +63,7 @@ test('Check all templates fields', async ({ page }) => {
   await expect(page.getByRole('cell', { name: templateName2 })).toBeVisible();
 
   //Удаление темплейта
-   await page.getByRole('link', { name: 'Alert Templates' }).click();
+   await page.goto('/AlertTemplates');
   // ищем строку таблицы, где есть имя нашего алерта
   const alertRow = page.getByRole('row', { name: templateName2 });
 

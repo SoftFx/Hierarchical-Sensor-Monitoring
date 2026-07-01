@@ -9,10 +9,10 @@ test('Create/remove alert and verify it appears on sensor', async ({ page }) => 
   await login(page, admin_user, admin_user_password, apiUrl);
   
   // Проверка, что залогинились (например, появилась ссылка "Alert Templates")
-  await expect(page.getByRole('link', { name: 'Alert Templates' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Alert Templates' })).toBeAttached();
 
   // --- Создание нового алерта ---
-  await page.getByRole('link', { name: 'Alert Templates' }).click();
+  await page.goto('/AlertTemplates');
   await expect(page).toHaveURL(/.*AlertTemplates\/Index/);
   await page.getByRole('link', { name: 'Add Template' }).click();
 
@@ -66,7 +66,7 @@ test('Create/remove alert and verify it appears on sensor', async ({ page }) => 
   
   
   //Удаляем алерт темплейт
-  await page.getByRole('link', { name: 'Alert Templates' }).click();
+  await page.goto('/AlertTemplates');
 
   // ищем строку таблицы, где есть имя нашего алерта
   const alertRow = page.getByRole('row', { name: /Beta_Service alive BetaTTS/ });
