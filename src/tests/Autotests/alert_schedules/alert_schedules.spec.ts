@@ -507,6 +507,17 @@ test.describe('Alert schedules', () => {
     }
   });
 
+  // The scenarios below are deferred (test.fixme) because they depend on server behaviour that is not
+  // yet implemented — leaving them as documented placeholders is more honest than fake-green empty
+  // bodies. Each needs a *saved alert bound to a schedule*, created through the sensor alert editor
+  // (HomeController.EditAlerts / select[name="ScheduleId"]); the first two also need product features
+  // that do not exist yet:
+  //   * AlertSchedulesController.Remove(Guid) deletes unconditionally — there is no "used by a saved
+  //     alert" guard, so delete-prevention cannot be asserted.
+  //   * Alert Schedules is gated only by [Authorize]; there is no schedule-management permission, so a
+  //     per-permission denial cannot be asserted (any authenticated user has full access).
+  // The remaining two ("affected sensors count > 0" and "binding survives an edit") are implementable
+  // once a helper exists to attach an alert to a schedule; tracked as follow-up under #1199.
   test.fixme('Prevent deleting a schedule that is used by a saved alert', async () => {});
   test.fixme('Show affected sensors count and tooltip for schedules used by saved alerts', async () => {});
   test.fixme('Keep saved alert binding after editing a linked schedule', async () => {});
