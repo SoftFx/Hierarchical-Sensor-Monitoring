@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
+import { userRow } from '../users.ts';
 
 
 test('Смена пароля у пользователя maryia.pazniak.viewer', async ({ page }) => {
@@ -11,8 +12,8 @@ test('Смена пароля у пользователя maryia.pazniak.viewer'
   
   // Заходим в Users и меняем пароль 
   await page.goto('/Account/Users');
-  await page.getByRole('row', { name: userName1 }).getByRole('button').nth(1).click();
-  await page.getByRole('row', { name: userName1 }).getByRole('textbox').fill(viewer_user_password_permanent);
+  await userRow(page, userName1).getByRole('button').nth(1).click();
+  await userRow(page, userName1).getByRole('textbox').fill(viewer_user_password_permanent);
   await page.locator(`button[name='${userName1}'][title='ok']`).click();
 
   await page.getByRole('link', { name: 'Logout' }).click();
@@ -37,8 +38,8 @@ test('Смена пароля у пользователя maryia.pazniak.viewer'
 
   // Возвращаем viewer старый пароль
   await page.goto('/Account/Users');
-  await page.getByRole('row', { name: userName1 }).getByRole('button').nth(1).click();
-  await page.getByRole('row', { name: userName1}).getByRole('textbox').fill(user1password);
+  await userRow(page, userName1).getByRole('button').nth(1).click();
+  await userRow(page, userName1).getByRole('textbox').fill(user1password);
   await page.locator(`button[name='${userName1}'][title='ok']`).click();
 
   // Логаут

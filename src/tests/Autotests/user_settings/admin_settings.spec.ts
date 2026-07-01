@@ -17,7 +17,7 @@ test('Visible Tabs for an Admin user', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Alert Templates', includeHidden: true })).toBeAttached();
   await expect(page.getByRole('link', { name: 'Access keys', includeHidden: true })).toBeAttached();
   await expect(page.getByRole('link', { name: 'Users', includeHidden: true })).toBeAttached();
-  await expect(page.getByRole('link', { name: 'Configuration', includeHidden: true })).toBeAttached();
+  await expect(page.locator('#optionsDropdown')).toBeAttached(); // Configuration menu toggle
 
 
   // Логаут

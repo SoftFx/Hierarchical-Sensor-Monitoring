@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
+import { userRow } from '../users.ts';
 
 
 // Утилита для проверки вкладок
@@ -18,8 +19,8 @@ test('Успешная смена роли viewer → admin и проверка 
   
   // Заходим в Users и меняем роль viewer → admin
   await page.goto('/Account/Users');
-  await page.getByRole('row', { name: userName1 }).getByRole('button').nth(1).click();
-  await page.getByRole('row', { name: userName1 }).getByRole('checkbox').check();
+  await userRow(page, userName1).getByRole('button').nth(1).click();
+  await userRow(page, userName1).getByRole('checkbox').check();
   await page.locator(`button[name='${userName1}'][title='ok']`).click();
 
   // Логаут и логин как admin
@@ -43,8 +44,8 @@ test('Успешная смена роли viewer → admin и проверка 
 
   // Возвращаем роль обратно (uncheck)
   await page.goto('/Account/Users');
-  await page.getByRole('row', { name: userName1 }).getByRole('button').nth(1).click();
-  await page.getByRole('row', { name: userName1 }).getByRole('checkbox').uncheck();
+  await userRow(page, userName1).getByRole('button').nth(1).click();
+  await userRow(page, userName1).getByRole('checkbox').uncheck();
   await page.locator(`button[name='${userName1}'][title='ok']`).click();
 
   // Логаут и проверка снова как viewer

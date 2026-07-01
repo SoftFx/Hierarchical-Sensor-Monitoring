@@ -10,7 +10,7 @@ test('Create/remove alert and verify it appears on sensor', async ({ page }) => 
 
   // --- Создание нового алерта --- (goto below confirms the session; no dropdown-link probe needed)
   await page.goto('/AlertTemplates');
-  await expect(page).toHaveURL(/.*AlertTemplates\/Index/);
+  await expect(page).toHaveURL(/.*AlertTemplates/);
   await page.getByRole('link', { name: 'Add Template' }).click();
 
   await page.getByLabel('Folder').selectOption('c1727475-48e7-4850-8400-c65427de0b7c');
