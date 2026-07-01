@@ -7,11 +7,8 @@ test('Create/remove alert and verify it appears on sensor', async ({ page }) => 
   // --- Login ---
   const { apiUrl, admin_user, admin_user_password } = testConfig;
   await login(page, admin_user, admin_user_password, apiUrl);
-  
-  // Проверка, что залогинились (например, появилась ссылка "Alert Templates")
-  await expect(page.getByRole('link', { name: 'Alert Templates' })).toBeAttached();
 
-  // --- Создание нового алерта ---
+  // --- Создание нового алерта --- (goto below confirms the session; no dropdown-link probe needed)
   await page.goto('/AlertTemplates');
   await expect(page).toHaveURL(/.*AlertTemplates\/Index/);
   await page.getByRole('link', { name: 'Add Template' }).click();

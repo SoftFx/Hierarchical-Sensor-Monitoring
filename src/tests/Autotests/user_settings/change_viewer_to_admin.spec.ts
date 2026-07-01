@@ -7,7 +7,7 @@ import { login } from '../login.ts';
 async function checkTabs(page: Page, tabs: string[]) {
     //                             ^^^^^^^  ^^^^^^^^^ (Явная типизация)
   for (const tab of tabs) {
-    await expect(page.getByRole('link', { name: tab })).toBeAttached();
+    await expect(page.getByRole('link', { name: tab, includeHidden: true })).toBeAttached();
   }
 }
 
@@ -61,7 +61,7 @@ test('Успешная смена роли viewer → admin и проверка 
   ]);
 
   //Проверяем что вкладок Use and Configuration нет
-  await expect(page.getByRole('link', { name: 'Users' })).not.toBeAttached();
-  await expect(page.getByRole('link', { name: 'Configuration' })).not.toBeAttached();
+  await expect(page.getByRole('link', { name: 'Users', includeHidden: true })).not.toBeAttached();
+  await expect(page.getByRole('link', { name: 'Configuration', includeHidden: true })).not.toBeAttached();
    
 });

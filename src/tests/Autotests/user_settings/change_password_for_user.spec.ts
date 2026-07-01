@@ -24,10 +24,10 @@ test('Смена пароля у пользователя maryia.pazniak.viewer'
   await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Dashboards' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Products' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Alert Templates' })).toBeAttached();
-  await expect(page.getByRole('link', { name: 'Access keys' })).toBeAttached();
-  await expect(page.getByRole('link', { name: 'Users' })).not.toBeAttached();
-  await expect(page.getByRole('link', { name: 'Configuration' })).not.toBeAttached();
+  await expect(page.getByRole('link', { name: 'Alert Templates', includeHidden: true })).toBeAttached();
+  await expect(page.getByRole('link', { name: 'Access keys', includeHidden: true })).toBeAttached();
+  await expect(page.getByRole('link', { name: 'Users', includeHidden: true })).not.toBeAttached();
+  await expect(page.getByRole('link', { name: 'Configuration', includeHidden: true })).not.toBeAttached();
   
   // Логаут
   await page.getByRole('link', { name: 'Logout' }).click();

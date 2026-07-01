@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { testConfig } from '../config.ts';
+import { testConfig, testData } from '../config.ts';
 import { login } from '../login.ts';
 
 

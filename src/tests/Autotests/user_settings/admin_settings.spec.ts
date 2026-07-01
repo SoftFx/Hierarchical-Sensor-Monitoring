@@ -14,10 +14,10 @@ test('Visible Tabs for an Admin user', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Dashboards' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Products' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Alert Templates' })).toBeAttached();
-  await expect(page.getByRole('link', { name: 'Access keys' })).toBeAttached();
-  await expect(page.getByRole('link', { name: 'Users' })).toBeAttached();
-  await expect(page.getByRole('link', { name: 'Configuration' })).toBeAttached();
+  await expect(page.getByRole('link', { name: 'Alert Templates', includeHidden: true })).toBeAttached();
+  await expect(page.getByRole('link', { name: 'Access keys', includeHidden: true })).toBeAttached();
+  await expect(page.getByRole('link', { name: 'Users', includeHidden: true })).toBeAttached();
+  await expect(page.getByRole('link', { name: 'Configuration', includeHidden: true })).toBeAttached();
 
 
   // Логаут
