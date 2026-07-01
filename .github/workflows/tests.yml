@@ -3,7 +3,7 @@ name: HSMServer E2E tests
 on:
   workflow_dispatch:
   pull_request:
-    branches: [master]
+    branches: [master, Maria_test]
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
