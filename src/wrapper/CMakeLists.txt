@@ -46,6 +46,13 @@ target_link_libraries(HSMCppWrapper PRIVATE hsm_collector_cpp)
 
 if(MSVC)
     target_compile_options(HSMCppWrapper PRIVATE /EHsc /W3)
+    # Emit a PDB for the Release DLL too (the VS Release config omits debug info by default, so the
+    # handoff bundle otherwise ships Release without symbols for crash analysis at tt-aggregator2).
+    # /Zi generates the debug info; the linker /DEBUG writes the .pdb; /OPT:REF /OPT:ICF restore the
+    # size/speed folding that /DEBUG turns off, so Release stays optimized but symbolizable. Exports/
+    # ABI are unaffected, so the relink stays byte-for-byte identical.
+    target_compile_options(HSMCppWrapper PRIVATE $<$<CONFIG:Release>:/Zi>)
+    target_link_options(HSMCppWrapper PRIVATE $<$<CONFIG:Release>:/DEBUG /OPT:REF /OPT:ICF>)
 endif()
 
 # Re-export the native C ABI from the DLL so a consumer can call hsm::collector directly via
