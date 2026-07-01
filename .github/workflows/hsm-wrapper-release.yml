@@ -3,7 +3,7 @@ name: hsm-wrapper-release
 # Packages the native HSMCppWrapper.dll drop-in bundle (Release + Debug x64, headers, libcurl/zlib
 # runtime, import libs, PDBs) for the tt-aggregator2 handoff.
 #
-#   * push a tag `wrapper-v<semver>`  -> builds + publishes a GitHub Release with the bundle attached
+#   * push a tag `wrapper-v<semver>`  -> builds the bundle, then publishes a GitHub Release with it
 #   * manual `workflow_dispatch`      -> builds + uploads the bundle as a workflow artifact only
 #
 # Cutting the release is a human action (push the tag); this workflow just does the build+attach so the
@@ -20,27 +20,42 @@ on:
         required: false
         default: '0.0.0-dev'
 
+# Least privilege: the default token is read-only for every job. Only the `release` job (tag pushes)
+# elevates to contents: write, so a workflow_dispatch dry-run never holds a release-publishing token.
 permissions:
-  contents: write   # gh release create (tag pushes only)
+  contents: read
 
 jobs:
   bundle:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # so pack.ps1 can stamp the source commit into the manifest
 
-      - name: Resolve version
+      - name: Resolve and validate version
         id: ver
         shell: pwsh
+        env:
+          # Bind the attacker-influenceable inputs (dispatch input, ref/tag name) to env vars and read
+          # them via $env: — never interpolate ${{ }} into the run: body, where a value containing a
+          # quote would break out and execute on the runner (GitHub's script-injection hardening rule).
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF: ${{ github.ref }}
         run: |
-          $v = if ($env:GITHUB_REF -like 'refs/tags/wrapper-v*') {
-                 $env:GITHUB_REF -replace '^refs/tags/wrapper-v', ''
+          $v = if ($env:REF -like 'refs/tags/wrapper-v*') {
+                 $env:REF -replace '^refs/tags/wrapper-v', ''
                } else {
-                 '${{ github.event.inputs.version }}'
+                 $env:INPUT_VERSION
                }
+          # Reject anything that is not a clean semver: keeps the artifact/zip/release names well-formed
+          # and defensively closes the injection surface for every downstream consumer of the value.
+          if ($v -notmatch '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$') {
+              throw "Refusing to build: version '$v' is not a clean semver (tag must be wrapper-v<semver>)."
+          }
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Bundle version: $v"
 
@@ -71,11 +86,13 @@ jobs:
 
       - name: Assemble bundle
         shell: pwsh
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           ./src/wrapper/packaging/pack.ps1 `
             -BuildDir build/wrapper `
             -VcpkgRoot $env:VCPKG_INSTALLATION_ROOT `
-            -Version '${{ steps.ver.outputs.version }}' `
+            -Version $env:VERSION `
             -OutDir dist
 
       - name: Upload bundle artifact
@@ -85,13 +102,35 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
-      - name: Publish GitHub Release (tag pushes only)
-        if: startsWith(github.ref, 'refs/tags/wrapper-v')
-        shell: pwsh
+  release:
+    # Publish a GitHub Release only on a tag push. A manual dispatch stops at the artifact above.
+    if: startsWith(github.ref, 'refs/tags/wrapper-v')
+    needs: bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # scoped to this job only — the release-publishing token
+
+    steps:
+      - name: Download bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: HSMCppWrapper-${{ needs.bundle.outputs.version }}
+          path: dist
+
+      - name: Publish GitHub Release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}   # gh targets the repo without a checkout
+          VERSION: ${{ needs.bundle.outputs.version }}
+          TAG: ${{ github.ref_name }}
         run: |
-          $zip = (Get-ChildItem dist/*.zip | Select-Object -First 1).FullName
-          gh release create $env:GITHUB_REF_NAME $zip `
-            --title "HSMCppWrapper ${{ steps.ver.outputs.version }}" `
-            --notes "Native drop-in ``HSMCppWrapper.dll`` (no CLR) for tt-aggregator2 - relink only, same public ABI. Unzip the attached bundle and follow ``MANIFEST.md`` for the swap recipe. Behavioral residue vs the managed wrapper: ``docs/native-collector-migration.md``."
+          set -euo pipefail
+          zip=$(ls dist/*.zip | head -1)
+          notes='Native drop-in `HSMCppWrapper.dll` (no CLR) for tt-aggregator2 — relink only, same public ABI. Unzip the attached bundle and follow `MANIFEST.md` for the swap recipe. Behavioral residue vs the managed wrapper: `docs/native-collector-migration.md`.'
+          # Idempotent: re-running a tag build re-uploads the asset instead of failing on an existing release.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$zip" --clobber
+          else
+            gh release create "$TAG" "$zip" --title "HSMCppWrapper $VERSION" --notes "$notes"
+          fi

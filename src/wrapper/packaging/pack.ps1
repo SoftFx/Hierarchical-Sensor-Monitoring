@@ -55,8 +55,11 @@ New-Dir $root | Out-Null
 foreach ($cfg in $configs) {
     $binSrc = Join-Path $BuildDir $cfg
     $dll = Join-Path $binSrc 'HSMCppWrapper.dll'
-    if (-not (Test-Path $dll)) {
-        throw "Missing $cfg build: '$dll' not found. Build both configs before packing (cmake --build build/wrapper --config $cfg)."
+    $lib = Join-Path $binSrc 'HSMCppWrapper.lib'
+    foreach ($artifact in @($dll, $lib)) {
+        if (-not (Test-Path $artifact)) {
+            throw "Missing $cfg build: '$artifact' not found. Build both configs before packing (cmake --build build/wrapper --config $cfg)."
+        }
     }
 
     $dllDst = New-Dir (Join-Path $root "dll\HSMCppWrapper\x64\$cfg")
@@ -64,13 +67,20 @@ foreach ($cfg in $configs) {
 
     Copy-Item $dll $dllDst
     Copy-Item (Join-Path $binSrc 'HSMCppWrapper.pdb') $dllDst -ErrorAction SilentlyContinue
-    Copy-Item (Join-Path $binSrc 'HSMCppWrapper.lib') $libDst
+    Copy-Item $lib $libDst
 
     # Shared libcurl + zlib runtime (schannel TLS, no OpenSSL): Release from bin/, Debug from debug/bin/.
+    # Copy an explicit libcurl/zlib allow-list rather than every *.dll, so a future transitive vcpkg
+    # dependency can't silently enlarge the handoff bundle — and it stays matched to MANIFEST.md.
     $vcBin = if ($cfg -eq 'Debug') { Join-Path $VcpkgRoot "installed\$triplet\debug\bin" }
              else                  { Join-Path $VcpkgRoot "installed\$triplet\bin" }
     if (Test-Path $vcBin) {
-        Copy-Item (Join-Path $vcBin '*.dll') $dllDst
+        $runtimeDlls = @(Get-ChildItem -Path $vcBin -Filter '*.dll' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^(libcurl|zlib)' })
+        if ($runtimeDlls.Count -eq 0) {
+            Write-Warning "No libcurl/zlib DLLs under '$vcBin' - runtime NOT bundled for $cfg."
+        }
+        foreach ($dllFile in $runtimeDlls) { Copy-Item $dllFile.FullName $dllDst }
     }
     else {
         Write-Warning "vcpkg bin not found for ${cfg}: '$vcBin' - libcurl/zlib runtime NOT bundled."
