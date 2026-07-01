@@ -32,9 +32,10 @@ jobs:
         preset: [asan, tsan]
     runs-on: ubuntu-latest
     env:
-      # Halt on the FIRST error and abort, so the sanitizer prints one clean report instead of the
-      # UAF + at-exit LSan dump interleaving (that interleaving is what hid the READ stack in CI).
-      ASAN_OPTIONS: 'halt_on_error=1:abort_on_error=1:detect_leaks=1'
+      # Halt on the FIRST error and abort. detect_leaks=0 disables LSan so ONLY the use-after-free
+      # report prints — the at-exit LSan dump otherwise interleaves and garbles the freed-by / read
+      # stacks (which is exactly what hid the real free path in the first CI logs).
+      ASAN_OPTIONS: 'halt_on_error=1:abort_on_error=1:detect_leaks=0'
       UBSAN_OPTIONS: 'print_stacktrace=1:halt_on_error=1'
       TSAN_OPTIONS: 'halt_on_error=1:second_deadlock_stack=1'
     steps:
