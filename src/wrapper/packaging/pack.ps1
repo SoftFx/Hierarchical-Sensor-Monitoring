@@ -66,7 +66,11 @@ foreach ($cfg in $configs) {
     $libDst = New-Dir (Join-Path $root "lib\HSMCppWrapper\x64\$cfg")
 
     Copy-Item $dll $dllDst
-    Copy-Item (Join-Path $binSrc 'HSMCppWrapper.pdb') $dllDst -ErrorAction SilentlyContinue
+    # PDB is advertised in MANIFEST.md; copy it when present, but make its absence visible rather than
+    # silently shipping a bundle that doesn't match the manifest (the .dll/.lib are hard-required above).
+    $pdb = Join-Path $binSrc 'HSMCppWrapper.pdb'
+    if (Test-Path $pdb) { Copy-Item $pdb $dllDst }
+    else { Write-Warning "No PDB for ${cfg} ('$pdb') - bundle ships without it, though MANIFEST.md lists it." }
     Copy-Item $lib $libDst
 
     # Shared libcurl + zlib runtime (schannel TLS, no OpenSSL): Release from bin/, Debug from debug/bin/.

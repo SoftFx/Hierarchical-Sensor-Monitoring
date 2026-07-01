@@ -57,3 +57,8 @@ pwsh src/wrapper/packaging/pack.ps1 -BuildDir build/wrapper -VcpkgRoot $env:VCPK
 `wrapper-v*` tags version the **wrapper bundle**, independently of the server (`server-v*`) and the
 native collector C ABI (`HSM_COLLECTOR_VERSION`). Bump when the wrapper is rebuilt for a handoff; the
 manifest records the exact source commit each build came from.
+
+The tag must be `wrapper-v<major>.<minor>.<patch>` with an optional pre-release suffix — e.g.
+`wrapper-v1.0.0` or `wrapper-v1.0.0-rc1`. The workflow validates this and rejects anything else; note
+that full-SemVer `+build` metadata (`wrapper-v1.0.0+build5`) is **not** accepted — keep build metadata
+out of the tag.

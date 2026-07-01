@@ -25,6 +25,12 @@ on:
 permissions:
   contents: read
 
+# Serialize runs for the same ref: two quick `wrapper-v*` tag pushes must not run overlapping release
+# jobs against the same tag (racing the create/upload). Never cancel an in-flight publish.
+concurrency:
+  group: hsm-wrapper-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   bundle:
     runs-on: windows-latest
@@ -126,7 +132,13 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          zip=$(ls dist/*.zip | head -1)
+          shopt -s nullglob
+          zips=(dist/*.zip)
+          if [ ${#zips[@]} -eq 0 ]; then
+            echo "No .zip found in the downloaded bundle artifact." >&2
+            exit 1
+          fi
+          zip="${zips[0]}"
           notes='Native drop-in `HSMCppWrapper.dll` (no CLR) for tt-aggregator2 — relink only, same public ABI. Unzip the attached bundle and follow `MANIFEST.md` for the swap recipe. Behavioral residue vs the managed wrapper: `docs/native-collector-migration.md`.'
           # Idempotent: re-running a tag build re-uploads the asset instead of failing on an existing release.
           if gh release view "$TAG" >/dev/null 2>&1; then
