@@ -1,3 +1,4 @@
+using HSMServer.Authentication;
 using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
 using System.Collections.Generic;
@@ -12,10 +13,10 @@ namespace HSMServer.Model.Configuration
 
         public SlackSettingsViewModel() { }
 
-        public SlackSettingsViewModel(ISlackDestinationsManager destinations)
+        public SlackSettingsViewModel(ISlackDestinationsManager destinations, IUserManager userManager = null)
         {
             Destinations = destinations.GetValues()
-                .Select(d => new SlackDestinationViewModel(d))
+                .Select(d => new SlackDestinationViewModel(d, userManager))
                 .ToList();
         }
     }

@@ -1,3 +1,4 @@
+using HSMServer.Authentication;
 using HSMServer.Notifications;
 using System;
 using System.ComponentModel.DataAnnotations;
@@ -27,13 +28,13 @@ namespace HSMServer.Model.Notifications
 
         public SlackDestinationViewModel() { }
 
-        public SlackDestinationViewModel(SlackDestination destination)
+        public SlackDestinationViewModel(SlackDestination destination, IUserManager userManager = null)
         {
             Id = destination.Id;
             Name = destination.Name;
             WebhookUrl = destination.WebhookUrl;
             Description = destination.Description;
-            Author = destination.AuthorId?.ToString();
+            Author = ResolveAuthorName(destination.AuthorId, userManager);
             CreationDate = destination.CreationDate;
             EnableMessages = destination.SendMessages;
         }
@@ -57,5 +58,11 @@ namespace HSMServer.Model.Notifications
                 WebhookUrl = WebhookUrl,
                 SendMessages = EnableMessages,
             };
+
+
+        private static string ResolveAuthorName(Guid? authorId, IUserManager userManager) =>
+            authorId is not null && userManager is not null && userManager.TryGetValueById(authorId, out var user)
+                ? user.Name
+                : authorId?.ToString();
     }
 }
