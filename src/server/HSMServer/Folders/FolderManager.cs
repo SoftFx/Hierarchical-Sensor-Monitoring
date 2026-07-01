@@ -138,7 +138,7 @@ namespace HSMServer.Folders
             if (result)
             {
                 AddFolderToChats?.Invoke(folder.Id, addedChats);
-                await (RemoveFolderFromChats?.Invoke(folder.Id, removedChats, update.Initiator) ?? Task.CompletedTask);
+                await FanOutRemoveFolderFromChats(folder.Id, removedChats, update.Initiator);
 
                 if (update.DefaultChats != null || update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     foreach (var productId in folder.Products.Keys)
@@ -480,5 +480,17 @@ namespace HSMServer.Folders
 
 
         private string GetChatNameById(Guid id) => GetChatName?.Invoke(id);
+
+        private Task FanOutRemoveFolderFromChats(Guid folderId, List<Guid> removedChats, InitiatorInfo initiator)
+        {
+            if (RemoveFolderFromChats is null)
+                return Task.CompletedTask;
+
+            var tasks = RemoveFolderFromChats.GetInvocationList()
+                .Cast<Func<Guid, List<Guid>, InitiatorInfo, Task>>()
+                .Select(h => h(folderId, removedChats, initiator));
+
+            return Task.WhenAll(tasks);
+        }
     }
 }
