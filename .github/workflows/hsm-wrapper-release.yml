@@ -1,0 +1,97 @@
+name: hsm-wrapper-release
+
+# Packages the native HSMCppWrapper.dll drop-in bundle (Release + Debug x64, headers, libcurl/zlib
+# runtime, import libs, PDBs) for the tt-aggregator2 handoff.
+#
+#   * push a tag `wrapper-v<semver>`  -> builds + publishes a GitHub Release with the bundle attached
+#   * manual `workflow_dispatch`      -> builds + uploads the bundle as a workflow artifact only
+#
+# Cutting the release is a human action (push the tag); this workflow just does the build+attach so the
+# artifact maps 1:1 to a commit. The fast PR/CI gate stays in hsm_cpp_wrapper_build.yml (Release+smoke).
+
+on:
+  push:
+    tags:
+      - 'wrapper-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Bundle version for a dry-run artifact (e.g. 1.0.0-rc1). Ignored on tag pushes.'
+        required: false
+        default: '0.0.0-dev'
+
+permissions:
+  contents: write   # gh release create (tag pushes only)
+
+jobs:
+  bundle:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # so pack.ps1 can stamp the source commit into the manifest
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = if ($env:GITHUB_REF -like 'refs/tags/wrapper-v*') {
+                 $env:GITHUB_REF -replace '^refs/tags/wrapper-v', ''
+               } else {
+                 '${{ github.event.inputs.version }}'
+               }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Bundle version: $v"
+
+      - name: Install libcurl (vcpkg)
+        run: vcpkg install curl:x64-windows
+        shell: cmd
+
+      - name: Configure
+        # No -G: use the runner's default multi-config VS generator (same as the native-collector lanes;
+        # pinning a VS version breaks when the image upgrades).
+        run: >
+          cmake -S src/wrapper -B build/wrapper
+          -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%/scripts/buildsystems/vcpkg.cmake
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+        shell: cmd
+
+      - name: Build (Release + Debug)
+        run: |
+          cmake --build build/wrapper --config Release
+          cmake --build build/wrapper --config Debug
+        shell: cmd
+
+      - name: Smoke (drive the public ABI in-process, no server needed)
+        run: |
+          set "PATH=%CD%\build\wrapper\Release;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%PATH%"
+          build\wrapper\Release\WrapperConsole.exe
+        shell: cmd
+
+      - name: Assemble bundle
+        shell: pwsh
+        run: |
+          ./src/wrapper/packaging/pack.ps1 `
+            -BuildDir build/wrapper `
+            -VcpkgRoot $env:VCPKG_INSTALLATION_ROOT `
+            -Version '${{ steps.ver.outputs.version }}' `
+            -OutDir dist
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HSMCppWrapper-${{ steps.ver.outputs.version }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/wrapper-v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip = (Get-ChildItem dist/*.zip | Select-Object -First 1).FullName
+          gh release create $env:GITHUB_REF_NAME $zip `
+            --title "HSMCppWrapper ${{ steps.ver.outputs.version }}" `
+            --notes "Native drop-in ``HSMCppWrapper.dll`` (no CLR) for tt-aggregator2 - relink only, same public ABI. Unzip the attached bundle and follow ``MANIFEST.md`` for the swap recipe. Behavioral residue vs the managed wrapper: ``docs/native-collector-migration.md``."
