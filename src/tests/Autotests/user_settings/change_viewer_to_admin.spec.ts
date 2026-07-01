@@ -11,6 +11,24 @@ async function checkTabs(page: Page, tabs: string[]) {
   }
 }
 
+// Safety net: the test mutates shared state (test_user1's admin flag) and reverts it inline. If the
+// body throws after promotion but before the inline demotion, test_user1 would be left as admin and,
+// with retries + other specs assuming a viewer, cascade into confusing failures. Restore the viewer
+// baseline here so it runs even when the body fails. Best-effort (matches the cleanup.* discipline).
+test.afterEach(async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password, userName1 } = testConfig;
+  try {
+    const logout = page.getByRole('link', { name: 'Logout' });
+    if (await logout.count())
+      await logout.first().click();
+    await login(page, admin_user, admin_user_password, apiUrl);
+    await page.goto('/Account/Users');
+    await setUserAdmin(page, userName1, false);
+  } catch (e) {
+    console.warn('[afterEach] restore test_user1 viewer role:', e instanceof Error ? e.message : e);
+  }
+});
+
 test('Успешная смена роли viewer → admin и проверка вкладок', async ({ page }) => {
   const {apiUrl, admin_user, admin_user_password, userName1, user1password } = testConfig;
   // Логинимся админом

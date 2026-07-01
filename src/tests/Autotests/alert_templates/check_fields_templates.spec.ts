@@ -1,13 +1,29 @@
 import { test, expect } from '@playwright/test';
-import { buildAlertTemplateFixture, fillAlertTemplateForm } from '../alertTemplateFixture.ts';
-import { uniqueName } from '../fixtures.ts';
+import { cleanup, uniqueName } from '../fixtures.ts';
+import { buildAlertTemplateFixture, cleanupAlertTemplateFixture, fillAlertTemplateForm, type AlertTemplateFixture } from '../alertTemplateFixture.ts';
 
 // Self-contained (#1199): builds its own folder+product+sensor fixture, then exercises the alert
 // template CRUD — create, edit (rename), remove.
+
+let fx: AlertTemplateFixture | null = null;
+const templates: string[] = [];
+
+// The body removes the template on success; this also cleans up the fixture folder + product and any
+// template left behind (the pre- or post-rename name) if the body failed mid-way. Best-effort.
+test.afterEach(async ({ page }) => {
+  for (const name of templates)
+    await cleanup.alertTemplate(page, name);
+  if (fx)
+    await cleanupAlertTemplateFixture(page, fx);
+  fx = null;
+  templates.length = 0;
+});
+
 test('Alert template create, edit and remove', async ({ page }) => {
-  const fx = await buildAlertTemplateFixture(page);
+  fx = await buildAlertTemplateFixture(page);
   const name = uniqueName('Tpl');
   const renamed = uniqueName('Tpl');
+  templates.push(name, renamed);
 
   // --- Create ---
   await page.goto('/AlertTemplates');

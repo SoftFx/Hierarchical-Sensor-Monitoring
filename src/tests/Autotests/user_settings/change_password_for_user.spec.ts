@@ -4,6 +4,24 @@ import { login } from '../login.ts';
 import { setUserPassword } from '../users.ts';
 
 
+// Safety net: the test changes test_user1's password and restores it inline. If the body throws after
+// the change but before the restore, the user would be left with the temp password and (with retries +
+// other specs assuming the original) cascade into confusing failures. Restore the baseline password
+// here so it runs even when the body fails. Best-effort (matches the cleanup.* discipline).
+test.afterEach(async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password, userName1, user1password } = testConfig;
+  try {
+    const logout = page.getByRole('link', { name: 'Logout' });
+    if (await logout.count())
+      await logout.first().click();
+    await login(page, admin_user, admin_user_password, apiUrl);
+    await page.goto('/Account/Users');
+    await setUserPassword(page, userName1, user1password);
+  } catch (e) {
+    console.warn('[afterEach] restore test_user1 password:', e instanceof Error ? e.message : e);
+  }
+});
+
 test('Смена пароля у пользователя maryia.pazniak.viewer', async ({ page }) => {
   const {apiUrl, admin_user, admin_user_password, userName1, user1password, viewer_user_password_permanent } = testConfig;
 

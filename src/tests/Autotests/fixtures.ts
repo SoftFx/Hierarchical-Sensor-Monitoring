@@ -55,7 +55,9 @@ export const cleanup = {
 
   async alertTemplate(page: Page, name: string): Promise<void> {
     try {
-      await page.getByRole('link', { name: 'Alert Templates' }).click();
+      // "Alert Templates" is a dropdown-item in the collapsed #alertsDropdown (display:none), so a
+      // getByRole('link').click() would hang — navigate by route instead (as the specs do).
+      await page.goto('/AlertTemplates');
       const row = page.getByRole('row', { name });
       if (await row.count() === 0) return;
       await row.first().locator('#actionButton').click();
