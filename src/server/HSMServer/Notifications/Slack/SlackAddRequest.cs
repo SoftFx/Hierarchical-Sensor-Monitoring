@@ -5,5 +5,7 @@ namespace HSMServer.Notifications
     public record SlackAddRequest : BaseAddRequest
     {
         public required string WebhookUrl { get; init; }
+
+        public int MessagesAggregationTimeSec { get; init; }
     }
 }

@@ -181,22 +181,94 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         [Fact]
-        public async Task FlushAsync_IsNoOp()
+        public async Task DeliverAsync_WhenAggregationIsPositive_BuffersUntilFlush()
+        {
+            var (manager, destinationId) = SeedDestination(send: true, aggregationSec: 60);
+            var handler = new StubHandler(HttpStatusCode.OK);
+
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
+                maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
+
+            await channel.DeliverAsync(BuildMessage(destinationId));
+
+            Assert.Equal(0, handler.Calls);
+
+            await channel.FlushAsync();
+
+            Assert.Equal(1, handler.Calls);
+            Assert.Equal(WebhookUrl, handler.LastRequestUri);
+        }
+
+        [Fact]
+        public async Task DeliverAsync_WhenAggregationIsZero_PostsImmediately()
+        {
+            var (manager, destinationId) = SeedDestination(send: true, aggregationSec: 0);
+            var handler = new StubHandler(HttpStatusCode.OK);
+
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
+                maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
+
+            await channel.DeliverAsync(BuildMessage(destinationId));
+
+            Assert.Equal(1, handler.Calls);
+
+            await channel.FlushAsync();
+
+            Assert.Equal(1, handler.Calls);
+        }
+
+        [Fact]
+        public async Task FlushAsync_WhenBufferEmpty_DoesNotPost()
+        {
+            var (manager, _) = SeedDestination(send: true, aggregationSec: 60);
+            var handler = new StubHandler(HttpStatusCode.OK);
+
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
+                maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
+
+            await channel.FlushAsync();
+
+            Assert.Equal(0, handler.Calls);
+        }
+
+        [Fact]
+        public async Task FlushAsync_RespectsAggregationWindow()
+        {
+            var (manager, destinationId) = SeedDestination(send: true, aggregationSec: 60);
+            var handler = new StubHandler(HttpStatusCode.OK);
+
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
+                maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
+
+            await channel.DeliverAsync(BuildMessage(destinationId));
+            await channel.FlushAsync();
+
+            Assert.Equal(1, handler.Calls);
+
+            await channel.FlushAsync();
+
+            Assert.Equal(1, handler.Calls);
+        }
+
+        [Fact]
+        public async Task FlushAsync_WhenNoDestinations_DoesNotThrowOrPost()
         {
             var manager = BuildManager();
-            var channel = new SlackNotificationChannel(manager, new HttpClient(),
+            var handler = new StubHandler(HttpStatusCode.OK);
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
                 maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
 
             var ex = await Record.ExceptionAsync(() => channel.FlushAsync());
 
             Assert.Null(ex);
+            Assert.Equal(0, handler.Calls);
         }
 
 
         private static SlackDestinationsManager BuildManager()
             => new(new Mock<IDatabaseCore>().Object, new Mock<ITreeValuesCache>().Object);
 
-        private static SlackDestination BuildDestination(bool send) =>
+        private static SlackDestination BuildDestination(bool send, int aggregationSec = 0) =>
             new(new SlackDestinationEntity
             {
                 Id = Guid.NewGuid().ToByteArray(),
@@ -205,12 +277,13 @@ namespace HSMServer.Core.Tests.Notifications
                 Name = "alerts-channel",
                 WebhookUrl = WebhookUrl,
                 SendMessages = send,
+                MessagesAggregationTimeSec = aggregationSec,
             });
 
-        private static (SlackDestinationsManager manager, Guid destinationId) SeedDestination(bool send)
+        private static (SlackDestinationsManager manager, Guid destinationId) SeedDestination(bool send, int aggregationSec = 0)
         {
             var manager = BuildManager();
-            var dest = BuildDestination(send);
+            var dest = BuildDestination(send, aggregationSec);
             manager.TryAdd(dest.Id, dest);
             return (manager, dest.Id);
         }
@@ -223,7 +296,16 @@ namespace HSMServer.Core.Tests.Notifications
                 AllChats = false,
             };
 
-            var alert = new AlertResult(dest, icon: "⚠️", comment: "value changed", policyId: Guid.NewGuid());
+            var state = new AlertState
+            {
+                Template = new AlertSystemTemplate(),
+                Path = "root/sensor",
+                Product = "TestProduct",
+                Sensor = "TestSensor",
+                Status = "Error",
+            };
+
+            var alert = new AlertResult(dest, icon: "⚠️", comment: "value changed", policyId: Guid.NewGuid(), template: "$product $sensor is $status", state);
 
             return new AlertMessage(Guid.NewGuid(), new List<AlertResult> { alert });
         }

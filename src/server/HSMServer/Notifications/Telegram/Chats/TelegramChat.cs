@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Notifications.Telegram.AddressBook;
+using HSMServer.Notifications.AddressBook;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;

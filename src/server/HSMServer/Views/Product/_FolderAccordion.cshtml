@@ -66,8 +66,11 @@
 
                                     var chatId = availableChats[i].Key;
                                     var chatName = availableChats[i].Value;
+                                    var isTelegram = telegramIds.Contains(chatId);
+                                    var brandClass = isTelegram ? ChatIcons.TelegramBrandClass : ChatIcons.SlackBrandClass;
 
-                                    @if (telegramIds.Contains(chatId))
+                                    <i class="@brandClass"></i>
+                                    @if (isTelegram)
                                     {
                                         <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chatId">@chatName</a>
                                     }
@@ -79,7 +82,21 @@
                             }
                             else
                             {
-                                @string.Join(", ", availableChats.Select(kv => kv.Value))
+                                for (int i = 0; i < availableChats.Count; ++i)
+                                {
+                                    if (i > 0)
+                                    {
+                                        <span>, </span>
+                                    }
+
+                                    var chatId = availableChats[i].Key;
+                                    var chatName = availableChats[i].Value;
+                                    var brandClass = chatId.ChatBrandClass(TelegramChatsManager, SlackDestinationsManager)
+                                        ?? ChatIcons.SlackBrandClass;
+
+                                    <i class="@brandClass"></i>
+                                    <span>@chatName</span>
+                                }
                             }
                         </div>
                     }

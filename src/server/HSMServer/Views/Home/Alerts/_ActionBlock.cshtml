@@ -53,14 +53,14 @@
                 <option disabled>Telegram groups</option>
                 @foreach (var chat in chats.GetGroups())
                 {
-                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
                 }
 
                 <option data-divider="true"></option>
                 <option disabled>Telegram users</option>
                 @foreach (var chat in chats.GetPrivates())
                 {
-                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
                 }
 
                 <option data-divider="true"></option>
@@ -73,7 +73,7 @@
                 {
                     foreach (var destination in slackDestinations)
                     {
-                        <option value="@destination.Id" selected="@Model.SlackDestinationIsSelected(destination)">@destination.Name</option>
+                        <option value="@destination.Id" selected="@Model.SlackDestinationIsSelected(destination)" data-content="<i class='@ChatIcons.SlackBrandClass'></i> @destination.Name">@destination.Name</option>
                     }
                 }
             </select>

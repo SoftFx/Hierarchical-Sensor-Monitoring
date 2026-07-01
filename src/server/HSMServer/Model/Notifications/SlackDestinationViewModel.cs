@@ -22,13 +22,18 @@ namespace HSMServer.Model.Notifications
 
         public DateTime CreationDate { get; set; }
 
+        [Display(Name = "Messages delay")]
+        public int MessagesDelay { get; set; } = 60;
+
         [Display(Name = "Enable messages")]
         public bool EnableMessages { get; set; }
+
+        public ChatFoldersViewModel Folders { get; set; } = new();
 
 
         public SlackDestinationViewModel() { }
 
-        public SlackDestinationViewModel(SlackDestination destination, IUserManager userManager = null)
+        public SlackDestinationViewModel(SlackDestination destination, IUserManager userManager = null, ChatFoldersViewModel folders = null)
         {
             Id = destination.Id;
             Name = destination.Name;
@@ -36,7 +41,9 @@ namespace HSMServer.Model.Notifications
             Description = destination.Description;
             Author = ResolveAuthorName(destination.AuthorId, userManager);
             CreationDate = destination.CreationDate;
+            MessagesDelay = destination.MessagesAggregationTimeSec;
             EnableMessages = destination.SendMessages;
+            Folders = folders ?? new ChatFoldersViewModel();
         }
 
 
@@ -47,6 +54,7 @@ namespace HSMServer.Model.Notifications
                 Name = Name,
                 Description = Description,
                 WebhookUrl = WebhookUrl,
+                MessagesAggregationTimeSec = MessagesDelay,
             };
 
         internal SlackDestinationUpdate ToUpdate() =>
@@ -57,6 +65,7 @@ namespace HSMServer.Model.Notifications
                 Description = Description,
                 WebhookUrl = WebhookUrl,
                 SendMessages = EnableMessages,
+                MessagesAggregationTimeSec = MessagesDelay,
             };
 
 

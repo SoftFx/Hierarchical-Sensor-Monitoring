@@ -72,11 +72,29 @@
                 </div>
             </div>
 
+            <div class="row mt-2">
+                <div class="col-2 d-flex align-items-center">
+                    <label class="col-form-label" asp-for="MessagesDelay"></label>
+                    <i class='fas fa-question-circle ms-2' title='Alert notifications aggregation period in seconds. Set 0 for immediate delivery.'></i>
+                </div>
+                <div class="col-4 p-0">
+                    <div class="input-group">
+                        <input type="number" class="form-control" asp-for="MessagesDelay" min="0">
+                        <span class="input-group-text">sec</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="d-flex justify-content-end my-2">
                 <a href="@Url.Action(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController)"
                    class="btn btn-link my-1 me-2">Cancel</a>
                 <button type="submit" class="btn btn-primary independentSizeButton my-1">Save</button>
             </div>
+
+            @if (!isNew)
+            {
+                <partial name="_ChatFolders" for="Folders" />
+            }
         </form>
     </div>
 </div>

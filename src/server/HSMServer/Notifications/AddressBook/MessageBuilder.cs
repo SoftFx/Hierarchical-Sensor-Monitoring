@@ -4,7 +4,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Text;
 
-namespace HSMServer.Notifications.Telegram.AddressBook
+namespace HSMServer.Notifications.AddressBook
 {
     internal interface IMessageBuilder
     {

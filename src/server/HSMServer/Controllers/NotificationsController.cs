@@ -112,7 +112,7 @@ namespace HSMServer.Controllers
                 return View(new SlackDestinationViewModel { EnableMessages = true });
 
             return SlackDestinations.TryGetValue(id, out var destination)
-                ? View(new SlackDestinationViewModel(destination))
+                ? View(new SlackDestinationViewModel(destination, folders: BuildSlackFolders(destination)))
                 : _emptyResult;
         }
 
@@ -137,10 +137,27 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return View(model);
 
-            await SlackDestinations.TryUpdate(model.ToUpdate());
+            if (await SlackDestinations.TryUpdate(model.ToUpdate()))
+            {
+                var updated = SlackDestinations[model.Id];
+                var removedFolders = updated.Folders.Except(model.Folders.Folders).ToList();
+
+                foreach (var folderId in model.Folders.SelectedFolders)
+                    if (_folderManager.TryGetValue(folderId, out var folder))
+                        await UpdateFolder(folderId, new HashSet<Guid>(folder.Chats) { model.Id });
+
+                foreach (var folderId in removedFolders)
+                    if (_folderManager.TryGetValue(folderId, out var folder))
+                    {
+                        var folderChats = new HashSet<Guid>(folder.Chats);
+                        folderChats.Remove(model.Id);
+
+                        await UpdateFolder(folderId, folderChats);
+                    }
+            }
 
             return SlackDestinations.TryGetValue(model.Id, out var destination)
-                ? View(new SlackDestinationViewModel(destination))
+                ? View(new SlackDestinationViewModel(destination, folders: BuildSlackFolders(destination)))
                 : RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
         }
 
@@ -165,6 +182,14 @@ namespace HSMServer.Controllers
             var chatFolders = _folderManager.GetValues().Where(f => chat.Folders.Contains(f.Id)).ToList();
 
             return new(availableFolders, chatFolders);
+        }
+
+        private ChatFoldersViewModel BuildSlackFolders(SlackDestination destination)
+        {
+            var availableFolders = _folderManager.GetUserFolders(CurrentUser).Where(f => !f.Chats.Contains(destination.Id)).ToList();
+            var destFolders = _folderManager.GetValues().Where(f => destination.Folders.Contains(f.Id)).ToList();
+
+            return new(availableFolders, destFolders);
         }
 
         private async Task UpdateFolder(Guid folderId, HashSet<Guid> folderChats)

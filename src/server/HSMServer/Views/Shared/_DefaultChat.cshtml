@@ -27,7 +27,36 @@
 
 <span class="@(Model.IsModify ? "col-2" : "meta-info-label")">Chat(s)</span>
 
-<span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : "meta-info-value")">@displayName</span>
+<span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : "meta-info-value")">
+    @if (Model.IsNotInitialized || Model.IsEmpty || (Model.IsFromParent && Model.SelectedChats.Count == 0))
+    {
+        @displayName
+    }
+    else
+    {
+        if (Model.IsFromParent)
+        {
+            <span>@parentChats</span>
+            if (Model.SelectedChats.Count > 0)
+            {
+                <span>, </span>
+            }
+        }
+
+        var first = true;
+        foreach (var id in Model.SelectedChats)
+        {
+            if (!first) { <span>, </span> }
+            first = false;
+
+            var icon = id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+            if (!string.IsNullOrEmpty(icon)) { @Html.Raw(icon) }
+
+            if (allChats.TryGetValue(id, out var name)) { <span>@name</span> }
+            else { <span>@id</span> }
+        }
+    }
+</span>
 <div id="defaultChatControl" class="@(Model.IsModify ? "col-auto ms-1 mx-2" : "d-none meta-info-interval mx-2")">
     <select name="SelectedChats" class="default-chat selectpicker" multiple data-live-search="true" data-placeholder="Default chat(s)" required>
         <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentChats</option>
@@ -40,7 +69,8 @@
             <option disabled>Telegram groups</option>
             foreach (var chat in telegramGroups)
             {
-                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)">@chat.Name</option>
+                var icon = chat.Id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)" data-content="@icon @chat.Name">@chat.Name</option>
             }
         }
 
@@ -50,7 +80,8 @@
             <option disabled>Telegram users</option>
             foreach (var chat in telegramUsers)
             {
-                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)">@chat.Name</option>
+                var icon = chat.Id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)" data-content="@icon @chat.Name">@chat.Name</option>
             }
         }
 
@@ -60,7 +91,8 @@
             <option disabled>Slack destinations</option>
             foreach (var dest in slackDestinations)
             {
-                <option value="@dest.Id" selected="@Model.IsSelectedChat(dest.Id)">@dest.Name</option>
+                var icon = dest.Id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+                <option value="@dest.Id" selected="@Model.IsSelectedChat(dest.Id)" data-content="@icon @dest.Name">@dest.Name</option>
             }
         }
     </select>

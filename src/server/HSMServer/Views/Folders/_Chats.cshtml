@@ -7,6 +7,9 @@
 
 @model FolderChatsViewModel
 
+@inject ITelegramChatsManager ChatsManager
+@inject ISlackDestinationsManager SlackDestinationsManager
+
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
@@ -20,10 +23,10 @@
 
     <div class="my-2" align="right">
         <a href="javascript:showAddTelegramGroupHelpModal();" class="btn btn-link p-0">
-            <i class="fa-solid fa-plus"></i> Add new telegram chat
+            <i class="fa-solid fa-plus"></i> <i class="@ChatIcons.TelegramBrandClass"></i> Add new telegram chat
         </a>
         <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditSlackDestination)" asp-route-id="@Guid.Empty" class="btn btn-link p-0">
-            <i class="fa-solid fa-plus"></i> Add new slack destination
+            <i class="fa-solid fa-plus"></i> <i class="@ChatIcons.SlackBrandClass"></i> Add new slack destination
         </a>
     </div>
 
@@ -35,7 +38,7 @@
                 <option disabled>Telegram groups</option>
                 foreach (var chat in Model.TelegramChatsToAdd.GetGroups())
                 {
-                    <option value="@chat.Id">@chat.Name</option>
+                    <option value="@chat.Id" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
                 }
             }
 
@@ -45,7 +48,7 @@
                 <option disabled>Telegram users</option>
                 foreach (var chat in Model.TelegramChatsToAdd.GetPrivates())
                 {
-                    <option value="@chat.Id">@chat.Name</option>
+                    <option value="@chat.Id" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
                 }
             }
 
@@ -55,7 +58,7 @@
                 <option disabled>Slack destinations</option>
                 foreach (var dest in Model.SlackDestinationsToAdd)
                 {
-                    <option value="@dest.Id">@dest.Name</option>
+                    <option value="@dest.Id" data-content="<i class='@ChatIcons.SlackBrandClass'></i> @dest.Name">@dest.Name</option>
                 }
             }
         </select>
@@ -78,6 +81,7 @@
                 {
                     <tr id="row_chat_@chat.Id">
                         <td class="text-break">
+                            <i class="@ChatIcons.TelegramBrandClass me-1"></i>
                             <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chat.Id">
                                 @chat.Name
                             </a>
@@ -129,6 +133,7 @@
                 {
                     <tr id="row_destination_@destination.Id">
                         <td class="text-break">
+                            <i class="@ChatIcons.SlackBrandClass me-1"></i>
                             <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditSlackDestination)" asp-route-id="@destination.Id">
                                 @destination.Name
                             </a>
