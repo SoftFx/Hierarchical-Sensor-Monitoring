@@ -3,7 +3,11 @@ import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 
 
-test('Create/remove alert and verify it appears on sensor', async ({ page }) => {
+// FIXME (#1199): the Alert Templates UI was redesigned (path field name="PathTemplates[0]", new
+// form layout) AND this flow is coupled to a pre-existing "BetaTTS" product/sensor tree that a fresh
+// server doesn't have. Needs a self-contained rewrite (create a product + post sensors via the API to
+// build the tree, then update the remaining selectors). Partial selector fixes are already applied.
+test.fixme('Create/remove alert and verify it appears on sensor', async ({ page }) => {
   // --- Login ---
   const { apiUrl, admin_user, admin_user_password } = testConfig;
   await login(page, admin_user, admin_user_password, apiUrl);
@@ -13,7 +17,7 @@ test('Create/remove alert and verify it appears on sensor', async ({ page }) => 
   await expect(page).toHaveURL(/.*AlertTemplates/);
   await page.getByRole('link', { name: 'Add Template' }).click();
 
-  await page.getByLabel('Folder').selectOption('c1727475-48e7-4850-8400-c65427de0b7c');
+  await page.getByLabel('Folder').selectOption({ label: 'Folder1' });
   await page.getByRole('textbox', { name: 'PathTemplate' })
     .fill('BetaTTS/BetaTTS/AutomaticDealer/.module/Service alive');
   await page.getByRole('textbox', { name: 'Name' }).fill('Beta_Service alive');
