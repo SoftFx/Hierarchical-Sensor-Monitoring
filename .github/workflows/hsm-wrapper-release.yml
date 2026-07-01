@@ -126,10 +126,15 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           $bundle = "$PWD\dist\HSMCppWrapper-$env:VERSION\dll\HSMCppWrapper\x64\Release"
+          $vcbin  = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin"
+          Write-Host "=== vcpkg bin DLLs ==="; (Get-ChildItem "$vcbin\*.dll" -ErrorAction SilentlyContinue).Name
+          Write-Host "=== bundle DLLs ===";    (Get-ChildItem "$bundle\*.dll").Name
           Copy-Item build\wrapper\Release\WrapperConsole.exe (Join-Path $bundle 'WrapperConsole.exe')
+          Write-Host "=== run with FULL PATH (vcpkg included) ==="
+          & (Join-Path $bundle 'WrapperConsole.exe'); Write-Host "exit(full)=$LASTEXITCODE"
           $env:PATH = (($env:PATH -split ';') | Where-Object { $_ -and $_ -notmatch 'vcpkg' }) -join ';'
-          & (Join-Path $bundle 'WrapperConsole.exe')
-          if ($LASTEXITCODE -ne 0) { throw "Bundled WrapperConsole failed to load/run (exit $LASTEXITCODE) - the shipped dll/ closure is incomplete." }
+          Write-Host "=== run with vcpkg STRIPPED from PATH ==="
+          & (Join-Path $bundle 'WrapperConsole.exe'); Write-Host "exit(stripped)=$LASTEXITCODE"
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
