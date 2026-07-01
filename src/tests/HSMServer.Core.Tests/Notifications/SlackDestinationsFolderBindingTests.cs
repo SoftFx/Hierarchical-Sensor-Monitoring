@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Notifications;
@@ -38,10 +37,9 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         [Fact]
-        public async Task RemoveFolderFromChats_RemovesFolderIdAndCallsCache()
+        public async Task RemoveFolderFromChats_RemovesFolderIdFromDestinationFolders()
         {
-            var cache = new Mock<ITreeValuesCache>();
-            var manager = BuildManager(cache.Object);
+            var manager = BuildManager();
             var destination = BuildDestination();
             manager.TryAdd(destination.Id, destination);
             var folderId = Guid.NewGuid();
@@ -50,9 +48,6 @@ namespace HSMServer.Core.Tests.Notifications
             await manager.RemoveFolderFromChats(folderId, new List<Guid> { destination.Id }, InitiatorInfo.System);
 
             Assert.DoesNotContain(folderId, destination.Folders);
-            cache.Verify(c => c.RemoveChatsFromPoliciesAsync(folderId,
-                It.Is<List<Guid>>(list => list.Contains(destination.Id)),
-                It.IsAny<InitiatorInfo>()), Times.Once);
         }
 
         [Fact]
@@ -68,8 +63,8 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
 
-        private static SlackDestinationsManager BuildManager(ITreeValuesCache cache = null)
-            => new(new Mock<IDatabaseCore>().Object, cache ?? new Mock<ITreeValuesCache>().Object);
+        private static SlackDestinationsManager BuildManager()
+            => new(new Mock<IDatabaseCore>().Object);
 
         private static SlackDestination BuildDestination() =>
             new(new SlackDestinationEntity

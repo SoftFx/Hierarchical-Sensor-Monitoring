@@ -140,6 +140,9 @@ namespace HSMServer.Folders
                 AddFolderToChats?.Invoke(folder.Id, addedChats);
                 await FanOutRemoveFolderFromChats(folder.Id, removedChats, update.Initiator);
 
+                if (removedChats.Count > 0)
+                    await _cache.RemoveChatsFromPoliciesAsync(folder.Id, removedChats, update.Initiator);
+
                 if (update.DefaultChats != null || update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     foreach (var productId in folder.Products.Keys)
                         await TryUpdateProductInFolder(productId, folder, update.Initiator);

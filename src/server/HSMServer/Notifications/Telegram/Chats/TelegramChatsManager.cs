@@ -1,7 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Folders;
@@ -25,7 +24,6 @@ namespace HSMServer.Notifications
 
         private readonly TelegramConfig _config;
         private readonly IDatabaseCore _database;
-        private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
 
         public TokensManager TokenManager { get; } = new();
@@ -45,9 +43,8 @@ namespace HSMServer.Notifications
         public event Func<Guid, Guid, string, Task<string>> ConnectChatToFolder;
 
 
-        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager, IServerConfig config)
+        public TelegramChatsManager(IDatabaseCore database, IUserManager userManager, IServerConfig config)
         {
-            _cache = cache;
             _database = database;
             _config = config.Telegram;
             _userManager = userManager;
@@ -140,8 +137,6 @@ namespace HSMServer.Notifications
                     if (chat.Folders.Count == 0)
                         await TryRemove(new(chatId, initiator));
                 }
-
-            await _cache.RemoveChatsFromPoliciesAsync(folderId, chats, initiator);
         }
 
         public void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator) =>

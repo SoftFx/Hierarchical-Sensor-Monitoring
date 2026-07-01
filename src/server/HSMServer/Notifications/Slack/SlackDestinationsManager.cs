@@ -1,6 +1,5 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Folders;
@@ -14,7 +13,6 @@ namespace HSMServer.Notifications
     public sealed class SlackDestinationsManager : ConcurrentStorage<SlackDestination, SlackDestinationEntity, SlackDestinationUpdate>, ISlackDestinationsManager
     {
         private readonly IDatabaseCore _database;
-        private readonly ITreeValuesCache _cache;
 
 
         protected override Action<SlackDestinationEntity> AddToDb => _database.AddSlackDestination;
@@ -26,10 +24,9 @@ namespace HSMServer.Notifications
         protected override Func<List<SlackDestinationEntity>> GetFromDb => _database.GetSlackDestinations;
 
 
-        public SlackDestinationsManager(IDatabaseCore database, ITreeValuesCache cache)
+        public SlackDestinationsManager(IDatabaseCore database)
         {
             _database = database;
-            _cache = cache;
         }
 
 
@@ -48,8 +45,6 @@ namespace HSMServer.Notifications
             foreach (var id in destinations)
                 if (TryGetValue(id, out var destination))
                     destination.Folders.Remove(folderId);
-
-            await _cache.RemoveChatsFromPoliciesAsync(folderId, destinations, initiator);
         }
 
         public void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator) =>
