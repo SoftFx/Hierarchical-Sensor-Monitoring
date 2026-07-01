@@ -32,10 +32,10 @@ jobs:
         preset: [asan, tsan]
     runs-on: ubuntu-latest
     env:
-      # Halt on the FIRST error and abort. detect_leaks=0 disables LSan so ONLY the use-after-free
-      # report prints — the at-exit LSan dump otherwise interleaves and garbles the freed-by / read
-      # stacks (which is exactly what hid the real free path in the first CI logs).
-      ASAN_OPTIONS: 'halt_on_error=1:abort_on_error=1:detect_leaks=0'
+      # detect_leaks=1 is the condition that EXPOSED the UAF (LeakSanitizer's at-exit world-stop is
+      # what caught the still-running scheduler thread on the freed ScheduledTask). Keeping it on here
+      # means 200 green iterations validate the fix under the exact conditions that originally failed.
+      ASAN_OPTIONS: 'halt_on_error=1:abort_on_error=1:detect_leaks=1'
       UBSAN_OPTIONS: 'print_stacktrace=1:halt_on_error=1'
       TSAN_OPTIONS: 'halt_on_error=1:second_deadlock_stack=1'
     steps:
