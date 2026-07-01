@@ -637,21 +637,14 @@ namespace
         }
     }
 
-    // Join a worker thread, but NEVER the calling thread itself: a self-join throws
-    // std::system_error(resource_deadlock_would_occur), and these joins run inside noexcept teardown
-    // (Stop() / destructors), so the throw would std::terminate the process. A self-join only arises if
-    // a stop is re-entered from within the worker's own action/callback; detach the already-exiting
-    // thread instead of aborting. The normal cross-thread case joins exactly as before (no behavior
-    // change), so this is a defensive guard against an EDEADLK teardown crash.
-    inline void JoinWorkerSelfSafe(std::thread& worker)
-    {
-        if (!worker.joinable())
-            return;
-        if (worker.get_id() == std::this_thread::get_id())
-            worker.detach();
-        else
-            worker.join();
-    }
+    // Worker threads (the scheduler task and the dispatch worker) are always joined by their owning
+    // object's teardown — never detached. hsm_collector_destroy() disposes the collector, joining every
+    // worker, BEFORE the last shared_ptr is dropped (see the note there), so a worker can never be the
+    // collector's final owner and thus never runs teardown on its own thread. A self-join would
+    // therefore only arise from the forbidden re-entrancy of a lifecycle call inside a callback; that
+    // must fail loudly (a self-join throws EDEADLK) rather than silently detach a live thread onto
+    // freed state — the earlier "self-safe" detach did the latter and caused a heap-use-after-free of
+    // the ScheduledTask (the scheduler thread kept running Loop() and read `stop_` after the free).
 
     // Single-worker periodic task — the portable ScheduledTaskHandle (issue #1095 §13).
     // Idempotent Start/Stop; the worker sleeps until the next due time reported by the
@@ -699,7 +692,8 @@ namespace
             }
 
             cv_.notify_all();
-            JoinWorkerSelfSafe(worker_);
+            if (worker_.joinable())
+                worker_.join();
 
             std::lock_guard<std::mutex> guard(mutex_);
             running_ = false;
@@ -4290,7 +4284,8 @@ namespace
 
             queue_cv_.notify_all();
 
-            JoinWorkerSelfSafe(worker_);
+            if (worker_.joinable())
+                worker_.join();
         }
 
         void WorkerLoop()
@@ -5246,6 +5241,21 @@ hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_co
 
 void hsm_collector_destroy(hsm_collector_t* collector)
 {
+    if (collector == nullptr)
+        return;
+
+    // Join every worker thread BEFORE dropping the last strong reference. The collector is owned by a
+    // single shared_ptr (this handle's `impl`); sensors hold a weak_ptr and transiently lock a strong
+    // ref on the scheduler/dispatch threads (collector_.lock() in the periodic tick, bar flush, file
+    // send, ...). If the ref count reached zero on one of those workers — e.g. this call races the
+    // scheduler mid-tick, which is holding a locked ref — then ~NativeCollector would run ON that
+    // worker thread, whose StopScheduler() would self-join and free the ScheduledTask out from under
+    // the still-unwinding Loop() (heap-use-after-free reading `stop_`). Dispose() joins all threads
+    // while `impl` still holds a strong ref, so afterwards no worker is an owner and destruction always
+    // runs on this (the caller's) thread. Idempotent: a no-op if the collector is already Disposed.
+    if (collector->impl)
+        collector->impl->Dispose();
+
     delete collector;
 }
 
