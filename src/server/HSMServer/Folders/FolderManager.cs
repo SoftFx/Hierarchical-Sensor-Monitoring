@@ -46,8 +46,6 @@ namespace HSMServer.Folders
 
         public event Func<Guid, string> GetChatName;
 
-        public event Func<Guid, string> GetSlackDestinationName;
-
 
         public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService)
         {
@@ -111,7 +109,6 @@ namespace HSMServer.Folders
                     await AddProductToFolder(productId, model.Id, info);
 
                 model.GetChatName += GetChatNameById;
-                model.GetSlackDestinationName += GetSlackDestinationNameById;
                 model.ChangesHandler += _journalService.AddRecord;
             }
 
@@ -126,13 +123,13 @@ namespace HSMServer.Folders
             var result = TryGetValue(update.Id, out var folder);
 
 
-            var addedTelegramChats = new List<Guid>(1 << 2);
-            var removedTelegramChats = new List<Guid>(1 << 2);
+            var addedChats = new List<Guid>(1 << 2);
+            var removedChats = new List<Guid>(1 << 2);
 
-            if (update.TelegramChats is not null)
+            if (update.Chats is not null)
             {
-                addedTelegramChats.AddRange(update.TelegramChats.Except(folder.TelegramChats));
-                removedTelegramChats.AddRange(folder.TelegramChats.Except(update.TelegramChats));
+                addedChats.AddRange(update.Chats.Except(folder.Chats));
+                removedChats.AddRange(folder.Chats.Except(update.Chats));
             }
 
 
@@ -140,8 +137,8 @@ namespace HSMServer.Folders
 
             if (result)
             {
-                AddFolderToChats?.Invoke(folder.Id, addedTelegramChats);
-                await (RemoveFolderFromChats?.Invoke(folder.Id, removedTelegramChats, update.Initiator) ?? Task.CompletedTask);
+                AddFolderToChats?.Invoke(folder.Id, addedChats);
+                await (RemoveFolderFromChats?.Invoke(folder.Id, removedChats, update.Initiator) ?? Task.CompletedTask);
 
                 if (update.DefaultChats != null || update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     foreach (var productId in folder.Products.Keys)
@@ -153,11 +150,11 @@ namespace HSMServer.Folders
             if (result)
             {
                 StringBuilder sb = new StringBuilder($"Folder '{logFolder}':");
-                if (addedTelegramChats.Any())
-                    sb.Append($" {addedTelegramChats.Count} chat(s) added");
+                if (addedChats.Any())
+                    sb.Append($" {addedChats.Count} chat(s) added");
 
-                if (removedTelegramChats.Any())
-                    sb.Append($" {removedTelegramChats.Count} chat(s) removed");
+                if (removedChats.Any())
+                    sb.Append($" {removedChats.Count} chat(s) removed");
 
                 _logger.Info(sb.ToString());
             }
@@ -204,7 +201,6 @@ namespace HSMServer.Folders
             foreach (var (_, folder) in this)
             {
                 folder.GetChatName += GetChatNameById;
-                folder.GetSlackDestinationName += GetSlackDestinationNameById;
                 folder.ChangesHandler += _journalService.AddRecord;
 
                 if (_userManager.TryGetValue(folder.AuthorId, out var author))
@@ -226,12 +222,12 @@ namespace HSMServer.Folders
 
         public async Task<string> AddChatToFolder(Guid chatId, Guid folderId, string userName)
         {
-            if (TryGetValue(folderId, out var folder) && !folder.TelegramChats.Contains(chatId))
+            if (TryGetValue(folderId, out var folder) && !folder.Chats.Contains(chatId))
             {
                 var update = new FolderUpdate()
                 {
                     Id = folderId,
-                    TelegramChats = new HashSet<Guid>(folder.TelegramChats) { chatId },
+                    Chats = new HashSet<Guid>(folder.Chats) { chatId },
                     Initiator = InitiatorInfo.AsUser(userName),
                 };
 
@@ -247,15 +243,15 @@ namespace HSMServer.Folders
         {
             foreach (var (folderId, folder) in this)
             {
-                if (folder.TelegramChats.Contains(chat.Id))
+                if (folder.Chats.Contains(chat.Id))
                 {
-                    var chats = new HashSet<Guid>(folder.TelegramChats);
+                    var chats = new HashSet<Guid>(folder.Chats);
                     chats.Remove(chat.Id);
 
                     var update = new FolderUpdate()
                     {
                         Id = folderId,
-                        TelegramChats = chats,
+                        Chats = chats,
                         Initiator = initiator,
                     };
 
@@ -264,6 +260,29 @@ namespace HSMServer.Folders
             }
 
             _logger.Info($"Chat '{chat.Name}' is removed from all folders by '{initiator}'");
+        }
+
+        public void RemoveSlackDestinationHandler(SlackDestination destination, InitiatorInfo initiator)
+        {
+            foreach (var (folderId, folder) in this)
+            {
+                if (folder.Chats.Contains(destination.Id))
+                {
+                    var chats = new HashSet<Guid>(folder.Chats);
+                    chats.Remove(destination.Id);
+
+                    var update = new FolderUpdate()
+                    {
+                        Id = folderId,
+                        Chats = chats,
+                        Initiator = initiator,
+                    };
+
+                    _ = TryUpdate(update);
+                }
+            }
+
+            _logger.Info($"Slack destination '{destination.Name}' is removed from all folders by '{initiator}'");
         }
 
         public List<FolderModel> GetUserFolders(User user)
@@ -461,7 +480,5 @@ namespace HSMServer.Folders
 
 
         private string GetChatNameById(Guid id) => GetChatName?.Invoke(id);
-
-        private string GetSlackDestinationNameById(Guid id) => GetSlackDestinationName?.Invoke(id);
     }
 }

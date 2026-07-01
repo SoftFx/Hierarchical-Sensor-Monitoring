@@ -1,5 +1,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
+using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Notifications
 {
@@ -11,6 +13,8 @@ namespace HSMServer.Notifications
         public string WebhookUrl { get; private set; }
 
         public bool SendMessages { get; private set; }
+
+        internal HashSet<Guid> Folders { get; } = [];
 
 
         public SlackDestination(SlackAddRequest add) : base(add)

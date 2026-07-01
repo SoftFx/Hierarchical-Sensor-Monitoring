@@ -22,6 +22,7 @@ namespace HSMServer.Controllers
     {
         private readonly IFolderManager _folderManager;
         private readonly TelegramBot _telegramBot;
+        private readonly NotificationsCenter _notifications;
 
         internal ITelegramChatsManager ChatsManager { get; }
 
@@ -34,6 +35,7 @@ namespace HSMServer.Controllers
         {
             ChatsManager = chatsManager;
             _folderManager = folderManager;
+            _notifications = notifications;
             _telegramBot = notifications.TelegramBot;
             SlackDestinations = slackDestinations;
         }
@@ -56,12 +58,12 @@ namespace HSMServer.Controllers
 
                 foreach (var folderId in updateModel.Folders.SelectedFolders)
                     if (_folderManager.TryGetValue(folderId, out var folder))
-                        await UpdateFolder(folderId, new HashSet<Guid>(folder.TelegramChats) { updateModel.Id });
+                        await UpdateFolder(folderId, new HashSet<Guid>(folder.Chats) { updateModel.Id });
 
                 foreach (var folderId in removedFolders)
                     if (_folderManager.TryGetValue(folderId, out var folder))
                     {
-                        var folderChats = new HashSet<Guid>(folder.TelegramChats);
+                        var folderChats = new HashSet<Guid>(folder.Chats);
                         folderChats.Remove(updateModel.Id);
 
                         await UpdateFolder(folderId, folderChats);
@@ -146,10 +148,20 @@ namespace HSMServer.Controllers
         [SlackAdmin]
         public async Task RemoveSlackDestination(Guid id) => await SlackDestinations.TryRemove(new(id, CurrentInitiator));
 
+        [HttpGet]
+        [SlackAdmin]
+        public async Task<IActionResult> SendTestSlackMessage([FromQuery] Guid id)
+        {
+            if (SlackDestinations.TryGetValue(id, out var destination))
+                await _notifications.SlackChannel.SendTestAsync(destination);
+
+            return Ok();
+        }
+
 
         private ChatFoldersViewModel BuildChatFolders(TelegramChat chat)
         {
-            var availableFolders = _folderManager.GetUserFolders(CurrentUser).Where(f => !f.TelegramChats.Contains(chat.Id)).ToList();
+            var availableFolders = _folderManager.GetUserFolders(CurrentUser).Where(f => !f.Chats.Contains(chat.Id)).ToList();
             var chatFolders = _folderManager.GetValues().Where(f => chat.Folders.Contains(f.Id)).ToList();
 
             return new(availableFolders, chatFolders);
@@ -160,7 +172,7 @@ namespace HSMServer.Controllers
             var update = new FolderUpdate()
             {
                 Id = folderId,
-                TelegramChats = folderChats,
+                Chats = folderChats,
                 Initiator = CurrentInitiator,
             };
 

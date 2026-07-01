@@ -43,8 +43,6 @@ namespace HSMServer.Model.ViewModel
 
         public DefaultChatViewModel DefaultChats { get; set; }
 
-        public DefaultSlackDestinationViewModel DefaultSlackDestinations { get; set; }
-
 
         public string EncodedId { get; set; }
 
@@ -83,7 +81,6 @@ namespace HSMServer.Model.ViewModel
 
             HistoryStatistic = model.HistoryStatistic;
             DefaultChats = new(model, isModify: false);
-            DefaultSlackDestinations = new(model, isModify: false);
 
             AlertIcons = model.AlertIcons;
             HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None || model.TTLAlerts.Count > 0;

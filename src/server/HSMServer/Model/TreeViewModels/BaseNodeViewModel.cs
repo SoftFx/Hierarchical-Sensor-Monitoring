@@ -31,8 +31,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public DefaultChatViewModel DefaultChats { get; protected set; }
 
-        public DefaultSlackDestinationViewModel DefaultSlackDestinations { get; protected set; }
-
 
         public Guid Id { get; protected set; }
 

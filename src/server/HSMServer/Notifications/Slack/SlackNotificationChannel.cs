@@ -76,6 +76,14 @@ namespace HSMServer.Notifications
         public Task FlushAsync() => Task.CompletedTask;
 
 
+        public async Task SendTestAsync(SlackDestination destination)
+        {
+            var payload = SlackMessageBuilder.BuildPayload("Test message from HSM");
+
+            await PostWithRetryAsync(destination.WebhookUrl, payload, destination.Name);
+        }
+
+
         private async Task PostWithRetryAsync(string webhookUrl, string payload, string destinationName)
         {
             var backoff = _initialBackoff;

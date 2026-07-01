@@ -52,7 +52,7 @@ namespace HSMServer.Model.DataAlerts
 
         public AlertExportViewModel() { }
 
-        internal AlertExportViewModel(IEnumerable<PolicyExportInfo> infoList, Dictionary<Guid, string> availableChats, Dictionary<Guid, string> availableSlackDestinations = null)
+        internal AlertExportViewModel(IEnumerable<PolicyExportInfo> infoList, Dictionary<Guid, string> availableChats)
         {
             Sensors = infoList.Select(u => u.FullRelativePath).OrderBy(u => u).ToList();
 
@@ -71,7 +71,7 @@ namespace HSMServer.Model.DataAlerts
             ScheduledRepeatMode = policy.Schedule.RepeatMode; // TODO: null if None or Immediatly?
             ScheduledInstantSend = policy.Schedule.InstantSend;
 
-            var destinationPool = MergePools(availableChats, availableSlackDestinations);
+            var destinationPool = availableChats ?? [];
 
             if (_chatsModeToKeyWords.TryGetValue(policy.Destination.Mode, out var keyWord))
                 Chats.Add(keyWord);
@@ -90,12 +90,12 @@ namespace HSMServer.Model.DataAlerts
             Conditions = policy.Conditions.Select(c => new ConditionExportViewModel(c)).ToList();
         }
 
-        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats, Dictionary<string, Guid> availableSlackDestinations = null)
+        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats)
         {
             PolicyDestinationMode? mode = PolicyDestinationMode.Custom;
             Dictionary<Guid, string> chats = [];
 
-            var pool = MergePools(availableChats, availableSlackDestinations);
+            var pool = availableChats ?? [];
 
             if (Chats is not null)
             {
@@ -139,25 +139,6 @@ namespace HSMServer.Model.DataAlerts
                 },
                 Destination = new PolicyDestinationUpdate(chats, mode ?? PolicyDestinationMode.Custom),
             };
-        }
-
-
-        private static Dictionary<Guid, string> MergePools(Dictionary<Guid, string> telegram, Dictionary<Guid, string> slack)
-        {
-            var merged = telegram is not null ? new Dictionary<Guid, string>(telegram) : [];
-            if (slack is not null)
-                foreach (var (id, name) in slack)
-                    merged.TryAdd(id, name);
-            return merged;
-        }
-
-        private static Dictionary<string, Guid> MergePools(Dictionary<string, Guid> telegram, Dictionary<string, Guid> slack)
-        {
-            var merged = telegram is not null ? new Dictionary<string, Guid>(telegram) : [];
-            if (slack is not null)
-                foreach (var (name, id) in slack)
-                    merged.TryAdd(name, id);
-            return merged;
         }
     }
 

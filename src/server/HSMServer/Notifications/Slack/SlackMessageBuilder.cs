@@ -17,6 +17,13 @@ namespace HSMServer.Notifications
             return JsonSerializer.Serialize(payload, _options);
         }
 
+        public static string BuildPayload(string text)
+        {
+            var payload = new SlackWebhookPayload { Text = text };
+
+            return JsonSerializer.Serialize(payload, _options);
+        }
+
         private sealed record SlackWebhookPayload
         {
             public string Text { get; init; }

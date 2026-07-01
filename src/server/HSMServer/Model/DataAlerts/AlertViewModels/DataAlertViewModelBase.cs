@@ -63,7 +63,7 @@ namespace HSMServer.Model.DataAlerts
             }
         }
 
-        internal PolicyUpdate ToUpdate(Dictionary<Guid, string> availableChats, Dictionary<Guid, string> availableSlackDestinations = null)
+        internal PolicyUpdate ToUpdate(Dictionary<Guid, string> availableChats)
         {
             List<PolicyConditionUpdate> conditions = new(Conditions.Count);
             Core.Model.TimeIntervalModel confirmationPeriod = null;
@@ -89,7 +89,7 @@ namespace HSMServer.Model.DataAlerts
                 }
             }
 
-            var actions = GetActions(availableChats, availableSlackDestinations);
+            var actions = GetActions(availableChats);
 
             return new()
             {
@@ -108,9 +108,9 @@ namespace HSMServer.Model.DataAlerts
             };
         }
 
-        internal PolicyUpdate ToTimeToLiveUpdate(InitiatorInfo initiator, Dictionary<Guid, string> availableChats, Dictionary<Guid, string> availableSlackDestinations = null)
+        internal PolicyUpdate ToTimeToLiveUpdate(InitiatorInfo initiator, Dictionary<Guid, string> availableChats)
         {
-            var actions = GetActions(availableChats, availableSlackDestinations);
+            var actions = GetActions(availableChats);
 
             return new()
             {
@@ -129,15 +129,13 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        private ActionProperties GetActions(Dictionary<Guid, string> availableChats, Dictionary<Guid, string> availableSlackDestinations)
+        private ActionProperties GetActions(Dictionary<Guid, string> availableChats)
         {
             PolicyDestinationUpdate destination = new();
             SensorStatus status = SensorStatus.Ok;
             PolicyScheduleUpdate schedule = null;
             string comment = null;
             string icon = null;
-
-            var pool = MergePools(availableChats, availableSlackDestinations);
 
             foreach (var action in Actions)
             {
@@ -151,7 +149,7 @@ namespace HSMServer.Model.DataAlerts
                     };
 
                     destination = new PolicyDestinationUpdate(
-                        action.Chats?.Where(pool.ContainsKey).ToDictionary(k => k, v => pool[v]) ?? new(0),
+                        action.Chats?.Where(availableChats.ContainsKey).ToDictionary(k => k, v => availableChats[v]) ?? new(0),
                         action.ChatsMode.ToCore());
 
                     comment = action.Comment;
@@ -166,22 +164,12 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        private static Dictionary<Guid, string> MergePools(Dictionary<Guid, string> telegram, Dictionary<Guid, string> slack)
+        public string ToString(Dictionary<Guid, string> availableChats)
         {
-            var merged = telegram is not null ? new Dictionary<Guid, string>(telegram) : [];
-            if (slack is not null)
-                foreach (var (id, name) in slack)
-                    merged.TryAdd(id, name);
-            return merged;
-        }
-
-
-        public string ToString(ITelegramChatsManager manager)
-        {
-            var telegramChats = manager.GetValues().ToDictionary(k => k.Id, v => v);
+            var allChats = availableChats ?? new(0);
 
             string GetActionChats(ActionViewModel action) =>
-                 string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
+                 string.Join(", ", action.Chats.Where(allChats.ContainsKey).Select(ch => allChats[ch]));
 
             var sb = new StringBuilder(128);
             sb.Append("If ");
@@ -239,7 +227,7 @@ namespace HSMServer.Model.DataAlerts
 
                                 string chatNames;
                                 if (parentIds.Count != 0)
-                                    chatNames = parentIds.ToNames(telegramChats);
+                                    chatNames = parentIds.ToNames(allChats);
                                 else
                                     chatNames = lastMode?.GetDisplayName();
 

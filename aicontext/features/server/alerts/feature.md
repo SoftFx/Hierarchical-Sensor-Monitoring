@@ -1,6 +1,6 @@
 # Feature: Alerts
 
-> Owner: server | Last reviewed: 2026-06-24 | Canonical: yes
+> Owner: server | Last reviewed: 2026-06-26 | Canonical: yes
 > Scope: Server-side alert ownership, creation paths, and the boundary between global (template) and per-sensor alerts.
 
 ---
@@ -81,6 +81,8 @@ Operator selects sensor -> per-sensor _Alerts.cshtml editor -> UpdateSensorInfo 
 
 - `PolicyEntity` rows live in a single LevelDB table keyed by `byte[] Id` (Guid). The `"NewPolicyIds"` index lists all known ids.
 - `PolicyDestinationEntity` (nested in `PolicyEntity.cs`) keeps a legacy `string Kind` field for read-tolerant deserialization of pre-refactor rows, but the field is no longer written or consulted (the heterogeneous-destinations refactor dropped the top-level discriminator). `PolicyDestination.Chats` is a heterogeneous `Dictionary<Guid, string>` — one action can target both Telegram chats and Slack destinations simultaneously; each id resolves to its channel via manager lookup at delivery time. Notification delivery lives behind the `INotificationChannel` seam — see `features/server/notifications/feature.md`.
+- The destination picker in `_ActionBlock.cshtml` is folder-scoped: a single heterogeneous `ActionViewModel.AvailableChats` (`HashSet<Guid>`) holds both Telegram chat ids and Slack destination ids bound to the folder of the sensor. It is derived from the single `folder.Chats` set via `NodeExtensions.TryGetChats`. Existing alert policies with ids that are no longer folder-bound still **deliver** (delivery resolves through the manager directly, not via `AvailableChats`), but those ids won't render as selected options in the UI until re-bound. See `features/server/notifications/feature.md` for the folder-binding wiring.
+- Default destinations (`DefaultChats`) on folders/products/nodes are heterogeneous: one mode + one heterogeneous id list per node. A single `FromParent` walk resolves Telegram chats and Slack destinations simultaneously through the unified `Settings.DefaultChats.CurValue`. The picker label reads "Chat(s)". See `features/server/notifications/feature.md` for the heterogeneous default-chats plumbing.
 - `BaseNodeEntity.Policies` (a `List<string>` of stringified Guids) exists on every Product and Sensor entity. At runtime, only `SensorEntity.Policies` is loaded into the in-memory `SensorPolicyCollection`. `ProductEntity.Policies` is **never read** into `ProductModel` — only `TTLPolicies` is.
 - Template-derived policies carry non-null `TemplateId` / `TemplateAlertId`; user-added policies have `TemplateId == null`.
 - `TreeValuesCache.CleanupProductOwnedPolicies` runs once at startup (`Initialize()`, after `ApplyProducts`) and deletes any `PolicyEntity` referenced by `ProductEntity.Policies` whose `TemplateId == null`, then prunes the dangling references from the list. The migration is idempotent: a second run finds an empty list and writes nothing.

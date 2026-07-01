@@ -679,21 +679,18 @@ namespace HSMServer.Controllers
                 return PartialView("_MetaInfo", invalidModel);
             }
 
-            var availableChats = sensor.GetAvailableChats(_telegramChatsManager);
-            var availableSlackDestinations = _slackDestinationsManager.GetValues()
-                .Where(d => d.SendMessages)
-                .ToDictionary(d => d.Id, d => d.Name);
+            var availableChats = sensor.GetAvailableChats(_telegramChatsManager, _slackDestinationsManager);
 
             newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var ttlAlertList);
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
-                ? list.Select(a => a.ToUpdate(availableChats, availableSlackDestinations)).ToList() : [];
+                ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
 
 
             var ttlPolicies = ttlAlertList?.Select(t =>
             {
                 var interval = t.Conditions is { Count: > 0 } ? t.Conditions[0].TimeToLive : null;
                 var fromParent = interval?.TimeInterval.IsParent() ?? false;
-                return t.ToTimeToLiveUpdate(CurrentInitiator, availableChats, availableSlackDestinations) with
+                return t.ToTimeToLiveUpdate(CurrentInitiator, availableChats) with
                 {
                     TTL = fromParent ? null : interval?.ToModel()?.Ticks
                 };
@@ -755,7 +752,7 @@ namespace HSMServer.Controllers
 
             if (sensor is null && folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
                 foreach (var action in viewModel.Actions)
-                    action.AvailableChats.UnionWith(folder.TelegramChats);
+                    action.AvailableChats.UnionWith(folder.Chats);
 
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
@@ -771,7 +768,7 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Sensors.TryGetValue(entityId, out var sensor))
                 sensor.TryGetChats(out chats);
             else if (folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
-                chats = folder.TelegramChats;
+                chats = folder.Chats;
 
             return PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, isTtl, chats) { Icon = ActionViewModel.DefaultIcon });
         }
@@ -926,7 +923,7 @@ namespace HSMServer.Controllers
             {
                 Id = product.Id,
                 TTL = newModel.ExpectedUpdateInterval.ToModel(product.TTL),
-                DefaultChats = newModel.DefaultChats?.ToUpdate(product, _telegramChatsManager, _folderManager),
+                DefaultChats = newModel.DefaultChats?.ToUpdate(product, _telegramChatsManager, _slackDestinationsManager),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
                 Description = newModel.Description ?? string.Empty,

@@ -26,6 +26,23 @@ namespace HSMServer.Extensions
             return GetAvailableChats(folderChats, chatsManager).ToDictionary(k => k.Id, v => v.Name);
         }
 
+        internal static Dictionary<Guid, string> GetAvailableChats(this BaseNodeViewModel node, ITelegramChatsManager chatsManager, ISlackDestinationsManager slackManager)
+        {
+            node.TryGetChats(out var folderChats);
+
+            var result = new Dictionary<Guid, string>();
+
+            foreach (var chat in chatsManager.GetValues())
+                if (folderChats.Contains(chat.Id))
+                    result[chat.Id] = chat.Name;
+
+            foreach (var dest in slackManager.GetValues())
+                if (dest.SendMessages && folderChats.Contains(dest.Id))
+                    result[dest.Id] = dest.Name;
+
+            return result;
+        }
+
         internal static List<TelegramChat> GetAvailableChats(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager)
         {
             var availableChats = new List<TelegramChat>(1 << 3);
@@ -37,6 +54,21 @@ namespace HSMServer.Extensions
             return availableChats;
         }
 
+        internal static Dictionary<Guid, string> GetAvailableChats(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager, ISlackDestinationsManager slackManager)
+        {
+            var result = new Dictionary<Guid, string>();
+
+            foreach (var chat in chatsManager.GetValues())
+                if (folderChats.Contains(chat.Id))
+                    result[chat.Id] = chat.Name;
+
+            foreach (var dest in slackManager.GetValues())
+                if (dest.SendMessages && folderChats.Contains(dest.Id))
+                    result[dest.Id] = dest.Name;
+
+            return result;
+        }
+
         internal static Dictionary<Guid, string> GetAvailableChatsDictionary(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager)
         {
             return folderChats.GetAvailableChats(chatsManager).ToDictionary(k => k.Id, v => v.Name);
@@ -46,24 +78,18 @@ namespace HSMServer.Extensions
         {
             if (model is FolderModel folder)
             {
-                chats = folder.TelegramChats;
+                chats = folder.Chats;
                 return true;
             }
             else if (model is NodeViewModel node && node.RootProduct.Parent is FolderModel rootFolder)
             {
-                chats = rootFolder.TelegramChats;
+                chats = rootFolder.Chats;
                 return true;
             }
 
             chats = [];
             return false;
         }
-
-
-        internal static Dictionary<Guid, string> GetAvailableSlackDestinations(this BaseNodeViewModel node, ISlackDestinationsManager destinationsManager)
-            => destinationsManager.GetValues()
-                .Where(d => d.SendMessages)
-                .ToDictionary(d => d.Id, d => d.Name);
 
 
         internal static bool HasUnconfiguredAlerts(this SensorNodeViewModel sensor)

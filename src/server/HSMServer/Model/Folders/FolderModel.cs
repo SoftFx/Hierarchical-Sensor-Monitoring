@@ -1,4 +1,4 @@
-﻿using HSMCommon.Extensions;
+using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Journal;
@@ -28,7 +28,7 @@ namespace HSMServer.Model.Folders
         public Guid AuthorId { get; }
 
 
-        public HashSet<Guid> TelegramChats { get; private set; } = [];
+        public HashSet<Guid> Chats { get; private set; } = [];
 
         public Color Color { get; private set; }
 
@@ -38,8 +38,6 @@ namespace HSMServer.Model.Folders
         public event Action<JournalRecordModel> ChangesHandler;
 
         public event Func<Guid, string> GetChatName;
-
-        public event Func<Guid, string> GetSlackDestinationName;
 
 
         public FolderModel(FolderEntity entity)
@@ -52,14 +50,12 @@ namespace HSMServer.Model.Folders
             CreationDate = new DateTime(entity.CreationDate);
 
             DefaultChats = LoadDefaultChats(entity.DefaultChatsSettings);
-            DefaultSlackDestinations = LoadDefaultSlackDestinations(entity.DefaultSlackDestinationsSettings);
 
             KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
             TTL = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TTL)));
 
-            if (entity.TelegramChats is not null)
-                TelegramChats = new HashSet<Guid>(entity.TelegramChats.Select(c => new Guid(c)));
+            Chats = LoadChats(entity);
         }
 
         internal FolderModel(FolderAdd addModel)
@@ -75,7 +71,6 @@ namespace HSMServer.Model.Folders
             Description = addModel.Description;
 
             DefaultChats = LoadDefaultChats();
-            DefaultSlackDestinations = LoadDefaultSlackDestinations();
 
             KeepHistory = LoadKeepHistory();
             SelfDestroy = LoadSelfDestroy();
@@ -98,14 +93,11 @@ namespace HSMServer.Model.Folders
             if (update.SelfDestroy != null)
                 SelfDestroy = UpdateSetting(SelfDestroy, new TimeIntervalViewModel(update.SelfDestroy, PredefinedIntervals.ForSelfDestory), update.Initiator, "Remove sensor after inactivity");
 
-            if (update.TelegramChats is not null)
-                TelegramChats = UpdateChats(TelegramChats, update.TelegramChats, update.Initiator);
+            if (update.Chats is not null)
+                Chats = UpdateChats(Chats, update.Chats, update.Initiator, GetChatName);
 
             if (update.DefaultChats != null)
                 DefaultChats = UpdateSetting(DefaultChats, update.DefaultChats, update.Initiator);
-
-            if (update.DefaultSlackDestinations != null)
-                DefaultSlackDestinations = UpdateSetting(DefaultSlackDestinations, update.DefaultSlackDestinations, update.Initiator);
         }
 
         private TimeIntervalViewModel UpdateSetting(TimeIntervalViewModel currentValue, TimeIntervalViewModel newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(currentValue))] string propName = "", NoneValues none = NoneValues.Never)
@@ -148,34 +140,7 @@ namespace HSMServer.Model.Folders
                     OldValue = GetJournalValue(oldChat),
                     NewValue = GetJournalValue(newChat),
 
-                    PropertyName = "Default telegram chat",
-                    Path = Name,
-                });
-            }
-
-            return newValue;
-        }
-
-        private DefaultSlackDestinationViewModel UpdateSetting(DefaultSlackDestinationViewModel currentValue, DefaultSlackDestinationViewModel newValue, InitiatorInfo initiator)
-        {
-            string GetJournalValue((HashSet<Guid> ids, DefaultChatMode mode) value) => value.mode switch
-            {
-                DefaultChatMode.Custom => string.Join(", ", value.ids.Select(i => GetSlackDestinationName?.Invoke(i))),
-                _ => value.mode.GetDisplayName(),
-            };
-
-            var oldDestination = (currentValue.SelectedChats, currentValue.ChatMode);
-            var newDestination = (newValue.SelectedChats, newValue.ChatMode);
-
-            if (oldDestination != newDestination)
-            {
-                ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
-                {
-                    Enviroment = "Folder settings update",
-                    OldValue = GetJournalValue(oldDestination),
-                    NewValue = GetJournalValue(newDestination),
-
-                    PropertyName = "Default slack destination",
+                    PropertyName = "Default chats",
                     Path = Name,
                 });
             }
@@ -199,9 +164,9 @@ namespace HSMServer.Model.Folders
             return newValue ?? oldValue;
         }
 
-        private HashSet<Guid> UpdateChats(HashSet<Guid> oldValue, HashSet<Guid> newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
+        private HashSet<Guid> UpdateChats(HashSet<Guid> oldValue, HashSet<Guid> newValue, InitiatorInfo initiator, Func<Guid, string> nameResolver, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
-            List<string> GetFilteredValues(HashSet<Guid> hash) => [.. hash.Select(GetChatName).OrderBy(n => n)];
+            List<string> GetFilteredValues(HashSet<Guid> hash) => [.. hash.Select(nameResolver).OrderBy(n => n)];
 
             var oldChats = GetFilteredValues(oldValue);
             var newChats = GetFilteredValues(newValue);
@@ -232,10 +197,9 @@ namespace HSMServer.Model.Folders
                 CreationDate = CreationDate.Ticks,
                 Description = Description,
                 Color = Color.ToArgb(),
-                TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
+                Chats = Chats.Select(c => c.ToByteArray()).ToList(),
 
                 DefaultChatsSettings = DefaultChats.ToEntity(GetAvailableChats()),
-                DefaultSlackDestinationsSettings = DefaultSlackDestinations.ToEntity(GetAvailableSlackDestinations()),
 
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
@@ -245,19 +209,8 @@ namespace HSMServer.Model.Folders
                 }
             };
 
-        internal Dictionary<Guid, string> GetAvailableChats() => TelegramChats.ToDictionary(k => k, v => GetChatName?.Invoke(v));
+        internal Dictionary<Guid, string> GetAvailableChats() => Chats.ToDictionary(k => k, v => GetChatName?.Invoke(v));
 
-        internal Dictionary<Guid, string> GetAvailableSlackDestinations()
-        {
-            var dict = new Dictionary<Guid, string>();
-            foreach (var id in DefaultSlackDestinations.SelectedChats)
-            {
-                var name = GetSlackDestinationName?.Invoke(id);
-                if (name is not null)
-                    dict.TryAdd(id, name);
-            }
-            return dict;
-        }
 
         internal FolderModel RecalculateState()
         {
@@ -276,11 +229,26 @@ namespace HSMServer.Model.Folders
             return new DefaultChatViewModel().FromModel(model);
         }
 
-        private static DefaultSlackDestinationViewModel LoadDefaultSlackDestinations(PolicyDestinationSettingsEntity entity = null)
+        private static HashSet<Guid> LoadChats(FolderEntity entity)
         {
-            var model = new PolicyDestinationSettings(entity ?? new PolicyDestinationSettingsEntity());
+            var chats = new HashSet<Guid>();
 
-            return new DefaultSlackDestinationViewModel().FromModel(model);
+            if (entity.Chats is not null)
+                foreach (var id in entity.Chats)
+                    chats.Add(new Guid(id));
+
+            if (chats.Count == 0)
+            {
+                if (entity.LegacyTelegramChats is not null)
+                    foreach (var id in entity.LegacyTelegramChats)
+                        chats.Add(new Guid(id));
+
+                if (entity.LegacySlackDestinations is not null)
+                    foreach (var id in entity.LegacySlackDestinations)
+                        chats.Add(new Guid(id));
+            }
+
+            return chats;
         }
 
 

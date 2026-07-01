@@ -14,6 +14,7 @@ namespace HSMServer.Notifications
         private readonly ITelegramChatsManager _telegramChatsManager;
         private readonly IFolderManager _folderManager;
         private readonly ITreeValuesCache _cache;
+        private readonly ISlackDestinationsManager _slackDestinationsManager;
         private readonly IReadOnlyList<INotificationChannel> _channels;
 
 
@@ -28,8 +29,9 @@ namespace HSMServer.Notifications
             _telegramChatsManager = telegramChats;
             _folderManager = folderManager;
             _cache = cache;
+            _slackDestinationsManager = slackDestinations;
 
-            ConnectFoldersAndChats(slackDestinations);
+            ConnectFoldersAndChats();
 
             TelegramBot = new(telegramChats, folderManager, config.Telegram);
             SlackChannel = slackChannel;
@@ -47,11 +49,15 @@ namespace HSMServer.Notifications
 
             _telegramChatsManager.ConnectChatToFolder -= _folderManager.AddChatToFolder;
             _telegramChatsManager.Removed -= _folderManager.RemoveChatHandler;
+            _slackDestinationsManager.Removed -= _folderManager.RemoveSlackDestinationHandler;
 
             _folderManager.RemoveFolderFromChats -= _telegramChatsManager.RemoveFolderFromChats;
-            _folderManager.AddFolderToChats += _telegramChatsManager.AddFolderToChats;
+            _folderManager.RemoveFolderFromChats -= _slackDestinationsManager.RemoveFolderFromChats;
+            _folderManager.AddFolderToChats -= _telegramChatsManager.AddFolderToChats;
+            _folderManager.AddFolderToChats -= _slackDestinationsManager.AddFolderToChats;
             _folderManager.Removed -= _telegramChatsManager.RemoveFolderHandler;
-            _folderManager.GetChatName -= _telegramChatsManager.GetChatName;
+            _folderManager.Removed -= _slackDestinationsManager.RemoveFolderHandler;
+            _folderManager.GetChatName -= GetChatNameComposite;
 
             return TelegramBot.DisposeAsync();
         }
@@ -76,21 +82,33 @@ namespace HSMServer.Notifications
                 await channel.DeliverAsync(message);
         }
 
-        private void ConnectFoldersAndChats(ISlackDestinationsManager slackDestinations)
+        private void ConnectFoldersAndChats()
         {
             _telegramChatsManager.ConnectChatToFolder += _folderManager.AddChatToFolder;
             _telegramChatsManager.Removed += _folderManager.RemoveChatHandler;
+            _slackDestinationsManager.Removed += _folderManager.RemoveSlackDestinationHandler;
 
-            _folderManager.RemoveFolderFromChats += _telegramChatsManager.RemoveFolderFromChats;
             _folderManager.AddFolderToChats += _telegramChatsManager.AddFolderToChats;
+            _folderManager.AddFolderToChats += _slackDestinationsManager.AddFolderToChats;
+            _folderManager.RemoveFolderFromChats += _telegramChatsManager.RemoveFolderFromChats;
+            _folderManager.RemoveFolderFromChats += _slackDestinationsManager.RemoveFolderFromChats;
+
             _folderManager.Removed += _telegramChatsManager.RemoveFolderHandler;
-            _folderManager.GetChatName += _telegramChatsManager.GetChatName;
-            _folderManager.GetSlackDestinationName += slackDestinations.GetSlackDestinationName;
+            _folderManager.Removed += _slackDestinationsManager.RemoveFolderHandler;
+
+            _folderManager.GetChatName += GetChatNameComposite;
 
             foreach (var folder in _folderManager.GetValues())
-                foreach (var chatId in folder.TelegramChats)
+                foreach (var chatId in folder.Chats)
+                {
                     if (_telegramChatsManager.TryGetValue(chatId, out var chat))
                         chat.Folders.Add(folder.Id);
+                    else if (_slackDestinationsManager.TryGetValue(chatId, out var destination))
+                        destination.Folders.Add(folder.Id);
+                }
         }
+
+        private string GetChatNameComposite(Guid id) =>
+            _telegramChatsManager.GetChatName(id) ?? _slackDestinationsManager.GetSlackDestinationName(id);
     }
 }

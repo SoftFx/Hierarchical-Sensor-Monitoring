@@ -1,4 +1,4 @@
-﻿using HSMServer.Attributes;
+using HSMServer.Attributes;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
@@ -26,8 +26,6 @@ namespace HSMServer.Model.ViewModel
 
         public DefaultChatViewModel DefaultChats { get; set; }
 
-        public DefaultSlackDestinationViewModel DefaultSlackDestinations { get; set; }
-
 
         public bool IsNameChanged => Name != OldName;
 
@@ -41,18 +39,16 @@ namespace HSMServer.Model.ViewModel
             OldName = product.Name;
             Description = product.Description;
             DefaultChats = new(product);
-            DefaultSlackDestinations = new(product);
         }
 
 
-        internal ProductUpdate ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, ISlackDestinationsManager slackDestinations, IFolderManager folderManager, InitiatorInfo initiator) =>
+        internal ProductUpdate ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, ISlackDestinationsManager slackManager, InitiatorInfo initiator) =>
             new()
             {
                 Id = Id,
                 Name = IsNameChanged ? Name : null,
                 Description = Description is null ? string.Empty : Description,
-                DefaultChats = DefaultChats.ToUpdate(product, chatsManager, folderManager),
-                DefaultSlackDestinations = DefaultSlackDestinations.ToUpdate(product, slackDestinations),
+                DefaultChats = DefaultChats.ToUpdate(product, chatsManager, slackManager),
                 Initiator = initiator,
             };
     }

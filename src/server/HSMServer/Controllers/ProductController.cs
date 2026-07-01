@@ -161,7 +161,7 @@ namespace HSMServer.Controllers
         {
             if (_treeViewModel.Nodes.TryGetValue(viewModel.Id, out var product) && ModelState.IsValid)
             {
-                var result = await _treeValuesCache.UpdateProductAsync(viewModel.ToUpdate(product, _telegramChatsManager, _slackDestinationsManager, _folderManager, CurrentInitiator));
+                var result = await _treeValuesCache.UpdateProductAsync(viewModel.ToUpdate(product, _telegramChatsManager, _slackDestinationsManager, CurrentInitiator));
 
                 if (!result.IsOk)
                     ModelState.AddModelError(nameof(ProductGeneralInfoViewModel.Name), result.Error);
@@ -169,7 +169,6 @@ namespace HSMServer.Controllers
             else
             {
                 viewModel.DefaultChats = new(product);
-                viewModel.DefaultSlackDestinations = new(product);
             }
 
             return PartialView("_EditProductGeneralInfo", viewModel);

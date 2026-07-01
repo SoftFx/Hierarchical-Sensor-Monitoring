@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model.Policies;
@@ -193,7 +194,7 @@ namespace HSMServer.Core.Tests.Notifications
 
 
         private static SlackDestinationsManager BuildManager()
-            => new(new Mock<IDatabaseCore>().Object);
+            => new(new Mock<IDatabaseCore>().Object, new Mock<ITreeValuesCache>().Object);
 
         private static SlackDestination BuildDestination(bool send) =>
             new(new SlackDestinationEntity

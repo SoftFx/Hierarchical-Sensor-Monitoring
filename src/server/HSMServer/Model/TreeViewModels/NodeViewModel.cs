@@ -48,7 +48,6 @@ namespace HSMServer.Model.TreeViewModel
             KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder));
             SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder));
             DefaultChats = new(() => (Parent?.DefaultChats, ParentIsFolder));
-            DefaultSlackDestinations = new(() => (Parent?.DefaultSlackDestinations, ParentIsFolder));
 
             CreationDate = model.CreationDate;
         }

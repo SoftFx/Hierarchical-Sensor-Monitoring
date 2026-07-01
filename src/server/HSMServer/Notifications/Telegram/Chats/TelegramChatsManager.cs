@@ -145,7 +145,7 @@ namespace HSMServer.Notifications
         }
 
         public void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator) =>
-            _ = RemoveFolderFromChats(folder.Id, folder.TelegramChats.ToList(), initiator);
+            _ = RemoveFolderFromChats(folder.Id, folder.Chats.ToList(), initiator);
 
 
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);

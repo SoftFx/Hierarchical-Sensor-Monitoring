@@ -92,7 +92,7 @@ namespace HSMServer.Core.Tests.Controllers
                 Id = folderId.ToString(),
                 DisplayName = "Test folder",
                 AuthorId = Guid.NewGuid().ToString(),
-                TelegramChats = [chat1.ToByteArray(), chat2.ToByteArray()],
+                Chats = [chat1.ToByteArray(), chat2.ToByteArray()],
             };
             var folder = new FolderModel(folderEntity);
 
@@ -107,7 +107,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var partial = Assert.IsType<PartialViewResult>(result);
             var model = Assert.IsAssignableFrom<DataAlertViewModelBase>(partial.Model);
-            Assert.All(model.Actions, action => Assert.Subset(folder.TelegramChats, action.AvailableChats));
+            Assert.All(model.Actions, action => Assert.Subset(folder.Chats, action.AvailableChats));
         }
 
 

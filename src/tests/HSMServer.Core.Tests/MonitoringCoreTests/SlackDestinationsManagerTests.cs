@@ -1,10 +1,12 @@
 using System;
 using System.Linq;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Cache;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Notifications;
 using System.Threading.Tasks;
+using Moq;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
@@ -21,7 +23,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var db = _databaseCoreManager.DatabaseCore;
 
-            var manager = new SlackDestinationsManager(db);
+            var manager = new SlackDestinationsManager(db, new Mock<ITreeValuesCache>().Object);
             await manager.Initialize();
             Assert.Empty(manager.GetValues());
 
@@ -44,7 +46,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             }));
 
             // Reload from LevelDB -> verifies entity<->model mapping (FromEntity) + persistence.
-            var reloaded = new SlackDestinationsManager(db);
+            var reloaded = new SlackDestinationsManager(db, new Mock<ITreeValuesCache>().Object);
             await reloaded.Initialize();
 
             var loaded = Assert.Single(reloaded.GetValues());
@@ -55,7 +57,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.True(await reloaded.TryRemove(new RemoveRequest(destination.Id, InitiatorInfo.System)));
             Assert.Empty(reloaded.GetValues());
 
-            var afterRemove = new SlackDestinationsManager(db);
+            var afterRemove = new SlackDestinationsManager(db, new Mock<ITreeValuesCache>().Object);
             await afterRemove.Initialize();
             Assert.Empty(afterRemove.GetValues());
         }
