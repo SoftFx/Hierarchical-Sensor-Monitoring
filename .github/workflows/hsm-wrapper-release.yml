@@ -101,15 +101,16 @@ jobs:
             -OutDir dist
 
       - name: Verify bundled runtime closure (post-pack smoke)
-        # Run WrapperConsole against ONLY the assembled bundle: copy the exe into the shipped Release
+        # Run WrapperConsole against ONLY the assembled Release bundle: copy the exe into the shipped
         # dll/ dir (an exe's own directory is searched first for DLLs) and strip the vcpkg bin from PATH,
-        # so libcurl.dll/zlib1.dll — and any transitive curl dependency — MUST resolve from the bundle,
-        # not from vcpkg. The rest of PATH is kept so the MSVC CRT still resolves (only vcpkg carries
-        # libcurl/zlib on the runner; the aggregator's hosts carry the VC++ redist as well). libcurl.dll
-        # is a load-time import of HSMCppWrapper.dll, so if pack.ps1's libcurl/zlib allow-list ever drops
-        # a needed DLL the exe fails to load HERE (red) instead of downstream in tt-aggregator2 — keeping
-        # the allow-list self-validating. (The pre-pack Smoke above exercises the ABI against the vcpkg
-        # runtime; this one exercises the exact SHIPPED closure.)
+        # so libcurl + zlib — and any transitive curl dependency — MUST resolve from the bundle, not from
+        # vcpkg. The rest of PATH is kept so the MSVC CRT still resolves (only vcpkg carries libcurl/zlib
+        # on the runner; the aggregator's hosts carry the VC++ redist as well). libcurl is a load-time
+        # import of HSMCppWrapper.dll, so if a runtime DLL is ever missing from the bundle the exe fails
+        # to load HERE (red) instead of downstream in tt-aggregator2. (The pre-pack Smoke above exercises
+        # the ABI against the vcpkg runtime; this one exercises the exact SHIPPED closure.) Release only:
+        # the Debug closure is produced by the identical, config-symmetric pack logic, so it is not
+        # separately smoked (a Debug run would also need the non-redistributable debug CRT on the runner).
         #
         # The zip was already written by pack.ps1 before this copy, so WrapperConsole.exe is not shipped.
         shell: pwsh
