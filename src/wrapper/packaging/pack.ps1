@@ -85,7 +85,10 @@ foreach ($cfg in $configs) {
     $deps = @(Get-ChildItem -Path (Join-Path $binSrc '*.dll') |
         Where-Object { $_.Name -ne 'HSMCppWrapper.dll' })
     if ($deps.Count -eq 0) {
-        Write-Warning "No runtime dependency DLLs next to '$binSrc' - was vcpkg's app-local deploy run for $cfg?"
+        # HSMCppWrapper.dll load-time imports libcurl, so an empty dep set means vcpkg's app-local
+        # deploy did not run and the bundle would ship non-loadable. Fail loud: the CI post-pack
+        # closure smoke only guards the workflow, but a local `pack.ps1` run has no such net.
+        throw "No runtime dependency DLLs next to '$binSrc' for $cfg - vcpkg's app-local deploy did not run; the bundle would be missing libcurl/zlib."
     }
     foreach ($depFile in $deps) { Copy-Item $depFile.FullName $dllDst }
 }
@@ -157,4 +160,3 @@ if (-not ('System.IO.Compression.ZipFile' -as [type])) {
     $root, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $true)
 
 Write-Host "Bundle assembled: $zip"
-if ($env:GITHUB_OUTPUT) { "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8 }
