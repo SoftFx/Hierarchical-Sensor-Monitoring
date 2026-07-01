@@ -1,0 +1,65 @@
+name: native-collector-asan-repro
+
+# TEMPORARY diagnostic lane for the ScheduledTask teardown heap-use-after-free that surfaces
+# intermittently as meta_no_new_payloads_but_arriving under ASan (the 133-byte "leak" is only the
+# secondary at-exit report after the UAF aborts the run). The stock sanitizers lane runs each fixture
+# once, so the ~1-in-6 race shows up as a flaky red with an interleaved, stack-less report.
+#
+# This lane runs ONLY that fixture in a repeat-until-fail loop, serial, halting on the first error, so:
+#   * the race becomes a deterministic repro, and
+#   * the UAF report is clean (no LSan interleaving) — it prints the READ stack that names whatever
+#     re-enters teardown on the scheduler thread.
+# It also validates a fix: 200 green iterations is strong evidence the race is gone.
+#
+# DELETE this workflow once the UAF is fixed and folded back into native-collector-conformance.yml.
+
+on:
+  push:
+    branches:
+      - 'fix/native-scheduler-teardown-uaf'
+  workflow_dispatch:
+    inputs:
+      repeat:
+        description: 'until-fail iteration cap'
+        required: false
+        default: '200'
+
+jobs:
+  repro:
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [asan, tsan]
+    runs-on: ubuntu-latest
+    env:
+      # Halt on the FIRST error and abort, so the sanitizer prints one clean report instead of the
+      # UAF + at-exit LSan dump interleaving (that interleaving is what hid the READ stack in CI).
+      ASAN_OPTIONS: 'halt_on_error=1:abort_on_error=1:detect_leaks=1'
+      UBSAN_OPTIONS: 'print_stacktrace=1:halt_on_error=1'
+      TSAN_OPTIONS: 'halt_on_error=1:second_deadlock_stack=1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+        working-directory: src/native/collector
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+        working-directory: src/native/collector
+
+      - name: Repro (single fixture, serial, repeat-until-fail)
+        run: >
+          ctest --preset ${{ matrix.preset }}
+          -R '^meta_no_new_payloads_but_arriving$'
+          --repeat until-fail:${{ github.event.inputs.repeat || '200' }}
+          --output-on-failure -j1
+        working-directory: src/native/collector
+
+      - name: Upload sanitizer logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asan-repro-${{ matrix.preset }}
+          path: src/native/collector/build/${{ matrix.preset }}/Testing
+          if-no-files-found: ignore
