@@ -19,12 +19,6 @@ on:
         description: 'Bundle version for a dry-run artifact (e.g. 1.0.0-rc1). Ignored on tag pushes.'
         required: false
         default: '0.0.0-dev'
-  # TEMP — validation only, REMOVE before merge: run the bundle job on PRs touching the wrapper so the
-  # new post-pack closure smoke is exercised pre-merge. The release job stays tag-gated (skipped on PRs).
-  pull_request:
-    paths:
-      - 'src/wrapper/**'
-      - '.github/workflows/hsm-wrapper-release.yml'
 
 # Least privilege: the default token is read-only for every job. Only the `release` job (tag pushes)
 # elevates to contents: write, so a workflow_dispatch dry-run never holds a release-publishing token.
@@ -60,10 +54,8 @@ jobs:
         run: |
           $v = if ($env:REF -like 'refs/tags/wrapper-v*') {
                  $env:REF -replace '^refs/tags/wrapper-v', ''
-               } elseif ($env:INPUT_VERSION) {
-                 $env:INPUT_VERSION
                } else {
-                 '0.0.0-ci'   # no tag and no dispatch input (a validation run): placeholder, never released
+                 $env:INPUT_VERSION
                }
           # Reject anything that is not a clean semver: keeps the artifact/zip/release names well-formed
           # and defensively closes the injection surface for every downstream consumer of the value.
