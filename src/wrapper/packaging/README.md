@@ -10,11 +10,12 @@ team unzips it straight over their checkout:
 
 ```
 HSMCppWrapper-<ver>/
-  include/HSMCppWrapper/   public wrapper ABI headers (unchanged from the C++/CLI wrapper)
-  include/hsm_collector/   native headers (only needed for DataCollectorProxy::Native())
-  dll/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.dll + .pdb + libcurl(-d).dll + zlib(d)1.dll
-  lib/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.lib
-  MANIFEST.md              version, source commit, and the drop-in swap recipe
+  include/HSMCppWrapper/   public wrapper ABI headers (Option A: relink)
+  include/hsm_collector/   native collector headers (Native() + Option B: your own native adapter)
+  dll/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.dll + .pdb + libcurl(-d).dll + z(d).dll
+  lib/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.lib          (Option A: relink)
+  lib/hsm_collector/x64/{Release,Debug}/   hsm_collector_core.lib     (Option B: native adapter)
+  MANIFEST.md              version, source commit, and both consume recipes (A relink / B adapter)
 ```
 
 The full swap recipe (what to overwrite, which managed DLLs to delete) is written into `MANIFEST.md`
