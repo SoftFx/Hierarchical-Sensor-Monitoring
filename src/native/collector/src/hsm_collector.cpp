@@ -85,11 +85,16 @@ namespace
     {
         switch (state)
         {
-        case CollectorState::Stopped:  return "Stopped";
-        case CollectorState::Starting: return "Starting";
-        case CollectorState::Running:  return "Running";
-        case CollectorState::Stopping: return "Stopping";
-        case CollectorState::Disposed: return "Disposed";
+        case CollectorState::Stopped:
+            return "Stopped";
+        case CollectorState::Starting:
+            return "Starting";
+        case CollectorState::Running:
+            return "Running";
+        case CollectorState::Stopping:
+            return "Stopping";
+        case CollectorState::Disposed:
+            return "Disposed";
         }
         return "Unknown";
     }
@@ -866,9 +871,12 @@ namespace
         {
             switch (level)
             {
-            case HSM_LOG_LEVEL_DEBUG: return "DEBUG";
-            case HSM_LOG_LEVEL_INFO:  return "INFO";
-            default:                  return "ERROR";
+            case HSM_LOG_LEVEL_DEBUG:
+                return "DEBUG";
+            case HSM_LOG_LEVEL_INFO:
+                return "INFO";
+            default:
+                return "ERROR";
             }
         }
 
