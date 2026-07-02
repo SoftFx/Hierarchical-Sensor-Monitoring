@@ -40,6 +40,12 @@ namespace HSMServer.Notifications
                     destination.Folders.Add(folderId);
         }
 
+        /// <summary>
+        /// Required by the IFolderManager.RemoveFolderFromChats contract so the same
+        /// multicast delegate can fan out to Telegram and Slack. <paramref name="initiator"/>
+        /// is unused here because Slack has no Telegram-style auto-remove at zero folders;
+        /// it is only consumed by TelegramChatsManager.TryRemove for the audit trail.
+        /// </summary>
         public Task RemoveFolderFromChats(Guid folderId, List<Guid> destinations, InitiatorInfo initiator)
         {
             foreach (var id in destinations)
