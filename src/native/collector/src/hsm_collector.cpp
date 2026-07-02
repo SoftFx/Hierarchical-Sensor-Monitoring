@@ -2365,6 +2365,9 @@ namespace
             if (!response.IsSuccess())
                 LogError("Failed to register " + std::to_string(sensors.size()) +
                          " sensor(s) on Start: " + (response.error.empty() ? "non-2xx response" : response.error));
+            else
+                LogMessage(
+                    HSM_LOG_LEVEL_INFO, "Registered " + std::to_string(sensors.size()) + " sensor(s) on connect.");
         }
 #endif
 
@@ -4637,6 +4640,15 @@ namespace
                     }
                 }
             }
+
+            // Managed-parity send diagnostic (BaseHandlers "Failed to send data ... Code = ..."):
+            // report a failed batch with the HTTP status. Deduplicated, so a sustained outage collapses
+            // to one line per window (the batch is re-enqueued by the dispatcher — the retry itself is
+            // not logged, matching the queue's silent re-enqueue).
+            if (!response.IsSuccess())
+                LogError(
+                    "Failed to send " + std::to_string(batch.size()) + " value(s): HTTP " +
+                    std::to_string(response.status_code) + (response.error.empty() ? "" : " " + response.error));
 
             return response.IsSuccess();
         }

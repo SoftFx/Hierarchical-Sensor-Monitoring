@@ -5,6 +5,7 @@
 #include "../src/hsm_http_retry.hpp"
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -3490,6 +3491,69 @@ namespace
         Require(logs.size() == 3, "a zero window logs every error immediately with no deduplication");
     }
 
+    void NativeLoggingEmitsLifecycleEvents()
+    {
+        std::vector<std::pair<hsm_log_level_t, std::string>> logs;
+        auto collector = CreateCollector();
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t level, const char* message, void* user_data) {
+                static_cast<std::vector<std::pair<hsm_log_level_t, std::string>>*>(user_data)->emplace_back(level, message);
+            },
+            &logs);
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto has_info = [&](const std::string& needle) {
+            for (const auto& entry : logs)
+                if (entry.first == HSM_LOG_LEVEL_INFO && entry.second.find(needle) != std::string::npos)
+                    return true;
+            return false;
+        };
+        Require(has_info("-> Starting"), "Start should log the Starting lifecycle transition at Info");
+        Require(has_info("-> Running"), "Start should log the Running lifecycle transition at Info");
+        Require(has_info("-> Stopping"), "Stop should log the Stopping lifecycle transition at Info");
+        Require(has_info("-> Stopped"), "Stop should log the Stopped lifecycle transition at Info");
+    }
+
+    void NativeFileLoggerWritesToDatedFile()
+    {
+        const std::filesystem::path dir = std::filesystem::temp_directory_path() / "hsm_filelog_smoke";
+        std::filesystem::remove_all(dir);
+
+        {
+            auto collector = CreateCollector();
+            Require(
+                hsm_collector_enable_file_logging(collector.value, dir.string().c_str(), HSM_LOG_LEVEL_INFO) == HSM_RESULT_OK,
+                "enable file logging failed");
+            hsm_collector_test_log_error(collector.value, "file-logger-smoke-line");
+            // The collector is destroyed here: the file logger drains its queue and joins, so the file
+            // is fully written by the time we read it below (no sleep needed).
+        }
+
+        std::string content;
+        bool found = false;
+        for (const auto& entry : std::filesystem::directory_iterator(dir))
+        {
+            const std::string name = entry.path().filename().string();
+            if (name.rfind("DataCollector_", 0) == 0 && name.find("_error_") == std::string::npos)
+            {
+                std::ifstream in(entry.path());
+                std::stringstream ss;
+                ss << in.rdbuf();
+                content = ss.str();
+                found = true;
+                break;
+            }
+        }
+        std::filesystem::remove_all(dir);
+
+        Require(found, "a DataCollector_<date>.txt file should have been written");
+        Require(content.find("file-logger-smoke-line") != std::string::npos, "the logged message is not in the file");
+        Require(content.find("ERROR") != std::string::npos, "the level tag is missing from the file line");
+    }
+
     void NativeLifecycleListenerCanRegisterAnotherListener()
     {
         auto collector = CreateCollector();
@@ -5012,6 +5076,8 @@ namespace
             { "native_lifecycle_listener_can_register_another_listener", [](const std::string&) { NativeLifecycleListenerCanRegisterAnotherListener(); } },
             { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },
             { "native_logger_zero_window_logs_every_error", [](const std::string&) { NativeLoggerZeroWindowLogsEveryError(); } },
+            { "native_logging_emits_lifecycle_events", [](const std::string&) { NativeLoggingEmitsLifecycleEvents(); } },
+            { "native_file_logger_writes_to_dated_file", [](const std::string&) { NativeFileLoggerWritesToDatedFile(); } },
             { "native_scheduler_clock_seam_drives_periodic_posts", [](const std::string&) { NativeSchedulerClockSeamDrivesPeriodicPosts(); } },
             { "native_scheduler_on_error_isolates_throwing_callback", [](const std::string&) { NativeSchedulerOnErrorIsolatesThrowingCallback(); } },
             { "native_version_matches_macro", [](const std::string&) { NativeVersionMatchesMacro(); } },

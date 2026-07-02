@@ -360,6 +360,8 @@ set(NATIVE_REGRESSION_TESTS
     native_scheduler_on_error_isolates_throwing_callback
     native_logger_deduplicates_repeated_errors_within_window
     native_logger_zero_window_logs_every_error
+    native_logging_emits_lifecycle_events
+    native_file_logger_writes_to_dated_file
     native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values
     native_retry_below_capacity_is_always_redelivered
     cpu_select_top_n_selects_busiest_above_threshold
