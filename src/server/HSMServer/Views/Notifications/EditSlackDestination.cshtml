@@ -32,6 +32,54 @@
         <form id="slackDestination_form" class="my-2" method="post" asp-action="@action">
             <input asp-for="@Model.Id" value="@Model.Id" type="hidden" />
 
+            <div class="row mt-2 mb-1">
+                <div class="col-10 p-0">
+                    <button class="btn btn-link text-decoration-none p-0 mb-1" type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#slackWebhookHelp"
+                            aria-expanded="false"
+                            aria-controls="slackWebhookHelp">
+                        <i class="fa-solid fa-circle-info me-1"></i>
+                        How to create a Slack incoming-webhook
+                    </button>
+                    <div id="slackWebhookHelp" class="collapse">
+                        <div class="card card-body p-2 ps-3">
+                            <ol class="mb-0">
+                                <li>
+                                    You must be a Slack workspace admin (or hold an app-install grant)
+                                    to install incoming-webhooks.
+                                </li>
+                                <li>
+                                    Create a custom app at
+                                    <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer">api.slack.com/apps</a>,
+                                    open <b>Incoming Webhooks</b>, and activate the feature.
+                                    Prefer this over the legacy "Build Your Own" integration so one app
+                                    can host multiple webhooks.
+                                </li>
+                                <li>
+                                    Pick the target channel. <b>The webhook is bound to one channel</b>
+                                    at creation time — HSM only sends <code>&#123;&quot;text&quot;:&quot;&hellip;&quot;&#125;</code>
+                                    and cannot redirect it. To deliver to multiple channels, create one
+                                    destination per channel.
+                                </li>
+                                <li>
+                                    Copy the <code>https://hooks.slack.com/services/T&hellip;/B&hellip;/&lt;token&gt;</code>
+                                    URL and paste it into the <b>Webhook URL</b> field below.
+                                </li>
+                                <li>
+                                    Optional: customize the bot name and icon in the Slack app's
+                                    <b>App Display</b> settings — HSM does not override them.
+                                </li>
+                                <li>
+                                    After saving, use the <b>Send test message</b> action in the
+                                    Slack destinations list to confirm delivery.
+                                </li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="row mt-2">
                 <div class="col-2 d-flex align-items-center">
                     <label class="col-form-label" asp-for="Name"></label>
@@ -45,7 +93,7 @@
             <div class="row mt-2">
                 <div class="col-2 d-flex align-items-center">
                     <label class="col-form-label" asp-for="WebhookUrl"></label>
-                    <i class='fas fa-question-circle ms-2' title='Full Slack incoming-webhook URL, e.g. https://hooks.slack.com/services/T…/B…/…'></i>
+                    <i class='fas fa-question-circle ms-2' title='Slack incoming-webhook URL (https://hooks.slack.com/services/…). See “How to create a Slack incoming-webhook” below.'></i>
                 </div>
                 <div class="col-8 p-0">
                     <input type="url" class="form-control" asp-for="WebhookUrl" value="@Model.WebhookUrl" required placeholder="https://hooks.slack.com/services/..." />
