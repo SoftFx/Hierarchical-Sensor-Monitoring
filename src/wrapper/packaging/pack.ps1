@@ -91,6 +91,22 @@ foreach ($cfg in $configs) {
         throw "No runtime dependency DLLs next to '$binSrc' for $cfg - vcpkg's app-local deploy did not run; the bundle would be missing libcurl/zlib."
     }
     foreach ($depFile in $deps) { Copy-Item $depFile.FullName $dllDst }
+
+    # Native collector static library (hsm_collector_core.lib) so a consumer can link a PURE-NATIVE
+    # adapter directly against hsm::collector and drop the wrapper (MANIFEST "Option B"). It is built as
+    # a subproject of the wrapper (add_subdirectory -> build/wrapper/hsm_collector/<cfg>/); the
+    # hsm_collector/ headers already ship under include/ below. The .lib carries both the C++ impl and
+    # the C ABI, so no wrapper DLL is needed on that path.
+    $collLib = Join-Path $BuildDir "hsm_collector\$cfg\hsm_collector_core.lib"
+    if (-not (Test-Path $collLib)) {
+        # Output layout can vary by generator; fall back to a scoped recursive search.
+        $collLib = (Get-ChildItem -Path (Join-Path $BuildDir 'hsm_collector') -Recurse -Filter 'hsm_collector_core.lib' -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "\\$cfg\\" } | Select-Object -First 1).FullName
+    }
+    if (-not $collLib -or -not (Test-Path $collLib)) {
+        throw "Missing $cfg native collector lib: hsm_collector_core.lib not found under '$BuildDir\hsm_collector' - was the wrapper (which subbuilds the collector) built for $cfg?"
+    }
+    Copy-Item $collLib (New-Dir (Join-Path $root "lib\hsm_collector\x64\$cfg"))
 }
 
 # --- public headers (mirror the consumer include roots) ---------------------
@@ -119,15 +135,23 @@ C++/CLI wrapper: relink only, zero source changes in the consumer.
 
 ```
 include/
-  HSMCppWrapper/      public wrapper ABI headers (DataCollector.h, HSMSensor.h, ...)
-  hsm_collector/      native headers - needed ONLY if you call DataCollectorProxy::Native()
+  HSMCppWrapper/      public wrapper ABI headers (DataCollector.h, HSMSensor.h, ...)   -- Option A
+  hsm_collector/      native collector headers (Native() and the pure-native adapter) -- Option B
 dll/HSMCppWrapper/x64/{Release,Debug}/
   HSMCppWrapper.dll   HSMCppWrapper.pdb   + the vcpkg runtime: libcurl.dll + z.dll (Debug: libcurl-d.dll + zd.dll)
 lib/HSMCppWrapper/x64/{Release,Debug}/
-  HSMCppWrapper.lib   import library
+  HSMCppWrapper.lib        import library (Option A: relink)
+lib/hsm_collector/x64/{Release,Debug}/
+  hsm_collector_core.lib   native collector static lib (Option B: your own native adapter)
 ```
 
-## Drop-in recipe (tt-aggregator2)
+Two ways to consume this bundle:
+- **Option A - drop-in relink:** keep the `hsm_wrapper::DataCollectorProxy` API, relink against the new
+  `HSMCppWrapper.dll` (same ABI, zero source changes). Recipe below.
+- **Option B - your own native adapter:** write directly against `hsm::collector` and link
+  `hsm_collector_core.lib`, dropping the wrapper entirely.
+
+## Option A - drop-in relink (tt-aggregator2)
 
 1. Copy `include/`, `dll/`, `lib/` over your vendored tree (`aggregator/{include,dll,lib}/...`).
    The headers are **byte-identical** to what you already vendor - overwriting them is a no-op.
@@ -138,6 +162,21 @@ lib/HSMCppWrapper/x64/{Release,Debug}/
 4. Rebuild. No CLR is loaded anymore. The exported ABI matches (relink proven by `dumpbin
    /LINKERMEMBER`: 545 exports in both configs - 543 wrapper + 2 `Native()` C-ABI re-exports), so the
    link resolves with no source edits.
+
+## Option B - your own native adapter (no wrapper)
+
+Build directly against the native collector and drop `HSMCppWrapper.dll` entirely:
+
+1. Vendor `lib/hsm_collector/x64/{Release,Debug}/hsm_collector_core.lib` (e.g. under
+   `aggregator/lib/hsm_collector/x64/...`) plus the `include/hsm_collector/` headers.
+2. Link, per config: `hsm_collector_core.lib` + Windows SDK `iphlpapi.lib` + `pdh.lib` + `libcurl.lib`
+   (the import lib for the shipped `libcurl.dll` - from vcpkg `curl:x64-windows`, or ask us to bundle it).
+3. `#include <hsm_collector/hsm_collector.hpp>` and use the `hsm::collector::Collector` RAII API (or the
+   C ABI in `hsm_collector.h`). Ship the same `libcurl.dll` + `z.dll` runtime next to your binary.
+
+`hsm_collector_core.lib` carries both the C++ implementation and the C ABI, so no wrapper DLL is needed
+on this path. (If you keep the wrapper instead, its DLL already re-exports the C ABI, so Option A's
+`HSMCppWrapper.lib` alone resolves `hsm::collector` calls - no separate collector lib required.)
 
 ## Behavioral residue
 
