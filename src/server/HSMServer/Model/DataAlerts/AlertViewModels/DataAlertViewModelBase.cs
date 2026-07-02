@@ -148,7 +148,10 @@ namespace HSMServer.Model.DataAlerts
                         InstantSend = action.ScheduleInstantSend
                     };
 
-                    destination = new PolicyDestinationUpdate(action.Chats?.Where(availableChats.ContainsKey).ToDictionary(k => k, v => availableChats[v]) ?? new(0), action.ChatsMode.ToCore());
+                    destination = new PolicyDestinationUpdate(
+                        action.Chats?.Where(availableChats.ContainsKey).ToDictionary(k => k, v => availableChats[v]) ?? new(0),
+                        action.ChatsMode.ToCore());
+
                     comment = action.Comment;
                 }
                 else if (action.Action == ActionType.ShowIcon)
@@ -161,12 +164,12 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        public string ToString(ITelegramChatsManager manager)
+        public string ToString(Dictionary<Guid, string> availableChats)
         {
-            var telegramChats = manager.GetValues().ToDictionary(k => k.Id, v => v);
+            var allChats = availableChats ?? new(0);
 
             string GetActionChats(ActionViewModel action) =>
-                 string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
+                 string.Join(", ", action.Chats.Where(allChats.ContainsKey).Select(ch => allChats[ch]));
 
             var sb = new StringBuilder(128);
             sb.Append("If ");
@@ -224,7 +227,7 @@ namespace HSMServer.Model.DataAlerts
 
                                 string chatNames;
                                 if (parentIds.Count != 0)
-                                    chatNames = parentIds.ToNames(telegramChats);
+                                    chatNames = parentIds.ToNames(allChats);
                                 else
                                     chatNames = lastMode?.GetDisplayName();
 

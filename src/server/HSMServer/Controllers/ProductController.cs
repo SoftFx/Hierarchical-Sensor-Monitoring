@@ -27,6 +27,7 @@ namespace HSMServer.Controllers
     public class ProductController : BaseController
     {
         private readonly ITelegramChatsManager _telegramChatsManager;
+        private readonly ISlackDestinationsManager _slackDestinationsManager;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
@@ -34,9 +35,10 @@ namespace HSMServer.Controllers
 
 
         public ProductController(IUserManager userManager, ITreeValuesCache treeValuesCache, IFolderManager folderManager,
-            TreeViewModel treeViewModel, ITelegramChatsManager telegramChatsManager, ILogger<ProductController> logger) : base(userManager)
+            TreeViewModel treeViewModel, ITelegramChatsManager telegramChatsManager, ISlackDestinationsManager slackDestinationsManager, ILogger<ProductController> logger) : base(userManager)
         {
             _telegramChatsManager = telegramChatsManager;
+            _slackDestinationsManager = slackDestinationsManager;
             _treeValuesCache = treeValuesCache;
             _folderManager = folderManager;
             _treeViewModel = treeViewModel;
@@ -159,13 +161,15 @@ namespace HSMServer.Controllers
         {
             if (_treeViewModel.Nodes.TryGetValue(viewModel.Id, out var product) && ModelState.IsValid)
             {
-                var result = await _treeValuesCache.UpdateProductAsync(viewModel.ToUpdate(product, _telegramChatsManager, _folderManager, CurrentInitiator));
+                var result = await _treeValuesCache.UpdateProductAsync(viewModel.ToUpdate(product, _telegramChatsManager, _slackDestinationsManager, CurrentInitiator));
 
                 if (!result.IsOk)
                     ModelState.AddModelError(nameof(ProductGeneralInfoViewModel.Name), result.Error);
             }
             else
+            {
                 viewModel.DefaultChats = new(product);
+            }
 
             return PartialView("_EditProductGeneralInfo", viewModel);
         }

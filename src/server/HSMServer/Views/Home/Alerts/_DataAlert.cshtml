@@ -15,14 +15,17 @@
 @model DataAlertViewModelBase
 
 @inject ITelegramChatsManager ChatsManager
+@inject ISlackDestinationsManager SlackDestinationsManager
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var telegramChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v);
+    var allChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v.Name);
+    foreach (var dest in SlackDestinationsManager.GetValues())
+        allChats[dest.Id] = dest.Name;
 
     string GetActionChats(ActionViewModel action) =>
-         string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
+         string.Join(", ", action.Chats.Where(allChats.ContainsKey).Select(ch => allChats[ch]));
 
     bool isTemplate = ViewBag.IsTemplate ?? false;
 
@@ -82,7 +85,7 @@
 
                         string chatNames;
                         if (parentIds.Count != 0)
-                            chatNames = parentIds.ToNames(telegramChats);
+                            chatNames = parentIds.ToNames(allChats);
                         else
                             chatNames = lastMode?.GetDisplayName();
 

@@ -26,6 +26,8 @@ namespace HSMServer.ConcurrentStorage
         event Action<ModelType, InitiatorInfo> Removed;
 
 
+        Task<bool> TryAdd(ModelType value);
+
         Task<bool> TryUpdate(UpdateType update);
 
         Task<bool> TryUpdate(ModelType value);

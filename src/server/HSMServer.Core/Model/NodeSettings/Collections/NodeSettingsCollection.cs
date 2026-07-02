@@ -1,4 +1,4 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.TableOfChanges;
 using System.Collections.Generic;
@@ -15,7 +15,9 @@ namespace HSMServer.Core.Model.NodeSettings
             base.Update(update, table);
 
             if (update is ProductUpdate productUpdate)
-                GetUpdateFunction<PolicyDestinationSettings>(update, table)(DefaultChats, productUpdate.DefaultChats, "Default telegram chats", null);
+            {
+                GetUpdateFunction<PolicyDestinationSettings>(update, table)(DefaultChats, productUpdate.DefaultChats, "Default chats", null);
+            }
         }
 
 
@@ -24,7 +26,9 @@ namespace HSMServer.Core.Model.NodeSettings
             base.SetParentSettings(parentCollection);
 
             if (parentCollection is NodeSettingsCollection settings)
+            {
                 DefaultChats.SetParent(settings.DefaultChats);
+            }
         }
 
         internal void SetSettings(Dictionary<string, TimeIntervalEntity> settingsEntity, PolicyDestinationSettingsEntity defaultChats)

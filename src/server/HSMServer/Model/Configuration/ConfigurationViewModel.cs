@@ -1,4 +1,6 @@
-﻿using HSMServer.Core.DataLayer;
+﻿using HSMServer.Authentication;
+using HSMServer.Core.DataLayer;
+using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
 using System;
 using System.Collections.Generic;
@@ -6,13 +8,15 @@ using System.Linq;
 
 namespace HSMServer.Model.Configuration
 {
-    public class ConfigurationViewModel(IServerConfig config, bool isBotRunning, IDatabaseCore database)
+    public class ConfigurationViewModel(IServerConfig config, bool isBotRunning, IDatabaseCore database, ISlackDestinationsManager slackDestinations, IUserManager userManager)
     {
         public ServerSettingsViewModel Server { get; } = new(config);
 
         public BackupSettingsViewModel Backup { get; } = new(config);
 
         public TelegramSettingsViewModel Telegram { get; } = new(config, isBotRunning);
+
+        public SlackSettingsViewModel Slack { get; } = new(slackDestinations, userManager);
 
         public MonitoringSettingsViewModel Monitoring { get; } = new(config);
 

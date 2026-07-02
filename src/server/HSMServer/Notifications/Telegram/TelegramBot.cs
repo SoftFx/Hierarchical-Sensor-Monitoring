@@ -11,7 +11,7 @@ using HSMServer.Core.Notifications;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Folders;
-using HSMServer.Notifications.Telegram.AddressBook;
+using HSMServer.Notifications.AddressBook;
 using HSMServer.ServerConfiguration;
 using Telegram.Bot.Types.Enums;
 using HSMServer.Helpers;
@@ -184,9 +184,6 @@ namespace HSMServer.Notifications
 
                 foreach (var alert in message)
                 {
-                    if (alert.Destination.Kind != NotificationKind.Telegram)
-                        continue;
-
                     var chatIds = alert.Destination.Chats;
 
                     foreach (var chatId in chatIds)

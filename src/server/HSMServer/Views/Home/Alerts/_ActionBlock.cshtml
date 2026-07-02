@@ -9,13 +9,14 @@
 @model ActionViewModel
 
 @inject ITelegramChatsManager ChatsManager
+@inject ISlackDestinationsManager SlackDestinations
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
 @{
     var action = Model.Action;
-      
+
 
     var isSendAction = action == ActionType.SendNotification;
     var isNotSendAction = action != ActionType.SendNotification;
@@ -26,6 +27,7 @@
     var isSecondaryCondition = !Model.IsMain;
 
     var chats = ChatsManager.GetValues().Where(x => Model.AvailableChats.Contains(x.Id)).ToList();
+    var slackDestinations = SlackDestinations.GetValues().Where(d => Model.AvailableChats.Contains(d.Id)).OrderBy(d => d.Name).ToList();
 }
 
 @* <div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3 w-100" > *@
@@ -41,24 +43,38 @@
             <div class="alert-text-block operation-select ms-2">to</div>
 
             <select class="selectpicker ms-2" name="Chats" multiple
-                    data-width="auto" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-container="body">
+                    data-width="auto" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="destinations" data-container="body">
                 <option class="general-group-chat-mode" value="@ChatsMode.FromParent" selected="@(Model.ChatsMode is ChatsMode.FromParent)">@ChatsMode.FromParent.GetDisplayName()</option>
                 <option class="general-group-chat-mode" value="@ChatsMode.NotInitialized" selected="@(Model.ChatsMode is ChatsMode.NotInitialized)">@ChatsMode.NotInitialized.GetDisplayName()</option>
                 <option class="general-group-chat-mode" value="@ChatsMode.Empty" selected="@(Model.ChatsMode is ChatsMode.Empty)">@ChatsMode.Empty.GetDisplayName()</option>
                 <option class="general-group-chat-mode" value="@ChatsMode.All" selected="@(Model.ChatsMode is ChatsMode.All)">@ChatsMode.All.GetDisplayName()</option>
 
                 <option data-divider="true"></option>
-                <option disabled>Groups</option>
+                <option disabled>Telegram groups</option>
                 @foreach (var chat in chats.GetGroups())
                 {
-                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
                 }
 
                 <option data-divider="true"></option>
-                <option disabled>Users</option>
+                <option disabled>Telegram users</option>
                 @foreach (var chat in chats.GetPrivates())
                 {
-                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
+                }
+
+                <option data-divider="true"></option>
+                <option disabled>Slack destinations</option>
+                @if (slackDestinations.Count == 0)
+                {
+                    <option disabled value="">No Slack destinations configured</option>
+                }
+                else
+                {
+                    foreach (var destination in slackDestinations)
+                    {
+                        <option value="@destination.Id" selected="@Model.SlackDestinationIsSelected(destination)" data-content="<i class='@ChatIcons.SlackBrandClass'></i> @destination.Name">@destination.Name</option>
+                    }
                 }
             </select>
         </div>
@@ -184,7 +200,7 @@
             $(this).selectpicker('refresh')
         });
 
-        
+
 
 
            $("div[name='emoji']").emojioneArea({
@@ -201,12 +217,11 @@
                 buttonTitle: "Select icon",
 
                 ui: {
-                    hideButtons: true   
+                    hideButtons: true
                 }
 
 
             });
-
     });
 
     $('select[name="Action"]').off("change").on("change", function () {

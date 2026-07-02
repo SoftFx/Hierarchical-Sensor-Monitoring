@@ -1,4 +1,4 @@
-﻿using HSMServer.ConcurrentStorage;
+using HSMServer.ConcurrentStorage;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Controls;
 using System;
@@ -14,7 +14,7 @@ namespace HSMServer.Model.Folders
         public required InitiatorInfo Initiator { get; init; }
 
 
-        public HashSet<Guid> TelegramChats { get; init; }
+        public HashSet<Guid> Chats { get; init; }
 
 
         public TimeIntervalViewModel TTL { get; init; }

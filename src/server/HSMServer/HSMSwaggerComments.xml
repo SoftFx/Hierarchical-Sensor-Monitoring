@@ -185,6 +185,12 @@
             Swagger filter for adding required string 'Key' in API requests header
             </summary>
         </member>
+        <member name="T:HSMServer.Filters.SlackRoleFilters.SlackAdminAttribute">
+            <summary>
+            Slack destinations are global (not folder-scoped), so any mutation
+            requires administrator rights. Non-admins are redirected to Home/Index.
+            </summary>
+        </member>
         <member name="T:HSMServer.Filters.UserRoleFilterBase">
             <summary>
             The attribute denies access to some actions for a user who is neither admin or has role from _roles

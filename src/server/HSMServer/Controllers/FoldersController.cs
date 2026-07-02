@@ -18,14 +18,17 @@ namespace HSMServer.Controllers
     public class FoldersController : BaseController
     {
         private readonly ITelegramChatsManager _telegramChatsManager;
+        private readonly ISlackDestinationsManager _slackDestinationsManager;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _tree;
 
 
         public FoldersController(IFolderManager folderManager, IUserManager userManager,
-            TreeViewModel treeViewModel, ITelegramChatsManager chatsManager) : base(userManager)
+            TreeViewModel treeViewModel, ITelegramChatsManager chatsManager,
+            ISlackDestinationsManager slackDestinationsManager) : base(userManager)
         {
             _telegramChatsManager = chatsManager;
+            _slackDestinationsManager = slackDestinationsManager;
             _folderManager = folderManager;
             _tree = treeViewModel;
         }
@@ -116,23 +119,23 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public async Task<IActionResult> UpdateTelegram(FolderTelegramViewModel viewModel)
+        public async Task<IActionResult> UpdateChats(FolderChatsViewModel viewModel)
         {
-            var connectedChats = viewModel.ConnectedChatIds?.Where(ch => ch != Guid.Empty).ToList() ?? new();
+            var connected = viewModel.ConnectedChatIds?.Where(id => id != Guid.Empty).ToList() ?? new();
             if (viewModel.NewChats is not null)
-                connectedChats.AddRange(viewModel.NewChats);
+                connected.AddRange(viewModel.NewChats);
 
             var update = new FolderUpdate()
             {
                 Id = viewModel.FolderId,
                 DefaultChats = viewModel.DefaultChats,
-                TelegramChats = new HashSet<Guid>(connectedChats),
+                Chats = new HashSet<Guid>(connected),
                 Initiator = CurrentInitiator
             };
 
             await _folderManager.TryUpdate(update);
 
-            return PartialView("_TelegramChats", BuildFolderTelegram(_folderManager[viewModel.FolderId]));
+            return PartialView("_Chats", BuildFolderChats(_folderManager[viewModel.FolderId]));
         }
 
 
@@ -207,7 +210,7 @@ namespace HSMServer.Controllers
         {
             var folder = _folderManager[folderId];
 
-            return new(folder, BuildFolderProducts(), BuildFolderUsers(folder), BuildFolderTelegram(folder));
+            return new(folder, BuildFolderProducts(), BuildFolderUsers(folder), BuildFolderChats(folder));
         }
 
         private FolderProductsViewModel BuildFolderProducts(List<string> selectedProducts = null)
@@ -220,11 +223,12 @@ namespace HSMServer.Controllers
         private FolderUsersViewModel BuildFolderUsers(FolderModel folder) =>
             new(folder, _userManager.GetUsers(u => !u.IsAdmin));
 
-        private FolderTelegramViewModel BuildFolderTelegram(FolderModel folder)
+        private FolderChatsViewModel BuildFolderChats(FolderModel folder)
         {
             var chats = _telegramChatsManager.GetValues();
+            var destinations = _slackDestinationsManager.GetValues().ToList();
 
-            return new(folder, chats);
+            return new(folder, chats, destinations);
         }
     }
 }

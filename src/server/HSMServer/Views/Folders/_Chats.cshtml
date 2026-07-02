@@ -1,11 +1,14 @@
-﻿@using HSMCommon.Extensions
+@using HSMCommon.Extensions
 @using HSMServer.Extensions
 @using HSMServer.Notifications
 @using HSMServer.Controllers
 @using HSMServer.Constants
 @using HSMServer.Model.Folders.ViewModels
 
-@model FolderTelegramViewModel
+@model FolderChatsViewModel
+
+@inject ITelegramChatsManager ChatsManager
+@inject ISlackDestinationsManager SlackDestinationsManager
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -20,29 +23,48 @@
 
     <div class="my-2" align="right">
         <a href="javascript:showAddTelegramGroupHelpModal();" class="btn btn-link p-0">
-            <i class="fa-solid fa-plus"></i> Add new chat
+            <i class="fa-solid fa-plus"></i> <i class="@ChatIcons.TelegramBrandClass"></i> Add new telegram chat
+        </a>
+        <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditSlackDestination)" asp-route-id="@Guid.Empty" class="btn btn-link p-0">
+            <i class="fa-solid fa-plus"></i> <i class="@ChatIcons.SlackBrandClass"></i> Add new slack destination
         </a>
     </div>
 
     <div id="chatsSelect" class="selectpicker">
         <select class="selectpicker" asp-for="NewChats" multiple
                 data-width="100%" data-live-search="true" data-placeholder="Choose chats to add">
-            <option disabled>Groups</option>
-            @foreach (var chat in Model.ChatsToAdd.GetGroups())
+            @if (Model.TelegramChatsToAdd.GetGroups().Count > 0)
             {
-                <option value="@chat.Id">@chat.Name</option>
+                <option disabled>Telegram groups</option>
+                foreach (var chat in Model.TelegramChatsToAdd.GetGroups())
+                {
+                    <option value="@chat.Id" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
+                }
             }
 
-            <option data-divider="true"></option>
-            <option disabled>Users</option>
-            @foreach (var chat in Model.ChatsToAdd.GetPrivates())
+            @if (Model.TelegramChatsToAdd.GetPrivates().Count > 0)
             {
-                <option value="@chat.Id">@chat.Name</option>
+                <option data-divider="true"></option>
+                <option disabled>Telegram users</option>
+                foreach (var chat in Model.TelegramChatsToAdd.GetPrivates())
+                {
+                    <option value="@chat.Id" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
+                }
+            }
+
+            @if (Model.SlackDestinationsToAdd.Count > 0)
+            {
+                <option data-divider="true"></option>
+                <option disabled>Slack destinations</option>
+                foreach (var dest in Model.SlackDestinationsToAdd)
+                {
+                    <option value="@dest.Id" data-content="<i class='@ChatIcons.SlackBrandClass'></i> @dest.Name">@dest.Name</option>
+                }
             }
         </select>
     </div>
 
-    @if (Model.ConnectedChats.Count > 0)
+    @if (Model.ConnectedTelegramChats.Count + Model.ConnectedSlackDestinations.Count > 0)
     {
         <table class="table table-striped">
             <thead>
@@ -55,10 +77,11 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var chat in Model.ConnectedChats)
+                @foreach (var chat in Model.ConnectedTelegramChats)
                 {
                     <tr id="row_chat_@chat.Id">
                         <td class="text-break">
+                            <i class="@ChatIcons.TelegramBrandClass me-1"></i>
                             <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chat.Id">
                                 @chat.Name
                             </a>
@@ -106,6 +129,50 @@
                         </td>
                     </tr>
                 }
+                @foreach (var destination in Model.ConnectedSlackDestinations)
+                {
+                    <tr id="row_destination_@destination.Id">
+                        <td class="text-break">
+                            <i class="@ChatIcons.SlackBrandClass me-1"></i>
+                            <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditSlackDestination)" asp-route-id="@destination.Id">
+                                @destination.Name
+                            </a>
+                        </td>
+                        <td class="text-center">Slack</td>
+                        <td class="text-break text-center">
+                            @if (destination.SendMessages)
+                            {
+                                <i class="fa-solid fa-check fa-xl"></i>
+                            }
+                        </td>
+                        <td class="text-break text-center">-</td>
+                        <td nowrap class="text-center w-10">
+                            <div class='btn-group'>
+                                <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                    <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                </button>
+                                <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                    <li>
+                                        <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;"
+                                           asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditSlackDestination)" asp-route-id="@destination.Id">
+                                            View/Edit
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a id='remove_@destination.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Remove from folder
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a id="sendMessage_@destination.Id" name="@destination.Id" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Send test message
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                }
             </tbody>
         </table>
     }
@@ -131,7 +198,7 @@
         $("select[name='NewChats']").selectpicker();
     });
 
-    $(document).on("submit", "#folderTelegramChats_form", function (event) {
+    $(document).on("submit", "#folderChats_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
 
@@ -139,7 +206,7 @@
         fillDefaultChatMode(formData);
 
         $.ajax({
-            url: $("#folderTelegramChats_form").attr("action"),
+            url: $("#folderChats_form").attr("action"),
             type: 'POST',
             data: formData,
             datatype: 'html',
@@ -148,8 +215,8 @@
             cache: false,
             async: true,
             success: function (viewData) {
-                $("#folderTelegramChats_form").html(viewData);
-                showToast("Folder telegram chats have been successfully saved!");
+                $("#folderChats_form").html(viewData);
+                showToast("Folder chats have been successfully saved!");
             }
         });
     });
@@ -158,6 +225,7 @@
         var chatId = this.id.substring("remove_".length, this.id.length);
 
         $(`#row_chat_${chatId}`).remove();
+        $(`#row_destination_${chatId}`).remove();
         $(`#folder_chat_${chatId}`).val('@Guid.Empty');
     });
 
@@ -166,10 +234,15 @@
         event.stopImmediatePropagation();
 
         let chatId = this.name;
+        let id = this.id.substring("sendMessage_".length, this.id.length);
 
-        $.ajax({
-            url: `@Url.Action(nameof(NotificationsController.SendTestTelegramMessage), ViewConstants.NotificationsController)?chatId=${chatId}`
-        });
+        let isGuid = /^[0-9a-fA-F-]{36}$/.test(id);
+
+        let url = isGuid
+            ? `@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)?id=${chatId}`
+            : `@Url.Action(nameof(NotificationsController.SendTestTelegramMessage), ViewConstants.NotificationsController)?chatId=${chatId}`;
+
+        $.ajax({ url: url });
     });
 
     $('[id^=openChat_]').on('click', function () {

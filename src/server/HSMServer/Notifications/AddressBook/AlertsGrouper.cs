@@ -3,7 +3,7 @@ using HSMServer.Core.Model.Policies;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Notifications.Telegram.AddressBook
+namespace HSMServer.Notifications.AddressBook
 {
     internal sealed class AlertsGrouper : CDictBase<(string, int), List<GroupedNotification>>
     {

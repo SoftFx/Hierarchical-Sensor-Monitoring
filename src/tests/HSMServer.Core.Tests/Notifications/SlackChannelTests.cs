@@ -8,7 +8,6 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model.Policies;
-using HSMServer.Core.Notifications;
 using HSMServer.Notifications;
 using Moq;
 using Xunit;
@@ -22,7 +21,7 @@ namespace HSMServer.Core.Tests.Notifications
 
 
         [Fact]
-        public async Task DeliverAsync_SlackPolicy_PostsToWebhookAndFiresEvents()
+        public async Task DeliverAsync_DestinationInChats_PostsToWebhookAndFiresEvents()
         {
             var (manager, destinationId) = SeedDestination(send: true);
             var handler = new StubHandler(HttpStatusCode.OK);
@@ -34,7 +33,7 @@ namespace HSMServer.Core.Tests.Notifications
             channel.MessageSending += () => sending++;
             channel.MessageSended += (_, _) => sended++;
 
-            await channel.DeliverAsync(BuildMessage(destinationId, NotificationKind.Slack));
+            await channel.DeliverAsync(BuildMessage(destinationId));
 
             Assert.Equal(1, handler.Calls);
             Assert.Equal(WebhookUrl, handler.LastRequestUri);
@@ -43,15 +42,32 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         [Fact]
-        public async Task DeliverAsync_TelegramPolicy_DoesNotPost()
+        public async Task DeliverAsync_HeterogeneousChats_PostsOnlyToResolvedSlackDestinations()
         {
             var (manager, destinationId) = SeedDestination(send: true);
+            var unrelatedGuid = Guid.NewGuid();
             var handler = new StubHandler(HttpStatusCode.OK);
 
             var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
                 maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
 
-            await channel.DeliverAsync(BuildMessage(destinationId, NotificationKind.Telegram));
+            await channel.DeliverAsync(BuildMessage(destinationId, unrelatedGuid));
+
+            Assert.Equal(1, handler.Calls);
+            Assert.Equal(WebhookUrl, handler.LastRequestUri);
+        }
+
+        [Fact]
+        public async Task DeliverAsync_NoSlackDestinationInChats_DoesNotPost()
+        {
+            var (_, _) = SeedDestination(send: true);
+            var manager = BuildManager();
+            var handler = new StubHandler(HttpStatusCode.OK);
+
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
+                maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
+
+            await channel.DeliverAsync(BuildMessage(Guid.NewGuid()));
 
             Assert.Equal(0, handler.Calls);
         }
@@ -65,7 +81,7 @@ namespace HSMServer.Core.Tests.Notifications
             var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
                 maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
 
-            await channel.DeliverAsync(BuildMessage(destinationId, NotificationKind.Slack));
+            await channel.DeliverAsync(BuildMessage(destinationId));
 
             Assert.Equal(0, handler.Calls);
         }
@@ -82,7 +98,7 @@ namespace HSMServer.Core.Tests.Notifications
             int errors = 0;
             channel.ErrorHandled += _ => errors++;
 
-            await channel.DeliverAsync(BuildMessage(destinationId, NotificationKind.Slack));
+            await channel.DeliverAsync(BuildMessage(destinationId));
 
             Assert.Equal(1, handler.Calls);
             Assert.Equal(1, errors);
@@ -100,7 +116,7 @@ namespace HSMServer.Core.Tests.Notifications
             int sended = 0;
             channel.MessageSended += (_, _) => sended++;
 
-            await channel.DeliverAsync(BuildMessage(destinationId, NotificationKind.Slack));
+            await channel.DeliverAsync(BuildMessage(destinationId));
 
             Assert.Equal(2, handler.Calls);
             Assert.Equal(1, sended);
@@ -118,7 +134,7 @@ namespace HSMServer.Core.Tests.Notifications
             int errors = 0;
             channel.ErrorHandled += _ => errors++;
 
-            await channel.DeliverAsync(BuildMessage(Guid.NewGuid(), NotificationKind.Slack));
+            await channel.DeliverAsync(BuildMessage(Guid.NewGuid()));
 
             Assert.Equal(0, handler.Calls);
             Assert.Equal(0, errors);
@@ -138,7 +154,7 @@ namespace HSMServer.Core.Tests.Notifications
             channel.ErrorHandled += _ => errors++;
             channel.MessageSended += (_, _) => sended++;
 
-            await channel.DeliverAsync(BuildMessage(destinationId, NotificationKind.Slack));
+            await channel.DeliverAsync(BuildMessage(destinationId));
 
             Assert.Equal(3, handler.Calls);
             Assert.Equal(0, sended);
@@ -157,29 +173,101 @@ namespace HSMServer.Core.Tests.Notifications
             int errors = 0;
             channel.ErrorHandled += _ => errors++;
 
-            var ex = await Record.ExceptionAsync(() => channel.DeliverAsync(BuildMessage(destinationId, NotificationKind.Slack)));
+            var ex = await Record.ExceptionAsync(() => channel.DeliverAsync(BuildMessage(destinationId)));
 
             Assert.Null(ex);
             Assert.True(errors >= 1);
         }
 
         [Fact]
-        public async Task FlushAsync_IsNoOp()
+        public async Task DeliverAsync_WhenAggregationIsPositive_BuffersUntilFlush()
+        {
+            var (manager, destinationId) = SeedDestination(send: true, aggregationSec: 60);
+            var handler = new StubHandler(HttpStatusCode.OK);
+
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
+                maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
+
+            await channel.DeliverAsync(BuildMessage(destinationId));
+
+            Assert.Equal(0, handler.Calls);
+
+            await channel.FlushAsync();
+
+            Assert.Equal(1, handler.Calls);
+            Assert.Equal(WebhookUrl, handler.LastRequestUri);
+        }
+
+        [Fact]
+        public async Task DeliverAsync_WhenAggregationIsZero_PostsImmediately()
+        {
+            var (manager, destinationId) = SeedDestination(send: true, aggregationSec: 0);
+            var handler = new StubHandler(HttpStatusCode.OK);
+
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
+                maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
+
+            await channel.DeliverAsync(BuildMessage(destinationId));
+
+            Assert.Equal(1, handler.Calls);
+
+            await channel.FlushAsync();
+
+            Assert.Equal(1, handler.Calls);
+        }
+
+        [Fact]
+        public async Task FlushAsync_WhenBufferEmpty_DoesNotPost()
+        {
+            var (manager, _) = SeedDestination(send: true, aggregationSec: 60);
+            var handler = new StubHandler(HttpStatusCode.OK);
+
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
+                maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
+
+            await channel.FlushAsync();
+
+            Assert.Equal(0, handler.Calls);
+        }
+
+        [Fact]
+        public async Task FlushAsync_RespectsAggregationWindow()
+        {
+            var (manager, destinationId) = SeedDestination(send: true, aggregationSec: 60);
+            var handler = new StubHandler(HttpStatusCode.OK);
+
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
+                maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
+
+            await channel.DeliverAsync(BuildMessage(destinationId));
+            await channel.FlushAsync();
+
+            Assert.Equal(1, handler.Calls);
+
+            await channel.FlushAsync();
+
+            Assert.Equal(1, handler.Calls);
+        }
+
+        [Fact]
+        public async Task FlushAsync_WhenNoDestinations_DoesNotThrowOrPost()
         {
             var manager = BuildManager();
-            var channel = new SlackNotificationChannel(manager, new HttpClient(),
+            var handler = new StubHandler(HttpStatusCode.OK);
+            var channel = new SlackNotificationChannel(manager, new HttpClient(handler),
                 maxRetryAttempts: 1, initialBackoff: TestBackoff, requestTimeout: TimeSpan.FromSeconds(5));
 
             var ex = await Record.ExceptionAsync(() => channel.FlushAsync());
 
             Assert.Null(ex);
+            Assert.Equal(0, handler.Calls);
         }
 
 
         private static SlackDestinationsManager BuildManager()
             => new(new Mock<IDatabaseCore>().Object);
 
-        private static SlackDestination BuildDestination(bool send) =>
+        private static SlackDestination BuildDestination(bool send, int aggregationSec = 0) =>
             new(new SlackDestinationEntity
             {
                 Id = Guid.NewGuid().ToByteArray(),
@@ -188,26 +276,35 @@ namespace HSMServer.Core.Tests.Notifications
                 Name = "alerts-channel",
                 WebhookUrl = WebhookUrl,
                 SendMessages = send,
+                MessagesAggregationTimeSec = aggregationSec,
             });
 
-        private static (SlackDestinationsManager manager, Guid destinationId) SeedDestination(bool send)
+        private static (SlackDestinationsManager manager, Guid destinationId) SeedDestination(bool send, int aggregationSec = 0)
         {
             var manager = BuildManager();
-            var dest = BuildDestination(send);
+            var dest = BuildDestination(send, aggregationSec);
             manager.TryAdd(dest.Id, dest);
             return (manager, dest.Id);
         }
 
-        private static AlertMessage BuildMessage(Guid destinationId, NotificationKind kind)
+        private static AlertMessage BuildMessage(params Guid[] destinationIds)
         {
             var dest = new AlertDestination
             {
-                Chats = new HashSet<Guid> { destinationId },
+                Chats = new HashSet<Guid>(destinationIds),
                 AllChats = false,
-                Kind = kind,
             };
 
-            var alert = new AlertResult(dest, icon: "⚠️", comment: "value changed", policyId: Guid.NewGuid());
+            var state = new AlertState
+            {
+                Template = new AlertSystemTemplate(),
+                Path = "root/sensor",
+                Product = "TestProduct",
+                Sensor = "TestSensor",
+                Status = "Error",
+            };
+
+            var alert = new AlertResult(dest, icon: "⚠️", comment: "value changed", policyId: Guid.NewGuid(), template: "$product $sensor is $status", state);
 
             return new AlertMessage(Guid.NewGuid(), new List<AlertResult> { alert });
         }

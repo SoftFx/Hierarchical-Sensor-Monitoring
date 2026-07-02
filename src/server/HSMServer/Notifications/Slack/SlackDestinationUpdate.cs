@@ -7,5 +7,7 @@ namespace HSMServer.Notifications
         public string WebhookUrl { get; init; }
 
         public bool? SendMessages { get; init; }
+
+        public int? MessagesAggregationTimeSec { get; init; }
     }
 }
