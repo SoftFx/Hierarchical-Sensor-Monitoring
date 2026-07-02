@@ -242,6 +242,17 @@ namespace hsm::collector
             loggers_.push_back(std::move(holder));
         }
 
+        /// Install the built-in rolling file logger (parity with the managed NLog default): writes
+        /// `<directory>/DataCollector_<UTC-date>.txt` (levels >= `min_level`) plus a `_error_` file
+        /// (errors only), asynchronously, rolling by date. Complements SetLogger - both the callback
+        /// and the file receive every message. Call before Start(); an empty `directory` clears it.
+        void EnableFileLogging(const std::string& directory, LogLevel min_level = LogLevel::Info)
+        {
+            Check(
+                hsm_collector_enable_file_logging(handle_, directory.c_str(), static_cast<hsm_log_level_t>(min_level)),
+                "Failed to enable file logging.");
+        }
+
         /// Install (or, with an empty std::function, clear) the metric-source factory. As with
         /// SetLogger, call once before Start(): a replaced/cleared holder is retained until
         /// destruction (the factory may be in use on the scheduler thread), with no reclamation.

@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <deque>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <functional>
@@ -79,6 +80,19 @@ namespace
         Stopping,
         Disposed,
     };
+
+    const char* StateName(CollectorState state)
+    {
+        switch (state)
+        {
+        case CollectorState::Stopped:  return "Stopped";
+        case CollectorState::Starting: return "Starting";
+        case CollectorState::Running:  return "Running";
+        case CollectorState::Stopping: return "Stopping";
+        case CollectorState::Disposed: return "Disposed";
+        }
+        return "Unknown";
+    }
 
     hsm_collector_status_t ToPublicStatus(CollectorState state)
     {
@@ -746,6 +760,143 @@ namespace
         std::thread worker_;
         bool running_ = false;
         bool stop_ = false;
+    };
+
+    // Built-in rolling file logger (parity with the managed NLog default sink). A background thread
+    // drains a queue and appends formatted lines to <dir>/DataCollector_<UTC-date>.txt (every level at
+    // or above min_level) and <dir>/DataCollector_error_<UTC-date>.txt (errors only), rolling when the
+    // UTC date changes. Enqueue never blocks the caller (the file write happens on the worker); the
+    // destructor drains the remaining queue before joining so shutdown logs are not lost. The worker
+    // touches only this object (files/queue), never the collector, so it is free of the teardown races
+    // the collector's own threads have to guard against.
+    class FileLogger
+    {
+    public:
+        FileLogger(std::string directory, hsm_log_level_t min_level)
+            : directory_(std::move(directory)), min_level_(min_level)
+        {
+            std::error_code ec;
+            std::filesystem::create_directories(directory_, ec); // best-effort; the file open() is the real gate
+            worker_ = std::thread([this] { Run(); });
+        }
+
+        FileLogger(const FileLogger&) = delete;
+        FileLogger& operator=(const FileLogger&) = delete;
+
+        ~FileLogger()
+        {
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                stop_ = true;
+            }
+            cv_.notify_all();
+            if (worker_.joinable())
+                worker_.join();
+        }
+
+        // Non-blocking: stamps wall-clock time (logging uses real time, not the collector's swappable
+        // clock) and hands off to the worker. Dropped silently once stopping.
+        void Enqueue(hsm_log_level_t level, const std::string& message)
+        {
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (stop_)
+                    return;
+                queue_.push_back(Entry{ level, message, UnixTimeMilliseconds() });
+            }
+            cv_.notify_one();
+        }
+
+    private:
+        struct Entry
+        {
+            hsm_log_level_t level;
+            std::string message;
+            int64_t unix_ms;
+        };
+
+        void Run()
+        {
+            std::string open_date;
+            std::ofstream all_file;
+            std::ofstream err_file;
+
+            std::unique_lock<std::mutex> lock(mutex_);
+            for (;;)
+            {
+                cv_.wait(lock, [this] { return stop_ || !queue_.empty(); });
+
+                std::deque<Entry> batch;
+                batch.swap(queue_);
+                const bool stopping = stop_;
+                lock.unlock();
+
+                for (const auto& e : batch)
+                {
+                    const std::string date = FormatUtc(e.unix_ms, "%Y-%m-%d");
+                    if (date != open_date)
+                    {
+                        open_date = date;
+                        all_file.close();
+                        err_file.close();
+                        all_file.open(directory_ + "/DataCollector_" + date + ".txt", std::ios::app);
+                        err_file.open(directory_ + "/DataCollector_error_" + date + ".txt", std::ios::app);
+                    }
+
+                    const std::string line =
+                        FormatUtc(e.unix_ms, "%Y-%m-%d %H:%M:%S") + "|" + LevelName(e.level) + "| " + e.message + "\n";
+                    if (e.level >= min_level_ && all_file.is_open())
+                        all_file << line;
+                    if (e.level == HSM_LOG_LEVEL_ERROR && err_file.is_open())
+                        err_file << line;
+                }
+
+                if (all_file.is_open())
+                    all_file.flush();
+                if (err_file.is_open())
+                    err_file.flush();
+
+                lock.lock();
+                if (stopping && queue_.empty())
+                    break;
+            }
+        }
+
+        static const char* LevelName(hsm_log_level_t level)
+        {
+            switch (level)
+            {
+            case HSM_LOG_LEVEL_DEBUG: return "DEBUG";
+            case HSM_LOG_LEVEL_INFO:  return "INFO";
+            default:                  return "ERROR";
+            }
+        }
+
+        // UTC strftime of a unix-ms instant; a sentinel on an out-of-range second (mirrors the wire ISO
+        // helper) so a bad clock never yields a "0000-" file name.
+        static std::string FormatUtc(int64_t unix_ms, const char* fmt)
+        {
+            std::time_t secs = static_cast<std::time_t>(unix_ms / 1000);
+            std::tm tm{};
+#if defined(_WIN32)
+            const bool ok = gmtime_s(&tm, &secs) == 0;
+#else
+            const bool ok = gmtime_r(&secs, &tm) != nullptr;
+#endif
+            if (!ok)
+                return "0001-01-01";
+            char buf[40];
+            const size_t n = std::strftime(buf, sizeof(buf), fmt, &tm);
+            return std::string(buf, n);
+        }
+
+        std::string directory_;
+        hsm_log_level_t min_level_;
+        std::mutex mutex_;
+        std::condition_variable cv_;
+        std::deque<Entry> queue_;
+        bool stop_ = false;
+        std::thread worker_;
     };
 
     // .NET shortest round-trip ("R") double text — the canonical payload contract
@@ -2521,6 +2672,23 @@ namespace
             log_user_data_ = user_data;
         }
 
+        // Install the built-in rolling file sink (parity with the managed NLog default). Complements
+        // SetLogger: both the callback (if any) and the file receive every message. Call before Start.
+        // A second call swaps the sink; an empty directory clears it. The replaced sink is flushed and
+        // joined outside the lock so a swap never stalls concurrent logging.
+        void EnableFileLogging(const std::string& directory, hsm_log_level_t min_level)
+        {
+            std::unique_ptr<FileLogger> logger =
+                directory.empty() ? nullptr : std::make_unique<FileLogger>(directory, min_level);
+            std::unique_ptr<FileLogger> old;
+            {
+                std::lock_guard<std::mutex> guard(logger_mutex_);
+                old = std::move(file_logger_);
+                file_logger_ = std::move(logger);
+            }
+            // `old`'s destructor (drain + join) runs here, outside logger_mutex_.
+        }
+
         hsm_result_t CreateSensor(
             const char* path,
             hsm_sensor_type_t type,
@@ -3387,6 +3555,7 @@ namespace
         void NotifyLifecycle(CollectorState state)
         {
             const auto status = ToPublicStatus(state);
+            LogMessage(HSM_LOG_LEVEL_INFO, std::string("DataCollector -> ") + StateName(state));
 
             std::vector<LifecycleListener> listeners;
             {
@@ -3402,16 +3571,21 @@ namespace
         {
             hsm_log_callback_t callback = nullptr;
             void* user_data = nullptr;
+            FileLogger* file_logger = nullptr;
             {
                 std::lock_guard<std::mutex> guard(logger_mutex_);
                 callback = log_callback_;
                 user_data = log_user_data_;
+                // Raw ptr is safe: the collector joins every thread that can call LogMessage before
+                // file_logger_ is destroyed at teardown, so it cannot be freed under this call.
+                file_logger = file_logger_.get();
             }
 
-            if (callback == nullptr)
-                return;
-
-            InvokeIsolated([&] { callback(level, message.c_str(), user_data); });
+            // Both sinks receive every message (the file logger applies its own min-level filter).
+            if (callback != nullptr)
+                InvokeIsolated([&] { callback(level, message.c_str(), user_data); });
+            if (file_logger != nullptr)
+                InvokeIsolated([&] { file_logger->Enqueue(level, message); });
         }
 
         // Error routing entry point: validation drops, loop errors and shutdown discards all
@@ -4561,6 +4735,7 @@ namespace
         std::mutex logger_mutex_;
         hsm_log_callback_t log_callback_ = nullptr;
         void* log_user_data_ = nullptr;
+        std::unique_ptr<FileLogger> file_logger_; // built-in file sink (EnableFileLogging); guarded by logger_mutex_
         std::unordered_map<std::string, DedupEntry> dedup_;
 
         // [[maybe_unused]] marks options stored to mirror CollectorOptions but consumed only by
@@ -5316,6 +5491,15 @@ hsm_result_t hsm_collector_set_logger(hsm_collector_t* collector, hsm_log_callba
         return HSM_RESULT_INVALID_ARGUMENT;
 
     collector->impl->SetLogger(callback, user_data);
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_collector_enable_file_logging(hsm_collector_t* collector, const char* directory, hsm_log_level_t min_level)
+{
+    if (collector == nullptr || directory == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    collector->impl->EnableFileLogging(directory, min_level);
     return HSM_RESULT_OK;
 }
 
