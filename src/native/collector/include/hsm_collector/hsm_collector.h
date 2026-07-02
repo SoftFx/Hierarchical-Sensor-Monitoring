@@ -309,6 +309,15 @@ typedef enum hsm_log_level_t HSM_ENUM_INT32
 typedef void (*hsm_log_callback_t)(hsm_log_level_t level, const char* message, void* user_data);
 hsm_result_t hsm_collector_set_logger(hsm_collector_t* collector, hsm_log_callback_t callback, void* user_data);
 
+/* Built-in rolling file logger (parity with the managed NLog default sink). Writes
+   <directory>/DataCollector_<UTC-date>.txt (every level >= min_level) and
+   <directory>/DataCollector_error_<UTC-date>.txt (errors only), asynchronously,
+   rolling when the UTC date changes; line format "yyyy-MM-dd HH:mm:ss|LEVEL| message".
+   Complements set_logger: both the callback (if any) and the file receive every
+   message (the file applies its own min_level filter). Call before Start. */
+hsm_result_t hsm_collector_enable_file_logging(
+    hsm_collector_t* collector, const char* directory, hsm_log_level_t min_level);
+
 hsm_result_t hsm_collector_create_int_sensor(
     hsm_collector_t* collector,
     const char* path,
