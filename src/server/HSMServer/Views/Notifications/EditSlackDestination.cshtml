@@ -104,9 +104,10 @@
 
 <script>
     function removeSlackDestination() {
+        const destinationName = @Json.Serialize(Model.Name);
         showConfirmationModal(
-            `Removing Slack destination '@Model.Name'`,
-            `Do you really want to remove Slack destination '@Model.Name'? Alerts targeting it will no longer fire Slack delivery.`,
+            `Removing Slack destination '${destinationName}'`,
+            `Do you really want to remove Slack destination '${destinationName}'? Alerts targeting it will no longer fire Slack delivery.`,
             function () {
                 $.ajax({
                     type: 'POST',

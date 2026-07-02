@@ -103,6 +103,7 @@ else
             var id = this.id.substring("sendMessage_".length, this.id.length);
 
             $.ajax({
+                type: 'POST',
                 url: `@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)?id=${id}`
             }).done(function () {
                 showToast("Test message sent.");

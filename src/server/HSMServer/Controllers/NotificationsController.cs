@@ -139,7 +139,9 @@ namespace HSMServer.Controllers
 
             if (await SlackDestinations.TryUpdate(model.ToUpdate()))
             {
-                var updated = SlackDestinations[model.Id];
+                if (!SlackDestinations.TryGetValue(model.Id, out var updated))
+                    return RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
+
                 var removedFolders = updated.Folders.Except(model.Folders.Folders).ToList();
 
                 foreach (var folderId in model.Folders.SelectedFolders)
@@ -165,7 +167,7 @@ namespace HSMServer.Controllers
         [SlackAdmin]
         public async Task RemoveSlackDestination(Guid id) => await SlackDestinations.TryRemove(new(id, CurrentInitiator));
 
-        [HttpGet]
+        [HttpPost]
         [SlackAdmin]
         public async Task<IActionResult> SendTestSlackMessage([FromQuery] Guid id)
         {
