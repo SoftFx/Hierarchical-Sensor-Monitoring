@@ -30,7 +30,7 @@
 
 @{
     var allChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v.Name);
-    foreach (var dest in SlackDestinationsManager.GetValues().Where(d => d.SendMessages))
+    foreach (var dest in SlackDestinationsManager.GetValues())
         allChats[dest.Id] = dest.Name;
 }
 

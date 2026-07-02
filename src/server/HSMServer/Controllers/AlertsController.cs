@@ -206,7 +206,7 @@ namespace HSMServer.Controllers
         private FileContentResult ExportModelToFile(string selectedNodePath, PolicyExportGroup group)
         {
             var availableChats = _telegram.GetValues().ToDictionary(ch => ch.Id, ch => ch.Name);
-            foreach (var dest in _slackDestinations.GetValues().Where(d => d.SendMessages))
+            foreach (var dest in _slackDestinations.GetValues())
                 availableChats[dest.Id] = dest.Name;
 
             var fileName = $"{selectedNodePath.Replace('/', '_')}-alerts.json";

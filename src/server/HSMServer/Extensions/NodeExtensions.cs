@@ -37,7 +37,7 @@ namespace HSMServer.Extensions
                     result[chat.Id] = chat.Name;
 
             foreach (var dest in slackManager.GetValues())
-                if (dest.SendMessages && folderChats.Contains(dest.Id))
+                if (folderChats.Contains(dest.Id))
                     result[dest.Id] = dest.Name;
 
             return result;
@@ -63,7 +63,7 @@ namespace HSMServer.Extensions
                     result[chat.Id] = chat.Name;
 
             foreach (var dest in slackManager.GetValues())
-                if (dest.SendMessages && folderChats.Contains(dest.Id))
+                if (folderChats.Contains(dest.Id))
                     result[dest.Id] = dest.Name;
 
             return result;

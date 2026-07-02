@@ -27,7 +27,7 @@
     var isSecondaryCondition = !Model.IsMain;
 
     var chats = ChatsManager.GetValues().Where(x => Model.AvailableChats.Contains(x.Id)).ToList();
-    var slackDestinations = SlackDestinations.GetValues().Where(d => d.SendMessages && Model.AvailableChats.Contains(d.Id)).OrderBy(d => d.Name).ToList();
+    var slackDestinations = SlackDestinations.GetValues().Where(d => Model.AvailableChats.Contains(d.Id)).OrderBy(d => d.Name).ToList();
 }
 
 @* <div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3 w-100" > *@

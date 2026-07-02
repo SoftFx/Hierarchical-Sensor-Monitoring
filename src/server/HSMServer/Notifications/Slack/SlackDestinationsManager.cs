@@ -40,11 +40,13 @@ namespace HSMServer.Notifications
                     destination.Folders.Add(folderId);
         }
 
-        public async Task RemoveFolderFromChats(Guid folderId, List<Guid> destinations, InitiatorInfo initiator)
+        public Task RemoveFolderFromChats(Guid folderId, List<Guid> destinations, InitiatorInfo initiator)
         {
             foreach (var id in destinations)
                 if (TryGetValue(id, out var destination))
                     destination.Folders.Remove(folderId);
+
+            return Task.CompletedTask;
         }
 
         public void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator) =>

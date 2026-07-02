@@ -226,7 +226,7 @@ namespace HSMServer.Controllers
         private FolderChatsViewModel BuildFolderChats(FolderModel folder)
         {
             var chats = _telegramChatsManager.GetValues();
-            var destinations = _slackDestinationsManager.GetValues().Where(d => d.SendMessages).ToList();
+            var destinations = _slackDestinationsManager.GetValues().ToList();
 
             return new(folder, chats, destinations);
         }

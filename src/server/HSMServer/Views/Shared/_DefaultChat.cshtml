@@ -14,14 +14,14 @@
     var available = new Dictionary<Guid, string>();
     foreach (var chat in ChatsManager.GetValues())
         available[chat.Id] = chat.Name;
-    foreach (var dest in SlackDestinationsManager.GetValues().Where(d => d.SendMessages))
+    foreach (var dest in SlackDestinationsManager.GetValues())
         available[dest.Id] = dest.Name;
 
     var (displayName, parentChats) = Model.GetDisplayChatName(available, out var allChats);
 
     var telegramGroups = ChatsManager.GetValues().Where(c => allChats.ContainsKey(c.Id) && c.Type == ConnectedChatType.TelegramGroup).OrderBy(c => c.Name).ToList();
     var telegramUsers = ChatsManager.GetValues().Where(c => allChats.ContainsKey(c.Id) && c.Type == ConnectedChatType.TelegramPrivate).OrderBy(c => c.Name).ToList();
-    var slackDestinations = SlackDestinationsManager.GetValues().Where(d => d.SendMessages && allChats.ContainsKey(d.Id)).OrderBy(d => d.Name).ToList();
+    var slackDestinations = SlackDestinationsManager.GetValues().Where(d => allChats.ContainsKey(d.Id)).OrderBy(d => d.Name).ToList();
 }
 
 
