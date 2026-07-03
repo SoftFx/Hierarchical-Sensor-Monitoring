@@ -14,7 +14,7 @@ extern "C"
    appended); MAJOR for any breaking change (field reorder/removal, semantic
    change). hsm_collector_version() returns the packed value at runtime. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 5
+#define HSM_COLLECTOR_VERSION_MINOR 6
 #define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
