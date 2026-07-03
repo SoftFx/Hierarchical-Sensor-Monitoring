@@ -17,7 +17,11 @@ namespace hsm::agent
     class FileLogger
     {
     public:
-        explicit FileLogger(std::wstring path, std::size_t max_bytes = 5u * 1024u * 1024u);
+        /// Messages below `min_level` are dropped (default Info — Debug stays out of the file unless
+        /// explicitly lowered; parity with the collector's built-in file logger).
+        explicit FileLogger(std::wstring path,
+                            hsm::collector::LogLevel min_level = hsm::collector::LogLevel::Info,
+                            std::size_t max_bytes = 5u * 1024u * 1024u);
 
         FileLogger(const FileLogger&) = delete;
         FileLogger& operator=(const FileLogger&) = delete;
@@ -30,6 +34,7 @@ namespace hsm::agent
         std::mutex mutex_;
         std::wstring path_;
         std::size_t max_bytes_;
+        hsm::collector::LogLevel min_level_;
         std::ofstream out_;
         std::size_t written_ = 0;
     };

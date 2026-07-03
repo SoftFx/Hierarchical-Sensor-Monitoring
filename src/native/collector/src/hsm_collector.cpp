@@ -2341,7 +2341,10 @@ namespace
         // "Type":0 Command discriminator the server's CommandRequestBaseDeserializationConverter
         // keys on. Best-effort: a failure is logged and Start proceeds (values would fail too if the
         // server is unreachable; the value queue's durable retry handles a transient outage).
-        void PostRegistrationsWire(const std::vector<std::shared_ptr<NativeSensor>>& sensors)
+        // `runtime` = a sensor registered lazily AFTER Start (top-CPU process, network interface,
+        // service-status, TCP-rate) rather than the connect-time batch. It changes the log label
+        // (no "on connect") and level (Debug, so per-sample registrations do not spam the log).
+        void PostRegistrationsWire(const std::vector<std::shared_ptr<NativeSensor>>& sensors, bool runtime = false)
         {
             if (sensors.empty())
                 return;
@@ -2362,12 +2365,22 @@ namespace
             };
 
             const auto response = http_transport_->Post(endpoints_.CommandsList(), body, headers);
+            // Name a single sensor by path; the connect batch by count.
+            const std::string what = sensors.size() == 1 ? "sensor " + sensors.front()->Path()
+                                                         : std::to_string(sensors.size()) + " sensor(s)";
             if (!response.IsSuccess())
-                LogError("Failed to register " + std::to_string(sensors.size()) +
-                         " sensor(s) on Start: " + (response.error.empty() ? "non-2xx response" : response.error));
+            {
+                // HTTP status for parity with the value send-fail log; fall back to the transport
+                // error text (e.g. "Could not connect to server") when no HTTP response arrived.
+                const std::string reason = response.status_code > 0
+                                               ? "HTTP " + std::to_string(response.status_code)
+                                               : (response.error.empty() ? "no response" : response.error);
+                LogError("Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason);
+            }
+            else if (runtime)
+                LogMessage(HSM_LOG_LEVEL_DEBUG, "Registered " + what + ".");
             else
-                LogMessage(
-                    HSM_LOG_LEVEL_INFO, "Registered " + std::to_string(sensors.size()) + " sensor(s) on connect.");
+                LogMessage(HSM_LOG_LEVEL_INFO, "Registered " + what + " on connect.");
         }
 #endif
 
@@ -3843,7 +3856,7 @@ namespace
                 return;
 #if defined(HSM_COLLECTOR_HTTP)
             if (send_wire_)
-                PostRegistrationsWire({ tcp_fail_rate_sensor_ });
+                PostRegistrationsWire({ tcp_fail_rate_sensor_ }, /*runtime=*/true);
 #endif
 
             {
@@ -4014,7 +4027,7 @@ namespace
                             it = cache.emplace(iface, sensor).first;
 #if defined(HSM_COLLECTOR_HTTP)
                             if (send_wire_)
-                                PostRegistrationsWire({ sensor });
+                                PostRegistrationsWire({ sensor }, /*runtime=*/true);
 #endif
                         }
 
@@ -4105,7 +4118,7 @@ namespace
                 return;
 #if defined(HSM_COLLECTOR_HTTP)
             if (send_wire_)
-                PostRegistrationsWire({ service_status_sensor_ });
+                PostRegistrationsWire({ service_status_sensor_ }, /*runtime=*/true);
 #endif
 
             {
@@ -4353,7 +4366,7 @@ namespace
                                 // so the server gets the description. HttpTransport::Post is
                                 // thread-safe (per-call libcurl easy handle).
                                 if (send_wire_)
-                                    PostRegistrationsWire({ std::move(sensor) });
+                                    PostRegistrationsWire({ std::move(sensor) }, /*runtime=*/true);
 #endif
                             }
                             else
@@ -4500,11 +4513,13 @@ namespace
                 dropped = DispatchQueuedLocked(lock, /*clear_remainder_on_failure=*/true);
             }
 
-            // Error routing — shutdown discard: a bounded stop that drops pending values on a
-            // dead/failing transport reports it (logged outside the queue lock so a slow log
-            // sink cannot stall shutdown). Deduplicated like any other error.
+            // Debug, not Error: dropping buffered values on a bounded graceful stop is expected and
+            // contracted (a stop must not block on a dead/failing transport). Logging it as Error
+            // spammed the log and the Windows Event Log on every routine restart; keep it only as a
+            // Debug breadcrumb (logged outside the queue lock so a slow sink cannot stall shutdown).
             if (dropped > 0)
-                LogError("Collector stop dropped " + std::to_string(dropped) + " pending value(s): transport unavailable.");
+                LogMessage(HSM_LOG_LEVEL_DEBUG,
+                           "Collector stop dropped " + std::to_string(dropped) + " pending value(s): transport unavailable.");
         }
 
         // Pops and sends batches of up to max_values_in_package_ until the queue is empty or a

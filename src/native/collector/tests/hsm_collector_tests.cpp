@@ -3786,6 +3786,51 @@ namespace
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
     }
+
+    // A registration POST that gets a non-2xx response must log the HTTP status for diagnosis (parity
+    // with the value send-fail log), and the Start batch keeps the "on connect" label — never the
+    // stale "on Start".
+    void NativeHttpRegistrationFailureLogsStatus()
+    {
+        hsm::test::HttpCaptureServer server(503);
+
+        std::vector<std::pair<hsm_log_level_t, std::string>> logs;
+
+        hsm_collector_options_t options{};
+        options.access_key = "reg-key";
+        options.server_address = "http://127.0.0.1";
+        options.port = server.Port();
+        options.client_name = "reg-client";
+        options.allow_plaintext_transport = true;
+        options.package_collect_period_ms = 20;
+
+        CollectorHandle collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t level, const char* message, void* user_data) {
+                static_cast<std::vector<std::pair<hsm_log_level_t, std::string>>*>(user_data)->emplace_back(level, message);
+            },
+            &logs);
+        hsm_collector_test_install_http_sender(collector.value);
+        SensorHandle sensor = CreateIntSensor(collector.value, "reg/int");
+
+        // Registration is POSTed synchronously during Start, so the failure is logged by the time
+        // start() returns.
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        const auto error_has = [&](const std::string& needle) {
+            for (const auto& entry : logs)
+                if (entry.first == HSM_LOG_LEVEL_ERROR && entry.second.find(needle) != std::string::npos)
+                    return true;
+            return false;
+        };
+        Require(error_has("Failed to register"), "a failed registration must log an error");
+        Require(error_has("HTTP 503"), "the registration failure must carry the HTTP status code");
+        Require(error_has("on connect"), "the Start batch failure keeps the 'on connect' label");
+        for (const auto& entry : logs)
+            Require(entry.second.find("on Start") == std::string::npos, "the stale 'on Start' label must be gone");
+    }
 #endif
 
     void NativeWireTimeSpanAndVersionMatchNet()
@@ -5032,6 +5077,7 @@ namespace
             { "native_http_transport_posts_to_capture_server", [](const std::string&) { NativeHttpTransportPostsToCaptureServer(); } },
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
+            { "native_http_registration_failure_logs_status", [](const std::string&) { NativeHttpRegistrationFailureLogsStatus(); } },
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },

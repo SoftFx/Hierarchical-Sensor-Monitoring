@@ -38,8 +38,8 @@ namespace hsm::agent
         }
     } // namespace
 
-    FileLogger::FileLogger(std::wstring path, std::size_t max_bytes)
-        : path_(std::move(path)), max_bytes_(max_bytes)
+    FileLogger::FileLogger(std::wstring path, hsm::collector::LogLevel min_level, std::size_t max_bytes)
+        : path_(std::move(path)), max_bytes_(max_bytes), min_level_(min_level)
     {
         out_.open(path_, std::ios::app | std::ios::binary);
         if (out_)
@@ -65,6 +65,8 @@ namespace hsm::agent
 
     void FileLogger::Write(hsm::collector::LogLevel level, const std::string& message)
     {
+        if (level < min_level_)
+            return;
         std::lock_guard<std::mutex> lock(mutex_);
         if (!out_)
             return;
