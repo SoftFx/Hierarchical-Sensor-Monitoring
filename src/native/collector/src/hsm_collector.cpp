@@ -3314,9 +3314,9 @@ namespace
         }
 
         // Optional host override for the reported ".module/Collector version". Empty (default) ->
-        // HSM_COLLECTOR_PRODUCT_VERSION (the collector product line). A host must NOT set this to its
-        // own application version: collector and host (e.g. the agent) are distinct products with
-        // distinct version lines. Reserved for embedders that genuinely re-brand the collector build.
+        // HSM_COLLECTOR_VERSION_STRING (the native collector's own version). A host must NOT set this
+        // to its own application version: collector and host (e.g. the agent) are distinct products
+        // with distinct version lines. Reserved for embedders that genuinely re-brand the collector.
         void SetCollectorVersionOverride(std::string version) { collector_version_override_ = std::move(version); }
         const std::string& CollectorVersionOverride() const { return collector_version_override_; }
 
@@ -7042,12 +7042,12 @@ hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* col
         std::shared_ptr<NativeSensor> collector_version;
         if (collector->impl->AddDefaultSensor(HSM_DEFAULT_COLLECTOR_VERSION, &params, collector_version) == HSM_RESULT_OK)
         {
-            // Report the collector PRODUCT version (HSMDataCollector line), NOT the C ABI version
-            // and NOT the host application's version — collector and host (e.g. the agent) are
-            // distinct products. An explicit host override still wins if set.
+            // Report the native collector's OWN version (HSM_COLLECTOR_VERSION_STRING), independent of
+            // the managed C# collector, the host application (e.g. the agent), and the server — each is
+            // a distinct product with its own version. An explicit host override still wins if set.
             const std::string& override_ver = collector->impl->CollectorVersionOverride();
             const std::string version = override_ver.empty()
-                                            ? std::string(HSM_COLLECTOR_PRODUCT_VERSION)
+                                            ? std::string(HSM_COLLECTOR_VERSION_STRING)
                                             : override_ver;
             EmitVersionStartValue(collector->impl.get(), collector_version, version.c_str());
         }

@@ -9,22 +9,24 @@ extern "C"
 {
 #endif
 
-/* ABI version. Bumped per the policy in docs/native-collector-c-abi.md: MINOR
-   for additive, backward-compatible growth (new functions, struct fields
-   appended); MAJOR for any breaking change (field reorder/removal, semantic
-   change). hsm_collector_version() returns the packed value at runtime. */
+/* The native collector's OWN version (semver) — INDEPENDENT of the managed C# collector, the host
+   application (e.g. the agent), and the server; each is a distinct product with its own version.
+   Bump per src/native/collector/AGENTS.md: MAJOR for a breaking ABI change; MINOR for additive ABI
+   growth (a new exported hsm_* function / appended struct field); PATCH for a backward-compatible
+   behavior/logic change that does not touch the ABI (e.g. a logging change). hsm_collector_version()
+   returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
+   reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
 #define HSM_COLLECTOR_VERSION_MINOR 6
-#define HSM_COLLECTOR_VERSION_PATCH 0
+#define HSM_COLLECTOR_VERSION_PATCH 1
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
-/* Collector PRODUCT version — the value reported as ".module/Collector version". This is the
-   HSMDataCollector product line and is DISTINCT from the C ABI version above (and from any host
-   application's own version). Keep it in sync with the managed collector's version
-   (src/collector/HSMDataCollector/HSMDataCollector.csproj <Version>) so the native port and the
-   C# collector report the same product version. */
-#define HSM_COLLECTOR_PRODUCT_VERSION "3.4.12"
+#define HSM_COLLECTOR_VERSION_STRINGIFY_(x) #x
+#define HSM_COLLECTOR_VERSION_STRINGIFY(x) HSM_COLLECTOR_VERSION_STRINGIFY_(x)
+#define HSM_COLLECTOR_VERSION_STRING                             \
+    HSM_COLLECTOR_VERSION_STRINGIFY(HSM_COLLECTOR_VERSION_MAJOR) \
+    "." HSM_COLLECTOR_VERSION_STRINGIFY(HSM_COLLECTOR_VERSION_MINOR) "." HSM_COLLECTOR_VERSION_STRINGIFY(HSM_COLLECTOR_VERSION_PATCH)
 
 typedef struct hsm_collector_t hsm_collector_t;
 typedef struct hsm_sensor_t hsm_sensor_t;

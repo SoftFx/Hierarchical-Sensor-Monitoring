@@ -7,37 +7,25 @@
 
 ## Overview
 
-HSM carries several **independent** version numbers. They are not tied to each other — each tracks a
-different thing, so bumping one does not imply bumping another. This is the map; the authoritative
-bump rules live in the directory `AGENTS.md` files.
+HSM carries **four independent** version numbers, **one per product**. They are not tied to each other:
+each tracks a different product, is allowed to diverge, and bumping one never implies bumping another.
+Authoritative bump rules live in the directory `AGENTS.md` files.
 
-## The versions
+## The four versions
 
-| Version | Where | What it tracks |
+| Product | Version (where) | When to bump |
 |---|---|---|
-| **HSM Agent** | `src/agent/CMakeLists.txt` → `project(HsmAgent VERSION …)` (`HSM_AGENT_VERSION`) | The self-update **delivery key**: the server delivers a build only when its version is *strictly greater* than the running agent's. |
-| **Native collector — library** | `src/native/collector/include/hsm_collector/hsm_collector.h` → `HSM_COLLECTOR_VERSION_{MAJOR,MINOR,PATCH}` (mirror in `CMakeLists.txt project VERSION`) | The C++ collector's own semver. Feeds `find_package(hsm_collector x.y)` + `hsm_collector_version()`. **Not** reported to the server. |
-| **Collector product** | `HSM_COLLECTOR_PRODUCT_VERSION` (native) **and** `src/collector/HSMDataCollector/HSMDataCollector.csproj <Version>` (managed) | The value of the `.module/Collector version` sensor — the shared **HSMDataCollector product** number. Native and managed are two language ports of one product, so they carry the **same** number (kept in lockstep; conformance compares them byte-identically). |
-| **Shared API DTO** | `src/api/HSMSensorDataObjects/HSMSensorDataObjects.csproj <Version>` | The wire-contract package shared by server, collector, and wrappers. |
-| **Server** | `src/server/HSMServer/HSMServer.csproj <Version>` | The HSM server application. |
+| **Native (C++) collector** | `HSM_COLLECTOR_VERSION_{MAJOR,MINOR,PATCH}` — `src/native/collector/include/hsm_collector/hsm_collector.h` (mirror in `CMakeLists.txt project VERSION`) | **MAJOR** breaking ABI · **MINOR** new exported `hsm_*` function / appended struct field · **PATCH** backward-compatible behavior/logic change, no ABI change (e.g. a logging fix). → `src/native/collector/AGENTS.md` |
+| **Managed (C#) collector** | `src/collector/HSMDataCollector/HSMDataCollector.csproj <Version>` | At a DataCollector NuGet release. |
+| **HSM site / server** | `src/server/HSMServer/HSMServer.csproj <Version>` | At a server release. |
+| **Agent** | `src/agent/CMakeLists.txt` → `project(HsmAgent VERSION …)` (`HSM_AGENT_VERSION`) | On **any change to the shipped agent binary** — including a native-collector change compiled into it — else self-update can't deliver it (it ships a build only when its version is *strictly greater* than the running agent's). → `src/agent/AGENTS.md` |
 
-## When to bump
+## Key points
 
-- **Changed the agent binary** — including a native-collector change compiled into it → bump the
-  **Agent** version (patch). Otherwise self-update cannot deliver it. → `src/agent/AGENTS.md`
-- **Native collector — ABI grew**: added/changed an exported `hsm_*` function or appended a struct
-  field → **MINOR** of the collector library version.
-- **Native collector — breaking ABI**: removed/reordered a field or changed a function's semantics →
-  **MAJOR**.
-- **Native collector — behavior/logic fix that does NOT touch the ABI** (e.g. a logging change) →
-  **PATCH** of the collector library version. → `src/native/collector/AGENTS.md`
-- **DataCollector product release** → bump the **product** version on **both** native
-  (`HSM_COLLECTOR_PRODUCT_VERSION`) and managed (`.csproj`) in lockstep. A one-language behavior fix
-  does not move it on its own. → root `AGENTS.md` "Versioning"
-- **Server / API-DTO release** → bump that `.csproj`. → root `AGENTS.md` "Versioning"
-
-## Don't conflate the two collector numbers
-
-The **library** version (`HSM_COLLECTOR_VERSION`, `0.x`) tracks the C++ ABI/build. The **product**
-version (`.module/Collector version`, `3.4.x`, shared with the managed collector) is the release
-identity reported to the server. They are different numbers for different purposes.
+- The **C++ collector** and the **C# collector** are two separate products. Each reports **its own**
+  version as the `.module/Collector version` sensor, and they may differ (C++ `0.x`, C# `3.4.x`). There
+  is no shared "product version" tying them together. Conformance compares the two collectors' wire
+  byte-for-byte but does **not** compare the version *value*, so the divergence is safe.
+- The **agent** embeds the native collector but is its own product: a collector change bumps the
+  collector version **and** (because the agent binary changed) the agent version — two independent
+  bumps for two products.
