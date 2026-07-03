@@ -4661,9 +4661,23 @@ namespace
             // to one line per window (the batch is re-enqueued by the dispatcher — the retry itself is
             // not logged, matching the queue's silent re-enqueue).
             if (!response.IsSuccess())
-                LogError(
-                    "Failed to send " + std::to_string(batch.size()) + " value(s): HTTP " +
-                    std::to_string(response.status_code) + (response.error.empty() ? "" : " " + response.error));
+            {
+                const std::string msg = "Failed to send " + std::to_string(batch.size()) + " value(s): HTTP " +
+                                        std::to_string(response.status_code) +
+                                        (response.error.empty() ? "" : " " + response.error);
+                // A send whose in-flight POST was cancelled by a graceful stop is expected, not an
+                // error — log it at Debug (same treatment as the stop-drop). A genuine failure while
+                // running still logs at Error (deduplicated).
+                bool cancelled_by_stop;
+                {
+                    std::lock_guard<std::mutex> guard(hang_mutex_);
+                    cancelled_by_stop = send_cancelled_;
+                }
+                if (cancelled_by_stop)
+                    LogMessage(HSM_LOG_LEVEL_DEBUG, msg);
+                else
+                    LogError(msg);
+            }
 
             return response.IsSuccess();
         }
