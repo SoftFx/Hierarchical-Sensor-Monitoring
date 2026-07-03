@@ -8,6 +8,10 @@
 // Writes NLog-parity log files to ./Logs (override the directory with HSM_LOG_DIR):
 // DataCollector_<date>.txt for all levels, DataCollector_error_<date>.txt for errors.
 
+// std::getenv (the HSM_LOG_DIR lookup below) is a read-only env read; silence MSVC's C4996
+// deprecation (must precede the CRT headers).
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <hsm_collector/hsm_collector.hpp>
 
 #include <chrono>
