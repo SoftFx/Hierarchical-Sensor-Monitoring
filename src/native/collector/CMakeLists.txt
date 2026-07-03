@@ -269,6 +269,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_registers_sensors_on_start
         COMMAND hsm_collector_tests native_http_registers_sensors_on_start
     )
+    add_test(NAME native_http_registration_failure_logs_status
+        COMMAND hsm_collector_tests native_http_registration_failure_logs_status
+    )
 endif()
 
 add_test(NAME native_invalid_argument_clears_out_params
