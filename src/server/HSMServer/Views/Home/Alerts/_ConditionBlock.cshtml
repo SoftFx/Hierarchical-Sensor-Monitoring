@@ -106,7 +106,12 @@
         }
 
         $.ajax({
-            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?type=${type}&property=${property}`,
+            // Use containerType (the real sensor type) rather than `type` (data-type on the select,
+            // which is Boolean for TTL alerts loaded from storage — see #1207). After demote, the
+            // operation partial must match the container's sensor type so e.g. picking Value on an
+            // Integer sensor returns numeric comparisons rather than Boolean operations. For non-TTL
+            // rows containerType === type so this is a no-op there.
+            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?type=${containerType}&property=${property}`,
             cache: false
         }).done(function (viewData) {
             operation.html(viewData);

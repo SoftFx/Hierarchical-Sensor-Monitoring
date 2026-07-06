@@ -17,6 +17,11 @@ namespace HSMServer.Model.DataAlerts
 
         protected override string DefaultIcon { get; } = TTLPolicy.DefaultIcon;
 
+        // The sensor type the TTL alert belongs to (null for product-level TTL and Any templates).
+        // Drives the regular property list shown in the main-condition dropdown so a saved TTL
+        // alert can be demoted back to a regular condition — see #1207.
+        private readonly SensorType? _sensorType;
+
         public TimeToLiveAlertViewModel() : base()
         {
             FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true });
@@ -24,6 +29,8 @@ namespace HSMServer.Model.DataAlerts
 
         public TimeToLiveAlertViewModel(NodeViewModel node) : base(node)
         {
+            _sensorType = node is SensorNodeViewModel sensor ? sensor.Type : null;
+
             if (node is null)
             {
                 FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true });
@@ -41,6 +48,8 @@ namespace HSMServer.Model.DataAlerts
 
         public TimeToLiveAlertViewModel(TTLPolicy policy, NodeViewModel node) : base(policy, node)
         {
+            _sensorType = node is SensorNodeViewModel sensor ? sensor.Type : null;
+
             TimeIntervalViewModel interval;
 
             if (policy.IsTTLFromParent && node != null)
@@ -78,8 +87,11 @@ namespace HSMServer.Model.DataAlerts
             FillConditions(interval);
         }
 
-        public TimeToLiveAlertViewModel(TTLPolicy policy, TimeIntervalViewModel interval) : base(policy, null)
+        public TimeToLiveAlertViewModel(TTLPolicy policy, TimeIntervalViewModel interval) : this(policy, interval, null) { }
+
+        public TimeToLiveAlertViewModel(TTLPolicy policy, TimeIntervalViewModel interval, SensorType? sensorType) : base(policy, null)
         {
+            _sensorType = sensorType;
             FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, interval) { IsAlertBlock = true });
         }
 
@@ -91,12 +103,12 @@ namespace HSMServer.Model.DataAlerts
             return this;
         }
 
-        protected override ConditionViewModel CreateCondition(bool isMain) => new TimeToLiveConditionViewModel();
+        protected override ConditionViewModel CreateCondition(bool isMain) => new TimeToLiveConditionViewModel(_sensorType, isMain);
 
         private void FillConditions(TimeIntervalViewModel intervalBlock)
         {
             Conditions.Clear();
-            Conditions.Add(new TimeToLiveConditionViewModel()
+            Conditions.Add(new TimeToLiveConditionViewModel(_sensorType)
             {
                 Property = AlertProperty.TimeToLive,
                 TimeToLive = intervalBlock,

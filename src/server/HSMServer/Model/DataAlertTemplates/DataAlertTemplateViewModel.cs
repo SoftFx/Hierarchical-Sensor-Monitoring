@@ -65,12 +65,17 @@ namespace HSMServer.Model.DataAlertTemplates
 
             if (model.TtlEntries?.Count > 0)
             {
+                // Pass the template's concrete sensor type (if any) so the TTL condition dropdown
+                // offers that type's regular properties for demote — see #1207. AnyType falls back
+                // to the Common subset.
+                SensorType? templateSensorType = Type > 0 ? (SensorType?)Type : null;
+
                 var ttlAlerts = new List<DataAlertViewModelBase>();
                 foreach (var entry in model.TtlEntries)
                 {
                     var ttlInterval = entry.Interval ?? TimeIntervalModel.None;
                     var interval = new TimeIntervalViewModel().FromModel(ttlInterval, PredefinedIntervals.ForTimeout);
-                    var ttl = new TimeToLiveAlertViewModel(entry.Policy, interval) { IsModify = true };
+                    var ttl = new TimeToLiveAlertViewModel(entry.Policy, interval, templateSensorType) { IsModify = true };
                     ttlAlerts.Add(ttl);
                 }
                 DataAlerts[TimeToLiveAlertViewModel.AlertKey] = ttlAlerts;

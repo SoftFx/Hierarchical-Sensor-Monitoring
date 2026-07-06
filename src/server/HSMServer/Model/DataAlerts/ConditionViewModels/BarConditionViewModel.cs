@@ -1,10 +1,10 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
     public sealed class BarConditionViewModel : ConditionViewModel
     {
-        protected override List<AlertProperty> Properties { get; } = new()
+        public static List<AlertProperty> SupportedProperties { get; } = new()
         {
             AlertProperty.FirstValue,
             AlertProperty.LastValue,
@@ -21,6 +21,8 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.NewSensorData,
             AlertProperty.TimeToLive,
         };
+
+        protected override List<AlertProperty> Properties => SupportedProperties;
 
 
         public BarConditionViewModel(bool isMain) : base(isMain) { }
