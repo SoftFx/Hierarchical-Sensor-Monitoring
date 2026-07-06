@@ -195,6 +195,25 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // === TTL demote: pre-existing Guid preserved when row routes from TTL collection ===
+
+        [Fact]
+        [Trait("Category", "TTL demote")]
+        public void TryUpdate_DemoteFromTtl_PreservesPreExistingGuid()
+        {
+            // The row was previously saved as a TTL alert with this Id. On demote, the form submits
+            // it under DataAlerts[<sensorType>] — non-empty Id absent from regular storage. Without
+            // the demote entry point, this update would be silently dropped (#1207).
+            var demoteId = Guid.NewGuid();
+
+            var update = BuildUpdate(demoteId, template: "demoted from TTL");
+            _collection.TryUpdate([update], InitiatorInfo.AsUser("test"), out _);
+
+            Assert.Single(_collection);
+            Assert.Equal(demoteId, _collection.First().Id);
+        }
+
+
         // === Manual policies: unaffected by template protection ===
 
         [Fact]
