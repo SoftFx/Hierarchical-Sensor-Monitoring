@@ -65,10 +65,9 @@ namespace HSMServer.Model.DataAlertTemplates
 
             if (model.TtlEntries?.Count > 0)
             {
-                // Pass the template's concrete sensor type (if any) so the TTL condition dropdown
-                // offers that type's regular properties for demote — see #1207. AnyType falls back
-                // to the Common subset.
-                SensorType? templateSensorType = Type > 0 ? (SensorType?)Type : null;
+                // AnyType (100) must resolve to null so the TTL condition falls back to the Common
+                // property subset — a raw (SensorType)AnyType cast would be an invalid enum value.
+                SensorType? templateSensorType = model.GetSensorType();
 
                 var ttlAlerts = new List<DataAlertViewModelBase>();
                 foreach (var entry in model.TtlEntries)

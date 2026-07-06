@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using HSMCommon.Extensions;
 using HSMCommon.Model;
 using HSMServer.Extensions;
@@ -11,11 +13,9 @@ namespace HSMServer.Model.DataAlerts
         private readonly SensorType? _sensorType;
 
 
-        // For TTL alerts loaded from storage (#1207), the underlying sensor type determines
-        // which regular properties the user can demote to. null / Boolean / AnyType fall back
-        // to the Common subset so the dropdown always offers at least Status/Comment/New data.
-        // During the base ctor _sensorType is still null (Common list); the body rebuilds
-        // PropertiesItems once a non-default sensor type is supplied.
+        // TTL alerts expose the underlying sensor type's regular property list so a saved TTL
+        // alert can be demoted back to a regular condition (#1207). null/Boolean/AnyType fall
+        // back to Common. _sensorType is null during base ctor, so the body rebuilds the list.
         protected override List<AlertProperty> Properties => SelectProperties(_sensorType);
 
 
@@ -34,6 +34,10 @@ namespace HSMServer.Model.DataAlerts
 
                 if (!isMain)
                     PropertiesItems.Add(new SelectListItem(AlertProperty.ConfirmationPeriod.GetDisplayName(), nameof(AlertProperty.ConfirmationPeriod)));
+
+                // Base ctor left Property = Common's first item (Status); keep it consistent with
+                // the rebuilt list. FillConditions overwrites this to TimeToLive for actual TTL alerts.
+                Property = Enum.Parse<AlertProperty>(PropertiesItems.First().Value);
             }
         }
 

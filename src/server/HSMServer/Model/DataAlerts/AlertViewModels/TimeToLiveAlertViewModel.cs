@@ -17,9 +17,8 @@ namespace HSMServer.Model.DataAlerts
 
         protected override string DefaultIcon { get; } = TTLPolicy.DefaultIcon;
 
-        // The sensor type the TTL alert belongs to (null for product-level TTL and Any templates).
-        // Drives the regular property list shown in the main-condition dropdown so a saved TTL
-        // alert can be demoted back to a regular condition — see #1207.
+        // Underlying sensor type — drives the TTL condition's regular property list (#1207).
+        // null for product-level TTL and Any templates.
         private readonly SensorType? _sensorType;
 
         public TimeToLiveAlertViewModel() : base()
@@ -29,7 +28,7 @@ namespace HSMServer.Model.DataAlerts
 
         public TimeToLiveAlertViewModel(NodeViewModel node) : base(node)
         {
-            _sensorType = node is SensorNodeViewModel sensor ? sensor.Type : null;
+            _sensorType = ResolveSensorType(node);
 
             if (node is null)
             {
@@ -48,7 +47,7 @@ namespace HSMServer.Model.DataAlerts
 
         public TimeToLiveAlertViewModel(TTLPolicy policy, NodeViewModel node) : base(policy, node)
         {
-            _sensorType = node is SensorNodeViewModel sensor ? sensor.Type : null;
+            _sensorType = ResolveSensorType(node);
 
             TimeIntervalViewModel interval;
 
@@ -87,8 +86,6 @@ namespace HSMServer.Model.DataAlerts
             FillConditions(interval);
         }
 
-        public TimeToLiveAlertViewModel(TTLPolicy policy, TimeIntervalViewModel interval) : this(policy, interval, null) { }
-
         public TimeToLiveAlertViewModel(TTLPolicy policy, TimeIntervalViewModel interval, SensorType? sensorType) : base(policy, null)
         {
             _sensorType = sensorType;
@@ -104,6 +101,9 @@ namespace HSMServer.Model.DataAlerts
         }
 
         protected override ConditionViewModel CreateCondition(bool isMain) => new TimeToLiveConditionViewModel(_sensorType, isMain);
+
+        private static SensorType? ResolveSensorType(NodeViewModel node) =>
+            node is SensorNodeViewModel sensor ? sensor.Type : null;
 
         private void FillConditions(TimeIntervalViewModel intervalBlock)
         {
