@@ -328,12 +328,8 @@ namespace HSMServer.Core.Model.Policies
                 if (!prioritySensorsExist)
                 {
                     foreach (var update in updatesList)
-                        // Create brand-new policies (Id == Guid.Empty) AND demote-from-TTL
-                        // policies (non-empty Id that is absent from regular storage — the
-                        // pre-existing TTL Guid is preserved across the toggle). Mirrors the
-                        // promote-side handling in PolicyCollectionBase.UpdateTTLs. TryUpdate
-                        // overwrites the policy Id from the update, so both cases produce a
-                        // PolicyType stored under the correct key. See #1207.
+                        // Treat demote-from-TTL rows like new policies: their non-empty Id is
+                        // absent from regular storage but must be preserved across the toggle. See #1207.
                         if (update.Id == Guid.Empty || !_storage.ContainsKey(update.Id))
                         {
                             var policy = new PolicyType();
