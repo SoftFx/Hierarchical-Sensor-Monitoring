@@ -16,7 +16,7 @@ namespace HSMServer.Model.DataAlerts
         // TTL alerts expose the underlying sensor type's regular property list so a saved TTL
         // alert can be demoted back to a regular condition (#1207). null/Boolean/AnyType fall
         // back to Common. _sensorType is null during base ctor, so the body rebuilds the list.
-        protected override List<AlertProperty> Properties => SelectProperties(_sensorType);
+        protected override IReadOnlyList<AlertProperty> Properties => SelectProperties(_sensorType);
 
 
         public TimeToLiveConditionViewModel() : this(null, true) { }
@@ -42,7 +42,7 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        private static List<AlertProperty> SelectProperties(SensorType? sensorType) => sensorType switch
+        private static IReadOnlyList<AlertProperty> SelectProperties(SensorType? sensorType) => sensorType switch
         {
             SensorType.Integer or SensorType.Double or SensorType.Rate or SensorType.Enum => NumericConditionViewModel.SupportedProperties,
             SensorType.Version => VersionConditionViewModel.SupportedProperties,

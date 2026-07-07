@@ -4,7 +4,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class FileConditionViewModel : ConditionViewModel
     {
-        public static List<AlertProperty> SupportedProperties { get; } = new()
+        public static IReadOnlyList<AlertProperty> SupportedProperties { get; } = new[]
         {
             AlertProperty.OriginalSize,
             AlertProperty.Status,
@@ -13,7 +13,7 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.TimeToLive,
         };
 
-        protected override List<AlertProperty> Properties => SupportedProperties;
+        protected override IReadOnlyList<AlertProperty> Properties => SupportedProperties;
 
 
         public FileConditionViewModel(bool isMain) : base(isMain) { }

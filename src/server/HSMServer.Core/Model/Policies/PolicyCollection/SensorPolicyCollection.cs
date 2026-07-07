@@ -330,7 +330,12 @@ namespace HSMServer.Core.Model.Policies
                     foreach (var update in updatesList)
                         // Treat demote-from-TTL rows like new policies: their non-empty Id is
                         // absent from regular storage but must be preserved across the toggle. See #1207.
-                        if (update.Id == Guid.Empty || !_storage.ContainsKey(update.Id))
+                        // Template-owned TTL alerts are blocked here — the regular update path also
+                        // restricts template policies to IsDisabled toggles, and PolicyCollectionBase.
+                        // UpdateTTLs preserves TTL entries with TemplateId, so blocking the add
+                        // leaves the TTL intact (demote effectively denied). Mirrors lines 294/319.
+                        if ((update.Id == Guid.Empty || !_storage.ContainsKey(update.Id))
+                            && (update.TemplateId == null || initiator.IsForceUpdate || initiator == InitiatorInfo.AlertTemplate))
                         {
                             var policy = new PolicyType();
 

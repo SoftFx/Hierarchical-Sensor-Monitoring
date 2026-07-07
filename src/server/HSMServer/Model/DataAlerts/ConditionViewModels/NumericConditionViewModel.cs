@@ -4,7 +4,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public class NumericConditionViewModel : ConditionViewModel
     {
-        public static List<AlertProperty> SupportedProperties { get; } = new()
+        public static IReadOnlyList<AlertProperty> SupportedProperties { get; } = new[]
         {
             AlertProperty.Value,
             AlertProperty.EmaValue,
@@ -14,7 +14,7 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.TimeToLive,
         };
 
-        protected override List<AlertProperty> Properties => SupportedProperties;
+        protected override IReadOnlyList<AlertProperty> Properties => SupportedProperties;
 
 
         public NumericConditionViewModel(bool isMain) : base(isMain) { }
