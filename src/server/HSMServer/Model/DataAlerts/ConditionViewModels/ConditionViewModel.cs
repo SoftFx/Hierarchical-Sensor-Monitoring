@@ -45,7 +45,7 @@ namespace HSMServer.Model.DataAlerts
 
     public class ConditionViewModel
     {
-        protected virtual List<AlertProperty> Properties { get; }
+        protected virtual IReadOnlyList<AlertProperty> Properties { get; }
 
         public AlertProperty Property { get; set; }
 

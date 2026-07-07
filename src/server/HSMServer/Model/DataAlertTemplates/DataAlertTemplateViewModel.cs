@@ -65,12 +65,16 @@ namespace HSMServer.Model.DataAlertTemplates
 
             if (model.TtlEntries?.Count > 0)
             {
+                // AnyType (100) must resolve to null so the TTL condition falls back to the Common
+                // property subset — a raw (SensorType)AnyType cast would be an invalid enum value.
+                SensorType? templateSensorType = model.GetSensorType();
+
                 var ttlAlerts = new List<DataAlertViewModelBase>();
                 foreach (var entry in model.TtlEntries)
                 {
                     var ttlInterval = entry.Interval ?? TimeIntervalModel.None;
                     var interval = new TimeIntervalViewModel().FromModel(ttlInterval, PredefinedIntervals.ForTimeout);
-                    var ttl = new TimeToLiveAlertViewModel(entry.Policy, interval) { IsModify = true };
+                    var ttl = new TimeToLiveAlertViewModel(entry.Policy, interval, templateSensorType) { IsModify = true };
                     ttlAlerts.Add(ttl);
                 }
                 DataAlerts[TimeToLiveAlertViewModel.AlertKey] = ttlAlerts;
