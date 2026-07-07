@@ -1542,6 +1542,12 @@ namespace HSMServer.Core.Cache
             // Persist the template once before dispatching per-sensor applications.
             // This makes it visible to concurrent AddSensor calls and removes the previous
             // reliance on a queue-thread "isPrimary" side effect.
+            // Capture the previous folder before replacing so the stale-sensor scan can also
+            // visit sensors in the old folder when the template is moved to another folder (#1209).
+            Guid? previousFolderId = null;
+            if (_alertTemplates.TryGetValue(alertTemplateModel.Id, out var previousTemplate))
+                previousFolderId = previousTemplate.FolderId;
+
             _alertTemplates[alertTemplateModel.Id] = alertTemplateModel;
             _database.AddAlertTemplate(alertTemplateModel.ToEntity());
 
@@ -1558,12 +1564,17 @@ namespace HSMServer.Core.Cache
                 }
 
                 // Reconcile sensors that previously held policies from this template but no longer
-                // match after the edit (path or sensor-type change). Their template-derived
+                // match after the edit (path, sensor-type, or folder change). Their template-derived
                 // policies must be pruned, otherwise they stay attached with no template to manage
                 // them (#1209). On a new-template creation no sensor carries the id yet, so this
-                // scan is empty and the pass is a no-op.
+                // scan is empty and the pass is a no-op. When the template moved folders, sensors
+                // in the old folder are also scanned because they can no longer match the new folder.
+                var scanProducts = products;
+                if (previousFolderId is Guid oldFolder && oldFolder != alertTemplateModel.FolderId)
+                    scanProducts = [.. products, .. GetProducts().Where(x => x.FolderId == oldFolder)];
+
                 var staleSensors = new List<BaseSensorModel>();
-                foreach (var product in products)
+                foreach (var product in scanProducts)
                 {
                     foreach (var sensor in product.GetAllSensors())
                     {

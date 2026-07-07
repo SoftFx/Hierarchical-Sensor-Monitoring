@@ -373,6 +373,95 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(templateB.Id, remaining[0].TemplateId);
         }
 
+        // Regression for #1209: editing an Alert Template's folder moves it to a different folder.
+        // Sensors in the OLD folder that previously matched must have the template-derived TTL
+        // policy pruned — they can no longer match a template that now belongs to another folder.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_ChangeFolder_RemovesTtlFromSensorsInOldFolder()
+        {
+            // Arrange: template in Folder1 matching */sensorFolderChange.
+            var template = BuildTemplate(SensorType.Integer, "*/sensorFolderChange",
+                ttlInterval: TimeSpan.FromMinutes(5));
+            template.FolderId = _fixture.FolderId;
+
+            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorFolderChange";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorBefore));
+            Assert.Single(sensorBefore.Policies.TTLPolicies);
+            Assert.Equal(template.Id, sensorBefore.Policies.TTLPolicies[0].TemplateId);
+
+            // Act: re-issue AddAlertTemplateAsync with the same Id but FolderId moved to Folder2.
+            // Use a fresh instance (mirrors the controller's data.ToModel path) so the cached
+            // template still reflects the previous FolderId when AddAlertTemplateAsync captures it.
+            var edited = new AlertTemplateModel
+            {
+                Id = template.Id,
+                Name = template.Name,
+                FolderId = _fixture.FolderId2,
+                SensorType = template.SensorType,
+                Paths = [.. template.Paths],
+                TtlEntries = [.. template.TtlEntries],
+            };
+            edited.TryApplyPathTemplates(out _);
+
+            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(edited);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+            await Task.Delay(300);
+
+            // Assert: the sensor in the old folder no longer carries the template TTL.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            Assert.DoesNotContain(sensorAfter.Policies.TTLPolicies, p => p.TemplateId == template.Id);
+        }
+
+        // Regression for #1209: regular (non-TTL) template policies are pruned by the same
+        // reconciliation path. Verifies both policy kinds listed in the issue tasks.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_ChangeSensorType_RemovesRegularPolicyFromNoLongerMatchingSensor()
+        {
+            // Arrange: template with a regular Integer policy (value > 0), no TTL.
+            var template = BuildTemplateWithRegularPolicy(SensorType.Integer, "*/sensorRegularPolicy");
+            template.FolderId = _fixture.FolderId;
+
+            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorRegularPolicy";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorBefore));
+            Assert.Contains(sensorBefore.Policies, p => p.TemplateId == template.Id);
+
+            // Act: change the template's SensorType so the Integer sensor no longer matches.
+            template.SensorType = (byte)SensorType.Double;
+            template.TryApplyPathTemplates(out _);
+
+            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+            await Task.Delay(300);
+
+            // Assert: the regular template policy is gone from the sensor.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            Assert.DoesNotContain(sensorAfter.Policies, p => p.TemplateId == template.Id);
+        }
+
 
         private async Task AddManualTtlToSensor(Guid productId, string sensorPath, TimeSpan ttl)
         {
@@ -419,6 +508,35 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 [
                     new TtlEntry(new TTLPolicy(ttlSetting, null), ttlSetting.Value ?? TimeIntervalModel.None),
                 ],
+            };
+            template.TryApplyPathTemplates(out _);
+
+            return template;
+        }
+
+        private AlertTemplateModel BuildTemplateWithRegularPolicy(SensorType sensorType, string pathPattern)
+        {
+            var policy = Policy.BuildPolicy((byte)sensorType);
+            var update = new PolicyUpdate
+            {
+                ConfirmationPeriod = 0,
+                Conditions =
+                [
+                    new PolicyConditionUpdate(
+                        PolicyOperation.GreaterThan,
+                        PolicyProperty.Value,
+                        new TargetValue(TargetType.Const, "0")),
+                ],
+            };
+            policy.UpdatePolicy(update);
+
+            var template = new AlertTemplateModel
+            {
+                Name = $"Test template {Guid.NewGuid():N}",
+                FolderId = _fixture.FolderId,
+                SensorType = (byte)sensorType,
+                Paths = [pathPattern],
+                Policies = [policy],
             };
             template.TryApplyPathTemplates(out _);
 
