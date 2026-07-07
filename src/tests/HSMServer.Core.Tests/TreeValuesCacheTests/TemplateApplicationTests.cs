@@ -7,6 +7,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -194,6 +195,211 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 _fixture.ProductId, sensorPath, out var sensor);
             Assert.True(found, "Sensor was not found in cache");
             Assert.Empty(sensor.Policies.TTLPolicies);
+        }
+
+
+        // Regression for #1209: editing an Alert Template's sensor type so a previously matched
+        // sensor no longer matches must prune the template-derived TTL policy from that sensor.
+        // The save path goes through AddAlertTemplateAsync for both new and edited templates.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_ChangeSensorType_RemovesTtlFromNoLongerMatchingSensor()
+        {
+            // Arrange: create a template matching Integer sensors on */sensorEditType.
+            var template = BuildTemplate(SensorType.Integer, "*/sensorEditType",
+                ttlInterval: TimeSpan.FromMinutes(5));
+
+            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorEditType";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorBefore));
+            Assert.Single(sensorBefore.Policies.TTLPolicies);
+            Assert.Equal(template.Id, sensorBefore.Policies.TTLPolicies[0].TemplateId);
+
+            // Act: re-issue AddAlertTemplateAsync with the same Id but a different SensorType,
+            // so the existing sensor no longer matches the template.
+            template.SensorType = (byte)SensorType.Double;
+            template.TryApplyPathTemplates(out _);
+
+            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+            await Task.Delay(300);
+
+            // Assert: the template TTL is gone from the sensor.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            Assert.DoesNotContain(sensorAfter.Policies.TTLPolicies, p => p.TemplateId == template.Id);
+        }
+
+        // Regression for #1209: editing an Alert Template's path so a previously matched sensor
+        // no longer matches must prune the template-derived TTL policy from that sensor.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_ChangePath_RemovesTtlFromNoLongerMatchingSensor()
+        {
+            // Arrange: template matches */sensorEditPath.
+            var template = BuildTemplate(SensorType.Integer, "*/sensorEditPath",
+                ttlInterval: TimeSpan.FromMinutes(5));
+
+            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorEditPath";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorBefore));
+            Assert.Single(sensorBefore.Policies.TTLPolicies);
+            Assert.Equal(template.Id, sensorBefore.Policies.TTLPolicies[0].TemplateId);
+
+            // Act: re-issue AddAlertTemplateAsync with the same Id but a path that no longer
+            // matches the existing sensor.
+            template.Paths = ["*/sensorDifferentPath"];
+            template.TryApplyPathTemplates(out _);
+
+            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+            await Task.Delay(300);
+
+            // Assert: the template TTL is gone from the sensor.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            Assert.DoesNotContain(sensorAfter.Policies.TTLPolicies, p => p.TemplateId == template.Id);
+        }
+
+        // Regression for #1209: when pruning stale template policies after an edit, a manual TTL
+        // policy on the same sensor must remain untouched.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_ChangeSensorType_PreservesManualTtl()
+        {
+            // Arrange: create a matching template and sensor, then add a manual TTL.
+            var template = BuildTemplate(SensorType.Integer, "*/sensorEditManual",
+                ttlInterval: TimeSpan.FromMinutes(5));
+
+            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var sensorPath = "sensorEditManual";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            await AddManualTtlToSensor(_fixture.ProductId, sensorPath, TimeSpan.FromMinutes(10));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorBefore));
+            Assert.Equal(2, sensorBefore.Policies.TTLPolicies.Count);
+            Assert.Contains(sensorBefore.Policies.TTLPolicies, p => p.TemplateId == template.Id);
+            Assert.Contains(sensorBefore.Policies.TTLPolicies, p => p.TemplateId == null);
+
+            // Act: edit the template so the sensor no longer matches.
+            template.SensorType = (byte)SensorType.Double;
+            template.TryApplyPathTemplates(out _);
+
+            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(editOk, $"Failed to edit template: {editError}");
+            await Task.Delay(300);
+
+            // Assert: only the template TTL is removed; the manual TTL remains.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            var remaining = sensorAfter.Policies.TTLPolicies;
+            Assert.Single(remaining);
+            Assert.Null(remaining[0].TemplateId);
+        }
+
+        // Regression for #1209: when pruning stale template policies after an edit, policies from
+        // a different template that still matches the sensor must remain untouched.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task EditTemplate_ChangeSensorType_PreservesOtherTemplatePolicies()
+        {
+            // Arrange: two templates matching the same sensor; edit one away.
+            var templateA = BuildTemplate(SensorType.Integer, "*/sensorEditOther",
+                ttlInterval: TimeSpan.FromMinutes(5));
+            var templateB = BuildTemplate(SensorType.Integer, "*/sensorEditOther",
+                ttlInterval: TimeSpan.FromMinutes(10));
+
+            var (addA, errA) = await _valuesCache.AddAlertTemplateAsync(templateA);
+            Assert.True(addA, $"Failed to add template A: {errA}");
+            var (addB, errB) = await _valuesCache.AddAlertTemplateAsync(templateB);
+            Assert.True(addB, $"Failed to add template B: {errB}");
+
+            var sensorPath = "sensorEditOther";
+            var sensorValue = SensorValuesFactory.BuildSensorValue(
+                SensorType.Integer, sensorPath, DateTime.UtcNow);
+
+            var addResult = await _valuesCache.AddSensorValueAsync(
+                _fixture.AccessKeyId, _fixture.ProductId, sensorValue);
+            Assert.True(addResult.IsOk, $"Failed to add sensor value: {addResult.Error}");
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorBefore));
+            Assert.Equal(2, sensorBefore.Policies.TTLPolicies.Count);
+            var templateIds = sensorBefore.Policies.TTLPolicies
+                .Select(p => p.TemplateId!.Value)
+                .OrderBy(id => id)
+                .ToArray();
+            var expectedIds = new[] { templateA.Id, templateB.Id }.OrderBy(id => id).ToArray();
+            Assert.Equal(expectedIds, templateIds);
+
+            // Act: edit templateA so the sensor no longer matches it.
+            templateA.SensorType = (byte)SensorType.Double;
+            templateA.TryApplyPathTemplates(out _);
+
+            var (editOk, editError) = await _valuesCache.AddAlertTemplateAsync(templateA);
+            Assert.True(editOk, $"Failed to edit template A: {editError}");
+            await Task.Delay(300);
+
+            // Assert: only templateA's TTL is removed; templateB's TTL remains.
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductId, sensorPath, out var sensorAfter));
+            var remaining = sensorAfter.Policies.TTLPolicies;
+            Assert.Single(remaining);
+            Assert.Equal(templateB.Id, remaining[0].TemplateId);
+        }
+
+
+        private async Task AddManualTtlToSensor(Guid productId, string sensorPath, TimeSpan ttl)
+        {
+            Assert.True(_valuesCache.TryGetSensorByPath(productId, sensorPath, out var sensor),
+                $"Sensor {sensorPath} not found");
+
+            var force = InitiatorInfo.AsSystemForce("test_add_manual_ttl");
+
+            // Id = Guid.Empty signals "new TTL policy" to UpdateTTLs.
+            var ttlUpdate = new PolicyUpdate
+            {
+                Id = Guid.Empty,
+                TTL = ttl.Ticks,
+                Initiator = force,
+                ConfirmationPeriod = 0,
+                Conditions = [],
+            };
+
+            var sensorUpdate = new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [ttlUpdate],
+                Initiator = force,
+            };
+
+            var result = await _valuesCache.UpdateSensorAsync(sensorUpdate);
+            Assert.True(result.IsOk, result.Error);
         }
 
 
