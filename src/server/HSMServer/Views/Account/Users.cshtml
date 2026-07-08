@@ -350,7 +350,7 @@
         var username = this.name;
 
         $('#modalDeleteBody').empty()
-            .append(document.createTextNode('Do you really want to remove "' + username.substring(0, 100) + '" user?'));
+            .append(document.createTextNode('Do you really want to remove "' + username.substring(0, maxUsernameLength) + '" user?'));
 
         var deleteModal = new bootstrap.Modal(document.getElementById('modalDelete'));
         deleteModal.show();
