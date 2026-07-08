@@ -95,6 +95,26 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             var result = validator.Validate(model);
 
+            Assert.False(result.IsValid);
+            Assert.Contains(result.Errors, e => e.ErrorMessage.Contains("Username max length"));
+            Assert.DoesNotContain(result.Errors, e => e.ErrorMessage.Contains("lenght"));
+        }
+
+        [Fact]
+        public void PasswordMinLengthMessage_ShouldNotContainTypo()
+        {
+            var validator = new RegistrationValidator(BuildUniqueManagerMock().Object);
+            var model = new RegistrationViewModel
+            {
+                Username = BuildUsername(10),
+                Password = "short",
+                SecondPassword = "short",
+            };
+
+            var result = validator.Validate(model);
+
+            Assert.False(result.IsValid);
+            Assert.Contains(result.Errors, e => e.ErrorMessage.Contains("Password min length"));
             Assert.DoesNotContain(result.Errors, e => e.ErrorMessage.Contains("lenght"));
         }
     }
