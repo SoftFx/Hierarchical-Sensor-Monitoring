@@ -6,8 +6,8 @@ namespace HSMServer.Model.Validators
 {
     public abstract class BaseUserValidator<T> : AbstractValidator<T> where T : class
     {
-        protected const int MaxUsernameLength = 100;
-        protected const int MinPasswordLenght = 8;
+        public const int MaxUsernameLength = 64;
+        protected const int MinPasswordLength = 8;
 
         protected const string UsernameRegexTemplate = @"[a-zA-Z0-9._@+-]";
 
@@ -22,11 +22,11 @@ namespace HSMServer.Model.Validators
         private readonly IUserManager _manager;
 
 
-        protected string UsernameMaxLengthMessage => $"Username max lenght is {MaxUsernameLength} characters";
+        protected string UsernameMaxLengthMessage => $"Username max length is {MaxUsernameLength} characters";
 
         protected string UsernameValidSymbolsMessage => $"Username must contains only this symbols ${_options.AllowedUserNameCharacters}";
 
-        protected string PasswordMinLengthMessage => $"Password min lenght is {MinPasswordLenght} characters.";
+        protected string PasswordMinLengthMessage => $"Password min length is {MinPasswordLength} characters.";
 
 
         protected BaseUserValidator(IUserManager manager)

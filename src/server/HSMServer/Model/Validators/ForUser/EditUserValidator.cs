@@ -8,7 +8,7 @@ namespace HSMServer.Model.Validators
     {
         public EditUserValidator(IUserManager userManager = null) : base(userManager)
         {
-            RuleFor(x => x.Password).Must(p => string.IsNullOrEmpty(p) || p.Length >= MinPasswordLenght)
+            RuleFor(x => x.Password).Must(p => string.IsNullOrEmpty(p) || p.Length >= MinPasswordLength)
                                     .WithMessage(PasswordMinLengthMessage);
         }
     }
