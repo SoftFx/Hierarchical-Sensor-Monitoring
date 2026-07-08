@@ -214,6 +214,12 @@ namespace HSMServer.Controllers
 
             if (ModelState.IsValid)
             {
+                foreach (var mismatchError in GetPathTypeMismatchErrors(model))
+                    ModelState.AddModelError(nameof(data.PathTemplates), mismatchError);
+            }
+
+            if (ModelState.IsValid)
+            {
                 var (success, error) = await _cache.AddAlertTemplateAsync(model);
 
                 if (!success)
@@ -272,6 +278,34 @@ namespace HSMServer.Controllers
             }
 
             return ((byte)sensors.FirstOrDefault()!.Type, sensors);
+        }
+
+        // #1210: detect path templates that match existing sensors of a type incompatible with the
+        // template's selected concrete type. AnyType templates intentionally skip this check — they
+        // match every type. Mirrors the type filter in AlertTemplateModel.IsMatch so anything we
+        // flag here would otherwise be silently skipped at apply time.
+        private List<string> GetPathTypeMismatchErrors(AlertTemplateModel model)
+        {
+            var errors = new List<string>();
+            var templateType = model.GetSensorType();
+            if (!templateType.HasValue)
+                return errors;
+
+            var templateTypeName = templateType.Value.ToString().Replace("Sensor", string.Empty);
+
+            foreach (var path in model.Paths.Where(p => !string.IsNullOrWhiteSpace(p)))
+            {
+                var mismatched = _cache.GetSensors(path, null, model.FolderId)
+                    .FirstOrDefault(s => s.Type != templateType.Value);
+
+                if (mismatched != null)
+                {
+                    var mismatchedTypeName = mismatched.Type.ToString().Replace("Sensor", string.Empty);
+                    errors.Add($"Path \"{path}\" matches {mismatchedTypeName} sensors, but this template is configured for {templateTypeName} sensors. Use a separate Alert Template for another sensor type.");
+                }
+            }
+
+            return errors;
         }
 
         private List<SelectListItem> GetAlertSchedulesSelectList()
