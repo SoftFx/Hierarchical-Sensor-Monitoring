@@ -133,6 +133,10 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.True(controller.ModelState.IsValid);
             Assert.IsType<OkResult>(result);
+            // Verify the mismatch check actually ran for each path — without this assertion the test
+            // would still pass if the validation was silently removed, because AddAlertTemplateAsync
+            // is mocked to succeed unconditionally.
+            _cacheMock.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.Exactly(2));
         }
 
         [Fact]
@@ -172,20 +176,21 @@ namespace HSMServer.Core.Tests.Controllers
 
         [Fact]
         [Trait("Category", "Alert Template authoring")]
-        public async Task ConcreteTypeTtlOnlyTemplate_BlocksMismatchedPath()
+        public async Task MismatchedPath_BlocksSave_EvenWithoutRegularAlerts()
         {
-            // TTL-only templates with a concrete type are also validated. AlertTemplateModel.IsMatch
-            // applies the type filter uniformly regardless of alert kind, so a TTL-only template
-            // would silently skip mismatched-type sensors just like a regular-alert template.
+            // The mismatch check must fire for any template with a concrete type, regardless of
+            // whether regular (non-TTL) policies are configured. AlertTemplateModel.IsMatch filters
+            // by type uniformly across alert kinds, so a TTL-only or freshly-opened template would
+            // silently skip mismatched-type sensors just like a regular-alert template.
             // Regression guard: if a future refactor narrows the check to templates that have
-            // regular (non-TTL) policies, this test must fail.
+            // regular policies, this test must fail.
             _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel> { BuildSensor(SensorType.Double) });
 
             var controller = CreateController();
             // No DataAlerts configured (no regular policies, no TTL entries) — mimics a freshly
             // opened editor where the user has only picked sensor type + paths so far.
-            var data = BuildData((byte)SensorType.Integer, "*/ttlOnlyMismatch");
+            var data = BuildData((byte)SensorType.Integer, "*/noRegularAlertsMismatch");
 
             await controller.AlertTemplate(data);
 
@@ -213,6 +218,8 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Contains(errors, e => e.ErrorMessage.Contains("badPathOne"));
             Assert.Contains(errors, e => e.ErrorMessage.Contains("badPathTwo"));
             Assert.Contains(errors, e => e.ErrorMessage.Contains("badPathThree"));
+            // Verifies the helper iterates paths rather than short-circuiting on the first mismatch.
+            _cacheMock.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.Exactly(3));
         }
     }
 }
