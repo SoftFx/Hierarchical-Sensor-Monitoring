@@ -1,0 +1,130 @@
+# Feature: Node Children Chart (overlay comparable child sensors)
+
+> Owner: site | Last reviewed: 2026-07-09 | Canonical: yes
+> Scope: A read-only "Chart" tab on a tree node that overlays its comparable child sensors' history on one multi-line time chart over an operator-chosen window.
+
+---
+
+## Overview
+
+Selecting a tree node normally shows each child sensor as its own tile. To answer "which
+child was hottest over the last hour" (which process used the most CPU, which NIC moved the
+most data), the operator had to open each child one by one.
+
+The node **Chart** tab overlays every *comparable* child sensor as one line on a single time
+chart. It is entirely derived from stored history: it never writes or changes sensor state.
+
+**v1 (this feature) — same-unit overlay:**
+
+- The server groups the node's chart-comparable descendant sensors by `(SensorType, effective unit)`
+  and overlays the **largest** such group (the group with the most sensors).
+- One line per child. Children with no data in the window are **omitted** (not zero-filled).
+  Sparse/intermittent series (e.g. top-N processes reported only while active) are drawn with
+  **gaps** — `connectgaps: false` — never interpolated across the gap.
+- If a node has comparable sensors in more than one unit, only the largest group is drawn and a
+  note explains that other-unit sensors are not overlaid (operator-approved v1 behavior for
+  mixed-unit nodes; full mixed-unit support is v3).
+- The tab is **not rendered** when the node has no group of >= 2 comparable children.
+
+## Invariants
+
+- **Read-only.** Derived from stored history via the existing history-read path; never writes,
+  never mutates sensor/TTL state.
+- **Comparable = numeric line-able + same type + same effective unit.** v1 comparable types:
+  `Integer, Double, Rate, IntegerBar, DoubleBar`. Excluded: `Boolean, Enum, Version, String,
+  TimeSpan, File` and service `status`/`alive` step sensors (their availability aggregation is v3).
+- **Effective unit** = `DisplayUnit` for `Rate` sensors, otherwise `SelectedUnit` (`OriginalUnit`).
+  Two unitless sensors of the same type still group together.
+- **Bars are flattened to their `Mean`** so every series is a single scalar line; bar min/max/count
+  overlays are out of scope for v1.
+- **Tab visibility is a server render-time decision.** `SelectNode` sets
+  `SelectedNodeViewModel.ShowChartTab = GetComparableChildGroups(nodeId).Count > 0`. Enabled for
+  product/tree **nodes** only, not folders.
+- **Empty series are omitted, not zero-filled.** A window with no data for a child drops that line.
+- Scope is the node's full descendant set (`GetAllNodeSensors`); the two real examples
+  (`Top CPU processes`, per-interface `Network`) are homogeneous. Direct-children-vs-subtree toggle
+  is v3.
+
+## Primary Workflows
+
+| # | Workflow | Initiator |
+|---|---|---|
+| 1 | Select a node -> open Chart tab -> pick a window (Last hour / 3h / day / Custom) -> one overlaid line per comparable child | operator |
+| 2 | Change the window -> re-query + redraw; children absent in the new window drop out | operator |
+
+## API / Public Contracts
+
+| Contract | Location | Notes |
+|---|---|---|
+| `POST SensorHistory/NodeChartHistory` | `Controllers/SensorHistoryController.cs` | Body `NodeChartRequest { NodeId, From, To }`. Returns `{ error, unit, note, series: [{ id, label, values: [{ time, value }] }] }`. |
+| `NodeChartRequest` | `Model/History/NodeChartRequest.cs` | `NodeId` is the node's GUID string (encoded id == `ToString()`); `From`/`To` are UTC instants. |
+| `NodeSensorGroup` | `Model/TreeViewModels/NodeSensorGroup.cs` | `(SensorType Type, string UnitLabel, List<Guid> SensorIds)` — a comparable group. |
+| `TreeViewModel.GetComparableChildGroups(Guid)` | `Model/TreeViewModels/TreeViewModel.cs` | Groups >= 2 comparable descendants by `(type, unit)`, largest first. |
+
+## Key Files
+
+| File | Purpose |
+|---|---|
+| `src/server/HSMServer/Model/TreeViewModels/TreeViewModel.cs` | `GetComparableChildGroups` + comparability/unit helpers. |
+| `src/server/HSMServer/Model/TreeViewModels/NodeSensorGroup.cs` | Comparable-group record. |
+| `src/server/HSMServer/Model/TreeViewModels/SelectedNodeViewModel.cs` | `ShowChartTab` flag. |
+| `src/server/HSMServer/Controllers/HomeController.cs` | `SelectNode` sets `ShowChartTab` for nodes. |
+| `src/server/HSMServer/Controllers/SensorHistoryController.cs` | `NodeChartHistory` endpoint + scalar projection (`BuildNodeChartSeries`, `TryGetScalar`, `GetNodeRelativeLabel`). |
+| `src/server/HSMServer/Model/History/NodeChartRequest.cs` | Request DTO. |
+| `src/server/HSMServer/Views/Home/_ChildrenPanel.cshtml` | Conditional Chart tab link + pane. |
+| `src/server/HSMServer/Views/Home/_NodeChartTabContent.cshtml` | Window picker, notes, graph div, and the inline Plotly overlay renderer. |
+
+## Data Flow
+
+1. `SelectNode` connects the node and computes `ShowChartTab` from `GetComparableChildGroups`.
+2. `_ChildrenPanel` renders the Chart tab only when `ShowChartTab`; the pane includes
+   `_NodeChartTabContent`.
+3. On tab click / window change, the inline script POSTs `{ nodeId, from, to }` to
+   `NodeChartHistory`.
+4. The endpoint takes the largest comparable group, reads each sensor's history in the window
+   (`GetSensorValues`, latest N, bounded), converts to display values, projects each to a scalar
+   (`Value`, or bar `Mean`), and returns one `series` entry per non-empty child.
+5. The client builds one `scattergl` line per series (palette-cycled, `connectgaps: false`) and
+   calls `Plotly.newPlot` with a shared legend. Global `Plotly`/`jQuery` are reused — no bundle
+   rebuild.
+
+## Storage / Persistence
+
+None. Reuses the existing sensor-history read path (`ITreeValuesCache.GetSensorValuesPage`).
+
+## UI / Operator Visibility
+
+Node data panel -> **Chart** tab (only when the node has >= 2 comparable children). Window picker
+(Last hour / Last 3 hours / Last day / Custom From-To). A static note explains omitted/gapped
+series; a dynamic note appears for mixed-unit nodes.
+
+## Dependencies
+
+- Depends on: sensor-tree (`TreeViewModel`, `GetAllNodeSensors`), sensor history read path,
+  bundled Plotly.js 2.28.0.
+- Used by: operators triaging a node's children at a glance.
+
+## Tests
+
+Manual acceptance (issue #1235):
+
+- `Top CPU processes` -> Chart -> Last hour -> one line per process.
+- `Network` -> one line per interface (MB/s).
+- Node with < 2 comparable children -> no Chart tab.
+- Change window -> re-query + redraw; children with no data in-window are absent, not zeroed.
+
+## Notes
+
+- Bars render as a single Mean line in v1; per-property (min/max/count) overlays and rate/counter
+  delta strategies are deferred.
+- The endpoint bounds each child to the latest `NodeChartMaxPointsPerSensor` values in the window
+  to keep the multi-line payload modest.
+
+## Known Issues / Limitations
+
+- **v2 — Ranking:** a sorted "top consumers" leaderboard (total / average / peak) as a second tab
+  on the same data.
+- **v3:** mixed-unit nodes (one chart/group per unit), direct-children-vs-subtree scope toggle,
+  per-type aggregation strategies (rate/counter delta, enum/bool availability = % uptime / flaps).
+- The mixed-unit note triggers when a second comparable group (>= 2) exists; a lone stray sensor of
+  a different unit (singleton) is silently not overlaid.

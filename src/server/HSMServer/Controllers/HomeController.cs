@@ -120,6 +120,7 @@ namespace HSMServer.Controllers
                         foreach (var alert in alerts)
                             alert.Schedules = schedulesList;
                     StoredUser.SelectedNode.ConnectNode(node);
+                    StoredUser.SelectedNode.ShowChartTab = _treeViewModel.GetComparableChildGroups(id).Count > 0;
                     CurrentUser.Tree.AddOpenedNode(id);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))

@@ -60,6 +60,10 @@ namespace HSMServer.Controllers
         private const int LatestHistoryCount = -300;
         private const int SensorValuesCount = -5000;
 
+        // Latest N values per child sensor for the node overlay chart (issue #1235). Negative = take the
+        // most recent within the window; bounds the payload when many children are overlaid at once.
+        private const int NodeChartMaxPointsPerSensor = -2000;
+
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
 
@@ -170,6 +174,119 @@ namespace HSMServer.Controllers
         public void ReloadHistoryRequest([FromBody] GetSensorHistoryRequest model)
         {
             StoredUser.History.Reload(model);
+        }
+
+        /// <summary>
+        /// Node-level overlay chart (issue #1235): returns every comparable child sensor of the node as
+        /// one line series over the chosen window. v1 overlays the node's largest (type, unit) group only.
+        /// Read-only; children with no data in the window are omitted (drawn with gaps, never zero-filled).
+        /// </summary>
+        [HttpPost]
+        public async Task<JsonResult> NodeChartHistory([FromBody] NodeChartRequest request)
+        {
+            if (request is null)
+                return _emptyJsonResult;
+
+            var nodeId = request.NodeId.ToGuid();
+
+            if (!_tree.Nodes.TryGetValue(nodeId, out var node))
+                return _emptyJsonResult;
+
+            var groups = _tree.GetComparableChildGroups(nodeId);
+
+            if (groups.Count == 0)
+                return new JsonResult(new { error = false, series = Array.Empty<object>() }, _serializationsOptions);
+
+            var group = groups[0];
+            var from = request.From.ToUtcKind();
+            var to = request.To.ToUtcKind();
+            var nodePath = node.FullPath;
+
+            var series = new List<object>(group.SensorIds.Count);
+
+            foreach (var sensorId in group.SensorIds)
+            {
+                if (!_tree.Sensors.TryGetValue(sensorId, out var sensor))
+                    continue;
+
+                var values = await BuildNodeChartSeries(sensor, from, to);
+
+                if (values.Count == 0) // omitted, not zero-filled
+                    continue;
+
+                series.Add(new
+                {
+                    id = sensor.Id,
+                    label = GetNodeRelativeLabel(nodePath, sensor.FullPath),
+                    values,
+                });
+            }
+
+            var note = groups.Count > 1
+                ? $"Showing {series.Count} sensor(s) in {(string.IsNullOrEmpty(group.UnitLabel) ? "no unit" : group.UnitLabel)}. This node also has comparable sensors in other units, which are not overlaid here."
+                : null;
+
+            return new JsonResult(new
+            {
+                error = false,
+                unit = group.UnitLabel,
+                note,
+                series,
+            }, _serializationsOptions);
+        }
+
+        private async Task<List<object>> BuildNodeChartSeries(SensorNodeViewModel sensor, DateTime from, DateTime to)
+        {
+            var rawValues = await GetSensorValues(sensor.EncodedId, from, to, NodeChartMaxPointsPerSensor);
+
+            var points = new List<(DateTime Time, double Value)>(rawValues.Count);
+
+            foreach (var raw in rawValues)
+            {
+                var display = sensor.ToDisplayValue(raw);
+
+                if (TryGetScalar(display, out var scalar))
+                    points.Add((display.Time.ToUniversalTime(), scalar));
+            }
+
+            return points.OrderBy(point => point.Time)
+                         .Select(point => (object)new { time = point.Time, value = point.Value })
+                         .ToList();
+        }
+
+        private static bool TryGetScalar(BaseValue value, out double scalar)
+        {
+            switch (value)
+            {
+                case BaseValue<double> doubleValue:
+                    scalar = doubleValue.Value;
+                    return true;
+                case BaseValue<int> intValue:
+                    scalar = intValue.Value;
+                    return true;
+                case BarBaseValue<double> doubleBar:
+                    scalar = doubleBar.Mean;
+                    return true;
+                case BarBaseValue<int> intBar:
+                    scalar = intBar.Mean;
+                    return true;
+                default:
+                    scalar = 0;
+                    return false;
+            }
+        }
+
+        private static string GetNodeRelativeLabel(string nodePath, string sensorPath)
+        {
+            if (!string.IsNullOrEmpty(nodePath) && sensorPath.StartsWith(nodePath, StringComparison.Ordinal))
+            {
+                var relative = sensorPath.Substring(nodePath.Length).TrimStart('/');
+
+                if (relative.Length > 0)
+                    return relative;
+            }
+
+            return sensorPath;
         }
 
         [HttpGet]

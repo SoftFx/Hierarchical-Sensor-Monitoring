@@ -1,4 +1,6 @@
-﻿using HSMServer.Authentication;
+﻿using HSMCommon.Extensions;
+using HSMCommon.Model;
+using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.TableOfChanges;
@@ -95,6 +97,50 @@ namespace HSMServer.Model.TreeViewModel
             }
 
             return sensors;
+        }
+
+        /// <summary>
+        /// Groups a node's chart-comparable descendant sensors by (type, effective unit) and returns
+        /// the groups that contain at least two sensors, ordered from the largest group to the smallest.
+        /// Used both to decide whether the node "Chart" tab is shown and to drive the overlay endpoint.
+        /// </summary>
+        internal List<NodeSensorGroup> GetComparableChildGroups(Guid nodeId)
+        {
+            var groups = new Dictionary<(SensorType Type, string Unit), List<Guid>>();
+
+            foreach (var sensorId in GetAllNodeSensors(nodeId))
+            {
+                if (!Sensors.TryGetValue(sensorId, out var sensor) || !IsComparableChartSensor(sensor))
+                    continue;
+
+                var key = (sensor.Type, GetEffectiveUnitLabel(sensor));
+
+                if (!groups.TryGetValue(key, out var ids))
+                    groups[key] = ids = new List<Guid>();
+
+                ids.Add(sensorId);
+            }
+
+            return groups.Where(pair => pair.Value.Count > 1)
+                         .Select(pair => new NodeSensorGroup(pair.Key.Type, pair.Key.Unit, pair.Value))
+                         .OrderByDescending(group => group.SensorIds.Count)
+                         .ThenBy(group => group.UnitLabel)
+                         .ToList();
+        }
+
+        // v1 overlays numeric line-able sensors only; enum/bool/version/timespan/string and service
+        // status/alive step charts are out of scope here (tracked for later aggregation strategies).
+        private static bool IsComparableChartSensor(SensorNodeViewModel sensor) =>
+            !sensor.IsServiceStatus && !sensor.IsServiceAlive &&
+            sensor.Type is SensorType.Integer or SensorType.Double or SensorType.Rate
+                        or SensorType.IntegerBar or SensorType.DoubleBar;
+
+        private static string GetEffectiveUnitLabel(SensorNodeViewModel sensor)
+        {
+            if (sensor.Type is SensorType.Rate && sensor.DisplayUnit.HasValue)
+                return sensor.DisplayUnit.Value.GetDisplayName();
+
+            return sensor.SelectedUnit?.GetDisplayName() ?? string.Empty;
         }
 
         internal Guid GetBackgroundPlotId(SensorNodeViewModel sensor, bool isStatusService)

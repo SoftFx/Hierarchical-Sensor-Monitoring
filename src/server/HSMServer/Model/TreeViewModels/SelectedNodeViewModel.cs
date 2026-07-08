@@ -17,6 +17,12 @@ public class SelectedNodeViewModel
 
     public bool HasChildren => _nodes.VisibleItems?.Count > 0 || _sensors.VisibleItems?.Count > 0;
 
+    /// <summary>
+    /// True when the selected node has at least one group of >= 2 comparable child sensors to overlay
+    /// on the node "Chart" tab (issue #1235). Set by the controller after the node is connected.
+    /// </summary>
+    public bool ShowChartTab { get; set; }
+
 
     public void ConnectNode(ProductNodeViewModel newNode)
     {

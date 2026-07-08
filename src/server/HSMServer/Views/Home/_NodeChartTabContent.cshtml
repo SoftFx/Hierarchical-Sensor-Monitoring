@@ -1,0 +1,164 @@
+@model string
+
+@{
+    var nodeId = Model;
+    var graphId = $"graph_node_{nodeId}";
+    var dataUrl = Url.Action("NodeChartHistory", "SensorHistory");
+}
+
+<div class="pt-3" id="nodeChartData_@nodeId" data-url="@dataUrl" data-node-id="@nodeId">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <label class="m-0">Period:</label>
+        <select class="form-select" style="width: auto;" id="nodeChartPeriod_@nodeId"
+                onchange="onNodeChartPeriodChange('@nodeId')">
+            <option value="hour" selected>Last hour</option>
+            <option value="threeHours">Last 3 hours</option>
+            <option value="day">Last day</option>
+            <option value="custom">Custom</option>
+        </select>
+
+        <div id="nodeChartCustom_@nodeId" class="d-none align-items-center gap-2">
+            <label class="m-0" for="nodeChartFrom_@nodeId">From:</label>
+            <input type="datetime-local" class="form-control" style="width: auto;" id="nodeChartFrom_@nodeId">
+            <label class="m-0" for="nodeChartTo_@nodeId">To:</label>
+            <input type="datetime-local" class="form-control" style="width: auto;" id="nodeChartTo_@nodeId">
+            <button type="button" class="btn btn-secondary" onclick="loadNodeChart('@nodeId')">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="mt-1 text-muted" style="font-size: 0.85em;">
+        One line per comparable child sensor. Sensors with no data in the window are omitted, and
+        intermittent series (e.g. top-N processes reported only while active) are drawn with gaps.
+    </div>
+
+    <div id="nodeChartNote_@nodeId" class="mt-1 d-none" style="color: #b8860b; font-size: 0.85em;"></div>
+
+    <div id="nodeChartNoData_@nodeId" class="d-none d-flex justify-content-center align-items-center noData-label mt-2">
+        <label>No data for the selected period</label>
+    </div>
+
+    <div class="mt-2" id="@graphId" style="width: 100%; height: 450px;"></div>
+</div>
+
+<script>
+    (function () {
+        const nodeChartPalette = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b',
+            '#e377c2', '#17becf', '#bcbd22', '#7f7f7f', '#393b79', '#e7ba52'
+        ];
+
+        window.onNodeChartPeriodChange = function (nodeId) {
+            const isCustom = document.getElementById(`nodeChartPeriod_${nodeId}`).value === 'custom';
+            const custom = document.getElementById(`nodeChartCustom_${nodeId}`);
+            custom.classList.toggle('d-none', !isCustom);
+            custom.classList.toggle('d-flex', isCustom);
+
+            if (!isCustom)
+                loadNodeChart(nodeId);
+        };
+
+        function nodeChartWindow(nodeId) {
+            const period = document.getElementById(`nodeChartPeriod_${nodeId}`).value;
+            const now = new Date();
+
+            if (period === 'custom') {
+                const fromVal = document.getElementById(`nodeChartFrom_${nodeId}`).value;
+                const toVal = document.getElementById(`nodeChartTo_${nodeId}`).value;
+                // datetime-local has no timezone; interpret as UTC to match server-stored times.
+                const from = fromVal ? new Date(`${fromVal}:00Z`) : new Date(now.getTime() - 3600e3);
+                const to = toVal ? new Date(`${toVal}:00Z`) : now;
+                return { from: from.toISOString(), to: to.toISOString() };
+            }
+
+            const spans = { hour: 3600e3, threeHours: 3 * 3600e3, day: 24 * 3600e3 };
+            return { from: new Date(now.getTime() - spans[period]).toISOString(), to: now.toISOString() };
+        }
+
+        // Called from the Chart tab link (onclick) and whenever the period changes.
+        window.initNodeChart = function (nodeId) {
+            loadNodeChart(nodeId);
+        };
+
+        window.loadNodeChart = function (nodeId) {
+            const container = document.getElementById(`nodeChartData_${nodeId}`);
+            if (!container)
+                return;
+
+            const { from, to } = nodeChartWindow(nodeId);
+            const token = (window._nodeChartToken = (window._nodeChartToken || 0) + 1);
+
+            $.ajax({
+                type: 'POST',
+                url: container.dataset.url,
+                contentType: 'application/json',
+                dataType: 'json',
+                cache: false,
+                data: JSON.stringify({ nodeId: container.dataset.nodeId, from: from, to: to })
+            }).done(function (data) {
+                if (token !== window._nodeChartToken)
+                    return;
+                renderNodeChart(nodeId, data);
+            });
+        };
+
+        function renderNodeChart(nodeId, data) {
+            const graphId = `graph_node_${nodeId}`;
+            const graphEl = document.getElementById(graphId);
+            const noData = document.getElementById(`nodeChartNoData_${nodeId}`);
+            const noteEl = document.getElementById(`nodeChartNote_${nodeId}`);
+            const series = (data && data.series) || [];
+
+            if (data && data.note) {
+                noteEl.textContent = data.note;
+                noteEl.classList.remove('d-none');
+            } else {
+                noteEl.classList.add('d-none');
+            }
+
+            if (!graphEl)
+                return;
+
+            if (series.length === 0) {
+                window.Plotly.purge(graphEl);
+                noData.classList.remove('d-none');
+                return;
+            }
+
+            noData.classList.add('d-none');
+
+            const unit = (data && data.unit) || '';
+            const traces = series.map(function (s, i) {
+                return {
+                    type: 'scattergl',
+                    mode: 'lines',
+                    name: s.label,
+                    x: s.values.map(function (v) { return v.time; }),
+                    y: s.values.map(function (v) { return v.value; }),
+                    connectgaps: false,
+                    line: { color: nodeChartPalette[i % nodeChartPalette.length], width: 1.5 },
+                    hovertemplate: `${s.label}: %{y} ${unit}<br>%{x|%Y-%m-%d %H:%M:%S} UTC<extra></extra>`
+                };
+            });
+
+            const layout = {
+                autosize: true,
+                margin: { l: 55, r: 20, t: 20, b: 40 },
+                hovermode: 'closest',
+                showlegend: true,
+                legend: { orientation: 'h', x: 0, y: 1.08, yanchor: 'bottom' },
+                xaxis: { type: 'date', autorange: true },
+                yaxis: { title: { text: unit, font: { size: 12, color: '#7f7f7f' } }, autorange: true }
+            };
+
+            const config = {
+                responsive: true,
+                displaylogo: false,
+                modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']
+            };
+
+            window.Plotly.newPlot(graphId, traces, layout, config);
+        }
+    })();
+</script>
