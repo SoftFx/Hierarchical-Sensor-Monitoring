@@ -17,6 +17,10 @@ namespace HSMServer.Model.DataAlerts
 
         protected override string DefaultIcon { get; } = TTLPolicy.DefaultIcon;
 
+        // Underlying sensor type — drives the TTL condition's regular property list (#1207).
+        // null for product-level TTL and Any templates.
+        private readonly SensorType? _sensorType;
+
         public TimeToLiveAlertViewModel() : base()
         {
             FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true });
@@ -24,6 +28,8 @@ namespace HSMServer.Model.DataAlerts
 
         public TimeToLiveAlertViewModel(NodeViewModel node) : base(node)
         {
+            _sensorType = ResolveSensorType(node);
+
             if (node is null)
             {
                 FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true });
@@ -41,6 +47,8 @@ namespace HSMServer.Model.DataAlerts
 
         public TimeToLiveAlertViewModel(TTLPolicy policy, NodeViewModel node) : base(policy, node)
         {
+            _sensorType = ResolveSensorType(node);
+
             TimeIntervalViewModel interval;
 
             if (policy.IsTTLFromParent && node != null)
@@ -78,8 +86,9 @@ namespace HSMServer.Model.DataAlerts
             FillConditions(interval);
         }
 
-        public TimeToLiveAlertViewModel(TTLPolicy policy, TimeIntervalViewModel interval) : base(policy, null)
+        public TimeToLiveAlertViewModel(TTLPolicy policy, TimeIntervalViewModel interval, SensorType? sensorType) : base(policy, null)
         {
+            _sensorType = sensorType;
             FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, interval) { IsAlertBlock = true });
         }
 
@@ -91,12 +100,15 @@ namespace HSMServer.Model.DataAlerts
             return this;
         }
 
-        protected override ConditionViewModel CreateCondition(bool isMain) => new TimeToLiveConditionViewModel();
+        protected override ConditionViewModel CreateCondition(bool isMain) => new TimeToLiveConditionViewModel(_sensorType, isMain);
+
+        private static SensorType? ResolveSensorType(NodeViewModel node) =>
+            node is SensorNodeViewModel sensor ? sensor.Type : null;
 
         private void FillConditions(TimeIntervalViewModel intervalBlock)
         {
             Conditions.Clear();
-            Conditions.Add(new TimeToLiveConditionViewModel()
+            Conditions.Add(new TimeToLiveConditionViewModel(_sensorType)
             {
                 Property = AlertProperty.TimeToLive,
                 TimeToLive = intervalBlock,

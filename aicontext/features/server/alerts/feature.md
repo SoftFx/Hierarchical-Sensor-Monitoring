@@ -1,6 +1,6 @@
 # Feature: Alerts
 
-> Owner: server | Last reviewed: 2026-06-26 | Canonical: yes
+> Owner: server | Last reviewed: 2026-07-08 | Canonical: yes
 > Scope: Server-side alert ownership, creation paths, and the boundary between global (template) and per-sensor alerts.
 
 ---
@@ -29,6 +29,8 @@ As of issue #1159 the editor exposes a single "Add" entry point: Inactivity Peri
 - TTL alerts are single-condition: when the main condition's property is `AlertProperty.TimeToLive`, the `_ConditionBlock.cshtml` change handler removes any non-main conditions and hides the "add condition" button.
 - The TTL demote path in `_ConditionBlock.cshtml` is a no-op inside an Any-template TTL container (`containerType == ttlKey`). Any templates only allow TTL alerts, so there is no concrete sensor type to demote to — the dropdown reverts to `TimeToLive` and the operation-refetch ajax is skipped, keeping the row routed as `TTLPolicy`. Without this guard the demote would set `data-alert-type` back to the container's key (which is also `ttlKey` for Any) but flip the visual state to regular, producing a row with a non-TTL property persisted as a malformed `TTLPolicy`.
 - `ConditionViewModel.Property` defaults to `PropertiesItems.First()`. `AlertProperty.TimeToLive` is the last entry in every condition view model's `Properties` list (asserted by `ConditionViewModelPropertiesTests.DefaultProperty_IsNotTimeToLive`), so a freshly-created alert never defaults to TTL — the user must explicitly pick Inactivity Period.
+- Alert Templates with a concrete sensor type validate at save time that no path template matches an existing sensor whose type differs from the template's selected type (#1210). `AlertTemplatesController.GetPathTypeMismatchErrors` queries `_cache.GetSensors(path, null, folderId)` without a type filter and surfaces a per-path field error on `PathTemplates` when a matched sensor's type differs. The check mirrors the type filter in `AlertTemplateModel.IsMatch` so anything flagged here would otherwise be silently skipped at apply time. AnyType templates skip the check (they match every type by design); path templates with no current matches stay allowed (future sensors). Applies to TTL-only templates with a concrete type too — `IsMatch` filters by type uniformly regardless of alert kind.
+- As of #1207, a TTL alert reloaded from storage exposes the underlying sensor type's full regular property list in its main-condition dropdown (`TimeToLiveConditionViewModel(sensorType)` switches on `SensorType` and reuses the matching `*ConditionViewModel.SupportedProperties`). `null`, `SensorType.Boolean`, and Any-template (`Type == AnyType`) fall back to the Common subset (`Status`/`Comment`/`New data`/`Inactivity Period`). The sensor type is threaded from `SensorNodeViewModel.Type` at `BuildAlert(TTLPolicy, NodeViewModel)` time, and from `DataAlertTemplateViewModel.Type` for template TTL alerts. The dropdown is therefore never single-option, and the user can demote a saved TTL alert back to a regular condition. The `_ConditionBlock.cshtml` AJAX that refetches the operation partial after a property change uses `containerType` (the real sensor type from the parent container id) rather than `data-type` (which is `SensorType.Boolean` for TTL alerts), so demote fetches the correct typed operation list.
 
 ## Primary Workflows
 
@@ -101,6 +103,13 @@ Operator selects sensor -> per-sensor _Alerts.cshtml editor -> UpdateSensorInfo 
 
 ## Tests
 
+Coverage for the mixed-type path validation lives in `src/tests/HSMServer.Core.Tests/Controllers/AlertTemplatesControllerTests.cs`:
+
+- `MixedTypePaths_AddsPathTemplatesError` — concrete type template + path matching a different-type sensor → save blocked with a field error naming both types.
+- `AllCompatiblePaths_ModelStateValid` — multiple paths all matching sensors of the template's type → save proceeds.
+- `PathMatchingNoSensors_ModelStateValid` — wildcard path matching nothing → save proceeds (future sensors allowed).
+- `AnyTypeTemplate_SkipsMismatchCheck` — AnyType template → no check regardless of matched sensor types.
+
 Coverage for the product-owned policy cleanup lives in `src/tests/HSMServer.Core.Tests/TreeValuesCacheTests/ProductOwnedPolicyCleanupTests.cs`:
 
 - `Cleanup_RemovesUserAddedPolicy_FromProductEntityPoliciesList`
@@ -119,6 +128,7 @@ Condition view model guards live in `src/tests/HSMServer.Core.Tests/ConditionVie
 - Issue #1141 (parent epic) established that node-level alerts are replaced by global alerts.
 - Issue #1142 removed the per-node alert editor UI and endpoint support, and added the storage cleanup migration.
 - Issue #1159 consolidated Inactivity Period into the regular alert editor as a condition property; the dedicated `addTtlAlert` link and `dataAlertsList_@ttlType` section were removed from both `_Alerts.cshtml` and `_AlertTemplate.cshtml`. Storage semantics (TTLPolicy vs regular Policy) are unchanged — only the UI entry point and form routing changed.
+- Issue #1210 added save-time validation blocking Alert Templates with a concrete sensor type from mixing path templates that match existing sensors of an incompatible type. The check runs in both create and edit flows; editing a pre-existing template that already had latent mixed-type paths will now surface the field error and block the save until the paths or type are corrected.
 - Collector-side alert behavior is explicitly out of scope per epic #1141.
 
 ## Known Issues / Limitations

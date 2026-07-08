@@ -106,7 +106,9 @@
         }
 
         $.ajax({
-            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?type=${type}&property=${property}`,
+            // containerType (real sensor type), not `type` (which is Boolean for TTL alerts loaded
+            // from storage — see #1207) so demote fetches the right operation partial.
+            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?type=${containerType}&property=${property}`,
             cache: false
         }).done(function (viewData) {
             operation.html(viewData);

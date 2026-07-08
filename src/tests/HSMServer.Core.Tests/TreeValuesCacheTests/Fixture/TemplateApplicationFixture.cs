@@ -14,6 +14,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.Fixture
         internal Guid ProductId { get; } = Guid.NewGuid();
         internal Guid AccessKeyId { get; private set; }
 
+        internal Guid FolderId2 { get; private set; }
+        internal Guid ProductId2 { get; } = Guid.NewGuid();
+        internal Guid AccessKeyId2 { get; private set; }
+
 
         internal override void InitializeDatabase(IDatabaseCore dbCore)
         {
@@ -34,6 +38,25 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.Fixture
             var key = EntitiesFactory.BuildAccessKeyEntity(productId: product.Id);
             AccessKeyId = Guid.Parse(key.Id);
             dbCore.AddAccessKey(key);
+
+            // Second folder + product for tests that move a template between folders (#1209).
+            var folder2 = EntitiesFactory.BuildFolderEntity();
+            FolderId2 = Guid.Parse(folder2.Id);
+            dbCore.AddFolder(folder2);
+
+            var product2 = new ProductEntity
+            {
+                Id = ProductId2.ToString(),
+                DisplayName = "TemplateTestProduct2",
+                CreationDate = DateTime.UtcNow.Ticks,
+                State = 1 << 30,
+                FolderId = folder2.Id,
+            };
+            dbCore.AddProduct(product2);
+
+            var key2 = EntitiesFactory.BuildAccessKeyEntity(productId: product2.Id);
+            AccessKeyId2 = Guid.Parse(key2.Id);
+            dbCore.AddAccessKey(key2);
         }
     }
 }
