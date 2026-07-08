@@ -48,7 +48,7 @@ When authoring an alert (sensor → *Edit info* → *Alerts*), each **send notif
 2. **Telegram groups** then **Telegram users** — the chats the folder has access to.
 3. **Slack destinations** — every enabled destination bound to the folder.
 
-Pick any mix across groups in one action — a single action can fan out to Telegram chats AND Slack destinations simultaneously. Only enabled Slack destinations that are bound to the sensor's folder appear; use the folder's **Chats** tab to bind a destination to a folder.
+Pick any mix across groups in one action — a single action can fan out to Telegram chats AND Slack destinations simultaneously. The picker shows destinations **bound to the folder of the sensor** plus any **global** destinations (destinations with no folder bindings, which broadcast to every folder). To narrow a destination to a specific folder, bind it through the folder's **Chats** tab.
 
 ---
 
@@ -80,23 +80,25 @@ Recreate the destination on the target server first (same name) if you want the 
 
 ## Bind chats to a folder
 
-Telegram chats and Slack destinations are bound to a folder through one unified **Chats** tab. The admin creates Telegram chats and Slack webhooks globally (Configuration → Telegram / Configuration → Slack); a Product Manager for a folder binds a subset of each via the same tab. The sensor alert picker only shows chats and destinations bound to the folder of the sensor.
+Telegram chats and Slack destinations are bound to a folder through one unified **Chats** tab. The admin creates Telegram chats and Slack webhooks globally (Configuration → Telegram / Configuration → Slack); a Product Manager for a folder can bind a subset of each via the same tab to narrow delivery.
+
+**Global default.** A Slack destination (or Telegram chat) with **no** folder bindings is *global* — it appears in the alert destination picker of every folder and is deliverable for any alert, regardless of folder. Binding a destination to one or more folders narrows delivery to only those folders. This is the common case for a single "catch-all" alerting channel: leave it unbound and it catches every alert.
 
 **Step 1.** Open **Folders → edit folder F → Chats tab**.
 
 **Step 2.** Under **Add new telegram chat** / **Add new slack destination** pick one or more items from the dropdown (the dropdown is grouped into Telegram groups, Telegram users, and Slack destinations).
 
-**Step 3.** Optionally configure **Default chat(s)** (the folder-level heterogeneous default used by alert actions in *parent chat(s)* / *FromParent* mode).
+**Step 3.** Optionally configure **Default chat(s)** (the folder-level heterogeneous default used by alert actions in *parent chat(s)* / *FromParent* mode). Global chats are included here as well.
 
 **Step 4.** Click **Save**.
 
 The connected items table shows Name, Type (Telegram group / Telegram user / Slack), Send messages state, and an **Actions** dropdown:
 - **View/Edit** — opens the global chat or destination editor (admin-only for Slack).
-- **Remove from folder** — unbinds the item from this folder only. The global Slack destination entity is preserved.
+- **Remove from folder** — unbinds the item from this folder only. If the item has no other folder bindings, it transitions to the global state (still deliverable everywhere); the underlying Slack destination entity is preserved either way.
 - **Send test message** — POSTs a fixed test payload to the webhook / chat (admin-only for Slack).
 - **Go to chat** (Telegram groups only) — opens the Telegram chat via deep link.
 
-When a folder is removed, its chat bindings are cleaned (and references pruned from existing alert policies), but the underlying Slack destination entities stay globally registered.
+When a folder is removed, its chat bindings are cleaned (and references pruned from existing alert policies for chats that still have other bindings), but the underlying Slack destination entities stay globally registered.
 
 ---
 

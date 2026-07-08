@@ -129,7 +129,7 @@ The alert message is a text template with variables that are filled in at the ti
 
 ## Destinations
 
-Each policy defines where to send notifications. The destination picker is unified and folder-scoped: it shows only Telegram chats **and** Slack destinations bound to the folder of the sensor (admins create both globally; a Product Manager for the folder binds a subset through the folder's single **Chats** tab). A single action can mix Telegram chats and Slack destinations in one heterogeneous selection.
+Each policy defines where to send notifications. The destination picker is unified and folder-scoped: it shows Telegram chats **and** Slack destinations bound to the folder of the sensor, **plus** any global chats (chats/destinations with no folder bindings, which broadcast to every folder). Admins create both Telegram chats and Slack destinations globally; a Product Manager for a folder can narrow delivery by binding a subset through the folder's single **Chats** tab. A single action can mix Telegram chats and Slack destinations in one heterogeneous selection.
 
 **Modes (one mode per action, applied to the heterogeneous chat set):**
 - **From parent** — use the default chats configured on the parent product/folder. The parent walk resolves one heterogeneous set in a single pass, so Telegram chats and Slack destinations configured on the parent are both pulled in together. Additional specific chats/destinations can be added on top.

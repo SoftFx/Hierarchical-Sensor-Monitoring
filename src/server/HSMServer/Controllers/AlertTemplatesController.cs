@@ -134,7 +134,7 @@ namespace HSMServer.Controllers
             if (_folders.TryGetValue(folderId, out var folder))
             {
                 chats = _telegram.GetValues()
-                    .Where(c => folder.Chats.Contains(c.Id))
+                    .Where(c => folder.Chats.Contains(c.Id) || c.Folders.Count == 0)
                     .Select(c => new ChatItem(c.Id, c.Name, (byte)c.Type))
                     .ToList();
             }
@@ -180,7 +180,10 @@ namespace HSMServer.Controllers
             var model = new DataAlertTemplateViewModel(data, _folders.GetUserFolders(CurrentUser));
 
             if (_folders.TryGetValue(data.FolderId, out var folder))
-                PopulateAvailableChats(model, folder.Chats);
+            {
+                folder.TryGetChats(out var chats);
+                PopulateAvailableChats(model, chats);
+            }
 
             foreach (var (_, alerts) in model.DataAlerts)
                 foreach (var alert in alerts)
@@ -199,7 +202,7 @@ namespace HSMServer.Controllers
                 ModelState.AddModelError(nameof(data.PathTemplates), "At least one path template is required.");
 
             Dictionary<Guid, string> availableChats = null;
-            if (_folders.TryGetValue(data.FolderId, out var folder) && folder.Chats.Count > 0)
+            if (_folders.TryGetValue(data.FolderId, out var folder))
                 availableChats = folder.GetAvailableChats(_telegram, _slackDestinations);
 
             AlertTemplateModel model = null;
@@ -232,7 +235,10 @@ namespace HSMServer.Controllers
             data = new DataAlertTemplateViewModel(model, _folders.GetUserFolders(CurrentUser));
 
             if (folder != null)
-                PopulateAvailableChats(data, folder.Chats);
+            {
+                folder.TryGetChats(out var chats);
+                PopulateAvailableChats(data, chats);
+            }
 
             foreach (var (_, alerts) in data.DataAlerts)
                 foreach (var alert in alerts)

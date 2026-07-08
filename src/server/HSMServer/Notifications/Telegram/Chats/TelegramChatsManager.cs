@@ -127,16 +127,13 @@ namespace HSMServer.Notifications
                     chat.Folders.Add(folderId);
         }
 
-        public async Task RemoveFolderFromChats(Guid folderId, List<Guid> chats, InitiatorInfo initiator)
+        public Task RemoveFolderFromChats(Guid folderId, List<Guid> chats, InitiatorInfo initiator)
         {
             foreach (var chatId in chats)
                 if (TryGetValue(chatId, out var chat))
-                {
                     chat.Folders.Remove(folderId);
 
-                    if (chat.Folders.Count == 0)
-                        await TryRemove(new(chatId, initiator));
-                }
+            return Task.CompletedTask;
         }
 
         public void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator) =>

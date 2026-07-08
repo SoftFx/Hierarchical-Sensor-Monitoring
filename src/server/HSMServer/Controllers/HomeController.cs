@@ -751,8 +751,11 @@ namespace HSMServer.Controllers
             viewModel.Schedules = GetAlertSchedulesSelectList();
 
             if (sensor is null && folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
+            {
+                folder.TryGetChats(out var chats);
                 foreach (var action in viewModel.Actions)
-                    action.AvailableChats.UnionWith(folder.Chats);
+                    action.AvailableChats.UnionWith(chats);
+            }
 
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
@@ -768,7 +771,7 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Sensors.TryGetValue(entityId, out var sensor))
                 sensor.TryGetChats(out chats);
             else if (folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
-                chats = folder.Chats;
+                folder.TryGetChats(out chats);
 
             return PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, isTtl, chats) { Icon = ActionViewModel.DefaultIcon });
         }

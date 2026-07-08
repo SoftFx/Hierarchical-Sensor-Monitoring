@@ -33,11 +33,11 @@ namespace HSMServer.Extensions
             var result = new Dictionary<Guid, string>();
 
             foreach (var chat in chatsManager.GetValues())
-                if (folderChats.Contains(chat.Id))
+                if (folderChats.Contains(chat.Id) || chat.Folders.Count == 0)
                     result[chat.Id] = chat.Name;
 
             foreach (var dest in slackManager.GetValues())
-                if (folderChats.Contains(dest.Id))
+                if (folderChats.Contains(dest.Id) || dest.Folders.Count == 0)
                     result[dest.Id] = dest.Name;
 
             return result;
@@ -48,7 +48,7 @@ namespace HSMServer.Extensions
             var availableChats = new List<TelegramChat>(1 << 3);
 
             foreach (var chat in chatsManager.GetValues())
-                if (folderChats.Contains(chat.Id))
+                if (folderChats.Contains(chat.Id) || chat.Folders.Count == 0)
                     availableChats.Add(chat);
 
             return availableChats;
@@ -59,11 +59,11 @@ namespace HSMServer.Extensions
             var result = new Dictionary<Guid, string>();
 
             foreach (var chat in chatsManager.GetValues())
-                if (folderChats.Contains(chat.Id))
+                if (folderChats.Contains(chat.Id) || chat.Folders.Count == 0)
                     result[chat.Id] = chat.Name;
 
             foreach (var dest in slackManager.GetValues())
-                if (folderChats.Contains(dest.Id))
+                if (folderChats.Contains(dest.Id) || dest.Folders.Count == 0)
                     result[dest.Id] = dest.Name;
 
             return result;
@@ -78,12 +78,18 @@ namespace HSMServer.Extensions
         {
             if (model is FolderModel folder)
             {
-                chats = folder.Chats;
+                chats = new HashSet<Guid>(folder.Chats);
+                if (folder.GetGlobalChatIds is not null)
+                    foreach (var id in folder.GetGlobalChatIds())
+                        chats.Add(id);
                 return true;
             }
             else if (model is NodeViewModel node && node.RootProduct.Parent is FolderModel rootFolder)
             {
-                chats = rootFolder.Chats;
+                chats = new HashSet<Guid>(rootFolder.Chats);
+                if (rootFolder.GetGlobalChatIds is not null)
+                    foreach (var id in rootFolder.GetGlobalChatIds())
+                        chats.Add(id);
                 return true;
             }
 

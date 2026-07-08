@@ -28,6 +28,8 @@ namespace HSMServer.Folders
         private readonly IUserManager _userManager;
         private readonly IDatabaseCore _databaseCore;
         private readonly IJournalService _journalService;
+        private readonly ITelegramChatsManager _telegramChatsManager;
+        private readonly ISlackDestinationsManager _slackDestinationsManager;
         
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -47,7 +49,8 @@ namespace HSMServer.Folders
         public event Func<Guid, string> GetChatName;
 
 
-        public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService)
+        public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService,
+                             ITelegramChatsManager telegramChatsManager, ISlackDestinationsManager slackDestinationsManager)
         {
             _databaseCore = databaseCore;
 
@@ -59,6 +62,9 @@ namespace HSMServer.Folders
             _journalService = journalService;
             _userManager.Removed += RemoveUserHandler;
             _userManager.Added += AddUserHandler;
+
+            _telegramChatsManager = telegramChatsManager;
+            _slackDestinationsManager = slackDestinationsManager;
         }
 
         private void FillFolderChats(FolderEventArgs e)
@@ -109,6 +115,7 @@ namespace HSMServer.Folders
                     await AddProductToFolder(productId, model.Id, info);
 
                 model.GetChatName += GetChatNameById;
+                model.GetGlobalChatIds += GetGlobalChatIds;
                 model.ChangesHandler += _journalService.AddRecord;
             }
 
@@ -141,7 +148,11 @@ namespace HSMServer.Folders
                 await FanOutRemoveFolderFromChats(folder.Id, removedChats, update.Initiator);
 
                 if (removedChats.Count > 0)
-                    await _cache.RemoveChatsFromPoliciesAsync(folder.Id, removedChats, update.Initiator);
+                {
+                    var chatsToPrune = removedChats.Where(id => !IsChatGlobal(id)).ToList();
+                    if (chatsToPrune.Count > 0)
+                        await _cache.RemoveChatsFromPoliciesAsync(folder.Id, chatsToPrune, update.Initiator);
+                }
 
                 if (update.DefaultChats != null || update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     foreach (var productId in folder.Products.Keys)
@@ -204,6 +215,7 @@ namespace HSMServer.Folders
             foreach (var (_, folder) in this)
             {
                 folder.GetChatName += GetChatNameById;
+                folder.GetGlobalChatIds += GetGlobalChatIds;
                 folder.ChangesHandler += _journalService.AddRecord;
 
                 if (_userManager.TryGetValue(folder.AuthorId, out var author))
@@ -483,6 +495,28 @@ namespace HSMServer.Folders
 
 
         private string GetChatNameById(Guid id) => GetChatName?.Invoke(id);
+
+        private IEnumerable<Guid> GetGlobalChatIds()
+        {
+            foreach (var chat in _telegramChatsManager.GetValues())
+                if (chat.Folders.Count == 0)
+                    yield return chat.Id;
+
+            foreach (var dest in _slackDestinationsManager.GetValues())
+                if (dest.Folders.Count == 0)
+                    yield return dest.Id;
+        }
+
+        private bool IsChatGlobal(Guid id)
+        {
+            if (_telegramChatsManager.TryGetValue(id, out var chat))
+                return chat.Folders.Count == 0;
+
+            if (_slackDestinationsManager.TryGetValue(id, out var dest))
+                return dest.Folders.Count == 0;
+
+            return false;
+        }
 
         private Task FanOutRemoveFolderFromChats(Guid folderId, List<Guid> removedChats, InitiatorInfo initiator)
         {
