@@ -1,10 +1,10 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
     public class NumericConditionViewModel : ConditionViewModel
     {
-        protected override List<AlertProperty> Properties { get; } = new()
+        public static IReadOnlyList<AlertProperty> SupportedProperties { get; } = new[]
         {
             AlertProperty.Value,
             AlertProperty.EmaValue,
@@ -13,6 +13,8 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.NewSensorData,
             AlertProperty.TimeToLive,
         };
+
+        protected override IReadOnlyList<AlertProperty> Properties => SupportedProperties;
 
 
         public NumericConditionViewModel(bool isMain) : base(isMain) { }
