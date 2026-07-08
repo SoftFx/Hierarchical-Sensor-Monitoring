@@ -22,11 +22,15 @@ jobs:
           fetch-depth: 1
 
       - uses: anthropics/claude-code-action@v1
+        id: claude
+        continue-on-error: true
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           base_branch: master
-          claude_args: --allowedTools "Bash(gh pr comment*),Bash(gh pr diff*),Bash(gh pr view*),Bash(git diff*),Bash(git log*),Write"
+          claude_args: >-
+            --verbose
+            --allowedTools "Bash(gh pr comment*),Bash(gh pr diff*),Bash(gh pr view*),Bash(git diff*),Bash(git log*),Write"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -41,3 +45,20 @@ jobs:
             Use `git diff origin/${{ github.base_ref }}...origin/${{ github.head_ref }}` to see the changes.
             Write your review to review_output.md, then post it:
             gh pr comment ${{ github.event.pull_request.number }} --body-file review_output.md
+
+      - name: Dump review output (on failure)
+        if: always() && steps.claude.outcome == 'failure'
+        run: |
+          echo "=== review_output.md ==="
+          cat review_output.md 2>/dev/null || echo "(file not created)"
+
+      - name: Upload Claude logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-logs
+          path: |
+            review_output.md
+            *.log
+          if-no-files-found: ignore
+          retention-days: 7
