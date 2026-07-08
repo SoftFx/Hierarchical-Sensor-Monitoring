@@ -31,6 +31,7 @@ jobs:
           claude_args: >-
             --verbose
             --allowedTools "Bash(gh pr comment*),Bash(gh pr diff*),Bash(gh pr view*),Bash(git diff*),Bash(git log*),Write"
+          show_full_output: true
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -60,5 +61,6 @@ jobs:
           path: |
             review_output.md
             *.log
+            /home/runner/work/_temp/claude-execution-output.json
           if-no-files-found: ignore
           retention-days: 7
