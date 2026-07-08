@@ -169,5 +169,50 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.True(controller.ModelState.IsValid);
             Assert.IsType<OkResult>(result);
         }
+
+        [Fact]
+        [Trait("Category", "Alert Template authoring")]
+        public async Task ConcreteTypeTtlOnlyTemplate_BlocksMismatchedPath()
+        {
+            // TTL-only templates with a concrete type are also validated. AlertTemplateModel.IsMatch
+            // applies the type filter uniformly regardless of alert kind, so a TTL-only template
+            // would silently skip mismatched-type sensors just like a regular-alert template.
+            // Regression guard: if a future refactor narrows the check to templates that have
+            // regular (non-TTL) policies, this test must fail.
+            _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
+                .Returns(new List<BaseSensorModel> { BuildSensor(SensorType.Double) });
+
+            var controller = CreateController();
+            // No DataAlerts configured (no regular policies, no TTL entries) — mimics a freshly
+            // opened editor where the user has only picked sensor type + paths so far.
+            var data = BuildData((byte)SensorType.Integer, "*/ttlOnlyMismatch");
+
+            await controller.AlertTemplate(data);
+
+            Assert.False(controller.ModelState.IsValid);
+            Assert.True(controller.ModelState.ContainsKey(nameof(DataAlertTemplateViewModel.PathTemplates)));
+        }
+
+        [Fact]
+        [Trait("Category", "Alert Template authoring")]
+        public async Task MultipleMismatchedPaths_EmitsErrorPerPath()
+        {
+            // Each offending path produces its own field error; the user should see all conflicts,
+            // not just the first one.
+            _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
+                .Returns(new List<BaseSensorModel> { BuildSensor(SensorType.Double) });
+
+            var controller = CreateController();
+            var data = BuildData((byte)SensorType.Integer, "*/badPathOne", "*/badPathTwo", "*/badPathThree");
+
+            await controller.AlertTemplate(data);
+
+            Assert.False(controller.ModelState.IsValid);
+            var errors = controller.ModelState[nameof(DataAlertTemplateViewModel.PathTemplates)].Errors;
+            Assert.Equal(3, errors.Count);
+            Assert.Contains(errors, e => e.ErrorMessage.Contains("badPathOne"));
+            Assert.Contains(errors, e => e.ErrorMessage.Contains("badPathTwo"));
+            Assert.Contains(errors, e => e.ErrorMessage.Contains("badPathThree"));
+        }
     }
 }
