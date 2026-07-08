@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.Extensions;
 using HSMServer.Notifications;
 using Moq;
 using Xunit;
@@ -60,6 +61,41 @@ namespace HSMServer.Core.Tests.Notifications
             await manager.RemoveFolderFromChats(folderId, new List<Guid> { destinationId }, InitiatorInfo.System);
 
             Assert.True(manager.TryGetValue(destinationId, out _));
+        }
+
+        [Fact]
+        public void GetAvailableChats_IncludesZeroFolderDestination()
+        {
+            var slackManager = BuildManager();
+            var dest = BuildDestination();
+            slackManager.TryAdd(dest.Id, dest);
+
+            var telegramMock = new Mock<ITelegramChatsManager>();
+            telegramMock.Setup(t => t.GetValues()).Returns(new List<TelegramChat>());
+
+            var folderChats = new HashSet<Guid>();
+
+            var available = folderChats.GetAvailableChats(telegramMock.Object, slackManager);
+
+            Assert.Contains(dest.Id, available.Keys);
+        }
+
+        [Fact]
+        public void GetAvailableChats_BoundDestinationExcludedFromOtherFolder()
+        {
+            var slackManager = BuildManager();
+            var dest = BuildDestination();
+            dest.Folders.Add(Guid.NewGuid());
+            slackManager.TryAdd(dest.Id, dest);
+
+            var telegramMock = new Mock<ITelegramChatsManager>();
+            telegramMock.Setup(t => t.GetValues()).Returns(new List<TelegramChat>());
+
+            var otherFolderChats = new HashSet<Guid>();
+
+            var available = otherFolderChats.GetAvailableChats(telegramMock.Object, slackManager);
+
+            Assert.DoesNotContain(dest.Id, available.Keys);
         }
 
 

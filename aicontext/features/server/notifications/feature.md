@@ -1,6 +1,6 @@
 # Feature: Notifications
 
-> Owner: server | Last reviewed: 2026-06-30 | Canonical: yes
+> Owner: server | Last reviewed: 2026-07-08 | Canonical: yes
 > Scope: Server-side alert notification delivery channels, the heterogeneous destination model (Telegram + Slack mixed in one alert action), the unified folder/product/node Chats field, the single heterogeneous DefaultChats setting, the unified destination picker, and single-channel FromParent default-destination resolution.
 
 ---
@@ -72,8 +72,10 @@ NotificationsBackgroundService (timer) -> NotificationsCenter.SendAllMessagesAsy
 ## Tests
 
 - `src/tests/HSMServer.Core.Tests/Notifications/SlackChannelTests.cs` — verifies heterogeneous dispatch: given an `AlertMessage` whose `Destination.Chats` mixes Slack and non-Slack Guids, the channel POSTs only to the Slack Guids. Also covers retry behavior (5xx retries, 4xx terminal), disabled destinations, unknown ids, exception swallowing.
-- `src/tests/HSMServer.Core.Tests/Notifications/SlackDestinationsFolderBindingTests.cs` — covers `AddFolderToChats` / `RemoveFolderFromChats` on `SlackDestinationsManager`: in-memory `Folders` reverse index is updated, `ITreeValuesCache.RemoveChatsFromPoliciesAsync` is invoked on removal, unknown ids are silently skipped, and destination entities are not auto-deleted when their last folder binding goes away.
-- Existing destination/policy tests stay green with no assertion changes: `TreeValuesCacheTests/TemplateConcurrencyTests.cs`, `TreeValuesCacheTests/AlertTemplatePartialFailureTests.cs`, `Controllers/HomeControllerAddDataPolicyTests.cs`.
+- `src/tests/HSMServer.Core.Tests/Notifications/SlackDestinationsFolderBindingTests.cs` — covers `AddFolderToChats` / `RemoveFolderFromChats` on `SlackDestinationsManager`: in-memory `Folders` reverse index is updated, `ITreeValuesCache.RemoveChatsFromPoliciesAsync` is invoked on removal, unknown ids are silently skipped, and destination entities are not auto-deleted when their last folder binding goes away. Also covers the global-default picker behavior: a zero-folder destination appears in `NodeExtensions.GetAvailableChats` for every folder, while a destination bound to one folder is excluded from another folder's available set (narrowing preserved).
+- `src/tests/HSMServer.Core.Tests/Notifications/TelegramChatsFolderBindingTests.cs` — mirrors the Slack binding tests for `TelegramChatsManager`: a Telegram chat survives when its last folder binding is removed (no auto-delete at zero folders), and a zero-folder chat appears in `NodeExtensions.GetAvailableChats` for every folder.
+- `src/tests/HSMServer.Core.Tests/Folders/FolderManagerPruningTests.cs` — covers the pruning-skip rule in `FolderManager.TryUpdate`: when a chat becomes global (last binding removed), `ITreeValuesCache.RemoveChatsFromPoliciesAsync` is NOT invoked and the chat survives; when a chat still has another folder binding, pruning IS invoked with that chat id.
+- Existing destination/policy tests stay green: `TreeValuesCacheTests/TemplateConcurrencyTests.cs`, `TreeValuesCacheTests/AlertTemplatePartialFailureTests.cs`. `Controllers/HomeControllerAddDataPolicyTests.cs` was updated for #1219 — the `AvailableChats` superset assertion was inverted to reflect that global chats now appear in the picker alongside folder-bound chats.
 
 ## Slack delivery
 
@@ -136,7 +138,7 @@ UI surface (global admin scope, unchanged):
 
 Operators can mix selections across all groups in one action. `_AlertsFormCollection.cshtml`'s `setFormDataAlertsSendNotificationChats` already classifies mode-sentinel vs real id while reading the select, so the merged picker plugs in with no JS change. The picker uses `@inject ITelegramChatsManager ChatsManager` + `@inject ISlackDestinationsManager SlackDestinations`.
 
-`ActionViewModel` exposes two selection-test helpers (`ChatIsSelected(TelegramChat)`, `SlackDestinationIsSelected(SlackDestination)`) so the partial can mark pre-selected options. Both read from the same `HashSet<Guid> AvailableChats` — there is no separate Slack field. The available-set itself comes from the heterogeneous `folder.Chats` (single `HashSet<Guid>`), resolved via `NodeExtensions.TryGetChats`.
+`ActionViewModel` exposes two selection-test helpers (`ChatIsSelected(TelegramChat)`, `SlackDestinationIsSelected(SlackDestination)`) so the partial can mark pre-selected options. Both read from the same `HashSet<Guid> AvailableChats` — there is no separate Slack field. The available-set itself is `folder.Chats ∪ {chats with Folders.Count == 0}` (single heterogeneous `HashSet<Guid>`), resolved via `NodeExtensions.TryGetChats`.
 
 ### Single-channel heterogeneous FromParent
 
@@ -179,28 +181,32 @@ Slack destinations themselves are **not** migrated by alert export/import — on
 
 ## Folder binding (heterogeneous)
 
-A folder carries a single heterogeneous `Chats: HashSet<Guid>` that mixes Telegram chat ids and Slack destination ids. Admins create Telegram chats and Slack webhooks globally (Configuration → Telegram / Configuration → Slack); a Product Manager for a folder binds a subset to that folder via the folder's single **Chats** tab (`Views/Folders/_Chats.cshtml` → `FoldersController.UpdateChats`). The sensor alert picker (`_ActionBlock.cshtml`) shows only destinations bound to the folder of the sensor — `ActionViewModel.AvailableChats` is built from `folder.Chats` via `NodeExtensions.TryGetChats`.
+A folder carries a single heterogeneous `Chats: HashSet<Guid>` that mixes Telegram chat ids and Slack destination ids. Admins create Telegram chats and Slack webhooks globally (Configuration → Telegram / Configuration → Slack); a Product Manager for a folder binds a subset to that folder via the folder's single **Chats** tab (`Views/Folders/_Chats.cshtml` → `FoldersController.UpdateChats`).
+
+**Global default**: a chat or Slack destination with **zero** folder bindings is *global* — it appears in the alert destination picker of every folder and is deliverable for any alert, regardless of folder. Explicit bindings narrow delivery to only the bound folders. This inverts the pre-#1219 default, where an unbound chat was invisible and undeliverable everywhere. The global default applies uniformly to Telegram chats and Slack destinations.
+
+The sensor alert picker (`_ActionBlock.cshtml`) shows the union of the folder's bound chats and all global chats — `ActionViewModel.AvailableChats` is built from `folder.Chats ∪ {chats with Folders.Count == 0}` via `NodeExtensions.TryGetChats`.
 
 Storage:
 - `FolderEntity.Chats: List<byte[]>` — heterogeneous. Pre-refactor rows that used separate `TelegramChats` / `SlackDestinations` fields deserialize read-tolerant (extra/missing JSON keys ignored, old fields become empty sets on load).
-- `FolderModel.Chats: HashSet<Guid>` loaded in the entity ctor, persisted in `ToEntity`, updated via `FolderUpdate.Chats`. The `FolderModel.UpdateChats` helper accepts a single composite `Func<Guid, string> nameResolver` (the `GetChatName` event) so Telegram and Slack names render uniformly in change journal entries.
+- `FolderModel.Chats: HashSet<Guid>` loaded in the entity ctor, persisted in `ToEntity`, updated via `FolderUpdate.Chats`. `FolderModel.GetAvailableChats()` unions `Chats` with global chat ids (via the `GetGlobalChatIds` delegate wired in `FolderManager`) so `ToEntity()` and `GetCorePolicy` preserve global chats in `DefaultChats.SelectedChats`. The `FolderModel.UpdateChats` helper accepts a single composite `Func<Guid, string> nameResolver` (the `GetChatName` event) so Telegram and Slack names render uniformly in change journal entries.
 - `SlackDestination.Folders: HashSet<Guid>` and `TelegramChat.Folders: HashSet<Guid>` are in-memory reverse indexes, **not** persisted. Hydrated at startup by `NotificationsCenter.ConnectFoldersAndChats` (single loop over `folder.Chats`, dispatching each id to whichever manager owns it) and maintained incrementally by each manager.
 
 Events (single heterogeneous fan-out):
 - `IFolderManager.AddFolderToChats` / `RemoveFolderFromChats` — raised from `FolderManager.TryUpdate` with the diff (added/removed heterogeneous chat ids).
-- Each event is wired in `NotificationsCenter` to **two** handlers — one on `ITelegramChatsManager`, one on `ISlackDestinationsManager`. Each manager resolves only the ids it owns; unknown ids are silently skipped. The remove path also calls `ITreeValuesCache.RemoveChatsFromPoliciesAsync(folderId, chats, initiator)` on each manager to prune dangling references from existing alert policies.
+- Each event is wired in `NotificationsCenter` to **two** handlers — one on `ITelegramChatsManager`, one on `ISlackDestinationsManager`. Each manager resolves only the ids it owns; unknown ids are silently skipped. The remove path prunes dangling references from existing alert policies via `ITreeValuesCache.RemoveChatsFromPoliciesAsync(folderId, chats, initiator)` — but **only for chats that still have other folder bindings**. A chat that becomes global (zero remaining folders) is *not* pruned, because it is still deliverable everywhere; pruning it would drop legitimate alert actions. `FolderManager.IsChatGlobal(id)` checks both managers' `Folders.Count == 0`.
 - `IFolderManager.RemoveChatHandler(TelegramChat, InitiatorInfo)` — invoked when a global Telegram chat is removed; iterates folders and prunes the id from each `folder.Chats`.
 - `IFolderManager.RemoveSlackDestinationHandler(SlackDestination, InitiatorInfo)` — invoked when a global Slack destination is removed by an admin; iterates folders and prunes the id from each `folder.Chats`. Symmetric to `RemoveChatHandler`.
 - `ITelegramChatsManager.RemoveFolderHandler(FolderModel, InitiatorInfo)` and `ISlackDestinationsManager.RemoveFolderHandler(FolderModel, InitiatorInfo)` — invoked when a folder is removed; each calls its own `RemoveFolderFromChats` with the ids it can resolve from `folder.Chats`.
 
 `NotificationsCenter.ConnectFoldersAndChats` wires the heterogeneous fan-out and the composite `GetChatName` resolver, and runs a single hydrate loop at startup that dispatches each `chatId in folder.Chats` to whichever manager owns it. `DisposeAsync` mirrors the subscriptions with `-=`. Orphan-logging at startup has been removed — heterogeneous `Chats` cannot drift between a default setting and a folder binding because there is only one set per folder.
 
-Asymmetry with Telegram (intentional):
-- Removing a folder does **not** auto-remove Slack destination entities. Their global lifecycle is admin-owned. Only the binding and policy references are cleaned.
-- Removing a Slack destination from all folders does **not** auto-delete it. Same reason.
-- Removing a Telegram chat that has no remaining folders **does** auto-delete the chat entity (long-standing behavior, unchanged).
+Lifecycle symmetry (post-#1219):
+- Removing a folder does **not** auto-remove Slack destination entities or Telegram chat entities. Their global lifecycle is admin-owned. Only the binding and policy references are cleaned.
+- Removing the last folder binding from a Telegram chat or Slack destination does **not** auto-delete the entity — it transitions to the global state and remains deliverable everywhere. (Pre-#1219, Telegram chats were auto-deleted at zero folders; this is no longer the case.)
+- Removing a Telegram chat or Slack destination globally (admin action) prunes its id from every folder's `Chats` and from existing alert policies.
 
-The alert picker filter is enforced by `ActionViewModel.AvailableChats` (populated via `NodeExtensions.TryGetChats` reading `folder.Chats`). Existing alert policies with ids that are no longer folder-bound still **deliver** (the delivery channel resolves via the manager directly, not via `AvailableChats`), but those ids won't render as selected options in the UI until re-bound.
+The alert picker filter is enforced by `ActionViewModel.AvailableChats` (populated via `NodeExtensions.TryGetChats` reading `folder.Chats ∪ global chats`). Existing alert policies with ids that are no longer folder-bound still **deliver** (the delivery channel resolves via the manager directly, not via `AvailableChats`), but those ids won't render as selected options in the UI until re-bound. A chat that transitions from bound to global stays referenced in policies where it was already selected — that is intentional, since it is still deliverable.
 
 ### Send test message
 

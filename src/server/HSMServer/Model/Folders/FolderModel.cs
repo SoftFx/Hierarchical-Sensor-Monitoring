@@ -39,6 +39,8 @@ namespace HSMServer.Model.Folders
 
         public event Func<Guid, string> GetChatName;
 
+        internal Func<IEnumerable<Guid>> GetGlobalChatIds;
+
 
         public FolderModel(FolderEntity entity)
         {
@@ -209,7 +211,17 @@ namespace HSMServer.Model.Folders
                 }
             };
 
-        internal Dictionary<Guid, string> GetAvailableChats() => Chats.ToDictionary(k => k, v => GetChatName?.Invoke(v));
+        internal Dictionary<Guid, string> GetAvailableChats()
+        {
+            var result = Chats.ToDictionary(k => k, v => GetChatName?.Invoke(v));
+
+            if (GetGlobalChatIds is not null)
+                foreach (var id in GetGlobalChatIds())
+                    if (!result.ContainsKey(id))
+                        result[id] = GetChatName?.Invoke(id);
+
+            return result;
+        }
 
 
         internal FolderModel RecalculateState()

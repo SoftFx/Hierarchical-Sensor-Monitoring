@@ -107,7 +107,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var partial = Assert.IsType<PartialViewResult>(result);
             var model = Assert.IsAssignableFrom<DataAlertViewModelBase>(partial.Model);
-            Assert.All(model.Actions, action => Assert.Subset(folder.Chats, action.AvailableChats));
+            Assert.All(model.Actions, action => Assert.Subset(action.AvailableChats, folder.Chats));
         }
 
 
