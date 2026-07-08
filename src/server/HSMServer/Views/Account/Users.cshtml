@@ -2,6 +2,7 @@
 @using HSMServer.Constants
 @using HSMServer.Helpers
 @using HSMServer.Model.Authentication
+@using HSMServer.Model.Validators
 @model List<UserViewModel>
 
 @{
@@ -13,6 +14,7 @@
     var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateUserAction, ViewConstants.AccountController))";
     var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveUserAction, ViewConstants.AccountController))";
     var updateAction = "@Html.Raw(Url.Action(ViewConstants.UpdateUserAction, ViewConstants.AccountController))";
+    var maxUsernameLength = @NewUserValidator.MaxUsernameLength;
 </script>
 
 <style>
@@ -163,7 +165,7 @@
             <div id="modalError" class="alert alert-danger d-none"></div>
                 <div class="mb-3">
                     <span class="form-label">Username</span>
-                    <input id="modalUsername" type="text" class="form-control" autocomplete="off" readonly onfocus="this.removeAttribute('readonly');" />
+                    <input id="modalUsername" type="text" class="form-control" autocomplete="off" maxlength="@NewUserValidator.MaxUsernameLength" readonly onfocus="this.removeAttribute('readonly');" />
                 </div>
                 <div class="mb-3">
                     <span class="form-label">Password</span>
@@ -297,7 +299,7 @@
 
         if (modalMode === 'create') {
             if (!username) { showModalError('Username must be not null.'); return; }
-            if (username.length > 100) { showModalError('Username max length is 100 characters.'); return; }
+            if (username.length > maxUsernameLength) { showModalError('Username max length is ' + maxUsernameLength + ' characters.'); return; }
             if (!usernameRegex.test(username)) { showModalError('Username contains invalid symbols.'); return; }
             if (!password) { showModalError('Password must be not null.'); return; }
             if (password.length < 8) { showModalError('Password min length is 8 characters.'); return; }

@@ -20,7 +20,7 @@ namespace HSMServer.Model.Validators
 
             RuleFor(x => x.Password).NotEmpty()
                                     .WithMessage(PasswordNotNullMessage)
-                                    .MinimumLength(MinPasswordLenght)
+                                    .MinimumLength(MinPasswordLength)
                                     .WithMessage(PasswordMinLengthMessage);
 
             RuleFor(x => x.SecondPassword).NotEmpty();
