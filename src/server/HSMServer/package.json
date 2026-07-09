@@ -9,7 +9,6 @@
   "author": "HSM team",
   "license": "MIT",
   "devDependencies": {
-    "@types/dompurify": "3.0.5",
     "@types/jquery": "3.5.29",
     "@types/plotly.js": "2.29.1",
     "buffer": "6.0.3",
@@ -45,7 +44,7 @@
     "codemirror-json-schema": "^0.8.1",
     "datatables": "1.10.18",
     "datatables.net-dt": "2.0.8",
-    "dompurify": "3.0.1",
+    "dompurify": "^3.4.11",
     "emojionearea": "3.4.2",
     "flatpickr": "^4.6.13",
     "interactjs": "1.10.19",
