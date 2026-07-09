@@ -58,11 +58,15 @@
             '#ce6dbd', '#e7969c'
         ];
 
+        // Show (as inline-flex) or hide a control group.
+        function setInlineFlex(el, show) {
+            el.classList.toggle('d-none', !show);
+            el.classList.toggle('d-flex', show);
+        }
+
         window.onNodeChartPeriodChange = function (nodeId) {
             const isCustom = document.getElementById(`nodeChartPeriod_${nodeId}`).value === 'custom';
-            const custom = document.getElementById(`nodeChartCustom_${nodeId}`);
-            custom.classList.toggle('d-none', !isCustom);
-            custom.classList.toggle('d-flex', isCustom);
+            setInlineFlex(document.getElementById(`nodeChartCustom_${nodeId}`), isCustom);
 
             if (!isCustom)
                 loadNodeChart(nodeId);
@@ -85,11 +89,7 @@
             return { from: new Date(now.getTime() - spans[period]).toISOString(), to: now.toISOString() };
         }
 
-        // Called from the Chart tab link (onclick) and whenever the period changes.
-        window.initNodeChart = function (nodeId) {
-            loadNodeChart(nodeId);
-        };
-
+        // Called from the Chart tab link (onclick), the period selector, and the group selector.
         window.loadNodeChart = function (nodeId) {
             const container = document.getElementById(`nodeChartData_${nodeId}`);
             if (!container)
@@ -139,11 +139,9 @@
                 }
                 if (data.selectedKey)
                     sel.value = data.selectedKey;
-                wrap.classList.remove('d-none');
-                wrap.classList.add('d-flex');
+                setInlineFlex(wrap, true);
             } else {
-                wrap.classList.add('d-none');
-                wrap.classList.remove('d-flex');
+                setInlineFlex(wrap, false);
             }
         }
 

@@ -1,5 +1,4 @@
-﻿using HSMCommon.Extensions;
-using HSMCommon.Model;
+﻿using HSMCommon.Model;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
@@ -102,12 +101,12 @@ namespace HSMServer.Model.TreeViewModel
         /// <summary>
         /// Groups a node's chart-comparable descendant sensors by (type, effective unit) and returns
         /// the groups that contain at least two sensors, ordered from the largest group to the smallest.
-        /// Used both to decide whether the node "Chart" tab is shown and to drive the overlay endpoint.
+        /// Drives the overlay endpoint; use <see cref="HasComparableChildGroup"/> for tab visibility.
         /// </summary>
         internal List<NodeSensorGroup> GetComparableChildGroups(Guid nodeId)
         {
-            // Key on the raw enum codes (cheap struct equality) — no reflection in this per-sensor loop,
-            // which runs on every node selection. The display label is formatted once per surviving group.
+            // Key on the raw enum codes (cheap struct equality) — no reflection in this per-sensor loop.
+            // The display label is formatted once per surviving group.
             var groups = new Dictionary<(SensorType Type, int? Unit), List<Guid>>();
 
             foreach (var sensorId in GetAllNodeSensors(nodeId))
@@ -115,7 +114,7 @@ namespace HSMServer.Model.TreeViewModel
                 if (!Sensors.TryGetValue(sensorId, out var sensor) || !IsComparableChartSensor(sensor))
                     continue;
 
-                var key = (sensor.Type, GetEffectiveUnitCode(sensor));
+                var key = (sensor.Type, sensor.EffectiveUnitCode);
 
                 if (!groups.TryGetValue(key, out var ids))
                     groups[key] = ids = new List<Guid>();
@@ -130,7 +129,7 @@ namespace HSMServer.Model.TreeViewModel
                 if (ids.Count < 2)
                     continue;
 
-                var unitLabel = Sensors.TryGetValue(ids[0], out var first) ? GetEffectiveUnitLabel(first) : string.Empty;
+                var unitLabel = Sensors.TryGetValue(ids[0], out var first) ? first.EffectiveUnitLabel : string.Empty;
                 result.Add(new NodeSensorGroup(key.Type, key.Unit, unitLabel, ids));
             }
 
@@ -139,30 +138,37 @@ namespace HSMServer.Model.TreeViewModel
                          .ToList();
         }
 
+        /// <summary>
+        /// Cheap existence check for the node "Chart" tab: returns true as soon as any (type, unit) group
+        /// reaches two sensors. Runs on every node selection, so it avoids the labels/sort/allocation of
+        /// <see cref="GetComparableChildGroups"/>.
+        /// </summary>
+        internal bool HasComparableChildGroup(Guid nodeId)
+        {
+            var counts = new Dictionary<(SensorType Type, int? Unit), int>();
+
+            foreach (var sensorId in GetAllNodeSensors(nodeId))
+            {
+                if (!Sensors.TryGetValue(sensorId, out var sensor) || !IsComparableChartSensor(sensor))
+                    continue;
+
+                var key = (sensor.Type, sensor.EffectiveUnitCode);
+
+                if (counts.TryGetValue(key, out var count)) // already seen once -> this is the second
+                    return true;
+
+                counts[key] = count + 1;
+            }
+
+            return false;
+        }
+
         // v1 overlays numeric line-able sensors only; enum/bool/version/timespan/string and service
         // status/alive step charts are out of scope here (tracked for later aggregation strategies).
         private static bool IsComparableChartSensor(SensorNodeViewModel sensor) =>
             !sensor.IsServiceStatus && !sensor.IsServiceAlive &&
             sensor.Type is SensorType.Integer or SensorType.Double or SensorType.Rate
                         or SensorType.IntegerBar or SensorType.DoubleBar;
-
-        // Rate sensors group by their display unit; everything else by the selected unit. Returns the
-        // raw enum value as an int so grouping needs no attribute reflection (unlike the display label).
-        private static int? GetEffectiveUnitCode(SensorNodeViewModel sensor)
-        {
-            if (sensor.Type is SensorType.Rate)
-                return sensor.DisplayUnit.HasValue ? (int)sensor.DisplayUnit.Value : null;
-
-            return sensor.SelectedUnit.HasValue ? (int)sensor.SelectedUnit.Value : null;
-        }
-
-        private static string GetEffectiveUnitLabel(SensorNodeViewModel sensor)
-        {
-            if (sensor.Type is SensorType.Rate && sensor.DisplayUnit.HasValue)
-                return sensor.DisplayUnit.Value.GetDisplayName();
-
-            return sensor.SelectedUnit?.GetDisplayName() ?? string.Empty;
-        }
 
         internal Guid GetBackgroundPlotId(SensorNodeViewModel sensor, bool isStatusService)
         {

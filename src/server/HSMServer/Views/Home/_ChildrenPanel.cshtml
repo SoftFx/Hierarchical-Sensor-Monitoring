@@ -19,7 +19,7 @@
     @if (Model.ShowChartTab)
     {
         <li class="nav-item">
-            <a id="chartLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="initNodeChart('@nodeId')" href='#@chartDivId' role="tab"><i class="fa-solid fa-chart-line"></i> Chart</a>
+            <a id="chartLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="loadNodeChart('@nodeId')" href='#@chartDivId' role="tab"><i class="fa-solid fa-chart-line"></i> Chart</a>
         </li>
     }
     <li class="nav-item">

@@ -216,13 +216,9 @@ namespace HSMServer.Controllers
             // data in the window, then cap the DISPLAY to the highest-peak sensors. Capping by tree order
             // before reading would drop active sensors: top-N series (e.g. per-process CPU) are
             // intermittent, so the first ids by path are usually idle in any given window.
-            var scannedIds = group.SensorIds.Count > NodeChartMaxSensorsScanned
-                ? group.SensorIds.Take(NodeChartMaxSensorsScanned).ToList()
-                : group.SensorIds;
+            var built = new List<(Guid Id, string Label, List<(DateTime Time, double Value)> Points)>();
 
-            var built = new List<(Guid Id, string Label, List<(DateTime Time, double Value)> Points, double Peak)>();
-
-            foreach (var sensorId in scannedIds)
+            foreach (var sensorId in group.SensorIds.Take(NodeChartMaxSensorsScanned))
             {
                 if (!_tree.Sensors.TryGetValue(sensorId, out var sensor))
                     continue;
@@ -232,20 +228,21 @@ namespace HSMServer.Controllers
                 if (points.Count == 0) // no data in the window -> omitted, not zero-filled
                     continue;
 
-                built.Add((sensor.Id, GetNodeRelativeLabel(nodePath, sensor.FullPath), points, points.Max(p => p.Value)));
+                built.Add((sensor.Id, GetNodeRelativeLabel(nodePath, sensor.FullPath), points));
             }
 
             var withData = built.Count;
 
+            // Rank by peak only when we actually have to drop series (the common case is <= 20).
             var shown = withData > MaxSensorsPerChart
-                ? built.OrderByDescending(b => b.Peak).Take(MaxSensorsPerChart).ToList()
+                ? built.OrderByDescending(b => b.Points.Max(p => p.Value)).Take(MaxSensorsPerChart).ToList()
                 : built;
 
             var series = shown.Select(b => new
             {
                 id = b.Id,
                 label = b.Label,
-                values = b.Points.Select(p => (object)new { time = p.Time, value = p.Value }),
+                values = b.Points.Select(p => new { time = p.Time, value = p.Value }),
             });
 
             var note = withData > MaxSensorsPerChart
