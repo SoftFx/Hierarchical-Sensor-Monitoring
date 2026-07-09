@@ -64,9 +64,14 @@ namespace HSMServer.Controllers
         // most recent within the window; bounds the payload when many children are overlaid at once.
         private const int NodeChartMaxPointsPerSensor = -2000;
 
-        // Max child sensors overlaid on one node chart. Applied before reading history, so it also bounds
-        // the number of history reads per request, and keeps the legend readable. Ranked selection is v2.
+        // Max child sensors drawn on one node chart (kept readable). Applied to the sensors that actually
+        // have data in the window, picking the highest-peak ones — NOT the first by tree order, which for
+        // intermittent top-N series (per-process CPU, etc.) would usually be idle and drop to one line.
         private const int MaxSensorsPerChart = 20;
+
+        // Upper bound on how many of a group's sensors are read per request, so a pathologically large
+        // same-unit group can't fan out into unbounded history reads. Real groups are far smaller.
+        private const int NodeChartMaxSensorsScanned = 500;
 
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
@@ -207,33 +212,44 @@ namespace HSMServer.Controllers
             var to = request.To.ToUtcKind();
             var nodePath = node.FullPath;
 
-            // Cap before reading history: bounds both the overlaid lines and the number of history reads.
-            var overlaidIds = group.SensorIds.Count > MaxSensorsPerChart
-                ? group.SensorIds.Take(MaxSensorsPerChart).ToList()
+            // Read every sensor in the group (bounded per sensor + a scan ceiling) and keep only those with
+            // data in the window, then cap the DISPLAY to the highest-peak sensors. Capping by tree order
+            // before reading would drop active sensors: top-N series (e.g. per-process CPU) are
+            // intermittent, so the first ids by path are usually idle in any given window.
+            var scannedIds = group.SensorIds.Count > NodeChartMaxSensorsScanned
+                ? group.SensorIds.Take(NodeChartMaxSensorsScanned).ToList()
                 : group.SensorIds;
 
-            var series = new List<object>(overlaidIds.Count);
+            var built = new List<(Guid Id, string Label, List<(DateTime Time, double Value)> Points, double Peak)>();
 
-            foreach (var sensorId in overlaidIds)
+            foreach (var sensorId in scannedIds)
             {
                 if (!_tree.Sensors.TryGetValue(sensorId, out var sensor))
                     continue;
 
-                var values = await BuildNodeChartSeries(sensor, from, to);
+                var points = await ReadNodeChartPoints(sensor, from, to);
 
-                if (values.Count == 0) // omitted, not zero-filled
+                if (points.Count == 0) // no data in the window -> omitted, not zero-filled
                     continue;
 
-                series.Add(new
-                {
-                    id = sensor.Id,
-                    label = GetNodeRelativeLabel(nodePath, sensor.FullPath),
-                    values,
-                });
+                built.Add((sensor.Id, GetNodeRelativeLabel(nodePath, sensor.FullPath), points, points.Max(p => p.Value)));
             }
 
-            var note = group.SensorIds.Count > MaxSensorsPerChart
-                ? $"Showing the first {MaxSensorsPerChart} of {group.SensorIds.Count} comparable sensors (chart limit)."
+            var withData = built.Count;
+
+            var shown = withData > MaxSensorsPerChart
+                ? built.OrderByDescending(b => b.Peak).Take(MaxSensorsPerChart).ToList()
+                : built;
+
+            var series = shown.Select(b => new
+            {
+                id = b.Id,
+                label = b.Label,
+                values = b.Points.Select(p => (object)new { time = p.Time, value = p.Value }),
+            });
+
+            var note = withData > MaxSensorsPerChart
+                ? $"Showing the {MaxSensorsPerChart} highest-peak sensors of {withData} with data in this window ({group.SensorIds.Count} in the group)."
                 : null;
 
             return new JsonResult(new
@@ -266,7 +282,7 @@ namespace HSMServer.Controllers
             _ => type.ToString(),
         };
 
-        private async Task<List<object>> BuildNodeChartSeries(SensorNodeViewModel sensor, DateTime from, DateTime to)
+        private async Task<List<(DateTime Time, double Value)>> ReadNodeChartPoints(SensorNodeViewModel sensor, DateTime from, DateTime to)
         {
             var rawValues = await GetSensorValues(sensor.EncodedId, from, to, NodeChartMaxPointsPerSensor);
 
@@ -280,9 +296,9 @@ namespace HSMServer.Controllers
                     points.Add((display.Time.ToUniversalTime(), scalar));
             }
 
-            return points.OrderBy(point => point.Time)
-                         .Select(point => (object)new { time = point.Time, value = point.Value })
-                         .ToList();
+            points.Sort((a, b) => a.Time.CompareTo(b.Time));
+
+            return points;
         }
 
         private static bool TryGetScalar(BaseValue value, out double scalar)

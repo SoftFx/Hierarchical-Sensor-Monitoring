@@ -41,10 +41,12 @@ chart. It is entirely derived from stored history: it never writes or changes se
   `SelectedNodeViewModel.ShowChartTab = GetComparableChildGroups(nodeId).Count > 0`. Enabled for
   product/tree **nodes** only, not folders.
 - **Empty series are omitted, not zero-filled.** A window with no data for a child drops that line.
-- **At most `MaxSensorsPerChart` (20) sensors are overlaid.** The cap is applied to the chosen group
-  *before* reading history, so it bounds both the number of overlaid lines (legend readability) and the
-  number of per-request history reads (worst-case cost). When the group is larger, the first 20 (tree
-  order) are shown and a note reports `N of M`. Ranked "top consumers" selection is v2.
+- **At most `MaxSensorsPerChart` (20) sensors are overlaid — chosen from those that actually have data.**
+  The endpoint reads every sensor in the group (bounded per sensor, plus a `NodeChartMaxSensorsScanned`
+  = 500 scan ceiling), drops the ones with no data in the window, and only then caps the display to the
+  **20 highest-peak** series. Capping by tree order *before* reading is wrong for intermittent top-N
+  series (per-process CPU, etc.): the first ids by path are usually idle in any given window, so it
+  collapsed the chart to a single line. The note reports "20 highest-peak of N with data (M in group)".
 - Scope is the node's full descendant set (`GetAllNodeSensors`); the two real examples
   (`Top CPU processes`, per-interface `Network`) are homogeneous. Direct-children-vs-subtree toggle
   is v3.
@@ -122,9 +124,9 @@ Manual acceptance (issue #1235):
 
 - Bars render as a single Mean line in v1; per-property (min/max/count) overlays and rate/counter
   delta strategies are deferred.
-- The endpoint bounds each child to the latest `NodeChartMaxPointsPerSensor` (2000) values in the
-  window, and the number of children to `MaxSensorsPerChart` (20), to keep the payload and read count
-  modest. Both are constants in `SensorHistoryController`.
+- Bounds (all constants in `SensorHistoryController`): `NodeChartMaxPointsPerSensor` (2000) values per
+  child; `NodeChartMaxSensorsScanned` (500) sensors read per request; `MaxSensorsPerChart` (20) lines
+  drawn (the highest-peak of those with data).
 
 ## Known Issues / Limitations
 
