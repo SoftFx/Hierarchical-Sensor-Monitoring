@@ -41,6 +41,10 @@ chart. It is entirely derived from stored history: it never writes or changes se
   `SelectedNodeViewModel.ShowChartTab = GetComparableChildGroups(nodeId).Count > 0`. Enabled for
   product/tree **nodes** only, not folders.
 - **Empty series are omitted, not zero-filled.** A window with no data for a child drops that line.
+- **At most `MaxSensorsPerChart` (20) sensors are overlaid.** The cap is applied to the chosen group
+  *before* reading history, so it bounds both the number of overlaid lines (legend readability) and the
+  number of per-request history reads (worst-case cost). When the group is larger, the first 20 (tree
+  order) are shown and a note reports `N of M`. Ranked "top consumers" selection is v2.
 - Scope is the node's full descendant set (`GetAllNodeSensors`); the two real examples
   (`Top CPU processes`, per-interface `Network`) are homogeneous. Direct-children-vs-subtree toggle
   is v3.
@@ -117,8 +121,9 @@ Manual acceptance (issue #1235):
 
 - Bars render as a single Mean line in v1; per-property (min/max/count) overlays and rate/counter
   delta strategies are deferred.
-- The endpoint bounds each child to the latest `NodeChartMaxPointsPerSensor` values in the window
-  to keep the multi-line payload modest.
+- The endpoint bounds each child to the latest `NodeChartMaxPointsPerSensor` (2000) values in the
+  window, and the number of children to `MaxSensorsPerChart` (20), to keep the payload and read count
+  modest. Both are constants in `SensorHistoryController`.
 
 ## Known Issues / Limitations
 

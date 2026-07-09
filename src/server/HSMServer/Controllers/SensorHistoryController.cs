@@ -64,6 +64,10 @@ namespace HSMServer.Controllers
         // most recent within the window; bounds the payload when many children are overlaid at once.
         private const int NodeChartMaxPointsPerSensor = -2000;
 
+        // Max child sensors overlaid on one node chart. Applied before reading history, so it also bounds
+        // the number of history reads per request, and keeps the legend readable. Ranked selection is v2.
+        private const int MaxSensorsPerChart = 20;
+
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
 
@@ -202,9 +206,14 @@ namespace HSMServer.Controllers
             var to = request.To.ToUtcKind();
             var nodePath = node.FullPath;
 
-            var series = new List<object>(group.SensorIds.Count);
+            // Cap before reading history: bounds both the overlaid lines and the number of history reads.
+            var overlaidIds = group.SensorIds.Count > MaxSensorsPerChart
+                ? group.SensorIds.Take(MaxSensorsPerChart).ToList()
+                : group.SensorIds;
 
-            foreach (var sensorId in group.SensorIds)
+            var series = new List<object>(overlaidIds.Count);
+
+            foreach (var sensorId in overlaidIds)
             {
                 if (!_tree.Sensors.TryGetValue(sensorId, out var sensor))
                     continue;
@@ -222,15 +231,19 @@ namespace HSMServer.Controllers
                 });
             }
 
-            var note = groups.Count > 1
-                ? $"Showing {series.Count} sensor(s) in {(string.IsNullOrEmpty(group.UnitLabel) ? "no unit" : group.UnitLabel)}. This node also has comparable sensors in other units, which are not overlaid here."
-                : null;
+            var notes = new List<string>(2);
+
+            if (group.SensorIds.Count > MaxSensorsPerChart)
+                notes.Add($"Showing the first {MaxSensorsPerChart} of {group.SensorIds.Count} comparable sensors (chart limit).");
+
+            if (groups.Count > 1)
+                notes.Add($"This node also has comparable sensors in units other than {(string.IsNullOrEmpty(group.UnitLabel) ? "no unit" : group.UnitLabel)}, which are not overlaid here.");
 
             return new JsonResult(new
             {
                 error = false,
                 unit = group.UnitLabel,
-                note,
+                note = notes.Count > 0 ? string.Join(" ", notes) : null,
                 series,
             }, _serializationsOptions);
         }
