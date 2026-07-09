@@ -145,3 +145,6 @@ CMakeUserPresets.json
 /Config/
 /Databases/
 /DatabasesBackups/
+
+# Local override for scripts/local-docker-build.ps1 — pins image tag, machine-local
+docker-compose.local.yml
