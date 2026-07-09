@@ -44,7 +44,7 @@
     "codemirror-json-schema": "^0.8.1",
     "datatables": "1.10.18",
     "datatables.net-dt": "2.0.8",
-    "dompurify": "^3.4.11",
+    "dompurify": "3.4.11",
     "emojionearea": "3.4.2",
     "flatpickr": "^4.6.13",
     "interactjs": "1.10.19",

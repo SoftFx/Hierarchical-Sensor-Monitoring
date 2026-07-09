@@ -26,7 +26,7 @@ window.TimeSpan = TimeSpan;
 import * as Marked from 'marked'
 window.marked = Marked;
 
-import * as DOMPurify from 'dompurify';
+import DOMPurify from 'dompurify';
 window.DOMPurify = DOMPurify;
 
 import 'datatables';
