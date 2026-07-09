@@ -1,0 +1,14 @@
+# Local-only HSMServer image.
+# Mirrors the dotnet SDK DefaultContainer output of server-build.yml's
+# publish-docker-image job, but bypasses the SDK's HTTP base-image fetch
+# (which fails on Windows Docker Desktop due to docker-credential-desktop
+# returning "credentials not found in native keychain" for anonymous pulls).
+#
+# Build context = `dotnet publish` output dir (scripts/local-docker-build.ps1
+# invokes this with the publish folder as context).
+
+FROM index.docker.io/hsmonitoring/hierarchical_sensor_monitoring_deps:latest
+WORKDIR /app
+COPY . /app/
+EXPOSE 44330 44333
+ENTRYPOINT ["./HSMServer"]

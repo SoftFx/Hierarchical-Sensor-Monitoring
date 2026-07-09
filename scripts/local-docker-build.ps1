@@ -11,13 +11,17 @@ param(
 )
 
 # Builds and runs the HSMServer Docker container locally from a given branch,
-# reproducing the publish-docker-image step of .github/workflows/server-build.yml:
+# reproducing the output of the publish-docker-image step in
+# .github/workflows/server-build.yml.
 #
-#   dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 `
-#       -p:PublishProfile=DefaultContainer `
-#       -p:ContainerBaseImage=index.docker.io/hsmonitoring/hierarchical_sensor_monitoring_deps:latest `
-#       -p:ContainerImageName=hsmonitoring/hierarchical_sensor_monitoring `
-#       -p:ContainerImageTags=<ImageTag>
+# The CI workflow uses the .NET SDK's DefaultContainer publish profile, but on
+# Windows Docker Desktop that path fails with CONTAINER1008 ("credentials not
+# found in native keychain") because the SDK's HTTP base-image fetch goes
+# through docker-credential-desktop, which rejects anonymous DockerHub pulls.
+# So instead we do a plain `dotnet publish` to a folder and feed it to
+# `docker build` using docker_scripts/HSMserver/Dockerfile.local, which has
+# the same base image (hierarchical_sensor_monitoring_deps:latest) and the
+# same ENTRYPOINT as the CI-built image.
 #
 # Then starts the container with docker-compose.yml + a local override that pins the tag.
 
@@ -107,16 +111,29 @@ try {
         Write-Warning "-IncludeAgent not set — /api/agent/installer will 503. Pass the flag to mirror CI exactly."
     }
 
-    # --- Publish container image (the heart of the release build) ---
-    Write-Host "Publishing container image ${ImageName}:$ImageTag ..."
+    # --- Publish server to a folder, then build the image with plain `docker build` ---
+    # We avoid the SDK's DefaultContainer profile because its HTTP base-image fetch
+    # breaks on Windows Docker Desktop (docker-credential-desktop / CONTAINER1008).
+    $publishDir = Join-Path $repoRoot "build" "local-publish"
+    if (Test-Path $publishDir) {
+        Remove-Item -Recurse -Force $publishDir
+    }
+
+    Write-Host "Publishing $ServerProject to $publishDir ..."
     dotnet publish $ServerProject `
         -c Release `
         --os linux --arch x64 `
-        -p:PublishProfile=DefaultContainer `
-        -p:ContainerBaseImage=$DepsImage `
-        -p:ContainerImageName=$ImageName `
-        -p:ContainerImageTags=$ImageTag
+        -o $publishDir
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
+
+    $dockerfile = Join-Path $repoRoot "docker_scripts" "HSMserver" "Dockerfile.local"
+    if (-not (Test-Path $dockerfile)) {
+        throw "Missing Dockerfile: $dockerfile"
+    }
+
+    Write-Host "Building Docker image ${ImageName}:$ImageTag ..."
+    docker build -t "${ImageName}:${ImageTag}" -f $dockerfile $publishDir
+    if ($LASTEXITCODE -ne 0) { throw "docker build failed with exit code $LASTEXITCODE" }
 
     Write-Host ""
     Write-Host "Built: ${ImageName}:$ImageTag" -ForegroundColor Green
