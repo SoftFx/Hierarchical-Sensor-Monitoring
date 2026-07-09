@@ -17,6 +17,12 @@
             <option value="custom">Custom</option>
         </select>
 
+        <div id="nodeChartTypeWrap_@nodeId" class="d-none align-items-center gap-2">
+            <label class="m-0" for="nodeChartType_@nodeId">Type:</label>
+            <select class="form-select" style="width: auto;" id="nodeChartType_@nodeId"
+                    onchange="loadNodeChart('@nodeId')"></select>
+        </div>
+
         <div id="nodeChartCustom_@nodeId" class="d-none align-items-center gap-2">
             <label class="m-0" for="nodeChartFrom_@nodeId">From:</label>
             <input type="datetime-local" class="form-control" style="width: auto;" id="nodeChartFrom_@nodeId">
@@ -90,6 +96,8 @@
                 return;
 
             const { from, to } = nodeChartWindow(nodeId);
+            const typeSel = document.getElementById(`nodeChartType_${nodeId}`);
+            const groupKey = typeSel ? typeSel.value : '';
             const token = (window._nodeChartToken = (window._nodeChartToken || 0) + 1);
 
             $.ajax({
@@ -98,7 +106,7 @@
                 contentType: 'application/json',
                 dataType: 'json',
                 cache: false,
-                data: JSON.stringify({ nodeId: container.dataset.nodeId, from: from, to: to })
+                data: JSON.stringify({ nodeId: container.dataset.nodeId, from: from, to: to, groupKey: groupKey })
             }).done(function (data) {
                 if (token !== window._nodeChartToken)
                     return;
@@ -106,12 +114,47 @@
             });
         };
 
+        function nodeChartEscape(s) {
+            return String(s).replace(/[&<>"]/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+            });
+        }
+
+        // Populate the "Type" group selector from the response; shown only when the node has >1 group.
+        function updateNodeChartTypes(nodeId, data) {
+            const wrap = document.getElementById(`nodeChartTypeWrap_${nodeId}`);
+            const sel = document.getElementById(`nodeChartType_${nodeId}`);
+            const groups = (data && data.groups) || [];
+
+            if (!wrap || !sel)
+                return;
+
+            if (groups.length > 1) {
+                const sig = groups.map(function (g) { return g.key; }).join('|');
+                if (sel.dataset.sig !== sig) {
+                    sel.innerHTML = groups.map(function (g) {
+                        return `<option value="${nodeChartEscape(g.key)}">${nodeChartEscape(g.label)}</option>`;
+                    }).join('');
+                    sel.dataset.sig = sig;
+                }
+                if (data.selectedKey)
+                    sel.value = data.selectedKey;
+                wrap.classList.remove('d-none');
+                wrap.classList.add('d-flex');
+            } else {
+                wrap.classList.add('d-none');
+                wrap.classList.remove('d-flex');
+            }
+        }
+
         function renderNodeChart(nodeId, data) {
             const graphId = `graph_node_${nodeId}`;
             const graphEl = document.getElementById(graphId);
             const noData = document.getElementById(`nodeChartNoData_${nodeId}`);
             const noteEl = document.getElementById(`nodeChartNote_${nodeId}`);
             const series = (data && data.series) || [];
+
+            updateNodeChartTypes(nodeId, data);
 
             if (data && data.note) {
                 noteEl.textContent = data.note;

@@ -131,7 +131,7 @@ namespace HSMServer.Model.TreeViewModel
                     continue;
 
                 var unitLabel = Sensors.TryGetValue(ids[0], out var first) ? GetEffectiveUnitLabel(first) : string.Empty;
-                result.Add(new NodeSensorGroup(key.Type, unitLabel, ids));
+                result.Add(new NodeSensorGroup(key.Type, key.Unit, unitLabel, ids));
             }
 
             return result.OrderByDescending(group => group.SensorIds.Count)

@@ -201,7 +201,8 @@ namespace HSMServer.Controllers
             if (groups.Count == 0)
                 return new JsonResult(new { error = false, series = Array.Empty<object>() }, _serializationsOptions);
 
-            var group = groups[0];
+            // The operator picks which comparable (type, unit) group to overlay; default to the largest.
+            var group = groups.FirstOrDefault(g => g.Key == request.GroupKey) ?? groups[0];
             var from = request.From.ToUtcKind();
             var to = request.To.ToUtcKind();
             var nodePath = node.FullPath;
@@ -231,22 +232,39 @@ namespace HSMServer.Controllers
                 });
             }
 
-            var notes = new List<string>(2);
-
-            if (group.SensorIds.Count > MaxSensorsPerChart)
-                notes.Add($"Showing the first {MaxSensorsPerChart} of {group.SensorIds.Count} comparable sensors (chart limit).");
-
-            if (groups.Count > 1)
-                notes.Add($"This node also has comparable sensors in units other than {(string.IsNullOrEmpty(group.UnitLabel) ? "no unit" : group.UnitLabel)}, which are not overlaid here.");
+            var note = group.SensorIds.Count > MaxSensorsPerChart
+                ? $"Showing the first {MaxSensorsPerChart} of {group.SensorIds.Count} comparable sensors (chart limit)."
+                : null;
 
             return new JsonResult(new
             {
                 error = false,
                 unit = group.UnitLabel,
-                note = notes.Count > 0 ? string.Join(" ", notes) : null,
+                note,
+                selectedKey = group.Key,
+                groups = groups.Select(g => new
+                {
+                    key = g.Key,
+                    label = GetGroupLabel(g),
+                    count = g.SensorIds.Count,
+                }),
                 series,
             }, _serializationsOptions);
         }
+
+        private static string GetGroupLabel(NodeSensorGroup group)
+        {
+            var unit = string.IsNullOrEmpty(group.UnitLabel) ? "no unit" : group.UnitLabel;
+
+            return $"{GetFriendlyType(group.Type)}, {unit} ({group.SensorIds.Count})";
+        }
+
+        private static string GetFriendlyType(SensorType type) => type switch
+        {
+            SensorType.IntegerBar => "Integer bar",
+            SensorType.DoubleBar => "Double bar",
+            _ => type.ToString(),
+        };
 
         private async Task<List<object>> BuildNodeChartSeries(SensorNodeViewModel sensor, DateTime from, DateTime to)
         {

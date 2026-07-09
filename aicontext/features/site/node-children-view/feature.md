@@ -14,16 +14,16 @@ most data), the operator had to open each child one by one.
 The node **Chart** tab overlays every *comparable* child sensor as one line on a single time
 chart. It is entirely derived from stored history: it never writes or changes sensor state.
 
-**v1 (this feature) — same-unit overlay:**
+**v1 (this feature) — grouped overlay with a group selector:**
 
-- The server groups the node's chart-comparable descendant sensors by `(SensorType, effective unit)`
-  and overlays the **largest** such group (the group with the most sensors).
-- One line per child. Children with no data in the window are **omitted** (not zero-filled).
-  Sparse/intermittent series (e.g. top-N processes reported only while active) are drawn with
-  **gaps** — `connectgaps: false` — never interpolated across the gap.
-- If a node has comparable sensors in more than one unit, only the largest group is drawn and a
-  note explains that other-unit sensors are not overlaid (operator-approved v1 behavior for
-  mixed-unit nodes; full mixed-unit support is v3).
+- The server groups the node's chart-comparable descendant sensors by `(SensorType, effective unit)`.
+  Each group of >= 2 sensors can be overlaid on its own chart.
+- The Chart tab overlays the **largest** group by default. When a node has more than one comparable
+  group, a **"Type" selector** (next to the Period selector) lets the operator switch which group
+  `(type, unit)` is charted — one unit at a time, so the y-axis stays meaningful.
+- One line per child in the selected group. Children with no data in the window are **omitted** (not
+  zero-filled). Sparse/intermittent series (e.g. top-N processes reported only while active) are drawn
+  with **gaps** — `connectgaps: false` — never interpolated across the gap.
 - The tab is **not rendered** when the node has no group of >= 2 comparable children.
 
 ## Invariants
@@ -55,14 +55,15 @@ chart. It is entirely derived from stored history: it never writes or changes se
 |---|---|---|
 | 1 | Select a node -> open Chart tab -> pick a window (Last hour / 3h / day / Custom) -> one overlaid line per comparable child | operator |
 | 2 | Change the window -> re-query + redraw; children absent in the new window drop out | operator |
+| 3 | On a multi-group node, pick a different `(type, unit)` group from the **Type** selector -> re-query + redraw that group | operator |
 
 ## API / Public Contracts
 
 | Contract | Location | Notes |
 |---|---|---|
-| `POST SensorHistory/NodeChartHistory` | `Controllers/SensorHistoryController.cs` | Body `NodeChartRequest { NodeId, From, To }`. Returns `{ error, unit, note, series: [{ id, label, values: [{ time, value }] }] }`. |
-| `NodeChartRequest` | `Model/History/NodeChartRequest.cs` | `NodeId` is the node's GUID string (encoded id == `ToString()`); `From`/`To` are UTC instants. |
-| `NodeSensorGroup` | `Model/TreeViewModels/NodeSensorGroup.cs` | `(SensorType Type, string UnitLabel, List<Guid> SensorIds)` — a comparable group. |
+| `POST SensorHistory/NodeChartHistory` | `Controllers/SensorHistoryController.cs` | Body `NodeChartRequest { NodeId, GroupKey?, From, To }`. Returns `{ error, unit, note, selectedKey, groups: [{ key, label, count }], series: [{ id, label, values: [{ time, value }] }] }`. |
+| `NodeChartRequest` | `Model/History/NodeChartRequest.cs` | `NodeId` is the node's GUID string (encoded id == `ToString()`); optional `GroupKey` selects the group; `From`/`To` are UTC instants. |
+| `NodeSensorGroup` | `Model/TreeViewModels/NodeSensorGroup.cs` | `(SensorType Type, int? UnitCode, string UnitLabel, List<Guid> SensorIds)`; `Key` = stable `"{typeInt}:{unitCode}"` used by the group selector. |
 | `TreeViewModel.GetComparableChildGroups(Guid)` | `Model/TreeViewModels/TreeViewModel.cs` | Groups >= 2 comparable descendants by `(type, unit)`, largest first. |
 
 ## Key Files
@@ -129,7 +130,8 @@ Manual acceptance (issue #1235):
 
 - **v2 — Ranking:** a sorted "top consumers" leaderboard (total / average / peak) as a second tab
   on the same data.
-- **v3:** mixed-unit nodes (one chart/group per unit), direct-children-vs-subtree scope toggle,
-  per-type aggregation strategies (rate/counter delta, enum/bool availability = % uptime / flaps).
-- The mixed-unit note triggers when a second comparable group (>= 2) exists; a lone stray sensor of
-  a different unit (singleton) is silently not overlaid.
+- **v3:** direct-children-vs-subtree scope toggle, per-type aggregation strategies (rate/counter
+  delta, enum/bool availability = % uptime / flaps). Mixed-unit nodes are already handled by the group
+  selector (one unit charted at a time), so the earlier "largest group only + note" behavior is gone.
+- Group selection is by `(type, unit)`; a lone comparable sensor of a different unit (a singleton
+  group) still isn't chartable on its own — it needs a peer to form a group of >= 2.

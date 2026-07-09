@@ -10,6 +10,12 @@ namespace HSMServer.Model.Model.History
     {
         public string NodeId { get; set; }
 
+        /// <summary>
+        /// Stable key of the comparable group to overlay (see <c>NodeSensorGroup.Key</c>). When null/unknown
+        /// the server falls back to the largest comparable group.
+        /// </summary>
+        public string GroupKey { get; set; }
+
         public DateTime From { get; set; } = DateTime.MinValue;
 
         public DateTime To { get; set; } = DateTime.MaxValue;
