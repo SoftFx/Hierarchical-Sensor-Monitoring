@@ -72,6 +72,16 @@
                 loadNodeChart(nodeId);
         };
 
+        // Interpret a datetime-local value ("YYYY-MM-DDTHH:MM", or "...:SS" in some browsers) as UTC.
+        // Falls back on empty or unparseable input so toISOString() can never throw on Invalid Date.
+        function parseLocalAsUtc(value, fallback) {
+            if (!value)
+                return fallback;
+
+            const parsed = new Date(value.length <= 16 ? `${value}:00Z` : `${value}Z`);
+            return isNaN(parsed.getTime()) ? fallback : parsed;
+        }
+
         function nodeChartWindow(nodeId) {
             const period = document.getElementById(`nodeChartPeriod_${nodeId}`).value;
             const now = new Date();
@@ -79,9 +89,9 @@
             if (period === 'custom') {
                 const fromVal = document.getElementById(`nodeChartFrom_${nodeId}`).value;
                 const toVal = document.getElementById(`nodeChartTo_${nodeId}`).value;
-                // datetime-local has no timezone; interpret as UTC to match server-stored times.
-                const from = fromVal ? new Date(`${fromVal}:00Z`) : new Date(now.getTime() - 3600e3);
-                const to = toVal ? new Date(`${toVal}:00Z`) : now;
+                // datetime-local carries no timezone; interpret as UTC to match server-stored times.
+                const from = parseLocalAsUtc(fromVal, new Date(now.getTime() - 3600e3));
+                const to = parseLocalAsUtc(toVal, now);
                 return { from: from.toISOString(), to: to.toISOString() };
             }
 
@@ -111,8 +121,30 @@
                 if (token !== window._nodeChartToken)
                     return;
                 renderNodeChart(nodeId, data);
+            }).fail(function () {
+                if (token !== window._nodeChartToken)
+                    return;
+                showNodeChartMessage(nodeId, 'Failed to load chart data');
             });
         };
+
+        // Show a centered message (no data / error) and clear the chart + note.
+        function showNodeChartMessage(nodeId, message) {
+            const graphEl = document.getElementById(`graph_node_${nodeId}`);
+            const noData = document.getElementById(`nodeChartNoData_${nodeId}`);
+            const noteEl = document.getElementById(`nodeChartNote_${nodeId}`);
+
+            if (graphEl)
+                window.Plotly.purge(graphEl);
+            if (noteEl)
+                noteEl.classList.add('d-none');
+            if (noData) {
+                const label = noData.querySelector('label');
+                if (label)
+                    label.textContent = message;
+                noData.classList.remove('d-none');
+            }
+        }
 
         function nodeChartEscape(s) {
             return String(s).replace(/[&<>"]/g, function (c) {
@@ -165,8 +197,7 @@
                 return;
 
             if (series.length === 0) {
-                window.Plotly.purge(graphEl);
-                noData.classList.remove('d-none');
+                showNodeChartMessage(nodeId, 'No data for the selected period');
                 return;
             }
 
