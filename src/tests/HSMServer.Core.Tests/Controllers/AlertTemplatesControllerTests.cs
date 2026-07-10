@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
@@ -221,5 +222,134 @@ namespace HSMServer.Core.Tests.Controllers
             // Verifies the helper iterates paths rather than short-circuiting on the first mismatch.
             _cacheMock.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.Exactly(3));
         }
+
+        // Regression coverage for #1244: UpdateTemplate feeds the live-refreshed notification dropdown,
+        // so it had to return Slack destinations alongside Telegram — otherwise any Slack selection
+        // disappeared the moment the user changed folder/type/path.
+        [Fact]
+        [Trait("Category", "Alert Template authoring")]
+        public void UpdateTemplate_ReturnsTelegramAndSlackChats()
+        {
+            var folderId = Guid.NewGuid();
+            var telegramChat = BuildTelegramChat(Guid.NewGuid(), "tg-group", ConnectedChatType.TelegramGroup);
+            var slackDestination = BuildSlackDestination(Guid.NewGuid(), "slack-channel");
+
+            var folder = new FolderModel(BuildFolderEntity(folderId, telegramChat.Id, slackDestination.Id));
+
+            _folderManagerMock.Setup(f => f.TryGetValue(folderId, out folder)).Returns(true);
+            _telegramMock.Setup(t => t.GetValues()).Returns(new List<TelegramChat> { telegramChat });
+            _slackDestinationsMock.Setup(s => s.GetValues()).Returns(new List<SlackDestination> { slackDestination });
+
+            var controller = CreateController();
+
+            var result = controller.UpdateTemplate(DataAlertTemplateViewModel.AnyType, "[]", folderId);
+
+            var json = Assert.IsType<JsonResult>(result);
+            using var doc = JsonDocument.Parse((string)json.Value);
+            var chats = doc.RootElement.GetProperty("Chats");
+
+            var tg = Assert.Single(chats.GetProperty("Groups").EnumerateArray());
+            Assert.Equal(telegramChat.Id, Guid.Parse(tg.GetProperty("Id").GetString()));
+            Assert.Equal(telegramChat.Name, tg.GetProperty("Name").GetString());
+
+            Assert.Empty(chats.GetProperty("Users").EnumerateArray());
+
+            var slack = Assert.Single(chats.GetProperty("SlackDestinations").EnumerateArray());
+            Assert.Equal(slackDestination.Id, Guid.Parse(slack.GetProperty("Id").GetString()));
+            Assert.Equal(slackDestination.Name, slack.GetProperty("Name").GetString());
+        }
+
+        [Fact]
+        [Trait("Category", "Alert Template authoring")]
+        public void UpdateTemplate_FiltersSlackDestinationsByFolderBinding()
+        {
+            // A Slack destination bound to a different folder must not appear in this folder's dropdown.
+            // Mirrors the Telegram availability rule used by GetAvailableChats.
+            var folderId = Guid.NewGuid();
+            var boundSlack = BuildSlackDestination(Guid.NewGuid(), "bound-slack");
+            boundSlack.Folders.Add(folderId);
+
+            var unboundSlack = BuildSlackDestination(Guid.NewGuid(), "other-folder-slack");
+            unboundSlack.Folders.Add(Guid.NewGuid()); // tied to a different folder
+
+            var folder = new FolderModel(BuildFolderEntity(folderId, boundSlack.Id));
+
+            _folderManagerMock.Setup(f => f.TryGetValue(folderId, out folder)).Returns(true);
+            _telegramMock.Setup(t => t.GetValues()).Returns(new List<TelegramChat>());
+            _slackDestinationsMock.Setup(s => s.GetValues()).Returns(new List<SlackDestination> { boundSlack, unboundSlack });
+
+            var controller = CreateController();
+
+            var result = controller.UpdateTemplate(DataAlertTemplateViewModel.AnyType, "[]", folderId);
+
+            var json = Assert.IsType<JsonResult>(result);
+            using var doc = JsonDocument.Parse((string)json.Value);
+            var slackIds = doc.RootElement
+                .GetProperty("Chats")
+                .GetProperty("SlackDestinations")
+                .EnumerateArray()
+                .Select(c => Guid.Parse(c.GetProperty("Id").GetString()))
+                .ToList();
+
+            Assert.Single(slackIds);
+            Assert.Equal(boundSlack.Id, slackIds[0]);
+        }
+
+        [Fact]
+        [Trait("Category", "Alert Template authoring")]
+        public void UpdateTemplate_ReturnsNullChats_WhenFolderNotFound()
+        {
+            // When the folder lookup misses, Chats stays null so the JS `if (data.Chats != null)`
+            // guard skips the dropdown rebuild entirely. A non-null empty payload would wipe the
+            // existing selection — the null contract is load-bearing.
+            var unknownFolderId = Guid.NewGuid();
+            FolderModel folder = null;
+            _folderManagerMock.Setup(f => f.TryGetValue(unknownFolderId, out folder)).Returns(false);
+
+            var controller = CreateController();
+
+            var result = controller.UpdateTemplate(DataAlertTemplateViewModel.AnyType, "[]", unknownFolderId);
+
+            var json = Assert.IsType<JsonResult>(result);
+            using var doc = JsonDocument.Parse((string)json.Value);
+            Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("Chats").ValueKind);
+        }
+
+
+        private static TelegramChat BuildTelegramChat(Guid id, string name, ConnectedChatType type) =>
+            new(new TelegramChatEntity
+            {
+                Id = id.ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = name,
+                ChatId = long.MaxValue,
+                SendMessages = true,
+                Type = (byte)type,
+                MessagesAggregationTimeSec = 60,
+                AuthorizationTime = DateTime.UtcNow.Ticks,
+            });
+
+        private static SlackDestination BuildSlackDestination(Guid id, string name) =>
+            new(new SlackDestinationEntity
+            {
+                Id = id.ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = name,
+                WebhookUrl = "https://hooks.slack.com/services/test",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+            });
+
+        private static FolderEntity BuildFolderEntity(Guid folderId, params Guid[] chatIds) =>
+            new()
+            {
+                Id = folderId.ToString(),
+                DisplayName = "Test folder",
+                AuthorId = Guid.NewGuid().ToString(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Chats = chatIds.Select(c => c.ToByteArray()).ToList(),
+            };
     }
 }
