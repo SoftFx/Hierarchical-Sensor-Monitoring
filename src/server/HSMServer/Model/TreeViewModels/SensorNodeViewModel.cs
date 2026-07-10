@@ -64,7 +64,9 @@ namespace HSMServer.Model.TreeViewModel
         public RateDisplayUnit? DisplayUnit { get; private set; }
 
         /// <summary>The unit that identifies this sensor's chart scale: the rate display unit for Rate
-        /// sensors, otherwise the selected unit. Returned as the raw enum code (no reflection).</summary>
+        /// sensors, otherwise the selected unit. Returned as the raw enum code (no reflection). Note this
+        /// mixes two enums (RateDisplayUnit vs Unit), so it is only unambiguous when the sensor Type is
+        /// also part of the key it is compared under (as in GetComparableChildGroups).</summary>
         public int? EffectiveUnitCode => Type is SensorType.Rate
             ? (DisplayUnit.HasValue ? (int)DisplayUnit.Value : null)
             : (SelectedUnit.HasValue ? (int)SelectedUnit.Value : null);

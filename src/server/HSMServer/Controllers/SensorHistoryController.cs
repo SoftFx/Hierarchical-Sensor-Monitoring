@@ -18,6 +18,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.JsonConverters;
 using System.Linq;
@@ -72,6 +73,10 @@ namespace HSMServer.Controllers
         // Upper bound on how many of a group's sensors are read per request, so a pathologically large
         // same-unit group can't fan out into unbounded history reads. Real groups are far smaller.
         private const int NodeChartMaxSensorsScanned = 500;
+
+        // Max concurrent per-sensor history reads for one node chart request. Bounds DB pressure while
+        // cutting latency from the sum of all reads toward the slowest.
+        private const int NodeChartReadConcurrency = 8;
 
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
@@ -212,48 +217,67 @@ namespace HSMServer.Controllers
             var to = request.To.ToUtcKind();
             var nodePath = node.FullPath;
 
-            // Read every sensor in the group (bounded per sensor + a scan ceiling) and keep only those with
-            // data in the window, then cap the DISPLAY to the highest-peak sensors. Capping by tree order
-            // before reading would drop active sensors: top-N series (e.g. per-process CPU) are
-            // intermittent, so the first ids by path are usually idle in any given window.
-            var built = new List<(Guid Id, string Label, List<(DateTime Time, double Value)> Points)>();
+            // Read every scanned sensor and keep only those with data in the window, then cap the DISPLAY
+            // to the highest-peak sensors. Capping by tree order before reading would drop active sensors:
+            // top-N series (e.g. per-process CPU) are intermittent, so the first ids by path are usually
+            // idle in any given window. Reads are independent, so they run with bounded concurrency — safe
+            // here because the comparable types exclude File, the only sensor kind with shared read state.
+            var scannedIds = group.SensorIds.Take(NodeChartMaxSensorsScanned).ToList();
 
-            foreach (var sensorId in group.SensorIds.Take(NodeChartMaxSensorsScanned))
+            using var readGate = new SemaphoreSlim(NodeChartReadConcurrency);
+
+            var reads = scannedIds.Select(async sensorId =>
             {
                 if (!_tree.Sensors.TryGetValue(sensorId, out var sensor))
-                    continue;
+                    return null;
 
-                var points = await ReadNodeChartPoints(sensor, from, to);
+                await readGate.WaitAsync();
 
-                if (points.Count == 0) // no data in the window -> omitted, not zero-filled
-                    continue;
+                try
+                {
+                    var points = await ReadNodeChartPoints(sensor, from, to);
 
-                built.Add((sensor.Id, GetNodeRelativeLabel(nodePath, sensor.FullPath), points));
-            }
+                    // no data in the window -> omitted, not zero-filled
+                    return points.Count == 0
+                        ? null
+                        : new NodeChartSeries(sensor.Id, GetNodeRelativeLabel(nodePath, sensor.FullPath), points);
+                }
+                finally
+                {
+                    readGate.Release();
+                }
+            });
+
+            // Task.WhenAll preserves order, so the kept series stay in tree order for the non-capped case.
+            var built = (await Task.WhenAll(reads)).Where(s => s is not null).ToList();
 
             var withData = built.Count;
 
             // Rank by peak only when we actually have to drop series (the common case is <= 20).
             var shown = withData > MaxSensorsPerChart
-                ? built.OrderByDescending(b => b.Points.Max(p => p.Value)).Take(MaxSensorsPerChart).ToList()
+                ? built.OrderByDescending(s => s.Points.Max(p => p.Value)).Take(MaxSensorsPerChart).ToList()
                 : built;
 
-            var series = shown.Select(b => new
+            var series = shown.Select(s => new
             {
-                id = b.Id,
-                label = b.Label,
-                values = b.Points.Select(p => new { time = p.Time, value = p.Value }),
+                id = s.Id,
+                label = s.Label,
+                values = s.Points.Select(p => new { time = p.Time, value = p.Value }),
             });
 
-            var note = withData > MaxSensorsPerChart
-                ? $"Showing the {MaxSensorsPerChart} highest-peak sensors of {withData} with data in this window ({group.SensorIds.Count} in the group)."
-                : null;
+            var notes = new List<string>(2);
+
+            if (group.SensorIds.Count > NodeChartMaxSensorsScanned)
+                notes.Add($"Only the first {NodeChartMaxSensorsScanned} of {group.SensorIds.Count} sensors in the group were scanned (tree order).");
+
+            if (withData > MaxSensorsPerChart)
+                notes.Add($"Showing the {MaxSensorsPerChart} highest-peak sensors of {withData} with data in this window.");
 
             return new JsonResult(new
             {
                 error = false,
                 unit = group.UnitLabel,
-                note,
+                note = notes.Count > 0 ? string.Join(" ", notes) : null,
                 selectedKey = group.Key,
                 groups = groups.Select(g => new
                 {
@@ -322,16 +346,18 @@ namespace HSMServer.Controllers
 
         private static string GetNodeRelativeLabel(string nodePath, string sensorPath)
         {
-            if (!string.IsNullOrEmpty(nodePath) && sensorPath.StartsWith(nodePath, StringComparison.Ordinal))
-            {
-                var relative = sensorPath.Substring(nodePath.Length).TrimStart('/');
-
-                if (relative.Length > 0)
-                    return relative;
-            }
+            // Require a '/' boundary so node "a/b" doesn't match sensor "a/bc/d" (can't happen for ids from
+            // GetAllNodeSensors, which are true descendants, but keeps the intent explicit).
+            if (!string.IsNullOrEmpty(nodePath)
+                && sensorPath.Length > nodePath.Length
+                && sensorPath[nodePath.Length] == '/'
+                && sensorPath.StartsWith(nodePath, StringComparison.Ordinal))
+                return sensorPath.Substring(nodePath.Length + 1);
 
             return sensorPath;
         }
+
+        private sealed record NodeChartSeries(Guid Id, string Label, List<(DateTime Time, double Value)> Points);
 
         [HttpGet]
         public IActionResult GetBackgroundSensorInfo([FromQuery] Guid currentId, [FromQuery] bool isStatusService = false)

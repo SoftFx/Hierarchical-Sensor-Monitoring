@@ -205,15 +205,17 @@
 
             const unit = (data && data.unit) || '';
             const traces = series.map(function (s, i) {
+                // Sensor names are user-influenced; escape before injecting into Plotly's pseudo-HTML text.
+                const label = nodeChartEscape(s.label);
                 return {
                     type: 'scattergl',
                     mode: 'lines',
-                    name: s.label,
+                    name: label,
                     x: s.values.map(function (v) { return v.time; }),
                     y: s.values.map(function (v) { return v.value; }),
                     connectgaps: false,
                     line: { color: nodeChartPalette[i % nodeChartPalette.length], width: 1.5 },
-                    hovertemplate: `${s.label}: %{y} ${unit}<br>%{x|%Y-%m-%d %H:%M:%S} UTC<extra></extra>`
+                    hovertemplate: `${label}: %{y} ${unit}<br>%{x|%Y-%m-%d %H:%M:%S} UTC<extra></extra>`
                 };
             });
 
