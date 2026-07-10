@@ -16,11 +16,16 @@
     // that window, collectAlerts would read the stale operation div and send contradictory data
     // (Property=Value but TimeToLive.Interval instead of Operation/Target), causing the demoted
     // row to be silently dropped (#1246). submitForm waits on these before collecting.
-    const pendingOperationLoads = [];
+    //
+    // var (not const) on top level: _MetaInfo.cshtml is re-rendered into #meta_info_<id> via
+    // jQuery .html() on every revert/load, which re-executes this inline <script>. A const
+    // redeclaration would throw SyntaxError and break the whole sensor editor. var + function
+    // declarations are idempotent across re-execution — same pattern as the rest of the file.
+    var pendingOperationLoads = [];
     function registerOperationLoad(req) { pendingOperationLoads.push(req); }
     function waitForOperationLoads() {
         // Snapshot + clear so requests fired during the wait are tracked for the next submit.
-        const snapshot = pendingOperationLoads.slice();
+        var snapshot = pendingOperationLoads.slice();
         pendingOperationLoads.length = 0;
         return $.when.apply($, snapshot);
     }
