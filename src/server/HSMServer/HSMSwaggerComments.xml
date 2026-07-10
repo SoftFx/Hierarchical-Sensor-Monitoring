@@ -18,13 +18,36 @@
             <param name="user">User object (password field must be password hash).</param>
         </member>
         <member name="T:HSMServer.Controllers.AgentController">
+             <summary>
+             Per-product HSM Agent download (epic #1167, W6/W7). The admin opens a product, clicks "Download
+             Windows agent", and gets a zip with the byte-identical signed exe + a generated config.json
+             (this server's address + the product's access key) + silent install scripts. The server ONLY
+             generates + serves the zip — it is not an installer; the client install is the C++ exe's own
+             <c>--install</c> (no .NET/MSI on the client).
+            
+             Epic #1174 adds two unauthenticated / key-authenticated endpoints for the agent self-update
+             channel: <c>GET /api/agent/version</c> (version manifest) and <c>GET /api/agent/exe</c>
+             (binary download, Key-header auth).
+             </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentController.GetVersion">
             <summary>
-            Per-product HSM Agent download (epic #1167, W6/W7). The admin opens a product, clicks "Download
-            Windows agent", and gets a zip with the byte-identical signed exe + a generated config.json
-            (this server's address + the product's access key) + silent install scripts. The server ONLY
-            generates + serves the zip — it is not an installer; the client install is the C++ exe's own
-            <c>--install</c> (no .NET/MSI on the client).
+            Agent self-update manifest (epic #1174). Returns the version, SHA-256, and whether the
+            server permits auto-updates. No authentication — version info is not sensitive and agents
+            need to poll this before they have a user context. Returns 503 when no exe is staged.
             </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentController.GetExe">
+            <summary>
+            Serve the staged agent binary for self-update (epic #1174). Requires a valid product access
+            key in the <c>Key</c> request header — the agent sends the same key it uses for sensor data.
+            Sets <c>X-Agent-Sha256</c> on the response so the caller can verify integrity without a
+            second round-trip.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AgentController.ReadStagedVersion(System.String)">
+            Read `wwwroot/agent/version.txt` (one-line version string staged by CI). Falls back to
+            "0.0.0" so the manifest stays valid even when the version file was not staged yet.
         </member>
         <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.TestConnection">
             <summary>
@@ -45,6 +68,9 @@
             <summary>
             to return panel data or annotations
             </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductController.UpdateSensorGroups(HSMServer.Model.ViewModel.SensorGroupsRequest)">
+            <summary>Update which sensor groups agents under this product should collect (#1198).</summary>
         </member>
         <member name="T:HSMServer.Controllers.SensorsController">
             <summary>
@@ -185,6 +211,13 @@
             Swagger filter for adding required string 'Key' in API requests header
             </summary>
         </member>
+        <member name="T:HSMServer.Filters.ProductRoleFilters.ProductRoleFilterBySensorGroups">
+            <summary>
+            Authorizes <see cref="T:HSMServer.Model.ViewModel.SensorGroupsRequest"/>-bodied actions (toggling a product's sensor
+            groups, #1198) against the role the user holds on the request's target product. Without this,
+            any authenticated user could disable data collection on any product by POSTing its id.
+            </summary>
+        </member>
         <member name="T:HSMServer.Filters.SlackRoleFilters.SlackAdminAttribute">
             <summary>
             Slack destinations are global (not folder-scoped), so any mutation
@@ -281,6 +314,24 @@
             <param name="means"></param>
             <returns></returns>
         </member>
+        <member name="P:HSMServer.Model.ViewModel.EditProductViewModel.DisabledSensorGroups">
+            Sensor groups currently disabled for this product's agents (#1198).
+        </member>
+        <member name="P:HSMServer.Model.ViewModel.SensorGroupsRequest.DisabledGroups">
+            Sensor group names that should be disabled. All others are considered enabled.
+            Valid values: "computer", "system", "disk", "network", "module", "process".
+        </member>
+        <member name="P:HSMServer.Model.TreeViewModel.ProductNodeViewModel.DisabledSensorGroups">
+            Sensor groups currently disabled for agents of this product (#1198).
+        </member>
+        <member name="M:HSMServer.Notifications.SlackDestinationsManager.RemoveFolderFromChats(System.Guid,System.Collections.Generic.List{System.Guid},HSMServer.Core.TableOfChanges.InitiatorInfo)">
+            <summary>
+            Required by the IFolderManager.RemoveFolderFromChats contract so the same
+            multicast delegate can fan out to Telegram and Slack. <paramref name="initiator"/>
+            is unused here because Slack has no Telegram-style auto-remove at zero folders;
+            it is only consumed by TelegramChatsManager.TryRemove for the audit trail.
+            </summary>
+        </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">
             <summary>
             Settings for the downloadable HSM Agent (epic #1167). The externally-reachable Sensor-API base URL
@@ -306,19 +357,8 @@
             <summary>
             Global kill-switch for the agent self-update channel (epic #1174). When false the
             <c>GET /api/agent/version</c> manifest returns <c>updateEnabled: false</c> and every agent
-            that polls it will stay on its current version. Default false (opt-in).
-            </summary>
-        </member>
-        <member name="M:HSMServer.Controllers.AgentController.GetVersion">
-            <summary>
-            Agent self-update manifest (epic #1174). Returns version, SHA-256 of the staged exe, and
-            whether the server permits auto-updates. No authentication. Returns 503 when no exe is staged.
-            </summary>
-        </member>
-        <member name="M:HSMServer.Controllers.AgentController.GetExe">
-            <summary>
-            Serve the staged agent binary for self-update (epic #1174). Requires a valid product access
-            key in the <c>Key</c> request header. Sets <c>X-Agent-Sha256</c> on the response.
+            that polls it will stay on its current version regardless of its local config. Default false
+            (opt-in: enable when ready to roll out, disable to halt).
             </summary>
         </member>
     </members>
