@@ -176,36 +176,42 @@
     }
 
     function submitForm() {
-        let form = document.getElementById('addAlertTemplate_form');
-        var formData = new FormData(form);
-        collectAlerts(formData);
+        // Wait for any in-flight GetOperation partials (promote/demote) before collecting form
+        // data — otherwise collectAlerts would read a stale operation div and silently drop the
+        // edited row (#1246). Use .always so a failed fetch still submits and surfaces a server
+        // validation error rather than hanging the Save button.
+        waitForOperationLoads().always(function () {
+            let form = document.getElementById('addAlertTemplate_form');
+            var formData = new FormData(form);
+            collectAlerts(formData);
 
-        $.ajax({
-            url: $("#addAlertTemplate_form").attr("action"),
-            type: $("#addAlertTemplate_form").attr("method"),
-            data: formData,
-            processData: false,
-            contentType: false,
-            async: true,
-            success: (viewData) => {
-                if (!viewData){
-                    window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))';
+            $.ajax({
+                url: $("#addAlertTemplate_form").attr("action"),
+                type: $("#addAlertTemplate_form").attr("method"),
+                data: formData,
+                processData: false,
+                contentType: false,
+                async: true,
+                success: (viewData) => {
+                    if (!viewData){
+                        window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))';
+                    }
+                    else if (typeof viewData === 'object' && viewData.success === false) {
+                        showConfirmationModal(
+                            'Failed to save template',
+                            viewData.error,
+                            () => {},
+                            () => { window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))'; },
+                            'Edit',
+                            'Discard'
+                        );
+                    }
+                    else {
+                        $("#addAlertTemplate_form").html(viewData);
+                        initForm();
+                    }
                 }
-                else if (typeof viewData === 'object' && viewData.success === false) {
-                    showConfirmationModal(
-                        'Failed to save template',
-                        viewData.error,
-                        () => {},
-                        () => { window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))'; },
-                        'Edit',
-                        'Discard'
-                    );
-                }
-                else {
-                    $("#addAlertTemplate_form").html(viewData);
-                    initForm();
-                }
-            }
+            });
         });
     }
 

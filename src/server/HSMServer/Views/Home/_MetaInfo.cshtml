@@ -208,29 +208,34 @@
         event.preventDefault();
         event.stopImmediatePropagation();
 
-        var formData = new FormData(this);
-        collectAlerts(formData);
-        if (window.fillDefaultChatMode) {
-            window.fillDefaultChatMode(formData);
-        }
-
-        $.ajax({
-            url: $("#editMetaInfo_form").attr("action"),
-            type: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            async: true,
-            success: (viewData) => {
-                $('#editButtonMetaInfo').removeClass('d-none');
-                displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
-
-                if ($(".field-validation-error").length !== 0)
-                    editInfoButtonClick();
-
-                window.InitializeHistory();
+        // Wait for any in-flight GetOperation partials (promote/demote) before collecting form
+        // data — otherwise collectAlerts would read a stale operation div and silently drop the
+        // edited row (#1246). Same race and same shared partial as the Alert Template editor.
+        waitForOperationLoads().always(function () {
+            var formData = new FormData(this);
+            collectAlerts(formData);
+            if (window.fillDefaultChatMode) {
+                window.fillDefaultChatMode(formData);
             }
-        });
+
+            $.ajax({
+                url: $("#editMetaInfo_form").attr("action"),
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                async: true,
+                success: (viewData) => {
+                    $('#editButtonMetaInfo').removeClass('d-none');
+                    displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
+
+                    if ($(".field-validation-error").length !== 0)
+                        editInfoButtonClick();
+
+                    window.InitializeHistory();
+                }
+            });
+        }.bind(this));
     });
 
     function collectAlerts(formData) {

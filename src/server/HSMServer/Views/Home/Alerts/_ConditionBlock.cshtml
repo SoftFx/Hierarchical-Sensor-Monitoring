@@ -105,12 +105,17 @@
             }
         }
 
-        $.ajax({
+        // Register with the in-flight tracker so submitForm waits for the partial before
+        // collecting form data. Without this, a Save fired before the partial lands would read
+        // the stale operation div and misroute the row's fields (#1246).
+        const operationReq = $.ajax({
             // containerType (real sensor type), not `type` (which is Boolean for TTL alerts loaded
             // from storage — see #1207) so demote fetches the right operation partial.
             url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?type=${containerType}&property=${property}`,
             cache: false
-        }).done(function (viewData) {
+        });
+        registerOperationLoad(operationReq);
+        operationReq.done(function (viewData) {
             operation.html(viewData);
         });
     });

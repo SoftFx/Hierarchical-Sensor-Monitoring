@@ -10,6 +10,21 @@
     const byte ttlType = TimeToLiveAlertViewModel.AlertKey;
 }
 
+    // Tracks in-flight GetOperation AJAX calls fired by the Property change handler in
+    // _ConditionBlock.cshtml. On promote/demote, data-alert-type flips synchronously but the
+    // operation partial swaps in only after the AJAX resolves — if the form is submitted during
+    // that window, collectAlerts would read the stale operation div and send contradictory data
+    // (Property=Value but TimeToLive.Interval instead of Operation/Target), causing the demoted
+    // row to be silently dropped (#1246). submitForm waits on these before collecting.
+    const pendingOperationLoads = [];
+    function registerOperationLoad(req) { pendingOperationLoads.push(req); }
+    function waitForOperationLoads() {
+        // Snapshot + clear so requests fired during the wait are tracked for the next submit.
+        const snapshot = pendingOperationLoads.slice();
+        pendingOperationLoads.length = 0;
+        return $.when.apply($, snapshot);
+    }
+
     function setFormDataAlerts(formData, type, alertsList) {
         // Per-row destination type: read data-alert-type if present (set in _DataAlert.cshtml
         // based on whether the main condition is TTL). Rows whose main condition is TTL route
