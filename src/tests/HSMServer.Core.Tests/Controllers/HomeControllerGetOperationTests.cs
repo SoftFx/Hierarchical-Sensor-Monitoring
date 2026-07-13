@@ -56,12 +56,8 @@ namespace HSMServer.Core.Tests.Controllers
                 _slackDestinationsMock.Object);
 
 
-        // Regression coverage for #1249: Any-type Alert Templates route their TTL alert row through
-        // type=TimeToLiveAlertViewModel.AlertKey (byte.MaxValue). BuildAlertCondition used to return
-        // null for that key, so GetOperation -> GetIntervalOperations threw NullReferenceException
-        // when the user touched the Property dropdown. The fix routes AlertKey to a TTL condition
-        // instance with initialized TimeToLive / ConfirmationPeriod intervals. If a future refactor
-        // reintroduces the null arm for AlertKey, this test fails instead of crashing at runtime.
+        // #1249: Any-template TTL rows route type=AlertKey; BuildAlertCondition must return a
+        // TTL condition so GetIntervalOperations does not NRE on the null condition.
         [Fact]
         [Trait("Category", "Alert Template authoring")]
         public void GetOperation_AnyTemplateType_TimeToLive_ReturnsIntervalPartial()
@@ -93,7 +89,7 @@ namespace HSMServer.Core.Tests.Controllers
         // Concrete sensor types must keep working unchanged after the Any-template fix.
         [Fact]
         [Trait("Category", "Alert Template authoring")]
-        public void GetOperation_ConcreteType_TimeToLive_ReturnsIntervalPartial()
+        public void GetOperation_IntegerType_TimeToLive_ReturnsIntervalPartial()
         {
             var controller = CreateController();
 
@@ -101,7 +97,8 @@ namespace HSMServer.Core.Tests.Controllers
 
             var partial = Assert.IsType<PartialViewResult>(result);
             Assert.Equal("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", partial.ViewName);
-            Assert.IsType<TimeToLiveOperation>(partial.Model);
+            var operation = Assert.IsType<TimeToLiveOperation>(partial.Model);
+            Assert.NotNull(operation.Target);
         }
     }
 }
