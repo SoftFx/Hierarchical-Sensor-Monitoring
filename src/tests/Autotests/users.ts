@@ -40,3 +40,24 @@ export async function deleteUserIfPresent(page: Page, username: string): Promise
   await page.getByRole('button', { name: 'Confirm' }).click();
   await expect(row).toHaveCount(0, { timeout: 5000 });
 }
+
+// The Users page opens an "Edit member" modal (#modalUser) with #modalPassword, an #modalIsAdmin
+// checkbox and #modalSaveButton — the row itself only has Edit/Remove buttons (no inline fields).
+export async function openEditUserModal(page: Page, username: string): Promise<void> {
+  await userRow(page, username).locator('button[title="Edit"]').click();
+  await expect(page.locator('#modalUser')).toBeVisible();
+}
+
+export async function setUserPassword(page: Page, username: string, password: string): Promise<void> {
+  await openEditUserModal(page, username);
+  await fillModalInput(page, '#modalPassword', password);
+  await page.locator('#modalSaveButton').click();
+  await expect(page.locator('#modalUser')).toBeHidden();
+}
+
+export async function setUserAdmin(page: Page, username: string, isAdmin: boolean): Promise<void> {
+  await openEditUserModal(page, username);
+  await page.locator('#modalIsAdmin').setChecked(isAdmin);
+  await page.locator('#modalSaveButton').click();
+  await expect(page.locator('#modalUser')).toBeHidden();
+}

@@ -30,15 +30,18 @@ export interface TestConfig {
 
 }
 
+// Base URL is taken from the CI env (PLAYWRIGHT_TEST_BASE_URL, set by the workflow) and falls back to
+// the local Docker server, so the same suite runs in CI and locally without editing this file.
+const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'https://localhost:44333';
+
 export const testConfig: TestConfig = {
-  //apiUrl: 'https://hsm.dev.soft-fx.eu:44333/Account/Index?ReturnUrl=%2FHome',
-  URLforAPI: 'https://localhost:44333/Home',
-  apiUrl: 'https://localhost:44333/Account/Index?ReturnUrl=%2FHome',
-  //apiUrl2: 'https://hsm.dev.soft-fx.eu:44333/Home',
-  apiUrl2: 'https://localhost:44333/Home',
-  //admin_user: 'maryia.pazniak',
+  URLforAPI: `${baseURL}/Home`,
+  apiUrl: `${baseURL}/Account/Index?ReturnUrl=%2FHome`,
+  apiUrl2: `${baseURL}/Home`,
+
+  // NOTE: test-only credentials — NOT real secrets. `default`/`default` is the admin the Docker test
+  // container seeds; the test-user passwords below exist solely for these E2E runs.
   admin_user: 'default',
-  //admin_user_password: '123qwe!!',
   admin_user_password: 'default',
   userName1:'test_user1',
   user1password: '1234567890',
@@ -77,3 +80,4 @@ export const testData = {
   testFolderColor: '#ff5733',
   testTemplatePath: 'aaa/bbb',
 };
+

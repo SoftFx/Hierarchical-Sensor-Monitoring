@@ -133,6 +133,22 @@ src/module/HSMPingModule/Config/*
 /code-review-report.md
 /code-review-report.json
 
+# Local runtime artifacts, logs, and downloaded release archives (machine-local, never commit)
+/HSMServer-source-*.zip
+/HSMServer-source-*/
+/HSM-latest-*.zip
+/HSM-latest-*/
+/HSM-latest-from-github-*/
+/hsm-test-runtime-*/
+/hyperv-diagnostics.txt
+/e-drive-vm-check.txt
+/powershell-window-screenshot.png
+*.log
+*.tmp
+# Playwright test output (regenerable)
+src/tests/Autotests/playwright-report/
+src/tests/Autotests/test-results/
+
 #AI
 # Claude Code local state (permissions, worktrees) - machine-local, never commit
 .claude/
