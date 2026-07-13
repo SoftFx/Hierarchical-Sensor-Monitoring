@@ -807,6 +807,11 @@ namespace HSMServer.Controllers
                 (byte)SensorType.IntegerBar => new BarConditionViewModel(false),
                 (byte)SensorType.DoubleBar => new BarConditionViewModel(false),
                 (byte)SensorType.Enum => new NumericConditionViewModel(false),
+                // Any-type Alert Templates send TimeToLiveAlertViewModel.AlertKey (byte.MaxValue)
+                // as the routing type — they only support TTL/ConfirmationPeriod alerts and have no
+                // concrete sensor type. Without this arm BuildAlertCondition returned null and
+                // GetOperation crashed in GetIntervalOperations on the null condition (#1249).
+                TimeToLiveAlertViewModel.AlertKey => new TimeToLiveConditionViewModel(false),
                 _ => null,
             };
 
