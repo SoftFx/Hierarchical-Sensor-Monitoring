@@ -1,6 +1,6 @@
 # Feature: Node Children Chart (overlay comparable child sensors)
 
-> Owner: site | Last reviewed: 2026-07-09 | Canonical: yes
+> Owner: site | Last reviewed: 2026-07-13 | Canonical: yes
 > Scope: A read-only "Chart" tab on a tree node that overlays its comparable child sensors' history on one multi-line time chart over an operator-chosen window.
 
 ---
@@ -39,8 +39,12 @@ chart. It is entirely derived from stored history: it never writes or changes se
   overlays are out of scope for v1.
 - **Tab visibility is a server render-time decision.** `SelectNode` sets
   `SelectedNodeViewModel.ShowChartTab = GetComparableChildGroups(nodeId).Count > 0`. Enabled for
-  product/tree **nodes** only, not folders.
+  product/tree **nodes** only, not folders. The flag is **reset to `false` on every selection change**
+  (`SelectedNodeViewModel.Subscribe`) because the view-model instance is reused — otherwise a node's
+  `true` would leak onto the next selected folder and render a Chart tab that has no endpoint.
 - **Empty series are omitted, not zero-filled.** A window with no data for a child drops that line.
+  A child whose read **throws** is treated the same way — logged and dropped as a single series, so one
+  malformed sensor can't fault the fan-out and 500 the whole overlay.
 - **At most `MaxSensorsPerChart` (20) sensors are overlaid — chosen from those that actually have data.**
   The endpoint reads every sensor in the group (bounded per sensor, plus a `NodeChartMaxSensorsScanned`
   = 500 scan ceiling), drops the ones with no data in the window, and only then caps the display to the

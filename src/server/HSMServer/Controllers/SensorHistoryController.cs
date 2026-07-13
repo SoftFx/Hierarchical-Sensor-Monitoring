@@ -12,6 +12,7 @@ using HSMServer.Model.Model.History;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -78,6 +79,7 @@ namespace HSMServer.Controllers
         // cutting latency from the sum of all reads toward the slowest.
         private const int NodeChartReadConcurrency = 8;
 
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
 
@@ -241,6 +243,13 @@ namespace HSMServer.Controllers
                     return points.Count == 0
                         ? null
                         : new NodeChartSeries(sensor.Id, GetNodeRelativeLabel(nodePath, sensor.FullPath), points);
+                }
+                catch (Exception ex)
+                {
+                    // One malformed/faulting child must not fault Task.WhenAll and 500 the whole overlay:
+                    // drop just that series (same outcome as an empty window) and keep the rest of the chart.
+                    _logger.Error(ex, $"Node chart: failed to read history for sensor {sensor.Id}");
+                    return null;
                 }
                 finally
                 {

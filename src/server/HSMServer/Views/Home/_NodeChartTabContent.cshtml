@@ -108,7 +108,11 @@
             const { from, to } = nodeChartWindow(nodeId);
             const typeSel = document.getElementById(`nodeChartType_${nodeId}`);
             const groupKey = typeSel ? typeSel.value : '';
-            const token = (window._nodeChartToken = (window._nodeChartToken || 0) + 1);
+            // Per-node request token: a newer request for THIS node supersedes its own older ones, but
+            // charts for other open nodes don't cancel each other (a single global counter did, blanking
+            // whichever node's response arrived after another node's request started).
+            const token = String((Number(container.dataset.reqToken) || 0) + 1);
+            container.dataset.reqToken = token;
 
             $.ajax({
                 type: 'POST',
@@ -118,11 +122,11 @@
                 cache: false,
                 data: JSON.stringify({ nodeId: container.dataset.nodeId, from: from, to: to, groupKey: groupKey })
             }).done(function (data) {
-                if (token !== window._nodeChartToken)
+                if (token !== container.dataset.reqToken)
                     return;
                 renderNodeChart(nodeId, data);
             }).fail(function () {
-                if (token !== window._nodeChartToken)
+                if (token !== container.dataset.reqToken)
                     return;
                 showNodeChartMessage(nodeId, 'Failed to load chart data');
             });
@@ -186,11 +190,13 @@
 
             updateNodeChartTypes(nodeId, data);
 
-            if (data && data.note) {
-                noteEl.textContent = data.note;
-                noteEl.classList.remove('d-none');
-            } else {
-                noteEl.classList.add('d-none');
+            if (noteEl) {
+                if (data && data.note) {
+                    noteEl.textContent = data.note;
+                    noteEl.classList.remove('d-none');
+                } else {
+                    noteEl.classList.add('d-none');
+                }
             }
 
             if (!graphEl)
@@ -201,7 +207,8 @@
                 return;
             }
 
-            noData.classList.add('d-none');
+            if (noData)
+                noData.classList.add('d-none');
 
             const unit = (data && data.unit) || '';
             const traces = series.map(function (s, i) {

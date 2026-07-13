@@ -49,7 +49,11 @@ public class SelectedNodeViewModel
             return;
 
         _selectedNode = newSelected;
-        
+
+        // Reset on every selection change so the flag can't leak across nodes/folders (this instance is
+        // reused). The node branch of SelectNode re-enables it; folders/sensors leave it off.
+        ShowChartTab = false;
+
         _nodes.Reset();
         _sensors.Reset();
     }
