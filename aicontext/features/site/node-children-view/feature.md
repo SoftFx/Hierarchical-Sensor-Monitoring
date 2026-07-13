@@ -135,7 +135,9 @@ Manual acceptance (issue #1235):
   delta strategies are deferred.
 - Bounds (all constants in `SensorHistoryController`): `NodeChartMaxPointsPerSensor` (2000) values per
   child; `NodeChartMaxSensorsScanned` (500) sensors read per request; `MaxSensorsPerChart` (20) lines
-  drawn (the highest-peak of those with data).
+  drawn (the highest-peak of those with data). **All three surface a `note` when they clip** — the
+  2000-point cap takes the most-recent values, so a dense series over a long window notes that earlier
+  points may be omitted (no silent truncation).
 
 ## Known Issues / Limitations
 

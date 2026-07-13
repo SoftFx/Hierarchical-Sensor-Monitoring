@@ -166,7 +166,9 @@
                 return;
 
             if (groups.length > 1) {
-                const sig = groups.map(function (g) { return g.key; }).join('|');
+                // Include the label (it embeds the live count, e.g. "Integer bar, % (7)") so a count change
+                // with an unchanged key set still rebuilds the options instead of showing a stale "(N)".
+                const sig = groups.map(function (g) { return g.key + ' ' + g.label; }).join('|');
                 if (sel.dataset.sig !== sig) {
                     sel.innerHTML = groups.map(function (g) {
                         return `<option value="${nodeChartEscape(g.key)}">${nodeChartEscape(g.label)}</option>`;

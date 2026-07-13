@@ -237,12 +237,12 @@ namespace HSMServer.Controllers
 
                 try
                 {
-                    var points = await ReadNodeChartPoints(sensor, from, to);
+                    var (points, truncated) = await ReadNodeChartPoints(sensor, from, to);
 
                     // no data in the window -> omitted, not zero-filled
                     return points.Count == 0
                         ? null
-                        : new NodeChartSeries(sensor.Id, GetNodeRelativeLabel(nodePath, sensor.FullPath), points);
+                        : new NodeChartSeries(sensor.Id, GetNodeRelativeLabel(nodePath, sensor.FullPath), points, truncated);
                 }
                 catch (Exception ex)
                 {
@@ -274,13 +274,16 @@ namespace HSMServer.Controllers
                 values = s.Points.Select(p => new { time = p.Time, value = p.Value }),
             });
 
-            var notes = new List<string>(2);
+            var notes = new List<string>(3);
 
             if (group.SensorIds.Count > NodeChartMaxSensorsScanned)
                 notes.Add($"Only the first {NodeChartMaxSensorsScanned} of {group.SensorIds.Count} sensors in the group were scanned (tree order).");
 
             if (withData > MaxSensorsPerChart)
                 notes.Add($"Showing the {MaxSensorsPerChart} highest-peak sensors of {withData} with data in this window.");
+
+            if (shown.Any(s => s.Truncated))
+                notes.Add($"Dense series show only their most recent {-NodeChartMaxPointsPerSensor} points; earlier data in the window may be omitted.");
 
             return new JsonResult(new
             {
@@ -312,9 +315,13 @@ namespace HSMServer.Controllers
             _ => type.ToString(),
         };
 
-        private async Task<List<(DateTime Time, double Value)>> ReadNodeChartPoints(SensorNodeViewModel sensor, DateTime from, DateTime to)
+        private async Task<(List<(DateTime Time, double Value)> Points, bool Truncated)> ReadNodeChartPoints(SensorNodeViewModel sensor, DateTime from, DateTime to)
         {
             var rawValues = await GetSensorValues(sensor.EncodedId, from, to, NodeChartMaxPointsPerSensor);
+
+            // A negative count returns the most-recent |N| values, so a full page means older points in
+            // the window were dropped — surfaced as a note rather than silently showing only the tail.
+            var truncated = rawValues.Count >= -NodeChartMaxPointsPerSensor;
 
             var points = new List<(DateTime Time, double Value)>(rawValues.Count);
 
@@ -328,7 +335,7 @@ namespace HSMServer.Controllers
 
             points.Sort((a, b) => a.Time.CompareTo(b.Time));
 
-            return points;
+            return (points, truncated);
         }
 
         private static bool TryGetScalar(BaseValue value, out double scalar)
@@ -369,7 +376,7 @@ namespace HSMServer.Controllers
             return sensorPath;
         }
 
-        private sealed record NodeChartSeries(Guid Id, string Label, List<(DateTime Time, double Value)> Points);
+        private sealed record NodeChartSeries(Guid Id, string Label, List<(DateTime Time, double Value)> Points, bool Truncated);
 
         [HttpGet]
         public IActionResult GetBackgroundSensorInfo([FromQuery] Guid currentId, [FromQuery] bool isStatusService = false)
