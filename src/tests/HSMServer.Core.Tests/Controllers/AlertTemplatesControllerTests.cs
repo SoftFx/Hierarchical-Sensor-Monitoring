@@ -120,17 +120,16 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Contains("separate Alert Template", message);
         }
 
-        // Regression coverage for #1247: when validation blocks Save, the action returns the
-        // _AlertTemplate partial and the client re-renders the form via replaceWith. That
-        // client-side fix only works if the server echoes the user-entered values back in the
-        // rebuilt DataAlertTemplateViewModel. The rebuild path (controller ~line 250: model ??=
-        // data.ToModel(...); data = new DataAlertTemplateViewModel(model, ...)) must carry Name,
-        // Type, and PathTemplates through. If a future refactor rebuilds from a different source
-        // (cached template, default viewmodel, etc.), this test fails instead of silently
-        // breaking the second Save after a validation error.
+        // Regression coverage for #1247: when validation blocks Save, the AlertTemplate POST
+        // returns _AlertTemplate and the client re-renders the form via replaceWith. That client
+        // fix only works if the server echoes user-entered values back in the rebuilt viewmodel.
+        // Id matters for the Edit path — a different Id after re-render would make the second Save
+        // create a new template instead of updating the one being edited. If a future refactor
+        // rebuilds from a different source (cached template, default viewmodel), this test fails
+        // instead of silently breaking the second Save.
         [Fact]
         [Trait("Category", "Alert Template authoring")]
-        public async Task ValidationFailure_ReturnsPartialView_PreservingUserData()
+        public async Task ValidationFailure_PreservesUserEnteredData()
         {
             _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
                 .Returns(new List<BaseSensorModel> { BuildSensor(SensorType.Double) });
@@ -138,14 +137,17 @@ namespace HSMServer.Core.Tests.Controllers
             var controller = CreateController();
             var data = BuildData((byte)SensorType.Integer, "*/intPath", "*/mixedPath");
             data.Name = "UserEnteredName";
+            var expectedId = data.Id;
 
             var result = await controller.AlertTemplate(data);
 
             var partial = Assert.IsType<PartialViewResult>(result);
             Assert.Equal("_AlertTemplate", partial.ViewName);
             var model = Assert.IsType<DataAlertTemplateViewModel>(partial.Model);
+            Assert.Equal(expectedId, model.Id);
             Assert.Equal("UserEnteredName", model.Name);
             Assert.Equal((byte)SensorType.Integer, model.Type);
+            Assert.Equal(_folderId, model.FolderId);
             Assert.Contains("*/intPath", model.PathTemplates);
             Assert.Contains("*/mixedPath", model.PathTemplates);
         }
