@@ -264,8 +264,9 @@
     @await Html.PartialAsync("~/Views/Home/Alerts/_AlertsFormCollection.cshtml")
 
     function updateTemplateChatDropdowns(chats) {
-        var groups = chats.filter(c => c.Type === 1);
-        var users = chats.filter(c => c.Type === 0);
+        var groups = (chats && chats.Groups) || [];
+        var users = (chats && chats.Users) || [];
+        var slackDestinations = (chats && chats.SlackDestinations) || [];
 
         $('form#addAlertTemplate_form select[name="Chats"]').each(function() {
             var $select = $(this);
@@ -273,21 +274,25 @@
 
             $select.find('option').not('.general-group-chat-mode').remove();
 
-            $select.append('<option data-divider="true"></option>');
-            $select.append('<option disabled>Groups</option>');
-            groups.forEach(function(chat) {
-                var isSelected = currentSelected.includes(chat.Id);
-                $select.append(`<option value="${chat.Id}" ${isSelected ? 'selected' : ''}>${chat.Name}</option>`);
-            });
-
-            $select.append('<option data-divider="true"></option>');
-            $select.append('<option disabled>Users</option>');
-            users.forEach(function(chat) {
-                var isSelected = currentSelected.includes(chat.Id);
-                $select.append(`<option value="${chat.Id}" ${isSelected ? 'selected' : ''}>${chat.Name}</option>`);
-            });
+            appendChatSection($select, 'Groups', groups, currentSelected);
+            appendChatSection($select, 'Users', users, currentSelected);
+            appendChatSection($select, 'Slack destinations', slackDestinations, currentSelected, 'No Slack destinations configured');
 
             $select.selectpicker('refresh');
+        });
+    }
+
+    function appendChatSection($select, title, items, currentSelected, emptyMessage) {
+        $select.append('<option data-divider="true"></option>');
+        $select.append(`<option disabled>${title}</option>`);
+        if (items.length === 0) {
+            if (emptyMessage)
+                $select.append(`<option disabled value="">${emptyMessage}</option>`);
+            return;
+        }
+        items.forEach(function(chat) {
+            var isSelected = currentSelected.includes(chat.Id);
+            $select.append(`<option value="${chat.Id}"${isSelected ? ' selected' : ''}>${chat.Name}</option>`);
         });
     }
 
