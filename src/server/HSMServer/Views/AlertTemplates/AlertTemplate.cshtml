@@ -209,15 +209,12 @@
                         );
                     }
                     else {
-                        // The returned partial is the full _AlertTemplate.cshtml, which wraps
-                        // everything in <form id="addAlertTemplate_form">…</form>. Setting it as
-                        // innerHTML of the existing form nests the new form inside the old one —
-                        // the browser then drops/merges the inner <form> tag during parsing,
-                        // leaving duplicate ids and inputs that the next submit collects from the
-                        // wrong element, so the user's second Save silently fails or sends stale
-                        // data (#1247). replaceWith swaps the outer form element for the freshly
-                        // rendered one, keeping a single form in the DOM and preserving all
-                        // user-entered values that were echoed back server-side.
+                        // _AlertTemplate.cshtml wraps its content in <form id="addAlertTemplate_form">.
+                        // Setting that as the existing form's innerHTML nests the new form inside the
+                        // old one; the HTML parser drops the inner <form> tag and leaves duplicate
+                        // ids/inputs that the next Save reads from the wrong element, so the second
+                        // Save after a validation error silently fails or sends stale data (#1247).
+                        // replaceWith swaps the outer form for the freshly rendered one.
                         $("#addAlertTemplate_form").replaceWith(viewData);
                         initForm();
                     }
