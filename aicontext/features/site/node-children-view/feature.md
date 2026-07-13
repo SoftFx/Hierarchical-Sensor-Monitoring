@@ -23,7 +23,10 @@ chart. It is entirely derived from stored history: it never writes or changes se
   `(type, unit)` is charted — one unit at a time, so the y-axis stays meaningful.
 - One line per child in the selected group. Children with no data in the window are **omitted** (not
   zero-filled). Sparse/intermittent series (e.g. top-N processes reported only while active) are drawn
-  with **gaps** — `connectgaps: false` — never interpolated across the gap.
+  with **gaps**, never interpolated across an idle stretch. The server omits idle points rather than
+  sending nulls, so the client inserts a `null` y wherever the interval between samples jumps above ~4x
+  the series' median spacing; `connectgaps: false` then breaks the line there (a bare `connectgaps:false`
+  would not, since there would be no null to break on).
 - The tab is **not rendered** when the node has no group of >= 2 comparable children.
 
 ## Invariants

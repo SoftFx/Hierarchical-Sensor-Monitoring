@@ -188,6 +188,43 @@
             }
         }
 
+        // Build x/y arrays, inserting a null y wherever the interval between two samples jumps well above
+        // the series' typical spacing. The server omits idle periods rather than sending nulls, so without
+        // this Plotly would draw a straight line across an inactive stretch; the null makes connectgaps:false
+        // break it into a real gap (intermittent top-N series report only while active).
+        function nodeChartGapArrays(values) {
+            const xs = [], ys = [];
+            const n = values.length;
+            if (n === 0)
+                return { xs: xs, ys: ys };
+
+            const deltas = [];
+            for (let i = 1; i < n; i++)
+                deltas.push(Date.parse(values[i].time) - Date.parse(values[i - 1].time));
+
+            // Typical spacing = median gap; break the line where a gap exceeds 4x it.
+            let threshold = Infinity;
+            if (deltas.length) {
+                const median = deltas.slice().sort(function (a, b) { return a - b; })[Math.floor(deltas.length / 2)];
+                if (median > 0)
+                    threshold = median * 4;
+            }
+
+            for (let i = 0; i < n; i++) {
+                if (i > 0) {
+                    const prev = Date.parse(values[i - 1].time);
+                    const gap = Date.parse(values[i].time) - prev;
+                    if (gap > threshold) {
+                        xs.push(new Date(prev + Math.floor(gap / 2)).toISOString());
+                        ys.push(null);
+                    }
+                }
+                xs.push(values[i].time);
+                ys.push(values[i].value);
+            }
+            return { xs: xs, ys: ys };
+        }
+
         function renderNodeChart(nodeId, data) {
             const graphId = `graph_node_${nodeId}`;
             const graphEl = document.getElementById(graphId);
@@ -226,12 +263,13 @@
             const traces = series.map(function (s, i) {
                 // Sensor names are user-influenced; escape before injecting into Plotly's pseudo-HTML text.
                 const label = nodeChartEscape(s.label);
+                const g = nodeChartGapArrays(s.values);
                 return {
                     type: 'scattergl',
                     mode: 'lines',
                     name: label,
-                    x: s.values.map(function (v) { return v.time; }),
-                    y: s.values.map(function (v) { return v.value; }),
+                    x: g.xs,
+                    y: g.ys,
                     connectgaps: false,
                     line: { color: nodeChartPalette[i % nodeChartPalette.length], width: 1.5 },
                     hovertemplate: `${label}: %{y} ${unit}<br>%{x|%Y-%m-%d %H:%M:%S} UTC<extra></extra>`

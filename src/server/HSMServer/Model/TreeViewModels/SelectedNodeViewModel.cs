@@ -50,8 +50,10 @@ public class SelectedNodeViewModel
 
         _selectedNode = newSelected;
 
-        // Reset on every selection change so the flag can't leak across nodes/folders (this instance is
-        // reused). The node branch of SelectNode re-enables it; folders/sensors leave it off.
+        // Reset whenever the selected node/folder changes (this instance is reused) so a previous node's
+        // true can't leak onto the next selection; the node branch of SelectNode re-enables it, folders
+        // leave it off. Selecting a sensor never calls this, but that's safe: the sensor panel
+        // (_NodeDataPanel) doesn't render _ChildrenPanel — only _Node.cshtml / _Folder.cshtml do.
         ShowChartTab = false;
 
         _nodes.Reset();
