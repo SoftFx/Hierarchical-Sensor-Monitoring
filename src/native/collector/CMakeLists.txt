@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.4.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.6.2 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -103,12 +103,27 @@ endfunction()
 add_library(hsm_collector_core STATIC
     src/hsm_collector.cpp
     src/cpu_top.cpp                              # per-process CPU sampling (#1179; SelectTopN portable, WindowsCpuSampler #if _WIN32)
+    src/network_speed.cpp                        # per-interface network speed (#1189; WindowsNetworkSampler #if _WIN32)
+    src/tcp_connection_stats.cpp                 # TCP connection failure rate sampler (WindowsTcpFailureSampler #if _WIN32)
+    src/windows_info.cpp                          # Windows OS-info readers (#1189 follow-up; ReadWindowsInfo #if _WIN32)
     src/platform/hsm_windows_metric_sources.cpp  # self-guarded #if _WIN32 (#1164)
 )
 
 # Windows live metric readers (#1164) link PDH (perf counters) + Win32.
+# Network speed uses GetIfTable2 from iphlpapi (#1189).
+# iphlpapi is PUBLIC: GetIfTable2/FreeMibTable are called from network_speed.cpp whose object
+# is pulled into the static lib; Conan/vcpkg consumers must link iphlpapi to resolve them.
+# pdh stays PRIVATE: it is only used when the live metric-source factory is active (no-op
+# default), so the pdh object files are not linked into typical consumers.
 if(WIN32)
+    target_link_libraries(hsm_collector_core PUBLIC iphlpapi)
     target_link_libraries(hsm_collector_core PRIVATE pdh)
+    # GetIfTable2 / MIB_IF_TABLE2 require NTDDI_VERSION >= Vista. Set Windows 10 target so
+    # all modern Win32 APIs are available without per-file version guard hacks.
+    target_compile_definitions(hsm_collector_core PRIVATE
+        _WIN32_WINNT=0x0A00
+        NTDDI_VERSION=0x0A000000
+    )
 endif()
 
 target_include_directories(hsm_collector_core
@@ -254,6 +269,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_registers_sensors_on_start
         COMMAND hsm_collector_tests native_http_registers_sensors_on_start
     )
+    add_test(NAME native_http_registration_failure_logs_status
+        COMMAND hsm_collector_tests native_http_registration_failure_logs_status
+    )
 endif()
 
 add_test(NAME native_invalid_argument_clears_out_params
@@ -300,6 +318,9 @@ set(NATIVE_REGRESSION_TESTS
     native_json_escapes_control_chars_in_comment
     native_json_escapes_control_chars_in_path
     native_json_escapes_control_chars_in_options_path_prefix
+    native_file_from_path_derives_name_extension_and_content
+    native_file_from_path_missing_file_returns_not_found_and_sends_nothing
+    native_file_from_path_before_start_is_rejected_without_reading
     native_double_nan_is_rejected_and_not_sent
     native_double_positive_infinity_is_rejected_and_not_sent
     native_double_negative_infinity_is_rejected_and_not_sent
@@ -325,6 +346,7 @@ set(NATIVE_REGRESSION_TESTS
     native_default_sensor_group_composition
     native_module_version_sensors_emit_start_value
     native_module_version_skips_product_when_missing
+    native_collector_self_monitoring_emits
     native_metric_source_seam_lifecycle
     native_metric_source_drives_default_bar_sensor
     native_metric_source_drives_custom_double_sensor
@@ -341,6 +363,8 @@ set(NATIVE_REGRESSION_TESTS
     native_scheduler_on_error_isolates_throwing_callback
     native_logger_deduplicates_repeated_errors_within_window
     native_logger_zero_window_logs_every_error
+    native_logging_emits_lifecycle_events
+    native_file_logger_writes_to_dated_file
     native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values
     native_retry_below_capacity_is_always_redelivered
     cpu_select_top_n_selects_busiest_above_threshold
@@ -360,6 +384,17 @@ if(WIN32)
     )
     add_test(NAME native_windows_process_metric_resolves_current_process
         COMMAND hsm_collector_tests native_windows_process_metric_resolves_current_process
+    )
+    # #1189 follow-up: host sensors must actually emit, not register empty.
+    add_test(NAME native_windows_info_sensors_emit_values
+        COMMAND hsm_collector_tests native_windows_info_sensors_emit_values
+    )
+    # Wrapper-parity gap #2: the live service-status sampler posts a named service's status.
+    add_test(NAME native_service_status_sensor_emits_running_for_critical_service
+        COMMAND hsm_collector_tests native_service_status_sensor_emits_running_for_critical_service
+    )
+    add_test(NAME native_service_status_sensor_reports_missing_service
+        COMMAND hsm_collector_tests native_service_status_sensor_reports_missing_service
     )
 endif()
 
@@ -384,6 +419,7 @@ add_conformance_test(conformance_bar_int_contract bar_int_contract.hsmtest)
 add_conformance_test(conformance_bar_double_contract bar_double_contract.hsmtest)
 add_conformance_test(conformance_bar_partial_contract bar_partial_contract.hsmtest)
 add_conformance_test(conformance_bar_rollover_contract bar_rollover_contract.hsmtest)
+add_conformance_test(conformance_bar_options_contract bar_options_contract.hsmtest)
 add_conformance_test(conformance_queue_overflow_contract queue_overflow_contract.hsmtest)
 add_conformance_test(conformance_sender_retry_contract sender_retry_contract.hsmtest)
 add_conformance_test(conformance_flush_contract flush_contract.hsmtest)
@@ -398,6 +434,7 @@ add_conformance_test(conformance_options_surface_contract options_surface_contra
 add_conformance_test(conformance_service_commands_contract service_commands_contract.hsmtest)
 add_conformance_test(conformance_default_sensors_contract default_sensors_contract.hsmtest)
 add_conformance_test(conformance_top_cpu_contract top_cpu_contract.hsmtest)
+add_conformance_test(conformance_network_speed_contract network_speed_contract.hsmtest)
 
 add_test(
     NAME native_default_sensors_wire_golden

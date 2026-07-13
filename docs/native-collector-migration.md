@@ -5,9 +5,23 @@ The native collector ships a header-only C++ RAII API (`hsm::collector`, `#inclu
 (`DataCollector.h`, the `hsm_wrapper::DataCollectorProxy` surface). The native API has no CLR
 dependency, links statically, and is consumable via `find_package(hsm_collector)`.
 
-This is a **source-compatibility audit**, not a drop-in: the two APIs are close in spirit but differ
-in spelling and in a few intentionally-dropped capabilities. The table below maps every wrapper
-surface to its native equivalent.
+There are two ways to leave the CLR behind:
+
+1. **Relink the native wrapper DLL (drop-in, zero source change).** `src/wrapper/` is no longer
+   C++/CLI — its implementation has been reimplemented over the native `hsm::collector` API while the
+   public headers (`include/DataCollector.h`, `hsm_wrapper::DataCollectorProxy`, the sensor/options/
+   alert DSL) are **unchanged**. The artifact is a pure-native `HSMCppWrapper.dll` (built by
+   `src/wrapper/CMakeLists.txt`, statically bundling the collector core; libcurl HTTP transport).
+   Consumers (e.g. tt-aggregator2) **relink against the new DLL and recompile nothing of their own** —
+   no CLR is loaded. The behavioral table below is exactly what that native backend does (e.g. function
+   sensors are int-only, time-in-GC is gone), so it doubles as the "what changed under the hood" list.
+2. **Port to the native API directly.** Drop the wrapper and call `hsm::collector` yourself — the
+   spellings differ (see the table) but you gain the new surface (enum sensors, lifecycle listeners,
+   `find_package` packaging). This is the **source-compatibility audit** for that path.
+
+The table below maps every wrapper surface to its native equivalent; the **Status** column applies
+to both paths (a "dropped"/"partial" row is a capability the native backend — and therefore the
+relinked DLL — no longer provides).
 
 ## Quick comparison
 
@@ -25,11 +39,12 @@ surface to its native equivalent.
 | `CreateIntSensor` / `CreateDoubleSensor` / `CreateStringSensor` | same names | shim — options type |
 | — | `CreateEnumSensor` (+ `EnumOption` table) | new (wrapper had no enum sensor) |
 | `CreateLastValue{Bool,Int,Double,String}Sensor` | `CreateLastValue{Bool,Int,Double,String}Sensor` | unchanged spelling |
-| `CreateIntBarSensor` / `CreateDoubleBarSensor(timeout, small_period[, precision])` | same names, `BarOptions{bar_period, post_period, precision}` | shim — chrono in a struct |
+| `CreateIntBarSensor` / `CreateDoubleBarSensor(timeout, small_period[, precision])` | same names, `BarOptions{bar_period, post_period, precision, + full SensorOptions surface}` | shim — `BarOptions` now carries the full registration surface (TTL/unit/description/keep-history/self-destroy/statistics/singleton/aggregate/grafana/computer/location/`default_alert_options`) via `hsm_collector_create_*_bar_sensor_with_options`; bars register `DisplayUnit:null` |
+| `HSMDefaultAlertsOptions` (`DisableTtl`/`DisableStatusChange`) on options | `SensorOptions` / `RateOptions` / `BarOptions::default_alert_options` (`DefaultAlertsOptions`) | shim — instant + rate + bar; the server attaches its default TTL + status-change alerts, these flags register them disabled |
 | `CreateIntRateSensor` / `CreateDoubleRateSensor` | `CreateRateSensor` (double) | **partial** — rate is double-only (matches .NET); the wrapper's int-rate is dropped |
 | `CreateNoParamsFuncSensor<T>` / `CreateParamsFuncSensor<T,U>` | `CreateFunctionSensor` / `CreateValuesFunctionSensor` (int) | **partial** — int / int-values only; no templated `T/U` (C ABI is int-only) |
-| `SendFileAsync(sensor_path, file_path, …)` | `CreateFileSensor(...)` + `FileSensor::AddContent(string)` | shim — string content, not a disk read |
-| `AddServiceStateMonitoring(service_name)` | `AddDefaultSensor(DefaultSensor::ServiceStatus)` | shim — via the default-sensor catalog |
+| `SendFileAsync(sensor_path, file_path, …)` | `CreateFileSensor(...)` + `FileSensor::SendFile(path)` (or `AddContent(string)`) | shim — `SendFile` reads the file and derives `Name`/`Extension` from the path (host I/O, 10 MiB cap, UTF-8 text); `AddContent` publishes raw string content |
+| `AddServiceStateMonitoring(service_name)` | `EnableServiceStatusMonitoring(service_name, scan_period)` | shim — registers `.module/Service status` and starts a live SCM poller (Win32 `OpenService`/`QueryServiceStatus`, Windows only) that posts the service's `ServiceControllerStatus` on change; registration-only via `AddDefaultSensor(DefaultSensor::ServiceStatus)` |
 | `InitializeSystemMonitoring` / `…ProcessMonitoring` / `…DiskMonitoring` / `…OsMonitoring` / `…NetworkMonitoring` / `…QueueDiagnostic` / `…CollectorMonitoring` | `AddSystemMonitoringSensors` / `AddProcessMonitoringSensors` / `AddDiskMonitoringSensors` / `AddWindowsInfoMonitoringSensors` / `AddAllNetworkSensors` / `AddAllQueueDiagnosticSensors` / `AddCollectorMonitoringSensors` (or `AddAllComputerSensors` / `AddAllModuleSensors` / `AddAllDefaultSensors`) | shim — group helpers instead of boolean flags |
 | `InitializeProductVersion(version)` | `AddAllModuleSensors(product_version)` / `AddDefaultSensor(DefaultSensor::ProductVersion, …)` | shim |
 | `Initialize*TimeInGC(...)` (time-in-GC) | — | **dropped** (#1099) — no managed GC in a native host |
@@ -60,9 +75,106 @@ sensor.AttachAlert(alert);
 |---|---|
 | Templated function sensors (`T/U`) | The C ABI exposes int / int-values function sensors only; supporting arbitrary `T` would be ABI growth, out of scope for the developer layer. |
 | Int rate sensors | .NET rate is double-only; the wrapper's int-rate was a wrapper-local convenience. |
-| `SendFileAsync` disk reads | Reading a file from disk is platform/IO policy, not part of the portable wire contract; publish string content instead. |
 | `RedirectAssembly` / `Initialize(config_path)` | CLR-hosting concerns with no native analogue. |
 | Time-in-GC sensors | No managed GC in a native host (#1099). |
+
+## Getting the native wrapper bundle (relink path)
+
+The prebuilt drop-in is published as a **GitHub Release tagged `wrapper-v<semver>`** with a single
+zip asset — a stable download URL, which is the practical cross-host channel (the aggregator builds on
+GitLab). The bundle mirrors the aggregator's vendored layout so it unzips straight over the checkout:
+
+```
+HSMCppWrapper-<ver>/
+  include/HSMCppWrapper/   public wrapper ABI headers (unchanged)
+  include/hsm_collector/   native headers (only for DataCollectorProxy::Native())
+  dll/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.dll + .pdb + libcurl(-d).dll + zlib(d)1.dll
+  lib/HSMCppWrapper/x64/{Release,Debug}/   HSMCppWrapper.lib
+  MANIFEST.md              source commit + the drop-in swap recipe
+```
+
+The swap is: copy `include/`/`dll/`/`lib/` over the vendored dirs, add the libcurl/zlib runtime DLLs
+next to the wrapper, and **delete the managed leftovers** (`HSMDataCollector.dll`,
+`HSMSensorDataObjects.dll`). The exact recipe rides in `MANIFEST.md` inside each bundle. The headers
+are byte-identical to what is already vendored and the exported ABI matches (relink proven by
+`dumpbin /LINKERMEMBER`: 545 exports per config — 543 wrapper + 2 `Native()` C-ABI re-exports), so the
+link resolves with no source edits.
+
+The bundle is produced by the [`hsm-wrapper-release`](../.github/workflows/hsm-wrapper-release.yml)
+workflow (push a `wrapper-v*` tag → build both configs + smoke + publish the Release; or run it via
+`workflow_dispatch` for a dry-run artifact without cutting a release). It can also be built locally —
+see [`src/wrapper/packaging/README.md`](../src/wrapper/packaging/README.md).
+
+## Native wrapper DLL — behavioral notes (relink path)
+
+The relinked `HSMCppWrapper.dll` preserves the public ABI but a few runtime behaviors follow the
+native backend rather than the old managed one:
+
+- **Monitoring-init boolean sub-flags are ignored.** `InitializeSystemMonitoring(is_cpu, …)` etc. map
+  to the native group helper (`AddSystemMonitoringSensors`, …), which registers the standard catalog
+  for the group; individual sub-sensors can't be toggled off. The aggregator passes the defaults
+  (everything on), so this is a no-op in practice.
+- **`InitializeDiskMonitoring(target, …)` ignores `target`.** The native disk group helper
+  (`AddDiskMonitoringSensors`) registers the default disk catalog with no per-volume targeting, so
+  `InitializeDiskMonitoring("D:\\", …)` is now **equivalent to `InitializeAllDisksMonitoring`** — a
+  caller asking for one specific volume gets the default set instead.
+- **Function sensors are int-only and fail loudly otherwise.** Only `CreateNoParamsFuncSensor<int>` /
+  `CreateParamsFuncSensor<int,int>` are backed by the native int function sensor; any other result or
+  element type (`double`/`bool`/`string`) **throws `hsm::collector::Error` at creation** rather than
+  silently truncating the value to `int32`. The aggregator only uses `<int,int>`.
+- **Function-sensor `RestartTimer` is a no-op.** The native function sensor's post period is fixed at
+  creation and cannot be re-armed, so `RestartTimer` does nothing and `GetInterval` reports the actual
+  (creation-time) period — it does not echo an interval that never took effect.
+- **Values-function buffer is a bounded sliding window** (100 000 entries) vs the managed unbounded
+  buffer — sized for the aggregator's per-window accumulators.
+- **`SendFileAsync` is synchronous despite its name.** The native `FileSensor::SendFile` reads the
+  file on the calling thread (the managed version ran on a `Task`), so a large/slow file blocks the
+  caller. It reuses one cached file sensor per sensor path, creating it on first send.
+- **`HSMBarSensorOptions::bar_tick_period` is dropped.** The native `BarOptions` has no sub-bar tick
+  field (only `bar_period`/`post_period`/`precision`), so the managed `BarTickPeriod` is not applied.
+- **Last-value / function-sensor descriptions are dropped** — the native `CreateLastValue*` /
+  `CreateFunctionSensor` factories take no description argument.
+- **`Initialize(config_path, write_debug)` and `RedirectAssembly()` are no-ops** — kept for source
+  compatibility; the collector is configured entirely through the constructor.
+
+## Incremental migration off the wrapper — `DataCollectorProxy::Native()`
+
+If the goal is to *stop* using the wrapper over time (write new sensors directly against
+`hsm::collector`, then delete the wrapper once nothing calls it), you don't need a big-bang rewrite.
+`DataCollectorProxy::Native()` returns the wrapper's underlying `hsm::collector::Collector&`, so new
+sensors are created directly on the **same collector and the same server connection** while existing
+sensors keep going through the wrapper:
+
+```cpp
+#include "HSMCppWrapper.h"
+#include <hsm_collector/hsm_collector.hpp>   // only needed where you call Native()
+
+hsm_wrapper::DataCollectorProxy proxy(key, address, port, module);
+// ... existing sensors via the wrapper API ...
+
+// New sensors — native, no wrapper sensor types:
+hsm::collector::SensorOptions opts;
+opts.description = "…";
+auto sensor = proxy.Native().CreateDoubleSensor("computer/module/path", opts);
+sensor.AddValue(42.0);
+```
+
+Key points:
+
+- **One collector, one connection.** `Native()` hands back the wrapper's own collector — there is no
+  second collector, no second registration batch, no second access-key. Do **not** construct a
+  separate `hsm::collector::Collector` alongside the wrapper.
+- **No second runtime copy.** The wrapper DLL re-exports the native C ABI (a generated module-
+  definition file lists the `extern "C"` `hsm_*` functions), so a consumer includes the
+  `hsm_collector` headers and links **only** `HSMCppWrapper` — the inline `hsm::collector` calls
+  resolve against the DLL's exports. The consumer does **not** link `hsm_collector_core`.
+- **Lifecycle stays with the wrapper.** Keep driving `Start`/`StartAsync`/`Stop` through the proxy;
+  it installs the Windows metric sources + HTTP transport on that collector. Native sensors created
+  before or after Start register correctly (the native collector accepts sensor creation while
+  running).
+- **Endgame.** When the last wrapper sensor/lifecycle call is gone, the consumer already holds a real
+  `hsm::collector::Collector` (just reached via `proxy.Native()`); swapping the proxy for a directly
+  owned collector and dropping the wrapper is then a mechanical change, not a rewrite.
 
 ## Building against the native API
 

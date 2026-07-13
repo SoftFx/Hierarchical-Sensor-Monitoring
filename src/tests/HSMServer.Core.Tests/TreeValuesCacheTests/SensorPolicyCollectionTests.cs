@@ -195,6 +195,56 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // === TTL demote: pre-existing Guid preserved when row routes from TTL collection ===
+
+        [Fact]
+        [Trait("Category", "TTL demote")]
+        public void TryUpdate_DemoteFromTtl_PreservesPreExistingGuid()
+        {
+            // Reproduces #1207: a saved TTL alert's Guid, resubmitted as a regular policy update,
+            // must be preserved (not silently dropped) when absent from regular storage.
+            var demoteId = Guid.NewGuid();
+
+            var update = BuildUpdate(demoteId, template: "demoted from TTL");
+            _collection.TryUpdate([update], InitiatorInfo.AsUser("test"), out _);
+
+            Assert.Single(_collection);
+            Assert.Equal(demoteId, _collection.First().Id);
+            Assert.Equal("demoted from TTL", _collection.First().Template);
+        }
+
+        [Fact]
+        [Trait("Category", "TTL demote")]
+        public void TryUpdate_DemoteFromTtl_BlocksTemplateOwnedAlert()
+        {
+            // A template-owned TTL alert carries TemplateId through the form. A User initiator
+            // must not create a template-owned regular policy — that would bypass the template
+            // protection applied to every other template-policy mutation. UpdateTTLs preserves
+            // the TTL entry (PolicyCollectionBase.cs:129), so blocking the add denies the demote
+            // without data loss. Force/AlertTemplate initiators still pass through.
+            var templateTtlId = Guid.NewGuid();
+
+            var update = BuildUpdate(templateTtlId, templateId: TemplateId, template: "template TTL");
+            _collection.TryUpdate([update], InitiatorInfo.AsUser("test"), out _);
+
+            Assert.Empty(_collection);
+        }
+
+        [Fact]
+        [Trait("Category", "TTL demote")]
+        public void TryUpdate_DemoteFromTtl_AllowsForceUpdateOnTemplateOwned()
+        {
+            // Force initiator bypasses template protection, mirroring the update path (line 294).
+            var templateTtlId = Guid.NewGuid();
+
+            var update = BuildUpdate(templateTtlId, templateId: TemplateId, template: "force demote");
+            _collection.TryUpdate([update], InitiatorInfo.AsSystemForce("test"), out _);
+
+            Assert.Single(_collection);
+            Assert.Equal(templateTtlId, _collection.First().Id);
+        }
+
+
         // === Manual policies: unaffected by template protection ===
 
         [Fact]

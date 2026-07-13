@@ -32,6 +32,7 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly Mock<ITelegramChatsManager> _telegramMock = new();
         private readonly Mock<IDatabaseCore> _databaseMock = new();
         private readonly Mock<IAlertScheduleProvider> _scheduleProviderMock = new();
+        private readonly Mock<ISlackDestinationsManager> _slackDestinationsMock = new();
         private readonly TreeViewModel _treeViewModel;
 
 
@@ -40,6 +41,7 @@ namespace HSMServer.Core.Tests.Controllers
             _cacheMock.Setup(c => c.GetProducts()).Returns(new List<ProductModel>());
             _userManagerMock.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns(new List<User>());
             _scheduleProviderMock.Setup(p => p.GetAllSchedules()).Returns(new List<AlertSchedule>());
+            _slackDestinationsMock.Setup(s => s.GetValues()).Returns(new List<SlackDestination>());
 
             _treeViewModel = new TreeViewModel(_cacheMock.Object, _folderManagerMock.Object, _userManagerMock.Object);
         }
@@ -53,7 +55,8 @@ namespace HSMServer.Core.Tests.Controllers
                 _journalMock.Object,
                 _telegramMock.Object,
                 _databaseMock.Object,
-                _scheduleProviderMock.Object);
+                _scheduleProviderMock.Object,
+                _slackDestinationsMock.Object);
 
 
         // Regression for #1142: AddDataPolicy is also called from the Alert Template editor,
@@ -89,7 +92,7 @@ namespace HSMServer.Core.Tests.Controllers
                 Id = folderId.ToString(),
                 DisplayName = "Test folder",
                 AuthorId = Guid.NewGuid().ToString(),
-                TelegramChats = [chat1.ToByteArray(), chat2.ToByteArray()],
+                Chats = [chat1.ToByteArray(), chat2.ToByteArray()],
             };
             var folder = new FolderModel(folderEntity);
 
@@ -104,7 +107,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var partial = Assert.IsType<PartialViewResult>(result);
             var model = Assert.IsAssignableFrom<DataAlertViewModelBase>(partial.Model);
-            Assert.All(model.Actions, action => Assert.Subset(folder.TelegramChats, action.AvailableChats));
+            Assert.All(model.Actions, action => Assert.Subset(action.AvailableChats, folder.Chats));
         }
 
 

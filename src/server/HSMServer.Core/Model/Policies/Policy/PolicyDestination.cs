@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Notifications;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -51,8 +50,6 @@ namespace HSMServer.Core.Model.Policies
     {
         public Dictionary<Guid, string> Chats { get; } = [];
 
-        public NotificationKind Kind { get; private set; }
-
 
         public PolicyDestinationMode Mode { get; private set; }
 
@@ -75,8 +72,6 @@ namespace HSMServer.Core.Model.Policies
             if (entity.Chats is not null)
                 foreach (var (chatId, name) in entity.Chats)
                     Chats.Add(new Guid(chatId), name);
-
-            Kind = Enum.TryParse<NotificationKind>(entity.Kind, out var kind) ? kind : NotificationKind.Telegram;
 
             Mode = entity switch
             {
@@ -105,7 +100,6 @@ namespace HSMServer.Core.Model.Policies
         internal PolicyDestinationEntity ToEntity() => new()
         {
             Chats = Chats?.ToDictionary(k => k.Key.ToString(), v => v.Value),
-            Kind = Kind.ToString(),
             IsNotInitialized = IsNotInitialized,
             UseDefaultChats = IsFromParentChats,
             AllChats = IsAllChats,

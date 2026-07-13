@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMCommon.Model;
@@ -71,17 +71,19 @@ namespace HSMServer.Model.DataAlerts
             ScheduledRepeatMode = policy.Schedule.RepeatMode; // TODO: null if None or Immediatly?
             ScheduledInstantSend = policy.Schedule.InstantSend;
 
+            var destinationPool = availableChats ?? [];
+
             if (_chatsModeToKeyWords.TryGetValue(policy.Destination.Mode, out var keyWord))
                 Chats.Add(keyWord);
             else
                 foreach (var (id, _) in policy.Destination.Chats)
-                    if (availableChats.TryGetValue(id, out var name))
+                    if (destinationPool.TryGetValue(id, out var name))
                         Chats.Add(name);
 
             if (policy.Destination.Mode is PolicyDestinationMode.FromParent)
             {
                 foreach (var (id, _) in policy.Destination.Chats)
-                    if (availableChats.TryGetValue(id, out var name))
+                    if (destinationPool.TryGetValue(id, out var name))
                         Chats.Add(name);
             }
 
@@ -92,6 +94,8 @@ namespace HSMServer.Model.DataAlerts
         {
             PolicyDestinationMode? mode = PolicyDestinationMode.Custom;
             Dictionary<Guid, string> chats = [];
+
+            var pool = availableChats ?? [];
 
             if (Chats is not null)
             {
@@ -109,7 +113,7 @@ namespace HSMServer.Model.DataAlerts
                         }
                     }
 
-                    if (availableChats.TryGetValue(chat, out var chatId))
+                    if (pool.TryGetValue(chat, out var chatId))
                         chats.Add(chatId, chat);
                 }
             }
@@ -133,7 +137,7 @@ namespace HSMServer.Model.DataAlerts
                     RepeatMode = ScheduledRepeatMode,
                     InstantSend = ScheduledInstantSend,
                 },
-                Destination = new PolicyDestinationUpdate(chats, mode),
+                Destination = new PolicyDestinationUpdate(chats, mode ?? PolicyDestinationMode.Custom),
             };
         }
     }

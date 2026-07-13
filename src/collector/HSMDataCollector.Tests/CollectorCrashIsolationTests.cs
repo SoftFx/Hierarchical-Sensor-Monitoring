@@ -19,7 +19,13 @@ namespace HSMDataCollector.Tests
         private const string SurvivedSentinel = "HOST_SURVIVED";
         private const string HostProjectName = "HSMDataCollector.CrashTests.Host";
 
-        private static readonly TimeSpan HostTimeout = TimeSpan.FromSeconds(20);
+        // Generous hard deadline. The host's own work is ~2-3 s (a 1.5 s tick window + the bounded
+        // <=5 s graceful Stop), but it is launched via `dotnet exec`, whose cold JIT/assembly-load —
+        // amplified by several of these spawned-process cases running in parallel on a loaded CI
+        // runner — was intermittently overshooting a tight 20 s budget (a false timeout, not a hang).
+        // This deadline exists only to catch a GENUINE host hang (a crash-isolation regression), so it
+        // is sized to never false-positive on a slow runner; survival is what the test actually asserts.
+        private static readonly TimeSpan HostTimeout = TimeSpan.FromSeconds(120);
 
         // A1: throwing host callbacks on the scheduler error path (public ExceptionThrowing event and
         // the internal onError seam every monitoring sensor passes HandleException into).
@@ -89,7 +95,9 @@ namespace HSMDataCollector.Tests
                     }
 
                     throw new TimeoutException(
-                        $"Crash host scenario '{scenario}' did not exit within {HostTimeout}. Spawned-process tests must stay fast (<5 s).");
+                        $"Crash host scenario '{scenario}' did not exit within {HostTimeout}. The host's own work is a few " +
+                        "seconds, so overshooting this generous deadline means it genuinely hung — a crash-isolation regression, " +
+                        "not a slow runner.");
                 }
 
                 // Flush the async output handlers before reading the buffers.

@@ -382,7 +382,7 @@ namespace hsm_wrapper
 	class HSMWRAPPER_API HSMRateSensorOptions : public HSMBaseSensorOptions
 	{
 	public:
-		std::chrono::milliseconds post_data_period;
+		std::chrono::milliseconds post_data_period = std::chrono::minutes(1);
 		std::vector<HSMInstantAlertTemplate> alerts;
 	};
 

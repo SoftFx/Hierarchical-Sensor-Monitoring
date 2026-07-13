@@ -1,15 +1,25 @@
 name: hsm-wrapper-build
 
+# Builds the native HSMCppWrapper.dll (pure C++ over hsm::collector — no CLR) and runs the
+# in-process ABI smoke. Replaces the former C++/CLI MSBuild lane.
+
 on:
   push:
     branches:
+      - master
       - hsm-cpp-wrapper
+    paths:
+      - 'src/wrapper/**'
+      - 'src/native/collector/**'
+      - '.github/workflows/hsm_cpp_wrapper_build.yml'
   pull_request:
     # ready_for_review is required so the build runs when a draft is marked ready
     # (marking ready does not emit a synchronize event).
     types: [opened, synchronize, reopened, ready_for_review]
-    branches:
-      - hsm-cpp-wrapper
+    paths:
+      - 'src/wrapper/**'
+      - 'src/native/collector/**'
+      - '.github/workflows/hsm_cpp_wrapper_build.yml'
 
   workflow_dispatch:
 
@@ -22,13 +32,27 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1.0.2
+      - name: Install libcurl (vcpkg)
+        run: vcpkg install curl:x64-windows
+        shell: cmd
 
-      - name: Install dependencies
-        run: nuget.exe restore src/HSMCppWrapper/HSMCppWrapper.sln
+      - name: Configure
+        # No -G: use the runner's default (multi-config VS) generator — pinning a VS version breaks
+        # when the image upgrades Visual Studio (same approach as the native-collector lanes).
+        run: >
+          cmake -S src/wrapper -B build/wrapper
+          -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%/scripts/buildsystems/vcpkg.cmake
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+        shell: cmd
 
       - name: Build
-        run: msbuild src/HSMCppWrapper/HSMCppWrapper.sln /property:Configuration=Release /property:Platform=x64 /property:OutDir='${{ github.workspace }}\Release\HSMCppWrapper' 
+        run: cmake --build build/wrapper --config Release
+        shell: cmd
+
+      - name: Smoke (drive the public ABI in-process, no server needed)
+        run: |
+          set "PATH=%CD%\build\wrapper\Release;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%PATH%"
+          build\wrapper\Release\WrapperConsole.exe
+        shell: cmd

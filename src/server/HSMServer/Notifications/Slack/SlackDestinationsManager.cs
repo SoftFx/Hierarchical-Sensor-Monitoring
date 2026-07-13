@@ -1,8 +1,12 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.TableOfChanges;
+using HSMServer.Model.Folders;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Notifications
 {
@@ -20,7 +24,39 @@ namespace HSMServer.Notifications
         protected override Func<List<SlackDestinationEntity>> GetFromDb => _database.GetSlackDestinations;
 
 
-        public SlackDestinationsManager(IDatabaseCore database) => _database = database;
+        public SlackDestinationsManager(IDatabaseCore database)
+        {
+            _database = database;
+        }
+
+
+        public string GetSlackDestinationName(Guid id) => this.GetValueOrDefault(id)?.Name;
+
+
+        public void AddFolderToChats(Guid folderId, List<Guid> destinations)
+        {
+            foreach (var id in destinations)
+                if (TryGetValue(id, out var destination))
+                    destination.Folders.Add(folderId);
+        }
+
+        /// <summary>
+        /// Required by the IFolderManager.RemoveFolderFromChats contract so the same
+        /// multicast delegate can fan out to Telegram and Slack. <paramref name="initiator"/>
+        /// is unused here because Slack has no Telegram-style auto-remove at zero folders;
+        /// it is only consumed by TelegramChatsManager.TryRemove for the audit trail.
+        /// </summary>
+        public Task RemoveFolderFromChats(Guid folderId, List<Guid> destinations, InitiatorInfo initiator)
+        {
+            foreach (var id in destinations)
+                if (TryGetValue(id, out var destination))
+                    destination.Folders.Remove(folderId);
+
+            return Task.CompletedTask;
+        }
+
+        public void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator) =>
+            _ = RemoveFolderFromChats(folder.Id, folder.Chats.ToList(), initiator);
 
 
         protected override SlackDestination FromEntity(SlackDestinationEntity entity) => new(entity);

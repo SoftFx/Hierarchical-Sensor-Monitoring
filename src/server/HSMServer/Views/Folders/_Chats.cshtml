@@ -1,0 +1,265 @@
+@using HSMCommon.Extensions
+@using HSMServer.Extensions
+@using HSMServer.Notifications
+@using HSMServer.Controllers
+@using HSMServer.Constants
+@using HSMServer.Model.Folders.ViewModels
+
+@model FolderChatsViewModel
+
+@inject ITelegramChatsManager ChatsManager
+@inject ISlackDestinationsManager SlackDestinationsManager
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+@if (Model is not null)
+{
+    @await Html.PartialAsync("~/Views/Notifications/_NewTelegramChatHelpModal.cshtml", Model.FolderId)
+
+    <div class="d-flex flex-row text-nowrap align-items-center my-3">
+        <partial name="~/Views/Shared/_DefaultChat.cshtml" for="DefaultChats" />
+    </div>
+
+    <div class="my-2" align="right">
+        <a href="javascript:showAddTelegramGroupHelpModal();" class="btn btn-link p-0">
+            <i class="fa-solid fa-plus"></i> <i class="@ChatIcons.TelegramBrandClass"></i> Add new telegram chat
+        </a>
+        <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditSlackDestination)" asp-route-id="@Guid.Empty" class="btn btn-link p-0">
+            <i class="fa-solid fa-plus"></i> <i class="@ChatIcons.SlackBrandClass"></i> Add new slack destination
+        </a>
+    </div>
+
+    <div id="chatsSelect" class="selectpicker">
+        <select class="selectpicker" asp-for="NewChats" multiple
+                data-width="100%" data-live-search="true" data-placeholder="Choose chats to add">
+            @if (Model.TelegramChatsToAdd.GetGroups().Count > 0)
+            {
+                <option disabled>Telegram groups</option>
+                foreach (var chat in Model.TelegramChatsToAdd.GetGroups())
+                {
+                    <option value="@chat.Id" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
+                }
+            }
+
+            @if (Model.TelegramChatsToAdd.GetPrivates().Count > 0)
+            {
+                <option data-divider="true"></option>
+                <option disabled>Telegram users</option>
+                foreach (var chat in Model.TelegramChatsToAdd.GetPrivates())
+                {
+                    <option value="@chat.Id" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
+                }
+            }
+
+            @if (Model.SlackDestinationsToAdd.Count > 0)
+            {
+                <option data-divider="true"></option>
+                <option disabled>Slack destinations</option>
+                foreach (var dest in Model.SlackDestinationsToAdd)
+                {
+                    <option value="@dest.Id" data-content="<i class='@ChatIcons.SlackBrandClass'></i> @dest.Name">@dest.Name</option>
+                }
+            }
+        </select>
+    </div>
+
+    @if (Model.ConnectedTelegramChats.Count + Model.ConnectedSlackDestinations.Count > 0)
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th class="text-center">Type</th>
+                    <th class="text-center">Send messages</th>
+                    <th class="text-center">Messages aggregation time (sec)</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var chat in Model.ConnectedTelegramChats)
+                {
+                    <tr id="row_chat_@chat.Id">
+                        <td class="text-break">
+                            <i class="@ChatIcons.TelegramBrandClass me-1"></i>
+                            <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chat.Id">
+                                @chat.Name
+                            </a>
+                        </td>
+                        <td class="text-center">@chat.Type.GetDisplayName()</td>
+                        <td class="text-break text-center">
+                            @if (chat.SendMessages)
+                            {
+                                <i class="fa-solid fa-check fa-xl"></i>
+                            }
+                        </td>
+                        <td class="text-break text-center">@chat.MessagesAggregationTimeSec</td>
+                        <td nowrap class="text-center w-10">
+                            <div class='btn-group'>
+                                <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                    <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                </button>
+                                <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                    <li>
+                                        <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;"
+                                           asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chat.Id">
+                                            View/Edit
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a id='remove_@chat.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Remove from folder
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a id="sendMessage_@chat.Id" name="@chat.ChatId" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Send test message
+                                        </a>
+                                    </li>
+                                    @if (chat.Type == ConnectedChatType.TelegramGroup)
+                                    {
+                                        <li>
+                                            <a id="openChat_@chat.Id" name="@chat.ChatId" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                                Go to chat
+                                            </a>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                @foreach (var destination in Model.ConnectedSlackDestinations)
+                {
+                    <tr id="row_destination_@destination.Id">
+                        <td class="text-break">
+                            <i class="@ChatIcons.SlackBrandClass me-1"></i>
+                            <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditSlackDestination)" asp-route-id="@destination.Id">
+                                @destination.Name
+                            </a>
+                        </td>
+                        <td class="text-center">Slack</td>
+                        <td class="text-break text-center">
+                            @if (destination.SendMessages)
+                            {
+                                <i class="fa-solid fa-check fa-xl"></i>
+                            }
+                        </td>
+                        <td class="text-break text-center">-</td>
+                        <td nowrap class="text-center w-10">
+                            <div class='btn-group'>
+                                <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                    <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                </button>
+                                <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                    <li>
+                                        <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;"
+                                           asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditSlackDestination)" asp-route-id="@destination.Id">
+                                            View/Edit
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a id='remove_@destination.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Remove from folder
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a id="sendMessage_@destination.Id" name="@destination.Id" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Send test message
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="d-flex justify-content-end my-2">
+        <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
+    </div>
+
+    @*There is info about chats for FormData*@
+    <div style="display:none">
+        @for (int i = 0; i < Model.ConnectedChatIds.Count; i++)
+        {
+            <input id="folder_chat_@Model.ConnectedChatIds[i]" asp-for="ConnectedChatIds[i]" value="@Model.ConnectedChatIds[i]" />
+        }
+    </div>
+
+    <input asp-for="FolderId" value="@Model.FolderId" style="display: none" />
+}
+
+
+<script>
+    $(document).ready(function () {
+        $("select[name='NewChats']").selectpicker();
+    });
+
+    $(document).on("submit", "#folderChats_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        var formData = new FormData(this);
+        fillDefaultChatMode(formData);
+
+        $.ajax({
+            url: $("#folderChats_form").attr("action"),
+            type: 'POST',
+            data: formData,
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            cache: false,
+            async: true,
+            success: function (viewData) {
+                $("#folderChats_form").html(viewData);
+                showToast("Folder chats have been successfully saved!");
+            }
+        });
+    });
+
+    $('[id^=remove_]').on('click', function () {
+        var chatId = this.id.substring("remove_".length, this.id.length);
+
+        $(`#row_chat_${chatId}`).remove();
+        $(`#row_destination_${chatId}`).remove();
+        $(`#folder_chat_${chatId}`).val('@Guid.Empty');
+    });
+
+    $('[id^=sendMessage_]').on('click', function () {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        let chatId = this.name;
+        let id = this.id.substring("sendMessage_".length, this.id.length);
+
+        let isGuid = /^[0-9a-fA-F-]{36}$/.test(id);
+
+        let url = isGuid
+            ? `@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)?id=${chatId}`
+            : `@Url.Action(nameof(NotificationsController.SendTestTelegramMessage), ViewConstants.NotificationsController)?chatId=${chatId}`;
+
+        $.ajax({ url: url });
+    });
+
+    $('[id^=openChat_]').on('click', function () {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        let chatId = this.name;
+
+        $.ajax({
+            url: `@Url.Action(nameof(NotificationsController.OpenTelegramGroup), ViewConstants.NotificationsController)?chatId=${chatId}`
+        }).done(function (data) {
+            if (data.error != null) {
+                showToast(`Error opening chat. ${data.error}`);
+            }
+            else {
+                window.open(data.link, "_blank");
+            }
+        });
+    });
+</script>

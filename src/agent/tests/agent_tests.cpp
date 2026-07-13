@@ -4,9 +4,12 @@
 #include "agent/config.hpp"
 
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <map>
+#include <sstream>
 #include <string>
 
 namespace
@@ -107,6 +110,46 @@ namespace
         CheckEq(config.product_version, std::string{ "2.3.4.5" }, "version");
         Check(!config.update_enabled, "update disabled");
         CheckEq(config.update_check_period_hours, 48, "update period");
+    }
+
+    // Guards writer<->parser key parity: WriteAgentConfig must emit every field the parser reads
+    // (a dropped key silently resets on the next directive-driven rewrite), and string values with
+    // JSON-significant characters must survive the escape round-trip.
+    void WriteReadRoundTrip()
+    {
+        const AgentConfig original = ParseOk(R"({
+            "server": { "address": "https://h:1", "port": 9999, "accessKey": "k\"\\with\ttabs", "allowUntrustedCertificate": true },
+            "identity": { "computerName": "BUILD01", "module": "Custom\\Module" },
+            "sensors": { "computer": false, "system": true, "disk": false, "network": true, "module": false, "process": true },
+            "periods": { "collectMs": 5000 },
+            "productVersion": "2.3.4.5",
+            "update": { "enabled": false, "checkPeriodHours": 48 }
+        })");
+
+        const std::string path = (std::filesystem::temp_directory_path() / "hsm_agent_roundtrip.json").string();
+        std::string err;
+        Check(hsm::agent::WriteAgentConfig(path, original, err), "WriteAgentConfig should succeed: " + err);
+
+        std::ifstream in(path, std::ios::binary);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        in.close();
+
+        const AgentConfig reparsed = ParseOk(ss.str());
+        CheckEq(reparsed.product_version, original.product_version, "productVersion round-trips");
+        CheckEq(reparsed.access_key, original.access_key, "accessKey with specials round-trips");
+        CheckEq(reparsed.module, original.module, "module with backslash round-trips");
+        CheckEq(reparsed.server_address, original.server_address, "address round-trips");
+        CheckEq(reparsed.computer_name, original.computer_name, "computerName round-trips");
+        CheckEq(reparsed.port, original.port, "port round-trips");
+        Check(reparsed.sensors_system && reparsed.sensors_network && reparsed.sensors_process, "enabled groups round-trip");
+        Check(!reparsed.sensors_computer && !reparsed.sensors_disk && !reparsed.sensors_module, "disabled groups round-trip");
+        CheckEq(reparsed.collect_period_ms, original.collect_period_ms, "collect period round-trips");
+        Check(reparsed.update_enabled == original.update_enabled, "update enabled round-trips");
+        CheckEq(reparsed.update_check_period_hours, original.update_check_period_hours, "update period round-trips");
+
+        std::error_code rm;
+        std::filesystem::remove(path, rm);
     }
 
     void BlankAccessKeyIsRejected()
@@ -212,6 +255,29 @@ namespace
         ExpectReject(R"({ "server": { "address": "h", "accessKey": "k" }, "update": "on" })", "non-object update");
     }
 
+    // Guards the sensor-group directive name<->field mapping (#1198): a typo (e.g. "disk" pointing at
+    // sensors_network) would silently toggle the wrong group. SensorGroupFlag is the single source of
+    // truth shared with the runtime directive handler, so testing it here covers both.
+    void SensorGroupFlagMapsNames()
+    {
+        using hsm::agent::SensorGroupFlag;
+        Check(SensorGroupFlag("computer") == &AgentConfig::sensors_computer, "computer -> sensors_computer");
+        Check(SensorGroupFlag("system") == &AgentConfig::sensors_system, "system -> sensors_system");
+        Check(SensorGroupFlag("disk") == &AgentConfig::sensors_disk, "disk -> sensors_disk");
+        Check(SensorGroupFlag("network") == &AgentConfig::sensors_network, "network -> sensors_network");
+        Check(SensorGroupFlag("module") == &AgentConfig::sensors_module, "module -> sensors_module");
+        Check(SensorGroupFlag("process") == &AgentConfig::sensors_process, "process -> sensors_process");
+        Check(SensorGroupFlag("bogus") == nullptr, "unknown group -> nullptr");
+        Check(SensorGroupFlag("") == nullptr, "empty group -> nullptr");
+
+        // The returned pointer-to-member reads and writes the intended field.
+        AgentConfig c; // defaults: process off, the rest on
+        auto process = SensorGroupFlag("process");
+        Check(process != nullptr && !(c.*process), "process flag reads its default (off)");
+        c.*process = true;
+        Check(c.sensors_process, "writing via the pointer flips the right field");
+    }
+
     const std::map<std::string, std::function<void()>>& Tests()
     {
         static const std::map<std::string, std::function<void()>> tests = {
@@ -224,10 +290,12 @@ namespace
             { "agent_config_rejects_wrong_typed_field", WrongTypedFieldIsRejected },
             { "agent_config_ignores_unknown_fields", UnknownFieldsAreIgnored },
             { "agent_config_decodes_string_escapes", StringEscapesDecode },
+            { "agent_config_write_read_roundtrip", WriteReadRoundTrip },
             { "agent_topcpu_config_parses_and_defaults", TopCpuConfigParsesAndDefaults },
             { "agent_topcpu_rejects_bad_config", TopCpuRejectsBadConfig },
             { "agent_update_config_parses_and_defaults", UpdateConfigParsesAndDefaults },
             { "agent_update_config_rejects_bad_period", UpdateConfigRejectsBadPeriod },
+            { "agent_sensor_group_flag_maps_names", SensorGroupFlagMapsNames },
         };
         return tests;
     }

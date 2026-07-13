@@ -8,6 +8,7 @@
 @model FolderViewModel
 
 @inject ITelegramChatsManager TelegramChatsManager
+@inject ISlackDestinationsManager SlackDestinationsManager
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -41,17 +42,21 @@
             <div id="accordionBody_@Model.Id" class='accordion-body p-3'>
                 @await Html.PartialAsync("_ProductList", Model)
 
-                @if (Model.TelegramChats is not null)
+                @if (Model.Chats is not null)
                 {
-                    @if (Model.TelegramChats.Count > 0)
-                    {
-                        var availableChats = Model.TelegramChats.GetAvailableChats(TelegramChatsManager).OrderBy(ch => ch.Type == ConnectedChatType.TelegramPrivate).ThenBy(ch => ch.Name).ToList();
+                    var availableChats = Model.Chats.GetAvailableChats(TelegramChatsManager, SlackDestinationsManager)
+                        .OrderBy(kv => kv.Value)
+                        .ToList();
 
+                    @if (availableChats.Count > 0)
+                    {
                         <div>
-                            <b>Telegram chats:</b>
+                            <b>Chats:</b>
 
                             @if (user.IsFolderManager(Model.Id.Value))
                             {
+                                var telegramIds = TelegramChatsManager.GetValues().Select(c => c.Id).ToHashSet();
+
                                 @for (int i = 0; i < availableChats.Count; ++i)
                                 {
                                     @if (i > 0)
@@ -59,20 +64,45 @@
                                         <span>, </span>
                                     }
 
-                                    <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@availableChats[i].Id">
-                                        @availableChats[i].Name
-                                    </a>
+                                    var chatId = availableChats[i].Key;
+                                    var chatName = availableChats[i].Value;
+                                    var isTelegram = telegramIds.Contains(chatId);
+                                    var brandClass = isTelegram ? ChatIcons.TelegramBrandClass : ChatIcons.SlackBrandClass;
+
+                                    <i class="@brandClass"></i>
+                                    @if (isTelegram)
+                                    {
+                                        <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chatId">@chatName</a>
+                                    }
+                                    else
+                                    {
+                                        <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditSlackDestination)" asp-route-id="@chatId">@chatName</a>
+                                    }
                                 }
                             }
                             else
                             {
-                                @string.Join(", ", availableChats.Select(ch => ch.Name))
+                                for (int i = 0; i < availableChats.Count; ++i)
+                                {
+                                    if (i > 0)
+                                    {
+                                        <span>, </span>
+                                    }
+
+                                    var chatId = availableChats[i].Key;
+                                    var chatName = availableChats[i].Value;
+                                    var brandClass = chatId.ChatBrandClass(TelegramChatsManager, SlackDestinationsManager)
+                                        ?? ChatIcons.SlackBrandClass;
+
+                                    <i class="@brandClass"></i>
+                                    <span>@chatName</span>
+                                }
                             }
                         </div>
                     }
                     else
                     {
-                        <b>No telegram chats</b>
+                        <b>No chats</b>
                     }
                 }
             </div>

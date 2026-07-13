@@ -50,9 +50,12 @@ namespace hsm_wrapper
 
 		std::chrono::milliseconds GetInterval()
 		{
-			impl_wrapper->GetInterval();
+			return impl_wrapper->GetInterval();
 		}
 
+		// NOTE (native backend): the native function sensor's post period is fixed at creation and
+		// cannot be re-armed, so RestartTimer is a no-op. GetInterval keeps reporting the actual
+		// (creation-time) period. See docs/native-collector-migration.md.
 		void RestartTimer(std::chrono::milliseconds time_interval)
 		{
 			impl_wrapper->RestartTimer(time_interval);

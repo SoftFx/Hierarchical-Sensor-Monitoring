@@ -42,6 +42,8 @@ namespace hsm::collector
         NetworkConnectionsEstablished = HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED,
         NetworkConnectionFailures = HSM_DEFAULT_NETWORK_CONNECTION_FAILURES,
         NetworkConnectionsReset = HSM_DEFAULT_NETWORK_CONNECTIONS_RESET,
+        NetworkInterfaceReceivedMBSec = HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC,
+        NetworkInterfaceSentMBSec = HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC,
 
         CollectorAlive = HSM_DEFAULT_COLLECTOR_ALIVE,
         CollectorVersion = HSM_DEFAULT_COLLECTOR_VERSION,
@@ -63,6 +65,7 @@ namespace hsm::collector
     {
         std::optional<std::string> process_name;
         std::optional<std::string> disk_letter;
+        std::optional<std::string> interface_name;
         std::optional<std::string> service_name;
         bool is_host_service = false;
         std::optional<std::string> product_version;
@@ -77,6 +80,8 @@ namespace hsm::collector
                 native.process_name = process_name->c_str();
             if (disk_letter.has_value())
                 native.disk_letter = disk_letter->c_str();
+            if (interface_name.has_value())
+                native.interface_name = interface_name->c_str();
             if (service_name.has_value())
                 native.service_name = service_name->c_str();
             native.is_host_service = is_host_service ? 1 : 0;

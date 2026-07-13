@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Notifications.Telegram.AddressBook;
+using HSMServer.Notifications.AddressBook;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -98,12 +98,17 @@ namespace HSMServer.Notifications
 
         internal IEnumerable<string> GetNotifications()
         {
-            foreach (var report in ScheduleMessageBuilder.GetReports())
-                yield return report;
+            try
+            {
+                foreach (var report in ScheduleMessageBuilder.GetReports())
+                    yield return report;
 
-            yield return MessageBuilder.GetAggregateMessage();
-
-            _nextSendMessageTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(MessagesAggregationTimeSec));
+                yield return MessageBuilder.GetAggregateMessage();
+            }
+            finally
+            {
+                _nextSendMessageTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(MessagesAggregationTimeSec));
+            }
         }
     }
 }

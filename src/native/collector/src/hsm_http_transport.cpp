@@ -2,6 +2,9 @@
 
 #include <curl/curl.h>
 
+#include <cctype>      // std::tolower in the header-name comparison
+#include <string_view> // std::string_view used when splitting response headers
+
 namespace hsm::http
 {
     namespace
@@ -26,6 +29,31 @@ namespace hsm::http
         {
             const size_t total = size * nmemb;
             static_cast<std::string*>(userdata)->append(ptr, total);
+            return total;
+        }
+
+        // Collect response headers. libcurl passes one line at a time including the status line and
+        // the blank terminator. Lines that contain ':' are real headers; others are silently ignored.
+        // Names are lowercased so callers can compare without a case-insensitive strcmp.
+        size_t HeaderCallback(char* buffer, size_t size, size_t nitems, void* userdata)
+        {
+            const size_t total = size * nitems;
+            const std::string_view line(buffer, total);
+            const auto colon = line.find(':');
+            if (colon == std::string_view::npos)
+                return total;
+
+            std::string name(line.substr(0, colon));
+            for (auto& c : name)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+            std::string_view raw = line.substr(colon + 1);
+            while (!raw.empty() && (raw.front() == ' ' || raw.front() == '\t'))
+                raw.remove_prefix(1);
+            while (!raw.empty() && (raw.back() == '\r' || raw.back() == '\n' || raw.back() == ' '))
+                raw.remove_suffix(1);
+
+            static_cast<std::vector<HttpHeader>*>(userdata)->push_back({ std::move(name), std::string(raw) });
             return total;
         }
 
@@ -74,6 +102,8 @@ namespace hsm::http
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response.body);
+            curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallback);
+            curl_easy_setopt(curl, CURLOPT_HEADERDATA, &response.response_headers);
             curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(timeout_ms));
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verify_peer ? 1L : 0L);
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verify_peer ? 2L : 0L);

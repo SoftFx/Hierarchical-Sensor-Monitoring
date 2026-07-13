@@ -10,7 +10,7 @@ Alerts are the core feature of HSM. You define rules (policies) that describe wh
 |---|---|
 | **Policy** | A single alert rule: if [condition] then [notify] |
 | **Condition** | What triggers the alert: value threshold, status change, inactivity |
-| **Destination** | Where to send the alert: a Telegram chat |
+| **Destination** | Where to send the alert: one or more Telegram chats and/or Slack destinations picked from a single unified picker (a heterogeneous mix in one action is allowed) |
 | **Template** | The notification message text, with dynamic variables |
 | **Schedule** | When alerts can fire: working hours, repeat intervals |
 | **Confirmation Period** | How long the condition must persist before alerting |
@@ -129,15 +129,15 @@ The alert message is a text template with variables that are filled in at the ti
 
 ## Destinations
 
-Each policy defines where to send notifications.
+Each policy defines where to send notifications. The destination picker is unified and folder-scoped: it shows Telegram chats **and** Slack destinations bound to the folder of the sensor, **plus** any global chats (chats/destinations with no folder bindings, which broadcast to every folder). Admins create both Telegram chats and Slack destinations globally; a Product Manager for a folder can narrow delivery by binding a subset through the folder's single **Chats** tab. A single action can mix Telegram chats and Slack destinations in one heterogeneous selection.
 
-**Modes:**
-- **From parent** — use the default Telegram chats configured on the parent product/folder. Additional specific chats can be added on top.
-- **Custom** — send only to the explicitly listed chats.
-- **All chats** — send to all Telegram chats registered in HSM.
+**Modes (one mode per action, applied to the heterogeneous chat set):**
+- **From parent** — use the default chats configured on the parent product/folder. The parent walk resolves one heterogeneous set in a single pass, so Telegram chats and Slack destinations configured on the parent are both pulled in together. Additional specific chats/destinations can be added on top.
+- **Custom** — send only to the explicitly listed chats and destinations (heterogeneous mix).
+- **All chats** — send to all Telegram chats registered in HSM (Telegram only; Slack has no equivalent).
 - **Empty** — no notification (the policy only changes sensor status).
 
-See [Telegram Setup](Telegram-Setup) for how to connect Telegram chats.
+See [Telegram Setup](Telegram-Setup) for how to connect Telegram chats, and [Slack Setup](Slack-Setup) for how to register Slack webhooks and bind them to a folder.
 
 ---
 

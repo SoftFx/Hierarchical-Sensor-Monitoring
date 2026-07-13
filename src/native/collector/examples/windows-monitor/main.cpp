@@ -5,6 +5,12 @@
 //
 // Usage: hsm_windows_monitor [server_address] [port] [access_key] [seconds]
 //   defaults: https://localhost 44330 demo-key 30
+// Writes NLog-parity log files to ./Logs (override the directory with HSM_LOG_DIR):
+// DataCollector_<date>.txt for all levels, DataCollector_error_<date>.txt for errors.
+
+// std::getenv (the HSM_LOG_DIR lookup below) is a read-only env read; silence MSVC's C4996
+// deprecation (must precede the CRT headers).
+#define _CRT_SECURE_NO_WARNINGS
 
 #include <hsm_collector/hsm_collector.hpp>
 
@@ -23,6 +29,9 @@ int main(int argc, char** argv)
     const std::string access_key = argc > 3 ? argv[3] : "demo-key";
     const int seconds = argc > 4 ? std::atoi(argv[4]) : 30;
 
+    const char* log_dir_env = std::getenv("HSM_LOG_DIR");
+    const std::string log_dir = (log_dir_env && *log_dir_env) ? log_dir_env : "Logs";
+
     try
     {
         hc::CollectorOptions options;
@@ -39,6 +48,11 @@ int main(int argc, char** argv)
             std::cerr << "[hsm] (" << static_cast<int>(level) << ") " << message << '\n';
         });
 
+        // Built-in async file logger (NLog parity) — the feature under test. Writes
+        // <log_dir>/DataCollector_<date>.txt (+ _error_ for errors), independent of the stderr
+        // callback above; both sinks receive every message. Enable before Start.
+        collector.EnableFileLogging(log_dir, hc::LogLevel::Info);
+
         // Real server transport (#1165) + the Windows live readers (#1164). Install both before Start.
         collector.UseHttpTransport();
         collector.InstallWindowsMetricSources();
@@ -48,7 +62,8 @@ int main(int argc, char** argv)
         collector.AddAllComputerSensors();
         collector.AddAllModuleSensors("1.0.0.0");
 
-        std::cout << "Monitoring Windows -> " << server << ':' << port << " for " << seconds << "s...\n";
+        std::cout << "Monitoring Windows -> " << server << ':' << port << " for " << seconds
+                  << "s... (log files: " << log_dir << ")\n";
         collector.Start();
         std::this_thread::sleep_for(std::chrono::seconds(seconds));
         collector.Stop();

@@ -170,6 +170,38 @@
         </div>
     
         <div class="my-1">
+            <h5 class="mt-2">HSM Agent</h5>
+            <p class="text-muted small">Download a ready-to-run Windows agent pre-configured for this product — this server's address and an access key are baked into its <code>config.json</code>. Run <code>install.cmd</code> on the target machine; the agent self-installs as an auto-start Windows service and connects.</p>
+            @{ var pageUser = User as User; }
+            @if (pageUser is not null && pageUser.IsAdmin)
+            {
+                <button id="downloadAgentButton" class="btn btn-secondary" type="button" onclick="downloadAgentClick()" title="Download a ready-to-run Windows agent for this product (server address + key pre-configured)">
+                    <i class="fa-solid fa-download"></i> Download agent
+                </button>
+            }
+            else
+            {
+                <p class="text-muted small mb-0">Only administrators can download the agent bundle.</p>
+            }
+        </div>
+
+        <div class="my-1">
+            <h5 class="mt-2">Agent sensor groups</h5>
+            <p class="text-muted small">Disabled groups will stop being collected by agents after their next data send (no restart needed).</p>
+            <div id="sensorGroups_div">
+                @foreach (var group in new[] { "computer", "system", "disk", "network", "module", "process" })
+                {
+                    var disabled = Model.DisabledSensorGroups.Contains(group);
+                    <div class="form-check form-switch">
+                        <input class="form-check-input sensor-group-toggle" type="checkbox" id="sg_@group"
+                               data-group="@group" @(disabled ? "" : "checked") />
+                        <label class="form-check-label" for="sg_@group">@group</label>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="my-1">
             <div class="d-flex justify-content-between row">
                 <h5 class="col-auto mt-2">Access keys</h5>
                 <button onclick="addAccessKeyButtonClick()" class="btn btn-link col-auto py-0 mt-2">
@@ -376,5 +408,66 @@
 
     $('#accessKeys_modal').on('hidden.bs.modal', function(e) {
         document.location.reload();
+    });
+</script>
+
+<script>
+    async function downloadAgentClick() {
+        // Fetch + blob (not window.location) so a 503/BadRequest surfaces as a toast instead of
+        // navigating the browser to a raw error page — e.g. when the product has no usable access
+        // key or the agent binary isn't staged on the server yet.
+        const button = document.getElementById('downloadAgentButton');
+        button.disabled = true;
+        try {
+            const response = await fetch('/api/Agent/installer?productId=@Model.GeneralInfo.Id');
+            if (!response.ok) {
+                const message = await response.text();
+                showToast(message || 'Failed to download the HSM Agent.', 'Error');
+                return;
+            }
+
+            const blob = await response.blob();
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+            const fileName = match ? decodeURIComponent(match[1]) : 'hsm-agent.zip';
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            showToast('Failed to download the HSM Agent: ' + error, 'Error');
+        } finally {
+            button.disabled = false;
+        }
+    }
+</script>
+
+<script>
+    var updateSensorGroupsUrl = "@Html.Raw(Url.Action("UpdateSensorGroups", "Product"))";
+    var productId = '@Model.GeneralInfo.Id';
+
+    function collectDisabledGroups() {
+        var disabled = [];
+        document.querySelectorAll('.sensor-group-toggle').forEach(function(cb) {
+            if (!cb.checked) disabled.push(cb.dataset.group);
+        });
+        return disabled;
+    }
+
+    document.querySelectorAll('.sensor-group-toggle').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            $.ajax({
+                type: 'POST',
+                url: updateSensorGroupsUrl,
+                data: JSON.stringify({ ProductId: productId, DisabledGroups: collectDisabledGroups() }),
+                contentType: 'application/json',
+                cache: false
+            });
+        });
     });
 </script>

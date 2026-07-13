@@ -1,6 +1,7 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Filters.FolderRoleFilters;
+using HSMServer.Filters.SlackRoleFilters;
 using HSMServer.Filters.TelegramRoleFilters;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
@@ -21,16 +22,22 @@ namespace HSMServer.Controllers
     {
         private readonly IFolderManager _folderManager;
         private readonly TelegramBot _telegramBot;
+        private readonly NotificationsCenter _notifications;
 
         internal ITelegramChatsManager ChatsManager { get; }
 
+        internal ISlackDestinationsManager SlackDestinations { get; }
+
 
         public NotificationsController(ITelegramChatsManager chatsManager, NotificationsCenter notifications,
-            IFolderManager folderManager, IUserManager userManager) : base(userManager)
+            IFolderManager folderManager, IUserManager userManager,
+            ISlackDestinationsManager slackDestinations) : base(userManager)
         {
             ChatsManager = chatsManager;
             _folderManager = folderManager;
+            _notifications = notifications;
             _telegramBot = notifications.TelegramBot;
+            SlackDestinations = slackDestinations;
         }
 
 
@@ -51,12 +58,12 @@ namespace HSMServer.Controllers
 
                 foreach (var folderId in updateModel.Folders.SelectedFolders)
                     if (_folderManager.TryGetValue(folderId, out var folder))
-                        await UpdateFolder(folderId, new HashSet<Guid>(folder.TelegramChats) { updateModel.Id });
+                        await UpdateFolder(folderId, new HashSet<Guid>(folder.Chats) { updateModel.Id });
 
                 foreach (var folderId in removedFolders)
                     if (_folderManager.TryGetValue(folderId, out var folder))
                     {
-                        var folderChats = new HashSet<Guid>(folder.TelegramChats);
+                        var folderChats = new HashSet<Guid>(folder.Chats);
                         folderChats.Remove(updateModel.Id);
 
                         await UpdateFolder(folderId, folderChats);
@@ -97,12 +104,94 @@ namespace HSMServer.Controllers
         }
 
 
+        [HttpGet]
+        [SlackAdmin]
+        public IActionResult EditSlackDestination(Guid id)
+        {
+            if (id == Guid.Empty)
+                return View(new SlackDestinationViewModel { EnableMessages = true });
+
+            return SlackDestinations.TryGetValue(id, out var destination)
+                ? View(new SlackDestinationViewModel(destination, folders: BuildSlackFolders(destination)))
+                : _emptyResult;
+        }
+
+        [HttpPost]
+        [SlackAdmin]
+        public async Task<IActionResult> AddSlackDestination(SlackDestinationViewModel model)
+        {
+            if (!ModelState.IsValid)
+                return View(nameof(EditSlackDestination), model);
+
+            var destination = new SlackDestination(model.ToAddRequest(CurrentUser.Id));
+
+            await SlackDestinations.TryAdd(destination);
+
+            return RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
+        }
+
+        [HttpPost]
+        [SlackAdmin]
+        public async Task<IActionResult> EditSlackDestination(SlackDestinationViewModel model)
+        {
+            if (!ModelState.IsValid)
+                return View(model);
+
+            if (await SlackDestinations.TryUpdate(model.ToUpdate()))
+            {
+                if (!SlackDestinations.TryGetValue(model.Id, out var updated))
+                    return RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
+
+                var removedFolders = updated.Folders.Except(model.Folders.Folders).ToList();
+
+                foreach (var folderId in model.Folders.SelectedFolders)
+                    if (_folderManager.TryGetValue(folderId, out var folder))
+                        await UpdateFolder(folderId, new HashSet<Guid>(folder.Chats) { model.Id });
+
+                foreach (var folderId in removedFolders)
+                    if (_folderManager.TryGetValue(folderId, out var folder))
+                    {
+                        var folderChats = new HashSet<Guid>(folder.Chats);
+                        folderChats.Remove(model.Id);
+
+                        await UpdateFolder(folderId, folderChats);
+                    }
+            }
+
+            return SlackDestinations.TryGetValue(model.Id, out var destination)
+                ? View(new SlackDestinationViewModel(destination, folders: BuildSlackFolders(destination)))
+                : RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
+        }
+
+        [HttpPost]
+        [SlackAdmin]
+        public async Task RemoveSlackDestination(Guid id) => await SlackDestinations.TryRemove(new(id, CurrentInitiator));
+
+        [HttpPost]
+        [SlackAdmin]
+        public async Task<IActionResult> SendTestSlackMessage([FromQuery] Guid id)
+        {
+            if (SlackDestinations.TryGetValue(id, out var destination))
+                await _notifications.SlackChannel.SendTestAsync(destination);
+
+            return Ok();
+        }
+
+
         private ChatFoldersViewModel BuildChatFolders(TelegramChat chat)
         {
-            var availableFolders = _folderManager.GetUserFolders(CurrentUser).Where(f => !f.TelegramChats.Contains(chat.Id)).ToList();
+            var availableFolders = _folderManager.GetUserFolders(CurrentUser).Where(f => !f.Chats.Contains(chat.Id)).ToList();
             var chatFolders = _folderManager.GetValues().Where(f => chat.Folders.Contains(f.Id)).ToList();
 
             return new(availableFolders, chatFolders);
+        }
+
+        private ChatFoldersViewModel BuildSlackFolders(SlackDestination destination)
+        {
+            var availableFolders = _folderManager.GetUserFolders(CurrentUser).Where(f => !f.Chats.Contains(destination.Id)).ToList();
+            var destFolders = _folderManager.GetValues().Where(f => destination.Folders.Contains(f.Id)).ToList();
+
+            return new(availableFolders, destFolders);
         }
 
         private async Task UpdateFolder(Guid folderId, HashSet<Guid> folderChats)
@@ -110,7 +199,7 @@ namespace HSMServer.Controllers
             var update = new FolderUpdate()
             {
                 Id = folderId,
-                TelegramChats = folderChats,
+                Chats = folderChats,
                 Initiator = CurrentInitiator,
             };
 

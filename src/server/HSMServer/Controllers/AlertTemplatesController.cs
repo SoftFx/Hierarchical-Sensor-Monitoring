@@ -44,6 +44,7 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
+        private readonly ISlackDestinationsManager _slackDestinations;
 
 
         static AlertTemplatesController()
@@ -55,13 +56,14 @@ namespace HSMServer.Controllers
         }
 
         public AlertTemplatesController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache,
-                                        IUserManager users, IAlertScheduleProvider provider) : base(users)
+                                        IUserManager users, IAlertScheduleProvider provider, ISlackDestinationsManager slackDestinations) : base(users)
         {
             _telegram = telegram;
             _folders = folders;
             _cache = cache;
             _tree = tree;
             _alertScheduleProvider = provider;
+            _slackDestinations = slackDestinations;
         }
 
         [HttpGet]
@@ -81,7 +83,9 @@ namespace HSMServer.Controllers
             return View(result);
         }
 
-        private sealed record ChatItem(Guid Id, string Name, byte Type);
+        private sealed record ChatEntry(Guid Id, string Name);
+
+        private sealed record ChatsPayload(List<ChatEntry> Groups, List<ChatEntry> Users, List<ChatEntry> SlackDestinations);
 
         private class UpdateResponse
         {
@@ -89,12 +93,12 @@ namespace HSMServer.Controllers
 
             public byte? Type { get; set; }
             public string Sensors { get; set; }
-            public List<ChatItem> Chats { get; set; }
+            public ChatsPayload Chats { get; set; }
             public int TotalCount { get; set; }
             public int Page { get; set; }
             public int TotalPages { get; set; }
 
-            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, List<ChatItem> chats, int page = 1)
+            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, ChatsPayload chats, int page = 1)
             {
                 Type = type;
                 Chats = chats;
@@ -128,13 +132,27 @@ namespace HSMServer.Controllers
 
             var (sensorType, sensors) = GetAffectedSensors(type, pathList, folderId);
 
-            List<ChatItem> chats = [];
-            if (_folders.TryGetValue(folderId, out var folder))
+            ChatsPayload chats = null;
+            if (_folders.TryGetValue(folderId, out var folder) && folder.TryGetChats(out var folderChats))
             {
-                chats = _telegram.GetValues()
-                    .Where(c => folder.TelegramChats.Contains(c.Id))
-                    .Select(c => new ChatItem(c.Id, c.Name, (byte)c.Type))
-                    .ToList();
+                // Mirrors folder.GetAvailableChats(_telegram, _slackDestinations) used by the POST
+                // path so the live-updated dropdown shows the same destinations as the saved form.
+                var groups = new List<ChatEntry>();
+                var users = new List<ChatEntry>();
+                var slack = new List<ChatEntry>();
+
+                foreach (var c in _telegram.GetValues())
+                    if (folderChats.Contains(c.Id) || c.Folders.Count == 0)
+                    {
+                        var list = c.Type == ConnectedChatType.TelegramGroup ? groups : users;
+                        list.Add(new ChatEntry(c.Id, c.Name));
+                    }
+
+                foreach (var d in _slackDestinations.GetValues())
+                    if (folderChats.Contains(d.Id) || d.Folders.Count == 0)
+                        slack.Add(new ChatEntry(d.Id, d.Name));
+
+                chats = new ChatsPayload(groups, users, slack);
             }
 
             var response = new UpdateResponse(sensorType, sensors, chats, page);
@@ -178,7 +196,10 @@ namespace HSMServer.Controllers
             var model = new DataAlertTemplateViewModel(data, _folders.GetUserFolders(CurrentUser));
 
             if (_folders.TryGetValue(data.FolderId, out var folder))
-                PopulateAvailableChats(model, folder.TelegramChats);
+            {
+                folder.TryGetChats(out var chats);
+                PopulateAvailableChats(model, chats);
+            }
 
             foreach (var (_, alerts) in model.DataAlerts)
                 foreach (var alert in alerts)
@@ -197,8 +218,8 @@ namespace HSMServer.Controllers
                 ModelState.AddModelError(nameof(data.PathTemplates), "At least one path template is required.");
 
             Dictionary<Guid, string> availableChats = null;
-            if (_folders.TryGetValue(data.FolderId, out var folder) && folder.TelegramChats.Count > 0)
-                availableChats = folder.TelegramChats.GetAvailableChatsDictionary(_telegram);
+            if (_folders.TryGetValue(data.FolderId, out var folder))
+                availableChats = folder.GetAvailableChats(_telegram, _slackDestinations);
 
             AlertTemplateModel model = null;
 
@@ -208,6 +229,12 @@ namespace HSMServer.Controllers
 
                 if (!model.TryApplyPathTemplates(out var pathError))
                     ModelState.AddModelError(nameof(data.PathTemplates), $"Invalid path template: {pathError}");
+            }
+
+            if (ModelState.IsValid)
+            {
+                foreach (var mismatchError in GetPathTypeMismatchErrors(model))
+                    ModelState.AddModelError(nameof(data.PathTemplates), mismatchError);
             }
 
             if (ModelState.IsValid)
@@ -224,7 +251,10 @@ namespace HSMServer.Controllers
             data = new DataAlertTemplateViewModel(model, _folders.GetUserFolders(CurrentUser));
 
             if (folder != null)
-                PopulateAvailableChats(data, folder.TelegramChats);
+            {
+                folder.TryGetChats(out var chats);
+                PopulateAvailableChats(data, chats);
+            }
 
             foreach (var (_, alerts) in data.DataAlerts)
                 foreach (var alert in alerts)
@@ -270,6 +300,34 @@ namespace HSMServer.Controllers
             }
 
             return ((byte)sensors.FirstOrDefault()!.Type, sensors);
+        }
+
+        // #1210: detect path templates that match existing sensors of a type incompatible with the
+        // template's selected concrete type. AnyType templates intentionally skip this check — they
+        // match every type. Mirrors the type filter in AlertTemplateModel.IsMatch so anything we
+        // flag here would otherwise be silently skipped at apply time.
+        private List<string> GetPathTypeMismatchErrors(AlertTemplateModel model)
+        {
+            var errors = new List<string>();
+            var templateType = model.GetSensorType();
+            if (!templateType.HasValue)
+                return errors;
+
+            var templateTypeName = templateType.Value.ToString().Replace("Sensor", string.Empty);
+
+            foreach (var path in model.Paths.Where(p => !string.IsNullOrWhiteSpace(p)))
+            {
+                var mismatched = _cache.GetSensors(path, null, model.FolderId)
+                    .FirstOrDefault(s => s.Type != templateType.Value);
+
+                if (mismatched != null)
+                {
+                    var mismatchedTypeName = mismatched.Type.ToString().Replace("Sensor", string.Empty);
+                    errors.Add($"Path \"{path}\" matches {mismatchedTypeName} sensors, but this template is configured for {templateTypeName} sensors. Use a separate Alert Template for another sensor type.");
+                }
+            }
+
+            return errors;
         }
 
         private List<SelectListItem> GetAlertSchedulesSelectList()

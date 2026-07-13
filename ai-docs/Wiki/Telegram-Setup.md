@@ -29,7 +29,7 @@ Before any chat can be connected, an administrator must configure the Telegram b
 **Step 3.** Verify the bot is running — the status indicator should turn green.
 If the bot fails to start, check that the token is valid and the server has internet access.
 
-> **Note:** Telegram chats are linked to **Folders**, not to individual sensors or products. Make sure you have at least one Folder created before connecting a chat.
+> **Note:** Telegram chats are linked to **Folders**, not to individual sensors or products. A chat with **no** folder bindings is *global* — it appears in the alert destination picker of every folder and is deliverable for any alert. Binding a chat to one or more folders narrows delivery to only those folders. Make sure you have at least one Folder created before binding a chat, or leave it unbound to broadcast everywhere.
 
 ---
 

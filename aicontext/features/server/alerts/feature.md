@@ -1,6 +1,6 @@
 # Feature: Alerts
 
-> Owner: server | Last reviewed: 2026-06-24 | Canonical: yes
+> Owner: server | Last reviewed: 2026-07-08 | Canonical: yes
 > Scope: Server-side alert ownership, creation paths, and the boundary between global (template) and per-sensor alerts.
 
 ---
@@ -29,6 +29,8 @@ As of issue #1159 the editor exposes a single "Add" entry point: Inactivity Peri
 - TTL alerts are single-condition: when the main condition's property is `AlertProperty.TimeToLive`, the `_ConditionBlock.cshtml` change handler removes any non-main conditions and hides the "add condition" button.
 - The TTL demote path in `_ConditionBlock.cshtml` is a no-op inside an Any-template TTL container (`containerType == ttlKey`). Any templates only allow TTL alerts, so there is no concrete sensor type to demote to — the dropdown reverts to `TimeToLive` and the operation-refetch ajax is skipped, keeping the row routed as `TTLPolicy`. Without this guard the demote would set `data-alert-type` back to the container's key (which is also `ttlKey` for Any) but flip the visual state to regular, producing a row with a non-TTL property persisted as a malformed `TTLPolicy`.
 - `ConditionViewModel.Property` defaults to `PropertiesItems.First()`. `AlertProperty.TimeToLive` is the last entry in every condition view model's `Properties` list (asserted by `ConditionViewModelPropertiesTests.DefaultProperty_IsNotTimeToLive`), so a freshly-created alert never defaults to TTL — the user must explicitly pick Inactivity Period.
+- Alert Templates with a concrete sensor type validate at save time that no path template matches an existing sensor whose type differs from the template's selected type (#1210). `AlertTemplatesController.GetPathTypeMismatchErrors` queries `_cache.GetSensors(path, null, folderId)` without a type filter and surfaces a per-path field error on `PathTemplates` when a matched sensor's type differs. The check mirrors the type filter in `AlertTemplateModel.IsMatch` so anything flagged here would otherwise be silently skipped at apply time. AnyType templates skip the check (they match every type by design); path templates with no current matches stay allowed (future sensors). Applies to TTL-only templates with a concrete type too — `IsMatch` filters by type uniformly regardless of alert kind.
+- As of #1207, a TTL alert reloaded from storage exposes the underlying sensor type's full regular property list in its main-condition dropdown (`TimeToLiveConditionViewModel(sensorType)` switches on `SensorType` and reuses the matching `*ConditionViewModel.SupportedProperties`). `null`, `SensorType.Boolean`, and Any-template (`Type == AnyType`) fall back to the Common subset (`Status`/`Comment`/`New data`/`Inactivity Period`). The sensor type is threaded from `SensorNodeViewModel.Type` at `BuildAlert(TTLPolicy, NodeViewModel)` time, and from `DataAlertTemplateViewModel.Type` for template TTL alerts. The dropdown is therefore never single-option, and the user can demote a saved TTL alert back to a regular condition. The `_ConditionBlock.cshtml` AJAX that refetches the operation partial after a property change uses `containerType` (the real sensor type from the parent container id) rather than `data-type` (which is `SensorType.Boolean` for TTL alerts), so demote fetches the correct typed operation list.
 
 ## Primary Workflows
 
@@ -80,7 +82,9 @@ Operator selects sensor -> per-sensor _Alerts.cshtml editor -> UpdateSensorInfo 
 ## Storage / Persistence
 
 - `PolicyEntity` rows live in a single LevelDB table keyed by `byte[] Id` (Guid). The `"NewPolicyIds"` index lists all known ids.
-- `PolicyDestinationEntity` (nested in `PolicyEntity.cs`) carries an additive `string Kind` (a `NotificationKind` discriminator) as of issue #1181. A missing/empty `Kind` reads as `Telegram`, so existing rows are unchanged and no migration is required. Notification delivery lives behind the `INotificationChannel` seam — see `features/server/notifications/feature.md`.
+- `PolicyDestinationEntity` (nested in `PolicyEntity.cs`) keeps a legacy `string Kind` field for read-tolerant deserialization of pre-refactor rows, but the field is no longer written or consulted (the heterogeneous-destinations refactor dropped the top-level discriminator). `PolicyDestination.Chats` is a heterogeneous `Dictionary<Guid, string>` — one action can target both Telegram chats and Slack destinations simultaneously; each id resolves to its channel via manager lookup at delivery time. Notification delivery lives behind the `INotificationChannel` seam — see `features/server/notifications/feature.md`.
+- The destination picker in `_ActionBlock.cshtml` is folder-scoped: a single heterogeneous `ActionViewModel.AvailableChats` (`HashSet<Guid>`) holds both Telegram chat ids and Slack destination ids bound to the folder of the sensor, **plus** all global chats (chats/destinations with zero folder bindings). It is derived from `folder.Chats ∪ {chats with Folders.Count == 0}` via `NodeExtensions.TryGetChats`. Global chats appear in every folder's picker; explicit bindings narrow delivery to only those folders. Existing alert policies with ids that are no longer folder-bound still **deliver** (delivery resolves through the manager directly, not via `AvailableChats`), but those ids won't render as selected options in the UI until re-bound. See `features/server/notifications/feature.md` for the folder-binding wiring.
+- Default destinations (`DefaultChats`) on folders/products/nodes are heterogeneous: one mode + one heterogeneous id list per node. A single `FromParent` walk resolves Telegram chats and Slack destinations simultaneously through the unified `Settings.DefaultChats.CurValue`. The picker label reads "Chat(s)". See `features/server/notifications/feature.md` for the heterogeneous default-chats plumbing.
 - `BaseNodeEntity.Policies` (a `List<string>` of stringified Guids) exists on every Product and Sensor entity. At runtime, only `SensorEntity.Policies` is loaded into the in-memory `SensorPolicyCollection`. `ProductEntity.Policies` is **never read** into `ProductModel` — only `TTLPolicies` is.
 - Template-derived policies carry non-null `TemplateId` / `TemplateAlertId`; user-added policies have `TemplateId == null`.
 - `TreeValuesCache.CleanupProductOwnedPolicies` runs once at startup (`Initialize()`, after `ApplyProducts`) and deletes any `PolicyEntity` referenced by `ProductEntity.Policies` whose `TemplateId == null`, then prunes the dangling references from the list. The migration is idempotent: a second run finds an empty list and writes nothing.
@@ -98,6 +102,13 @@ Operator selects sensor -> per-sensor _Alerts.cshtml editor -> UpdateSensorInfo 
 - Used by: notification delivery, icon rendering, TTL evaluation.
 
 ## Tests
+
+Coverage for the mixed-type path validation lives in `src/tests/HSMServer.Core.Tests/Controllers/AlertTemplatesControllerTests.cs`:
+
+- `MixedTypePaths_AddsPathTemplatesError` — concrete type template + path matching a different-type sensor → save blocked with a field error naming both types.
+- `AllCompatiblePaths_ModelStateValid` — multiple paths all matching sensors of the template's type → save proceeds.
+- `PathMatchingNoSensors_ModelStateValid` — wildcard path matching nothing → save proceeds (future sensors allowed).
+- `AnyTypeTemplate_SkipsMismatchCheck` — AnyType template → no check regardless of matched sensor types.
 
 Coverage for the product-owned policy cleanup lives in `src/tests/HSMServer.Core.Tests/TreeValuesCacheTests/ProductOwnedPolicyCleanupTests.cs`:
 
@@ -117,6 +128,7 @@ Condition view model guards live in `src/tests/HSMServer.Core.Tests/ConditionVie
 - Issue #1141 (parent epic) established that node-level alerts are replaced by global alerts.
 - Issue #1142 removed the per-node alert editor UI and endpoint support, and added the storage cleanup migration.
 - Issue #1159 consolidated Inactivity Period into the regular alert editor as a condition property; the dedicated `addTtlAlert` link and `dataAlertsList_@ttlType` section were removed from both `_Alerts.cshtml` and `_AlertTemplate.cshtml`. Storage semantics (TTLPolicy vs regular Policy) are unchanged — only the UI entry point and form routing changed.
+- Issue #1210 added save-time validation blocking Alert Templates with a concrete sensor type from mixing path templates that match existing sensors of an incompatible type. The check runs in both create and edit flows; editing a pre-existing template that already had latent mixed-type paths will now surface the field error and block the save until the paths or type are corrected.
 - Collector-side alert behavior is explicitly out of scope per epic #1141.
 
 ## Known Issues / Limitations

@@ -92,7 +92,7 @@ namespace HSMDataCollector.Client.HttpsClient
                         var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                         var error = await JsonSerializer.DeserializeAsync<string>(stream, cancellationToken: token).ConfigureAwait(false);
 
-                        _logger.Error($"Command request for {value.Path} has been faulted. {error}.");
+                        _logger.Error($"Command request for {value.Path} has been faulted. Status Code: {response.StatusCode}, Status Text: {error}.");
                     }
                     else
                     {

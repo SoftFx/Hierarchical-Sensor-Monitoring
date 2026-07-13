@@ -226,6 +226,8 @@ namespace HSMDataCollector.Tests
                             IsComputerSensor = bool.Parse(step.Arg(9)),
                             SensorLocation = (SensorLocation)int.Parse(step.Arg(10)),
                             Description = ExpandTextToken(step.Arg(11)),
+                            // Optional trailing DefaultAlertsOptions bitmask (absent => None).
+                            DefaultAlertsOptions = step.TryArg(12, out var intDao) ? (DefaultAlertsOptions)long.Parse(intDao) : DefaultAlertsOptions.None,
                         }));
                     break;
 
@@ -237,7 +239,10 @@ namespace HSMDataCollector.Tests
                     // Build the REAL default-sensor prototype's registration request (#1099) and record
                     // it. The native driver registers the same id via hsm_collector_add_default_sensor;
                     // both satisfy the fixture's expect_registration_contains substrings.
-                    state.Sender.RecordRegistration(BuildDefaultSensorRequest(step.Arg(0)));
+                    // arg(0)=id, arg(1)=disk_letter, arg(2)=interface_name — thread the interface
+                    // through so a non-"Ethernet" fixture (or the fuzzer) registers the same path the
+                    // native driver does, instead of always hardcoding "Ethernet".
+                    state.Sender.RecordRegistration(BuildDefaultSensorRequest(step.Arg(0), step.TryArg(2, out var ifaceArg) ? ifaceArg : null));
                     break;
 
                 case "service_send_custom":
@@ -593,6 +598,35 @@ namespace HSMDataCollector.Tests
                         BuildConformanceBarOptions(int.Parse(step.Arg(1)), int.Parse(step.Arg(2)), int.Parse(step.Arg(3)))));
                     break;
 
+                case "create_double_bar_sensor_full_options":
+                {
+                    // Arg(6) display_unit is ignored: BarSensorOptions is SensorOptions<NoDisplayUnit>,
+                    // so bars register DisplayUnit:null (fixtures pass -1 there).
+                    var inert = TimeSpan.FromDays(365);
+                    var barOptions = new BarSensorOptions
+                    {
+                        BarPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))),
+                        PostDataPeriod = long.Parse(step.Arg(2)) <= 0 ? inert : TimeSpan.FromMilliseconds(long.Parse(step.Arg(2))),
+                        BarTickPeriod = inert,
+                        Precision = int.Parse(step.Arg(3)),
+                        TTL = long.Parse(step.Arg(4)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(4))) : (TimeSpan?)null,
+                        SensorUnit = int.Parse(step.Arg(5)) >= 0 ? (Unit)int.Parse(step.Arg(5)) : (Unit?)null,
+                        KeepHistory = long.Parse(step.Arg(7)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(7))) : (TimeSpan?)null,
+                        SelfDestroy = long.Parse(step.Arg(8)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(8))) : (TimeSpan?)null,
+                        Statistics = int.Parse(step.Arg(9)) >= 0 ? (StatisticsOptions)int.Parse(step.Arg(9)) : StatisticsOptions.None,
+                        IsSingletonSensor = ParseTriBool(step.Arg(10)),
+                        AggregateData = ParseTriBool(step.Arg(11)),
+                        EnableForGrafana = ParseTriBool(step.Arg(12)),
+                        IsComputerSensor = bool.Parse(step.Arg(13)),
+                        SensorLocation = (SensorLocation)int.Parse(step.Arg(14)),
+                        Description = ExpandTextToken(step.Arg(15)),
+                        // Optional trailing DefaultAlertsOptions bitmask (absent => None).
+                        DefaultAlertsOptions = step.TryArg(16, out var barDao) ? (DefaultAlertsOptions)long.Parse(barDao) : DefaultAlertsOptions.None,
+                    };
+                    AddSensor(state, state.DoubleBarSensors, state.Collector.CreateDoubleBarSensor(step.Arg(0), barOptions));
+                    break;
+                }
+
                 case "add_bar_int":
                     state.IntBarSensors[int.Parse(step.Arg(0))].AddValue(int.Parse(step.Arg(1)));
                     break;
@@ -701,6 +735,34 @@ namespace HSMDataCollector.Tests
                         new RateSensorOptions { PostDataPeriod = TimeSpan.FromMilliseconds(int.Parse(step.Arg(1))) }));
                     break;
 
+                case "create_rate_sensor_full_options":
+                {
+                    var rateOptions = new RateSensorOptions
+                    {
+                        PostDataPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))),
+                        TTL = long.Parse(step.Arg(2)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(2))) : (TimeSpan?)null,
+                        DisplayUnit = int.Parse(step.Arg(4)) >= 0 ? (RateDisplayUnit)int.Parse(step.Arg(4)) : (RateDisplayUnit?)null,
+                        KeepHistory = long.Parse(step.Arg(5)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(5))) : (TimeSpan?)null,
+                        SelfDestroy = long.Parse(step.Arg(6)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(6))) : (TimeSpan?)null,
+                        Statistics = int.Parse(step.Arg(7)) >= 0 ? (StatisticsOptions)int.Parse(step.Arg(7)) : StatisticsOptions.None,
+                        IsSingletonSensor = ParseTriBool(step.Arg(8)),
+                        AggregateData = ParseTriBool(step.Arg(9)),
+                        EnableForGrafana = ParseTriBool(step.Arg(10)),
+                        IsComputerSensor = bool.Parse(step.Arg(11)),
+                        SensorLocation = (SensorLocation)int.Parse(step.Arg(12)),
+                        Description = ExpandTextToken(step.Arg(13)),
+                        // Optional trailing DefaultAlertsOptions bitmask (absent => None).
+                        DefaultAlertsOptions = step.TryArg(14, out var rateDao) ? (DefaultAlertsOptions)long.Parse(rateDao) : DefaultAlertsOptions.None,
+                    };
+                    // RateSensorOptions ctor sets SensorUnit = ValueInSecond; override ONLY when the
+                    // fixture specifies a unit (>= 0) so the -1 sentinel preserves the 3000 default —
+                    // mirrors the native unit < 0 => ValueInSecond rate default.
+                    if (int.Parse(step.Arg(3)) >= 0)
+                        rateOptions.SensorUnit = (Unit)int.Parse(step.Arg(3));
+                    AddSensor(state, state.RateSensors, state.Collector.CreateRateSensor(ExpandTextToken(step.Arg(0)), rateOptions));
+                    break;
+                }
+
                 case "add_rate":
                     state.RateSensors[int.Parse(step.Arg(0))]
                         .AddValue(ParseDouble(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
@@ -773,6 +835,13 @@ namespace HSMDataCollector.Tests
                             count: int.Parse(step.Arg(0)),
                             minPercent: ParseDouble(step.Arg(1)),
                             period: TimeSpan.FromMilliseconds(int.Parse(step.Arg(2))));
+                    break;
+
+                case "enable_network_interface_speed_sensors":
+                    // (#1189) period_ms — Windows-only; no-op on other platforms so the fixture
+                    // parses cross-platform without an unsupported marker.
+                    if (DataCollector.IsWindowsOS)
+                        state.Collector.Windows.AddNetworkInterfacesSpeed();
                     break;
 
                 default:
@@ -1246,7 +1315,7 @@ namespace HSMDataCollector.Tests
         // its managed prototype (Prototypes/Collections/**), the same source the production AddX path
         // uses. The AddAll* path passes null to Get; service status needs a non-null host-service
         // options object. Names mirror the native DefaultSensorIdFromName map.
-        private static AddOrUpdateSensorRequest BuildDefaultSensorRequest(string id)
+        private static AddOrUpdateSensorRequest BuildDefaultSensorRequest(string id, string interfaceName = null)
         {
             switch (id)
             {
@@ -1272,6 +1341,8 @@ namespace HSMDataCollector.Tests
                 case "network_established": return new ConnectionsEstablishedCountPrototype().Get(null).ApiRequest;
                 case "network_failures": return new ConnectionsFailuresCountPrototype().Get(null).ApiRequest;
                 case "network_reset": return new ConnectionsResetCountPrototype().Get(null).ApiRequest;
+                case "network_interface_received": return BuildNetworkInterfaceSpeedRequest(string.IsNullOrEmpty(interfaceName) ? "Ethernet" : interfaceName, received: true);
+                case "network_interface_sent": return BuildNetworkInterfaceSpeedRequest(string.IsNullOrEmpty(interfaceName) ? "Ethernet" : interfaceName, received: false);
                 case "collector_alive": return new ServiceAlivePrototype().Get(null).ApiRequest;
                 case "collector_version": return new CollectorVersionPrototype().Get(null).ApiRequest;
                 case "collector_errors": return new CollectorErrorsPrototype().Get(null).ApiRequest;
@@ -1283,6 +1354,28 @@ namespace HSMDataCollector.Tests
                 case "queue_content_size": return new PackageContentSizePrototype().Get(null).ApiRequest;
                 default: throw new ArgumentException("Unknown default sensor id name: " + id);
             }
+        }
+
+        // Build a registration request for the per-interface speed sensor catalog prototype (#1189).
+        // The path mirrors the native RevealDefaultPath output (.computer/Network/<iface>/...) so the
+        // suffix assertion in the conformance fixture matches both the managed and native drivers.
+        private static AddOrUpdateSensorRequest BuildNetworkInterfaceSpeedRequest(string iface, bool received)
+        {
+            var direction = received ? "Received" : "Sent";
+            var opts = new BarSensorOptions
+            {
+                Path = $".computer/Network/{iface}/{direction} MB,sec",
+                IsComputerSensor = true,
+                Type = HSMSensorDataObjects.SensorType.DoubleBarSensor,
+                TTL = TimeSpan.FromMinutes(5),
+                KeepHistory = TimeSpan.FromDays(90),
+                SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MBytes_sec,
+                Statistics = HSMSensorDataObjects.SensorRequests.StatisticsOptions.EMA,
+                Alerts = new List<Alerts.BarAlertTemplate>(),
+                EnableForGrafana = true,
+                Description = $"Average {direction.ToLowerInvariant()} network speed on interface **{iface}**.",
+            };
+            return opts.ApiRequest;
         }
 
         // Canonical cross-language registration (AddOrUpdateSensorRequest) text — fixed field
@@ -1323,7 +1416,8 @@ namespace HSMDataCollector.Tests
                    $"\"DisplayUnit\":{Int(request.DisplayUnit)}," +
                    $"\"IsSingletonSensor\":{Bool(request.IsSingletonSensor)}," +
                    $"\"AggregateData\":{Bool(request.AggregateData)}," +
-                   $"\"EnableGrafana\":{Bool(request.EnableGrafana)}" +
+                   $"\"EnableGrafana\":{Bool(request.EnableGrafana)}," +
+                   $"\"DefaultAlertsOptions\":{((long)request.DefaultAlertsOptions).ToString(CultureInfo.InvariantCulture)}" +
                    "}";
         }
 

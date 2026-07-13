@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <future>
 #include <memory>
 #include <string>
@@ -46,6 +47,16 @@ namespace hsm::collector
 
         std::int64_t exception_deduplicator_window_ms = 0; ///< [3600000]
         int max_deduplicated_messages = 0;                 ///< [1000]
+
+        // Server-directive channel (#1198). Each pair is injected as an HTTP request header into
+        // every sensor-data POST (e.g. {"X-Agent-Version", "0.5.1"} so the server can decide
+        // whether to return an update-available directive).
+        std::vector<std::pair<std::string, std::string>> extra_request_headers;
+
+        // Called on the send thread whenever the server returns an X-Hsm-Directive response
+        // header. First arg: verb ("update-available", "sensor-disable", …). Second arg: payload
+        // after the colon, or empty string when absent.
+        std::function<void(const std::string&, const std::string&)> on_server_directive;
     };
 
     /// Owning RAII handle to a native collector. Move-only. The destructor disposes and frees the
@@ -93,6 +104,24 @@ namespace hsm::collector
             const auto result = hsm_collector_create(&native, &handle_);
             if (result != HSM_RESULT_OK)
                 throw Error(std::string{ "Failed to create collector. (" } + detail::ResultName(result) + ")");
+
+            for (const auto& [name, value] : options.extra_request_headers)
+                Check(hsm_collector_set_extra_request_header(handle_, name.c_str(), value.c_str()),
+                      "Failed to set extra request header.");
+
+            if (options.on_server_directive)
+            {
+                auto holder = std::make_unique<std::function<void(const std::string&, const std::string&)>>(options.on_server_directive);
+                Check(hsm_collector_set_server_directive_handler(
+                          handle_,
+                          [](const char* verb, const char* payload, void* ud) {
+                              auto* fn = static_cast<std::function<void(const std::string&, const std::string&)>*>(ud);
+                              (*fn)(std::string{ verb }, std::string{ payload });
+                          },
+                          holder.get()),
+                      "Failed to set server directive handler.");
+                directive_holders_.push_back(std::move(holder));
+            }
         }
 
         Collector(const Collector&) = delete;
@@ -211,6 +240,17 @@ namespace hsm::collector
             auto holder = std::make_unique<Logger>(std::move(logger));
             Check(hsm_collector_set_logger(handle_, &detail::hsm_collector_cpp_log_thunk, holder.get()), "Failed to set logger.");
             loggers_.push_back(std::move(holder));
+        }
+
+        /// Install the built-in rolling file logger (parity with the managed NLog default): writes
+        /// `<directory>/DataCollector_<UTC-date>.txt` (levels >= `min_level`) plus a `_error_` file
+        /// (errors only), asynchronously, rolling by date. Complements SetLogger - both the callback
+        /// and the file receive every message. Call before Start(); an empty `directory` clears it.
+        void EnableFileLogging(const std::string& directory, LogLevel min_level = LogLevel::Info)
+        {
+            Check(
+                hsm_collector_enable_file_logging(handle_, directory.c_str(), static_cast<hsm_log_level_t>(min_level)),
+                "Failed to enable file logging.");
         }
 
         /// Install (or, with an empty std::function, clear) the metric-source factory. As with
@@ -392,13 +432,15 @@ namespace hsm::collector
 
         IntBarSensor CreateIntBarSensor(const std::string& path, const BarOptions& options = {})
         {
+            const hsm_sensor_options_t native = options.ToNative();
             hsm_sensor_t* sensor = nullptr;
             Check(
-                hsm_collector_create_int_bar_sensor(
+                hsm_collector_create_int_bar_sensor_with_options(
                     handle_,
                     path.c_str(),
                     static_cast<std::int64_t>(options.bar_period.count()),
                     static_cast<std::int64_t>(options.post_period.count()),
+                    &native,
                     &sensor),
                 "Failed to create int bar sensor.");
             return IntBarSensor(sensor);
@@ -406,14 +448,16 @@ namespace hsm::collector
 
         DoubleBarSensor CreateDoubleBarSensor(const std::string& path, const BarOptions& options = {})
         {
+            const hsm_sensor_options_t native = options.ToNative();
             hsm_sensor_t* sensor = nullptr;
             Check(
-                hsm_collector_create_double_bar_sensor(
+                hsm_collector_create_double_bar_sensor_with_options(
                     handle_,
                     path.c_str(),
                     static_cast<std::int64_t>(options.bar_period.count()),
                     static_cast<std::int64_t>(options.post_period.count()),
                     options.precision,
+                    &native,
                     &sensor),
                 "Failed to create double bar sensor.");
             return DoubleBarSensor(sensor);
@@ -423,15 +467,37 @@ namespace hsm::collector
 
         RateSensor CreateRateSensor(const std::string& path, const RateOptions& options = {})
         {
+            const auto native = options.ToNative();
             hsm_sensor_t* sensor = nullptr;
             Check(
-                hsm_collector_create_rate_sensor(
+                hsm_collector_create_rate_sensor_with_options(
                     handle_,
                     path.c_str(),
                     static_cast<std::int64_t>(options.post_period.count()),
+                    &native,
                     &sensor),
                 "Failed to create rate sensor.");
             return RateSensor(sensor);
+        }
+
+        /// Rate sensor posting every minute (mirrors CreateM1RateSensor). `description` is always
+        /// registered — empty by default, matching the managed convenience overload (which sets
+        /// RateSensorOptions.Description = description, "" by default, vs null for CreateRateSensor).
+        RateSensor CreateM1RateSensor(const std::string& path, const std::string& description = "")
+        {
+            RateOptions options;
+            options.post_period = std::chrono::minutes(1);
+            options.description = description;
+            return CreateRateSensor(path, options);
+        }
+
+        /// Rate sensor posting every five minutes (mirrors CreateM5RateSensor).
+        RateSensor CreateM5RateSensor(const std::string& path, const std::string& description = "")
+        {
+            RateOptions options;
+            options.post_period = std::chrono::minutes(5);
+            options.description = description;
+            return CreateRateSensor(path, options);
         }
 
         /// Pull int function sensor: `function` is invoked every period on the scheduler thread.
@@ -543,6 +609,15 @@ namespace hsm::collector
                 "Failed to add module sensors.");
         }
 
+        // Make ".module/Collector version" report this version instead of the compile-time library
+        // version. Call before AddAllModuleSensors. Used by the agent so the collector version tracks
+        // the agent build (#1189 follow-up).
+        void SetCollectorVersionOverride(const std::string& version)
+        {
+            Check(hsm_collector_set_collector_version_override(handle_, version.c_str()),
+                  "Failed to set collector version override.");
+        }
+
         void AddProcessMonitoringSensors()
         {
             Check(hsm_collector_add_process_monitoring_sensors(handle_), "Failed to add process sensors.");
@@ -586,6 +661,27 @@ namespace hsm::collector
             Check(
                 hsm_collector_enable_top_cpu_sensors(handle_, count, min_percent, static_cast<int32_t>(period.count())),
                 "Failed to enable top-CPU sensors.");
+        }
+
+        /// Enable the TCP connection failure rate sensor (Windows only, push-fed Rate). Call BEFORE
+        /// Start(). Each `period` it reads the failed-connection-attempt counter delta (IPv4+IPv6) and
+        /// posts a Rate sensor at ".computer/Network/Connection failures rate" (displayed per minute).
+        void EnableTcpConnectionFailureRateSensor(std::chrono::milliseconds period)
+        {
+            Check(
+                hsm_collector_enable_tcp_connection_failure_rate_sensor(handle_, static_cast<int32_t>(period.count())),
+                "Failed to enable TCP connection failure rate sensor.");
+        }
+
+        /// Enable live monitoring of a Windows service's status (Windows only; mirrors the managed
+        /// WindowsServiceStatusSensor). Call BEFORE Start(). Registers ".module/Service status" and,
+        /// every `scan_period`, posts the named service's ServiceControllerStatus on change (-1/Error
+        /// when missing). `service_name` is the service name (case-insensitive), not the display name.
+        void EnableServiceStatusMonitoring(const std::string& service_name, std::chrono::milliseconds scan_period)
+        {
+            Check(
+                hsm_collector_enable_service_status_monitoring(handle_, service_name.c_str(), static_cast<int32_t>(scan_period.count())),
+                "Failed to enable service status monitoring.");
         }
 
         // ---- Introspection ------------------------------------------------------------------
@@ -678,5 +774,7 @@ namespace hsm::collector
         std::vector<std::unique_ptr<MetricSourceFactory>> metric_factories_;
         std::vector<std::unique_ptr<IntFunction>> int_functions_;
         std::vector<std::unique_ptr<IntValuesFunction>> int_values_functions_;
+        // Keeps on_server_directive closures alive after they are handed to the C ABI.
+        std::vector<std::unique_ptr<std::function<void(const std::string&, const std::string&)>>> directive_holders_;
     };
 } // namespace hsm::collector

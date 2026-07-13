@@ -13,7 +13,8 @@ documentation that shows third parties how to use HSM.
 
 ## Feature Folders To Add Here
 
-- `cpp-wrapper/` - legacy C++/CLI wrapper (`src/wrapper/`); superseded by `native-collector/`.
+- `cpp-wrapper/` - the `src/wrapper/` `HSMCppWrapper` DLL (`hsm_wrapper::DataCollectorProxy` ABI),
+  now reimplemented natively over `hsm::collector` (no CLR) — documented under `native-collector/`.
 - `ping-module/` - module behavior, deployment, collector/server interaction.
 - `sandbox-apps/` - sample apps and local smoke-test utilities.
 - `benchmarks/` - benchmark and performance test harnesses.

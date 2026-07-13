@@ -7,5 +7,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string WebhookUrl { get; set; }
 
         public bool SendMessages { get; set; }
+
+        public int MessagesAggregationTimeSec { get; set; }
     }
 }

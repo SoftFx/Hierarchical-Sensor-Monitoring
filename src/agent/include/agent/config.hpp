@@ -73,4 +73,14 @@ namespace hsm::agent
     /// Read `path` and parse it. Returns false and fills `error` if the file cannot be opened or the
     /// content fails `ParseAgentConfig`.
     bool LoadAgentConfig(const std::string& path, AgentConfig& out, std::string& error);
+
+    /// Serialize `config` back to `path` in config.json format. Called when a sensor-enable/disable
+    /// server directive arrives so the change persists across the service restart that follows.
+    bool WriteAgentConfig(const std::string& path, const AgentConfig& config, std::string& error);
+
+    /// Map a sensor-group directive name ("computer"/"system"/"disk"/"network"/"module"/"process")
+    /// to the AgentConfig flag it toggles, or nullptr for an unknown group. Single source of truth
+    /// shared by the runtime directive handler (#1198) and its unit test, so the name↔field mapping
+    /// can never silently drift.
+    bool AgentConfig::* SensorGroupFlag(const std::string& group);
 } // namespace hsm::agent

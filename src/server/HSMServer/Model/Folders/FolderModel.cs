@@ -1,4 +1,4 @@
-﻿using HSMCommon.Extensions;
+using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Journal;
@@ -28,7 +28,7 @@ namespace HSMServer.Model.Folders
         public Guid AuthorId { get; }
 
 
-        public HashSet<Guid> TelegramChats { get; private set; } = [];
+        public HashSet<Guid> Chats { get; private set; } = [];
 
         public Color Color { get; private set; }
 
@@ -38,6 +38,8 @@ namespace HSMServer.Model.Folders
         public event Action<JournalRecordModel> ChangesHandler;
 
         public event Func<Guid, string> GetChatName;
+
+        internal Func<IEnumerable<Guid>> GetGlobalChatIds;
 
 
         public FolderModel(FolderEntity entity)
@@ -55,8 +57,7 @@ namespace HSMServer.Model.Folders
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
             TTL = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TTL)));
 
-            if (entity.TelegramChats is not null)
-                TelegramChats = new HashSet<Guid>(entity.TelegramChats.Select(c => new Guid(c)));
+            Chats = LoadChats(entity);
         }
 
         internal FolderModel(FolderAdd addModel)
@@ -94,8 +95,8 @@ namespace HSMServer.Model.Folders
             if (update.SelfDestroy != null)
                 SelfDestroy = UpdateSetting(SelfDestroy, new TimeIntervalViewModel(update.SelfDestroy, PredefinedIntervals.ForSelfDestory), update.Initiator, "Remove sensor after inactivity");
 
-            if (update.TelegramChats is not null)
-                TelegramChats = UpdateChats(TelegramChats, update.TelegramChats, update.Initiator);
+            if (update.Chats is not null)
+                Chats = UpdateChats(Chats, update.Chats, update.Initiator, GetChatName);
 
             if (update.DefaultChats != null)
                 DefaultChats = UpdateSetting(DefaultChats, update.DefaultChats, update.Initiator);
@@ -141,7 +142,7 @@ namespace HSMServer.Model.Folders
                     OldValue = GetJournalValue(oldChat),
                     NewValue = GetJournalValue(newChat),
 
-                    PropertyName = "Default telegram chat",
+                    PropertyName = "Default chats",
                     Path = Name,
                 });
             }
@@ -165,9 +166,9 @@ namespace HSMServer.Model.Folders
             return newValue ?? oldValue;
         }
 
-        private HashSet<Guid> UpdateChats(HashSet<Guid> oldValue, HashSet<Guid> newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
+        private HashSet<Guid> UpdateChats(HashSet<Guid> oldValue, HashSet<Guid> newValue, InitiatorInfo initiator, Func<Guid, string> nameResolver, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
-            List<string> GetFilteredValues(HashSet<Guid> hash) => [.. hash.Select(GetChatName).OrderBy(n => n)];
+            List<string> GetFilteredValues(HashSet<Guid> hash) => [.. hash.Select(nameResolver).OrderBy(n => n)];
 
             var oldChats = GetFilteredValues(oldValue);
             var newChats = GetFilteredValues(newValue);
@@ -198,7 +199,7 @@ namespace HSMServer.Model.Folders
                 CreationDate = CreationDate.Ticks,
                 Description = Description,
                 Color = Color.ToArgb(),
-                TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
+                Chats = Chats.Select(c => c.ToByteArray()).ToList(),
 
                 DefaultChatsSettings = DefaultChats.ToEntity(GetAvailableChats()),
 
@@ -210,7 +211,18 @@ namespace HSMServer.Model.Folders
                 }
             };
 
-        internal Dictionary<Guid, string> GetAvailableChats() => TelegramChats.ToDictionary(k => k, v => GetChatName?.Invoke(v));
+        internal Dictionary<Guid, string> GetAvailableChats()
+        {
+            var result = Chats.ToDictionary(k => k, v => GetChatName?.Invoke(v));
+
+            if (GetGlobalChatIds is not null)
+                foreach (var id in GetGlobalChatIds())
+                    if (!result.ContainsKey(id))
+                        result[id] = GetChatName?.Invoke(id);
+
+            return result;
+        }
+
 
         internal FolderModel RecalculateState()
         {
@@ -227,6 +239,28 @@ namespace HSMServer.Model.Folders
             var model = new PolicyDestinationSettings(entity ?? new PolicyDestinationSettingsEntity());
 
             return new DefaultChatViewModel().FromModel(model);
+        }
+
+        private static HashSet<Guid> LoadChats(FolderEntity entity)
+        {
+            var chats = new HashSet<Guid>();
+
+            if (entity.Chats is not null)
+                foreach (var id in entity.Chats)
+                    chats.Add(new Guid(id));
+
+            if (chats.Count == 0)
+            {
+                if (entity.LegacyTelegramChats is not null)
+                    foreach (var id in entity.LegacyTelegramChats)
+                        chats.Add(new Guid(id));
+
+                if (entity.LegacySlackDestinations is not null)
+                    foreach (var id in entity.LegacySlackDestinations)
+                        chats.Add(new Guid(id));
+            }
+
+            return chats;
         }
 
 

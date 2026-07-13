@@ -9,15 +9,24 @@ extern "C"
 {
 #endif
 
-/* ABI version. Bumped per the policy in docs/native-collector-c-abi.md: MINOR
-   for additive, backward-compatible growth (new functions, struct fields
-   appended); MAJOR for any breaking change (field reorder/removal, semantic
-   change). hsm_collector_version() returns the packed value at runtime. */
+/* The native collector's OWN version (semver) — INDEPENDENT of the managed C# collector, the host
+   application (e.g. the agent), and the server; each is a distinct product with its own version.
+   Bump per src/native/collector/AGENTS.md: MAJOR for a breaking ABI change; MINOR for additive ABI
+   growth (a new exported hsm_* function / appended struct field); PATCH for a backward-compatible
+   behavior/logic change that does not touch the ABI (e.g. a logging change). hsm_collector_version()
+   returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
+   reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 5
-#define HSM_COLLECTOR_VERSION_PATCH 0
+#define HSM_COLLECTOR_VERSION_MINOR 6
+#define HSM_COLLECTOR_VERSION_PATCH 2
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
+
+#define HSM_COLLECTOR_VERSION_STRINGIFY_(x) #x
+#define HSM_COLLECTOR_VERSION_STRINGIFY(x) HSM_COLLECTOR_VERSION_STRINGIFY_(x)
+#define HSM_COLLECTOR_VERSION_STRING                             \
+    HSM_COLLECTOR_VERSION_STRINGIFY(HSM_COLLECTOR_VERSION_MAJOR) \
+    "." HSM_COLLECTOR_VERSION_STRINGIFY(HSM_COLLECTOR_VERSION_MINOR) "." HSM_COLLECTOR_VERSION_STRINGIFY(HSM_COLLECTOR_VERSION_PATCH)
 
 typedef struct hsm_collector_t hsm_collector_t;
 typedef struct hsm_sensor_t hsm_sensor_t;
@@ -302,6 +311,15 @@ typedef enum hsm_log_level_t HSM_ENUM_INT32
 typedef void (*hsm_log_callback_t)(hsm_log_level_t level, const char* message, void* user_data);
 hsm_result_t hsm_collector_set_logger(hsm_collector_t* collector, hsm_log_callback_t callback, void* user_data);
 
+/* Built-in rolling file logger (parity with the managed NLog default sink). Writes
+   <directory>/DataCollector_<UTC-date>.txt (every level >= min_level) and
+   <directory>/DataCollector_error_<UTC-date>.txt (errors only), asynchronously,
+   rolling when the UTC date changes; line format "yyyy-MM-dd HH:mm:ss|LEVEL| message".
+   Complements set_logger: both the callback (if any) and the file receive every
+   message (the file applies its own min_level filter). Call before Start. */
+hsm_result_t hsm_collector_enable_file_logging(
+    hsm_collector_t* collector, const char* directory, hsm_log_level_t min_level);
+
 hsm_result_t hsm_collector_create_int_sensor(
     hsm_collector_t* collector,
     const char* path,
@@ -424,6 +442,10 @@ typedef enum hsm_default_sensor_t HSM_ENUM_INT32
     HSM_DEFAULT_NETWORK_CONNECTIONS_ESTABLISHED = 50,
     HSM_DEFAULT_NETWORK_CONNECTION_FAILURES = 51,
     HSM_DEFAULT_NETWORK_CONNECTIONS_RESET = 52,
+    /* Per-interface network speed (.computer/Network/{iface}/..., DoubleBar, MB/sec, 1 min, TTL 5 min).
+       interface_name in params substitutes the {iface} segment; NULL => "Ethernet". */
+    HSM_DEFAULT_NETWORK_INTERFACE_RECEIVED_MB_SEC = 53,
+    HSM_DEFAULT_NETWORK_INTERFACE_SENT_MB_SEC = 54,
     /* Module info (.module/...). */
     HSM_DEFAULT_COLLECTOR_ALIVE = 60,
     HSM_DEFAULT_COLLECTOR_VERSION = 61,
@@ -446,6 +468,7 @@ typedef struct hsm_default_sensor_params_t
 {
     const char* process_name;    /* "Process <name>" category; NULL => "process" */
     const char* disk_letter;     /* the {letter} in a disk sensor name; NULL => "C" */
+    const char* interface_name;  /* the {iface} in a per-interface network sensor name; NULL => "Ethernet" */
     const char* service_name;    /* RESERVED (not yet honored): service-status resolution */
     int is_host_service;         /* RESERVED (not yet honored): service-status registers under .module
                                     regardless — non-host placement lands with the live readers */
@@ -527,6 +550,17 @@ hsm_result_t hsm_collector_create_enum_sensor_with_options(
     size_t enum_option_count,
     hsm_sensor_t** out_sensor);
 
+/* Default-alert suppression flags (mirrors the managed [Flags] DefaultAlertsOptions). The SERVER
+   auto-attaches a default TTL inactivity alert and a default status-change notification to every new
+   sensor; the collector only forwards these flags so the server registers those defaults disabled.
+   Combine with bitwise OR. */
+typedef enum hsm_default_alerts_options_t HSM_ENUM_INT32
+{
+    HSM_DEFAULT_ALERTS_NONE = 0,
+    HSM_DEFAULT_ALERTS_DISABLE_TTL = 1,
+    HSM_DEFAULT_ALERTS_DISABLE_STATUS_CHANGE = 2,
+} hsm_default_alerts_options_t;
+
 /* Full SensorOptions registration surface (#1098 §6). Every nullable field uses a sentinel for
    "emit null / take the managed default": ttl_ms/keep_history_ms/self_destroy_ms = 0 => null;
    unit/display_unit/statistics < 0 => null; the tri-state bools is_singleton/aggregate_data/
@@ -547,6 +581,8 @@ typedef struct hsm_sensor_options_t
     int32_t enable_grafana;
     bool is_computer_sensor;
     int32_t sensor_location;
+    /* DefaultAlertsOptions bitmask (hsm_default_alerts_options_t flags); 0 => None. */
+    int64_t default_alert_options;
 } hsm_sensor_options_t;
 
 /* Returns an options value pre-filled with the managed defaults (every nullable field at its
@@ -662,6 +698,26 @@ hsm_result_t hsm_collector_create_double_bar_sensor(
     int32_t precision,
     hsm_sensor_t** out_sensor);
 
+/* Bar create carrying the full SensorOptions registration surface (TTL/unit/description/keep-history/
+   self-destroy/statistics/singleton/aggregate/grafana/computer/location/DefaultAlertsOptions). Bars
+   always emit DisplayUnit:null unless `display_unit` is set; a default-initialized options struct
+   (hsm_sensor_options_default) reproduces the plain create_*_bar_sensor registration byte-for-byte. */
+hsm_result_t hsm_collector_create_int_bar_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_double_bar_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t bar_period_ms,
+    int64_t post_period_ms,
+    int32_t precision,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor);
+
 /* Periodic sensors (rate / function): the FIRST post fires immediately on collector Start,
    then every post_period_ms. Rate = accumulated sum / measured elapsed seconds since the
    previous post (fallback: the configured period for the first sample); the sum resets on
@@ -671,6 +727,18 @@ hsm_result_t hsm_collector_create_rate_sensor(
     hsm_collector_t* collector,
     const char* path,
     int64_t post_period_ms,
+    hsm_sensor_t** out_sensor);
+/* Rate sensor with the full registration surface (mirrors RateSensorOptions). Like
+   hsm_collector_create_rate_sensor, but `options` carries TTL/unit/display_unit/keep_history/
+   self_destroy/statistics/aggregate/grafana/singleton/location. Start from
+   hsm_sensor_options_default(); for each field left at its sentinel the rate defaults apply:
+   OriginalUnit = ValueInSecond (3000) and DisplayUnit = 0 are ALWAYS emitted (never null), and
+   Description stays null unless set. `options` must not be NULL. */
+hsm_result_t hsm_collector_create_rate_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    const hsm_sensor_options_t* options,
     hsm_sensor_t** out_sensor);
 hsm_result_t hsm_collector_create_function_int_sensor(
     hsm_collector_t* collector,
@@ -760,6 +828,21 @@ hsm_result_t hsm_sensor_add_file(
     hsm_sensor_status_t status,
     const char* comment);
 
+/* File publish from a filesystem path (host-I/O convenience mirroring managed FileSensor.SendFile):
+   reads the file, derives Name (file stem) and Extension from the path — overriding the sensor's
+   creation-time defaults — and publishes it with the given status/comment. Content is treated as
+   UTF-8 text, like hsm_sensor_add_file. Returns HSM_RESULT_NOT_FOUND if the file cannot be opened or
+   is truncated mid-read, HSM_RESULT_LIMIT_EXCEEDED if it exceeds 10 MiB (the managed
+   FileSensorOptions.MaxFileSizeBytes default), HSM_RESULT_INVALID_ARGUMENT for a NULL sensor/path or
+   an invalid status (the send fails, matching managed SendFile — NOT a silent no-op), and
+   HSM_RESULT_INVALID_STATE if the collector cannot accept data (not started / stopped) — checked
+   BEFORE the file is read, so a no-op never performs the disk read. */
+hsm_result_t hsm_sensor_add_file_from_path(
+    hsm_sensor_t* sensor,
+    const char* file_path,
+    hsm_sensor_status_t status,
+    const char* comment);
+
 /* Bar accumulation. A non-finite double value (NaN/Infinity) and an inconsistent partial
    (count < 1 or mean/first/last outside [min, max] — strict for int bars, FP-tolerant for
    double bars) are silently skipped: the call returns HSM_RESULT_OK and the bar is unchanged. */
@@ -792,6 +875,36 @@ void hsm_collector_set_send_fail_next(hsm_collector_t* collector, int32_t count)
    collector shutdown must never block the host's restart. */
 void hsm_collector_set_send_hang(hsm_collector_t* collector, bool hang);
 
+/* Server-directive channel (#1198). Extra headers are injected into every sensor-data HTTP
+   POST. The agent uses this to send X-Agent-Version so the server can emit directives
+   conditionally. Multiple calls append multiple headers. Call before Start(). */
+hsm_result_t hsm_collector_set_extra_request_header(
+    hsm_collector_t* collector,
+    const char* name,
+    const char* value);
+
+/* Override the ".module/Collector version" value (#1189 follow-up). By default that sensor reports
+   the compile-time HSM_COLLECTOR_VERSION_* library version; a host that embeds the collector (e.g.
+   the agent) can set its own build version here so the reported collector version tracks each
+   deploy. Call before AddAllModuleSensors / Start. Empty or unset keeps the library default. */
+hsm_result_t hsm_collector_set_collector_version_override(
+    hsm_collector_t* collector,
+    const char* version);
+
+/* Server-directive callback. Called on the worker thread for every X-Hsm-Directive header in
+   a successful data-POST response. `verb` is the directive name (e.g. "update-available");
+   `payload` is the colon-separated argument (e.g. "0.5.2") or an empty string when absent.
+   `user_data` must outlive the collector. NULL callback clears the handler. */
+typedef void (*hsm_server_directive_callback_t)(
+    const char* verb,
+    const char* payload,
+    void* user_data);
+
+hsm_result_t hsm_collector_set_server_directive_handler(
+    hsm_collector_t* collector,
+    hsm_server_directive_callback_t callback,
+    void* user_data);
+
 size_t hsm_collector_sent_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_sent_json(const hsm_collector_t* collector, size_t index, const char** out_json);
 
@@ -811,6 +924,42 @@ hsm_result_t hsm_collector_enable_top_cpu_sensors(
     int32_t count,
     double min_percent,
     int32_t period_ms);
+
+/* Enable per-interface network speed sensors (Windows only, #1189). Starts a background thread that
+   samples GetIfTable2 cumulative octet counters at intervals of `period_ms` milliseconds, computes
+   MB/sec deltas for every active (Up, non-loopback) interface, and posts DoubleBar sensors at
+   "Network/<interface-name>/{Received,Sent} MB/sec". Call BEFORE Start().
+   Returns HSM_RESULT_INVALID_ARGUMENT if period_ms <= 0.
+   Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
+hsm_result_t hsm_collector_enable_network_interface_speed_sensors(
+    hsm_collector_t* collector,
+    int32_t period_ms);
+
+/* Enable the TCP connection failure rate sensor (Windows only). Starts a background thread that every
+   `period_ms` milliseconds reads the cumulative failed-connection-attempt counter
+   (MIB_TCPSTATS.dwAttemptFails, IPv4+IPv6) and pushes the per-interval delta into a Rate sensor at
+   ".computer/Network/Connection failures rate" (OriginalUnit ValueInSecond, DisplayUnit per-minute).
+   The rate sensor is created synchronously at Start, so it is registered the moment Start returns.
+   Call BEFORE Start().
+   Returns HSM_RESULT_INVALID_ARGUMENT if period_ms <= 0.
+   Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
+hsm_result_t hsm_collector_enable_tcp_connection_failure_rate_sensor(
+    hsm_collector_t* collector,
+    int32_t period_ms);
+
+/* Enable live monitoring of a Windows service's status (Windows only; mirrors the managed
+   WindowsServiceStatusSensor). Registers the ".module/Service status" enum sensor and starts a
+   background thread that every `scan_period_ms` milliseconds queries the named service via the SCM
+   (Win32 OpenService/QueryServiceStatus) and posts its ServiceControllerStatus (Stopped=1..Paused=7)
+   to the sensor ON CHANGE. A missing/unqueryable service posts -1 with Error ("Service not found!")
+   and then backs off for an hour. `service_name` is the service NAME (case-insensitive), not the
+   display name; it drives the query only and is not part of the registration. Call BEFORE Start().
+   Returns HSM_RESULT_INVALID_ARGUMENT if service_name is NULL/empty or scan_period_ms <= 0.
+   Returns HSM_RESULT_INVALID_STATE if already started or not on Windows. */
+hsm_result_t hsm_collector_enable_service_status_monitoring(
+    hsm_collector_t* collector,
+    const char* service_name,
+    int32_t scan_period_ms);
 
 #ifdef __cplusplus
 }

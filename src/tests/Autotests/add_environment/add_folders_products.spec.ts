@@ -1,6 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
+import { removeFolderByName } from '../cleanup.ts';
+
+test.afterEach(async ({ page }) => {
+  // Remove the folders this spec creates so they do not accumulate on the server (best-effort).
+  await removeFolderByName(page, testConfig.folder_name1);
+  await removeFolderByName(page, testConfig.folder_name3);
+});
 
 
   // Loging

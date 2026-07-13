@@ -392,8 +392,10 @@ namespace HSMDataCollector.Core
 
         private void LogDiscardedItems(int count, string queueName)
         {
+            // Info, not Error: discarding still-buffered values on a graceful shutdown is expected and
+            // contracted (a stop must not block on a dead/slow transport) — it is not a fault.
             if (count > 0)
-                _logger.Error($"{queueName} queue discarded {count} item(s) during collector shutdown.");
+                _logger.Info($"{queueName} queue discarded {count} item(s) during collector shutdown.");
         }
 
         private void RollbackStartedQueues(bool dataStarted, bool priorityStarted, bool fileStarted, bool commandStarted)

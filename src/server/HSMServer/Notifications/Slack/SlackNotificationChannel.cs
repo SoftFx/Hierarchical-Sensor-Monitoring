@@ -1,6 +1,7 @@
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Notifications;
+using HSMServer.Notifications.AddressBook;
 using HSMServer.Notifications.Channels;
 using System;
 using System.Net;
@@ -53,23 +54,26 @@ namespace HSMServer.Notifications
             {
                 foreach (var alert in message)
                 {
-                    if (alert.Destination.Kind != NotificationKind.Slack)
-                        continue;
-
-                    var payload = SlackMessageBuilder.BuildPayload(alert);
-
                     foreach (var destinationId in alert.Destination.Chats)
                     {
                         if (!_destinations.TryGetValue(destinationId, out var destination))
-                        {
-                            _logger.Warn($"Slack destination {destinationId} not found for alert {alert.PolicyId}");
                             continue;
-                        }
 
                         if (!destination.SendMessages)
                             continue;
 
-                        await PostWithRetryAsync(destination.WebhookUrl, payload, destination.Name);
+                        if (destination.MessagesAggregationTimeSec == 0)
+                        {
+                            var payload = SlackMessageBuilder.BuildPayload(alert);
+                            await PostWithRetryAsync(destination.WebhookUrl, payload, destination.Name);
+                        }
+                        else
+                        {
+                            IMessageBuilder builder = message is ScheduleAlertMessage
+                                ? destination.ScheduleMessageBuilder
+                                : destination.MessageBuilder;
+                            builder.AddMessage(alert);
+                        }
                     }
                 }
             }
@@ -79,7 +83,38 @@ namespace HSMServer.Notifications
             }
         }
 
-        public Task FlushAsync() => Task.CompletedTask;
+        public async Task FlushAsync()
+        {
+            foreach (var destination in _destinations.GetValues())
+            {
+                try
+                {
+                    if (!destination.ShouldSendNotification)
+                        continue;
+
+                    foreach (var notification in destination.GetNotifications())
+                    {
+                        if (string.IsNullOrWhiteSpace(notification))
+                            continue;
+
+                        var payload = SlackMessageBuilder.BuildPayload(notification);
+                        await PostWithRetryAsync(destination.WebhookUrl, payload, destination.Name);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, $"Slack FlushAsync: error for destination {destination.Name}");
+                }
+            }
+        }
+
+
+        public async Task SendTestAsync(SlackDestination destination)
+        {
+            var payload = SlackMessageBuilder.BuildPayload("Test message from HSM");
+
+            await PostWithRetryAsync(destination.WebhookUrl, payload, destination.Name);
+        }
 
 
         private async Task PostWithRetryAsync(string webhookUrl, string payload, string destinationName)

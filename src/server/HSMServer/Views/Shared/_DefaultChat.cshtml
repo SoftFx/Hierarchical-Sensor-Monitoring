@@ -1,4 +1,4 @@
-﻿@using HSMCommon.Extensions
+@using HSMCommon.Extensions
 @using HSMServer.Model.Controls
 @using HSMServer.Notifications
 @using HSMServer.Extensions
@@ -6,40 +6,99 @@
 @model DefaultChatViewModel
 
 @inject ITelegramChatsManager ChatsManager
+@inject ISlackDestinationsManager SlackDestinationsManager
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var (displayName, parentChats) = Model.GetDisplayChatName(ChatsManager.GetValues(), out var allChats);
+    var available = new Dictionary<Guid, string>();
+    foreach (var chat in ChatsManager.GetValues())
+        available[chat.Id] = chat.Name;
+    foreach (var dest in SlackDestinationsManager.GetValues())
+        available[dest.Id] = dest.Name;
+
+    var (displayName, parentChats) = Model.GetDisplayChatName(available, out var allChats);
+
+    var telegramGroups = ChatsManager.GetValues().Where(c => allChats.ContainsKey(c.Id) && c.Type == ConnectedChatType.TelegramGroup).OrderBy(c => c.Name).ToList();
+    var telegramUsers = ChatsManager.GetValues().Where(c => allChats.ContainsKey(c.Id) && c.Type == ConnectedChatType.TelegramPrivate).OrderBy(c => c.Name).ToList();
+    var slackDestinations = SlackDestinationsManager.GetValues().Where(d => allChats.ContainsKey(d.Id)).OrderBy(d => d.Name).ToList();
 }
 
 
-<span class="@(Model.IsModify ? "col-2" : "meta-info-label")">Telegram chat(s)</span>
+<span class="@(Model.IsModify ? "col-2" : "meta-info-label")">Chat(s)</span>
 
-<span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : "meta-info-value")">@displayName</span>
+<span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : "meta-info-value")">
+    @if (Model.IsNotInitialized || Model.IsEmpty || (Model.IsFromParent && Model.SelectedChats.Count == 0))
+    {
+        @displayName
+    }
+    else
+    {
+        if (Model.IsFromParent)
+        {
+            <span>@parentChats</span>
+            if (Model.SelectedChats.Count > 0)
+            {
+                <span>, </span>
+            }
+        }
+
+        var first = true;
+        foreach (var id in Model.SelectedChats)
+        {
+            if (!first) { <span>, </span> }
+            first = false;
+
+            var icon = id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+            if (!string.IsNullOrEmpty(icon)) { @Html.Raw(icon) }
+
+            if (allChats.TryGetValue(id, out var name)) { <span>@name</span> }
+            else { <span>@id</span> }
+        }
+    }
+</span>
 <div id="defaultChatControl" class="@(Model.IsModify ? "col-auto ms-1 mx-2" : "d-none meta-info-interval mx-2")">
-    <select name="SelectedChats" class="default-chat selectpicker" multiple data-live-search="true" data-placeholder="Default telegram chat(s)" required>
+    <select name="SelectedChats" class="default-chat selectpicker" multiple data-live-search="true" data-placeholder="Default chat(s)" required>
         <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentChats</option>
         <option value="@DefaultChatMode.NotInitialized" selected="@Model.IsSelectedMode(DefaultChatMode.NotInitialized)">@DefaultChatMode.NotInitialized.GetDisplayName()</option>
         <option value="@DefaultChatMode.Empty" selected="@Model.IsSelectedMode(DefaultChatMode.Empty)">@DefaultChatMode.Empty.GetDisplayName()</option>
 
-        <option data-divider="true"></option>
-        <option disabled>Groups</option>
-        @foreach (var chat in allChats.GetGroups())
+        @if (telegramGroups.Count > 0)
         {
-            <option value="@chat.Id" selected="@Model.IsSelectedChat(chat)">@chat.Name</option>
+            <option data-divider="true"></option>
+            <option disabled>Telegram groups</option>
+            foreach (var chat in telegramGroups)
+            {
+                var icon = chat.Id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)" data-content="@icon @chat.Name">@chat.Name</option>
+            }
         }
 
-        <option data-divider="true"></option>
-        <option disabled>Users</option>
-        @foreach (var chat in allChats.GetPrivates())
+        @if (telegramUsers.Count > 0)
         {
-            <option value="@chat.Id" selected="@Model.IsSelectedChat(chat)">@chat.Name</option>
+            <option data-divider="true"></option>
+            <option disabled>Telegram users</option>
+            foreach (var chat in telegramUsers)
+            {
+                var icon = chat.Id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)" data-content="@icon @chat.Name">@chat.Name</option>
+            }
+        }
+
+        @if (slackDestinations.Count > 0)
+        {
+            <option data-divider="true"></option>
+            <option disabled>Slack destinations</option>
+            foreach (var dest in slackDestinations)
+            {
+                var icon = dest.Id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+                <option value="@dest.Id" selected="@Model.IsSelectedChat(dest.Id)" data-content="@icon @dest.Name">@dest.Name</option>
+            }
         }
     </select>
 </div>
 
-<i class='fas fa-question-circle mx-2' title='Telegram chat that will be default for new sensors.'></i>
+<i class='fas fa-question-circle mx-2' title='Chat that will be default for new sensors.'></i>
 
 
 <script>
@@ -48,7 +107,7 @@
         $("select[name='SelectedChats']").off('changed.bs.select').on('changed.bs.select', function (e, clickedIndex, isSelected, previousValue, a) {
             const clickedValue = $(this)[0].options[clickedIndex].value;
             if ((clickedValue === 'Empty' || clickedValue === 'NotInitialized') && isSelected) {
-                $(this).val($(this)[0].options[clickedIndex].value);   
+                $(this).val($(this)[0].options[clickedIndex].value);
             }
             else {
                 if (Array.from($("select[name='SelectedChats']")[0].selectedOptions).find(x => x.value === 'NotInitialized' || x.value === 'Empty') !== undefined)
@@ -71,7 +130,7 @@
                     chats = [];
                     return;
                 }
-        
+
                 chats.push($(this).val());
             }
         });
