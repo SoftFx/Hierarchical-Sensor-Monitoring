@@ -151,66 +151,74 @@ function saveMetaData(selectedId) {
         return;
     }
 
-    let formData = new FormData(form);
-    
-    collectAlerts(formData);
+    // Same #1246 race as the explicit Save button: if the user demotes a TTL row and then
+    // clicks another tree node before GetOperation resolves, collectAlerts would read the
+    // stale operation div and the demoted row would be misrouted / dropped. waitForOperationLoads
+    // is the same global defined via _AlertsFormCollection.cshtml. .always so a stalled
+    // GetOperation (which has its own timeout) still lets the user navigate away rather than
+    // hanging the tree click.
+    waitForOperationLoads().always(function () {
+        let formData = new FormData(form);
 
-    $.ajax({
-        type: 'POST',
-        url: isDataValidAction,
-        data: formData,
-        processData: false,
-        contentType: false,
-        async: true
-    }).done(function (isValid) {
-        let isAlertsValid = true;
-        $("#editMetaInfo_form").find("div.dataAlertRow").each(function () {
-            $(this).find(`input[name='Comment']`).each(function () {
-                isAlertsValid &= $(this)[0].checkValidity();
+        collectAlerts(formData);
+
+        $.ajax({
+            type: 'POST',
+            url: isDataValidAction,
+            data: formData,
+            processData: false,
+            contentType: false,
+            async: true
+        }).done(function (isValid) {
+            let isAlertsValid = true;
+            $("#editMetaInfo_form").find("div.dataAlertRow").each(function () {
+                $(this).find(`input[name='Comment']`).each(function () {
+                    isAlertsValid &= $(this)[0].checkValidity();
+                });
+
+                $(this).find('input[name="Target"]').each(function () {
+                    isAlertsValid &= $(this)[0].checkValidity();
+                });
             });
 
-            $(this).find('input[name="Target"]').each(function () {
-                isAlertsValid &= $(this)[0].checkValidity();
-            });
-        });
+            if (isValid && isAlertsValid) {
+                let path = $("#nodeHeader").text();
 
-        if (isValid && isAlertsValid) {
-            let path = $("#nodeHeader").text();
-
-            if (!formObserver.check())
-            {
-                showConfirmationModal(
-                    `Saving changes`,
-                    `Do you want to save '${path}' changes?`,
-                    () => {
-                        $.ajax({
-                            url: form.action,
-                            type: 'POST',
-                            data: formData,
-                            processData: false,
-                            contentType: false,
-                            async: true
-                        }).done(() => initSelectedNode(selectedId));
-                    },
-                    () => initSelectedNode(selectedId),
-                    "Yes",
-                    "No"
-                );
+                if (!formObserver.check())
+                {
+                    showConfirmationModal(
+                        `Saving changes`,
+                        `Do you want to save '${path}' changes?`,
+                        () => {
+                            $.ajax({
+                                url: form.action,
+                                type: 'POST',
+                                data: formData,
+                                processData: false,
+                                contentType: false,
+                                async: true
+                            }).done(() => initSelectedNode(selectedId));
+                        },
+                        () => initSelectedNode(selectedId),
+                        "Yes",
+                        "No"
+                    );
+                }
+                else {
+                    $.ajax({
+                        url: form.action,
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        async: true
+                    }).done(() => initSelectedNode(selectedId));
+                }
             }
             else {
-                $.ajax({
-                    url: form.action,
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    async: true
-                }).done(() => initSelectedNode(selectedId));
+                initSelectedNode(selectedId);
             }
-        }
-        else {
-            initSelectedNode(selectedId);
-        }
+        });
     });
 }
 
