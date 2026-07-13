@@ -34,7 +34,10 @@ chart. It is entirely derived from stored history: it never writes or changes se
   `Integer, Double, Rate, IntegerBar, DoubleBar`. Excluded: `Boolean, Enum, Version, String,
   TimeSpan, File` and service `status`/`alive` step sensors (their availability aggregation is v3).
 - **Effective unit** = `DisplayUnit` for `Rate` sensors, otherwise `SelectedUnit` (`OriginalUnit`).
-  Two unitless sensors of the same type still group together.
+  Two unitless sensors of the same type still group together. `EffectiveUnitCode` (group key) and
+  `EffectiveUnitLabel` (displayed unit) must branch on the **same** source: a Rate sensor without a
+  `DisplayUnit` is unit-less (code `null`, label empty) — it never borrows `SelectedUnit` for the label,
+  which would let two such sensors share the `null` key yet show conflicting units.
 - **Bars are flattened to their `Mean`** so every series is a single scalar line; bar min/max/count
   overlays are out of scope for v1.
 - **Tab visibility is a server render-time decision.** `SelectNode` sets
@@ -44,7 +47,9 @@ chart. It is entirely derived from stored history: it never writes or changes se
   `true` would leak onto the next selected folder and render a Chart tab that has no endpoint.
 - **Empty series are omitted, not zero-filled.** A window with no data for a child drops that line.
   A child whose read **throws** is treated the same way — logged and dropped as a single series, so one
-  malformed sensor can't fault the fan-out and 500 the whole overlay.
+  malformed sensor can't fault the fan-out and 500 the whole overlay. **Non-finite points (`NaN`/
+  `Infinity`) are skipped** in `TryGetScalar` (they'd serialize as JSON string literals Plotly can't
+  plot); a child left with no finite points is omitted like an empty window.
 - **At most `MaxSensorsPerChart` (20) sensors are overlaid — chosen from those that actually have data.**
   The endpoint reads every sensor in the group (bounded per sensor, plus a `NodeChartMaxSensorsScanned`
   = 500 scan ceiling), drops the ones with no data in the window, and only then caps the display to the

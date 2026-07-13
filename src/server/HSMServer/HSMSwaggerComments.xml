@@ -365,7 +365,10 @@
             also part of the key it is compared under (as in GetComparableChildGroups).</summary>
         </member>
         <member name="P:HSMServer.Model.TreeViewModel.SensorNodeViewModel.EffectiveUnitLabel">
-            <summary>Display label for <see cref="P:HSMServer.Model.TreeViewModel.SensorNodeViewModel.EffectiveUnitCode"/> (e.g. "%", "MB/sec"), or empty.</summary>
+            <summary>Display label for <see cref="P:HSMServer.Model.TreeViewModel.SensorNodeViewModel.EffectiveUnitCode"/> (e.g. "%", "MB/sec"), or empty.
+            Must branch on the SAME source as <see cref="P:HSMServer.Model.TreeViewModel.SensorNodeViewModel.EffectiveUnitCode"/>: a Rate sensor without a
+            DisplayUnit has code <c>null</c>, so its label is empty too — never the SelectedUnit, or two
+            such sensors would share the <c>null</c> group key yet show different (conflicting) units.</summary>
         </member>
         <member name="M:HSMServer.Model.TreeViewModel.TreeViewModel.GetComparableChildGroups(System.Guid)">
             <summary>

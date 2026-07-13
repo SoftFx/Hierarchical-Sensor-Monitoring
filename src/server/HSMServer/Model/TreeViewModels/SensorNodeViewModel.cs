@@ -71,10 +71,13 @@ namespace HSMServer.Model.TreeViewModel
             ? (DisplayUnit.HasValue ? (int)DisplayUnit.Value : null)
             : (SelectedUnit.HasValue ? (int)SelectedUnit.Value : null);
 
-        /// <summary>Display label for <see cref="EffectiveUnitCode"/> (e.g. "%", "MB/sec"), or empty.</summary>
-        public string EffectiveUnitLabel => Type is SensorType.Rate && DisplayUnit.HasValue
-            ? DisplayUnit.Value.GetDisplayName()
-            : SelectedUnit?.GetDisplayName() ?? string.Empty;
+        /// <summary>Display label for <see cref="EffectiveUnitCode"/> (e.g. "%", "MB/sec"), or empty.
+        /// Must branch on the SAME source as <see cref="EffectiveUnitCode"/>: a Rate sensor without a
+        /// DisplayUnit has code <c>null</c>, so its label is empty too — never the SelectedUnit, or two
+        /// such sensors would share the <c>null</c> group key yet show different (conflicting) units.</summary>
+        public string EffectiveUnitLabel => Type is SensorType.Rate
+            ? (DisplayUnit.HasValue ? DisplayUnit.Value.GetDisplayName() : string.Empty)
+            : (SelectedUnit?.GetDisplayName() ?? string.Empty);
 
         public DateTime CreationTime { get; private set; }
 

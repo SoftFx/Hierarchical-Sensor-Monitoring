@@ -335,15 +335,18 @@ namespace HSMServer.Controllers
         {
             switch (value)
             {
+                // NaN/Infinity would serialize as JSON "NaN"/"Infinity" string literals (AllowNamedFloating-
+                // PointLiterals) and Plotly can't plot a string as a number, so drop non-finite points as if
+                // there were no data. int/int-bar means are always finite.
                 case BaseValue<double> doubleValue:
                     scalar = doubleValue.Value;
-                    return true;
+                    return double.IsFinite(scalar);
                 case BaseValue<int> intValue:
                     scalar = intValue.Value;
                     return true;
                 case BarBaseValue<double> doubleBar:
                     scalar = doubleBar.Mean;
-                    return true;
+                    return double.IsFinite(scalar);
                 case BarBaseValue<int> intBar:
                     scalar = intBar.Mean;
                     return true;
