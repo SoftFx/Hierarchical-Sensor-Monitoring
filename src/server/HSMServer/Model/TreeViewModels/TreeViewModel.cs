@@ -133,8 +133,12 @@ namespace HSMServer.Model.TreeViewModel
                 result.Add(new NodeSensorGroup(key.Type, key.Unit, unitLabel, ids));
             }
 
+            // Final tie-break on the unique group Key so the default group (groups[0]) and the selector
+            // order are stable across requests: groups come from an unordered Dictionary, and count +
+            // UnitLabel alone tie for e.g. a unit-less Integer vs a unit-less Double group (both label "").
             return result.OrderByDescending(group => group.SensorIds.Count)
                          .ThenBy(group => group.UnitLabel)
+                         .ThenBy(group => group.Key, StringComparer.Ordinal)
                          .ToList();
         }
 
