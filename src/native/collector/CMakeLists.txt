@@ -368,6 +368,15 @@ set(NATIVE_REGRESSION_TESTS
     native_retry_meeting_full_queue_is_dropped_not_evicting_queued_values
     native_retry_below_capacity_is_always_redelivered
     cpu_select_top_n_selects_busiest_above_threshold
+    tcp_failure_accumulator_seeds_baseline_first_tick
+    tcp_failure_accumulator_returns_delta_after_seed
+    tcp_failure_accumulator_sums_both_families
+    tcp_failure_accumulator_quiet_interval_returns_nullopt
+    tcp_failure_accumulator_counter_reset_contributes_zero
+    tcp_failure_accumulator_reset_in_one_family_keeps_other_delta
+    tcp_failure_accumulator_unreadable_family_keeps_baseline
+    tcp_failure_accumulator_neither_readable_returns_nullopt
+    tcp_failure_accumulator_families_seed_independently
 )
 
 foreach(name IN LISTS NATIVE_REGRESSION_TESTS)
@@ -395,6 +404,11 @@ if(WIN32)
     )
     add_test(NAME native_service_status_sensor_reports_missing_service
         COMMAND hsm_collector_tests native_service_status_sensor_reports_missing_service
+    )
+    # The opt-in TCP connection failure rate sensor registers a Rate sensor at Start (Windows-only, as
+    # EnableTcpConnectionFailureRateSensor is a no-op elsewhere).
+    add_test(NAME native_tcp_failure_rate_sensor_registers
+        COMMAND hsm_collector_tests native_tcp_failure_rate_sensor_registers
     )
 endif()
 
