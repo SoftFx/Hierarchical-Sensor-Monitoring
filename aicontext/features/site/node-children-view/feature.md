@@ -50,12 +50,15 @@ chart. It is entirely derived from stored history: it never writes or changes se
   malformed sensor can't fault the fan-out and 500 the whole overlay. **Non-finite points (`NaN`/
   `Infinity`) are skipped** in `TryGetScalar` (they'd serialize as JSON string literals Plotly can't
   plot); a child left with no finite points is omitted like an empty window.
-- **At most `MaxSensorsPerChart` (20) sensors are overlaid — chosen from those that actually have data.**
-  The endpoint reads every sensor in the group (bounded per sensor, plus a `NodeChartMaxSensorsScanned`
-  = 500 scan ceiling), drops the ones with no data in the window, and only then caps the display to the
-  **20 highest-peak** series. Capping by tree order *before* reading is wrong for intermittent top-N
-  series (per-process CPU, etc.): the first ids by path are usually idle in any given window, so it
-  collapsed the chart to a single line. The note reports "20 highest-peak of N with data (M in group)".
+- **At most `MaxSensorsPerChart` (15) sensors are overlaid, and only that many histories are read.**
+  To avoid reading a whole large group's history on every interaction, the endpoint **shortlists the
+  top 15 by each child's current in-memory `LastValue`** (no DB read) and reads history *only* for those,
+  then drops any with no data in the window and orders the rest by in-window peak. Ranking the shortlist
+  by **live value, not tree order**, is what keeps intermittent top-N series (per-process CPU, etc.)
+  visible — tree-order-first collapsed the chart to one line because the first ids by path are usually
+  idle. Tradeoff: a child that peaked earlier in the window but is idle *now* can fall outside the
+  shortlist (acceptable for the recent-window common case; a custom historical window is ranked by a
+  value that may be outside it). The note reports "group has N sensors; charting the 15 highest current".
 - Scope is the node's full descendant set (`GetAllNodeSensors`); the two real examples
   (`Top CPU processes`, per-interface `Network`) are homogeneous. Direct-children-vs-subtree toggle
   is v3.
@@ -97,9 +100,10 @@ chart. It is entirely derived from stored history: it never writes or changes se
    `_NodeChartTabContent`.
 3. On tab click / window change, the inline script POSTs `{ nodeId, from, to }` to
    `NodeChartHistory`.
-4. The endpoint takes the largest comparable group, reads each sensor's history in the window
-   (`GetSensorValues`, latest N, bounded), converts to display values, projects each to a scalar
-   (`Value`, or bar `Mean`), and returns one `series` entry per non-empty child.
+4. The endpoint takes the selected comparable group, shortlists the top `MaxSensorsPerChart` children by
+   their current in-memory `LastValue` (no DB read), reads history only for those (`GetSensorValues`,
+   latest N, bounded), converts to display values, projects each to a scalar (`Value`, or bar `Mean`),
+   and returns one `series` entry per non-empty child.
 5. The client builds one `scattergl` line per series (palette-cycled, `connectgaps: false`) and
    calls `Plotly.newPlot` with a shared legend. Global `Plotly`/`jQuery` are reused — no bundle
    rebuild.
@@ -133,11 +137,13 @@ Manual acceptance (issue #1235):
 
 - Bars render as a single Mean line in v1; per-property (min/max/count) overlays and rate/counter
   delta strategies are deferred.
-- Bounds (all constants in `SensorHistoryController`): `NodeChartMaxPointsPerSensor` (2000) values per
-  child; `NodeChartMaxSensorsScanned` (500) sensors read per request; `MaxSensorsPerChart` (20) lines
-  drawn (the highest-peak of those with data). **All three surface a `note` when they clip** — the
+- Bounds (constants in `SensorHistoryController`): `MaxSensorsPerChart` (15) lines — and, because the
+  shortlist happens before reading, also the number of history reads per request (so a huge same-unit
+  group no longer fans out into hundreds of reads); `NodeChartMaxPointsPerSensor` (2000) values per child;
+  `NodeChartReadConcurrency` (8) concurrent reads. **Both caps surface a `note` when they clip** — the
   2000-point cap takes the most-recent values, so a dense series over a long window notes that earlier
-  points may be omitted (no silent truncation).
+  points may be omitted (no silent truncation), and a group larger than 15 notes that only the
+  highest-current-value children are charted.
 
 ## Known Issues / Limitations
 

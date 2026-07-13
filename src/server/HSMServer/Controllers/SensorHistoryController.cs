@@ -66,14 +66,11 @@ namespace HSMServer.Controllers
         // most recent within the window; bounds the payload when many children are overlaid at once.
         private const int NodeChartMaxPointsPerSensor = -2000;
 
-        // Max child sensors drawn on one node chart (kept readable). Applied to the sensors that actually
-        // have data in the window, picking the highest-peak ones — NOT the first by tree order, which for
-        // intermittent top-N series (per-process CPU, etc.) would usually be idle and drop to one line.
-        private const int MaxSensorsPerChart = 20;
-
-        // Upper bound on how many of a group's sensors are read per request, so a pathologically large
-        // same-unit group can't fan out into unbounded history reads. Real groups are far smaller.
-        private const int NodeChartMaxSensorsScanned = 500;
+        // Max child sensors charted on one node chart. Because the endpoint shortlists candidates by their
+        // current value BEFORE reading history (see NodeChartHistory), this is also the number of history
+        // reads per request — the DB fan-out is bounded to the shortlist, not the whole comparable group.
+        // Kept small so the overlay stays readable and one tab open / period change is cheap.
+        private const int MaxSensorsPerChart = 15;
 
         // Max concurrent per-sensor history reads for one node chart request. Bounds DB pressure while
         // cutting latency from the sum of all reads toward the slowest.
@@ -219,20 +216,27 @@ namespace HSMServer.Controllers
             var to = request.To.ToUtcKind();
             var nodePath = node.FullPath;
 
-            // Read every scanned sensor and keep only those with data in the window, then cap the DISPLAY
-            // to the highest-peak sensors. Capping by tree order before reading would drop active sensors:
-            // top-N series (e.g. per-process CPU) are intermittent, so the first ids by path are usually
-            // idle in any given window. Reads are independent, so they run with bounded concurrency — safe
-            // here because the comparable types exclude File, the only sensor kind with shared read state.
-            var scannedIds = group.SensorIds.Take(NodeChartMaxSensorsScanned).ToList();
+            // Perf: don't read every child's history just to rank by peak. A large comparable group (e.g.
+            // per-process CPU) can be dozens–hundreds of sensors, and reading them all on every tab open /
+            // period change is a heavy DB burst whose results are then mostly discarded. Instead shortlist
+            // the top MaxSensorsPerChart by each child's CURRENT value — already in memory, no DB read —
+            // and read history only for those. Ranking by live value (not tree order) still surfaces the
+            // hot intermittent series (the tree-order-first approach collapsed the chart to one line,
+            // because the first ids by path are usually idle). Tradeoff: a child that peaked earlier in the
+            // window but is idle now can fall outside the shortlist — acceptable for the recent-window case.
+            var candidates = group.SensorIds
+                .Select(id => _tree.Sensors.TryGetValue(id, out var s) ? s : null)
+                .Where(s => s is not null)
+                .OrderByDescending(s => TryGetScalar(s.LastValue, out var v) ? v : double.NegativeInfinity)
+                .Take(MaxSensorsPerChart)
+                .ToList();
 
+            // Reads are independent, so they run with bounded concurrency — safe here because the comparable
+            // types exclude File, the only sensor kind with shared read state.
             using var readGate = new SemaphoreSlim(NodeChartReadConcurrency);
 
-            var reads = scannedIds.Select(async sensorId =>
+            var reads = candidates.Select(async sensor =>
             {
-                if (!_tree.Sensors.TryGetValue(sensorId, out var sensor))
-                    return null;
-
                 await readGate.WaitAsync();
 
                 try
@@ -257,15 +261,11 @@ namespace HSMServer.Controllers
                 }
             });
 
-            // Task.WhenAll preserves order, so the kept series stay in tree order for the non-capped case.
-            var built = (await Task.WhenAll(reads)).Where(s => s is not null).ToList();
-
-            var withData = built.Count;
-
-            // Rank by peak only when we actually have to drop series (the common case is <= 20).
-            var shown = withData > MaxSensorsPerChart
-                ? built.OrderByDescending(s => s.Points.Max(p => p.Value)).Take(MaxSensorsPerChart).ToList()
-                : built;
+            // Order the rendered lines by in-window peak (the shortlist is already <= MaxSensorsPerChart).
+            var shown = (await Task.WhenAll(reads))
+                .Where(s => s is not null)
+                .OrderByDescending(s => s.Points.Max(p => p.Value))
+                .ToList();
 
             var series = shown.Select(s => new
             {
@@ -274,13 +274,10 @@ namespace HSMServer.Controllers
                 values = s.Points.Select(p => new { time = p.Time, value = p.Value }),
             });
 
-            var notes = new List<string>(3);
+            var notes = new List<string>(2);
 
-            if (group.SensorIds.Count > NodeChartMaxSensorsScanned)
-                notes.Add($"Only the first {NodeChartMaxSensorsScanned} of {group.SensorIds.Count} sensors in the group were scanned (tree order).");
-
-            if (withData > MaxSensorsPerChart)
-                notes.Add($"Showing the {MaxSensorsPerChart} highest-peak sensors of {withData} with data in this window.");
+            if (group.SensorIds.Count > MaxSensorsPerChart)
+                notes.Add($"Group has {group.SensorIds.Count} sensors; charting the {MaxSensorsPerChart} with the highest current value.");
 
             if (shown.Any(s => s.Truncated))
                 notes.Add($"Dense series show only their most recent {-NodeChartMaxPointsPerSensor} points; earlier data in the window may be omitted.");
