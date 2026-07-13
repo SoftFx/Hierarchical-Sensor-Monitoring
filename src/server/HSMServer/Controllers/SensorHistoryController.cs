@@ -190,9 +190,11 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Node-level overlay chart (issue #1235): returns every comparable child sensor of the node as
-        /// one line series over the chosen window. v1 overlays the node's largest (type, unit) group only.
-        /// Read-only; children with no data in the window are omitted (drawn with gaps, never zero-filled).
+        /// Node-level overlay chart (issue #1235): returns the node's comparable child sensors as one line
+        /// series each over the chosen window. Descendants are grouped by (type, unit); the operator picks
+        /// which group with <c>GroupKey</c> (default: the largest), and within it the top
+        /// <c>MaxSensorsPerChart</c> children by current value are charted. Read-only; children with no data
+        /// in the window are omitted (drawn with gaps, never zero-filled).
         /// </summary>
         [HttpPost]
         public async Task<JsonResult> NodeChartHistory([FromBody] NodeChartRequest request)
@@ -314,11 +316,14 @@ namespace HSMServer.Controllers
 
         private async Task<(List<(DateTime Time, double Value)> Points, bool Truncated)> ReadNodeChartPoints(SensorNodeViewModel sensor, DateTime from, DateTime to)
         {
-            var rawValues = await GetSensorValues(sensor.EncodedId, from, to, NodeChartMaxPointsPerSensor);
+            var maxPoints = -NodeChartMaxPointsPerSensor;
 
-            // A negative count returns the most-recent |N| values, so a full page means older points in
-            // the window were dropped — surfaced as a note rather than silently showing only the tail.
-            var truncated = rawValues.Count >= -NodeChartMaxPointsPerSensor;
+            // Over-read by one (a negative count returns the most-recent |N|) so we can tell "hit the cap"
+            // (older points in the window were dropped) from "the window holds exactly maxPoints" (nothing
+            // dropped) — otherwise the truncation note false-positives at exactly maxPoints.
+            var rawValues = await GetSensorValues(sensor.EncodedId, from, to, NodeChartMaxPointsPerSensor - 1);
+
+            var truncated = rawValues.Count > maxPoints;
 
             var points = new List<(DateTime Time, double Value)>(rawValues.Count);
 
@@ -331,6 +336,10 @@ namespace HSMServer.Controllers
             }
 
             points.Sort((a, b) => a.Time.CompareTo(b.Time));
+
+            // Drop the over-read extra(s) so the displayed series honors the cap (oldest first after sort).
+            if (points.Count > maxPoints)
+                points.RemoveRange(0, points.Count - maxPoints);
 
             return (points, truncated);
         }

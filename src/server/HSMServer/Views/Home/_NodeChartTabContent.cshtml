@@ -50,7 +50,8 @@
 
 <script>
     (function () {
-        // 20 distinct colors — matches the server-side MaxSensorsPerChart cap so lines don't repeat.
+        // 20 distinct colors — comfortably covers the server-side MaxSensorsPerChart cap (15), so
+        // lines never repeat a color.
         const nodeChartPalette = [
             '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b',
             '#e377c2', '#17becf', '#bcbd22', '#7f7f7f', '#393b79', '#e7ba52',
@@ -179,6 +180,10 @@
                     sel.value = data.selectedKey;
                 setInlineFlex(wrap, true);
             } else {
+                // Dropped to <= 1 group: clear the cached options/signature so re-expanding later rebuilds
+                // them instead of reusing stale entries.
+                sel.innerHTML = '';
+                delete sel.dataset.sig;
                 setInlineFlex(wrap, false);
             }
         }

@@ -4,7 +4,8 @@ namespace HSMServer.Model.Model.History
 {
     /// <summary>
     /// Request for the node-level overlay chart (issue #1235): one node id plus the operator-chosen
-    /// time window. The server fans out over the node's largest comparable child-sensor group.
+    /// time window. The server groups the node's comparable descendants by (type, unit); <c>GroupKey</c>
+    /// selects which group to chart (default: the largest).
     /// </summary>
     public sealed record NodeChartRequest
     {
