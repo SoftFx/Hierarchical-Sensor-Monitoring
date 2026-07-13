@@ -15,6 +15,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
@@ -223,6 +224,43 @@ namespace HSMServer.Core.Tests.Controllers
             _cacheMock.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.Exactly(3));
         }
 
+        // Regression coverage for #1246: when a demoted TTL row's Operation is missing from the
+        // form data (the client-side race where collectAlerts runs before the GetOperation AJAX
+        // completes), the server silently drops the condition — Property=Value is bound but
+        // Operation=null, so ToUpdate's `if (condition.Operation != null)` guard skips it.
+        // The resulting policy has zero conditions. This test documents that behavior so a future
+        // server-side change can't accidentally start auto-filling Operation; the real fix lives
+        // in submitForm (waits for the AJAX before collecting).
+        [Fact]
+        [Trait("Category", "Alert Template authoring")]
+        public async Task AlertTemplate_DemotedRowWithoutOperation_SavesPolicyWithNoConditions()
+        {
+            AlertTemplateModel captured = null;
+            _cacheMock.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .Callback<AlertTemplateModel, CancellationToken>((m, _) => captured = m)
+                .Returns(Task.FromResult((true, (string)null)));
+
+            var controller = CreateController();
+            var data = BuildData((byte)SensorType.Integer, "*/intSensor");
+            data.DataAlerts = new Dictionary<byte, List<DataAlertViewModelBase>>
+            {
+                [(byte)SensorType.Integer] =
+                [
+                    new DataAlertViewModelBase
+                    {
+                        Id = Guid.NewGuid(),
+                        Conditions = { new ConditionViewModel { Property = AlertProperty.Value } },
+                    },
+                ],
+            };
+
+            var result = await controller.AlertTemplate(data);
+
+            Assert.IsType<OkResult>(result);
+            Assert.NotNull(captured);
+            Assert.Single(captured.Policies);
+            Assert.Empty(captured.Policies[0].Conditions);
+        }
         // Regression coverage for #1244: UpdateTemplate feeds the live-refreshed notification dropdown,
         // so it had to return Slack destinations alongside Telegram — otherwise any Slack selection
         // disappeared the moment the user changed folder/type/path.
