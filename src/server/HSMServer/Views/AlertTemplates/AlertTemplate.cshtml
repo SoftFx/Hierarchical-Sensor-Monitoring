@@ -209,7 +209,13 @@
                         );
                     }
                     else {
-                        $("#addAlertTemplate_form").html(viewData);
+                        // _AlertTemplate.cshtml wraps its content in <form id="addAlertTemplate_form">.
+                        // Setting that as the existing form's innerHTML nests the new form inside the
+                        // old one; the HTML parser drops the inner <form> tag and leaves duplicate
+                        // ids/inputs that the next Save reads from the wrong element, so the second
+                        // Save after a validation error silently fails or sends stale data (#1247).
+                        // replaceWith swaps the outer form for the freshly rendered one.
+                        $("#addAlertTemplate_form").replaceWith(viewData);
                         initForm();
                     }
                 }
