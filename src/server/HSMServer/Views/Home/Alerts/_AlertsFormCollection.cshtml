@@ -24,10 +24,23 @@
     var pendingOperationLoads = [];
     function registerOperationLoad(req) { pendingOperationLoads.push(req); }
     function waitForOperationLoads() {
-        // Snapshot + clear so requests fired during the wait are tracked for the next submit.
-        var snapshot = pendingOperationLoads.slice();
-        pendingOperationLoads.length = 0;
-        return $.when.apply($, snapshot);
+        // Drain in a loop: snapshot the in-flight requests, clear the array, await them, and
+        // re-check. Requests fired by a Property change on another row during the wait are now
+        // picked up by the next iteration instead of leaking past the current submit — closes
+        // the race where Save followed by a second edit would let collectAlerts read a stale
+        // operation div on the second row. Loop bounded in practice: GetOperation is fast and
+        // has its own timeout in _ConditionBlock.cshtml, so the array drains within seconds.
+        var deferred = $.Deferred();
+        (function drain() {
+            var snapshot = pendingOperationLoads.slice();
+            pendingOperationLoads.length = 0;
+            if (snapshot.length === 0) {
+                deferred.resolve();
+                return;
+            }
+            $.when.apply($, snapshot).always(drain);
+        })();
+        return deferred.promise();
     }
 
     function setFormDataAlerts(formData, type, alertsList) {

@@ -178,8 +178,10 @@
     function submitForm() {
         // Wait for any in-flight GetOperation partials (promote/demote) before collecting form
         // data — otherwise collectAlerts would read a stale operation div and silently drop the
-        // edited row (#1246). Use .always so a failed fetch still submits and surfaces a server
-        // validation error rather than hanging the Save button.
+        // edited row (#1246). waitForOperationLoads drains pending requests in a loop, so a
+        // second edit during the wait is still covered; GetOperation has its own timeout, so a
+        // stalled connection rejects (not hangs) and .always still submits to surface a server
+        // validation error instead of freezing the Save button.
         waitForOperationLoads().always(function () {
             let form = document.getElementById('addAlertTemplate_form');
             var formData = new FormData(form);
