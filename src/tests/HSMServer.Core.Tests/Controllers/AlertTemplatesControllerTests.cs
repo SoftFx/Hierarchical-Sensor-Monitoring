@@ -120,6 +120,36 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Contains("separate Alert Template", message);
         }
 
+        // Regression coverage for #1247: when validation blocks Save, the action returns the
+        // _AlertTemplate partial and the client re-renders the form via replaceWith. That
+        // client-side fix only works if the server echoes the user-entered values back in the
+        // rebuilt DataAlertTemplateViewModel. The rebuild path (controller ~line 250: model ??=
+        // data.ToModel(...); data = new DataAlertTemplateViewModel(model, ...)) must carry Name,
+        // Type, and PathTemplates through. If a future refactor rebuilds from a different source
+        // (cached template, default viewmodel, etc.), this test fails instead of silently
+        // breaking the second Save after a validation error.
+        [Fact]
+        [Trait("Category", "Alert Template authoring")]
+        public async Task ValidationFailure_ReturnsPartialView_PreservingUserData()
+        {
+            _cacheMock.Setup(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()))
+                .Returns(new List<BaseSensorModel> { BuildSensor(SensorType.Double) });
+
+            var controller = CreateController();
+            var data = BuildData((byte)SensorType.Integer, "*/intPath", "*/mixedPath");
+            data.Name = "UserEnteredName";
+
+            var result = await controller.AlertTemplate(data);
+
+            var partial = Assert.IsType<PartialViewResult>(result);
+            Assert.Equal("_AlertTemplate", partial.ViewName);
+            var model = Assert.IsType<DataAlertTemplateViewModel>(partial.Model);
+            Assert.Equal("UserEnteredName", model.Name);
+            Assert.Equal((byte)SensorType.Integer, model.Type);
+            Assert.Contains("*/intPath", model.PathTemplates);
+            Assert.Contains("*/mixedPath", model.PathTemplates);
+        }
+
         [Fact]
         [Trait("Category", "Alert Template authoring")]
         public async Task AllCompatiblePaths_ModelStateValid()
