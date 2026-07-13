@@ -5,15 +5,17 @@ export default defineConfig({
   /* Run tests in files in parallel */
   testMatch: '**/*.spec.ts',
   
-  fullyParallel: true,
+  fullyParallel: false,
   /* Fail the build on CI if you accidentally left test. only in the source code. */
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI? 1: undefined,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  /* Run tests sequentially — all tests share the same admin session */
+  workers: 1,
+  /* Abort the whole suite well before the 6h GitHub Actions job cap so a hung test fails fast. */
+  globalTimeout: 20 * 60 * 1000,
+  /* GitHub annotations in the PR diff on CI; HTML report both locally and on CI (uploaded as artifact). */
+  reporter: process.env.CI ? [['github'], ['html']] : 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     // Явно указываем headless режим
@@ -27,14 +29,24 @@ export default defineConfig({
     ignoreHTTPSErrors: true,
     viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',
+    video: 'on-first-retry',
   },
 
-  /* Configure projects for major browsers */
+  /* The add_environment/* specs seed the shared fixtures (test users, folders) that other specs
+     depend on, so they run first as a `setup` project; the main `chromium` project depends on it and
+     excludes them. Running `--project=chromium` therefore pulls in setup automatically. */
   projects: [
     {
-      name: 'chromium',
+      name: 'setup',
+      testMatch: /add_environment[\\/].*\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
     },
-   ],
+    {
+      name: 'chromium',
+      testIgnore: /add_environment[\\/].*\.spec\.ts$/,
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
 });
 

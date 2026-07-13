@@ -10,6 +10,57 @@
     const byte ttlType = TimeToLiveAlertViewModel.AlertKey;
 }
 
+    // Tracks in-flight GetOperation AJAX calls fired by the Property change handler in
+    // _ConditionBlock.cshtml. On promote/demote, data-alert-type flips synchronously but the
+    // operation partial swaps in only after the AJAX resolves — if the form is submitted during
+    // that window, collectAlerts would read the stale operation div and send contradictory data
+    // (Property=Value but TimeToLive.Interval instead of Operation/Target), causing the demoted
+    // row to be silently dropped (#1246). submitForm waits on these before collecting.
+    //
+    // var (not const) on top level: _MetaInfo.cshtml is re-rendered into #meta_info_<id> via
+    // jQuery .html() on every revert/load, which re-executes this inline <script>. A const
+    // redeclaration would throw SyntaxError and break the whole sensor editor. var + function
+    // declarations are idempotent across re-execution — same pattern as the rest of the file.
+    var pendingOperationLoads = [];
+    function registerOperationLoad(req) {
+        pendingOperationLoads.push(req);
+        // Prune on settle so the array reflects only truly in-flight requests. Without this a
+        // failed or timed-out request would sit in the array forever; since $.when is reject-fast
+        // it would short-circuit every later save and re-open #1246 for the rest of the session.
+        req.always(function () {
+            var i = pendingOperationLoads.indexOf(req);
+            if (i !== -1) pendingOperationLoads.splice(i, 1);
+        });
+    }
+    function waitForOperationLoads() {
+        // Drain in a loop: snapshot the in-flight requests, clear the array, await them, and
+        // re-check. Requests fired by a Property change on another row during the wait are now
+        // picked up by the next iteration instead of leaking past the current submit — closes
+        // the race where Save followed by a second edit would let collectAlerts read a stale
+        // operation div on the second row. Loop bounded in practice: GetOperation is fast and
+        // has its own timeout in _ConditionBlock.cshtml, so the array drains within seconds.
+        //
+        // Each request is wrapped in .then(null, resolve) so $.when waits for ALL of them to
+        // settle instead of short-circuiting on the first rejection. A timed-out request still
+        // lets its siblings' wait complete normally; the user gets the accepted degraded case
+        // (stale div for the failed row only) rather than the bug (every row past the first
+        // failure racing).
+        var deferred = $.Deferred();
+        (function drain() {
+            var snapshot = pendingOperationLoads.slice();
+            pendingOperationLoads.length = 0;
+            if (snapshot.length === 0) {
+                deferred.resolve();
+                return;
+            }
+            var settled = snapshot.map(function (r) {
+                return r.then(null, function () { return $.Deferred().resolve(); });
+            });
+            $.when.apply($, settled).always(drain);
+        })();
+        return deferred.promise();
+    }
+
     function setFormDataAlerts(formData, type, alertsList) {
         // Per-row destination type: read data-alert-type if present (set in _DataAlert.cshtml
         // based on whether the main condition is TTL). Rows whose main condition is TTL route

@@ -3,6 +3,7 @@ import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 import { createUser, deleteUserIfPresent, fillModalInput, openCreateUserModal, openUsersPage, userRow } from '../users.ts';
 
+
 // Фикстура для авторизации перед каждым тестом
 test.beforeEach(async ({ page }) => {
    const {apiUrl, admin_user, admin_user_password } = testConfig;

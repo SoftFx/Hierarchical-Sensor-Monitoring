@@ -808,6 +808,9 @@ namespace HSMServer.Controllers
                 (byte)SensorType.IntegerBar => new BarConditionViewModel(false),
                 (byte)SensorType.DoubleBar => new BarConditionViewModel(false),
                 (byte)SensorType.Enum => new NumericConditionViewModel(false),
+                // Any-type templates have no concrete sensor type — they route TTL/ConfirmationPeriod
+                // alerts through AlertKey (byte.MaxValue), so build a TTL condition (#1249).
+                TimeToLiveAlertViewModel.AlertKey => new TimeToLiveConditionViewModel(false),
                 _ => null,
             };
 

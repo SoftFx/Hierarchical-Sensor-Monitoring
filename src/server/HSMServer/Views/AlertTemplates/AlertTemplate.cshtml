@@ -176,36 +176,50 @@
     }
 
     function submitForm() {
-        let form = document.getElementById('addAlertTemplate_form');
-        var formData = new FormData(form);
-        collectAlerts(formData);
+        // Wait for any in-flight GetOperation partials (promote/demote) before collecting form
+        // data — otherwise collectAlerts would read a stale operation div and silently drop the
+        // edited row (#1246). waitForOperationLoads drains pending requests in a loop, so a
+        // second edit during the wait is still covered; GetOperation has its own timeout, so a
+        // stalled connection rejects (not hangs) and .always still submits to surface a server
+        // validation error instead of freezing the Save button.
+        waitForOperationLoads().always(function () {
+            let form = document.getElementById('addAlertTemplate_form');
+            var formData = new FormData(form);
+            collectAlerts(formData);
 
-        $.ajax({
-            url: $("#addAlertTemplate_form").attr("action"),
-            type: $("#addAlertTemplate_form").attr("method"),
-            data: formData,
-            processData: false,
-            contentType: false,
-            async: true,
-            success: (viewData) => {
-                if (!viewData){
-                    window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))';
+            $.ajax({
+                url: $("#addAlertTemplate_form").attr("action"),
+                type: $("#addAlertTemplate_form").attr("method"),
+                data: formData,
+                processData: false,
+                contentType: false,
+                async: true,
+                success: (viewData) => {
+                    if (!viewData){
+                        window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))';
+                    }
+                    else if (typeof viewData === 'object' && viewData.success === false) {
+                        showConfirmationModal(
+                            'Failed to save template',
+                            viewData.error,
+                            () => {},
+                            () => { window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))'; },
+                            'Edit',
+                            'Discard'
+                        );
+                    }
+                    else {
+                        // _AlertTemplate.cshtml wraps its content in <form id="addAlertTemplate_form">.
+                        // Setting that as the existing form's innerHTML nests the new form inside the
+                        // old one; the HTML parser drops the inner <form> tag and leaves duplicate
+                        // ids/inputs that the next Save reads from the wrong element, so the second
+                        // Save after a validation error silently fails or sends stale data (#1247).
+                        // replaceWith swaps the outer form for the freshly rendered one.
+                        $("#addAlertTemplate_form").replaceWith(viewData);
+                        initForm();
+                    }
                 }
-                else if (typeof viewData === 'object' && viewData.success === false) {
-                    showConfirmationModal(
-                        'Failed to save template',
-                        viewData.error,
-                        () => {},
-                        () => { window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))'; },
-                        'Edit',
-                        'Discard'
-                    );
-                }
-                else {
-                    $("#addAlertTemplate_form").html(viewData);
-                    initForm();
-                }
-            }
+            });
         });
     }
 
@@ -258,8 +272,9 @@
     @await Html.PartialAsync("~/Views/Home/Alerts/_AlertsFormCollection.cshtml")
 
     function updateTemplateChatDropdowns(chats) {
-        var groups = chats.filter(c => c.Type === 1);
-        var users = chats.filter(c => c.Type === 0);
+        var groups = (chats && chats.Groups) || [];
+        var users = (chats && chats.Users) || [];
+        var slackDestinations = (chats && chats.SlackDestinations) || [];
 
         $('form#addAlertTemplate_form select[name="Chats"]').each(function() {
             var $select = $(this);
@@ -267,21 +282,25 @@
 
             $select.find('option').not('.general-group-chat-mode').remove();
 
-            $select.append('<option data-divider="true"></option>');
-            $select.append('<option disabled>Groups</option>');
-            groups.forEach(function(chat) {
-                var isSelected = currentSelected.includes(chat.Id);
-                $select.append(`<option value="${chat.Id}" ${isSelected ? 'selected' : ''}>${chat.Name}</option>`);
-            });
-
-            $select.append('<option data-divider="true"></option>');
-            $select.append('<option disabled>Users</option>');
-            users.forEach(function(chat) {
-                var isSelected = currentSelected.includes(chat.Id);
-                $select.append(`<option value="${chat.Id}" ${isSelected ? 'selected' : ''}>${chat.Name}</option>`);
-            });
+            appendChatSection($select, 'Groups', groups, currentSelected);
+            appendChatSection($select, 'Users', users, currentSelected);
+            appendChatSection($select, 'Slack destinations', slackDestinations, currentSelected, 'No Slack destinations configured');
 
             $select.selectpicker('refresh');
+        });
+    }
+
+    function appendChatSection($select, title, items, currentSelected, emptyMessage) {
+        $select.append('<option data-divider="true"></option>');
+        $select.append(`<option disabled>${title}</option>`);
+        if (items.length === 0) {
+            if (emptyMessage)
+                $select.append(`<option disabled value="">${emptyMessage}</option>`);
+            return;
+        }
+        items.forEach(function(chat) {
+            var isSelected = currentSelected.includes(chat.Id);
+            $select.append(`<option value="${chat.Id}"${isSelected ? ' selected' : ''}>${chat.Name}</option>`);
         });
     }
 

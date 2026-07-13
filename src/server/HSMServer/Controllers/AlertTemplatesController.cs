@@ -83,7 +83,9 @@ namespace HSMServer.Controllers
             return View(result);
         }
 
-        private sealed record ChatItem(Guid Id, string Name, byte Type);
+        private sealed record ChatEntry(Guid Id, string Name);
+
+        private sealed record ChatsPayload(List<ChatEntry> Groups, List<ChatEntry> Users, List<ChatEntry> SlackDestinations);
 
         private class UpdateResponse
         {
@@ -91,12 +93,12 @@ namespace HSMServer.Controllers
 
             public byte? Type { get; set; }
             public string Sensors { get; set; }
-            public List<ChatItem> Chats { get; set; }
+            public ChatsPayload Chats { get; set; }
             public int TotalCount { get; set; }
             public int Page { get; set; }
             public int TotalPages { get; set; }
 
-            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, List<ChatItem> chats, int page = 1)
+            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, ChatsPayload chats, int page = 1)
             {
                 Type = type;
                 Chats = chats;
@@ -130,13 +132,27 @@ namespace HSMServer.Controllers
 
             var (sensorType, sensors) = GetAffectedSensors(type, pathList, folderId);
 
-            List<ChatItem> chats = [];
-            if (_folders.TryGetValue(folderId, out var folder))
+            ChatsPayload chats = null;
+            if (_folders.TryGetValue(folderId, out var folder) && folder.TryGetChats(out var folderChats))
             {
-                chats = _telegram.GetValues()
-                    .Where(c => folder.Chats.Contains(c.Id) || c.Folders.Count == 0)
-                    .Select(c => new ChatItem(c.Id, c.Name, (byte)c.Type))
-                    .ToList();
+                // Mirrors folder.GetAvailableChats(_telegram, _slackDestinations) used by the POST
+                // path so the live-updated dropdown shows the same destinations as the saved form.
+                var groups = new List<ChatEntry>();
+                var users = new List<ChatEntry>();
+                var slack = new List<ChatEntry>();
+
+                foreach (var c in _telegram.GetValues())
+                    if (folderChats.Contains(c.Id) || c.Folders.Count == 0)
+                    {
+                        var list = c.Type == ConnectedChatType.TelegramGroup ? groups : users;
+                        list.Add(new ChatEntry(c.Id, c.Name));
+                    }
+
+                foreach (var d in _slackDestinations.GetValues())
+                    if (folderChats.Contains(d.Id) || d.Folders.Count == 0)
+                        slack.Add(new ChatEntry(d.Id, d.Name));
+
+                chats = new ChatsPayload(groups, users, slack);
             }
 
             var response = new UpdateResponse(sensorType, sensors, chats, page);

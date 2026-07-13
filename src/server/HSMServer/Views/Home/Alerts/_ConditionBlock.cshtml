@@ -105,12 +105,22 @@
             }
         }
 
-        $.ajax({
+        // Register with the in-flight tracker so submitForm waits for the partial before
+        // collecting form data. Without this, a Save fired before the partial lands would read
+        // the stale operation div and misroute the row's fields (#1246).
+        // timeout: cap how long the wait can block submit. GetOperation is a fast local endpoint
+        // and normally returns in milliseconds; if it stalls (proxy black-hole, dead socket),
+        // waitForOperationLoads' .always still fires on fail and submit proceeds with the stale
+        // operation div for this row rather than hanging Save indefinitely.
+        const operationReq = $.ajax({
             // containerType (real sensor type), not `type` (which is Boolean for TTL alerts loaded
             // from storage — see #1207) so demote fetches the right operation partial.
             url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?type=${containerType}&property=${property}`,
-            cache: false
-        }).done(function (viewData) {
+            cache: false,
+            timeout: 10000
+        });
+        registerOperationLoad(operationReq);
+        operationReq.done(function (viewData) {
             operation.html(viewData);
         });
     });
