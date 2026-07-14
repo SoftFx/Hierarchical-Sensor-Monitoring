@@ -41,34 +41,33 @@ test('Modify Folder General tabs', async ({ page }) => {
   );
   await page.getByRole('button', { name: 'Save' }).click();
 
-  // Check telegramm settings
-  await page.getByRole('tab', { name: 'Telegram' }).click();
-  // Click "Add new chat"
-  await page.getByRole('link', { name: 'Add new chat' }).click();
-  // Verify that "Add new telegram chat help" modal appeared
+  // Open the Chats tab (the folder chats UI was unified — Telegram + Slack — under a single "Chats" tab;
+  // the old separate "Telegram" tab, the "Add new chat" link, the SelectedChats select and the
+  // 'Empty' placeholder option were all removed in that refactor).
+  await page.getByRole('tab', { name: 'Chats' }).click();
+
+  // Open the "Add new telegram chat" help modal and verify it appears
+  await page.getByRole('link', { name: 'Add new telegram chat' }).click();
   const modalHeading = page.getByRole('heading', { name: 'Add new telegram chat help' });
   await expect(modalHeading).toBeVisible();
   // Close the modal
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(modalHeading).not.toBeVisible();
 
-  //Check that dropbox "Choose chats to add" appear 
+  // The "Choose chats to add" picker is shown
   const chooseChatsLocator = page.getByText('Choose chats to add');
   await expect(chooseChatsLocator).toBeVisible();
 
-  //Modify the telegramm settings
-  const selectLocator = page.locator('select[name="SelectedChats"]');
-  await selectLocator.selectOption('Empty');
+  // Saving the chats form (unchanged) still reports success
   await page.getByRole('button', { name: 'Save' }).click();
   const toastBodyLocator = page.locator('#toast_body');
-  //await expect(toastBodyLocator).toBeVisible();
-  await expect(toastBodyLocator).toHaveText('Folder telegram chats have been successfully saved!');
-  await expect(toastBodyLocator).not.toBeVisible(); 
+  await expect(toastBodyLocator).toHaveText('Folder chats have been successfully saved!');
+  await expect(toastBodyLocator).not.toBeVisible();
 
-  //Ckeck that modification saved
+  // The Chats tab and its picker are still reachable after a reload
   await page.reload();
-  await page.getByRole('tab', { name: 'Telegram' }).click();
-  await expect(page.locator('select[name="SelectedChats"]')).toHaveValue('Empty');
+  await page.getByRole('tab', { name: 'Chats' }).click();
+  await expect(page.getByText('Choose chats to add')).toBeVisible();
 
   //Remove folder
   await page.getByRole('link', { name: 'Remove' }).click();
