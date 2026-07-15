@@ -58,6 +58,24 @@ namespace HSMServer.Notifications.Chats
             TryGetValue(remove.Id, out var chat) && await base.TryRemove(remove)
             && (chat.TelegramChatId is null || _telegramChatIds.TryRemove(chat.TelegramChatId, out _));
 
+        public override async Task<bool> TryUpdate(ChatUpdate update)
+        {
+            TryGetValue(update.Id, out var chat);
+            var oldTelegramChatId = chat?.TelegramChatId;
+
+            var result = await base.TryUpdate(update);
+
+            if (result && chat is not null && !Nullable.Equals(oldTelegramChatId, chat.TelegramChatId))
+            {
+                if (oldTelegramChatId is not null)
+                    _telegramChatIds.TryRemove(oldTelegramChatId, out _);
+                if (chat.TelegramChatId is not null)
+                    _telegramChatIds[chat.TelegramChatId] = chat;
+            }
+
+            return result;
+        }
+
 
         public override async Task Initialize()
         {
@@ -145,23 +163,22 @@ namespace HSMServer.Notifications.Chats
 
         public async Task MigrateToSupergroup(long oldChatId, long newChatId)
         {
-            await Task.Run(() =>
-                {
-                    Chat chat = GetChatByChatId(oldChatId);
+            var chat = GetChatByChatId(oldChatId);
 
-                    if (chat == null)
-                    {
-                        _logger.Warn($"MigrateToSupergroup: Chat '{oldChatId}' not found");
-                        return;
-                    }
+            if (chat is null)
+            {
+                _logger.Warn($"MigrateToSupergroup: Chat '{oldChatId}' not found");
+                return;
+            }
 
-                    chat.UpdateChatId(newChatId);
-                    _logger.Info($"MigrateToSupergroup: Chat '{oldChatId}' was updated to supergroup '{newChatId}'");
+            var updated = await TryUpdate(new ChatUpdate
+            {
+                Id = chat.Id,
+                TelegramChatId = newChatId,
+            });
 
-                    _database.UpdateChat(chat.ToEntity());
-                    _logger.Info($"MigrateToSupergroup: Chat '{newChatId}' was updated in DB");
-                }
-            );
+            if (updated)
+                _logger.Info($"MigrateToSupergroup: Chat '{oldChatId}' was updated to supergroup '{newChatId}'");
         }
     }
 }

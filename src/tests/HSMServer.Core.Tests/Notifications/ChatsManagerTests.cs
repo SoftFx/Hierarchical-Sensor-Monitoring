@@ -69,6 +69,57 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Null(manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(knownChatId)));
         }
 
+        [Fact]
+        public async Task TryUpdate_TelegramChatIdChange_RekeysTelegramChatIdsIndex()
+        {
+            const long oldChatId = 100L;
+            const long newChatId = 200L;
+            var manager = BuildManager();
+            var chat = BuildTelegramChat(oldChatId);
+            await manager.TryAdd(chat);
+
+            var updated = await manager.TryUpdate(new ChatUpdate
+            {
+                Id = chat.Id,
+                TelegramChatId = newChatId,
+            });
+
+            Assert.True(updated);
+            Assert.Null(manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(oldChatId)));
+            Assert.Same(chat, manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(newChatId)));
+        }
+
+        [Fact]
+        public async Task MigrateToSupergroup_RekeysTelegramChatIdsIndex()
+        {
+            const long oldChatId = 100L;
+            const long newChatId = 200L;
+            var manager = BuildManager();
+            var chat = BuildTelegramChat(oldChatId);
+            await manager.TryAdd(chat);
+
+            await manager.MigrateToSupergroup(oldChatId, newChatId);
+
+            Assert.Null(manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(oldChatId)));
+            Assert.Same(chat, manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(newChatId)));
+        }
+
+        [Fact]
+        public void Chat_BuiltFromPublicCtor_PersistsTelegramFieldsThroughToEntity()
+        {
+            // Ctor must default TelegramType — ToEntity() gates Telegram persistence on it.
+            var chat = new Chat(new Telegram.Bot.Types.ChatId(42L));
+
+            var entity = chat.ToEntity();
+
+            Assert.Equal((byte)ConnectedChatType.TelegramPrivate, entity.TelegramType);
+            Assert.Equal(42L, entity.TelegramChatId);
+
+            var reloaded = new Chat(entity);
+            Assert.Equal(42L, reloaded.TelegramChatId?.Identifier);
+            Assert.Equal(ConnectedChatType.TelegramPrivate, reloaded.TelegramType);
+        }
+
 
         private static ChatsManager BuildManager()
         {

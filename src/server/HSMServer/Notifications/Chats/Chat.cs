@@ -56,6 +56,7 @@ namespace HSMServer.Notifications.Chats
             MessagesAggregationTimeSec = DefaultMessagesAggregationTimeSec;
 
             TelegramChatId = chatId;
+            TelegramType = ConnectedChatType.TelegramPrivate;
         }
 
         internal Chat() : base()
