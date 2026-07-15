@@ -12,7 +12,7 @@ namespace HSMServer.Core.Tests.Notifications
     public class ChatMigrationTests
     {
         [Fact]
-        public void Migrate_EmptyDb_WritesNothingAndDoesNotDeleteKeys()
+        public void Migrate_EmptyDb_WritesNothing()
         {
             var db = new Mock<IDatabaseCore>(MockBehavior.Strict);
             db.Setup(d => d.GetChats()).Returns(new List<ChatEntity>());
@@ -22,8 +22,6 @@ namespace HSMServer.Core.Tests.Notifications
             new ChatMigrator().Migrate(db.Object);
 
             db.Verify(d => d.AddChat(It.IsAny<ChatEntity>()), Times.Never);
-            db.Verify(d => d.RemoveTelegramChatsListKey(), Times.Never);
-            db.Verify(d => d.RemoveSlackDestinationsListKey(), Times.Never);
         }
 
         [Fact]
@@ -53,8 +51,6 @@ namespace HSMServer.Core.Tests.Notifications
             db.Setup(d => d.GetTelegramChats()).Returns(telegramChats);
             db.Setup(d => d.GetSlackDestinations()).Returns(slackDestinations);
             db.Setup(d => d.AddChat(It.IsAny<ChatEntity>())).Callback<ChatEntity>(written.Add);
-            db.Setup(d => d.RemoveTelegramChatsListKey());
-            db.Setup(d => d.RemoveSlackDestinationsListKey());
 
             new ChatMigrator().Migrate(db.Object);
 
@@ -83,29 +79,87 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Null(migratedSlack1.AuthorizationTime);
 
             db.Verify(d => d.AddChat(It.IsAny<ChatEntity>()), Times.Exactly(5));
-            db.Verify(d => d.RemoveTelegramChatsListKey(), Times.Once);
-            db.Verify(d => d.RemoveSlackDestinationsListKey(), Times.Once);
         }
 
         [Fact]
-        public void Migrate_AlreadyMigrated_IsNoop()
+        public void Migrate_AllLegacyIdsAlreadyPresent_IsNoop()
         {
+            var tg1Id = Guid.NewGuid();
+            var tg2Id = Guid.NewGuid();
+            var slack1Id = Guid.NewGuid();
+
             var existing = new List<ChatEntity>
             {
-                new() { Id = Guid.NewGuid().ToByteArray(), Name = "chat-1" },
-                new() { Id = Guid.NewGuid().ToByteArray(), Name = "chat-2" },
+                new() { Id = tg1Id.ToByteArray(), Name = "tg-1" },
+                new() { Id = tg2Id.ToByteArray(), Name = "tg-2" },
+                new() { Id = slack1Id.ToByteArray(), Name = "slack-1" },
+            };
+
+            var telegramChats = new List<TelegramChatEntity>
+            {
+                BuildTelegram(tg1Id, "tg-1", type: 0, chatId: 100L),
+                BuildTelegram(tg2Id, "tg-2", type: 1, chatId: 200L),
+            };
+            var slackDestinations = new List<SlackDestinationEntity>
+            {
+                BuildSlack(slack1Id, "slack-1", "https://hooks.slack.com/services/A"),
             };
 
             var db = new Mock<IDatabaseCore>(MockBehavior.Strict);
             db.Setup(d => d.GetChats()).Returns(existing);
+            db.Setup(d => d.GetTelegramChats()).Returns(telegramChats);
+            db.Setup(d => d.GetSlackDestinations()).Returns(slackDestinations);
 
             new ChatMigrator().Migrate(db.Object);
 
-            db.Verify(d => d.GetTelegramChats(), Times.Never);
-            db.Verify(d => d.GetSlackDestinations(), Times.Never);
             db.Verify(d => d.AddChat(It.IsAny<ChatEntity>()), Times.Never);
-            db.Verify(d => d.RemoveTelegramChatsListKey(), Times.Never);
-            db.Verify(d => d.RemoveSlackDestinationsListKey(), Times.Never);
+        }
+
+        [Fact]
+        public void Migrate_PartialRun_ResumesAndWritesOnlyMissingChats()
+        {
+            // Simulates a previously interrupted migration: tg1 already written, tg2/tg3/slack1/slack2 still pending.
+            var tg1Id = Guid.NewGuid();
+            var tg2Id = Guid.NewGuid();
+            var tg3Id = Guid.NewGuid();
+            var slack1Id = Guid.NewGuid();
+            var slack2Id = Guid.NewGuid();
+
+            var existing = new List<ChatEntity>
+            {
+                new() { Id = tg1Id.ToByteArray(), Name = "tg-1" },
+            };
+
+            var telegramChats = new List<TelegramChatEntity>
+            {
+                BuildTelegram(tg1Id, "tg-1", type: 0, chatId: 100L),
+                BuildTelegram(tg2Id, "tg-2", type: 1, chatId: 200L),
+                BuildTelegram(tg3Id, "tg-3", type: 0, chatId: 300L),
+            };
+            var slackDestinations = new List<SlackDestinationEntity>
+            {
+                BuildSlack(slack1Id, "slack-1", "https://hooks.slack.com/services/A"),
+                BuildSlack(slack2Id, "slack-2", "https://hooks.slack.com/services/B"),
+            };
+
+            var written = new List<ChatEntity>();
+            var db = new Mock<IDatabaseCore>(MockBehavior.Strict);
+            db.Setup(d => d.GetChats()).Returns(existing);
+            db.Setup(d => d.GetTelegramChats()).Returns(telegramChats);
+            db.Setup(d => d.GetSlackDestinations()).Returns(slackDestinations);
+            db.Setup(d => d.AddChat(It.IsAny<ChatEntity>())).Callback<ChatEntity>(written.Add);
+
+            new ChatMigrator().Migrate(db.Object);
+
+            Assert.Equal(4, written.Count);
+            var writtenIds = written.Select(c => new Guid(c.Id)).ToHashSet();
+            Assert.DoesNotContain(tg1Id, writtenIds);
+            Assert.Contains(tg2Id, writtenIds);
+            Assert.Contains(tg3Id, writtenIds);
+            Assert.Contains(slack1Id, writtenIds);
+            Assert.Contains(slack2Id, writtenIds);
+
+            db.Verify(d => d.AddChat(It.IsAny<ChatEntity>()), Times.Exactly(4));
         }
 
 

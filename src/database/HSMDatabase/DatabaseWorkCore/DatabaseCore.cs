@@ -617,10 +617,6 @@ namespace HSMDatabase.DatabaseWorkCore
             return chats;
         }
 
-        public void RemoveTelegramChatsListKey() => _environmentDatabase.RemoveTelegramChatsListKey();
-
-        public void RemoveSlackDestinationsListKey() => _environmentDatabase.RemoveSlackDestinationsListKey();
-
         #endregion
 
         #region Journal

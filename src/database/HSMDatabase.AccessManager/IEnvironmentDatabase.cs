@@ -104,9 +104,6 @@ namespace HSMDatabase.AccessManager
         void AddChatToList(byte[] chatId);
         void RemoveChatFromList(byte[] chatId);
 
-        void RemoveTelegramChatsListKey();
-        void RemoveSlackDestinationsListKey();
-
         #endregion
 
         #region Alert templates

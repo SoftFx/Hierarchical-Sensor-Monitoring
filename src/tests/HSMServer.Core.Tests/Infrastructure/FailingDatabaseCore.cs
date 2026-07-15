@@ -122,8 +122,6 @@ namespace HSMServer.Core.Tests.Infrastructure
         public void RemoveChat(byte[] chatId) => _inner.RemoveChat(chatId);
         public ChatEntity GetChat(byte[] chatId) => _inner.GetChat(chatId);
         public List<ChatEntity> GetChats() => _inner.GetChats();
-        public void RemoveTelegramChatsListKey() => _inner.RemoveTelegramChatsListKey();
-        public void RemoveSlackDestinationsListKey() => _inner.RemoveSlackDestinationsListKey();
 
         public List<AlertTemplateEntity> GetAllAlertTemplates() => _inner.GetAllAlertTemplates();
         public void AddAlertTemplate(AlertTemplateEntity policy) => _inner.AddAlertTemplate(policy);

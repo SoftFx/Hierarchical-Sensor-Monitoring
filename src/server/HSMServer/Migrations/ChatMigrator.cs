@@ -2,6 +2,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using NLog;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Migrations
@@ -16,39 +17,42 @@ namespace HSMServer.Migrations
             if (database is null)
                 throw new ArgumentNullException(nameof(database));
 
-            if (database.GetChats().Count > 0)
-            {
-                _logger.Info("ChatMigrator: 'Chats' key already populated, skipping migration.");
-                return;
-            }
+            var existing = database.GetChats() ?? new List<ChatEntity>();
+            var existingIds = new HashSet<Guid>(existing.Select(c => new Guid(c.Id)));
 
             var telegramChats = database.GetTelegramChats() ?? Enumerable.Empty<TelegramChatEntity>();
             var slackDestinations = database.GetSlackDestinations() ?? Enumerable.Empty<SlackDestinationEntity>();
 
-            var migrated = 0;
+            var written = 0;
+            var skipped = 0;
 
             foreach (var tg in telegramChats)
             {
+                if (existingIds.Contains(new Guid(tg.Id)))
+                {
+                    skipped++;
+                    continue;
+                }
+
                 database.AddChat(BuildFromTelegram(tg));
-                migrated++;
+                written++;
             }
 
             foreach (var slack in slackDestinations)
             {
+                if (existingIds.Contains(new Guid(slack.Id)))
+                {
+                    skipped++;
+                    continue;
+                }
+
                 database.AddChat(BuildFromSlack(slack));
-                migrated++;
+                written++;
             }
 
-            if (migrated == 0)
-            {
-                _logger.Info("ChatMigrator: no legacy chats found, nothing to migrate.");
-                return;
-            }
+            _logger.Info($"ChatMigrator: wrote {written} chats, skipped {skipped} already-present entries.");
 
-            database.RemoveTelegramChatsListKey();
-            database.RemoveSlackDestinationsListKey();
-
-            _logger.Info($"ChatMigrator: migrated {migrated} chats to the unified 'Chats' key.");
+            // Legacy keys are left intact — consumers still read them; removal deferred to #1261.
         }
 
 

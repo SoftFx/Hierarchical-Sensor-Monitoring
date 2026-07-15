@@ -821,30 +821,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void RemoveTelegramChatsListKey()
-        {
-            try
-            {
-                _database.Delete(_telegramChatIdsKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to remove legacy TelegramChats list key");
-            }
-        }
-
-        public void RemoveSlackDestinationsListKey()
-        {
-            try
-            {
-                _database.Delete(_slackDestinationIdsKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to remove legacy SlackDestinations list key");
-            }
-        }
-
         #endregion
 
         #region AlertTemplates

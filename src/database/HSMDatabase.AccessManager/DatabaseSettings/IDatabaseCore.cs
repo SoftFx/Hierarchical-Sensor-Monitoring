@@ -144,9 +144,6 @@ namespace HSMServer.Core.DataLayer
         ChatEntity GetChat(byte[] chatId);
         List<ChatEntity> GetChats();
 
-        void RemoveTelegramChatsListKey();
-        void RemoveSlackDestinationsListKey();
-
         #endregion
 
         #region Alert Templates
