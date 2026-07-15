@@ -52,7 +52,13 @@ namespace HSMServer.Migrations
 
             _logger.Info($"ChatMigrator: wrote {written} chats, skipped {skipped} already-present entries.");
 
-            // Legacy keys are left intact — consumers still read them; removal deferred to #1261.
+            // This migration is intentionally additive and is not the source of truth yet.
+            //   - Legacy `TelegramChats` / `SlackDestinations` keys are left intact; their managers
+            //     remain active and consumable until #1261 switches readers to IChatsManager.
+            //   - Renames / field changes / deletes performed through the legacy UI *after* this
+            //     migration runs are NOT propagated: the migrator skips by id and never updates or
+            //     deletes. #1261 must reconcile updates and deletes (not just adds) before it can
+            //     treat the unified `Chats` key as authoritative.
         }
 
 

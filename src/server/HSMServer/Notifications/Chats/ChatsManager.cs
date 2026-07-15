@@ -106,7 +106,9 @@ namespace HSMServer.Notifications.Chats
                 });
             }
 
-            var folderName = await ConnectChatToFolder?.Invoke(chat.Id, token.FolderId, token.User.Name);
+            var folderName = ConnectChatToFolder is null
+                ? null
+                : await ConnectChatToFolder.Invoke(chat.Id, token.FolderId, token.User.Name);
 
             if (!string.IsNullOrEmpty(folderName))
             {
