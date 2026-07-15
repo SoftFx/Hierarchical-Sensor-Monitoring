@@ -10,12 +10,8 @@ namespace HSMServer.Notifications.Chats
         public int? MessagesAggregationTimeSec { get; init; }
 
 
-        // Telegram (optional)
-        public byte? TelegramType { get; init; }
-
+        // Telegram chat id (optional; TelegramType / AuthorizationTime are init-only on Chat)
         public long? TelegramChatId { get; init; }
-
-        public long? AuthorizationTime { get; init; }
 
 
         // Slack (optional)

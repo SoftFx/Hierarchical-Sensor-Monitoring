@@ -53,6 +53,22 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Empty(manager.GetValues());
         }
 
+        [Fact]
+        public async Task TryRemove_TelegramChat_RemovesFromTelegramChatIdsIndex()
+        {
+            const long knownChatId = 42L;
+            var manager = BuildManager();
+            var chat = BuildTelegramChat(knownChatId);
+            await manager.TryAdd(chat);
+
+            Assert.NotNull(manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(knownChatId)));
+
+            var removed = await manager.TryRemove(new RemoveRequest(chat.Id, InitiatorInfo.System));
+
+            Assert.True(removed);
+            Assert.Null(manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(knownChatId)));
+        }
+
 
         private static ChatsManager BuildManager()
         {
