@@ -1,3 +1,4 @@
+using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Filters.FolderRoleFilters;
@@ -59,9 +60,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
+        [AuthorizeIsAdmin]
         public IActionResult AddChat() => View(nameof(EditChat), new ChatViewModel { EnableMessages = true });
 
         [HttpPost]
+        [AuthorizeIsAdmin]
         public async Task<IActionResult> AddChat(ChatViewModel model)
         {
             if (!ModelState.IsValid)
@@ -107,6 +110,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
+        [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> SendTestSlackMessage([FromQuery] Guid id)
         {
             if (ChatsManager.TryGetValue(id, out var chat))
@@ -129,9 +133,17 @@ namespace HSMServer.Controllers
             if (!ChatsManager.TryGetValue(model.Id, out var updated))
                 return;
 
-            var removedFolders = updated.Folders.Except(model.Folders.Folders).ToList();
+            // SelectedFolders and the implicit "removed" set are attacker-controlled POST data.
+            // EditChat's role filter only guarantees the user manages *some* folder this chat is
+            // bound to — it does not authorise mutating other folders. Re-check membership here.
+            var managedFolderIds = _folderManager.GetUserFolders(CurrentUser).Select(f => f.Id).ToHashSet();
 
-            foreach (var folderId in model.Folders.SelectedFolders)
+            var removedFolders = updated.Folders
+                .Except(model.Folders.Folders)
+                .Where(managedFolderIds.Contains)
+                .ToList();
+
+            foreach (var folderId in model.Folders.SelectedFolders.Where(managedFolderIds.Contains))
                 if (_folderManager.TryGetValue(folderId, out var folder))
                     await UpdateFolder(folderId, new HashSet<Guid>(folder.Chats) { model.Id });
 
