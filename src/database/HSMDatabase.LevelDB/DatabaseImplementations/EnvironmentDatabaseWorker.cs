@@ -794,7 +794,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 var currentList = GetChatsList();
 
-                if (!currentList.Contains(chatId))
+                if (!currentList.Any(existing => existing.SequenceEqual(chatId)))
                     currentList.Add(chatId);
 
                 _database.Put(_chatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
@@ -811,7 +811,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 var currentList = GetChatsList();
 
-                currentList.Remove(chatId);
+                currentList.RemoveAll(existing => existing.SequenceEqual(chatId));
 
                 _database.Put(_chatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
