@@ -1,4 +1,3 @@
-using HSMServer.Authentication;
 using HSMServer.Model.Notifications;
 using HSMServer.Notifications.Chats;
 using System.Collections.Generic;
@@ -13,7 +12,7 @@ namespace HSMServer.Model.Configuration
 
         public ChatsSettingsViewModel() { }
 
-        public ChatsSettingsViewModel(IChatsManager chats, IUserManager userManager = null)
+        public ChatsSettingsViewModel(IChatsManager chats)
         {
             Chats = chats.GetValues()
                 .OrderBy(c => c.Name)

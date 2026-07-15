@@ -1,5 +1,4 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Core.DataLayer;
+﻿using HSMServer.Core.DataLayer;
 using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
 using System;
@@ -8,7 +7,7 @@ using System.Linq;
 
 namespace HSMServer.Model.Configuration
 {
-    public class ConfigurationViewModel(IServerConfig config, bool isBotRunning, IDatabaseCore database, IChatsManager chats, IUserManager userManager)
+    public class ConfigurationViewModel(IServerConfig config, bool isBotRunning, IDatabaseCore database, IChatsManager chats)
     {
         public ServerSettingsViewModel Server { get; } = new(config);
 
@@ -16,7 +15,7 @@ namespace HSMServer.Model.Configuration
 
         public TelegramSettingsViewModel Telegram { get; } = new(config, isBotRunning);
 
-        public ChatsSettingsViewModel Chats { get; } = new(chats, userManager);
+        public ChatsSettingsViewModel Chats { get; } = new(chats);
 
         public MonitoringSettingsViewModel Monitoring { get; } = new(config);
 
