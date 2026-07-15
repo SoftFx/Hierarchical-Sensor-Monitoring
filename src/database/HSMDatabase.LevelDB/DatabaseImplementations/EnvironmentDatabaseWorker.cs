@@ -26,6 +26,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
         private readonly byte[] _telegramChatIdsKey = "TelegramChats"u8.ToArray();
         private readonly byte[] _slackDestinationIdsKey = "SlackDestinations"u8.ToArray();
+        private readonly byte[] _chatIdsKey = "Chats"u8.ToArray();
         private readonly byte[] _alertTemplatesIdsKey = "AlertTemplates"u8.ToArray();
         private readonly byte[] _alertScheduleIdsKey = "AlertSchedule"u8.ToArray();
 
@@ -738,6 +739,85 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception e)
             {
                 _logger.Error(e, $"Failed to remove slack destination id {id} from list");
+            }
+        }
+
+        #endregion
+
+        #region Chats
+
+        public List<byte[]> GetChatsList() => GetListOfBytes(_chatIdsKey, "Failed to get chats ids list");
+
+        public ChatEntity GetChat(byte[] chatId)
+        {
+            try
+            {
+                return _database.TryRead(chatId, out byte[] value)
+                    ? JsonSerializer.Deserialize<ChatEntity>(Encoding.UTF8.GetString(value))
+                    : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for chat {new Guid(chatId)}");
+            }
+
+            return null;
+        }
+
+        public void AddChat(ChatEntity chat)
+        {
+            try
+            {
+                _database.Put(chat.Id, JsonSerializer.SerializeToUtf8Bytes(chat));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add chat info for {chat.Id}");
+            }
+        }
+
+        public void RemoveChat(byte[] chatId)
+        {
+            try
+            {
+                _database.Delete(chatId);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove info for chat {new Guid(chatId)}");
+            }
+        }
+
+        public void AddChatToList(byte[] chatId)
+        {
+            try
+            {
+                var currentList = GetChatsList();
+
+                if (!currentList.Any(existing => existing.SequenceEqual(chatId)))
+                    currentList.Add(chatId);
+
+                _database.Put(_chatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to add chat id to list");
+            }
+        }
+
+        public void RemoveChatFromList(byte[] chatId)
+        {
+            try
+            {
+                var currentList = GetChatsList();
+
+                currentList.RemoveAll(existing => existing.SequenceEqual(chatId));
+
+                _database.Put(_chatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove chat id {chatId} from list");
             }
         }
 

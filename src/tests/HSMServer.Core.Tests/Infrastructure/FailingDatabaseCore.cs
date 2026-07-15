@@ -117,6 +117,12 @@ namespace HSMServer.Core.Tests.Infrastructure
         public SlackDestinationEntity GetSlackDestination(byte[] id) => _inner.GetSlackDestination(id);
         public List<SlackDestinationEntity> GetSlackDestinations() => _inner.GetSlackDestinations();
 
+        public void AddChat(ChatEntity chat) => _inner.AddChat(chat);
+        public void UpdateChat(ChatEntity chat) => _inner.UpdateChat(chat);
+        public void RemoveChat(byte[] chatId) => _inner.RemoveChat(chatId);
+        public ChatEntity GetChat(byte[] chatId) => _inner.GetChat(chatId);
+        public List<ChatEntity> GetChats() => _inner.GetChats();
+
         public List<AlertTemplateEntity> GetAllAlertTemplates() => _inner.GetAllAlertTemplates();
         public void AddAlertTemplate(AlertTemplateEntity policy) => _inner.AddAlertTemplate(policy);
         public void RemoveAlertTemplate(Guid id) => _inner.RemoveAlertTemplate(id);

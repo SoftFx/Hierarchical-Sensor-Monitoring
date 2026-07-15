@@ -584,6 +584,41 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
+        #region Environment database : Chat
+
+        public void AddChat(ChatEntity chat)
+        {
+            _environmentDatabase.AddChatToList(chat.Id);
+            _environmentDatabase.AddChat(chat);
+        }
+
+        public void UpdateChat(ChatEntity chat) => _environmentDatabase.AddChat(chat);
+
+        public void RemoveChat(byte[] chatId)
+        {
+            _environmentDatabase.RemoveChat(chatId);
+            _environmentDatabase.RemoveChatFromList(chatId);
+        }
+
+        public ChatEntity GetChat(byte[] chatId) => _environmentDatabase.GetChat(chatId);
+
+        public List<ChatEntity> GetChats()
+        {
+            var chats = new List<ChatEntity>(1 << 4);
+            var ids = _environmentDatabase.GetChatsList();
+
+            foreach (var id in ids)
+            {
+                var entity = _environmentDatabase.GetChat(id);
+                if (entity != null)
+                    chats.Add(entity);
+            }
+
+            return chats;
+        }
+
+        #endregion
+
         #region Journal
 
         public void AddJournalValue(JournalKey journalKey, JournalRecordEntity value)
