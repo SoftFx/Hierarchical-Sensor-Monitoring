@@ -606,63 +606,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public void AddTelegramChat(TelegramChatEntity chat)
-        {
-            try
-            {
-                _database.Put(chat.Id, JsonSerializer.SerializeToUtf8Bytes(chat));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to add telegram chat info for {chat.Id}");
-            }
-        }
-
-        public void RemoveTelegramChat(byte[] chatId)
-        {
-            try
-            {
-                _database.Delete(chatId);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove info for telegram chat {new Guid(chatId)}");
-            }
-        }
-
-        public void AddTelegramChatToList(byte[] chatId)
-        {
-            try
-            {
-                var currentList = GetTelegramChatsList();
-
-                if (!currentList.Contains(chatId))
-                    currentList.Add(chatId);
-
-                _database.Put(_telegramChatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to add telegram chat id to list");
-            }
-        }
-
-        public void RemoveTelegramChatFromList(byte[] chatId)
-        {
-            try
-            {
-                var currentList = GetTelegramChatsList();
-
-                currentList.Remove(chatId);
-
-                _database.Put(_telegramChatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove telegram chat id {chatId} from list");
-            }
-        }
-
         #endregion
 
         #region Slack destinations
@@ -683,63 +626,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
 
             return null;
-        }
-
-        public void AddSlackDestination(SlackDestinationEntity destination)
-        {
-            try
-            {
-                _database.Put(destination.Id, JsonSerializer.SerializeToUtf8Bytes(destination));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to add slack destination info for {destination.Id}");
-            }
-        }
-
-        public void RemoveSlackDestination(byte[] id)
-        {
-            try
-            {
-                _database.Delete(id);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove info for slack destination {new Guid(id)}");
-            }
-        }
-
-        public void AddSlackDestinationToList(byte[] id)
-        {
-            try
-            {
-                var currentList = GetSlackDestinationsList();
-
-                if (!currentList.Contains(id))
-                    currentList.Add(id);
-
-                _database.Put(_slackDestinationIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to add slack destination id to list");
-            }
-        }
-
-        public void RemoveSlackDestinationFromList(byte[] id)
-        {
-            try
-            {
-                var currentList = GetSlackDestinationsList();
-
-                currentList.Remove(id);
-
-                _database.Put(_slackDestinationIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove slack destination id {id} from list");
-            }
         }
 
         #endregion

@@ -11,6 +11,6 @@ namespace HSMServer.Filters.TelegramRoleFilters
 
 
         protected override Guid? GetEntityId(object arg, ActionExecutingContext context = null) =>
-            arg is TelegramChatViewModel chatVM ? chatVM.Id : null;
+            arg is ChatViewModel chatVM ? chatVM.Id : null;
     }
 }

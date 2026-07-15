@@ -11,7 +11,7 @@ using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
-using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -26,8 +26,7 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ProductController : BaseController
     {
-        private readonly ITelegramChatsManager _telegramChatsManager;
-        private readonly ISlackDestinationsManager _slackDestinationsManager;
+        private readonly IChatsManager _chatsManager;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
@@ -35,10 +34,9 @@ namespace HSMServer.Controllers
 
 
         public ProductController(IUserManager userManager, ITreeValuesCache treeValuesCache, IFolderManager folderManager,
-            TreeViewModel treeViewModel, ITelegramChatsManager telegramChatsManager, ISlackDestinationsManager slackDestinationsManager, ILogger<ProductController> logger) : base(userManager)
+            TreeViewModel treeViewModel, IChatsManager chatsManager, ILogger<ProductController> logger) : base(userManager)
         {
-            _telegramChatsManager = telegramChatsManager;
-            _slackDestinationsManager = slackDestinationsManager;
+            _chatsManager = chatsManager;
             _treeValuesCache = treeValuesCache;
             _folderManager = folderManager;
             _treeViewModel = treeViewModel;
@@ -161,7 +159,7 @@ namespace HSMServer.Controllers
         {
             if (_treeViewModel.Nodes.TryGetValue(viewModel.Id, out var product) && ModelState.IsValid)
             {
-                var result = await _treeValuesCache.UpdateProductAsync(viewModel.ToUpdate(product, _telegramChatsManager, _slackDestinationsManager, CurrentInitiator));
+                var result = await _treeValuesCache.UpdateProductAsync(viewModel.ToUpdate(product, _chatsManager, CurrentInitiator));
 
                 if (!result.IsOk)
                     ModelState.AddModelError(nameof(ProductGeneralInfoViewModel.Name), result.Error);

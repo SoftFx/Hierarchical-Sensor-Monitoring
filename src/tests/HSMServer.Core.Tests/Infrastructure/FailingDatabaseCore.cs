@@ -105,15 +105,9 @@ namespace HSMServer.Core.Tests.Infrastructure
         public List<UserEntity> GetUsers() => _inner.GetUsers();
         public List<UserEntity> GetUsersPage(int page, int pageSize) => _inner.GetUsersPage(page, pageSize);
 
-        public void AddTelegramChat(TelegramChatEntity chat) => _inner.AddTelegramChat(chat);
-        public void UpdateTelegramChat(TelegramChatEntity chat) => _inner.UpdateTelegramChat(chat);
-        public void RemoveTelegramChat(byte[] chatId) => _inner.RemoveTelegramChat(chatId);
         public TelegramChatEntity GetTelegramChat(byte[] chatId) => _inner.GetTelegramChat(chatId);
         public List<TelegramChatEntity> GetTelegramChats() => _inner.GetTelegramChats();
 
-        public void AddSlackDestination(SlackDestinationEntity destination) => _inner.AddSlackDestination(destination);
-        public void UpdateSlackDestination(SlackDestinationEntity destination) => _inner.UpdateSlackDestination(destination);
-        public void RemoveSlackDestination(byte[] id) => _inner.RemoveSlackDestination(id);
         public SlackDestinationEntity GetSlackDestination(byte[] id) => _inner.GetSlackDestination(id);
         public List<SlackDestinationEntity> GetSlackDestinations() => _inner.GetSlackDestinations();
 

@@ -3,7 +3,7 @@ using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
-using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;
 using System;
@@ -19,16 +19,16 @@ namespace HSMServer.Extensions
         private const int IconSize = 3;
 
 
-        internal static Dictionary<Guid, string> GetAvailableChats(this BaseNodeViewModel node, ITelegramChatsManager chatsManager)
+        internal static Dictionary<Guid, string> GetAvailableChats(this BaseNodeViewModel node, IChatsManager chatsManager)
         {
             node.TryGetChats(out var folderChats);
 
-            return GetAvailableChats(folderChats, chatsManager).ToDictionary(k => k.Id, v => v.Name);
+            return folderChats.GetAvailableChats(chatsManager);
         }
 
-        internal static Dictionary<Guid, string> GetAvailableChats(this BaseNodeViewModel node, ITelegramChatsManager chatsManager, ISlackDestinationsManager slackManager)
+        internal static Dictionary<Guid, string> GetAvailableChats(this HashSet<Guid> folderChats, IChatsManager chatsManager)
         {
-            node.TryGetChats(out var folderChats);
+            folderChats ??= new HashSet<Guid>();
 
             var result = new Dictionary<Guid, string>();
 
@@ -36,42 +36,7 @@ namespace HSMServer.Extensions
                 if (folderChats.Contains(chat.Id) || chat.Folders.Count == 0)
                     result[chat.Id] = chat.Name;
 
-            foreach (var dest in slackManager.GetValues())
-                if (folderChats.Contains(dest.Id) || dest.Folders.Count == 0)
-                    result[dest.Id] = dest.Name;
-
             return result;
-        }
-
-        internal static List<TelegramChat> GetAvailableChats(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager)
-        {
-            var availableChats = new List<TelegramChat>(1 << 3);
-
-            foreach (var chat in chatsManager.GetValues())
-                if (folderChats.Contains(chat.Id) || chat.Folders.Count == 0)
-                    availableChats.Add(chat);
-
-            return availableChats;
-        }
-
-        internal static Dictionary<Guid, string> GetAvailableChats(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager, ISlackDestinationsManager slackManager)
-        {
-            var result = new Dictionary<Guid, string>();
-
-            foreach (var chat in chatsManager.GetValues())
-                if (folderChats.Contains(chat.Id) || chat.Folders.Count == 0)
-                    result[chat.Id] = chat.Name;
-
-            foreach (var dest in slackManager.GetValues())
-                if (folderChats.Contains(dest.Id) || dest.Folders.Count == 0)
-                    result[dest.Id] = dest.Name;
-
-            return result;
-        }
-
-        internal static Dictionary<Guid, string> GetAvailableChatsDictionary(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager)
-        {
-            return folderChats.GetAvailableChats(chatsManager).ToDictionary(k => k.Id, v => v.Name);
         }
 
         internal static bool TryGetChats(this BaseNodeViewModel model, out HashSet<Guid> chats)

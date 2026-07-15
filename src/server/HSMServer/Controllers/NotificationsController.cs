@@ -1,13 +1,13 @@
-﻿using HSMServer.Authentication;
+using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Filters.FolderRoleFilters;
-using HSMServer.Filters.SlackRoleFilters;
 using HSMServer.Filters.TelegramRoleFilters;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -24,59 +24,62 @@ namespace HSMServer.Controllers
         private readonly TelegramBot _telegramBot;
         private readonly NotificationsCenter _notifications;
 
-        internal ITelegramChatsManager ChatsManager { get; }
-
-        internal ISlackDestinationsManager SlackDestinations { get; }
+        internal IChatsManager ChatsManager { get; }
 
 
-        public NotificationsController(ITelegramChatsManager chatsManager, NotificationsCenter notifications,
-            IFolderManager folderManager, IUserManager userManager,
-            ISlackDestinationsManager slackDestinations) : base(userManager)
+        public NotificationsController(IChatsManager chatsManager, NotificationsCenter notifications,
+            IFolderManager folderManager, IUserManager userManager) : base(userManager)
         {
             ChatsManager = chatsManager;
             _folderManager = folderManager;
             _notifications = notifications;
             _telegramBot = notifications.TelegramBot;
-            SlackDestinations = slackDestinations;
         }
 
 
         [HttpGet]
         [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
         public IActionResult EditChat(Guid id) => ChatsManager.TryGetValue(id, out var chat)
-            ? View(new TelegramChatViewModel(chat, BuildChatFolders(chat)))
+            ? View(new ChatViewModel(chat, BuildChatFolders(chat)))
             : _emptyResult;
 
         [HttpPost]
-        [TelegramRoleFilterByEditModel(nameof(updateModel), ProductRoleEnum.ProductManager)]
-        public async Task<IActionResult> EditChat(TelegramChatViewModel updateModel)
+        [TelegramRoleFilterByEditModel(nameof(model), ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> EditChat(ChatViewModel model)
         {
-            if (await ChatsManager.TryUpdate(updateModel.ToUpdate()))
-            {
-                var updatedChat = ChatsManager[updateModel.Id];
-                var removedFolders = updatedChat.Folders.Except(updateModel.Folders.Folders).ToList();
+            if (!ModelState.IsValid)
+                return View(model);
 
-                foreach (var folderId in updateModel.Folders.SelectedFolders)
-                    if (_folderManager.TryGetValue(folderId, out var folder))
-                        await UpdateFolder(folderId, new HashSet<Guid>(folder.Chats) { updateModel.Id });
+            if (await ChatsManager.TryUpdate(model.ToUpdate()))
+                await SyncFolders(model);
 
-                foreach (var folderId in removedFolders)
-                    if (_folderManager.TryGetValue(folderId, out var folder))
-                    {
-                        var folderChats = new HashSet<Guid>(folder.Chats);
-                        folderChats.Remove(updateModel.Id);
-
-                        await UpdateFolder(folderId, folderChats);
-                    }
-            }
-
-            return ChatsManager.TryGetValue(updateModel.Id, out var chat)
-                ? View(new TelegramChatViewModel(chat, BuildChatFolders(chat)))
+            return ChatsManager.TryGetValue(model.Id, out var chat)
+                ? View(new ChatViewModel(chat, BuildChatFolders(chat)))
                 : RedirectToAction(nameof(ProductController.Index), ViewConstants.ProductController);
         }
 
+        [HttpGet]
+        public IActionResult AddChat() => View(nameof(EditChat), new ChatViewModel { EnableMessages = true });
+
+        [HttpPost]
+        public async Task<IActionResult> AddChat(ChatViewModel model)
+        {
+            if (!ModelState.IsValid)
+                return View(nameof(EditChat), model);
+
+            var chat = model.ToNewChat(CurrentUser.Id);
+
+            if (await ChatsManager.TryAdd(chat))
+            {
+                model.Id = chat.Id;
+                await SyncFolders(model);
+            }
+
+            return RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
+        }
+
         [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
-        public async Task RemoveChat(Guid id) => await ChatsManager.TryRemove(new(id));
+        public async Task RemoveChat(Guid id) => await ChatsManager.TryRemove(new(id, CurrentInitiator));
 
         [HttpGet]
         [FolderRoleFilterByFolderId(nameof(folderId), ProductRoleEnum.ProductManager)]
@@ -103,76 +106,17 @@ namespace HSMServer.Controllers
             await _telegramBot.SendTestMessageAsync(chatId, testMessage);
         }
 
-
-        [HttpGet]
-        [SlackAdmin]
-        public IActionResult EditSlackDestination(Guid id)
+        [HttpPost]
+        public async Task<IActionResult> SendTestSlackMessage([FromQuery] Guid id)
         {
-            if (id == Guid.Empty)
-                return View(new SlackDestinationViewModel { EnableMessages = true });
+            if (ChatsManager.TryGetValue(id, out var chat))
+                await _notifications.SlackChannel.SendTestAsync(chat);
 
-            return SlackDestinations.TryGetValue(id, out var destination)
-                ? View(new SlackDestinationViewModel(destination, folders: BuildSlackFolders(destination)))
-                : _emptyResult;
+            return Ok();
         }
 
-        [HttpPost]
-        [SlackAdmin]
-        public async Task<IActionResult> AddSlackDestination(SlackDestinationViewModel model)
-        {
-            if (!ModelState.IsValid)
-                return View(nameof(EditSlackDestination), model);
 
-            var destination = new SlackDestination(model.ToAddRequest(CurrentUser.Id));
-
-            await SlackDestinations.TryAdd(destination);
-
-            return RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
-        }
-
-        [HttpPost]
-        [SlackAdmin]
-        public async Task<IActionResult> EditSlackDestination(SlackDestinationViewModel model)
-        {
-            if (!ModelState.IsValid)
-                return View(model);
-
-            if (await SlackDestinations.TryUpdate(model.ToUpdate()))
-            {
-                if (!SlackDestinations.TryGetValue(model.Id, out var updated))
-                    return RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
-
-                var removedFolders = updated.Folders.Except(model.Folders.Folders).ToList();
-
-                foreach (var folderId in model.Folders.SelectedFolders)
-                    if (_folderManager.TryGetValue(folderId, out var folder))
-                        await UpdateFolder(folderId, new HashSet<Guid>(folder.Chats) { model.Id });
-
-                foreach (var folderId in removedFolders)
-                    if (_folderManager.TryGetValue(folderId, out var folder))
-                    {
-                        var folderChats = new HashSet<Guid>(folder.Chats);
-                        folderChats.Remove(model.Id);
-
-                        await UpdateFolder(folderId, folderChats);
-                    }
-            }
-
-            return SlackDestinations.TryGetValue(model.Id, out var destination)
-                ? View(new SlackDestinationViewModel(destination, folders: BuildSlackFolders(destination)))
-                : RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
-        }
-
-        [HttpPost]
-        [SlackAdmin]
-        public async Task RemoveSlackDestination(Guid id) => await SlackDestinations.TryRemove(new(id, CurrentInitiator));
-
-        [HttpPost]
-        [SlackAdmin]
-        public IActionResult SendTestSlackMessage([FromQuery] Guid id) => Ok();
-
-
-        private ChatFoldersViewModel BuildChatFolders(TelegramChat chat)
+        private ChatFoldersViewModel BuildChatFolders(Chat chat)
         {
             var availableFolders = _folderManager.GetUserFolders(CurrentUser).Where(f => !f.Chats.Contains(chat.Id)).ToList();
             var chatFolders = _folderManager.GetValues().Where(f => chat.Folders.Contains(f.Id)).ToList();
@@ -180,12 +124,25 @@ namespace HSMServer.Controllers
             return new(availableFolders, chatFolders);
         }
 
-        private ChatFoldersViewModel BuildSlackFolders(SlackDestination destination)
+        private async Task SyncFolders(ChatViewModel model)
         {
-            var availableFolders = _folderManager.GetUserFolders(CurrentUser).Where(f => !f.Chats.Contains(destination.Id)).ToList();
-            var destFolders = _folderManager.GetValues().Where(f => destination.Folders.Contains(f.Id)).ToList();
+            if (!ChatsManager.TryGetValue(model.Id, out var updated))
+                return;
 
-            return new(availableFolders, destFolders);
+            var removedFolders = updated.Folders.Except(model.Folders.Folders).ToList();
+
+            foreach (var folderId in model.Folders.SelectedFolders)
+                if (_folderManager.TryGetValue(folderId, out var folder))
+                    await UpdateFolder(folderId, new HashSet<Guid>(folder.Chats) { model.Id });
+
+            foreach (var folderId in removedFolders)
+                if (_folderManager.TryGetValue(folderId, out var folder))
+                {
+                    var folderChats = new HashSet<Guid>(folder.Chats);
+                    folderChats.Remove(model.Id);
+
+                    await UpdateFolder(folderId, folderChats);
+                }
         }
 
         private async Task UpdateFolder(Guid folderId, HashSet<Guid> folderChats)

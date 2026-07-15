@@ -167,7 +167,7 @@ A single heterogeneous `DefaultChats` setting replaces the previous parallel `De
 - `Views/Product/_EditProductGeneralInfo.cshtml` (inline editable on product general info).
 - `Views/Home/_GeneralInfo.cshtml` (read-only display via `NodeInfoBaseViewModel`).
 
-`ProductController.EditProduct` injects both `ITelegramChatsManager` and `ISlackDestinationsManager` and passes them to `ProductGeneralInfoViewModel.ToUpdate`, which forwards them to `DefaultChatViewModel.ToUpdate` → builds the heterogeneous available-set via `product.GetAvailableChats(chatsManager, slackManager)`. The `DefaultChats` field on `NodeInfoBaseViewModel` round-trips back through `ProductUpdate.DefaultChats`.
+`ProductController.EditProduct` injects the unified `IChatsManager` and passes it to `ProductGeneralInfoViewModel.ToUpdate`, which forwards it to `DefaultChatViewModel.ToUpdate` → builds the heterogeneous available-set via `product.GetAvailableChats(chatsManager)`. The `DefaultChats` field on `NodeInfoBaseViewModel` round-trips back through `ProductUpdate.DefaultChats`.
 
 ### Alert export/import
 
@@ -177,37 +177,36 @@ Slack destinations themselves are **not** migrated by alert export/import — on
 
 ### Role filter
 
-`SlackAdminAttribute` (`src/server/HSMServer/Filters/SlackRoleFilters/SlackAdminAttribute.cs`) implements `IAuthorizationFilter` directly. Non-admins are redirected to `Home/Index`. It does **not** inherit from `UserRoleFilterBase` because Slack destinations are not folder-scoped — there is no folder id to bind against.
+Slack-only actions (`SendTestSlackMessage`, `EditChat`, `RemoveChat`) are gated by the same admin role as Telegram — `[AuthorizeIsAdmin]` on `ConfigurationController` plus `[TelegramRoleFilterById]` / `[TelegramRoleFilterByEditModel]` for chat-specific mutations. The dedicated `SlackAdminAttribute` was removed in the #1261 unification — Slack destinations no longer have a separate authorization path because they are first-class `Chat` entities.
 
 ## Folder binding (heterogeneous)
 
-A folder carries a single heterogeneous `Chats: HashSet<Guid>` that mixes Telegram chat ids and Slack destination ids. Admins create Telegram chats and Slack webhooks globally (Configuration → Telegram / Configuration → Slack); a Product Manager for a folder binds a subset to that folder via the folder's single **Chats** tab (`Views/Folders/_Chats.cshtml` → `FoldersController.UpdateChats`).
+A folder carries a single heterogeneous `Chats: HashSet<Guid>` whose entries are unified `Chat` ids. Each `Chat` may carry zero or more channels (Telegram, Slack, Mattermost) simultaneously. Admins create chats globally (Configuration → **Chats** tab); a Product Manager for a folder binds a subset to that folder via the folder's single **Chats** tab (`Views/Folders/_Chats.cshtml` → `FoldersController.UpdateChats`).
 
-**Global default**: a chat or Slack destination with **zero** folder bindings is *global* — it appears in the alert destination picker of every folder and is deliverable for any alert, regardless of folder. Explicit bindings narrow delivery to only the bound folders. This inverts the pre-#1219 default, where an unbound chat was invisible and undeliverable everywhere. The global default applies uniformly to Telegram chats and Slack destinations.
+**Global default**: a chat with **zero** folder bindings is *global* — it appears in the alert destination picker of every folder and is deliverable for any alert, regardless of folder. Explicit bindings narrow delivery to only the bound folders.
 
 The sensor alert picker (`_ActionBlock.cshtml`) shows the union of the folder's bound chats and all global chats — `ActionViewModel.AvailableChats` is built from `folder.Chats ∪ {chats with Folders.Count == 0}` via `NodeExtensions.TryGetChats`.
 
 Storage:
-- `FolderEntity.Chats: List<byte[]>` — heterogeneous. Pre-refactor rows that used separate `TelegramChats` / `SlackDestinations` fields deserialize read-tolerant (extra/missing JSON keys ignored, old fields become empty sets on load).
-- `FolderModel.Chats: HashSet<Guid>` loaded in the entity ctor, persisted in `ToEntity`, updated via `FolderUpdate.Chats`. `FolderModel.GetAvailableChats()` unions `Chats` with global chat ids (via the `GetGlobalChatIds` delegate wired in `FolderManager`) so `ToEntity()` and `GetCorePolicy` preserve global chats in `DefaultChats.SelectedChats`. The `FolderModel.UpdateChats` helper accepts a single composite `Func<Guid, string> nameResolver` (the `GetChatName` event) so Telegram and Slack names render uniformly in change journal entries.
-- `SlackDestination.Folders: HashSet<Guid>` and `TelegramChat.Folders: HashSet<Guid>` are in-memory reverse indexes, **not** persisted. Hydrated at startup by `NotificationsCenter.ConnectFoldersAndChats` (single loop over `folder.Chats`, dispatching each id to whichever manager owns it) and maintained incrementally by each manager.
+- `FolderEntity.Chats: List<byte[]>` — heterogeneous unified Chat ids. Pre-refactor rows that used separate `TelegramChats` / `SlackDestinations` fields deserialize read-tolerant via `LegacyTelegramChats` / `LegacySlackDestinations` fallback fields; the `ChatMigrator` seeds the unified `Chats` collection at first boot and writes back on every boot thereafter.
+- `FolderModel.Chats: HashSet<Guid>` loaded in the entity ctor, persisted in `ToEntity`, updated via `FolderUpdate.Chats`. `FolderModel.GetAvailableChats(IChatsManager)` unions `Chats` with global chat ids so `ToEntity()` and `GetCorePolicy` preserve global chats in `DefaultChats.SelectedChats`.
+- `Chat.Folders: HashSet<Guid>` is an in-memory reverse index, **not** persisted. Hydrated at startup by `NotificationsCenter.ConnectFoldersAndChats` (single loop over `folder.Chats`, calling `_chatsManager.TryGetValue`) and maintained incrementally by the manager.
 
-Events (single heterogeneous fan-out):
-- `IFolderManager.AddFolderToChats` / `RemoveFolderFromChats` — raised from `FolderManager.TryUpdate` with the diff (added/removed heterogeneous chat ids).
-- Each event is wired in `NotificationsCenter` to **two** handlers — one on `ITelegramChatsManager`, one on `ISlackDestinationsManager`. Each manager resolves only the ids it owns; unknown ids are silently skipped. The remove path prunes dangling references from existing alert policies via `ITreeValuesCache.RemoveChatsFromPoliciesAsync(folderId, chats, initiator)` — but **only for chats that still have other folder bindings**. A chat that becomes global (zero remaining folders) is *not* pruned, because it is still deliverable everywhere; pruning it would drop legitimate alert actions. `FolderManager.IsChatGlobal(id)` checks both managers' `Folders.Count == 0`.
-- `IFolderManager.RemoveChatHandler(TelegramChat, InitiatorInfo)` — invoked when a global Telegram chat is removed; iterates folders and prunes the id from each `folder.Chats`.
-- `IFolderManager.RemoveSlackDestinationHandler(SlackDestination, InitiatorInfo)` — invoked when a global Slack destination is removed by an admin; iterates folders and prunes the id from each `folder.Chats`. Symmetric to `RemoveChatHandler`.
-- `ITelegramChatsManager.RemoveFolderHandler(FolderModel, InitiatorInfo)` and `ISlackDestinationsManager.RemoveFolderHandler(FolderModel, InitiatorInfo)` — invoked when a folder is removed; each calls its own `RemoveFolderFromChats` with the ids it can resolve from `folder.Chats`.
+Events (single fan-out):
+- `IFolderManager.AddFolderToChats` / `RemoveFolderFromChats` — raised from `FolderManager.TryUpdate` with the diff (added/removed chat ids).
+- Both events are wired in `NotificationsCenter` to a single handler on `IChatsManager`. The remove path prunes dangling references from existing alert policies via `ITreeValuesCache.RemoveChatsFromPoliciesAsync(folderId, chats, initiator)` — but **only for chats that still have other folder bindings**. A chat that becomes global (zero remaining folders) is *not* pruned, because it is still deliverable everywhere; pruning it would drop legitimate alert actions. `FolderManager.IsChatGlobal(id)` checks `_chatsManager[id].Folders.Count == 0`.
+- `IFolderManager.RemoveChatHandler(Chat, InitiatorInfo)` — invoked when a chat is removed; iterates folders and prunes the id from each `folder.Chats`.
+- `IChatsManager.RemoveFolderHandler(FolderModel, InitiatorInfo)` — invoked when a folder is removed; calls `RemoveFolderFromChats` with the ids resolvable from `folder.Chats`.
 
-`NotificationsCenter.ConnectFoldersAndChats` wires the heterogeneous fan-out and the composite `GetChatName` resolver, and runs a single hydrate loop at startup that dispatches each `chatId in folder.Chats` to whichever manager owns it. `DisposeAsync` mirrors the subscriptions with `-=`. Orphan-logging at startup has been removed — heterogeneous `Chats` cannot drift between a default setting and a folder binding because there is only one set per folder.
+`NotificationsCenter.ConnectFoldersAndChats` wires the fan-out and the `GetChatName` resolver, and runs a single hydrate loop at startup that resolves each `chatId in folder.Chats` against `_chatsManager`. `DisposeAsync` mirrors the subscriptions with `-=`.
 
-Lifecycle symmetry (post-#1219):
-- Removing a folder does **not** auto-remove Slack destination entities or Telegram chat entities. Their global lifecycle is admin-owned. Only the binding and policy references are cleaned.
-- Removing the last folder binding from a Telegram chat or Slack destination does **not** auto-delete the entity — it transitions to the global state and remains deliverable everywhere. (Pre-#1219, Telegram chats were auto-deleted at zero folders; this is no longer the case.)
-- Removing a Telegram chat or Slack destination globally (admin action) prunes its id from every folder's `Chats` and from existing alert policies.
+Lifecycle symmetry (post-#1261):
+- Removing a folder does **not** auto-remove Chat entities. Their global lifecycle is admin-owned. Only the binding and policy references are cleaned.
+- Removing the last folder binding from a chat does **not** auto-delete the entity — it transitions to the global state and remains deliverable everywhere.
+- Removing a chat globally (admin action) prunes its id from every folder's `Chats` and from existing alert policies.
 
-The alert picker filter is enforced by `ActionViewModel.AvailableChats` (populated via `NodeExtensions.TryGetChats` reading `folder.Chats ∪ global chats`). Existing alert policies with ids that are no longer folder-bound still **deliver** (the delivery channel resolves via the manager directly, not via `AvailableChats`), but those ids won't render as selected options in the UI until re-bound. A chat that transitions from bound to global stays referenced in policies where it was already selected — that is intentional, since it is still deliverable.
+The alert picker filter is enforced by `ActionViewModel.AvailableChats` (populated via `NodeExtensions.TryGetChats` reading `folder.Chats ∪ global chats`). Existing alert policies with ids that are no longer folder-bound still **deliver** (the delivery channel resolves via the manager directly, not via `AvailableChats`), but those ids won't render as selected options in the UI until re-bound.
 
 ### Send test message
 
-`NotificationsController.SendTestSlackMessage([FromQuery] Guid id)` is gated by `[SlackAdmin]`. It calls `SlackNotificationChannel.SendTestAsync(SlackDestination)`, which builds a fixed `{"text":"Test message from HSM"}` payload via `SlackMessageBuilder.BuildPayload(string)` and POSTs through the same retry path as `DeliverAsync`. The folder Chats tab surfaces this action per Slack destination row.
+`NotificationsController.SendTestSlackMessage([FromQuery] Guid id)` is admin-gated and loads the unified `Chat` via `ChatsManager.TryGetValue`. It calls `SlackNotificationChannel.SendTestAsync(Chat)`, which builds a fixed `{"text":"Test message from HSM"}` payload via `SlackMessageBuilder.BuildPayload(string)` and POSTs through the same retry path as `DeliverAsync`. The folder Chats tab and Configuration → Chats tab both surface this action per chat row. `SendTestTelegramMessage(long chatId)` (Telegram channel id, not Guid) is exposed separately because Telegram delivery requires the native bot chat id rather than the unified Chat guid.

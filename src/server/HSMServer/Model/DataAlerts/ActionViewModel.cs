@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
@@ -110,8 +110,6 @@ namespace HSMServer.Model.DataAlerts
             AvailableChats = availableChats;
         }
 
-        public bool ChatIsSelected(TelegramChat chat) => Chats?.Contains(chat.Id) ?? false;
-
-        public bool SlackDestinationIsSelected(SlackDestination destination) => Chats?.Contains(destination.Id) ?? false;
+        public bool ChatIsSelected(Chat chat) => Chats?.Contains(chat.Id) ?? false;
     }
 }
