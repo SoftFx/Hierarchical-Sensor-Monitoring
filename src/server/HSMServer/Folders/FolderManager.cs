@@ -12,7 +12,7 @@ using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using NLog;
 using System;
 using System.Collections.Generic;
@@ -28,9 +28,8 @@ namespace HSMServer.Folders
         private readonly IUserManager _userManager;
         private readonly IDatabaseCore _databaseCore;
         private readonly IJournalService _journalService;
-        private readonly ITelegramChatsManager _telegramChatsManager;
-        private readonly ISlackDestinationsManager _slackDestinationsManager;
-        
+        private readonly IChatsManager _chatsManager;
+
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
@@ -50,7 +49,7 @@ namespace HSMServer.Folders
 
 
         public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService,
-                             ITelegramChatsManager telegramChatsManager, ISlackDestinationsManager slackDestinationsManager)
+                             IChatsManager chatsManager)
         {
             _databaseCore = databaseCore;
 
@@ -63,8 +62,7 @@ namespace HSMServer.Folders
             _userManager.Removed += RemoveUserHandler;
             _userManager.Added += AddUserHandler;
 
-            _telegramChatsManager = telegramChatsManager;
-            _slackDestinationsManager = slackDestinationsManager;
+            _chatsManager = chatsManager;
         }
 
         private void FillFolderChats(FolderEventArgs e)
@@ -254,7 +252,7 @@ namespace HSMServer.Folders
             return folder?.Name;
         }
 
-        public void RemoveChatHandler(TelegramChat chat, InitiatorInfo initiator)
+        public void RemoveChatHandler(Chat chat, InitiatorInfo initiator)
         {
             foreach (var (folderId, folder) in this)
             {
@@ -275,29 +273,6 @@ namespace HSMServer.Folders
             }
 
             _logger.Info($"Chat '{chat.Name}' is removed from all folders by '{initiator}'");
-        }
-
-        public void RemoveSlackDestinationHandler(SlackDestination destination, InitiatorInfo initiator)
-        {
-            foreach (var (folderId, folder) in this)
-            {
-                if (folder.Chats.Contains(destination.Id))
-                {
-                    var chats = new HashSet<Guid>(folder.Chats);
-                    chats.Remove(destination.Id);
-
-                    var update = new FolderUpdate()
-                    {
-                        Id = folderId,
-                        Chats = chats,
-                        Initiator = initiator,
-                    };
-
-                    _ = TryUpdate(update);
-                }
-            }
-
-            _logger.Info($"Slack destination '{destination.Name}' is removed from all folders by '{initiator}'");
         }
 
         public List<FolderModel> GetUserFolders(User user)
@@ -498,25 +473,13 @@ namespace HSMServer.Folders
 
         private IEnumerable<Guid> GetGlobalChatIds()
         {
-            foreach (var chat in _telegramChatsManager.GetValues())
+            foreach (var chat in _chatsManager.GetValues())
                 if (chat.Folders.Count == 0)
                     yield return chat.Id;
-
-            foreach (var dest in _slackDestinationsManager.GetValues())
-                if (dest.Folders.Count == 0)
-                    yield return dest.Id;
         }
 
-        private bool IsChatGlobal(Guid id)
-        {
-            if (_telegramChatsManager.TryGetValue(id, out var chat))
-                return chat.Folders.Count == 0;
-
-            if (_slackDestinationsManager.TryGetValue(id, out var dest))
-                return dest.Folders.Count == 0;
-
-            return false;
-        }
+        private bool IsChatGlobal(Guid id) =>
+            _chatsManager.TryGetValue(id, out var chat) && chat.Folders.Count == 0;
 
         private Task FanOutRemoveFolderFromChats(Guid folderId, List<Guid> removedChats, InitiatorInfo initiator)
         {

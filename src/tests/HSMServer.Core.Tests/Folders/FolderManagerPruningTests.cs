@@ -12,6 +12,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
 using Moq;
 using Xunit;
@@ -25,15 +26,14 @@ namespace HSMServer.Core.Tests.Folders
         {
             var folderId = Guid.NewGuid();
             var chatId = Guid.NewGuid();
-            var chat = BuildTelegramChat(chatId);
+            var chat = BuildChat(chatId);
             chat.Folders.Add(folderId);
 
-            var telegramManager = BuildTelegramManager();
-            telegramManager.TryAdd(chatId, chat);
-            var slackManager = new SlackDestinationsManager(new Mock<IDatabaseCore>().Object);
+            var chatsManager = BuildChatsManager();
+            chatsManager.TryAdd(chatId, chat);
 
-            var (folderManager, cacheMock) = BuildFolderManager(telegramManager, slackManager);
-            WireEvents(folderManager, telegramManager, slackManager);
+            var (folderManager, cacheMock) = BuildFolderManager(chatsManager);
+            WireEvents(folderManager, chatsManager);
 
             var folder = new FolderModel(BuildFolderEntity(folderId, chatId));
             await folderManager.TryAdd(folder, InitiatorInfo.System);
@@ -48,7 +48,7 @@ namespace HSMServer.Core.Tests.Folders
             await folderManager.TryUpdate(update);
 
             cacheMock.Verify(c => c.RemoveChatsFromPoliciesAsync(folderId, It.IsAny<List<Guid>>(), It.IsAny<InitiatorInfo>()), Times.Never);
-            Assert.True(telegramManager.TryGetValue(chatId, out var survivingChat));
+            Assert.True(chatsManager.TryGetValue(chatId, out var survivingChat));
             Assert.Empty(survivingChat.Folders);
         }
 
@@ -58,16 +58,15 @@ namespace HSMServer.Core.Tests.Folders
             var folderId = Guid.NewGuid();
             var otherFolderId = Guid.NewGuid();
             var chatId = Guid.NewGuid();
-            var chat = BuildTelegramChat(chatId);
+            var chat = BuildChat(chatId);
             chat.Folders.Add(folderId);
             chat.Folders.Add(otherFolderId);
 
-            var telegramManager = BuildTelegramManager();
-            telegramManager.TryAdd(chatId, chat);
-            var slackManager = new SlackDestinationsManager(new Mock<IDatabaseCore>().Object);
+            var chatsManager = BuildChatsManager();
+            chatsManager.TryAdd(chatId, chat);
 
-            var (folderManager, cacheMock) = BuildFolderManager(telegramManager, slackManager);
-            WireEvents(folderManager, telegramManager, slackManager);
+            var (folderManager, cacheMock) = BuildFolderManager(chatsManager);
+            WireEvents(folderManager, chatsManager);
 
             var folder = new FolderModel(BuildFolderEntity(folderId, chatId));
             await folderManager.TryAdd(folder, InitiatorInfo.System);
@@ -85,10 +84,10 @@ namespace HSMServer.Core.Tests.Folders
         }
 
 
-        private static TelegramChatsManager BuildTelegramManager()
+        private static ChatsManager BuildChatsManager()
             => new(new Mock<IDatabaseCore>().Object, new Mock<IUserManager>().Object, new Mock<IServerConfig>().Object);
 
-        private static (FolderManager manager, Mock<ITreeValuesCache> cacheMock) BuildFolderManager(ITelegramChatsManager telegram, ISlackDestinationsManager slack)
+        private static (FolderManager manager, Mock<ITreeValuesCache> cacheMock) BuildFolderManager(ChatsManager chats)
         {
             var cacheMock = new Mock<ITreeValuesCache>();
             cacheMock.Setup(c => c.GetProducts()).Returns(new List<ProductModel>());
@@ -98,29 +97,27 @@ namespace HSMServer.Core.Tests.Folders
             userMock.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns(new List<User>());
             var journalMock = new Mock<IJournalService>();
 
-            var manager = new FolderManager(dbMock.Object, cacheMock.Object, userMock.Object, journalMock.Object, telegram, slack);
+            var manager = new FolderManager(dbMock.Object, cacheMock.Object, userMock.Object, journalMock.Object, chats);
             return (manager, cacheMock);
         }
 
-        private static void WireEvents(FolderManager manager, TelegramChatsManager telegram, SlackDestinationsManager slack)
+        private static void WireEvents(FolderManager manager, ChatsManager chats)
         {
-            manager.AddFolderToChats += telegram.AddFolderToChats;
-            manager.AddFolderToChats += slack.AddFolderToChats;
-            manager.RemoveFolderFromChats += telegram.RemoveFolderFromChats;
-            manager.RemoveFolderFromChats += slack.RemoveFolderFromChats;
-            manager.GetChatName += id => telegram.GetChatName(id) ?? slack.GetSlackDestinationName(id);
+            manager.AddFolderToChats += chats.AddFolderToChats;
+            manager.RemoveFolderFromChats += chats.RemoveFolderFromChats;
+            manager.GetChatName += chats.GetChatName;
         }
 
-        private static TelegramChat BuildTelegramChat(Guid id) =>
-            new(new TelegramChatEntity
+        private static Chat BuildChat(Guid id) =>
+            new(new ChatEntity
             {
                 Id = id.ToByteArray(),
                 Author = Guid.NewGuid().ToByteArray(),
                 CreationDate = DateTime.UtcNow.Ticks,
                 Name = "test-chat",
-                ChatId = 123456,
                 SendMessages = true,
-                Type = (byte)ConnectedChatType.TelegramGroup,
+                TelegramType = (byte)ConnectedChatType.TelegramGroup,
+                TelegramChatId = 123456,
                 MessagesAggregationTimeSec = 60,
                 AuthorizationTime = DateTime.UtcNow.Ticks,
             });

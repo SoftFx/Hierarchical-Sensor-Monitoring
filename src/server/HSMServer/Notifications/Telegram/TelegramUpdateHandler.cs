@@ -3,6 +3,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
+using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
 using NLog;
 using System;
@@ -23,7 +24,7 @@ namespace HSMServer.Notifications
     public sealed class TelegramUpdateHandler : IUpdateHandler
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly ITelegramChatsManager _chatsManager;
+        private readonly IChatsManager _chatsManager;
         private readonly IFolderManager _folderManager;
         private readonly TelegramConfig _config;
         private readonly TelegramBot _bot;
@@ -39,7 +40,7 @@ namespace HSMServer.Notifications
         }
 
 
-    internal TelegramUpdateHandler(TelegramBot bot, ITelegramChatsManager chatsManager, IFolderManager folderManager, TelegramConfig config)
+    internal TelegramUpdateHandler(TelegramBot bot, IChatsManager chatsManager, IFolderManager folderManager, TelegramConfig config)
         {
             _folderManager = folderManager;
             _chatsManager = chatsManager;

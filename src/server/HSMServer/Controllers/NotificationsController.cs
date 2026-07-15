@@ -169,13 +169,7 @@ namespace HSMServer.Controllers
 
         [HttpPost]
         [SlackAdmin]
-        public async Task<IActionResult> SendTestSlackMessage([FromQuery] Guid id)
-        {
-            if (SlackDestinations.TryGetValue(id, out var destination))
-                await _notifications.SlackChannel.SendTestAsync(destination);
-
-            return Ok();
-        }
+        public IActionResult SendTestSlackMessage([FromQuery] Guid id) => Ok();
 
 
         private ChatFoldersViewModel BuildChatFolders(TelegramChat chat)

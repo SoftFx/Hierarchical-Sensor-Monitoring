@@ -12,7 +12,9 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Folders;
 using HSMServer.Notifications.AddressBook;
+using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
+using Chat = HSMServer.Notifications.Chats.Chat;
 using Telegram.Bot.Types.Enums;
 using HSMServer.Helpers;
 
@@ -36,7 +38,7 @@ namespace HSMServer.Notifications
         };
 
         private readonly TelegramUpdateHandler _updateHandler;
-        private readonly ITelegramChatsManager _chatsManager;
+        private readonly IChatsManager _chatsManager;
         private readonly IFolderManager _folderManager;
         private readonly TelegramConfig _config;
 
@@ -55,7 +57,7 @@ namespace HSMServer.Notifications
         public event Action<string, string> MessageSended;
         public event Action MessageSending;
 
-        internal TelegramBot(ITelegramChatsManager chatsManager, IFolderManager folderManager, TelegramConfig config)
+        internal TelegramBot(IChatsManager chatsManager, IFolderManager folderManager, TelegramConfig config)
         {
             _folderManager = folderManager;
             _chatsManager = chatsManager;
@@ -187,7 +189,7 @@ namespace HSMServer.Notifications
                     var chatIds = alert.Destination.Chats;
 
                     foreach (var chatId in chatIds)
-                        if (_chatsManager.TryGetValue(chatId, out var chat) && chat.SendMessages)
+                        if (_chatsManager.TryGetValue(chatId, out var chat) && chat.TelegramChatId is not null && chat.SendMessages)
                         {
                             var alertText = alert.ToString();
                             var logAlert = alertText.Length > 100 ? alertText.Substring(0, 100) : alertText;
@@ -223,6 +225,9 @@ namespace HSMServer.Notifications
             {
                 foreach (var chat in _chatsManager.GetValues())
                 {
+                    if (chat.TelegramChatId is null)
+                        continue;
+
                     try
                     {
                         if (chat.ShouldSendNotification)
@@ -255,22 +260,25 @@ namespace HSMServer.Notifications
             {
                 foreach (var chat in _chatsManager.GetValues())
                 {
+                    if (chat.TelegramChatId is null)
+                        continue;
+
                     try
                     {
-                        ChatFullInfo telegramChat = await _bot.GetChat(chat.ChatId, _tokenSource.Token);
-        
+                        ChatFullInfo telegramChat = await _bot.GetChat(chat.TelegramChatId, _tokenSource.Token);
+
                         if (ShouldGroupBeDeleted(telegramChat))
                         {
                             if (await _chatsManager.TryRemove(new RemoveRequest(chat.Id, InitiatorInfo.System)))
                                 continue;
                         }
-                        
-                        var chatName = chat.Type is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
+
+                        var chatName = chat.TelegramType is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
                         var chatDescription = telegramChat.Description;
 
                         if (chat.Name != chatName || chat.Description != chatDescription)
                         {
-                            var update = new TelegramChatUpdate()
+                            var update = new ChatUpdate()
                             {
                                 Id = chat.Id,
                                 Name = chatName,
@@ -312,9 +320,9 @@ namespace HSMServer.Notifications
         //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
         //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
 
-        private async ValueTask SendMessageAsync(TelegramChat chat, string message)
+        private async ValueTask SendMessageAsync(Chat chat, string message)
         {
-            if (string.IsNullOrEmpty(message))
+            if (string.IsNullOrEmpty(message) || chat.TelegramChatId is null)
                 return;
 
             int retry = 1;
@@ -334,7 +342,7 @@ namespace HSMServer.Notifications
 
                     MessageSending?.Invoke();
 
-                    await (_bot?.SendMessage(chat.ChatId, MarkdownHelper.ConvertToMarkdownV2(message), cancellationToken: _tokenSource.Token, parseMode: ParseMode.MarkdownV2) ?? Task.CompletedTask);
+                    await (_bot?.SendMessage(chat.TelegramChatId, MarkdownHelper.ConvertToMarkdownV2(message), cancellationToken: _tokenSource.Token, parseMode: ParseMode.MarkdownV2) ?? Task.CompletedTask);
 
                     var logMessage = message.Length > 100 ? message.Substring(0, 100) : message;
 
