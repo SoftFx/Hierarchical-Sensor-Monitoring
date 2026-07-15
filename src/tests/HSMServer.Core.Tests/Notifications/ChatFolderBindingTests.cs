@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
@@ -179,6 +180,36 @@ namespace HSMServer.Core.Tests.Notifications
 
             Assert.NotNull(manager[chat.Id].TelegramChatId);
             Assert.False(string.IsNullOrEmpty(manager[chat.Id].SlackWebhookUrl));
+        }
+
+        // Regression for the shared-buffer bug surfaced in PR #1265 review:
+        // Chat used to expose a single MessageBuilder/ScheduleBuilder/_nextSendMessageTime that
+        // both TelegramBot and SlackNotificationChannel wrote to. For a chat with both channels
+        // configured, the alert was double-buffered and the first channel to flush bumped the
+        // shared timer, so the second channel was skipped. ChannelAccumulator gives each channel
+        // its own state — this test pins that contract by draining Telegram and confirming the
+        // Slack timer is unchanged.
+        [Fact]
+        public void Chat_MultiChannel_AccumulatorsAreIndependent()
+        {
+            var chat = BuildMultiChannelChat();
+            var aggregation = chat.MessagesAggregationTimeSec;
+
+            Assert.NotNull(chat.TelegramAccumulator);
+            Assert.NotNull(chat.SlackAccumulator);
+            Assert.NotSame(chat.TelegramAccumulator, chat.SlackAccumulator);
+
+            // Both ready to send initially — _nextSendMessageTime defaults to DateTime.MinValue.
+            Assert.True(chat.TelegramAccumulator.ShouldSend(aggregation));
+            Assert.True(chat.SlackAccumulator.ShouldSend(aggregation));
+
+            // Drain Telegram (mirrors NotificationsCenter flush order [Telegram, Slack]). Even
+            // with no buffered alerts, GetNotifications bumps Telegram's timer to the future.
+            _ = chat.TelegramAccumulator.GetNotifications(aggregation).ToList();
+
+            // Pre-fix: this was false because Telegram's drain bumped the shared timer.
+            // Post-fix: each accumulator owns its own timer, so Slack is still ready to fire.
+            Assert.True(chat.SlackAccumulator.ShouldSend(aggregation));
         }
 
 

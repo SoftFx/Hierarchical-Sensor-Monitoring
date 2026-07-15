@@ -1,7 +1,6 @@
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Notifications;
-using HSMServer.Notifications.AddressBook;
 using HSMServer.Notifications.Channels;
 using HSMServer.Notifications.Chats;
 using System;
@@ -73,10 +72,7 @@ namespace HSMServer.Notifications
                         }
                         else
                         {
-                            IMessageBuilder builder = message is ScheduleAlertMessage
-                                ? chat.ScheduleMessageBuilder
-                                : chat.MessageBuilder;
-                            builder.AddMessage(alert);
+                            chat.SlackAccumulator.AddMessage(alert, message is ScheduleAlertMessage);
                         }
                     }
                 }
@@ -96,10 +92,10 @@ namespace HSMServer.Notifications
 
                 try
                 {
-                    if (!chat.ShouldSendNotification)
+                    if (!chat.SlackAccumulator.ShouldSend(chat.MessagesAggregationTimeSec))
                         continue;
 
-                    foreach (var notification in chat.GetNotifications())
+                    foreach (var notification in chat.SlackAccumulator.GetNotifications(chat.MessagesAggregationTimeSec))
                     {
                         if (string.IsNullOrWhiteSpace(notification))
                             continue;

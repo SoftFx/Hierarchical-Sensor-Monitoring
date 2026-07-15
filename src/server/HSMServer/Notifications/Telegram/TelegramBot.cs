@@ -11,7 +11,6 @@ using HSMServer.Core.Notifications;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Folders;
-using HSMServer.Notifications.AddressBook;
 using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
 using Chat = HSMServer.Notifications.Chats.Chat;
@@ -201,8 +200,7 @@ namespace HSMServer.Notifications
                             }
                             else
                             {
-                                IMessageBuilder builder = message is ScheduleAlertMessage ? chat.ScheduleMessageBuilder : chat.MessageBuilder;
-                                builder.AddMessage(alert);
+                                chat.TelegramAccumulator.AddMessage(alert, message is ScheduleAlertMessage);
 
                                 _logger.Info($"TSend: builder '{logAlert}'");
                             }
@@ -230,9 +228,9 @@ namespace HSMServer.Notifications
 
                     try
                     {
-                        if (chat.ShouldSendNotification)
+                        if (chat.TelegramAccumulator.ShouldSend(chat.MessagesAggregationTimeSec))
                         {
-                            foreach (var notification in chat.GetNotifications())
+                            foreach (var notification in chat.TelegramAccumulator.GetNotifications(chat.MessagesAggregationTimeSec))
                             {
                                 if (_tokenSource.IsCancellationRequested)
                                     break;
