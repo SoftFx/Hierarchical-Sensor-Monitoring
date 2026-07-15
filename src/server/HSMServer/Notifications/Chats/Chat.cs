@@ -32,7 +32,7 @@ namespace HSMServer.Notifications.Chats
 
 
         // Telegram (optional)
-        public ChatId TelegramChatId { get; private set; }
+        public ChatId? TelegramChatId { get; private set; }
 
         public ConnectedChatType? TelegramType { get; init; }
 
@@ -50,15 +50,18 @@ namespace HSMServer.Notifications.Chats
         public bool ShouldSendNotification => MessagesAggregationTimeSec > 0 && _nextSendMessageTime <= DateTime.UtcNow;
 
 
-        public Chat() : base()
+        public Chat(ChatId chatId) : base()
         {
             SendMessages = DefaultSendMessages;
             MessagesAggregationTimeSec = DefaultMessagesAggregationTimeSec;
+
+            TelegramChatId = chatId;
         }
 
-        public Chat(global::Telegram.Bot.Types.Chat chat) : this()
+        internal Chat() : base()
         {
-            TelegramChatId = chat;
+            SendMessages = DefaultSendMessages;
+            MessagesAggregationTimeSec = DefaultMessagesAggregationTimeSec;
         }
 
         internal Chat(ChatEntity entity) : base(entity)
