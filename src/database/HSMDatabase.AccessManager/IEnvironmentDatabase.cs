@@ -95,6 +95,20 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
+        #region Chats
+
+        List<byte[]> GetChatsList();
+        ChatEntity GetChat(byte[] chatId);
+        void AddChat(ChatEntity chat);
+        void RemoveChat(byte[] chatId);
+        void AddChatToList(byte[] chatId);
+        void RemoveChatFromList(byte[] chatId);
+
+        void RemoveTelegramChatsListKey();
+        void RemoveSlackDestinationsListKey();
+
+        #endregion
+
         #region Alert templates
 
         List<byte[]> GetAllAlertTemplatesIds();

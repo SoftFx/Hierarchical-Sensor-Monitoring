@@ -136,6 +136,19 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
+        #region Chat
+
+        void AddChat(ChatEntity chat);
+        void UpdateChat(ChatEntity chat);
+        void RemoveChat(byte[] chatId);
+        ChatEntity GetChat(byte[] chatId);
+        List<ChatEntity> GetChats();
+
+        void RemoveTelegramChatsListKey();
+        void RemoveSlackDestinationsListKey();
+
+        #endregion
+
         #region Alert Templates
         List<AlertTemplateEntity> GetAllAlertTemplates();
         void AddAlertTemplate(AlertTemplateEntity policy);
