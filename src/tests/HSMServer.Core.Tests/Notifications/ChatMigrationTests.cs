@@ -67,6 +67,7 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal("tg-1", migratedTg1.Name);
             Assert.Equal((byte)0, migratedTg1.TelegramType);
             Assert.Equal(100L, migratedTg1.TelegramChatId);
+            Assert.NotNull(migratedTg1.AuthorizationTime);
             Assert.Null(migratedTg1.SlackWebhookUrl);
             Assert.Null(migratedTg1.MattermostWebhookUrl);
 
