@@ -106,7 +106,7 @@ namespace HSMServer.Controllers
             await _telegramBot.SendTestMessageAsync(chatId, testMessage);
         }
 
-        [HttpPost]
+        [HttpGet]
         public async Task<IActionResult> SendTestSlackMessage([FromQuery] Guid id)
         {
             if (ChatsManager.TryGetValue(id, out var chat))

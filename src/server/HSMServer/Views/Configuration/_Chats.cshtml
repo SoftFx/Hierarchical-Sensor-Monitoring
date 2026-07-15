@@ -123,7 +123,7 @@ else
         $(document).off("click", "[id^=sendSlack_]").on("click", "[id^=sendSlack_]", function () {
             var id = this.id.substring("sendSlack_".length, this.id.length);
 
-            $.post("@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)", { id: id })
+            $.get("@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)", { id: id })
                 .done(function () { showToast("Test Slack message sent."); })
                 .fail(function () { showToast("Failed to send test Slack message."); });
         });

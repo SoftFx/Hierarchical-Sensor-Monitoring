@@ -14,6 +14,8 @@
 
     var isTelegramBound = Model.TelegramChatId.HasValue;
     var icons = Model.ChatBrandIcons();
+    var isNewChat = Model.Id == Guid.Empty;
+    var formAction = isNewChat ? nameof(NotificationsController.AddChat) : nameof(NotificationsController.EditChat);
 }
 
 
@@ -33,7 +35,7 @@
             </a>
         </div>
 
-        <form id="chat_form" class="my-2" method="post" asp-action="@nameof(NotificationsController.EditChat)">
+        <form id="chat_form" class="my-2" method="post" asp-action="@formAction">
             <input asp-for="@Model.Id" value="@Model.Id" style="display: none" />
             <input asp-for="@Model.TelegramChatId" value="@Model.TelegramChatId" style="display: none" />
             <input asp-for="@Model.TelegramType" value="@Model.TelegramType" style="display: none" />
@@ -181,7 +183,7 @@
 
         $("#sendTestSlack").off("click").on("click", function () {
             var id = $(this).data("chat-id");
-            $.post("@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)", { id: id })
+            $.get("@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)", { id: id })
                 .done(function () { showToast("Test Slack message sent."); })
                 .fail(function () { showToast("Failed to send test Slack message."); });
         });
