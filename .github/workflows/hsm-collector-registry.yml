@@ -1,0 +1,58 @@
+name: hsm-collector vcpkg registry
+
+# Validates that this repository works as a vcpkg registry for `hsm-collector`:
+#   1. the version database (versions/) is internally consistent with the ports (ports/), and
+#   2. the registry port installs (fetching the tagged source) and a consumer links against it.
+# Windows-only: the aggregator target is Windows/MSVC, and the version-DB check is platform-agnostic.
+
+on:
+  push:
+    paths:
+      - 'ports/hsm-collector/**'
+      - 'versions/**'
+      - '.github/workflows/hsm-collector-registry.yml'
+  pull_request:
+    paths:
+      - 'ports/hsm-collector/**'
+      - 'versions/**'
+      - 'src/native/collector/**'
+      - '.github/workflows/hsm-collector-registry.yml'
+  workflow_dispatch:
+
+jobs:
+  registry-consume:
+    runs-on: windows-latest
+    env:
+      VCPKG_DISABLE_METRICS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
+
+      - name: Verify the version database matches the ports
+        shell: bash
+        run: |
+          "$VCPKG_ROOT/vcpkg" x-verify-versions --verbose \
+            --x-builtin-ports-root=ports \
+            --x-builtin-registry-versions-dir=versions
+
+      - name: Install hsm-collector from the registry port (fetches the tagged source)
+        shell: bash
+        # run-vcpkg defaults the binary cache to a GHA backend that needs tokens not reliably present
+        # here; override to "clear" so the port builds from source (same fix as the other consume lanes).
+        env:
+          VCPKG_BINARY_SOURCES: clear
+        run: |
+          "$VCPKG_ROOT/vcpkg" install hsm-collector --overlay-ports=ports --triplet x64-windows
+
+      - name: Build a consumer against the installed package
+        shell: bash
+        run: |
+          cmake -S src/native/collector/examples/console/standalone -B build/registry-consume \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=x64-windows
+          cmake --build build/registry-consume --config Release --parallel
