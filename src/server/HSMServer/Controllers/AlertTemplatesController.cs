@@ -82,9 +82,9 @@ namespace HSMServer.Controllers
             return View(result);
         }
 
-        private sealed record ChatEntry(Guid Id, string Name);
+        private sealed record ChatEntry(Guid Id, string Name, string IconsHtml);
 
-        private sealed record ChatsPayload(List<ChatEntry> Groups, List<ChatEntry> Users, List<ChatEntry> SlackDestinations);
+        private sealed record ChatsPayload(List<ChatEntry> Chats);
 
         private class UpdateResponse
         {
@@ -136,27 +136,19 @@ namespace HSMServer.Controllers
             {
                 // Mirrors folder.GetAvailableChats(_chats) used by the POST path so the live-updated
                 // dropdown shows the same destinations as the saved form. A unified Chat may carry
-                // both Telegram and Slack channels, so a single chat can appear under more than one list.
-                var groups = new List<ChatEntry>();
-                var users = new List<ChatEntry>();
-                var slack = new List<ChatEntry>();
+                // multiple channels (Telegram + Slack + Mattermost); each chat appears exactly once
+                // with its multi-channel brand icons rendered via ChatBrandIcons().
+                var list = new List<ChatEntry>();
 
                 foreach (var c in _chats.GetValues())
                 {
                     if (!folderChats.Contains(c.Id) && c.Folders.Count != 0)
                         continue;
 
-                    if (c.TelegramChatId is not null)
-                    {
-                        var list = c.TelegramType == ConnectedChatType.TelegramGroup ? groups : users;
-                        list.Add(new ChatEntry(c.Id, c.Name));
-                    }
-
-                    if (!string.IsNullOrEmpty(c.SlackWebhookUrl))
-                        slack.Add(new ChatEntry(c.Id, c.Name));
+                    list.Add(new ChatEntry(c.Id, c.Name, c.ChatBrandIcons()));
                 }
 
-                chats = new ChatsPayload(groups, users, slack);
+                chats = new ChatsPayload(list);
             }
 
             var response = new UpdateResponse(sensorType, sensors, chats, page);

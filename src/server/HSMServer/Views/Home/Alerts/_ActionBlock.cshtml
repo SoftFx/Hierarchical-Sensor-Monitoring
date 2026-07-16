@@ -27,12 +27,6 @@
     var isSecondaryCondition = !Model.IsMain;
 
     var allChats = ChatsManager.GetValues().Where(c => Model.AvailableChats.Contains(c.Id)).OrderBy(c => c.Name).ToList();
-    // A unified Chat may carry both Telegram and Slack channels, so a single chat can appear under
-    // more than one section below. The duplicate <option> is harmless — the chat id is submitted
-    // once regardless of how many options carry it. Mirrors AlertTemplatesController.UpdateTemplate.
-    var telegramGroups = allChats.Where(c => c.TelegramChatId is not null && c.TelegramType == ConnectedChatType.TelegramGroup).ToList();
-    var telegramUsers = allChats.Where(c => c.TelegramChatId is not null && c.TelegramType == ConnectedChatType.TelegramPrivate).ToList();
-    var slackChats = allChats.Where(c => !string.IsNullOrEmpty(c.SlackWebhookUrl)).ToList();
 }
 
 @* <div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3 w-100" > *@
@@ -55,28 +49,13 @@
                 <option class="general-group-chat-mode" value="@ChatsMode.All" selected="@(Model.ChatsMode is ChatsMode.All)">@ChatsMode.All.GetDisplayName()</option>
 
                 <option data-divider="true"></option>
-                <option disabled>Telegram groups</option>
-                @foreach (var chat in telegramGroups)
+                @if (allChats.Count == 0)
                 {
-                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
-                }
-
-                <option data-divider="true"></option>
-                <option disabled>Telegram users</option>
-                @foreach (var chat in telegramUsers)
-                {
-                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
-                }
-
-                <option data-divider="true"></option>
-                <option disabled>Slack destinations</option>
-                @if (slackChats.Count == 0)
-                {
-                    <option disabled value="">No Slack destinations configured</option>
+                    <option disabled value="">No chats configured</option>
                 }
                 else
                 {
-                    foreach (var chat in slackChats)
+                    foreach (var chat in allChats)
                     {
                         <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
                     }

@@ -15,54 +15,36 @@
 
 @if (Model is not null)
 {
-    @await Html.PartialAsync("~/Views/Notifications/_NewTelegramChatHelpModal.cshtml", Model.FolderId)
+    @await Html.PartialAsync("~/Views/Notifications/_NewChatHelpModal.cshtml", Model.FolderId)
 
     <div class="d-flex flex-row text-nowrap align-items-center my-3">
         <partial name="~/Views/Shared/_DefaultChat.cshtml" for="DefaultChats" />
     </div>
 
-    <div class="my-2" align="right">
-        <a href="javascript:showAddTelegramGroupHelpModal();" class="btn btn-link p-0">
-            <i class="fa-solid fa-plus"></i> <i class="@ChatIcons.TelegramBrandClass"></i> Add new telegram chat
-        </a>
-        <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.AddChat)" asp-route-id="@Guid.Empty" class="btn btn-link p-0">
-            <i class="fa-solid fa-plus"></i> <i class="@ChatIcons.SlackBrandClass"></i> Add new chat
-        </a>
+    <div class="my-2 dropdown d-flex justify-content-end" align="right">
+        <button class="btn btn-link p-0 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fa-solid fa-plus"></i> Add new chat
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+                <a class="dropdown-item" href="javascript:showAddChatHelpModal();">
+                    <i class="@ChatIcons.TelegramBrandClass"></i> Telegram bot invite
+                </a>
+            </li>
+            <li>
+                <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.AddChat)" asp-route-id="@Guid.Empty">
+                    <i class="@ChatIcons.SlackBrandClass"></i> Slack / Mattermost webhook
+                </a>
+            </li>
+        </ul>
     </div>
 
     <div id="chatsSelect" class="selectpicker">
         <select class="selectpicker" asp-for="NewChats" multiple
                 data-width="100%" data-live-search="true" data-placeholder="Choose chats to add">
-            @{
-                var telegramGroupsToAdd = Model.ChatsToAdd.Where(c => c.TelegramChatId is not null && c.TelegramType == ConnectedChatType.TelegramGroup).ToList();
-                var telegramUsersToAdd = Model.ChatsToAdd.Where(c => c.TelegramChatId is not null && c.TelegramType == ConnectedChatType.TelegramPrivate).ToList();
-                var slackToAdd = Model.ChatsToAdd.Where(c => !string.IsNullOrEmpty(c.SlackWebhookUrl)).ToList();
-            }
-
-            @if (telegramGroupsToAdd.Count > 0)
+            @if (Model.ChatsToAdd.Count > 0)
             {
-                <option disabled>Telegram groups</option>
-                foreach (var chat in telegramGroupsToAdd)
-                {
-                    <option value="@chat.Id" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
-                }
-            }
-
-            @if (telegramUsersToAdd.Count > 0)
-            {
-                <option data-divider="true"></option>
-                <option disabled>Telegram users</option>
-                foreach (var chat in telegramUsersToAdd)
-                {
-                    <option value="@chat.Id" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
-                }
-            }
-
-            @if (slackToAdd.Count > 0)
-            {
-                <option data-divider="true"></option>
-                <option disabled>Slack destinations</option>
-                foreach (var chat in slackToAdd)
+                foreach (var chat in Model.ChatsToAdd)
                 {
                     <option value="@chat.Id" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
                 }

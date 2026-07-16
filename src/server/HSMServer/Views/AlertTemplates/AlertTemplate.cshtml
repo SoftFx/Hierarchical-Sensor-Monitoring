@@ -272,39 +272,30 @@
     @await Html.PartialAsync("~/Views/Home/Alerts/_AlertsFormCollection.cshtml")
 
     function updateTemplateChatDropdowns(chats) {
-        var groups = (chats && chats.Groups) || [];
-        var users = (chats && chats.Users) || [];
-        var slackDestinations = (chats && chats.SlackDestinations) || [];
+        var list = (chats && chats.Chats) || [];
 
         $('form#addAlertTemplate_form select[name="Chats"]').each(function() {
             var $select = $(this);
             var currentSelected = ($select.val() || []).slice();
 
             $select.find('option').not('.general-group-chat-mode').remove();
+            $select.append('<option data-divider="true"></option>');
 
-            appendChatSection($select, 'Groups', groups, currentSelected, 'fab fa-telegram');
-            appendChatSection($select, 'Users', users, currentSelected, 'fab fa-telegram');
-            appendChatSection($select, 'Slack destinations', slackDestinations, currentSelected, 'fab fa-slack', 'No Slack destinations configured');
+            if (list.length === 0) {
+                $select.append('<option disabled value="">No chats configured</option>');
+            } else {
+                // data-content lets bootstrap-select render the multi-channel brand icons inline;
+                // IconsHtml is produced server-side by Chat.ChatBrandIcons() so the dropdown looks
+                // the same after a form refresh as on initial render.
+                list.forEach(function(chat) {
+                    var isSelected = currentSelected.includes(chat.Id);
+                    var icons = chat.IconsHtml || '';
+                    var dataContent = `${icons} ${chat.Name}`;
+                    $select.append(`<option value="${chat.Id}"${isSelected ? ' selected' : ''} data-content="${dataContent}">${chat.Name}</option>`);
+                });
+            }
 
             $select.selectpicker('refresh');
-        });
-    }
-
-    function appendChatSection($select, title, items, currentSelected, brandClass, emptyMessage) {
-        $select.append('<option data-divider="true"></option>');
-        $select.append(`<option disabled>${title}</option>`);
-        if (items.length === 0) {
-            if (emptyMessage)
-                $select.append(`<option disabled value="">${emptyMessage}</option>`);
-            return;
-        }
-        items.forEach(function(chat) {
-            var isSelected = currentSelected.includes(chat.Id);
-            // data-content lets bootstrap-select render the brand icon inline; matches the static
-            // markup emitted by Views/Home/Alerts/_ActionBlock.cshtml so the dropdown looks the same
-            // after a form refresh as on initial render.
-            var dataContent = `<i class='${brandClass}'></i> ${chat.Name}`;
-            $select.append(`<option value="${chat.Id}"${isSelected ? ' selected' : ''} data-content="${dataContent}">${chat.Name}</option>`);
         });
     }
 
