@@ -117,9 +117,16 @@ jobs:
                     f"{existing['git-tree']}; refusing to rewrite it to {tree}. Bump the version.")
               sys.exit(1)
           b = json.load(open('versions/baseline.json'))
-          b['default']['hsm-collector']['baseline'] = ver
-          b['default']['hsm-collector']['port-version'] = 0  # reset on a new version
-          json.dump(b, open('versions/baseline.json', 'w'), indent=2); open('versions/baseline.json', 'a').write('\n')
+          cur = b['default']['hsm-collector'].get('baseline', '0.0.0')
+          semver = lambda v: tuple(int(x) for x in v.split('.'))
+          # Only advance the baseline — a backport / re-publish of an OLDER version still gets its
+          # versions/ entry (below) but must not roll the default consumers see backward.
+          if semver(ver) >= semver(cur):
+              b['default']['hsm-collector']['baseline'] = ver
+              b['default']['hsm-collector']['port-version'] = 0  # reset on a new version
+              json.dump(b, open('versions/baseline.json', 'w'), indent=2); open('versions/baseline.json', 'a').write('\n')
+          else:
+              print(f"::warning::published {ver}, but the baseline stays at {cur} (newer) — not rolling back.")
           # Idempotent (pre-merge re-runs): drop any existing entry for this version, then prepend it.
           d['versions'] = [e for e in d['versions'] if e.get('version') != ver]
           d['versions'].insert(0, {"version": ver, "git-tree": tree})
