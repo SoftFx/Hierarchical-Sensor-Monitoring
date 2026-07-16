@@ -32,13 +32,6 @@ jobs:
         with:
           vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
 
-      - name: Verify the version database matches the ports
-        shell: bash
-        run: |
-          "$VCPKG_ROOT/vcpkg" x-verify-versions --verbose \
-            --x-builtin-ports-root=ports \
-            --x-builtin-registry-versions-dir=versions
-
       - name: Install hsm-collector from the registry port (fetches the tagged source)
         shell: bash
         # run-vcpkg defaults the binary cache to a GHA backend that needs tokens not reliably present
@@ -56,3 +49,10 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=x64-windows
           cmake --build build/registry-consume --config Release --parallel
+
+      - name: Verify the version database matches the ports
+        shell: bash
+        run: |
+          "$VCPKG_ROOT/vcpkg" x-ci-verify-versions --verbose \
+            --x-builtin-ports-root=ports \
+            --x-builtin-registry-versions-dir=versions
