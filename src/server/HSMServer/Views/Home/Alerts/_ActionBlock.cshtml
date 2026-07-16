@@ -27,6 +27,9 @@
     var isSecondaryCondition = !Model.IsMain;
 
     var allChats = ChatsManager.GetValues().Where(c => Model.AvailableChats.Contains(c.Id)).OrderBy(c => c.Name).ToList();
+    // A unified Chat may carry both Telegram and Slack channels, so a single chat can appear under
+    // more than one section below. The duplicate <option> is harmless — the chat id is submitted
+    // once regardless of how many options carry it. Mirrors AlertTemplatesController.UpdateTemplate.
     var telegramGroups = allChats.Where(c => c.TelegramChatId is not null && c.TelegramType == ConnectedChatType.TelegramGroup).ToList();
     var telegramUsers = allChats.Where(c => c.TelegramChatId is not null && c.TelegramType == ConnectedChatType.TelegramPrivate).ToList();
     var slackChats = allChats.Where(c => !string.IsNullOrEmpty(c.SlackWebhookUrl)).ToList();
