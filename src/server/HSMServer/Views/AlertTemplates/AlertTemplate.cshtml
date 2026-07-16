@@ -287,16 +287,33 @@
                 // data-content lets bootstrap-select render the multi-channel brand icons inline;
                 // IconsHtml is produced server-side by Chat.ChatBrandIcons() so the dropdown looks
                 // the same after a form refresh as on initial render.
+                // chat.Name is user-controlled and is escaped before insertion to prevent HTML
+                // injection through the template-literal markup below; IconsHtml is trusted
+                // server-rendered markup and is inserted verbatim.
                 list.forEach(function(chat) {
                     var isSelected = currentSelected.includes(chat.Id);
                     var icons = chat.IconsHtml || '';
-                    var dataContent = `${icons} ${chat.Name}`;
-                    $select.append(`<option value="${chat.Id}"${isSelected ? ' selected' : ''} data-content="${dataContent}">${chat.Name}</option>`);
+                    var safeName = escapeChatName(chat.Name);
+                    var dataContent = `${icons} ${safeName}`;
+                    $select.append(`<option value="${chat.Id}"${isSelected ? ' selected' : ''} data-content="${dataContent}">${safeName}</option>`);
                 });
             }
 
             $select.selectpicker('refresh');
         });
+    }
+
+    function escapeChatName(name) {
+        // chat.Name flows from user input into both the data-content attribute and the option's
+        // text body. Without escaping, a name like 'a" onclick="...' or '<script>' would execute
+        // in the dropdown. Razor HtmlEncoding protects the server-rendered options in
+        // _ActionBlock.cshtml / _DefaultChat.cshtml; this JS path needs its own escape.
+        return String(name == null ? '' : name)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     function renderSensorsPagination(currentPage, totalPages) {
