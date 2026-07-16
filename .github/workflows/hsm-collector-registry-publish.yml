@@ -80,7 +80,7 @@ jobs:
           url="https://github.com/${REPO}/archive/${TAG}.tar.gz"
           # Download to a file (with -f so a missing tag → non-zero exit under set -e) rather than piping
           # curl into sha512sum, where a 404 would otherwise be hashed as an empty stream.
-          curl -fsSL --retry 3 --retry-connrefused "$url" -o source.tgz
+          curl -fsSL --retry 3 --retry-connrefused --max-time 300 "$url" -o source.tgz
           sha=$(sha512sum source.tgz | awk '{print $1}')
           empty="cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
           if [ "${#sha}" -ne 128 ] || [ "$sha" = "$empty" ]; then
