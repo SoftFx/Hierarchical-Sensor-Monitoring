@@ -516,20 +516,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : Telegram chat
 
-        public void AddTelegramChat(TelegramChatEntity chat)
-        {
-            _environmentDatabase.AddTelegramChatToList(chat.Id);
-            _environmentDatabase.AddTelegramChat(chat);
-        }
-
-        public void UpdateTelegramChat(TelegramChatEntity chat) => _environmentDatabase.AddTelegramChat(chat);
-
-        public void RemoveTelegramChat(byte[] chatId)
-        {
-            _environmentDatabase.RemoveTelegramChat(chatId);
-            _environmentDatabase.RemoveTelegramChatFromList(chatId);
-        }
-
         public TelegramChatEntity GetTelegramChat(byte[] chatId) => _environmentDatabase.GetTelegramChat(chatId);
 
         public List<TelegramChatEntity> GetTelegramChats()
@@ -550,20 +536,6 @@ namespace HSMDatabase.DatabaseWorkCore
         #endregion
 
         #region Environment database : Slack destination
-
-        public void AddSlackDestination(SlackDestinationEntity destination)
-        {
-            _environmentDatabase.AddSlackDestinationToList(destination.Id);
-            _environmentDatabase.AddSlackDestination(destination);
-        }
-
-        public void UpdateSlackDestination(SlackDestinationEntity destination) => _environmentDatabase.AddSlackDestination(destination);
-
-        public void RemoveSlackDestination(byte[] id)
-        {
-            _environmentDatabase.RemoveSlackDestination(id);
-            _environmentDatabase.RemoveSlackDestinationFromList(id);
-        }
 
         public SlackDestinationEntity GetSlackDestination(byte[] id) => _environmentDatabase.GetSlackDestination(id);
 

@@ -1,7 +1,5 @@
-using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Notifications.AddressBook;
 using System;
 using System.Collections.Generic;
 using Telegram.Bot.Types;
@@ -13,14 +11,11 @@ namespace HSMServer.Notifications.Chats
         private const bool DefaultSendMessages = true;
         private const int DefaultMessagesAggregationTimeSec = 60;
 
-        private DateTime _nextSendMessageTime;
+        private readonly ChannelAccumulator _telegramAccumulator = new();
+        private readonly ChannelAccumulator _slackAccumulator = new();
 
 
         internal HashSet<Guid> Folders { get; } = [];
-
-        internal ScheduleBuilder ScheduleMessageBuilder { get; } = new();
-
-        internal MessageBuilder MessageBuilder { get; } = new();
 
 
         // Common
@@ -47,7 +42,13 @@ namespace HSMServer.Notifications.Chats
         public string MattermostWebhookUrl { get; private set; }
 
 
-        public bool ShouldSendNotification => MessagesAggregationTimeSec > 0 && _nextSendMessageTime <= DateTime.UtcNow;
+        // Per-channel accumulators. Returns null when the channel is not configured for this chat,
+        // so callers can early-skip without an extra flag check. Each accumulator owns its own
+        // MessageBuilder/ScheduleBuilder/next-send timer — sharing them across channels would
+        // double-buffer each alert and let the first channel to flush starve the others.
+        internal ChannelAccumulator TelegramAccumulator => TelegramChatId is null ? null : _telegramAccumulator;
+
+        internal ChannelAccumulator SlackAccumulator => string.IsNullOrEmpty(SlackWebhookUrl) ? null : _slackAccumulator;
 
 
         public Chat(ChatId chatId) : base()
@@ -117,22 +118,6 @@ namespace HSMServer.Notifications.Chats
             entity.MattermostWebhookUrl = MattermostWebhookUrl;
 
             return entity;
-        }
-
-
-        internal IEnumerable<string> GetNotifications()
-        {
-            try
-            {
-                foreach (var report in ScheduleMessageBuilder.GetReports())
-                    yield return report;
-
-                yield return MessageBuilder.GetAggregateMessage();
-            }
-            finally
-            {
-                _nextSendMessageTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(MessagesAggregationTimeSec));
-            }
         }
     }
 }

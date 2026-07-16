@@ -40,6 +40,30 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.NotNull(manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(12345L)));
         }
 
+        // Regression: pre-#1265 TryAdd was `base.TryAdd(model) && (no telegram id || _telegramChatIds.TryAdd(...))`.
+        // If base succeeded but the index TryAdd collided, the method returned false but the chat was
+        // already in storage — a ghost chat that survives restart. The pre-flight check rejects before
+        // any base mutation; this test pins the post-fix behavior (colliding add rejected + no ghost).
+        [Fact]
+        public async Task TryAdd_CollidingTelegramChatId_RejectedAndNotAddedToBase()
+        {
+            const long sharedChatId = 999L;
+            var manager = BuildManager();
+            var first = BuildTelegramChat(sharedChatId);
+            var firstAdded = await manager.TryAdd(first);
+            Assert.True(firstAdded);
+
+            var colliding = new Chat(new Telegram.Bot.Types.ChatId(sharedChatId))
+            {
+                TelegramType = ConnectedChatType.TelegramPrivate,
+            };
+            var collidingAdded = await manager.TryAdd(colliding);
+
+            Assert.False(collidingAdded);
+            Assert.Single(manager.GetValues());
+            Assert.Same(first, manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(sharedChatId)));
+        }
+
         [Fact]
         public async Task TryRemove_SlackOnlyChat_DoesNotThrowOnMissingTelegramIndex()
         {

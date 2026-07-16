@@ -218,12 +218,6 @@
             any authenticated user could disable data collection on any product by POSTing its id.
             </summary>
         </member>
-        <member name="T:HSMServer.Filters.SlackRoleFilters.SlackAdminAttribute">
-            <summary>
-            Slack destinations are global (not folder-scoped), so any mutation
-            requires administrator rights. Non-admins are redirected to Home/Index.
-            </summary>
-        </member>
         <member name="T:HSMServer.Filters.UserRoleFilterBase">
             <summary>
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
@@ -323,14 +317,6 @@
         </member>
         <member name="P:HSMServer.Model.TreeViewModel.ProductNodeViewModel.DisabledSensorGroups">
             Sensor groups currently disabled for agents of this product (#1198).
-        </member>
-        <member name="M:HSMServer.Notifications.SlackDestinationsManager.RemoveFolderFromChats(System.Guid,System.Collections.Generic.List{System.Guid},HSMServer.Core.TableOfChanges.InitiatorInfo)">
-            <summary>
-            Required by the IFolderManager.RemoveFolderFromChats contract so the same
-            multicast delegate can fan out to Telegram and Slack. <paramref name="initiator"/>
-            is unused here because Slack has no Telegram-style auto-remove at zero folders;
-            it is only consumed by TelegramChatsManager.TryRemove for the audit trail.
-            </summary>
         </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">
             <summary>

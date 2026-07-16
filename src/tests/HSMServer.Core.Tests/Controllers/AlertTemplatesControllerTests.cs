@@ -20,6 +20,7 @@ using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
@@ -37,9 +38,8 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly Mock<ITreeValuesCache> _cacheMock = new();
         private readonly Mock<IFolderManager> _folderManagerMock = new();
         private readonly Mock<IUserManager> _userManagerMock = new();
-        private readonly Mock<ITelegramChatsManager> _telegramMock = new();
+        private readonly Mock<IChatsManager> _chatsMock = new();
         private readonly Mock<IAlertScheduleProvider> _scheduleProviderMock = new();
-        private readonly Mock<ISlackDestinationsManager> _slackDestinationsMock = new();
         private readonly TreeViewModel _treeViewModel;
         private readonly Guid _folderId = Guid.NewGuid();
 
@@ -56,7 +56,7 @@ namespace HSMServer.Core.Tests.Controllers
             _userManagerMock.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns(new List<User>());
             _folderManagerMock.Setup(f => f.GetUserFolders(It.IsAny<User>())).Returns(new List<FolderModel>());
             _scheduleProviderMock.Setup(p => p.GetAllSchedules()).Returns(new List<AlertSchedule>());
-            _slackDestinationsMock.Setup(s => s.GetValues()).Returns(new List<SlackDestination>());
+            _chatsMock.Setup(s => s.GetValues()).Returns(new List<Chat>());
 
             _treeViewModel = new TreeViewModel(_cacheMock.Object, _folderManagerMock.Object, _userManagerMock.Object);
         }
@@ -65,13 +65,12 @@ namespace HSMServer.Core.Tests.Controllers
         private AlertTemplatesController CreateController()
         {
             var controller = new AlertTemplatesController(
-                _telegramMock.Object,
+                _chatsMock.Object,
                 _folderManagerMock.Object,
                 _treeViewModel,
                 _cacheMock.Object,
                 _userManagerMock.Object,
-                _scheduleProviderMock.Object,
-                _slackDestinationsMock.Object);
+                _scheduleProviderMock.Object);
 
             controller.ControllerContext = new ControllerContext
             {
@@ -302,13 +301,12 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var folderId = Guid.NewGuid();
             var telegramChat = BuildTelegramChat(Guid.NewGuid(), "tg-group", ConnectedChatType.TelegramGroup);
-            var slackDestination = BuildSlackDestination(Guid.NewGuid(), "slack-channel");
+            var slackChat = BuildSlackChat(Guid.NewGuid(), "slack-channel");
 
-            var folder = new FolderModel(BuildFolderEntity(folderId, telegramChat.Id, slackDestination.Id));
+            var folder = new FolderModel(BuildFolderEntity(folderId, telegramChat.Id, slackChat.Id));
 
             _folderManagerMock.Setup(f => f.TryGetValue(folderId, out folder)).Returns(true);
-            _telegramMock.Setup(t => t.GetValues()).Returns(new List<TelegramChat> { telegramChat });
-            _slackDestinationsMock.Setup(s => s.GetValues()).Returns(new List<SlackDestination> { slackDestination });
+            _chatsMock.Setup(t => t.GetValues()).Returns(new List<Chat> { telegramChat, slackChat });
 
             var controller = CreateController();
 
@@ -325,8 +323,8 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Empty(chats.GetProperty("Users").EnumerateArray());
 
             var slack = Assert.Single(chats.GetProperty("SlackDestinations").EnumerateArray());
-            Assert.Equal(slackDestination.Id, Guid.Parse(slack.GetProperty("Id").GetString()));
-            Assert.Equal(slackDestination.Name, slack.GetProperty("Name").GetString());
+            Assert.Equal(slackChat.Id, Guid.Parse(slack.GetProperty("Id").GetString()));
+            Assert.Equal(slackChat.Name, slack.GetProperty("Name").GetString());
         }
 
         [Fact]
@@ -336,17 +334,16 @@ namespace HSMServer.Core.Tests.Controllers
             // A Slack destination bound to a different folder must not appear in this folder's dropdown.
             // Mirrors the Telegram availability rule used by GetAvailableChats.
             var folderId = Guid.NewGuid();
-            var boundSlack = BuildSlackDestination(Guid.NewGuid(), "bound-slack");
+            var boundSlack = BuildSlackChat(Guid.NewGuid(), "bound-slack");
             boundSlack.Folders.Add(folderId);
 
-            var unboundSlack = BuildSlackDestination(Guid.NewGuid(), "other-folder-slack");
+            var unboundSlack = BuildSlackChat(Guid.NewGuid(), "other-folder-slack");
             unboundSlack.Folders.Add(Guid.NewGuid()); // tied to a different folder
 
             var folder = new FolderModel(BuildFolderEntity(folderId, boundSlack.Id));
 
             _folderManagerMock.Setup(f => f.TryGetValue(folderId, out folder)).Returns(true);
-            _telegramMock.Setup(t => t.GetValues()).Returns(new List<TelegramChat>());
-            _slackDestinationsMock.Setup(s => s.GetValues()).Returns(new List<SlackDestination> { boundSlack, unboundSlack });
+            _chatsMock.Setup(t => t.GetValues()).Returns(new List<Chat> { boundSlack, unboundSlack });
 
             var controller = CreateController();
 
@@ -386,30 +383,30 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
-        private static TelegramChat BuildTelegramChat(Guid id, string name, ConnectedChatType type) =>
-            new(new TelegramChatEntity
+        private static Chat BuildTelegramChat(Guid id, string name, ConnectedChatType type) =>
+            new(new ChatEntity
             {
                 Id = id.ToByteArray(),
                 Author = Guid.NewGuid().ToByteArray(),
                 CreationDate = DateTime.UtcNow.Ticks,
                 Name = name,
-                ChatId = long.MaxValue,
                 SendMessages = true,
-                Type = (byte)type,
                 MessagesAggregationTimeSec = 60,
+                TelegramChatId = long.MaxValue,
+                TelegramType = (byte)type,
                 AuthorizationTime = DateTime.UtcNow.Ticks,
             });
 
-        private static SlackDestination BuildSlackDestination(Guid id, string name) =>
-            new(new SlackDestinationEntity
+        private static Chat BuildSlackChat(Guid id, string name) =>
+            new(new ChatEntity
             {
                 Id = id.ToByteArray(),
                 Author = Guid.NewGuid().ToByteArray(),
                 CreationDate = DateTime.UtcNow.Ticks,
                 Name = name,
-                WebhookUrl = "https://hooks.slack.com/services/test",
                 SendMessages = true,
                 MessagesAggregationTimeSec = 60,
+                SlackWebhookUrl = "https://hooks.slack.com/services/test",
             });
 
         private static FolderEntity BuildFolderEntity(Guid folderId, params Guid[] chatIds) =>

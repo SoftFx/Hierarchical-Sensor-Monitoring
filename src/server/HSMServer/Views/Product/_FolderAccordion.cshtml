@@ -1,14 +1,13 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Extensions
-@using HSMServer.Notifications
+@using HSMServer.Notifications.Chats
 @using HSMServer.Model.Authentication
 @using HSMServer.Model.Folders.ViewModels
 
 @model FolderViewModel
 
-@inject ITelegramChatsManager TelegramChatsManager
-@inject ISlackDestinationsManager SlackDestinationsManager
+@inject IChatsManager ChatsManager
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -44,7 +43,7 @@
 
                 @if (Model.Chats is not null)
                 {
-                    var availableChats = Model.Chats.GetAvailableChats(TelegramChatsManager, SlackDestinationsManager)
+                    var availableChats = Model.Chats.GetAvailableChats(ChatsManager)
                         .OrderBy(kv => kv.Value)
                         .ToList();
 
@@ -53,48 +52,29 @@
                         <div>
                             <b>Chats:</b>
 
-                            @if (user.IsFolderManager(Model.Id.Value))
+                            @for (int i = 0; i < availableChats.Count; ++i)
                             {
-                                var telegramIds = TelegramChatsManager.GetValues().Select(c => c.Id).ToHashSet();
-
-                                @for (int i = 0; i < availableChats.Count; ++i)
+                                @if (i > 0)
                                 {
-                                    @if (i > 0)
-                                    {
-                                        <span>, </span>
-                                    }
-
-                                    var chatId = availableChats[i].Key;
-                                    var chatName = availableChats[i].Value;
-                                    var isTelegram = telegramIds.Contains(chatId);
-                                    var brandClass = isTelegram ? ChatIcons.TelegramBrandClass : ChatIcons.SlackBrandClass;
-
-                                    <i class="@brandClass"></i>
-                                    @if (isTelegram)
-                                    {
-                                        <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chatId">@chatName</a>
-                                    }
-                                    else
-                                    {
-                                        <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditSlackDestination)" asp-route-id="@chatId">@chatName</a>
-                                    }
+                                    <span>, </span>
                                 }
-                            }
-                            else
-                            {
-                                for (int i = 0; i < availableChats.Count; ++i)
+
+                                var chatId = availableChats[i].Key;
+                                var chatName = availableChats[i].Value;
+                                ChatsManager.TryGetValue(chatId, out var chat);
+                                var icons = chat?.ChatBrandIcons();
+
+                                if (!string.IsNullOrEmpty(icons))
                                 {
-                                    if (i > 0)
-                                    {
-                                        <span>, </span>
-                                    }
+                                    @Html.Raw(icons)
+                                }
 
-                                    var chatId = availableChats[i].Key;
-                                    var chatName = availableChats[i].Value;
-                                    var brandClass = chatId.ChatBrandClass(TelegramChatsManager, SlackDestinationsManager)
-                                        ?? ChatIcons.SlackBrandClass;
-
-                                    <i class="@brandClass"></i>
+                                @if (user.IsFolderManager(Model.Id.Value))
+                                {
+                                    <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chatId">@chatName</a>
+                                }
+                                else
+                                {
                                     <span>@chatName</span>
                                 }
                             }

@@ -52,13 +52,21 @@ namespace HSMServer.Migrations
 
             _logger.Info($"ChatMigrator: wrote {written} chats, skipped {skipped} already-present entries.");
 
-            // This migration is intentionally additive and is not the source of truth yet.
-            //   - Legacy `TelegramChats` / `SlackDestinations` keys are left intact; their managers
-            //     remain active and consumable until #1261 switches readers to IChatsManager.
-            //   - Renames / field changes / deletes performed through the legacy UI *after* this
-            //     migration runs are NOT propagated: the migrator skips by id and never updates or
-            //     deletes. #1261 must reconcile updates and deletes (not just adds) before it can
-            //     treat the unified `Chats` key as authoritative.
+            // Post-#1261 state: the unified `Chats` LevelDB key is authoritative. All readers and
+            // writers go through IChatsManager; the legacy TelegramChatsManager / SlackDestinationsManager
+            // and their write paths are gone.
+            //
+            // This migration is intentionally additive and idempotent:
+            //   - First boot on a pre-#1260 installation: every legacy TelegramChatEntity /
+            //     SlackDestinationEntity gets a unified twin written under `Chats`.
+            //   - Subsequent boots: every legacy id is already in `existingIds`, so the loops are
+            //     a no-op and `AddChat` is never called.
+            //   - The legacy read paths (GetTelegramChats / GetSlackDestinations on IDatabaseCore)
+            //     are kept solely for this migrator. They are read-only — no service writes to the
+            //     legacy keys anymore, so legacy data is frozen as of the first #1260 boot.
+            //   - Removal of the legacy `TelegramChats` / `SlackDestinations` LevelDB key families
+            //     is deferred to a later cleanup PR; until then they cost disk space but nothing
+            //     reads them outside this migrator.
         }
 
 

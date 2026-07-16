@@ -4,7 +4,7 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
 using HSMServer.Model.Controls;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using System;
 using System.ComponentModel.DataAnnotations;
 
@@ -42,13 +42,13 @@ namespace HSMServer.Model.ViewModel
         }
 
 
-        internal ProductUpdate ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, ISlackDestinationsManager slackManager, InitiatorInfo initiator) =>
+        internal ProductUpdate ToUpdate(ProductNodeViewModel product, IChatsManager chatsManager, InitiatorInfo initiator) =>
             new()
             {
                 Id = Id,
                 Name = IsNameChanged ? Name : null,
                 Description = Description is null ? string.Empty : Description,
-                DefaultChats = DefaultChats.ToUpdate(product, chatsManager, slackManager),
+                DefaultChats = DefaultChats.ToUpdate(product, chatsManager),
                 Initiator = initiator,
             };
     }

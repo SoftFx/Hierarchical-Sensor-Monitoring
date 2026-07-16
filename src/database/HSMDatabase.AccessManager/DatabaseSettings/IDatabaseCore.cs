@@ -118,9 +118,6 @@ namespace HSMServer.Core.DataLayer
 
         #region Telegram chat
 
-        void AddTelegramChat(TelegramChatEntity chat);
-        void UpdateTelegramChat(TelegramChatEntity chat);
-        void RemoveTelegramChat(byte[] chatId);
         TelegramChatEntity GetTelegramChat(byte[] chatId);
         List<TelegramChatEntity> GetTelegramChats();
 
@@ -128,9 +125,6 @@ namespace HSMServer.Core.DataLayer
 
         #region Slack destination
 
-        void AddSlackDestination(SlackDestinationEntity destination);
-        void UpdateSlackDestination(SlackDestinationEntity destination);
-        void RemoveSlackDestination(byte[] id);
         SlackDestinationEntity GetSlackDestination(byte[] id);
         List<SlackDestinationEntity> GetSlackDestinations();
 

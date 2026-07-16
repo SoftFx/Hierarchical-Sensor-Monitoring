@@ -3,10 +3,9 @@
 @using HSMServer.Core.Model
 @using HSMServer.Extensions
 @using HSMServer.Model.DataAlertTemplates
-@using HSMServer.Notifications
+@using HSMServer.Notifications.Chats
 
-@inject ITelegramChatsManager ChatsManager
-@inject ISlackDestinationsManager SlackDestinationsManager
+@inject IChatsManager ChatsManager
 
 @model DataAlertTemplateTableViewModel
 
@@ -30,8 +29,6 @@
 
 @{
     var allChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v.Name);
-    foreach (var dest in SlackDestinationsManager.GetValues())
-        allChats[dest.Id] = dest.Name;
 }
 
 <table class="table table-striped alert-templates-table">

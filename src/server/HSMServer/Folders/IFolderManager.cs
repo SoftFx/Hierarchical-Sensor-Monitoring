@@ -4,7 +4,7 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -30,9 +30,7 @@ namespace HSMServer.Folders
 
         Task<string> AddChatToFolder(Guid chatId, Guid folderId, string userName);
 
-        void RemoveChatHandler(TelegramChat chat, InitiatorInfo initiator);
-
-        void RemoveSlackDestinationHandler(SlackDestination destination, InitiatorInfo initiator);
+        void RemoveChatHandler(Chat chat, InitiatorInfo initiator);
 
         List<FolderModel> GetUserFolders(User user);
 

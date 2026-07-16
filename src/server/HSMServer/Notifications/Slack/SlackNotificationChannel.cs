@@ -1,8 +1,8 @@
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Notifications;
-using HSMServer.Notifications.AddressBook;
 using HSMServer.Notifications.Channels;
+using HSMServer.Notifications.Chats;
 using System;
 using System.Net;
 using System.Net.Http;
@@ -20,7 +20,7 @@ namespace HSMServer.Notifications
 
         private static readonly NLog.Logger _logger = NLog.LogManager.GetLogger(nameof(SlackNotificationChannel));
 
-        private readonly ISlackDestinationsManager _destinations;
+        private readonly IChatsManager _chats;
         private readonly HttpClient _httpClient;
         private readonly int _maxRetryAttempts;
         private readonly TimeSpan _initialBackoff;
@@ -32,15 +32,15 @@ namespace HSMServer.Notifications
         public event Action<string> ErrorHandled;
 
 
-        public SlackNotificationChannel(ISlackDestinationsManager destinations, HttpClient httpClient)
-            : this(destinations, httpClient, DefaultMaxRetryAttempts, DefaultInitialBackoff, DefaultRequestTimeout)
+        public SlackNotificationChannel(IChatsManager chats, HttpClient httpClient)
+            : this(chats, httpClient, DefaultMaxRetryAttempts, DefaultInitialBackoff, DefaultRequestTimeout)
         {
         }
 
-        internal SlackNotificationChannel(ISlackDestinationsManager destinations, HttpClient httpClient,
+        internal SlackNotificationChannel(IChatsManager chats, HttpClient httpClient,
             int maxRetryAttempts, TimeSpan initialBackoff, TimeSpan requestTimeout)
         {
-            _destinations = destinations;
+            _chats = chats;
             _httpClient = httpClient;
             _httpClient.Timeout = requestTimeout;
             _maxRetryAttempts = maxRetryAttempts;
@@ -54,25 +54,25 @@ namespace HSMServer.Notifications
             {
                 foreach (var alert in message)
                 {
-                    foreach (var destinationId in alert.Destination.Chats)
+                    foreach (var chatId in alert.Destination.Chats)
                     {
-                        if (!_destinations.TryGetValue(destinationId, out var destination))
+                        if (!_chats.TryGetValue(chatId, out var chat))
                             continue;
 
-                        if (!destination.SendMessages)
+                        if (string.IsNullOrEmpty(chat.SlackWebhookUrl))
                             continue;
 
-                        if (destination.MessagesAggregationTimeSec == 0)
+                        if (!chat.SendMessages)
+                            continue;
+
+                        if (chat.MessagesAggregationTimeSec == 0)
                         {
                             var payload = SlackMessageBuilder.BuildPayload(alert);
-                            await PostWithRetryAsync(destination.WebhookUrl, payload, destination.Name);
+                            await PostWithRetryAsync(chat.SlackWebhookUrl, payload, chat.Name);
                         }
                         else
                         {
-                            IMessageBuilder builder = message is ScheduleAlertMessage
-                                ? destination.ScheduleMessageBuilder
-                                : destination.MessageBuilder;
-                            builder.AddMessage(alert);
+                            chat.SlackAccumulator.AddMessage(alert, message is ScheduleAlertMessage);
                         }
                     }
                 }
@@ -85,35 +85,41 @@ namespace HSMServer.Notifications
 
         public async Task FlushAsync()
         {
-            foreach (var destination in _destinations.GetValues())
+            foreach (var chat in _chats.GetValues())
             {
+                if (string.IsNullOrEmpty(chat.SlackWebhookUrl))
+                    continue;
+
                 try
                 {
-                    if (!destination.ShouldSendNotification)
+                    if (!chat.SlackAccumulator.ShouldSend(chat.MessagesAggregationTimeSec))
                         continue;
 
-                    foreach (var notification in destination.GetNotifications())
+                    foreach (var notification in chat.SlackAccumulator.GetNotifications(chat.MessagesAggregationTimeSec))
                     {
                         if (string.IsNullOrWhiteSpace(notification))
                             continue;
 
                         var payload = SlackMessageBuilder.BuildPayload(notification);
-                        await PostWithRetryAsync(destination.WebhookUrl, payload, destination.Name);
+                        await PostWithRetryAsync(chat.SlackWebhookUrl, payload, chat.Name);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error(ex, $"Slack FlushAsync: error for destination {destination.Name}");
+                    _logger.Error(ex, $"Slack FlushAsync: error for chat {chat.Name}");
                 }
             }
         }
 
 
-        public async Task SendTestAsync(SlackDestination destination)
+        public async Task SendTestAsync(Chat chat)
         {
+            if (string.IsNullOrEmpty(chat.SlackWebhookUrl))
+                return;
+
             var payload = SlackMessageBuilder.BuildPayload("Test message from HSM");
 
-            await PostWithRetryAsync(destination.WebhookUrl, payload, destination.Name);
+            await PostWithRetryAsync(chat.SlackWebhookUrl, payload, chat.Name);
         }
 
 

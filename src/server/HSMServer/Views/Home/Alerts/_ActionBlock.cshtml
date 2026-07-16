@@ -2,14 +2,14 @@
 @using HSMServer.Extensions
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Notifications
+@using HSMServer.Notifications.Chats
 @using HSMServer.Model.DataAlerts
 @using HSMServer.Controllers
 @using HSMServer.Constants
 
 @model ActionViewModel
 
-@inject ITelegramChatsManager ChatsManager
-@inject ISlackDestinationsManager SlackDestinations
+@inject IChatsManager ChatsManager
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -26,8 +26,13 @@
 
     var isSecondaryCondition = !Model.IsMain;
 
-    var chats = ChatsManager.GetValues().Where(x => Model.AvailableChats.Contains(x.Id)).ToList();
-    var slackDestinations = SlackDestinations.GetValues().Where(d => Model.AvailableChats.Contains(d.Id)).OrderBy(d => d.Name).ToList();
+    var allChats = ChatsManager.GetValues().Where(c => Model.AvailableChats.Contains(c.Id)).OrderBy(c => c.Name).ToList();
+    // A unified Chat may carry both Telegram and Slack channels, so a single chat can appear under
+    // more than one section below. The duplicate <option> is harmless — the chat id is submitted
+    // once regardless of how many options carry it. Mirrors AlertTemplatesController.UpdateTemplate.
+    var telegramGroups = allChats.Where(c => c.TelegramChatId is not null && c.TelegramType == ConnectedChatType.TelegramGroup).ToList();
+    var telegramUsers = allChats.Where(c => c.TelegramChatId is not null && c.TelegramType == ConnectedChatType.TelegramPrivate).ToList();
+    var slackChats = allChats.Where(c => !string.IsNullOrEmpty(c.SlackWebhookUrl)).ToList();
 }
 
 @* <div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3 w-100" > *@
@@ -51,29 +56,29 @@
 
                 <option data-divider="true"></option>
                 <option disabled>Telegram groups</option>
-                @foreach (var chat in chats.GetGroups())
+                @foreach (var chat in telegramGroups)
                 {
-                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
+                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
                 }
 
                 <option data-divider="true"></option>
                 <option disabled>Telegram users</option>
-                @foreach (var chat in chats.GetPrivates())
+                @foreach (var chat in telegramUsers)
                 {
-                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="<i class='@ChatIcons.TelegramBrandClass'></i> @chat.Name">@chat.Name</option>
+                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
                 }
 
                 <option data-divider="true"></option>
                 <option disabled>Slack destinations</option>
-                @if (slackDestinations.Count == 0)
+                @if (slackChats.Count == 0)
                 {
                     <option disabled value="">No Slack destinations configured</option>
                 }
                 else
                 {
-                    foreach (var destination in slackDestinations)
+                    foreach (var chat in slackChats)
                     {
-                        <option value="@destination.Id" selected="@Model.SlackDestinationIsSelected(destination)" data-content="<i class='@ChatIcons.SlackBrandClass'></i> @destination.Name">@destination.Name</option>
+                        <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
                     }
                 }
             </select>
