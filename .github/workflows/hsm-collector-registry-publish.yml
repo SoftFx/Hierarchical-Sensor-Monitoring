@@ -1,0 +1,116 @@
+name: hsm-collector registry publish
+
+# Automates publishing a new hsm-collector version into this repo's vcpkg registry, so there is no
+# manual "recipe" to remember. Push a `collector-v<semver>` tag (or run this manually) and it:
+#   1. computes the source tarball SHA512 for that tag,
+#   2. updates ports/hsm-collector/ (portfile REF + SHA512, vcpkg.json version),
+#   3. refreshes the version database (versions/), and
+#   4. opens a PR — which the hsm-collector-registry lane validates before a human merges it.
+
+on:
+  push:
+    tags:
+      - 'collector-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish, e.g. 0.6.3 (a matching collector-v<version> tag must already exist).'
+        required: true
+      dry_run:
+        description: 'Only compute + show the diff; do not open a PR.'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Resolve version + tag
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="collector-v${{ github.event.inputs.version }}"
+          fi
+          ver="${tag#collector-v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
+          echo "Publishing hsm-collector $ver (source tag $tag)"
+
+      - name: Compute source tarball SHA512
+        id: sha
+        run: |
+          url="https://github.com/${{ github.repository }}/archive/${{ steps.v.outputs.tag }}.tar.gz"
+          sha=$(curl -fsSL "$url" | sha512sum | awk '{print $1}')
+          [ "${#sha}" -eq 128 ] || { echo "unexpected sha512: $sha"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare registry update
+        id: prep
+        run: |
+          set -euo pipefail
+          tag='${{ steps.v.outputs.tag }}'; ver='${{ steps.v.outputs.ver }}'; sha='${{ steps.sha.outputs.sha }}'
+          br="registry/hsm-collector-${ver}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$br"
+
+          sed -i -E "s|REF collector-v[0-9]+\.[0-9]+\.[0-9]+|REF ${tag}|" ports/hsm-collector/portfile.cmake
+          sed -i -E "s|SHA512 [0-9a-f]{128}|SHA512 ${sha}|" ports/hsm-collector/portfile.cmake
+          sed -i -E "s|(\"version\"[[:space:]]*:[[:space:]]*\")[0-9]+\.[0-9]+\.[0-9]+(\")|\1${ver}\2|" ports/hsm-collector/vcpkg.json
+
+          # Commit the port first so the recorded git-tree is the NEW port content.
+          git add ports/hsm-collector
+          git commit -q -m "vcpkg registry: publish hsm-collector ${ver}"
+          tree=$(git rev-parse "HEAD:ports/hsm-collector")
+
+          python3 - "$ver" "$tree" <<'PY'
+          import json, sys
+          ver, tree = sys.argv[1], sys.argv[2]
+          b = json.load(open('versions/baseline.json'))
+          b['default']['hsm-collector']['baseline'] = ver
+          json.dump(b, open('versions/baseline.json', 'w'), indent=2); open('versions/baseline.json', 'a').write('\n')
+          f = 'versions/h-/hsm-collector.json'
+          d = json.load(open(f))
+          if not any(e.get('version') == ver for e in d['versions']):
+              d['versions'].insert(0, {"version": ver, "git-tree": tree})
+          json.dump(d, open(f, 'w'), indent=2); open(f, 'a').write('\n')
+          PY
+
+          # Fold the versions/ change into the same commit (ports/ tree — and thus the recorded
+          # git-tree — is unchanged by touching versions/).
+          git add versions
+          git commit -q --amend --no-edit
+          echo "branch=$br" >> "$GITHUB_OUTPUT"
+
+      - name: Sanity-check version DB git-tree
+        run: |
+          recorded=$(grep -oiE '[0-9a-f]{40}' versions/h-/hsm-collector.json | head -1)
+          actual=$(git rev-parse "HEAD:ports/hsm-collector")
+          echo "recorded=$recorded actual=$actual"
+          [ "$recorded" = "$actual" ]
+
+      - name: Show the computed change
+        run: git show --stat HEAD
+
+      - name: Open PR
+        if: github.event_name == 'push' || github.event.inputs.dry_run == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          br='${{ steps.prep.outputs.branch }}'; ver='${{ steps.v.outputs.ver }}'
+          git push -f -u origin "$br"
+          gh pr create --base master --head "$br" \
+            --title "vcpkg registry: hsm-collector ${ver}" \
+            --body "Automated by \`hsm-collector-registry-publish\`: the port now fetches \`collector-v${ver}\` (SHA512 refreshed) and the version database is updated. Re-run / ensure the **hsm-collector-registry** check passes, then merge to make ${ver} available to consumers." \
+            || echo "A PR for $br may already exist."
