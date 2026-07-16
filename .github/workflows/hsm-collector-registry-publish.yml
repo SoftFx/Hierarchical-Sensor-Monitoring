@@ -7,6 +7,11 @@ name: hsm-collector registry publish
 #   3. refreshes the version database (versions/),
 #   4. builds+installs the updated port to prove it's valid, then
 #   5. opens a PR to master.
+#
+# Scope / limits: publishes SOURCE versions only — a port-only fix (no source change) needs a manual
+# port-version bump. Two publishes opened before either merges will conflict in versions/ (rebase the
+# second). Build validation runs on Linux; the Windows/MSVC consumer path is the hsm-collector-registry
+# check, which a human runs before merge (a GITHUB_TOKEN-opened PR doesn't auto-trigger it).
 
 on:
   push:
@@ -74,7 +79,7 @@ jobs:
           url="https://github.com/${REPO}/archive/${TAG}.tar.gz"
           # Download to a file (with -f so a missing tag → non-zero exit under set -e) rather than piping
           # curl into sha512sum, where a 404 would otherwise be hashed as an empty stream.
-          curl -fsSL "$url" -o source.tgz
+          curl -fsSL --retry 3 --retry-connrefused "$url" -o source.tgz
           sha=$(sha512sum source.tgz | awk '{print $1}')
           empty="cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
           if [ "${#sha}" -ne 128 ] || [ "$sha" = "$empty" ]; then
@@ -147,9 +152,12 @@ jobs:
           echo "branch=$br" >> "$GITHUB_OUTPUT"
 
       - name: Sanity-check version DB git-tree
+        env:
+          VER: ${{ steps.v.outputs.ver }}
         run: |
           set -euo pipefail
-          recorded=$(grep -oiE '[0-9a-f]{40}' versions/h-/hsm-collector.json | head -1)
+          # Read the git-tree recorded for THIS version (order-independent — not `head -1`).
+          recorded=$(python3 -c "import json,os; d=json.load(open('versions/h-/hsm-collector.json')); print(next(e['git-tree'] for e in d['versions'] if e['version']==os.environ['VER']))")
           actual=$(git rev-parse "HEAD:ports/hsm-collector")
           echo "recorded=$recorded actual=$actual"
           [ "$recorded" = "$actual" ]
@@ -186,5 +194,5 @@ jobs:
           else
             gh pr create --base master --head "$BR" \
               --title "vcpkg registry: hsm-collector ${VER}" \
-              --body "Automated by \`hsm-collector-registry-publish\`: the port now fetches \`collector-v${VER}\` (SHA512 refreshed) and the version DB is updated. The updated port was **built + installed in the publish run** ('Validate the updated port builds + installs'), so it is known-good. Note: this PR is opened by \`GITHUB_TOKEN\`, so the separate **hsm-collector-registry** check does NOT auto-run here — re-run it manually (Actions -> hsm-collector-registry -> Run workflow on this branch) or push an empty commit if you want it on the PR before merging."
+              --body "Automated by \`hsm-collector-registry-publish\`: the port now fetches \`collector-v${VER}\` (SHA512 refreshed) and the version DB is updated. The updated port was **built + installed on Linux in the publish run** (validates the SHA512/REF resolve and the collector compiles with \`[http]\`). The consumer-facing **hsm-collector-registry** check is Windows/MSVC and does NOT auto-run on a \`GITHUB_TOKEN\` PR — **run it manually** (Actions -> hsm-collector-registry -> Run workflow on this branch) before merging to cover the Windows path."
           fi
