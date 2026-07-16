@@ -12,6 +12,7 @@ name: hsm-collector registry publish
 # port-version bump. Two publishes opened before either merges will conflict in versions/ (rebase the
 # second). Build validation runs on Linux; the Windows/MSVC consumer path is the hsm-collector-registry
 # check, which a human runs before merge (a GITHUB_TOKEN-opened PR doesn't auto-trigger it).
+# Re-runs force-push the version's branch, so any manual commit pushed onto an open auto-PR is lost.
 
 on:
   push:
@@ -45,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: master
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Resolve + validate version
         id: v
@@ -136,7 +137,11 @@ jobs:
                   json.dump(b, fh, indent=2); fh.write('\n')
           elif semver(ver) < semver(cur):
               print(f"::warning::published {ver}, but the baseline stays at {cur} (newer) — not rolling back.")
-          # ver == cur: baseline already correct; leave baseline.json (and its port-version) untouched.
+          else:  # ver == cur: baseline already correct; leave baseline.json (and its port-version) alone.
+              if b['default']['hsm-collector'].get('port-version', 0):
+                  print(f"::warning::re-published {ver} while baseline port-version is "
+                        f"{b['default']['hsm-collector']['port-version']}; the versions/ entry records port-version 0. "
+                        f"Port-only changes need a manual port-version bump (see the header note).")
           # Idempotent (pre-merge re-runs): drop any existing entry for this version, then prepend it
           # (newest-first — the sanity-check step's `grep ... | head -1` relies on this ordering).
           d['versions'] = [e for e in d['versions'] if e.get('version') != ver]
