@@ -48,7 +48,7 @@
             {
                 foreach (var chat in Model.ChatsToAdd)
                 {
-                    <option value="@chat.Id" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
+                    <option value="@chat.Id" data-content="@chat.ChatBrandIconsAndName()">@chat.Name</option>
                 }
             }
         </select>

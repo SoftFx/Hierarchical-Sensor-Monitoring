@@ -1,6 +1,7 @@
 @using HSMCommon.Extensions
 @using HSMServer.Model.Controls
 @using HSMServer.Notifications
+@using HSMServer.Notifications.Chats
 @using HSMServer.Extensions
 
 @model DefaultChatViewModel
@@ -65,8 +66,7 @@
             <option data-divider="true"></option>
             foreach (var chat in availableChats)
             {
-                var icon = chat.ChatBrandIcons();
-                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)" data-content="@icon @chat.Name">@chat.Name</option>
+                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)" data-content="@chat.ChatBrandIconsAndName()">@chat.Name</option>
             }
         }
     </select>

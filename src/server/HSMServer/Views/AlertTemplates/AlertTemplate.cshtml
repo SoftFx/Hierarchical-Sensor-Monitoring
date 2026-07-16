@@ -284,18 +284,27 @@
             if (list.length === 0) {
                 $select.append('<option disabled value="">No chats configured</option>');
             } else {
-                // data-content lets bootstrap-select render the multi-channel brand icons inline;
-                // IconsHtml is produced server-side by Chat.ChatBrandIcons() so the dropdown looks
-                // the same after a form refresh as on initial render.
-                // chat.Name is user-controlled and is escaped before insertion to prevent HTML
-                // injection through the template-literal markup below; IconsHtml is trusted
-                // server-rendered markup and is inserted verbatim.
+                // Each chat is one option. IconsHtml is server-rendered markup from
+                // Chat.ChatBrandIcons() (only `<i class='fab fa-...'>` tags from static brand
+                // constants) and is inserted verbatim. chat.Name is user-controlled; route it
+                // through jQuery's DOM API rather than concatenating strings:
+                //   - .text(name) creates a text node, no HTML parsing — safe and renders as
+                //     the literal name.
+                //   - .attr('data-content', ...) is later read by bootstrap-select and inserted
+                //     via innerHTML, so the value goes through attribute-parse → innerHTML
+                //     decoding. Double-encode the name so it survives both passes as inert
+                //     entities instead of executable markup.
                 list.forEach(function(chat) {
-                    var isSelected = currentSelected.includes(chat.Id);
                     var icons = chat.IconsHtml || '';
-                    var safeName = escapeChatName(chat.Name);
-                    var dataContent = `${icons} ${safeName}`;
-                    $select.append(`<option value="${chat.Id}"${isSelected ? ' selected' : ''} data-content="${dataContent}">${safeName}</option>`);
+                    var dataContent = icons + ' ' + escapeChatNameForDataContent(chat.Name);
+                    var $option = $('<option></option>')
+                        .val(String(chat.Id))
+                        .attr('data-content', dataContent)
+                        .text(chat.Name);
+                    if (currentSelected.includes(chat.Id)) {
+                        $option.attr('selected', 'selected');
+                    }
+                    $select.append($option);
                 });
             }
 
@@ -303,12 +312,19 @@
         });
     }
 
-    function escapeChatName(name) {
-        // chat.Name flows from user input into both the data-content attribute and the option's
-        // text body. Without escaping, a name like 'a" onclick="...' or '<script>' would execute
-        // in the dropdown. Razor HtmlEncoding protects the server-rendered options in
-        // _ActionBlock.cshtml / _DefaultChat.cshtml; this JS path needs its own escape.
-        return String(name == null ? '' : name)
+    function escapeChatNameForDataContent(name) {
+        // bootstrap-select reads data-content via the attribute (browser decodes HTML entities)
+        // and then assigns the result to innerHTML (browser parses entities again). A single
+        // HTML-encode is therefore undone before innerHTML sees the value, which means a name
+        // containing "<img onerror=...>" would execute. Encode twice so that after both decode
+        // passes the result is "&lt;img onerror=...&gt;" — entities the browser renders as text.
+        var once = String(name == null ? '' : name)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        return once
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')

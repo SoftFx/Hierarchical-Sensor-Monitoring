@@ -2,6 +2,7 @@
 @using HSMServer.Extensions
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Notifications
+@using HSMServer.Notifications.Chats
 @using HSMServer.Model.DataAlerts
 @using HSMServer.Controllers
 @using HSMServer.Constants
@@ -56,7 +57,7 @@
                 {
                     foreach (var chat in allChats)
                     {
-                        <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="@chat.ChatBrandIcons() @chat.Name">@chat.Name</option>
+                        <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)" data-content="@chat.ChatBrandIconsAndName()">@chat.Name</option>
                     }
                 }
             </select>
