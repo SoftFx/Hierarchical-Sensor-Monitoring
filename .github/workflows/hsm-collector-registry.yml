@@ -50,9 +50,19 @@ jobs:
             -DVCPKG_TARGET_TRIPLET=x64-windows
           cmake --build build/registry-consume --config Release --parallel
 
-      - name: Verify the version database matches the ports
+      - name: Verify the version database git-tree matches the port
         shell: bash
+        # This is a supplementary registry (it provides only hsm-collector; upstream deps like
+        # vcpkg-cmake/curl come from the default registry), so vcpkg's whole-registry x-ci-verify-versions
+        # isn't applicable. Assert the one invariant that matters: versions/h-/hsm-collector.json records
+        # the exact git-tree of ports/hsm-collector, so git-registry consumers resolve the right port.
         run: |
-          "$VCPKG_ROOT/vcpkg" x-ci-verify-versions --verbose \
-            --x-builtin-ports-root=ports \
-            --x-builtin-registry-versions-dir=versions
+          recorded=$(grep -oiE '[0-9a-f]{40}' versions/h-/hsm-collector.json | head -1)
+          actual=$(git rev-parse "HEAD:ports/hsm-collector")
+          echo "recorded git-tree: $recorded"
+          echo "actual   git-tree: $actual"
+          if [ "$recorded" != "$actual" ]; then
+            echo "::error::versions/h-/hsm-collector.json git-tree is stale. Run 'vcpkg x-add-version hsm-collector' (or update it to $actual)."
+            exit 1
+          fi
+          echo "version database git-tree is consistent."
