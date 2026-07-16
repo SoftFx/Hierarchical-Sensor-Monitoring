@@ -120,18 +120,24 @@ jobs:
           b = json.load(open('versions/baseline.json'))
           cur = b['default']['hsm-collector'].get('baseline', '0.0.0')
           semver = lambda v: tuple(int(x) for x in v.split('.'))
-          # Only advance the baseline — a backport / re-publish of an OLDER version still gets its
-          # versions/ entry (below) but must not roll the default consumers see backward.
-          if semver(ver) >= semver(cur):
+          # Only ADVANCE the baseline. A strictly newer version resets port-version; re-publishing the
+          # SAME baseline version leaves port-version alone (a manual port-only bump must not be
+          # clobbered); an OLDER version (backport) still gets its versions/ entry (below) but never
+          # rolls the default that consumers resolve backward.
+          if semver(ver) > semver(cur):
               b['default']['hsm-collector']['baseline'] = ver
-              b['default']['hsm-collector']['port-version'] = 0  # reset on a new version
-              json.dump(b, open('versions/baseline.json', 'w'), indent=2); open('versions/baseline.json', 'a').write('\n')
-          else:
+              b['default']['hsm-collector']['port-version'] = 0
+              with open('versions/baseline.json', 'w') as fh:
+                  json.dump(b, fh, indent=2); fh.write('\n')
+          elif semver(ver) < semver(cur):
               print(f"::warning::published {ver}, but the baseline stays at {cur} (newer) — not rolling back.")
-          # Idempotent (pre-merge re-runs): drop any existing entry for this version, then prepend it.
+          # ver == cur: baseline already correct; leave baseline.json (and its port-version) untouched.
+          # Idempotent (pre-merge re-runs): drop any existing entry for this version, then prepend it
+          # (newest-first — the sanity-check step's `grep ... | head -1` relies on this ordering).
           d['versions'] = [e for e in d['versions'] if e.get('version') != ver]
           d['versions'].insert(0, {"version": ver, "git-tree": tree})
-          json.dump(d, open(f, 'w'), indent=2); open(f, 'a').write('\n')
+          with open(f, 'w') as fh:
+              json.dump(d, fh, indent=2); fh.write('\n')
           PY
 
           # Fold versions/ into the same commit (ports/ tree — and thus the recorded git-tree — is
@@ -159,7 +165,7 @@ jobs:
         env:
           VCPKG_BINARY_SOURCES: clear
         run: |
-          "$VCPKG_ROOT/vcpkg" install hsm-collector --overlay-ports=ports
+          "$VCPKG_ROOT/vcpkg" install "hsm-collector[http]" --overlay-ports=ports
 
       - name: Show the computed change
         run: git show --stat HEAD
