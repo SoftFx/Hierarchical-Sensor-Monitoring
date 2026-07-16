@@ -24,8 +24,10 @@ using HSMServer.Filters;
 using HSMServer.Folders;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
+using HSMServer.Migrations;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
 using HSMServer.Core.Schedule;
 
@@ -43,6 +45,7 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton(config);
 
             services.AddSingleton<IDatabaseCore, DatabaseCore>()
+                    .AddSingleton<ChatMigrator>()
                     .AddSingleton<IAlertScheduleProvider, AlertScheduleProvider>()
                     .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
                     .AddSingleton<ITreeValuesCache, TreeValuesCache>()
@@ -50,8 +53,7 @@ namespace HSMServer.ServiceExtensions
 
             services.AddAsyncStorage<IUserManager, UserManager>()
                     .AddAsyncStorage<IFolderManager, FolderManager>()
-                    .AddAsyncStorage<ITelegramChatsManager, TelegramChatsManager>()
-                    .AddAsyncStorage<ISlackDestinationsManager, SlackDestinationsManager>()
+                    .AddAsyncStorage<IChatsManager, ChatsManager>()
                     .AddAsyncStorage<IDashboardManager, DashboardManager>();
 
             services.AddSingleton<DataCollectorWrapper>()
@@ -165,6 +167,8 @@ namespace HSMServer.ServiceExtensions
 
         public static async Task InitStorages(this IServiceProvider services)
         {
+            services.GetRequiredService<ChatMigrator>().Migrate(services.GetRequiredService<IDatabaseCore>());
+
             foreach (var type in _asyncStorageTypes)
                 if (services.GetService(type) is IAsyncStorage storage)
                     await storage.Initialize();

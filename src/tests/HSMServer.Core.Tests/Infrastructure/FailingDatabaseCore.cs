@@ -105,17 +105,17 @@ namespace HSMServer.Core.Tests.Infrastructure
         public List<UserEntity> GetUsers() => _inner.GetUsers();
         public List<UserEntity> GetUsersPage(int page, int pageSize) => _inner.GetUsersPage(page, pageSize);
 
-        public void AddTelegramChat(TelegramChatEntity chat) => _inner.AddTelegramChat(chat);
-        public void UpdateTelegramChat(TelegramChatEntity chat) => _inner.UpdateTelegramChat(chat);
-        public void RemoveTelegramChat(byte[] chatId) => _inner.RemoveTelegramChat(chatId);
         public TelegramChatEntity GetTelegramChat(byte[] chatId) => _inner.GetTelegramChat(chatId);
         public List<TelegramChatEntity> GetTelegramChats() => _inner.GetTelegramChats();
 
-        public void AddSlackDestination(SlackDestinationEntity destination) => _inner.AddSlackDestination(destination);
-        public void UpdateSlackDestination(SlackDestinationEntity destination) => _inner.UpdateSlackDestination(destination);
-        public void RemoveSlackDestination(byte[] id) => _inner.RemoveSlackDestination(id);
         public SlackDestinationEntity GetSlackDestination(byte[] id) => _inner.GetSlackDestination(id);
         public List<SlackDestinationEntity> GetSlackDestinations() => _inner.GetSlackDestinations();
+
+        public void AddChat(ChatEntity chat) => _inner.AddChat(chat);
+        public void UpdateChat(ChatEntity chat) => _inner.UpdateChat(chat);
+        public void RemoveChat(byte[] chatId) => _inner.RemoveChat(chatId);
+        public ChatEntity GetChat(byte[] chatId) => _inner.GetChat(chatId);
+        public List<ChatEntity> GetChats() => _inner.GetChats();
 
         public List<AlertTemplateEntity> GetAllAlertTemplates() => _inner.GetAllAlertTemplates();
         public void AddAlertTemplate(AlertTemplateEntity policy) => _inner.AddAlertTemplate(policy);

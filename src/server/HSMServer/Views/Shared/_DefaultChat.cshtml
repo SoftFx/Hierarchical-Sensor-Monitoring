@@ -1,12 +1,12 @@
 @using HSMCommon.Extensions
 @using HSMServer.Model.Controls
 @using HSMServer.Notifications
+@using HSMServer.Notifications.Chats
 @using HSMServer.Extensions
 
 @model DefaultChatViewModel
 
-@inject ITelegramChatsManager ChatsManager
-@inject ISlackDestinationsManager SlackDestinationsManager
+@inject IChatsManager ChatsManager
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -14,14 +14,14 @@
     var available = new Dictionary<Guid, string>();
     foreach (var chat in ChatsManager.GetValues())
         available[chat.Id] = chat.Name;
-    foreach (var dest in SlackDestinationsManager.GetValues())
-        available[dest.Id] = dest.Name;
 
     var (displayName, parentChats) = Model.GetDisplayChatName(available, out var allChats);
 
-    var telegramGroups = ChatsManager.GetValues().Where(c => allChats.ContainsKey(c.Id) && c.Type == ConnectedChatType.TelegramGroup).OrderBy(c => c.Name).ToList();
-    var telegramUsers = ChatsManager.GetValues().Where(c => allChats.ContainsKey(c.Id) && c.Type == ConnectedChatType.TelegramPrivate).OrderBy(c => c.Name).ToList();
-    var slackDestinations = SlackDestinationsManager.GetValues().Where(d => allChats.ContainsKey(d.Id)).OrderBy(d => d.Name).ToList();
+    var availableChats = ChatsManager.GetValues().Where(c => allChats.ContainsKey(c.Id)).OrderBy(c => c.Name).ToList();
+    var telegramGroups = availableChats.Where(c => c.TelegramChatId is not null && c.TelegramType == ConnectedChatType.TelegramGroup).ToList();
+    var telegramUsers = availableChats.Where(c => c.TelegramChatId is not null && c.TelegramType == ConnectedChatType.TelegramPrivate).ToList();
+    var slackChats = availableChats.Where(c => !string.IsNullOrEmpty(c.SlackWebhookUrl)).ToList();
+    var mattermostChats = availableChats.Where(c => !string.IsNullOrEmpty(c.MattermostWebhookUrl)).ToList();
 }
 
 
@@ -49,7 +49,9 @@
             if (!first) { <span>, </span> }
             first = false;
 
-            var icon = id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+            Chat chat = null;
+            ChatsManager.TryGetValue(id, out chat);
+            var icon = chat?.ChatBrandIcons() ?? string.Empty;
             if (!string.IsNullOrEmpty(icon)) { @Html.Raw(icon) }
 
             if (allChats.TryGetValue(id, out var name)) { <span>@name</span> }
@@ -69,7 +71,7 @@
             <option disabled>Telegram groups</option>
             foreach (var chat in telegramGroups)
             {
-                var icon = chat.Id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+                var icon = chat.ChatBrandIcons();
                 <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)" data-content="@icon @chat.Name">@chat.Name</option>
             }
         }
@@ -80,19 +82,30 @@
             <option disabled>Telegram users</option>
             foreach (var chat in telegramUsers)
             {
-                var icon = chat.Id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
+                var icon = chat.ChatBrandIcons();
                 <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)" data-content="@icon @chat.Name">@chat.Name</option>
             }
         }
 
-        @if (slackDestinations.Count > 0)
+        @if (slackChats.Count > 0)
         {
             <option data-divider="true"></option>
             <option disabled>Slack destinations</option>
-            foreach (var dest in slackDestinations)
+            foreach (var chat in slackChats)
             {
-                var icon = dest.Id.ChatBrandIcon(ChatsManager, SlackDestinationsManager);
-                <option value="@dest.Id" selected="@Model.IsSelectedChat(dest.Id)" data-content="@icon @dest.Name">@dest.Name</option>
+                var icon = chat.ChatBrandIcons();
+                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)" data-content="@icon @chat.Name">@chat.Name</option>
+            }
+        }
+
+        @if (mattermostChats.Count > 0)
+        {
+            <option data-divider="true"></option>
+            <option disabled>Mattermost destinations</option>
+            foreach (var chat in mattermostChats)
+            {
+                var icon = chat.ChatBrandIcons();
+                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)" data-content="@icon @chat.Name">@chat.Name</option>
             }
         }
     </select>

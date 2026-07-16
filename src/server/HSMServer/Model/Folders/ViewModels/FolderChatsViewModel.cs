@@ -1,5 +1,5 @@
 using HSMServer.Model.Controls;
-using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,13 +8,9 @@ namespace HSMServer.Model.Folders.ViewModels
 {
     public sealed class FolderChatsViewModel
     {
-        public List<TelegramChat> ConnectedTelegramChats { get; } = new();
+        public List<Chat> ConnectedChats { get; } = new();
 
-        public List<TelegramChat> TelegramChatsToAdd { get; } = new();
-
-        public List<SlackDestination> ConnectedSlackDestinations { get; } = new();
-
-        public List<SlackDestination> SlackDestinationsToAdd { get; } = new();
+        public List<Chat> ChatsToAdd { get; } = new();
 
 
         public DefaultChatViewModel DefaultChats { get; set; }
@@ -28,36 +24,29 @@ namespace HSMServer.Model.Folders.ViewModels
 
         public FolderChatsViewModel() { }
 
-        public FolderChatsViewModel(FolderModel folder, List<TelegramChat> telegramChats, List<SlackDestination> slackDestinations)
+        public FolderChatsViewModel(FolderModel folder, List<Chat> chats)
         {
             FolderId = folder.Id;
             DefaultChats = new DefaultChatViewModel(folder);
 
-            foreach (var chat in telegramChats)
+            foreach (var chat in chats)
             {
                 if (folder.Chats.Contains(chat.Id))
-                    ConnectedTelegramChats.Add(chat);
+                    ConnectedChats.Add(chat);
                 else
-                    TelegramChatsToAdd.Add(chat);
+                    ChatsToAdd.Add(chat);
             }
 
-            foreach (var dest in slackDestinations)
-            {
-                if (folder.Chats.Contains(dest.Id))
-                    ConnectedSlackDestinations.Add(dest);
-                else
-                    SlackDestinationsToAdd.Add(dest);
-            }
-
-            ConnectedTelegramChats = ConnectedTelegramChats.OrderByDescending(ch => ch.Type).ThenBy(ch => ch.Name).ToList();
-            TelegramChatsToAdd = TelegramChatsToAdd.OrderBy(ch => ch.Name).ToList();
-
-            ConnectedSlackDestinations = ConnectedSlackDestinations.OrderBy(d => d.Name).ToList();
-            SlackDestinationsToAdd = SlackDestinationsToAdd.OrderBy(d => d.Name).ToList();
-
-            ConnectedChatIds = ConnectedTelegramChats.Select(ch => ch.Id)
-                .Concat(ConnectedSlackDestinations.Select(d => d.Id))
+            ConnectedChats = ConnectedChats
+                .OrderByDescending(ch => ch.TelegramType)
+                .ThenBy(ch => ch.Name)
                 .ToList();
+
+            ChatsToAdd = ChatsToAdd
+                .OrderBy(ch => ch.Name)
+                .ToList();
+
+            ConnectedChatIds = ConnectedChats.Select(ch => ch.Id).ToList();
         }
     }
 }

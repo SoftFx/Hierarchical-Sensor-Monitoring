@@ -10,6 +10,7 @@ using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -39,12 +40,11 @@ namespace HSMServer.Controllers
             AllowTrailingCommas = true,
         };
 
-        private readonly ITelegramChatsManager _telegram;
+        private readonly IChatsManager _chats;
         private readonly ITreeValuesCache _cache;
         private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
-        private readonly ISlackDestinationsManager _slackDestinations;
 
 
         static AlertTemplatesController()
@@ -55,15 +55,14 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertTemplatesController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache,
-                                        IUserManager users, IAlertScheduleProvider provider, ISlackDestinationsManager slackDestinations) : base(users)
+        public AlertTemplatesController(IChatsManager chats, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache,
+                                        IUserManager users, IAlertScheduleProvider provider) : base(users)
         {
-            _telegram = telegram;
+            _chats = chats;
             _folders = folders;
             _cache = cache;
             _tree = tree;
             _alertScheduleProvider = provider;
-            _slackDestinations = slackDestinations;
         }
 
         [HttpGet]
@@ -135,22 +134,27 @@ namespace HSMServer.Controllers
             ChatsPayload chats = null;
             if (_folders.TryGetValue(folderId, out var folder) && folder.TryGetChats(out var folderChats))
             {
-                // Mirrors folder.GetAvailableChats(_telegram, _slackDestinations) used by the POST
-                // path so the live-updated dropdown shows the same destinations as the saved form.
+                // Mirrors folder.GetAvailableChats(_chats) used by the POST path so the live-updated
+                // dropdown shows the same destinations as the saved form. A unified Chat may carry
+                // both Telegram and Slack channels, so a single chat can appear under more than one list.
                 var groups = new List<ChatEntry>();
                 var users = new List<ChatEntry>();
                 var slack = new List<ChatEntry>();
 
-                foreach (var c in _telegram.GetValues())
-                    if (folderChats.Contains(c.Id) || c.Folders.Count == 0)
+                foreach (var c in _chats.GetValues())
+                {
+                    if (!folderChats.Contains(c.Id) && c.Folders.Count != 0)
+                        continue;
+
+                    if (c.TelegramChatId is not null)
                     {
-                        var list = c.Type == ConnectedChatType.TelegramGroup ? groups : users;
+                        var list = c.TelegramType == ConnectedChatType.TelegramGroup ? groups : users;
                         list.Add(new ChatEntry(c.Id, c.Name));
                     }
 
-                foreach (var d in _slackDestinations.GetValues())
-                    if (folderChats.Contains(d.Id) || d.Folders.Count == 0)
-                        slack.Add(new ChatEntry(d.Id, d.Name));
+                    if (!string.IsNullOrEmpty(c.SlackWebhookUrl))
+                        slack.Add(new ChatEntry(c.Id, c.Name));
+                }
 
                 chats = new ChatsPayload(groups, users, slack);
             }
@@ -219,7 +223,7 @@ namespace HSMServer.Controllers
 
             Dictionary<Guid, string> availableChats = null;
             if (_folders.TryGetValue(data.FolderId, out var folder))
-                availableChats = folder.GetAvailableChats(_telegram, _slackDestinations);
+                availableChats = folder.GetAvailableChats(_chats);
 
             AlertTemplateModel model = null;
 

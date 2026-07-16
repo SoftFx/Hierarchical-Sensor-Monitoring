@@ -516,20 +516,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : Telegram chat
 
-        public void AddTelegramChat(TelegramChatEntity chat)
-        {
-            _environmentDatabase.AddTelegramChatToList(chat.Id);
-            _environmentDatabase.AddTelegramChat(chat);
-        }
-
-        public void UpdateTelegramChat(TelegramChatEntity chat) => _environmentDatabase.AddTelegramChat(chat);
-
-        public void RemoveTelegramChat(byte[] chatId)
-        {
-            _environmentDatabase.RemoveTelegramChat(chatId);
-            _environmentDatabase.RemoveTelegramChatFromList(chatId);
-        }
-
         public TelegramChatEntity GetTelegramChat(byte[] chatId) => _environmentDatabase.GetTelegramChat(chatId);
 
         public List<TelegramChatEntity> GetTelegramChats()
@@ -551,20 +537,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : Slack destination
 
-        public void AddSlackDestination(SlackDestinationEntity destination)
-        {
-            _environmentDatabase.AddSlackDestinationToList(destination.Id);
-            _environmentDatabase.AddSlackDestination(destination);
-        }
-
-        public void UpdateSlackDestination(SlackDestinationEntity destination) => _environmentDatabase.AddSlackDestination(destination);
-
-        public void RemoveSlackDestination(byte[] id)
-        {
-            _environmentDatabase.RemoveSlackDestination(id);
-            _environmentDatabase.RemoveSlackDestinationFromList(id);
-        }
-
         public SlackDestinationEntity GetSlackDestination(byte[] id) => _environmentDatabase.GetSlackDestination(id);
 
         public List<SlackDestinationEntity> GetSlackDestinations()
@@ -580,6 +552,41 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return destinations;
+        }
+
+        #endregion
+
+        #region Environment database : Chat
+
+        public void AddChat(ChatEntity chat)
+        {
+            _environmentDatabase.AddChatToList(chat.Id);
+            _environmentDatabase.AddChat(chat);
+        }
+
+        public void UpdateChat(ChatEntity chat) => _environmentDatabase.AddChat(chat);
+
+        public void RemoveChat(byte[] chatId)
+        {
+            _environmentDatabase.RemoveChat(chatId);
+            _environmentDatabase.RemoveChatFromList(chatId);
+        }
+
+        public ChatEntity GetChat(byte[] chatId) => _environmentDatabase.GetChat(chatId);
+
+        public List<ChatEntity> GetChats()
+        {
+            var chats = new List<ChatEntity>(1 << 4);
+            var ids = _environmentDatabase.GetChatsList();
+
+            foreach (var id in ids)
+            {
+                var entity = _environmentDatabase.GetChat(id);
+                if (entity != null)
+                    chats.Add(entity);
+            }
+
+            return chats;
         }
 
         #endregion

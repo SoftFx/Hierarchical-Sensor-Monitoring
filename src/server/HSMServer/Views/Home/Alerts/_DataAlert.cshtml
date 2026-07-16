@@ -7,22 +7,19 @@
 @using HSMCommon.Extensions
 @using HSMServer.Controllers
 @using HSMServer.Constants
-@using HSMServer.Notifications
+@using HSMServer.Notifications.Chats
 @using Markdig
 @using Microsoft.AspNetCore.Html
 @using System.Net
 
 @model DataAlertViewModelBase
 
-@inject ITelegramChatsManager ChatsManager
-@inject ISlackDestinationsManager SlackDestinationsManager
+@inject IChatsManager ChatsManager
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
     var allChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v.Name);
-    foreach (var dest in SlackDestinationsManager.GetValues())
-        allChats[dest.Id] = dest.Name;
 
     string GetActionChats(ActionViewModel action) =>
          string.Join(", ", action.Chats.Where(allChats.ContainsKey).Select(ch => allChats[ch]));

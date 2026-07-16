@@ -11,6 +11,7 @@ using HSMServer.Model.DataAlerts;
 using HSMServer.Model.MultiToastViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -38,11 +39,10 @@ namespace HSMServer.Controllers
             AllowTrailingCommas = true,
         };
 
-        private readonly ITelegramChatsManager _telegram;
+        private readonly IChatsManager _chats;
         private readonly ITreeValuesCache _cache;
         private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
-        private readonly ISlackDestinationsManager _slackDestinations;
 
 
         static AlertsController()
@@ -53,13 +53,12 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertsController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users, ISlackDestinationsManager slackDestinations) : base(users)
+        public AlertsController(IChatsManager chats, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users) : base(users)
         {
-            _telegram = telegram;
+            _chats = chats;
             _folders = folders;
             _cache = cache;
             _tree = tree;
-            _slackDestinations = slackDestinations;
         }
 
 
@@ -127,7 +126,7 @@ namespace HSMServer.Controllers
         {
             if (_tree.Nodes.TryGetValue(nodeId, out var targetNode))
             {
-                var availableChats = targetNode.GetAvailableChats(_telegram, _slackDestinations)
+                var availableChats = targetNode.GetAvailableChats(_chats)
                     .ToDictionary(k => k.Value, v => v.Key);
                 var productId = targetNode.RootProduct.Id;
 
@@ -205,9 +204,7 @@ namespace HSMServer.Controllers
 
         private FileContentResult ExportModelToFile(string selectedNodePath, PolicyExportGroup group)
         {
-            var availableChats = _telegram.GetValues().ToDictionary(ch => ch.Id, ch => ch.Name);
-            foreach (var dest in _slackDestinations.GetValues())
-                availableChats[dest.Id] = dest.Name;
+            var availableChats = _chats.GetValues().ToDictionary(ch => ch.Id, ch => ch.Name);
 
             var fileName = $"{selectedNodePath.Replace('/', '_')}-alerts.json";
             var content = JsonSerializer.SerializeToUtf8Bytes(group.SelectMany(p => p.Value.Select(info => (p.Key, info)))

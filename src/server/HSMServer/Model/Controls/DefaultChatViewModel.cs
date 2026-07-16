@@ -4,7 +4,7 @@ using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -234,9 +234,9 @@ namespace HSMServer.Model.Controls
                 Mode = (byte) DefaultChatsMode.FromParent,
             };
 
-        internal PolicyDestinationSettings ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, ISlackDestinationsManager slackManager)
+        internal PolicyDestinationSettings ToUpdate(ProductNodeViewModel product, IChatsManager chatsManager)
         {
-            return ToModel(product.GetAvailableChats(chatsManager, slackManager));
+            return ToModel(product.GetAvailableChats(chatsManager));
         }
 
 

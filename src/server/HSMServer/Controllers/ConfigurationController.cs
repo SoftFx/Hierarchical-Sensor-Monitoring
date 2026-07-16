@@ -1,8 +1,8 @@
 ﻿using HSMServer.Attributes;
-using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
 using HSMServer.Model.Configuration;
 using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,14 +20,14 @@ namespace HSMServer.Controllers
     [Authorize]
     [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService, IDatabaseCore database, ISlackDestinationsManager slackDestinations, IUserManager userManager) : Controller
+    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService, IDatabaseCore database, IChatsManager chats) : Controller
     {
         private readonly TelegramBot _telegramBot = notifications.TelegramBot;
 
         protected readonly Logger _logger = LogManager.GetLogger(typeof(ConfigurationController).Name);
 
 
-        public IActionResult Index() => View(new ConfigurationViewModel(config, _telegramBot.IsBotRunning, database, slackDestinations, userManager));
+        public IActionResult Index() => View(new ConfigurationViewModel(config, _telegramBot.IsBotRunning, database, chats));
 
         [HttpPost]
         public IActionResult SaveServerSettings(ServerSettingsViewModel settings)

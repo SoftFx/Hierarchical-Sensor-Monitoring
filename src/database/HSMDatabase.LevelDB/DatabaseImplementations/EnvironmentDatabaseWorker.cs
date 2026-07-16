@@ -26,6 +26,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
         private readonly byte[] _telegramChatIdsKey = "TelegramChats"u8.ToArray();
         private readonly byte[] _slackDestinationIdsKey = "SlackDestinations"u8.ToArray();
+        private readonly byte[] _chatIdsKey = "Chats"u8.ToArray();
         private readonly byte[] _alertTemplatesIdsKey = "AlertTemplates"u8.ToArray();
         private readonly byte[] _alertScheduleIdsKey = "AlertSchedule"u8.ToArray();
 
@@ -605,63 +606,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public void AddTelegramChat(TelegramChatEntity chat)
-        {
-            try
-            {
-                _database.Put(chat.Id, JsonSerializer.SerializeToUtf8Bytes(chat));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to add telegram chat info for {chat.Id}");
-            }
-        }
-
-        public void RemoveTelegramChat(byte[] chatId)
-        {
-            try
-            {
-                _database.Delete(chatId);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove info for telegram chat {new Guid(chatId)}");
-            }
-        }
-
-        public void AddTelegramChatToList(byte[] chatId)
-        {
-            try
-            {
-                var currentList = GetTelegramChatsList();
-
-                if (!currentList.Contains(chatId))
-                    currentList.Add(chatId);
-
-                _database.Put(_telegramChatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to add telegram chat id to list");
-            }
-        }
-
-        public void RemoveTelegramChatFromList(byte[] chatId)
-        {
-            try
-            {
-                var currentList = GetTelegramChatsList();
-
-                currentList.Remove(chatId);
-
-                _database.Put(_telegramChatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove telegram chat id {chatId} from list");
-            }
-        }
-
         #endregion
 
         #region Slack destinations
@@ -684,60 +628,82 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public void AddSlackDestination(SlackDestinationEntity destination)
+        #endregion
+
+        #region Chats
+
+        public List<byte[]> GetChatsList() => GetListOfBytes(_chatIdsKey, "Failed to get chats ids list");
+
+        public ChatEntity GetChat(byte[] chatId)
         {
             try
             {
-                _database.Put(destination.Id, JsonSerializer.SerializeToUtf8Bytes(destination));
+                return _database.TryRead(chatId, out byte[] value)
+                    ? JsonSerializer.Deserialize<ChatEntity>(Encoding.UTF8.GetString(value))
+                    : null;
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add slack destination info for {destination.Id}");
+                _logger.Error(e, $"Failed to read info for chat {new Guid(chatId)}");
+            }
+
+            return null;
+        }
+
+        public void AddChat(ChatEntity chat)
+        {
+            try
+            {
+                _database.Put(chat.Id, JsonSerializer.SerializeToUtf8Bytes(chat));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add chat info for {chat.Id}");
             }
         }
 
-        public void RemoveSlackDestination(byte[] id)
+        public void RemoveChat(byte[] chatId)
         {
             try
             {
-                _database.Delete(id);
+                _database.Delete(chatId);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove info for slack destination {new Guid(id)}");
+                _logger.Error(e, $"Failed to remove info for chat {new Guid(chatId)}");
             }
         }
 
-        public void AddSlackDestinationToList(byte[] id)
+        public void AddChatToList(byte[] chatId)
         {
             try
             {
-                var currentList = GetSlackDestinationsList();
+                var currentList = GetChatsList();
 
-                if (!currentList.Contains(id))
-                    currentList.Add(id);
+                if (!currentList.Any(existing => existing.SequenceEqual(chatId)))
+                    currentList.Add(chatId);
 
-                _database.Put(_slackDestinationIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+                _database.Put(_chatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to add slack destination id to list");
+                _logger.Error(e, "Failed to add chat id to list");
             }
         }
 
-        public void RemoveSlackDestinationFromList(byte[] id)
+        public void RemoveChatFromList(byte[] chatId)
         {
             try
             {
-                var currentList = GetSlackDestinationsList();
+                var currentList = GetChatsList();
 
-                currentList.Remove(id);
+                currentList.RemoveAll(existing => existing.SequenceEqual(chatId));
 
-                _database.Put(_slackDestinationIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+                _database.Put(_chatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove slack destination id {id} from list");
+                _logger.Error(e, $"Failed to remove chat id {chatId} from list");
             }
         }
 

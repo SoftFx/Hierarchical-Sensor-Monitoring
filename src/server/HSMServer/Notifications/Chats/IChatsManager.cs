@@ -1,4 +1,4 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Folders;
@@ -9,9 +9,9 @@ using System.Threading.Tasks;
 using Telegram.Bot.Types;
 using User = HSMServer.Model.Authentication.User;
 
-namespace HSMServer.Notifications
+namespace HSMServer.Notifications.Chats
 {
-    public interface ITelegramChatsManager : IConcurrentStorage<TelegramChat, TelegramChatEntity, TelegramChatUpdate>
+    public interface IChatsManager : IConcurrentStorage<Chat, ChatEntity, ChatUpdate>
     {
         TokensManager TokenManager { get; }
 
@@ -20,7 +20,7 @@ namespace HSMServer.Notifications
 
         string GetChatName(Guid id);
 
-        TelegramChat GetChatByChatId(ChatId chatId);
+        Chat GetChatByChatId(ChatId chatId);
 
         string GetInvitationLink(Guid folderId, User user);
 

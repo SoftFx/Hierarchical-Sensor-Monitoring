@@ -3,6 +3,7 @@
 #include "../src/cpu_top.hpp"
 #include "../src/hsm_http_endpoints.hpp"
 #include "../src/hsm_http_retry.hpp"
+#include "../src/tcp_connection_stats.hpp"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -5025,6 +5026,124 @@ namespace
     }
 #endif
 
+    // --- TcpFailureRateAccumulator: the portable baseline/delta/wrap/quiet math behind the TCP-failure-
+    // rate sampler. The OS read (GetTcpStatisticsEx) is the only Windows-specific part; these cases drive
+    // the accumulator with synthetic per-family readings so every branch is verified cross-platform.
+    hsm::collector::TcpFailureRateAccumulator::FamilyReading TcpRead(std::uint64_t attempt_fails)
+    {
+        return { true, attempt_fails };
+    }
+
+    hsm::collector::TcpFailureRateAccumulator::FamilyReading TcpUnreadable()
+    {
+        return { false, 0 };
+    }
+
+    void RequireTcpDelta(const std::optional<double>& actual, double expected, const char* message)
+    {
+        Require(actual.has_value(), message);
+        Require(actual.value() == expected, message);
+    }
+
+    void RequireTcpNothing(const std::optional<double>& actual, const char* message)
+    {
+        Require(!actual.has_value(), message);
+    }
+
+    // First readable tick seeds each family's baseline and posts nothing (a fresh sampler has no prior).
+    void TcpFailureAccumulatorSeedsBaselineFirstTick()
+    {
+        hsm::collector::TcpFailureRateAccumulator acc;
+        RequireTcpNothing(acc.Accumulate(TcpRead(100), TcpRead(5)),
+                          "first readable tick must seed the baseline and return nullopt");
+    }
+
+    // After seeding, a growing counter posts the per-tick delta.
+    void TcpFailureAccumulatorReturnsDeltaAfterSeed()
+    {
+        hsm::collector::TcpFailureRateAccumulator acc;
+        acc.Accumulate(TcpRead(100), TcpRead(0)); // seed v4=100, v6=0
+        RequireTcpDelta(acc.Accumulate(TcpRead(107), TcpRead(0)), 7.0,
+                        "delta after seed must equal the counter increase");
+    }
+
+    // IPv4 and IPv6 deltas are summed into one posted value.
+    void TcpFailureAccumulatorSumsBothFamilies()
+    {
+        hsm::collector::TcpFailureRateAccumulator acc;
+        acc.Accumulate(TcpRead(100), TcpRead(200)); // seed
+        RequireTcpDelta(acc.Accumulate(TcpRead(103), TcpRead(205)), 8.0,
+                        "posted value must be the IPv4 (+3) and IPv6 (+5) deltas summed");
+    }
+
+    // A quiet interval (no new failures) posts nothing, so the rate window stays 0.
+    void TcpFailureAccumulatorQuietIntervalReturnsNullopt()
+    {
+        hsm::collector::TcpFailureRateAccumulator acc;
+        acc.Accumulate(TcpRead(100), TcpRead(200)); // seed
+        RequireTcpNothing(acc.Accumulate(TcpRead(100), TcpRead(200)),
+                          "an unchanged counter must post nothing (zero delta)");
+    }
+
+    // A counter reset/wrap (current < prev) contributes 0 and re-baselines — never a false spike — and
+    // the next tick resumes the delta from the post-reset baseline.
+    void TcpFailureAccumulatorCounterResetContributesZero()
+    {
+        hsm::collector::TcpFailureRateAccumulator acc;
+        acc.Accumulate(TcpRead(100), TcpRead(200)); // seed
+        RequireTcpNothing(acc.Accumulate(TcpRead(5), TcpRead(200)),
+                          "a reset family must contribute 0 (no false spike), not dump its whole count");
+        RequireTcpDelta(acc.Accumulate(TcpRead(8), TcpRead(200)), 3.0,
+                        "delta must resume from the post-reset baseline (8 - 5), not the old one");
+    }
+
+    // A reset in one family does not mask the other family's real progress in the same tick.
+    void TcpFailureAccumulatorResetInOneFamilyKeepsOtherDelta()
+    {
+        hsm::collector::TcpFailureRateAccumulator acc;
+        acc.Accumulate(TcpRead(100), TcpRead(200)); // seed
+        RequireTcpDelta(acc.Accumulate(TcpRead(1), TcpRead(205)), 5.0,
+                        "v4 reset contributes 0 while v6's +5 delta is still counted");
+    }
+
+    // An unreadable family keeps its own baseline: it contributes 0 for the blackout tick and, when it
+    // returns, resumes from its pre-blackout baseline instead of dumping its cumulative count as a spike.
+    void TcpFailureAccumulatorUnreadableFamilyKeepsBaseline()
+    {
+        hsm::collector::TcpFailureRateAccumulator acc;
+        acc.Accumulate(TcpRead(100), TcpRead(50)); // seed
+        RequireTcpDelta(acc.Accumulate(TcpUnreadable(), TcpRead(52)), 2.0,
+                        "an unreadable family contributes 0 while the readable one still posts its delta");
+        RequireTcpDelta(acc.Accumulate(TcpRead(105), TcpRead(52)), 5.0,
+                        "the returning family resumes from its own baseline (105 - 100), no false spike");
+    }
+
+    // Both families unreadable posts nothing and preserves both baselines across the blackout.
+    void TcpFailureAccumulatorNeitherReadableReturnsNullopt()
+    {
+        hsm::collector::TcpFailureRateAccumulator acc;
+        acc.Accumulate(TcpRead(100), TcpRead(200)); // seed
+        RequireTcpNothing(acc.Accumulate(TcpUnreadable(), TcpUnreadable()),
+                          "neither family readable must post nothing");
+        RequireTcpDelta(acc.Accumulate(TcpRead(104), TcpRead(206)), 10.0,
+                        "baselines must survive a fully-unreadable tick (+4 and +6 posted afterwards)");
+    }
+
+    // Each family seeds independently: a family absent at first seeds only when it first appears, while
+    // the other family posts deltas throughout.
+    void TcpFailureAccumulatorFamiliesSeedIndependently()
+    {
+        hsm::collector::TcpFailureRateAccumulator acc;
+        RequireTcpNothing(acc.Accumulate(TcpRead(100), TcpUnreadable()),
+                          "v4 seeds while v6 is absent -> nothing posted");
+        RequireTcpDelta(acc.Accumulate(TcpRead(103), TcpUnreadable()), 3.0,
+                        "v4 posts its delta while v6 has never been seen");
+        RequireTcpNothing(acc.Accumulate(TcpRead(103), TcpRead(500)),
+                          "v6's first appearance seeds its own baseline; v4 flat -> nothing posted");
+        RequireTcpDelta(acc.Accumulate(TcpRead(103), TcpRead(504)), 4.0,
+                        "v6 posts its delta from its own late baseline (504 - 500)");
+    }
+
     // A user/agent can raise the built-in Total CPU sensor to Error (on top of its default Warning) by
     // attaching an extra EmaMean > threshold alert before Start — WITHOUT touching the shared default
     // catalog. add_default_sensor is idempotent by path, AttachAlert rebuilds the registration in place,
@@ -5112,6 +5231,15 @@ namespace
 #if defined(_WIN32)
             { "native_tcp_failure_rate_sensor_registers", [](const std::string&) { NativeTcpFailureRateSensorRegisters(); } },
 #endif
+            { "tcp_failure_accumulator_seeds_baseline_first_tick", [](const std::string&) { TcpFailureAccumulatorSeedsBaselineFirstTick(); } },
+            { "tcp_failure_accumulator_returns_delta_after_seed", [](const std::string&) { TcpFailureAccumulatorReturnsDeltaAfterSeed(); } },
+            { "tcp_failure_accumulator_sums_both_families", [](const std::string&) { TcpFailureAccumulatorSumsBothFamilies(); } },
+            { "tcp_failure_accumulator_quiet_interval_returns_nullopt", [](const std::string&) { TcpFailureAccumulatorQuietIntervalReturnsNullopt(); } },
+            { "tcp_failure_accumulator_counter_reset_contributes_zero", [](const std::string&) { TcpFailureAccumulatorCounterResetContributesZero(); } },
+            { "tcp_failure_accumulator_reset_in_one_family_keeps_other_delta", [](const std::string&) { TcpFailureAccumulatorResetInOneFamilyKeepsOtherDelta(); } },
+            { "tcp_failure_accumulator_unreadable_family_keeps_baseline", [](const std::string&) { TcpFailureAccumulatorUnreadableFamilyKeepsBaseline(); } },
+            { "tcp_failure_accumulator_neither_readable_returns_nullopt", [](const std::string&) { TcpFailureAccumulatorNeitherReadableReturnsNullopt(); } },
+            { "tcp_failure_accumulator_families_seed_independently", [](const std::string&) { TcpFailureAccumulatorFamiliesSeedIndependently(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
             { "native_alert_scheduled_notification_matches_net", [](const std::string&) { NativeAlertScheduledNotificationMatchesNet(); } },
             { "native_prototype_merge_pins_identity_overrides_metadata", [](const std::string&) { NativePrototypeMergePinsIdentityOverridesMetadata(); } },

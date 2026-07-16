@@ -27,6 +27,7 @@ using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -48,28 +49,26 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
-        private readonly ITelegramChatsManager _telegramChatsManager;
+        private readonly IChatsManager _chatsManager;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IJournalService _journalService;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IDatabaseCore _database;
         private readonly IAlertScheduleProvider _alertScheduleProvider;
-        private readonly ISlackDestinationsManager _slackDestinationsManager;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager,
-                              IDatabaseCore database, IAlertScheduleProvider provider, ISlackDestinationsManager slackDestinationsManager) : base(userManager)
+                              IUserManager userManager, IJournalService journalService, IChatsManager chatsManager,
+                              IDatabaseCore database, IAlertScheduleProvider provider) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
             _journalService = journalService;
-            _telegramChatsManager = telegramChatsManager;
+            _chatsManager = chatsManager;
             _database = database;
             _alertScheduleProvider = provider;
-            _slackDestinationsManager = slackDestinationsManager;
         }
 
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -680,7 +679,7 @@ namespace HSMServer.Controllers
                 return PartialView("_MetaInfo", invalidModel);
             }
 
-            var availableChats = sensor.GetAvailableChats(_telegramChatsManager, _slackDestinationsManager);
+            var availableChats = sensor.GetAvailableChats(_chatsManager);
 
             newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var ttlAlertList);
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
@@ -930,7 +929,7 @@ namespace HSMServer.Controllers
             {
                 Id = product.Id,
                 TTL = newModel.ExpectedUpdateInterval.ToModel(product.TTL),
-                DefaultChats = newModel.DefaultChats?.ToUpdate(product, _telegramChatsManager, _slackDestinationsManager),
+                DefaultChats = newModel.DefaultChats?.ToUpdate(product, _chatsManager),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
                 Description = newModel.Description ?? string.Empty,

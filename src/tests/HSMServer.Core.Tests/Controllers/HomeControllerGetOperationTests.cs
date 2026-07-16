@@ -13,7 +13,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Xunit;
@@ -26,10 +26,9 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly Mock<IFolderManager> _folderManagerMock = new();
         private readonly Mock<IUserManager> _userManagerMock = new();
         private readonly Mock<IJournalService> _journalMock = new();
-        private readonly Mock<ITelegramChatsManager> _telegramMock = new();
+        private readonly Mock<IChatsManager> _chatsMock = new();
         private readonly Mock<IDatabaseCore> _databaseMock = new();
         private readonly Mock<IAlertScheduleProvider> _scheduleProviderMock = new();
-        private readonly Mock<ISlackDestinationsManager> _slackDestinationsMock = new();
         private readonly TreeViewModel _treeViewModel;
 
 
@@ -38,7 +37,7 @@ namespace HSMServer.Core.Tests.Controllers
             _cacheMock.Setup(c => c.GetProducts()).Returns(new List<ProductModel>());
             _userManagerMock.Setup(u => u.GetUsers(It.IsAny<Func<User, bool>>())).Returns(new List<User>());
             _scheduleProviderMock.Setup(p => p.GetAllSchedules()).Returns(new List<AlertSchedule>());
-            _slackDestinationsMock.Setup(s => s.GetValues()).Returns(new List<SlackDestination>());
+            _chatsMock.Setup(s => s.GetValues()).Returns(new List<Chat>());
 
             _treeViewModel = new TreeViewModel(_cacheMock.Object, _folderManagerMock.Object, _userManagerMock.Object);
         }
@@ -50,10 +49,9 @@ namespace HSMServer.Core.Tests.Controllers
                 _treeViewModel,
                 _userManagerMock.Object,
                 _journalMock.Object,
-                _telegramMock.Object,
+                _chatsMock.Object,
                 _databaseMock.Object,
-                _scheduleProviderMock.Object,
-                _slackDestinationsMock.Object);
+                _scheduleProviderMock.Object);
 
 
         // #1249: Any-template TTL rows route type=AlertKey; BuildAlertCondition must return a

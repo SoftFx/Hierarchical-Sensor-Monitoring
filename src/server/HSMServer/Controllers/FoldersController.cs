@@ -6,7 +6,7 @@ using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
-using HSMServer.Notifications;
+using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -17,18 +17,15 @@ namespace HSMServer.Controllers
 {
     public class FoldersController : BaseController
     {
-        private readonly ITelegramChatsManager _telegramChatsManager;
-        private readonly ISlackDestinationsManager _slackDestinationsManager;
+        private readonly IChatsManager _chatsManager;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _tree;
 
 
         public FoldersController(IFolderManager folderManager, IUserManager userManager,
-            TreeViewModel treeViewModel, ITelegramChatsManager chatsManager,
-            ISlackDestinationsManager slackDestinationsManager) : base(userManager)
+            TreeViewModel treeViewModel, IChatsManager chatsManager) : base(userManager)
         {
-            _telegramChatsManager = chatsManager;
-            _slackDestinationsManager = slackDestinationsManager;
+            _chatsManager = chatsManager;
             _folderManager = folderManager;
             _tree = treeViewModel;
         }
@@ -223,12 +220,7 @@ namespace HSMServer.Controllers
         private FolderUsersViewModel BuildFolderUsers(FolderModel folder) =>
             new(folder, _userManager.GetUsers(u => !u.IsAdmin));
 
-        private FolderChatsViewModel BuildFolderChats(FolderModel folder)
-        {
-            var chats = _telegramChatsManager.GetValues();
-            var destinations = _slackDestinationsManager.GetValues().ToList();
-
-            return new(folder, chats, destinations);
-        }
+        private FolderChatsViewModel BuildFolderChats(FolderModel folder) =>
+            new(folder, _chatsManager.GetValues().ToList());
     }
 }

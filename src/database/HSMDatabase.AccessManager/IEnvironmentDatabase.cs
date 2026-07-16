@@ -77,10 +77,6 @@ namespace HSMDatabase.AccessManager
 
         List<byte[]> GetTelegramChatsList();
         TelegramChatEntity GetTelegramChat(byte[] chatId);
-        void AddTelegramChat(TelegramChatEntity chat);
-        void RemoveTelegramChat(byte[] chatId);
-        void AddTelegramChatToList(byte[] chatId);
-        void RemoveTelegramChatFromList(byte[] chatId);
 
         #endregion
 
@@ -88,10 +84,17 @@ namespace HSMDatabase.AccessManager
 
         List<byte[]> GetSlackDestinationsList();
         SlackDestinationEntity GetSlackDestination(byte[] id);
-        void AddSlackDestination(SlackDestinationEntity destination);
-        void RemoveSlackDestination(byte[] id);
-        void AddSlackDestinationToList(byte[] id);
-        void RemoveSlackDestinationFromList(byte[] id);
+
+        #endregion
+
+        #region Chats
+
+        List<byte[]> GetChatsList();
+        ChatEntity GetChat(byte[] chatId);
+        void AddChat(ChatEntity chat);
+        void RemoveChat(byte[] chatId);
+        void AddChatToList(byte[] chatId);
+        void RemoveChatFromList(byte[] chatId);
 
         #endregion
 
