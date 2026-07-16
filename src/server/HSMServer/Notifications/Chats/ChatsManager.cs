@@ -51,8 +51,23 @@ namespace HSMServer.Notifications.Chats
         }
 
 
-        public async override Task<bool> TryAdd(Chat model) =>
-            await base.TryAdd(model) && (model.TelegramChatId is null || _telegramChatIds.TryAdd(model.TelegramChatId, model));
+        public async override Task<bool> TryAdd(Chat model)
+        {
+            // Pre-flight the Telegram chat-id index so a collision rejects before any base mutation.
+            // Without this, base.TryAdd could succeed and _telegramChatIds.TryAdd then fail, leaving
+            // the chat in storage but invisible to GetChatByChatId — a ghost chat that survives restart.
+            if (model.TelegramChatId is not null && !_telegramChatIds.TryAdd(model.TelegramChatId, model))
+                return false;
+
+            if (!await base.TryAdd(model))
+            {
+                if (model.TelegramChatId is not null)
+                    _telegramChatIds.TryRemove(model.TelegramChatId, out _);
+                return false;
+            }
+
+            return true;
+        }
 
         public async override Task<bool> TryRemove(RemoveRequest remove) =>
             TryGetValue(remove.Id, out var chat) && await base.TryRemove(remove)
