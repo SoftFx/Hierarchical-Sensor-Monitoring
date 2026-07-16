@@ -21,22 +21,24 @@
         <partial name="~/Views/Shared/_DefaultChat.cshtml" for="DefaultChats" />
     </div>
 
-    <div class="my-2 dropdown d-flex justify-content-end" align="right">
-        <button class="btn btn-link p-0 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fa-solid fa-plus"></i> Add new chat
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-            <li>
-                <a class="dropdown-item" href="javascript:showAddChatHelpModal();">
-                    <i class="@ChatIcons.TelegramBrandClass"></i> Telegram bot invite
-                </a>
-            </li>
-            <li>
-                <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.AddChat)" asp-route-id="@Guid.Empty">
-                    <i class="@ChatIcons.SlackBrandClass"></i> Slack / Mattermost webhook
-                </a>
-            </li>
-        </ul>
+    <div class="my-2 d-flex justify-content-end">
+        <div class="dropdown">
+            <button class="btn btn-link p-0 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fa-solid fa-plus"></i> Add new chat
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                    <a class="dropdown-item" href="javascript:showAddChatHelpModal();">
+                        <i class="@ChatIcons.TelegramBrandClass"></i> Telegram bot invite
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.AddChat)" asp-route-id="@Guid.Empty">
+                        <i class="@ChatIcons.SlackBrandClass"></i> Slack / Mattermost webhook
+                    </a>
+                </li>
+            </ul>
+        </div>
     </div>
 
     <div id="chatsSelect" class="selectpicker">
