@@ -26,6 +26,11 @@ permissions:
   contents: write
   pull-requests: write
 
+# Serialize publishes so two tag pushes can't race on the shared version database.
+concurrency:
+  group: hsm-collector-registry-publish
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -100,14 +105,22 @@ jobs:
           tree=$(git rev-parse "HEAD:ports/hsm-collector")
 
           VER="$VER" TREE="$tree" python3 - <<'PY'
-          import json, os
+          import json, os, sys
           ver, tree = os.environ['VER'], os.environ['TREE']
-          b = json.load(open('versions/baseline.json'))
-          b['default']['hsm-collector']['baseline'] = ver
-          json.dump(b, open('versions/baseline.json', 'w'), indent=2); open('versions/baseline.json', 'a').write('\n')
           f = 'versions/h-/hsm-collector.json'
           d = json.load(open(f))
-          # Idempotent: drop any existing entry for this version, then prepend the fresh one.
+          # vcpkg version->git-tree mappings are immutable. If this version is already published with a
+          # DIFFERENT tree (e.g. its source tag was recreated with new content), refuse — bump instead.
+          existing = next((e for e in d['versions'] if e.get('version') == ver), None)
+          if existing and existing.get('git-tree') != tree:
+              print(f"::error::hsm-collector {ver} is already published with git-tree "
+                    f"{existing['git-tree']}; refusing to rewrite it to {tree}. Bump the version.")
+              sys.exit(1)
+          b = json.load(open('versions/baseline.json'))
+          b['default']['hsm-collector']['baseline'] = ver
+          b['default']['hsm-collector']['port-version'] = 0  # reset on a new version
+          json.dump(b, open('versions/baseline.json', 'w'), indent=2); open('versions/baseline.json', 'a').write('\n')
+          # Idempotent (pre-merge re-runs): drop any existing entry for this version, then prepend it.
           d['versions'] = [e for e in d['versions'] if e.get('version') != ver]
           d['versions'].insert(0, {"version": ver, "git-tree": tree})
           json.dump(d, open(f, 'w'), indent=2); open(f, 'a').write('\n')
@@ -152,7 +165,11 @@ jobs:
         run: |
           set -euo pipefail
           git push -f -u origin "$BR"
-          gh pr create --base master --head "$BR" \
-            --title "vcpkg registry: hsm-collector ${VER}" \
-            --body "Automated by \`hsm-collector-registry-publish\`: the port now fetches \`collector-v${VER}\` (SHA512 refreshed) and the version DB is updated. The updated port was **built + installed in the publish run** ('Validate the updated port builds + installs'), so it is known-good. Note: this PR is opened by \`GITHUB_TOKEN\`, so the separate **hsm-collector-registry** check does NOT auto-run here — re-run it manually (Actions -> hsm-collector-registry -> Run workflow on this branch) or push an empty commit if you want it on the PR before merging." \
-            || echo "A PR for $BR may already exist."
+          # Check existence explicitly rather than masking every gh failure with `|| echo`.
+          if gh pr view "$BR" --json number >/dev/null 2>&1; then
+            echo "A PR for $BR is already open; pushed the refreshed branch to it."
+          else
+            gh pr create --base master --head "$BR" \
+              --title "vcpkg registry: hsm-collector ${VER}" \
+              --body "Automated by \`hsm-collector-registry-publish\`: the port now fetches \`collector-v${VER}\` (SHA512 refreshed) and the version DB is updated. The updated port was **built + installed in the publish run** ('Validate the updated port builds + installs'), so it is known-good. Note: this PR is opened by \`GITHUB_TOKEN\`, so the separate **hsm-collector-registry** check does NOT auto-run here — re-run it manually (Actions -> hsm-collector-registry -> Run workflow on this branch) or push an empty commit if you want it on the PR before merging."
+          fi
