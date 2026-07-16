@@ -68,9 +68,10 @@ jobs:
         id: sha
         env:
           TAG: ${{ steps.v.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          url="https://github.com/${{ github.repository }}/archive/${TAG}.tar.gz"
+          url="https://github.com/${REPO}/archive/${TAG}.tar.gz"
           # Download to a file (with -f so a missing tag → non-zero exit under set -e) rather than piping
           # curl into sha512sum, where a 404 would otherwise be hashed as an empty stream.
           curl -fsSL "$url" -o source.tgz
@@ -172,8 +173,9 @@ jobs:
         run: |
           set -euo pipefail
           git push -f -u origin "$BR"
-          # Check existence explicitly rather than masking every gh failure with `|| echo`.
-          if gh pr view "$BR" --json number >/dev/null 2>&1; then
+          # Check for an OPEN PR explicitly (gh pr view also resolves merged/closed ones) rather than
+          # masking every gh failure with `|| echo`.
+          if [ -n "$(gh pr list --head "$BR" --state open --json number --jq '.[].number')" ]; then
             echo "A PR for $BR is already open; pushed the refreshed branch to it."
           else
             gh pr create --base master --head "$BR" \
