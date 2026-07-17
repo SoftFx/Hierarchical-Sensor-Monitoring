@@ -1,6 +1,6 @@
 # Feature: Notifications
 
-> Owner: server | Last reviewed: 2026-07-08 | Canonical: yes
+> Owner: server | Last reviewed: 2026-07-17 | Canonical: yes
 > Scope: Server-side alert notification delivery channels, the heterogeneous destination model (Telegram + Slack mixed in one alert action), the unified folder/product/node Chats field, the single heterogeneous DefaultChats setting, the unified destination picker, and single-channel FromParent default-destination resolution.
 
 ---
@@ -49,7 +49,30 @@ Telegram-specific concerns (bot lifecycle, inbound update polling, chat-name syn
 
 `BaseNodeEntity` (parent of `ProductEntity`, `FolderEntity`) carries a single heterogeneous `PolicyDestinationSettingsEntity DefaultChatsSettings`. The pre-refactor parallel `DefaultSlackDestinationsSettings` field has been removed; old LevelDB rows with the field deserialize read-tolerant (extra/missing JSON keys are ignored). On legacy data, default chat ids continue to resolve via manager lookup regardless of channel.
 
-`FolderEntity.Chats: List<byte[]>` is a single heterogeneous list — unified `Chat` ids live side by side regardless of which channels each chat happens to carry. The pre-refactor parallel fields `TelegramChats` and `SlackDestinations` have been removed; old rows deserialize read-tolerant.
+`FolderEntity.Chats: List<byte[]>` is a single heterogeneous list — unified `Chat` ids live side by side regardless of which channels each chat happens to carry. The pre-refactor C# fields `TelegramChats` and `SlackDestinations` were renamed to `LegacyTelegramChats` / `LegacySlackDestinations` and demoted to read-only fallback (consulted by `FolderModel.LoadChats` only when `Chats` is empty); legacy LevelDB rows still deserialize read-tolerant via the `[JsonPropertyName]` aliases on those fallback fields. The unified `Chat` rows themselves live under the `"Chats"` LevelDB key — see **Migration** below for the boot-time seeding path.
+
+## Migration Telegram/Slack → unified Chat
+
+`ChatMigrator.Migrate` (`src/server/HSMServer/Migrations/ChatMigrator.cs`) runs at server startup and bridges pre-#1260 storage shapes to the unified `Chat` entity. The migration is **intentionally additive and idempotent** — it never deletes legacy keys and never overwrites an existing unified row.
+
+**Inputs** (all read-only):
+- `database.GetChats()` — existing unified `ChatEntity` rows under the `"Chats"` LevelDB key.
+- `database.GetTelegramChats()` — legacy `TelegramChatEntity` rows under `"TelegramChats"`.
+- `database.GetSlackDestinations()` — legacy `SlackDestinationEntity` rows under `"SlackDestinations"`.
+
+**Algorithm**:
+1. Build `existingIds: HashSet<Guid>` from the unified rows.
+2. For each legacy `TelegramChatEntity` whose id is NOT in `existingIds` — `database.AddChat(BuildFromTelegram(tg))`.
+3. For each legacy `SlackDestinationEntity` whose id is NOT in `existingIds` — `database.AddChat(BuildFromSlack(slack))`.
+4. Log `"ChatMigrator: wrote N chats, skipped M already-present entries."`
+
+**Field mapping**:
+- `TelegramChatEntity → ChatEntity`: `Id, Author, CreationDate, Name, Description, SendMessages, MessagesAggregationTimeSec` carry 1:1; `Type → TelegramType`, `ChatId → TelegramChatId`, plus `AuthorizationTime`.
+- `SlackDestinationEntity → ChatEntity`: same common fields; `WebhookUrl → SlackWebhookUrl`. Slack chats have no `AuthorizationTime` and leave `TelegramChatId` / `TelegramType` null.
+
+**Idempotency**: on every subsequent boot, every legacy id is already in `existingIds`, so both loops are no-ops and `AddChat` is never called. The legacy read paths (`IDatabaseCore.GetTelegramChats` / `GetSlackDestinations`) are kept solely for this migrator — no service writes to the legacy keys anymore, so legacy data is frozen as of the first #1260 boot.
+
+**Deferred cleanup**: removal of the legacy `"TelegramChats"` / `"SlackDestinations"` LevelDB key families and the `LegacyTelegramChats` / `LegacySlackDestinations` fallback fields on `FolderEntity` is deferred to a later PR. Until then they cost disk space but nothing reads them outside this migrator (and `FolderModel.LoadChats`'s empty-`Chats` fallback).
 
 ## Data Flow
 
@@ -77,7 +100,7 @@ NotificationsBackgroundService (timer) -> NotificationsCenter.SendAllMessagesAsy
 - `src/tests/HSMServer.Core.Tests/Notifications/ChatFolderBindingTests.cs` — consolidated post-#1261 coverage of `IChatsManager` folder binding. Pins: (a) `RemoveFolderFromChats_DoesNotDeleteChatAtZeroFolders` — a chat transitions to global and stays in the manager; (b) `GetAvailableChats_IncludesZeroFolderChat` / `GetAvailableChats_BoundChatExcludedFromOtherFolder` — global-default picker behavior and narrowing; (c) `AddFolderToChats_AddsFolderIdToChatFolders` / `AddFolderToChats_SingleInvocation_AddsFolderOnce` — single-event fan-out post-merge (regression for the #1261 manager merge that collapsed the Telegram + Slack subscriber pair into one); (d) `RemoveChatHandler_PrunesIdFromAllFolders` — the merged handler prunes the removed chat id from every folder.Chats reference (regression for the dual→single handler merge); (e) `Chat_WithSlackWebhookOnly_HasNoTelegramChatId` / `Chat_WithTelegramOnly_HasNoSlackWebhook` / `Chat_WithBothChannels_KeepsTelegramAndSlackFields` — pin the optional-channel invariants that let each sender null-guard its own field; (f) `Chat_MultiChannel_AccumulatorsAreIndependent` — regression for the shared-buffer bug fixed in PR #1265 (pre-fix, draining Telegram bumped the shared timer and starved Slack; per-channel `ChannelAccumulator` isolates state).
 - `src/tests/HSMServer.Core.Tests/Folders/FolderManagerPruningTests.cs` — covers the pruning-skip rule in `FolderManager.TryUpdate`: when a chat becomes global (last binding removed), `ITreeValuesCache.RemoveChatsFromPoliciesAsync` is NOT invoked and the chat survives; when a chat still has another folder binding, pruning IS invoked with that chat id.
 - `src/tests/HSMServer.Core.Tests/Notifications/ChatsManagerTests.cs` — round-trip, update, remove, and `TelegramChatId` null-handling on the unified manager.
-- `src/tests/HSMServer.Core.Tests/Folders/ChatMigrationTests.cs` — LevelDB migration of legacy `TelegramChats` / `SlackDestinations` into unified `Chats`, including preservation of `AuthorizationTime` and the self-healing additive write-back on every boot.
+- `src/tests/HSMServer.Core.Tests/Notifications/ChatMigrationTests.cs` — LevelDB migration of legacy `TelegramChats` / `SlackDestinations` into unified `Chats`, including preservation of `AuthorizationTime` and the self-healing additive write-back on every boot.
 - Existing destination/policy tests stay green: `TreeValuesCacheTests/TemplateConcurrencyTests.cs`, `TreeValuesCacheTests/AlertTemplatePartialFailureTests.cs`. `Controllers/HomeControllerAddDataPolicyTests.cs` was updated for #1219 — the `AvailableChats` superset assertion was inverted to reflect that global chats now appear in the picker alongside folder-bound chats.
 
 ## Slack delivery
