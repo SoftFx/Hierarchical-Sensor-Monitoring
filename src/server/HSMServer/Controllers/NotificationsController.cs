@@ -6,6 +6,7 @@ using HSMServer.Filters.TelegramRoleFilters;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
+using HSMServer.Model.Configuration;
 using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
@@ -61,6 +62,10 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         [AuthorizeIsAdmin]
+        public IActionResult Index() => View(nameof(Index), new ChatsSettingsViewModel(ChatsManager));
+
+        [HttpGet]
+        [AuthorizeIsAdmin]
         public IActionResult AddChat() => View(nameof(EditChat), new ChatViewModel { EnableMessages = true });
 
         [HttpPost]
@@ -78,7 +83,7 @@ namespace HSMServer.Controllers
                 await SyncFolders(model);
             }
 
-            return RedirectToAction(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController);
+            return RedirectToAction(nameof(Index), ViewConstants.NotificationsController);
         }
 
         [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]

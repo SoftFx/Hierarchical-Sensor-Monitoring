@@ -1,0 +1,20 @@
+@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Model.Configuration
+
+@model ChatsSettingsViewModel
+
+@{
+    ViewData["Title"] = "Notification chats";
+}
+
+
+<div class="container">
+    <div class="row w-100 justify-content-center">
+        <div class="d-flex justify-content-start my-3 p-0">
+            <h5>Notification chats</h5>
+        </div>
+
+        @await Html.PartialAsync("~/Views/Configuration/_Chats.cshtml", Model)
+    </div>
+</div>

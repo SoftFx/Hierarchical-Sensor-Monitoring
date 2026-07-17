@@ -35,6 +35,11 @@ namespace HSMServer.Helpers
             return user.IsAdmin;
         }
 
+        public static bool IsChatsPageAllowed(User user)
+        {
+            return user.IsAdmin;
+        }
+
         public static bool IsManager(User user)
         {
             return user.ProductsRoles.Any(x => x.Item2 == ProductRoleEnum.ProductManager);

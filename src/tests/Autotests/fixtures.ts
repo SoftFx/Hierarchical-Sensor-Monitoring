@@ -69,11 +69,11 @@ export const cleanup = {
 
   async chat(page: Page, chatName: string): Promise<void> {
     try {
-      // Chats are listed under Configuration → Chats. The remove handler shows a window.confirm()
-      // dialog; waitForEvent('dialog') accepts it inline so we don't leak a page.on listener
-      // across multiple cleanup.chat calls in the same afterEach.
-      await page.goto('/Configuration');
-      await page.getByRole('tab', { name: 'Chats' }).click();
+      // Chats live on the top-level /Notifications page (promoted from a Settings tab in #1273).
+      // The remove handler shows a window.confirm() dialog; waitForEvent('dialog') accepts it
+      // inline so we don't leak a page.on listener across multiple cleanup.chat calls in the
+      // same afterEach.
+      await page.goto('/Notifications');
       const row = page.getByRole('row').filter({ hasText: chatName });
       if (await row.count() === 0) return;
       await row.first().locator('#actionButton').click();
