@@ -144,6 +144,88 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(ConnectedChatType.TelegramPrivate, reloaded.TelegramType);
         }
 
+        // ApplyUpdate uses `?? current` for SlackWebhookUrl, so a null update value means "don't
+        // change" — submitting an empty webhook through EditChat cannot clear a saved value. The
+        // ClearSlackWebhook flag routes around that. Pinned because the EditChat "Remove Slack"
+        // button depends on it (issue #1271).
+        [Fact]
+        public async Task TryUpdate_ClearSlackWebhook_FlagSetsFieldToNull()
+        {
+            var manager = BuildManager();
+            var chat = BuildSlackOnlyChat();
+            await manager.TryAdd(chat);
+            await manager.TryUpdate(new ChatUpdate
+            {
+                Id = chat.Id,
+                SlackWebhookUrl = "https://hooks.slack.com/services/test",
+            });
+
+            var cleared = await manager.TryUpdate(new ChatUpdate { Id = chat.Id, ClearSlackWebhook = true });
+
+            Assert.True(cleared);
+            Assert.Null(manager[chat.Id].SlackWebhookUrl);
+        }
+
+        [Fact]
+        public async Task TryUpdate_ClearMattermostWebhook_FlagSetsFieldToNull()
+        {
+            var manager = BuildManager();
+            var chat = BuildSlackOnlyChat();
+            await manager.TryAdd(chat);
+            await manager.TryUpdate(new ChatUpdate
+            {
+                Id = chat.Id,
+                MattermostWebhookUrl = "https://mattermost.example/hooks/test",
+            });
+
+            var cleared = await manager.TryUpdate(new ChatUpdate { Id = chat.Id, ClearMattermostWebhook = true });
+
+            Assert.True(cleared);
+            Assert.Null(manager[chat.Id].MattermostWebhookUrl);
+        }
+
+        // ClearTelegramBinding must null all three Telegram fields and drop the chat from the
+        // _telegramChatIds index — otherwise GetChatByChatId would still return the chat and the
+        // next bot invite for the same Telegram chat would collide with the ghost entry.
+        [Fact]
+        public async Task TryUpdate_ClearTelegramBinding_FlagClearsFieldsAndRekeysIndex()
+        {
+            const long knownChatId = 42L;
+            var manager = BuildManager();
+            var chat = BuildTelegramChat(knownChatId);
+            await manager.TryAdd(chat);
+
+            Assert.NotNull(manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(knownChatId)));
+
+            var cleared = await manager.TryUpdate(new ChatUpdate { Id = chat.Id, ClearTelegramBinding = true });
+
+            Assert.True(cleared);
+            Assert.Null(manager[chat.Id].TelegramChatId);
+            Assert.Null(manager[chat.Id].TelegramType);
+            Assert.Null(manager[chat.Id].AuthorizationTime);
+            Assert.Null(manager.GetChatByChatId(new Telegram.Bot.Types.ChatId(knownChatId)));
+        }
+
+        // ToEntity() gates the Telegram block on `TelegramType.HasValue` — so after ClearTelegramBinding
+        // the entity round-trip must omit TelegramType / TelegramChatId / AuthorizationTime entirely.
+        // Without this, reloading the chat from storage would resurrect the cleared binding.
+        [Fact]
+        public async Task Chat_AfterClearTelegramBinding_ToEntityOmitsTelegramFields()
+        {
+            const long knownChatId = 99L;
+            var manager = BuildManager();
+            var chat = BuildTelegramChat(knownChatId);
+            await manager.TryAdd(chat);
+
+            await manager.TryUpdate(new ChatUpdate { Id = chat.Id, ClearTelegramBinding = true });
+
+            var entity = manager[chat.Id].ToEntity();
+
+            Assert.Null(entity.TelegramType);
+            Assert.Null(entity.TelegramChatId);
+            Assert.Null(entity.AuthorizationTime);
+        }
+
 
         private static ChatsManager BuildManager()
         {
