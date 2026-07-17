@@ -140,16 +140,16 @@
                 @if (isTelegramBound)
                 {
                     <a id="sendTestTelegram" data-chat-id="@Model.TelegramChatId" class="btn btn-outline-secondary" style="cursor: pointer;">Send test Telegram message</a>
-                    <a id="removeTelegram" data-chat-id="@Model.Id" class="btn btn-outline-danger" style="cursor: pointer;">Remove Telegram</a>
+                    <a id="removeTelegram" class="btn btn-outline-danger" style="cursor: pointer;">Remove Telegram</a>
                 }
                 @if (Model.HasSlack)
                 {
                     <a id="sendTestSlack" data-chat-id="@Model.Id" class="btn btn-outline-secondary" style="cursor: pointer;">Send test Slack message</a>
-                    <a id="removeSlack" data-chat-id="@Model.Id" class="btn btn-outline-danger" style="cursor: pointer;">Remove Slack</a>
+                    <a id="removeSlack" class="btn btn-outline-danger" style="cursor: pointer;">Remove Slack</a>
                 }
                 @if (Model.HasMattermost)
                 {
-                    <a id="removeMattermost" data-chat-id="@Model.Id" class="btn btn-outline-danger" style="cursor: pointer;">Remove Mattermost</a>
+                    <a id="removeMattermost" class="btn btn-outline-danger" style="cursor: pointer;">Remove Mattermost</a>
                 }
                 <button type="submit" class="btn btn-primary independentSizeButton my-1">Save</button>
             </div>
