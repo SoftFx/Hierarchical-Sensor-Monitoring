@@ -31,7 +31,7 @@
             </h5>
 
             <a href="javascript:removeChat();">
-                <i class='fas fa-trash-alt'></i> Remove
+                <i class='fas fa-trash-alt'></i> Remove chat
             </a>
         </div>
 
@@ -70,7 +70,7 @@
                     <label class="col-form-label" asp-for="EnableMessages"></label>
                     <i class='fas fa-question-circle ms-2' title='True means that alert notifications for this chat is enabled.'></i>
                 </div>
-                <div class="col-4 form-check form-switch mt-2">
+                <div class="col-6 form-check form-switch mt-2">
                     <input id="messages-settings" class="form-check-input" type="checkbox" asp-for="EnableMessages">
                 </div>
             </div>
@@ -80,7 +80,7 @@
                     <label class="col-form-label" asp-for="MessagesDelay"></label>
                     <i class='fas fa-question-circle ms-2' title='Alert notifications aggregation period in seconds.'></i>
                 </div>
-                <div class="col-4 p-0">
+                <div class="col-6 p-0">
                     <div class="input-group">
                         <input type="number" class="form-control" asp-for="MessagesDelay">
                         <span class="input-group-text">sec</span>
@@ -140,10 +140,16 @@
                 @if (isTelegramBound)
                 {
                     <a id="sendTestTelegram" data-chat-id="@Model.TelegramChatId" class="btn btn-outline-secondary" style="cursor: pointer;">Send test Telegram message</a>
+                    <a id="removeTelegram" data-chat-id="@Model.Id" class="btn btn-outline-danger" style="cursor: pointer;">Remove Telegram</a>
                 }
                 @if (Model.HasSlack)
                 {
                     <a id="sendTestSlack" data-chat-id="@Model.Id" class="btn btn-outline-secondary" style="cursor: pointer;">Send test Slack message</a>
+                    <a id="removeSlack" data-chat-id="@Model.Id" class="btn btn-outline-danger" style="cursor: pointer;">Remove Slack</a>
+                }
+                @if (Model.HasMattermost)
+                {
+                    <a id="removeMattermost" data-chat-id="@Model.Id" class="btn btn-outline-danger" style="cursor: pointer;">Remove Mattermost</a>
                 }
                 <button type="submit" class="btn btn-primary independentSizeButton my-1">Save</button>
             </div>
@@ -173,6 +179,24 @@
         );
     }
 
+    // Per-channel Remove buttons. Each clears only its channel; the Chat row and the other
+    // channels stay intact. Form reloads to reflect the post-clear state.
+    function removeChannel(channelName, actionUrl, confirmText) {
+        showConfirmationModal(
+            `Removing ${channelName} from chat '@Model.Name'`,
+            confirmText,
+            function () {
+                $.ajax({
+                    type: 'POST',
+                    url: actionUrl + `?id=@Model.Id`,
+                    cache: false,
+                    async: true,
+                    success: function () { window.location.reload(); }
+                });
+            }
+        );
+    }
+
     $(function () {
         $("#sendTestTelegram").off("click").on("click", function () {
             var chatId = $(this).data("chat-id");
@@ -186,6 +210,30 @@
             $.get("@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)", { id: id })
                 .done(function () { showToast("Test Slack message sent."); })
                 .fail(function () { showToast("Failed to send test Slack message."); });
+        });
+
+        $("#removeTelegram").off("click").on("click", function () {
+            removeChannel(
+                "Telegram binding",
+                "@Url.Action(nameof(NotificationsController.RemoveTelegramBinding), ViewConstants.NotificationsController)",
+                `Telegram binding will be removed from chat '@Model.Name'. The chat itself, its folder bindings, and other channels stay intact.`
+            );
+        });
+
+        $("#removeSlack").off("click").on("click", function () {
+            removeChannel(
+                "Slack webhook",
+                "@Url.Action(nameof(NotificationsController.ClearSlackWebhook), ViewConstants.NotificationsController)",
+                `Slack webhook will be removed from chat '@Model.Name'. The chat itself and other channels stay intact.`
+            );
+        });
+
+        $("#removeMattermost").off("click").on("click", function () {
+            removeChannel(
+                "Mattermost webhook",
+                "@Url.Action(nameof(NotificationsController.ClearMattermostWebhook), ViewConstants.NotificationsController)",
+                `Mattermost webhook will be removed from chat '@Model.Name'. The chat itself and other channels stay intact.`
+            );
         });
     });
 </script>

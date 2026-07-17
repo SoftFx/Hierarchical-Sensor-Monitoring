@@ -20,5 +20,17 @@ namespace HSMServer.Notifications.Chats
 
         // Mattermost (optional)
         public string MattermostWebhookUrl { get; init; }
+
+
+        // Negative-clear flags. Chat.ApplyUpdate uses `?? current` for SlackWebhookUrl /
+        // MattermostWebhookUrl, so a null update value means "don't change" and submitting an
+        // empty string through EditChat cannot clear a saved webhook. Telegram binding is even
+        // stricter — TelegramType / AuthorizationTime are private-set and only mutable here.
+        // These flags route around both issues by explicitly signalling "set this channel to null".
+        public bool? ClearTelegramBinding { get; init; }
+
+        public bool? ClearSlackWebhook { get; init; }
+
+        public bool? ClearMattermostWebhook { get; init; }
     }
 }
