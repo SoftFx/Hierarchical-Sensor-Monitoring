@@ -69,8 +69,10 @@ test('Folder Chats tab: Add-chat dropdown offers Telegram help and Slack webhook
   await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/test');
   await page.getByRole('button', { name: 'Save' }).click();
 
-  // AddChat POST redirects to /Notifications (the top-level Chats page from #1273). Verify the
-  // chat landed in the unified Chats list — no tab click needed, the list IS the page.
+  // AddChat POST redirects to /Notifications (the top-level Chats page from #1273). Assert the URL
+  // first — if TryAdd silently fails or the redirect changes, the row check below would surface as
+  // an opaque "row not found" instead of a clear URL mismatch.
+  await expect(page).toHaveURL(/.*Notifications/);
   await expect(page.getByRole('row').filter({ hasText: slackChatName })).toBeVisible();
 
   // --- Logout ---
