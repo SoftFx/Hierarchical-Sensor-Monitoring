@@ -104,6 +104,10 @@ test('Folder Chats picker renders chat.Name as inert text (XSS lock-down)', asyn
   await page.getByRole('link', { name: 'Add folder' }).click();
   await page.getByRole('textbox', { name: 'Name' }).fill(folderName);
   await page.getByRole('button', { name: 'Save' }).click();
+
+  // Verify Save landed us on the folder edit page (same guard as the first test — without it a
+  // silent validation failure would surface later as an opaque "Chats tab not found" instead).
+  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue(folderName);
   await page.getByRole('tab', { name: 'Chats' }).click();
 
   // The folder Chats tab renders TWO bootstrap-select pickers side by side: the DefaultChats
