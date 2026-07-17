@@ -19,11 +19,12 @@
 
     // First configured channel wins; for a brand-new chat we land on Slack because Telegram can
     // only be added through the bot-invite flow (Show setup help), so Slack is the only fillable
-    // field. An existing chat with no channels configured falls back to Telegram (shows the help).
+    // field. An existing chat with no channels configured (e.g. right after ClearSlackWebhook)
+    // also falls back to Slack — landing on Telegram would surprise the user, who just acted on
+    // the Slack webhook. Mattermost only wins if it's the sole configured channel.
     var defaultTab = isTelegramBound ? "telegram"
-                   : (Model.HasSlack || isNewChat) ? "slack"
-                   : Model.HasMattermost ? "mattermost"
-                   : "telegram";
+                   : Model.HasMattermost && !Model.HasSlack ? "mattermost"
+                   : "slack";
 }
 
 
