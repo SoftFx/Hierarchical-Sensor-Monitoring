@@ -191,7 +191,8 @@
                     url: actionUrl + `?id=@Model.Id`,
                     cache: false,
                     async: true,
-                    success: function () { window.location.reload(); }
+                    success: function () { window.location.reload(); },
+                    error: function () { showToast(`Failed to remove ${channelName.toLowerCase()} from chat.`); }
                 });
             }
         );
