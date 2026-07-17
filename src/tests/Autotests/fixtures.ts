@@ -70,14 +70,17 @@ export const cleanup = {
   async chat(page: Page, chatName: string): Promise<void> {
     try {
       // Chats are listed under Configuration → Chats. The remove handler shows a window.confirm()
-      // dialog, so accept dialogs unconditionally during cleanup.
-      page.on('dialog', d => d.accept().catch(() => {}));
+      // dialog; waitForEvent('dialog') accepts it inline so we don't leak a page.on listener
+      // across multiple cleanup.chat calls in the same afterEach.
       await page.goto('/Configuration');
       await page.getByRole('tab', { name: 'Chats' }).click();
       const row = page.getByRole('row').filter({ hasText: chatName });
       if (await row.count() === 0) return;
       await row.first().locator('#actionButton').click();
+      const dialogPromise = page.waitForEvent('dialog');
       await row.first().locator('a.dropdown-item', { hasText: 'Remove' }).click();
+      const dialog = await dialogPromise;
+      await dialog.accept();
     } catch (e) {
       console.warn(`[cleanup] chat "${chatName}":`, e instanceof Error ? e.message : e);
     }
