@@ -9,6 +9,8 @@ const slackChatName = uniqueName('SlackChat');
 // @chat.Name into the Configuration/_Chats.cshtml row's first td, so the literal payload text
 // appears in the DOM. The onerror handler would set window.__xss=1 if it ever executed.
 const xssChatName = `<img src=x onerror="window.__xss=1">${uniqueName('xss')}`;
+// Both tests share folderName — fine because playwright.config sets fullyParallel:false and
+// afterEach removes the folder, so the second test always starts from a clean slate.
 
 test.afterEach(async ({ browser }) => {
   const page = await browser.newPage();
@@ -37,17 +39,14 @@ test('Folder Chats tab: Add-chat dropdown offers Telegram help and Slack webhook
   await page.getByRole('link', { name: 'Add folder' }).click();
   await page.getByRole('textbox', { name: 'Name' }).fill(folderName);
   await page.getByRole('textbox', { name: 'Description' }).fill(folder_description);
-  await page.evaluate(
-    ({ selector, value }) => {
-      const input = document.querySelector(selector) as HTMLInputElement;
-      if (!input) throw new Error('Color input not found');
-      input.value = value.toLowerCase();
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    },
-    { selector: '#Color', value: folder_color }
-  );
+  // The Add-folder page seeds a RANDOM color server-side on every render. Set our color with
+  // Playwright's native fill (reliable for <input type="color">, matches add_remove_folder.spec.ts)
+  // — otherwise the form submits the random default.
+  await page.locator('#Color').fill(folder_color);
   await page.getByRole('button', { name: 'Save' }).click();
+
+  // Verify Save landed us on the folder edit page (vs silently failing back to the add form).
+  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue(folderName);
 
   // --- Unified Chats tab ---
   await page.getByRole('tab', { name: 'Chats' }).click();
