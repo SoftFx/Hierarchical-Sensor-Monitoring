@@ -29,9 +29,13 @@ namespace HSMServer.Notifications.Chats
         // Telegram (optional)
         public ChatId? TelegramChatId { get; private set; }
 
-        public ConnectedChatType? TelegramType { get; init; }
+        // init would block the ClearTelegramBinding path — ApplyUpdate needs to null these out so
+        // ToEntity() drops them on the next round-trip. internal set keeps existing object
+        // initializers in ChatsManager.TryConnect and ChatsManagerTests working; outside this
+        // assembly the surface is effectively read-only.
+        public ConnectedChatType? TelegramType { get; internal set; }
 
-        public DateTime? AuthorizationTime { get; init; }
+        public DateTime? AuthorizationTime { get; internal set; }
 
 
         // Slack (optional)
@@ -98,6 +102,19 @@ namespace HSMServer.Notifications.Chats
 
             if (update.TelegramChatId.HasValue)
                 TelegramChatId = new ChatId(update.TelegramChatId.Value);
+
+            if (update.ClearTelegramBinding is true)
+            {
+                TelegramChatId = null;
+                TelegramType = null;
+                AuthorizationTime = null;
+            }
+
+            if (update.ClearSlackWebhook is true)
+                SlackWebhookUrl = null;
+
+            if (update.ClearMattermostWebhook is true)
+                MattermostWebhookUrl = null;
         }
 
         public override ChatEntity ToEntity()

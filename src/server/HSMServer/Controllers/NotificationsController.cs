@@ -124,6 +124,35 @@ namespace HSMServer.Controllers
             return Ok();
         }
 
+        [HttpPost]
+        [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> RemoveTelegramBinding(Guid id) =>
+            await ClearChannel(id, clearTelegram: true);
+
+        [HttpPost]
+        [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> ClearSlackWebhook(Guid id) =>
+            await ClearChannel(id, clearSlack: true);
+
+        [HttpPost]
+        [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> ClearMattermostWebhook(Guid id) =>
+            await ClearChannel(id, clearMattermost: true);
+
+
+        private async Task<IActionResult> ClearChannel(Guid id, bool clearTelegram = false, bool clearSlack = false, bool clearMattermost = false)
+        {
+            var update = new ChatUpdate
+            {
+                Id = id,
+                ClearTelegramBinding = clearTelegram,
+                ClearSlackWebhook = clearSlack,
+                ClearMattermostWebhook = clearMattermost,
+            };
+
+            return await ChatsManager.TryUpdate(update) ? Ok() : NotFound();
+        }
+
 
         private ChatFoldersViewModel BuildChatFolders(Chat chat)
         {

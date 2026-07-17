@@ -5,6 +5,7 @@ import { uniqueName, cleanup } from '../fixtures.ts';
 
 const folderName = uniqueName('Fldr');
 const slackChatName = uniqueName('SlackChat');
+const slackRemoveChatName = uniqueName('SlackRm');
 // XSS payload used as chat Name. Cleanup by text still works because Razor default-encodes
 // @chat.Name into the Configuration/_Chats.cshtml row's first td, so the literal payload text
 // appears in the DOM. The onerror handler would set window.__xss=1 if it ever executed.
@@ -17,6 +18,7 @@ test.afterEach(async ({ browser }) => {
   try {
     await login(page, testConfig.admin_user, testConfig.admin_user_password, testConfig.apiUrl);
     await cleanup.chat(page, slackChatName);
+    await cleanup.chat(page, slackRemoveChatName);
     await cleanup.chat(page, xssChatName);
     await cleanup.folder(page, folderName);
   } finally {
@@ -136,6 +138,61 @@ test('Folder Chats picker renders chat.Name as inert text (XSS lock-down)', asyn
   // the payload is text-only and the property stays undefined.
   const xssMarker = await page.evaluate(() => (window as any).__xss);
   expect(xssMarker).toBeUndefined();
+
+  // --- Logout ---
+  await page.getByRole('link', { name: 'Logout' }).click();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+});
+
+
+// Covers issue #1271: per-channel Remove buttons on the EditChat form. The Slack "Remove" button
+// must clear only the Slack webhook and leave the Chat row intact. Pre-#1271 the only destructive
+// action was the header-level "Remove chat" link, which deletes the whole record.
+test('EditChat: per-channel Remove clears Slack webhook without deleting the chat', async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
+
+  // --- Login ---
+  await login(page, admin_user, admin_user_password, apiUrl);
+
+  // --- Create a Slack chat via the unified Chats tab ---
+  await page.getByRole('link', { name: 'Configuration' }).click();
+  await page.getByRole('tab', { name: 'Chats' }).click();
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await page.locator('#Name').fill(slackRemoveChatName);
+  await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/remove-test');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  // AddChat POST redirects to Configuration. Reopen the Chats tab and click into EditChat via
+  // the row's action dropdown (matches the row pattern in _Chats.cshtml:53-86).
+  await page.getByRole('tab', { name: 'Chats' }).click();
+  const chatRow = page.getByRole('row').filter({ hasText: slackRemoveChatName });
+  await expect(chatRow).toBeVisible();
+  await chatRow.locator('#actionButton').click();
+  await page.getByRole('link', { name: 'View/Edit' }).click();
+
+  // EditChat should show the populated webhook and a "Remove Slack" button alongside the
+  // existing "Send test Slack message" button.
+  await expect(page.locator('#SlackWebhookUrl')).toHaveValue('https://hooks.slack.com/services/remove-test');
+  await expect(page.locator('#removeSlack')).toBeVisible();
+
+  // Click Remove Slack → confirmation modal → OK. The AJAX POST hits ClearSlackWebhook and the
+  // page reloads (EditChat.cshtml removeChannel success handler). Wait for the reload to land
+  // before asserting — otherwise the auto-waiting toHaveValue('') can race against the
+  // still-rendering previous DOM and flake.
+  await page.locator('#removeSlack').click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await page.waitForLoadState('domcontentloaded');
+
+  // After reload, the webhook field is empty and the per-channel Remove button is gone
+  // (HasSlack is now false). The chat still exists — only the webhook was cleared.
+  await expect(page.locator('#SlackWebhookUrl')).toHaveValue('');
+  await expect(page.locator('#removeSlack')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /Edit chat/ })).toBeVisible();
+
+  // The Chats list must still contain the row — channel clear ≠ chat delete (acceptance #4).
+  await page.getByRole('link', { name: 'Configuration' }).click();
+  await page.getByRole('tab', { name: 'Chats' }).click();
+  await expect(page.getByRole('row').filter({ hasText: slackRemoveChatName })).toBeVisible();
 
   // --- Logout ---
   await page.getByRole('link', { name: 'Logout' }).click();
