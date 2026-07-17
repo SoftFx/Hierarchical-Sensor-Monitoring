@@ -292,12 +292,12 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Single(captured.Policies);
             Assert.Empty(captured.Policies[0].Conditions);
         }
-        // Regression coverage for #1244: UpdateTemplate feeds the live-refreshed notification dropdown,
-        // so it had to return Slack destinations alongside Telegram — otherwise any Slack selection
-        // disappeared the moment the user changed folder/type/path.
+        // Regression coverage for #1244: UpdateTemplate feeds the live-refreshed notification dropdown.
+        // Post-#1262 the payload is one unified Chats array (no more Groups/Users/SlackDestinations split):
+        // each Chat appears exactly once regardless of how many channels it carries.
         [Fact]
         [Trait("Category", "Alert Template authoring")]
-        public void UpdateTemplate_ReturnsTelegramAndSlackChats()
+        public void UpdateTemplate_ReturnsUnifiedChatsList()
         {
             var folderId = Guid.NewGuid();
             var telegramChat = BuildTelegramChat(Guid.NewGuid(), "tg-group", ConnectedChatType.TelegramGroup);
@@ -314,36 +314,39 @@ namespace HSMServer.Core.Tests.Controllers
 
             var json = Assert.IsType<JsonResult>(result);
             using var doc = JsonDocument.Parse((string)json.Value);
-            var chats = doc.RootElement.GetProperty("Chats");
+            var chats = doc.RootElement.GetProperty("Chats").GetProperty("Chats").EnumerateArray().ToList();
 
-            var tg = Assert.Single(chats.GetProperty("Groups").EnumerateArray());
-            Assert.Equal(telegramChat.Id, Guid.Parse(tg.GetProperty("Id").GetString()));
-            Assert.Equal(telegramChat.Name, tg.GetProperty("Name").GetString());
+            Assert.Equal(2, chats.Count);
+            var byId = chats.ToDictionary(c => Guid.Parse(c.GetProperty("Id").GetString()));
 
-            Assert.Empty(chats.GetProperty("Users").EnumerateArray());
+            Assert.Contains(telegramChat.Id, byId.Keys);
+            Assert.Equal(telegramChat.Name, byId[telegramChat.Id].GetProperty("Name").GetString());
+            Assert.False(string.IsNullOrEmpty(byId[telegramChat.Id].GetProperty("IconsHtml").GetString()),
+                "Telegram chat should carry brand icon HTML");
 
-            var slack = Assert.Single(chats.GetProperty("SlackDestinations").EnumerateArray());
-            Assert.Equal(slackChat.Id, Guid.Parse(slack.GetProperty("Id").GetString()));
-            Assert.Equal(slackChat.Name, slack.GetProperty("Name").GetString());
+            Assert.Contains(slackChat.Id, byId.Keys);
+            Assert.Equal(slackChat.Name, byId[slackChat.Id].GetProperty("Name").GetString());
+            Assert.False(string.IsNullOrEmpty(byId[slackChat.Id].GetProperty("IconsHtml").GetString()),
+                "Slack chat should carry brand icon HTML");
         }
 
         [Fact]
         [Trait("Category", "Alert Template authoring")]
-        public void UpdateTemplate_FiltersSlackDestinationsByFolderBinding()
+        public void UpdateTemplate_FiltersChatsByFolderBinding()
         {
-            // A Slack destination bound to a different folder must not appear in this folder's dropdown.
-            // Mirrors the Telegram availability rule used by GetAvailableChats.
+            // A chat bound to a different folder must not appear in this folder's dropdown.
+            // Mirrors the GetAvailableChats availability rule (bound → only its folder; unbound → global).
             var folderId = Guid.NewGuid();
-            var boundSlack = BuildSlackChat(Guid.NewGuid(), "bound-slack");
-            boundSlack.Folders.Add(folderId);
+            var boundChat = BuildSlackChat(Guid.NewGuid(), "bound-slack");
+            boundChat.Folders.Add(folderId);
 
-            var unboundSlack = BuildSlackChat(Guid.NewGuid(), "other-folder-slack");
-            unboundSlack.Folders.Add(Guid.NewGuid()); // tied to a different folder
+            var unboundChat = BuildSlackChat(Guid.NewGuid(), "other-folder-slack");
+            unboundChat.Folders.Add(Guid.NewGuid()); // tied to a different folder
 
-            var folder = new FolderModel(BuildFolderEntity(folderId, boundSlack.Id));
+            var folder = new FolderModel(BuildFolderEntity(folderId, boundChat.Id));
 
             _folderManagerMock.Setup(f => f.TryGetValue(folderId, out folder)).Returns(true);
-            _chatsMock.Setup(t => t.GetValues()).Returns(new List<Chat> { boundSlack, unboundSlack });
+            _chatsMock.Setup(t => t.GetValues()).Returns(new List<Chat> { boundChat, unboundChat });
 
             var controller = CreateController();
 
@@ -351,15 +354,15 @@ namespace HSMServer.Core.Tests.Controllers
 
             var json = Assert.IsType<JsonResult>(result);
             using var doc = JsonDocument.Parse((string)json.Value);
-            var slackIds = doc.RootElement
+            var chatIds = doc.RootElement
                 .GetProperty("Chats")
-                .GetProperty("SlackDestinations")
+                .GetProperty("Chats")
                 .EnumerateArray()
                 .Select(c => Guid.Parse(c.GetProperty("Id").GetString()))
                 .ToList();
 
-            Assert.Single(slackIds);
-            Assert.Equal(boundSlack.Id, slackIds[0]);
+            Assert.Single(chatIds);
+            Assert.Equal(boundChat.Id, chatIds[0]);
         }
 
         [Fact]

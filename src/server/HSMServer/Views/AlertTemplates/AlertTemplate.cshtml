@@ -272,40 +272,64 @@
     @await Html.PartialAsync("~/Views/Home/Alerts/_AlertsFormCollection.cshtml")
 
     function updateTemplateChatDropdowns(chats) {
-        var groups = (chats && chats.Groups) || [];
-        var users = (chats && chats.Users) || [];
-        var slackDestinations = (chats && chats.SlackDestinations) || [];
+        var list = (chats && chats.Chats) || [];
 
         $('form#addAlertTemplate_form select[name="Chats"]').each(function() {
             var $select = $(this);
             var currentSelected = ($select.val() || []).slice();
 
             $select.find('option').not('.general-group-chat-mode').remove();
+            $select.append('<option data-divider="true"></option>');
 
-            appendChatSection($select, 'Groups', groups, currentSelected, 'fab fa-telegram');
-            appendChatSection($select, 'Users', users, currentSelected, 'fab fa-telegram');
-            appendChatSection($select, 'Slack destinations', slackDestinations, currentSelected, 'fab fa-slack', 'No Slack destinations configured');
+            if (list.length === 0) {
+                $select.append('<option disabled value="">No chats configured</option>');
+            } else {
+                // Each chat is one option. IconsHtml is server-rendered markup from
+                // Chat.ChatBrandIcons() (only `<i class='fab fa-...'>` tags from static brand
+                // constants) and is inserted verbatim. chat.Name is user-controlled; route it
+                // through jQuery's DOM API rather than concatenating strings:
+                //   - .text(name) creates a text node, no HTML parsing — safe and renders as
+                //     the literal name.
+                //   - .attr('data-content', ...) is later read by bootstrap-select and inserted
+                //     via innerHTML, so the value goes through attribute-parse → innerHTML
+                //     decoding. Double-encode the name so it survives both passes as inert
+                //     entities instead of executable markup.
+                list.forEach(function(chat) {
+                    var icons = chat.IconsHtml || '';
+                    var dataContent = icons + ' ' + escapeChatNameForDataContent(chat.Name);
+                    var $option = $('<option></option>')
+                        .val(String(chat.Id))
+                        .attr('data-content', dataContent)
+                        .text(chat.Name);
+                    if (currentSelected.includes(chat.Id)) {
+                        $option.attr('selected', 'selected');
+                    }
+                    $select.append($option);
+                });
+            }
 
             $select.selectpicker('refresh');
         });
     }
 
-    function appendChatSection($select, title, items, currentSelected, brandClass, emptyMessage) {
-        $select.append('<option data-divider="true"></option>');
-        $select.append(`<option disabled>${title}</option>`);
-        if (items.length === 0) {
-            if (emptyMessage)
-                $select.append(`<option disabled value="">${emptyMessage}</option>`);
-            return;
-        }
-        items.forEach(function(chat) {
-            var isSelected = currentSelected.includes(chat.Id);
-            // data-content lets bootstrap-select render the brand icon inline; matches the static
-            // markup emitted by Views/Home/Alerts/_ActionBlock.cshtml so the dropdown looks the same
-            // after a form refresh as on initial render.
-            var dataContent = `<i class='${brandClass}'></i> ${chat.Name}`;
-            $select.append(`<option value="${chat.Id}"${isSelected ? ' selected' : ''} data-content="${dataContent}">${chat.Name}</option>`);
-        });
+    function escapeChatNameForDataContent(name) {
+        // bootstrap-select reads data-content via the attribute (browser decodes HTML entities)
+        // and then assigns the result to innerHTML (browser parses entities again). A single
+        // HTML-encode is therefore undone before innerHTML sees the value, which means a name
+        // containing "<img onerror=...>" would execute. Encode twice so that after both decode
+        // passes the result is "&lt;img onerror=...&gt;" — entities the browser renders as text.
+        var once = String(name == null ? '' : name)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        return once
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     function renderSensorsPagination(currentPage, totalPages) {

@@ -104,12 +104,12 @@
             }
             else
             {
-                @await Html.PartialAsync("_NewTelegramChatHelpModal.cshtml", Model.Id)
+                @await Html.PartialAsync("_NewChatHelpModal.cshtml", Model.Id)
                 <div class="row mt-2">
                     <label class="col-2 col-form-label">Telegram</label>
                     <div class="col-6">
-                        <a href="javascript:showAddTelegramGroupHelpModal();" class="btn btn-link p-0">
-                            <i class="fab fa-telegram"></i> Connect via bot
+                        <a href="javascript:showAddChatHelpModal();" class="btn btn-link p-0">
+                            <i class="fab fa-telegram"></i> Show setup help
                         </a>
                     </div>
                 </div>

@@ -28,7 +28,7 @@
                 <button class="nav-link" id="telegram-tab" data-bs-toggle="tab" data-bs-target="#telegram" type="button" role="tab" aria-controls="telegram" aria-selected="false">Telegram</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="slack-tab" data-bs-toggle="tab" data-bs-target="#slack" type="button" role="tab" aria-controls="slack" aria-selected="false">Chats</button>
+                <button class="nav-link" id="chats-tab" data-bs-toggle="tab" data-bs-target="#chats" type="button" role="tab" aria-controls="chats" aria-selected="false">Chats</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="database-tab" data-bs-toggle="tab" data-bs-target="#database" type="button" role="tab" aria-controls="database" aria-selected="false">Database</button>
@@ -62,7 +62,7 @@
                 </form>
             </div>
 
-            <div class="tab-pane fade" id="slack" role="tabpanel" aria-labelledby="slack-tab">
+            <div class="tab-pane fade" id="chats" role="tabpanel" aria-labelledby="chats-tab">
                 @await Html.PartialAsync("_Chats", Model.Chats)
             </div>
 
