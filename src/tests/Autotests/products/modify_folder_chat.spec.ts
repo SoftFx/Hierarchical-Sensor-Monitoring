@@ -170,9 +170,12 @@ test('EditChat: per-channel Remove clears Slack webhook without deleting the cha
   await expect(page.locator('#removeSlack')).toBeVisible();
 
   // Click Remove Slack → confirmation modal → OK. The AJAX POST hits ClearSlackWebhook and the
-  // page reloads (EditChat.cshtml removeChannel success handler).
+  // page reloads (EditChat.cshtml removeChannel success handler). Wait for the reload to land
+  // before asserting — otherwise the auto-waiting toHaveValue('') can race against the
+  // still-rendering previous DOM and flake.
   await page.locator('#removeSlack').click();
   await page.getByRole('button', { name: 'OK' }).click();
+  await page.waitForLoadState('domcontentloaded');
 
   // After reload, the webhook field is empty and the per-channel Remove button is gone
   // (HasSlack is now false). The chat still exists — only the webhook was cleared.
