@@ -63,7 +63,7 @@
 
             <div class="chat-edit-section">
                 <div class="row align-items-center mb-3">
-                    <div class="col-12 col-md-3">
+                    <div class="col-12 col-md-3 text-md-end">
                         <label class="chat-form-label col-form-label" asp-for="Name"></label>
                     </div>
                     <div class="col-12 col-md-7">
@@ -76,7 +76,7 @@
                 </div>
 
                 <div class="row align-items-center mb-3">
-                    <div class="col-12 col-md-3">
+                    <div class="col-12 col-md-3 text-md-end">
                         <label class="chat-form-label col-form-label" asp-for="Description"></label>
                     </div>
                     <div class="col-12 col-md-7">
@@ -85,7 +85,7 @@
                 </div>
 
                 <div class="row align-items-center mb-3">
-                    <div class="col-12 col-md-3 d-flex align-items-center gap-2">
+                    <div class="col-12 col-md-3 d-flex align-items-center gap-2 justify-content-md-end">
                         <label class="chat-form-label col-form-label mb-0" asp-for="EnableMessages"></label>
                         <i class='fas fa-question-circle text-secondary' title='True means that alert notifications for this chat is enabled.'></i>
                     </div>
@@ -97,7 +97,7 @@
                 </div>
 
                 <div class="row align-items-center mb-0">
-                    <div class="col-12 col-md-3 d-flex align-items-center gap-2">
+                    <div class="col-12 col-md-3 d-flex align-items-center gap-2 justify-content-md-end">
                         <label class="chat-form-label col-form-label mb-0" asp-for="MessagesDelay"></label>
                         <i class='fas fa-question-circle text-secondary' title='Alert notifications aggregation period in seconds.'></i>
                     </div>
@@ -144,7 +144,7 @@
                                 Telegram-bound fields are read-only — they sync from the bot.
                             </div>
                             <div class="row align-items-center mb-3">
-                                <div class="col-12 col-md-3">
+                                <div class="col-12 col-md-3 text-md-end">
                                     <label class="chat-form-label col-form-label">Telegram</label>
                                 </div>
                                 <div class="col-12 col-md-7">
@@ -165,7 +165,7 @@
                         {
                             @await Html.PartialAsync("_NewChatHelpModal.cshtml", Model.Id)
                             <div class="row align-items-center">
-                                <div class="col-12 col-md-3">
+                                <div class="col-12 col-md-3 text-md-end">
                                     <label class="chat-form-label col-form-label">Telegram</label>
                                 </div>
                                 <div class="col-12 col-md-7">
@@ -181,7 +181,7 @@
                          role="tabpanel" aria-labelledby="slack-tab">
                         @await Html.PartialAsync("_SlackHelpModal.cshtml")
                         <div class="row align-items-center mb-3">
-                            <div class="col-12 col-md-3">
+                            <div class="col-12 col-md-3 text-md-end">
                                 <label class="chat-form-label col-form-label" for="SlackWebhookUrl">Slack</label>
                             </div>
                             <div class="col-12 col-md-7">
@@ -204,7 +204,7 @@
                          role="tabpanel" aria-labelledby="mattermost-tab">
                         @await Html.PartialAsync("_MattermostHelpModal.cshtml")
                         <div class="row align-items-center mb-3">
-                            <div class="col-12 col-md-3">
+                            <div class="col-12 col-md-3 text-md-end">
                                 <label class="chat-form-label col-form-label" for="MattermostWebhookUrl">Mattermost</label>
                             </div>
                             <div class="col-12 col-md-7">
