@@ -7,8 +7,8 @@ const folderName = uniqueName('Fldr');
 const slackChatName = uniqueName('SlackChat');
 const slackRemoveChatName = uniqueName('SlackRm');
 // XSS payload used as chat Name. Cleanup by text still works because Razor default-encodes
-// @chat.Name into the Configuration/_Chats.cshtml row's first td, so the literal payload text
-// appears in the DOM. The onerror handler would set window.__xss=1 if it ever executed.
+// @chat.Name into the Configuration/_Chats.cshtml row's .chat-info span, so the literal payload
+// text appears in the DOM. The onerror handler would set window.__xss=1 if it ever executed.
 const xssChatName = `<img src=x onerror="window.__xss=1">${uniqueName('xss')}`;
 // Both tests share folderName — fine because playwright.config sets fullyParallel:false and
 // afterEach removes the folder, so the second test always starts from a clean slate.
@@ -54,12 +54,12 @@ test('Folder Chats tab: Add-chat dropdown offers Telegram help and Slack webhook
   await page.getByRole('tab', { name: 'Chats' }).click();
   await expect(page.getByText('Choose chats to add')).toBeVisible();
 
-  // Telegram bot-invite path opens the help modal. The title was unified to "Add new chat" in #1262
-  // (previously "Add new telegram chat help"); the link text changed from "Add new telegram chat"
-  // to "Telegram bot invite" inside an "Add new chat" dropdown.
+  // Telegram bot-invite path opens the help modal. The modal was retitled to "Telegram setup" in
+  // #1281 (was "Add new chat" when it carried Slack/Mattermost sections too — those moved into
+  // _SlackHelpModal.cshtml / _MattermostHelpModal.cshtml on the EditChat form).
   await page.getByRole('button', { name: 'Add new chat' }).click();
   await page.getByRole('link', { name: 'Telegram bot invite' }).click();
-  const modalHeading = page.getByRole('heading', { name: 'Add new chat' });
+  const modalHeading = page.getByRole('heading', { name: 'Telegram setup' });
   await expect(modalHeading).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(modalHeading).not.toBeVisible();
@@ -73,9 +73,10 @@ test('Folder Chats tab: Add-chat dropdown offers Telegram help and Slack webhook
 
   // AddChat POST redirects to /Notifications (the top-level Chats page from #1273). Assert the URL
   // first — if TryAdd silently fails or the redirect changes, the row check below would surface as
-  // an opaque "row not found" instead of a clear URL mismatch.
+  // an opaque "row not found" instead of a clear URL mismatch. The row is a .chat-row, not a <tr> —
+  // after the #1281 Members-layout rebuild there is no <table> on the Chats page.
   await expect(page).toHaveURL(/.*Notifications/);
-  await expect(page.getByRole('row').filter({ hasText: slackChatName })).toBeVisible();
+  await expect(page.locator('.chat-row').filter({ hasText: slackChatName })).toBeVisible();
 
   // --- Logout ---
   await page.getByRole('link', { name: 'Logout' }).click();
@@ -154,21 +155,25 @@ test('EditChat: per-channel Remove clears Slack webhook without deleting the cha
   // --- Login ---
   await login(page, admin_user, admin_user_password, apiUrl);
 
-  // --- Create a Slack chat via the unified Chats tab ---
-  await page.getByRole('link', { name: 'Configuration' }).click();
-  await page.getByRole('tab', { name: 'Chats' }).click();
+  // --- Create a Slack chat via the top-level Chats page ---
+  // Configuration dropdown hosts Chats as a link after #1273 (used to be a Settings tab). The
+  // dropdown toggle is <a role="button"> in _Layout.cshtml, so getByRole('button') wins over the
+  // <a> tag default (matches the XSS test pattern at line ~102).
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
   await page.getByRole('link', { name: 'Add new chat' }).click();
   await page.locator('#Name').fill(slackRemoveChatName);
   await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/remove-test');
   await page.getByRole('button', { name: 'Save' }).click();
 
-  // AddChat POST redirects to Configuration. Reopen the Chats tab and click into EditChat via
-  // the row's action dropdown (matches the row pattern in _Chats.cshtml:53-86).
-  await page.getByRole('tab', { name: 'Chats' }).click();
-  const chatRow = page.getByRole('row').filter({ hasText: slackRemoveChatName });
+  // AddChat POST redirects to /Notifications (top-level Chats page). Click into EditChat via the
+  // row's inline Edit button — _Chats.cshtml was rebuilt on the Members-layout pattern in #1281
+  // (was a three-dot dropdown with a "View/Edit" item before #1281).
+  await expect(page).toHaveURL(/.*Notifications/);
+  const chatRow = page.locator('.chat-row').filter({ hasText: slackRemoveChatName });
   await expect(chatRow).toBeVisible();
-  await chatRow.locator('#actionButton').click();
-  await page.getByRole('link', { name: 'View/Edit' }).click();
+  await chatRow.locator('.chat-action-btn[title="Edit"]').click();
 
   // EditChat should show the populated webhook and a "Remove Slack" button alongside the
   // existing "Send test Slack message" button.
@@ -190,9 +195,11 @@ test('EditChat: per-channel Remove clears Slack webhook without deleting the cha
   await expect(page.getByRole('heading', { name: /Edit chat/ })).toBeVisible();
 
   // The Chats list must still contain the row — channel clear ≠ chat delete (acceptance #4).
-  await page.getByRole('link', { name: 'Configuration' }).click();
-  await page.getByRole('tab', { name: 'Chats' }).click();
-  await expect(page.getByRole('row').filter({ hasText: slackRemoveChatName })).toBeVisible();
+  // Reopen the top-level Chats page (Configuration dropdown → Chats link, same as setup).
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+  await expect(page.locator('.chat-row').filter({ hasText: slackRemoveChatName })).toBeVisible();
 
   // --- Logout ---
   await page.getByRole('link', { name: 'Logout' }).click();

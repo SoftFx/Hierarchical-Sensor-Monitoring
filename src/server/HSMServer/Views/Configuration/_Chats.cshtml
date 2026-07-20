@@ -9,88 +9,90 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<div class="d-flex justify-content-between my-2">
-    <h5 class="m-0">Notification chats</h5>
-    <div class='d-flex col-md-auto'>
+<style>
+    .chat-container { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; }
+    .chat-list { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
+    .chat-list-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 0.875rem; color: #6b7280; border-radius: 0.5rem 0.5rem 0 0; }
+    .chat-row { display: flex; align-items: center; justify-content: space-between; padding: 1rem; border-bottom: 1px solid #e5e7eb; }
+    .chat-row:last-child { border-bottom: none; }
+    .chat-row:hover { background-color: #f9fafb; }
+    .chat-info { display: flex; align-items: center; gap: 0.75rem; }
+    .chat-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; }
+    .chat-badge.badge-enabled { color: #16a34a; border-color: #16a34a; background-color: #f0fdf4; }
+    .chat-badge.badge-disabled { color: #6b7280; background-color: #f5f5f5; }
+    .chat-action-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; background: none; border: 1px solid #d1d5db; border-radius: 0.5rem; cursor: pointer; color: #6b7280; font-size: 1rem; text-decoration: none; }
+    .chat-action-btn:hover { background-color: #f9fafb; }
+    .chat-action-btn.danger { color: #ef4444; }
+    .chat-action-btn.danger:hover { background-color: #fef2f2; border-color: #fca5a5; }
+</style>
+
+
+<div class="chat-container">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <h1 class="h4 fw-semibold m-0">Notification chats</h1>
         <a href="@Url.Action(nameof(NotificationsController.AddChat), ViewConstants.NotificationsController)"
-           class="btn btn-link p-0">
-            <i class="fa-solid fa-plus"></i> Add new chat
+           class="btn d-flex align-items-center gap-1"
+           style="background-color: #16a34a; color: #fff; border-color: #16a34a;">
+            <i class="fas fa-plus"></i> Add new chat
         </a>
     </div>
-</div>
+    <p class="text-secondary mb-3">Configure notification destinations for alert delivery. One chat can carry multiple channels (Telegram, Slack, Mattermost).</p>
 
-@if (Model.Chats is null || Model.Chats.Count == 0)
-{
-    <div class="text-muted">No chats configured yet.</div>
-}
-else
-{
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Channels</th>
-                <th class="text-center">Enabled</th>
-                <th>Author</th>
-                <th>Created</th>
-                <th class="text-center">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var chat in Model.Chats)
+    <div class="d-flex gap-2 mb-3">
+        <div class="position-relative flex-grow-1">
+            <input id="chatSearch" type="text" class="form-control pe-4" placeholder="Find a chat..." autocomplete="off" />
+            <button id="clearChatSearch" type="button" class="btn btn-link position-absolute top-50 end-0 translate-middle-y text-secondary text-decoration-none p-0 me-2 d-none" style="font-size: 0.875rem; line-height: 1;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <select id="channelFilter" class="form-select" style="max-width: 180px;">
+            <option value="any" selected>Any channel</option>
+            <option value="telegram">Telegram</option>
+            <option value="slack">Slack</option>
+            <option value="mattermost">Mattermost</option>
+        </select>
+    </div>
+
+    <div class="chat-list">
+        <div class="chat-list-header">
+            <span>@(Model.Chats?.Count ?? 0) chats</span>
+        </div>
+
+        @if (Model.Chats is null || Model.Chats.Count == 0)
+        {
+            <div class="text-center text-secondary py-5">No chats configured yet.</div>
+        }
+        else
+        {
+            foreach (var chat in Model.Chats)
             {
-                <tr>
-                    <td>@chat.Name</td>
-                    <td>@Html.Raw(chat.ChatBrandIcons())</td>
-                    <td class="text-center">
-                        @if (chat.EnableMessages)
-                        {
-                            <i class="fa-solid fa-check fa-lg text-success"></i>
-                        }
-                    </td>
-                    <td>@(chat.Author ?? "—")</td>
-                    <td>@chat.CreationDate.ToLocalTime().ToString("g")</td>
-                    <td nowrap class="text-center w-10">
-                        <div class='btn-group'>
-                            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                                <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
-                            </button>
-                            <ul class='dropdown-menu dropdown-menu-end overflow-auto' aria-labelledby="dropdownMenuButton">
-                                <li>
-                                    <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;"
-                                       href="@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController, new { id = chat.Id })">
-                                        View/Edit
-                                    </a>
-                                </li>
-                                @if (chat.HasTelegram)
-                                {
-                                    <li>
-                                        <a id="sendTelegram_@chat.Id" data-telegram-chat-id="@chat.TelegramChatId" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                            Send test Telegram message
-                                        </a>
-                                    </li>
-                                }
-                                @if (chat.HasSlack)
-                                {
-                                    <li>
-                                        <a id="sendSlack_@chat.Id" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                            Send test Slack message
-                                        </a>
-                                    </li>
-                                }
-                                <li>
-                                    <a id='remove_@chat.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                        Remove
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </td>
-                </tr>
+                var enabledBadgeClass = chat.EnableMessages ? "badge-enabled" : "badge-disabled";
+                var enabledBadgeText = chat.EnableMessages ? "Enabled" : "Disabled";
+
+                <div class="chat-row"
+                     data-name="@(chat.Name?.ToLower() ?? string.Empty)"
+                     data-has-telegram="@chat.HasTelegram.ToString().ToLower()"
+                     data-has-slack="@chat.HasSlack.ToString().ToLower()"
+                     data-has-mattermost="@chat.HasMattermost.ToString().ToLower()">
+                    <div class="chat-info">
+                        @Html.Raw(chat.ChatBrandIcons())
+                        <span class="fw-medium">@chat.Name</span>
+                        <span class="chat-badge @enabledBadgeClass">@enabledBadgeText</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                        <a class="chat-action-btn" title="Edit"
+                           href="@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController, new { id = chat.Id })">
+                            <i class="fa-regular fa-pen-to-square"></i>
+                        </a>
+                        <button type="button" id="remove_@chat.Id" name="@chat.Name" class="chat-action-btn danger" title="Remove">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
             }
-        </tbody>
-    </table>
-}
+        }
+    </div>
+</div>
 
 <form id="removeChat_form" method="post"
       action="@Url.Action(nameof(NotificationsController.RemoveChat), ViewConstants.NotificationsController)">
@@ -98,34 +100,63 @@ else
     <input type="hidden" name="id" id="removeChat_id" />
 </form>
 
+
 <script>
     $(function () {
+        // Remove — opens the shared _ConfirmationModal (rendered by _Layout.cshtml) instead of
+        // window.confirm, matching the Users page delete pattern. The hidden form POSTs to the
+        // existing NotificationsController.RemoveChat handler — same contract as before.
+        //
+        // Escape chat.Name before interpolating into the modal title/body — confirmation.js feeds
+        // both through jQuery .append(), which parses the string as HTML. chat.Name is user-controlled
+        // with no regex constraint (only length), so an unescaped name like `<img onerror=...>` would
+        // execute when the modal renders. Pre-#1281 the remove flow used window.confirm(), which
+        // stringifies — this restore-parity guard keeps that contract.
         $(document).off("click", "[id^=remove_]").on("click", "[id^=remove_]", function () {
-            var id = this.id.substring("remove_".length, this.id.length);
-            var row = $(this).closest('tr');
-            var name = row.find('td:first').text().trim();
+            var id = this.id.substring("remove_".length);
+            var rawName = $(this).attr("name") || "";
+            var safeName = $("<div/>").text(rawName).html();
 
-            if (!confirm("Remove chat \"" + name + "\"?"))
-                return;
-
-            $("#removeChat_id").val(id);
-            $("#removeChat_form").submit();
+            showConfirmationModal(
+                `Removing chat "${safeName}"`,
+                `Do you really want to remove chat "${safeName}"?`,
+                function () {
+                    $("#removeChat_id").val(id);
+                    $("#removeChat_form").submit();
+                }
+            );
         });
 
-        $(document).off("click", "[id^=sendTelegram_]").on("click", "[id^=sendTelegram_]", function () {
-            var chatId = $(this).data("telegram-chat-id");
+        // Filter rows by Name substring (case-insensitive) AND the selected channel. "Any channel"
+        // (the default) means no channel filter — mirrors Users' "Role" select semantics.
+        //
+        // Read data-name via .attr() + String() rather than .data() — jQuery's data() coerces
+        // values that look like numbers/booleans/JSON into native types. A chat named e.g.
+        // "123456" (common for Telegram groups) would come back as a Number, and `.indexOf(q)`
+        // would throw TypeError, aborting the whole filter pass and leaving rows in an
+        // inconsistent state. The has-telegram/has-slack/has-mattermost flags below deliberately
+        // rely on the boolean coercion — that path stays on .data().
+        function applyChatFilters() {
+            var q = $("#chatSearch").val().toLowerCase();
+            var channel = $("#channelFilter").val();
 
-            $.get("@Url.Action(nameof(NotificationsController.SendTestTelegramMessage), ViewConstants.NotificationsController)", { chatId: chatId })
-                .done(function () { showToast("Test Telegram message sent."); })
-                .fail(function () { showToast("Failed to send test Telegram message."); });
-        });
+            $("#clearChatSearch").toggleClass("d-none", !q);
 
-        $(document).off("click", "[id^=sendSlack_]").on("click", "[id^=sendSlack_]", function () {
-            var id = this.id.substring("sendSlack_".length, this.id.length);
+            $(".chat-row").each(function () {
+                var $row = $(this);
+                var name = String($row.attr("data-name") || "");
+                var matchSearch = !q || name.indexOf(q) !== -1;
+                var matchChannel = channel === "any" ||
+                    $row.data("has-" + channel) === true;
+                $row.toggle(matchSearch && matchChannel);
+            });
+        }
 
-            $.get("@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)", { id: id })
-                .done(function () { showToast("Test Slack message sent."); })
-                .fail(function () { showToast("Failed to send test Slack message."); });
+        $("#chatSearch").on("input", applyChatFilters);
+        $("#channelFilter").on("change", applyChatFilters);
+        $("#clearChatSearch").on("click", function () {
+            $("#chatSearch").val("");
+            applyChatFilters();
         });
     });
 </script>
