@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Migrations;
@@ -164,12 +166,14 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         [Fact]
-        public void Chat_LoadedFromLegacyEntity_HasNullTelegramTitleAndDescription()
+        public void Chat_DeserializedFromLegacyJson_HasNullTelegramTitleAndDescription()
         {
-            // Simulates a legacy LevelDB row written before #1283: the TelegramChatTitle /
-            // TelegramChatDescription JSON keys are absent and System.Text.Json deserializes
-            // them to null. Additive migration — no breaking schema change.
-            var legacyEntity = new ChatEntity
+            // Real LevelDB read path: EnvironmentDatabaseWorker.GetChat calls
+            // JsonSerializer.Deserialize<ChatEntity>. Legacy rows pre-#1283 lack the
+            // TelegramChatTitle / TelegramChatDescription keys — System.Text.Json must
+            // deserialize them as null (default behavior for missing properties).
+            // Additive migration — no breaking schema change.
+            var entity = new ChatEntity
             {
                 Id = Guid.NewGuid().ToByteArray(),
                 Author = Guid.NewGuid().ToByteArray(),
@@ -180,7 +184,13 @@ namespace HSMServer.Core.Tests.Notifications
                 MessagesAggregationTimeSec = 60,
             };
 
-            var chat = new Chat(legacyEntity);
+            var json = JsonNode.Parse(JsonSerializer.Serialize(entity)).AsObject();
+            json.Remove(nameof(ChatEntity.TelegramChatTitle));
+            json.Remove(nameof(ChatEntity.TelegramChatDescription));
+            var legacyJson = json.ToJsonString();
+
+            var deserialized = JsonSerializer.Deserialize<ChatEntity>(legacyJson);
+            var chat = new Chat(deserialized);
 
             Assert.Null(chat.TelegramChatTitle);
             Assert.Null(chat.TelegramChatDescription);
@@ -222,8 +232,8 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal("Actual Telegram Group", roundTripped.TelegramChatTitle);
             Assert.Equal("Telegram-side description", roundTripped.TelegramChatDescription);
             Assert.Equal("On-call alerts", roundTripped.Name);
+            Assert.Equal("primary", roundTripped.Description);
         }
-
 
         private static TelegramChatEntity BuildTelegram(Guid id, string name, byte type, long chatId) => new()
         {
