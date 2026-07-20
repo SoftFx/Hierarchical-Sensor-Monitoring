@@ -12,8 +12,6 @@ namespace HSMServer.Model.Configuration
         public List<ChatViewModel> Chats { get; }
 
 
-        public ChatsSettingsViewModel() { }
-
         public ChatsSettingsViewModel(IChatsManager chats, IFolderManager folders)
         {
             var allFolders = folders.GetValues();

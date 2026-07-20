@@ -88,7 +88,7 @@
                     <div class="d-flex align-items-center gap-3">
                         <div class="chat-folders-grid">
                             @{
-                                var display = chat.Folders?.DisplayFolders ?? new List<FolderModel>();
+                                var display = chat.Folders.DisplayFolders;
                                 if (display.Count == 0)
                                 {
                                     <span class="text-secondary" style="font-size: 0.75rem;">No folders</span>
@@ -103,7 +103,7 @@
                                     }
                                     if (display.Count > limit)
                                     {
-                                        // XSS-safe via Razor attribute encoding + the popover JS pattern from Users.cshtml:402-407 (textContent then unescape only literal <br/>).
+                                        // XSS-safe: Razor HTML-encodes the attribute, the popover JS below un-escapes only literal <br/>.
                                         var allNames = string.Join("<br/>", display.Select(f => f.Name));
                                         <a href="javascript:void(0)" class="chat-folders-more-link" tabindex="0"
                                            data-bs-content="@allNames">+@(display.Count - limit) more</a>
@@ -192,7 +192,7 @@
             applyChatFilters();
         });
 
-        // Folder-bindings "+N more" popover — mirrors Users.cshtml:396-414; content callback un-escapes only literal <br/> so folder names stay inert text.
+        // Folder-bindings "+N more" popover — mirrors Users.cshtml products-more-link; only literal <br/> is un-escaped so folder names stay inert text.
         $(".chat-folders-more-link").each(function () {
             var el = this;
             new bootstrap.Popover(el, {
