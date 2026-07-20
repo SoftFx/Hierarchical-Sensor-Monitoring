@@ -62,7 +62,7 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         [AuthorizeIsAdmin]
-        public IActionResult Index() => View(nameof(Index), new ChatsSettingsViewModel(ChatsManager));
+        public IActionResult Index() => View(nameof(Index), new ChatsSettingsViewModel(ChatsManager, _folderManager));
 
         [HttpGet]
         [AuthorizeIsAdmin]

@@ -2,6 +2,7 @@
 @using HSMServer.Constants
 @using HSMServer.Extensions
 @using HSMServer.Model.Configuration
+@using HSMServer.Model.Folders
 @using HSMServer.Model.ViewModel
 
 @model ChatsSettingsViewModel
@@ -24,6 +25,12 @@
     .chat-action-btn:hover { background-color: #f9fafb; }
     .chat-action-btn.danger { color: #ef4444; }
     .chat-action-btn.danger:hover { background-color: #fef2f2; border-color: #fca5a5; }
+    .chat-folders-grid { display: flex; flex-wrap: wrap; gap: 0.25rem; max-width: 320px; justify-content: flex-end; }
+    .chat-folder-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; background-color: #f5f5f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 150px; color: inherit; text-decoration: none; }
+    .chat-folder-badge:hover { background-color: #eef2ff; border-color: #c7cdd9; }
+    .chat-folder-badge.badge-public { color: #3b82f6; border-color: #93c5fd; background-color: #eff6ff; }
+    .chat-folders-more-link { font-size: 0.75rem; color: #3b82f6; text-decoration: none; cursor: pointer; line-height: 2; white-space: nowrap; }
+    .chat-folders-more-link:hover { text-decoration: underline; }
 </style>
 
 
@@ -79,14 +86,41 @@
                         <span class="fw-medium">@chat.Name</span>
                         <span class="chat-badge @enabledBadgeClass">@enabledBadgeText</span>
                     </div>
-                    <div class="d-flex align-items-center gap-1">
-                        <a class="chat-action-btn" title="Edit"
-                           href="@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController, new { id = chat.Id })">
-                            <i class="fa-regular fa-pen-to-square"></i>
-                        </a>
-                        <button type="button" id="remove_@chat.Id" name="@chat.Name" class="chat-action-btn danger" title="Remove">
-                            <i class="fa-regular fa-trash-can"></i>
-                        </button>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="chat-folders-grid">
+                            @{
+                                var display = chat.Folders.DisplayFolders;
+                                if (display.Count == 0)
+                                {
+                                    <span class="chat-folder-badge badge-public">Public</span>
+                                }
+                                else
+                                {
+                                    const int limit = 3;
+                                    foreach (var folder in display.Take(limit))
+                                    {
+                                        <a class="chat-folder-badge" title="@folder.Name"
+                                           href="@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController, new { folderId = folder.Id })">@folder.Name</a>
+                                    }
+                                    if (display.Count > limit)
+                                    {
+                                        // XSS-safe: Razor HTML-encodes the attribute, the popover JS below un-escapes only literal <br/>.
+                                        var allNames = string.Join("<br/>", display.Select(f => f.Name));
+                                        <a href="javascript:void(0)" class="chat-folders-more-link" tabindex="0"
+                                           data-bs-content="@allNames">+@(display.Count - limit) more</a>
+                                    }
+                                }
+                            }
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <a class="chat-action-btn" title="Edit"
+                               href="@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController, new { id = chat.Id })">
+                                <i class="fa-regular fa-pen-to-square"></i>
+                            </a>
+                            <button type="button" id="remove_@chat.Id" name="@chat.Name" class="chat-action-btn danger" title="Remove">
+                                <i class="fa-regular fa-trash-can"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             }
@@ -157,6 +191,27 @@
         $("#clearChatSearch").on("click", function () {
             $("#chatSearch").val("");
             applyChatFilters();
+        });
+
+        // Folder-bindings "+N more" popover — mirrors Users.cshtml products-more-link; only literal <br/> is un-escaped so folder names stay inert text.
+        $(".chat-folders-more-link").each(function () {
+            var el = this;
+            new bootstrap.Popover(el, {
+                html: true,
+                trigger: "focus",
+                placement: "left",
+                content: function () {
+                    var raw = el.getAttribute("data-bs-content");
+                    var div = document.createElement("div");
+                    div.textContent = raw;
+                    return div.innerHTML.replace(/&lt;br\/&gt;/g, "<br/>");
+                }
+            });
+        });
+
+        $(".chat-folders-more-link").on("click", function (e) {
+            e.preventDefault();
+            this.focus();
         });
     });
 </script>
