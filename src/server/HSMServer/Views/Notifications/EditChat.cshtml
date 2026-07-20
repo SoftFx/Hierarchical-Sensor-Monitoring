@@ -53,7 +53,7 @@
     <p class="text-secondary mb-3">
         @(isNewChat
             ? "Create a new notification chat. At least one channel is required to deliver alerts."
-            : "Update chat settings. Telegram-bound fields are read-only — they sync from the bot.")
+            : "Update chat settings. Use the channel tabs below to configure delivery.")
     </p>
 
     <form id="chat_form" method="post" asp-action="@formAction">
@@ -144,6 +144,9 @@
                          role="tabpanel" aria-labelledby="telegram-tab">
                         @if (isTelegramBound)
                         {
+                            <div class="alert alert-secondary small mb-3 py-2">
+                                Telegram-bound fields are read-only — they sync from the bot.
+                            </div>
                             <div class="row align-items-center mb-3">
                                 <div class="col-12 col-md-3">
                                     <label class="chat-form-label col-form-label">Telegram</label>
