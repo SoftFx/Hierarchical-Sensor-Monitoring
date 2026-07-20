@@ -207,6 +207,13 @@ namespace HSMServer.Controllers
             if (!_tree.Nodes.TryGetValue(nodeId, out var node))
                 return _emptyJsonResult;
 
+            // The node id comes from the client and _tree is a global singleton, so resolving it proves
+            // nothing about access: gate the read on the caller's role for the owning product. Matters more
+            // here than for the per-sensor endpoints — one id fans out to a whole subtree's history plus its
+            // structural metadata (group list, counts, relative paths).
+            if (!CurrentUser.IsProductAvailable(node.RootProduct.Id))
+                return _emptyJsonResult;
+
             var groups = _tree.GetComparableChildGroups(nodeId);
 
             if (groups.Count == 0)

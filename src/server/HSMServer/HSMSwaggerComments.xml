@@ -387,14 +387,6 @@
             on the node "Chart" tab (issue #1235). Set by the controller after the node is connected.
             </summary>
         </member>
-        <member name="M:HSMServer.Notifications.SlackDestinationsManager.RemoveFolderFromChats(System.Guid,System.Collections.Generic.List{System.Guid},HSMServer.Core.TableOfChanges.InitiatorInfo)">
-            <summary>
-            Required by the IFolderManager.RemoveFolderFromChats contract so the same
-            multicast delegate can fan out to Telegram and Slack. <paramref name="initiator"/>
-            is unused here because Slack has no Telegram-style auto-remove at zero folders;
-            it is only consumed by TelegramChatsManager.TryRemove for the audit trail.
-            </summary>
-        </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">
             <summary>
             Settings for the downloadable HSM Agent (epic #1167). The externally-reachable Sensor-API base URL

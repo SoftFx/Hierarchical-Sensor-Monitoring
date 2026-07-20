@@ -78,7 +78,7 @@ chart. It is entirely derived from stored history: it never writes or changes se
 
 | Contract | Location | Notes |
 |---|---|---|
-| `POST SensorHistory/NodeChartHistory` | `Controllers/SensorHistoryController.cs` | Body `NodeChartRequest { NodeId, GroupKey?, From, To }`. Returns `{ error, unit, note, selectedKey, groups: [{ key, label, count }], series: [{ id, label, values: [{ time, value }] }] }`. |
+| `POST SensorHistory/NodeChartHistory` | `Controllers/SensorHistoryController.cs` | Body `NodeChartRequest { NodeId, GroupKey?, From, To }`. Returns `{ error, unit, note, selectedKey, groups: [{ key, label, count }], series: [{ id, label, values: [{ time, value }] }] }`. Requires the caller to have access to the node's root product (`CurrentUser.IsProductAvailable`); otherwise an empty result. |
 | `NodeChartRequest` | `Model/History/NodeChartRequest.cs` | `NodeId` is the node's GUID string (encoded id == `ToString()`); optional `GroupKey` selects the group; `From`/`To` are UTC instants. |
 | `NodeSensorGroup` | `Model/TreeViewModels/NodeSensorGroup.cs` | `(SensorType Type, int? UnitCode, string UnitLabel, List<Guid> SensorIds)`; `Key` = stable `"{typeInt}:{unitCode}"` used by the group selector. |
 | `TreeViewModel.GetComparableChildGroups(Guid)` | `Model/TreeViewModels/TreeViewModel.cs` | Groups >= 2 comparable descendants by `(type, unit)`, largest first. |
@@ -103,11 +103,14 @@ chart. It is entirely derived from stored history: it never writes or changes se
    `_NodeChartTabContent`.
 3. On tab click / window change, the inline script POSTs `{ nodeId, from, to }` to
    `NodeChartHistory`.
-4. The endpoint takes the selected comparable group, shortlists the top `MaxSensorsPerChart` children by
+4. The endpoint resolves the node in the global tree and rejects (empty result) unless the caller's
+   product roles cover the node's `RootProduct` — the node id is client-supplied and one call fans out
+   to a whole subtree.
+5. It then takes the selected comparable group, shortlists the top `MaxSensorsPerChart` children by
    their current in-memory `LastValue` (no DB read), reads history only for those (`GetSensorValues`,
    latest N, bounded), converts to display values, projects each to a scalar (`Value`, or bar `Mean`),
    and returns one `series` entry per non-empty child.
-5. The client builds one `scattergl` line per series (palette-cycled, `connectgaps: false`) and
+6. The client builds one `scattergl` line per series (palette-cycled, `connectgaps: false`) and
    calls `Plotly.newPlot` with a shared legend. Global `Plotly`/`jQuery` are reused — no bundle
    rebuild.
 
