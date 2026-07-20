@@ -1,0 +1,48 @@
+<div class="modal fade" tabindex="-1" role="dialog" id="slackHelp_modal">
+    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fab fa-slack"></i> How to create a Slack incoming webhook</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="hideSlackHelpModal()" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <p>A Slack incoming webhook is a private URL that lets HSM send alert messages to one selected Slack channel. First create this URL in Slack, then paste it into the Webhook URL field in HSM.</p>
+                <ol>
+                    <li>You need Slack workspace admin permissions, or permission to install apps.</li>
+                    <li>Open <code>api.slack.com/apps</code>.</li>
+                    <li>Click <code>Create New App</code>.</li>
+                    <li>Choose <code>From scratch</code>.</li>
+                    <li>Enter an app name, for example <code>my space</code>.</li>
+                    <li>Select the Slack workspace where alerts should be sent.</li>
+                    <li>Click <code>Create App</code>.</li>
+                    <li>In the left menu, open <code>Incoming Webhooks</code> under <code>Features</code>.</li>
+                    <li>Turn on <code>Activate Incoming Webhooks</code>. The switch should change from Off to On.</li>
+                    <li>Click <code>Add New Webhook to Workspace</code> at the bottom of the page.</li>
+                    <li>Slack will ask which channel should receive messages. Select the channel. The channel must already exist in Slack before this step.</li>
+                    <li>Click <code>Allow</code>.</li>
+                    <li>Slack will generate a URL like <code>https://hooks.slack.com/services/...</code>.</li>
+                    <li>Copy this URL.</li>
+                    <li>Paste it into the <code>Slack webhook URL</code> field in HSM.</li>
+                    <li>Save the chat.</li>
+                    <li>In HSM, use <code>Send test Slack message</code> to confirm that Slack receives the message.</li>
+                </ol>
+                <p class="mb-0"><strong>Important:</strong> one webhook is connected to one Slack channel. To send alerts to multiple channels, create one chat per channel.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    function showSlackHelpModal() {
+        $(`#slackHelp_modal`).modal({
+            backdrop: 'static'
+        });
+        $(`#slackHelp_modal`).modal('show');
+    }
+
+    function hideSlackHelpModal() {
+        $(`#slackHelp_modal`).modal('hide');
+    }
+</script>

@@ -156,42 +156,16 @@
 
                 <div class="tab-pane fade @(defaultTab == "slack" ? "show active" : "")" id="slack"
                      role="tabpanel" aria-labelledby="slack-tab">
+                    @await Html.PartialAsync("_SlackHelpModal.cshtml")
                     <div class="row mt-2">
                         <div class="col-2 d-flex align-items-center">
                             <label class="col-form-label" asp-for="SlackWebhookUrl"></label>
                         </div>
                         <div class="col-6">
                             <input type="url" class="form-control" asp-for="SlackWebhookUrl" placeholder="https://hooks.slack.com/services/..." />
-                            <button class="btn btn-link p-0 mt-1" type="button"
-                                    data-bs-toggle="collapse" data-bs-target="#slackWebhookHelp"
-                                    aria-expanded="false" aria-controls="slackWebhookHelp">
-                                <i class="fas fa-question-circle"></i> How to create a Slack incoming webhook
-                            </button>
-                            <div class="collapse" id="slackWebhookHelp">
-                                <div class="card card-body bg-light">
-                                    <p>A Slack incoming webhook is a private URL that lets HSM send alert messages to one selected Slack channel. First create this URL in Slack, then paste it into the Webhook URL field in HSM.</p>
-                                    <ol class="mb-2">
-                                        <li>You need Slack workspace admin permissions, or permission to install apps.</li>
-                                        <li>Open <code>api.slack.com/apps</code>.</li>
-                                        <li>Click <code>Create New App</code>.</li>
-                                        <li>Choose <code>From scratch</code>.</li>
-                                        <li>Enter an app name, for example <code>my space</code>.</li>
-                                        <li>Select the Slack workspace where alerts should be sent.</li>
-                                        <li>Click <code>Create App</code>.</li>
-                                        <li>In the left menu, open <code>Incoming Webhooks</code> under <code>Features</code>.</li>
-                                        <li>Turn on <code>Activate Incoming Webhooks</code>. The switch should change from Off to On.</li>
-                                        <li>Click <code>Add New Webhook to Workspace</code> at the bottom of the page.</li>
-                                        <li>Slack will ask which channel should receive messages. Select the channel. The channel must already exist in Slack before this step.</li>
-                                        <li>Click <code>Allow</code>.</li>
-                                        <li>Slack will generate a URL like <code>https://hooks.slack.com/services/...</code>.</li>
-                                        <li>Copy this URL.</li>
-                                        <li>Paste it into the <code>Webhook URL</code> field in HSM.</li>
-                                        <li>Save the chat.</li>
-                                        <li>In HSM, use <code>Send test Slack message</code> to confirm that Slack receives the message.</li>
-                                    </ol>
-                                    <p class="mb-0"><strong>Important:</strong> one webhook is connected to one Slack channel. To send alerts to multiple channels, create one chat per channel.</p>
-                                </div>
-                            </div>
+                            <a href="javascript:showSlackHelpModal();" class="btn btn-link p-0 mt-1">
+                                <i class="fas fa-question-circle"></i> Show setup help
+                            </a>
                         </div>
                     </div>
                     @if (Model.HasSlack)
@@ -205,6 +179,7 @@
 
                 <div class="tab-pane fade @(defaultTab == "mattermost" ? "show active" : "")" id="mattermost"
                      role="tabpanel" aria-labelledby="mattermost-tab">
+                    @await Html.PartialAsync("_MattermostHelpModal.cshtml")
                     <div class="row mt-2">
                         <div class="col-2 d-flex align-items-center">
                             <label class="col-form-label" asp-for="MattermostWebhookUrl"></label>
@@ -212,31 +187,9 @@
                         <div class="col-6">
                             <input type="url" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." disabled />
                             <small class="text-muted d-block mt-1">Mattermost delivery is not yet implemented — the URL saved here will be used once delivery ships.</small>
-                            <button class="btn btn-link p-0 mt-1" type="button"
-                                    data-bs-toggle="collapse" data-bs-target="#mattermostWebhookHelp"
-                                    aria-expanded="false" aria-controls="mattermostWebhookHelp">
-                                <i class="fas fa-question-circle"></i> How to create a Mattermost incoming webhook
-                            </button>
-                            <div class="collapse" id="mattermostWebhookHelp">
-                                <div class="card card-body bg-light">
-                                    <p>A Mattermost incoming webhook is a private URL that lets HSM post alert messages into one selected Mattermost channel. Create this URL in your Mattermost server, then paste it into the Webhook URL field in HSM.</p>
-                                    <ol class="mb-2">
-                                        <li>You need a Mattermost account with permission to create integrations, or ask a System Admin for help.</li>
-                                        <li>Open your Mattermost site in the browser.</li>
-                                        <li>Open the main menu (top-left) → <code>Integrations</code> → <code>Incoming Webhooks</code>.</li>
-                                        <li>If the page says incoming webhooks are disabled, ask a System Admin to enable them: <code>System Console</code> → <code>Integrations</code> → <code>Custom Integrations</code> → turn on <code>Enable Incoming Webhooks</code>.</li>
-                                        <li>Click <code>Add Incoming Webhook</code>.</li>
-                                        <li>Select the channel that should receive alert messages. The channel must already exist.</li>
-                                        <li>Optionally set a display name (e.g. <code>HSM alerts</code>) and description.</li>
-                                        <li>Click <code>Save</code>.</li>
-                                        <li>Mattermost will display a URL like <code>https://your-mattermost.example/hooks/xxxx</code>.</li>
-                                        <li>Copy this URL.</li>
-                                        <li>Paste it into the <code>Webhook URL</code> field in HSM.</li>
-                                        <li>Save the chat.</li>
-                                    </ol>
-                                    <p class="mb-0"><strong>Important:</strong> one webhook is connected to one Mattermost channel. To send alerts to multiple channels, create one chat per channel.</p>
-                                </div>
-                            </div>
+                            <a href="javascript:showMattermostHelpModal();" class="btn btn-link p-0 mt-1">
+                                <i class="fas fa-question-circle"></i> Show setup help
+                            </a>
                         </div>
                     </div>
                     @if (Model.HasMattermost)
