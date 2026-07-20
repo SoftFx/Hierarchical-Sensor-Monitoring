@@ -187,7 +187,7 @@
                         @await Html.PartialAsync("_SlackHelpModal.cshtml")
                         <div class="row align-items-center mb-3">
                             <div class="col-12 col-md-3">
-                                <label class="chat-form-label col-form-label" asp-for="SlackWebhookUrl"></label>
+                                <label class="chat-form-label col-form-label" for="SlackWebhookUrl">Slack</label>
                             </div>
                             <div class="col-12 col-md-7">
                                 <input type="url" class="form-control" asp-for="SlackWebhookUrl" placeholder="https://hooks.slack.com/services/..." />
@@ -210,7 +210,7 @@
                         @await Html.PartialAsync("_MattermostHelpModal.cshtml")
                         <div class="row align-items-center mb-3">
                             <div class="col-12 col-md-3">
-                                <label class="chat-form-label col-form-label" asp-for="MattermostWebhookUrl"></label>
+                                <label class="chat-form-label col-form-label" for="MattermostWebhookUrl">Mattermost</label>
                             </div>
                             <div class="col-12 col-md-7">
                                 <input type="url" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." disabled />
