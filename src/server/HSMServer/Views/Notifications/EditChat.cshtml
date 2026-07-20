@@ -126,7 +126,7 @@
                         <button class="nav-link @(defaultTab == "mattermost" ? "active" : "")" id="mattermost-tab"
                                 data-bs-toggle="tab" data-bs-target="#mattermost" type="button" role="tab"
                                 aria-controls="mattermost" aria-selected="@(defaultTab == "mattermost" ? "true" : "false")">
-                            <i class="fab fa-mattermost"></i> Mattermost
+                            @Html.Raw(HSMServer.Extensions.ChatIcons.MattermostBrandIconSvg) Mattermost
                         </button>
                     </li>
                 </ul>
