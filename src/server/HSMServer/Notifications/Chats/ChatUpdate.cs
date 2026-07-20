@@ -14,6 +14,13 @@ namespace HSMServer.Notifications.Chats
         public long? TelegramChatId { get; init; }
 
 
+        // Telegram title/description — written by TelegramBot.ChatNamesSynchronization on every
+        // bot start. Admin-owned Name/Description on the same chat are never touched by sync.
+        public string TelegramChatTitle { get; init; }
+
+        public string TelegramChatDescription { get; init; }
+
+
         // Slack (optional)
         public string SlackWebhookUrl { get; init; }
 

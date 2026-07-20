@@ -4,6 +4,7 @@ using System.Linq;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Migrations;
+using HSMServer.Notifications.Chats;
 using Moq;
 using Xunit;
 
@@ -160,6 +161,67 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Contains(slack2Id, writtenIds);
 
             db.Verify(d => d.AddChat(It.IsAny<ChatEntity>()), Times.Exactly(4));
+        }
+
+        [Fact]
+        public void Chat_LoadedFromLegacyEntity_HasNullTelegramTitleAndDescription()
+        {
+            // Simulates a legacy LevelDB row written before #1283: the TelegramChatTitle /
+            // TelegramChatDescription JSON keys are absent and System.Text.Json deserializes
+            // them to null. Additive migration — no breaking schema change.
+            var legacyEntity = new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "On-call alerts",
+                Description = "primary",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+            };
+
+            var chat = new Chat(legacyEntity);
+
+            Assert.Null(chat.TelegramChatTitle);
+            Assert.Null(chat.TelegramChatDescription);
+            Assert.Equal("On-call alerts", chat.Name);
+            Assert.Equal("primary", chat.Description);
+        }
+
+        [Fact]
+        public void Chat_SyncUpdate_UpdatesTelegramFieldsAndLeavesNameAndDescriptionUntouched()
+        {
+            // Pins the contract TelegramBot.ChatNamesSynchronization relies on: the sync
+            // update carries only TelegramChatTitle / TelegramChatDescription, so admin-set
+            // Name / Description survive bot restarts. Mocking the Telegram.Bot client is
+            // not worth the complexity for this contract pin.
+            var chat = new Chat(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "On-call alerts",
+                Description = "primary",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+            });
+
+            chat.Update(new ChatUpdate
+            {
+                Id = chat.Id,
+                TelegramChatTitle = "Actual Telegram Group",
+                TelegramChatDescription = "Telegram-side description",
+            });
+
+            Assert.Equal("Actual Telegram Group", chat.TelegramChatTitle);
+            Assert.Equal("Telegram-side description", chat.TelegramChatDescription);
+            Assert.Equal("On-call alerts", chat.Name);
+            Assert.Equal("primary", chat.Description);
+
+            var roundTripped = new Chat(chat.ToEntity());
+            Assert.Equal("Actual Telegram Group", roundTripped.TelegramChatTitle);
+            Assert.Equal("Telegram-side description", roundTripped.TelegramChatDescription);
+            Assert.Equal("On-call alerts", roundTripped.Name);
         }
 
 
