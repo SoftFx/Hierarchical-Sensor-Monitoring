@@ -63,6 +63,7 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<NotificationsCenter>();
 
             services.AddHttpClient<SlackNotificationChannel>();
+            services.AddHttpClient<MattermostNotificationChannel>();
 
             services.AddHostedService<TreeSnapshotService>()
                     .AddHostedService<ClearDatabaseService>()

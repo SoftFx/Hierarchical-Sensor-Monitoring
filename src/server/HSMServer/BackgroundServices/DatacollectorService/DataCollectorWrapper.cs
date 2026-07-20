@@ -58,6 +58,8 @@ namespace HSMServer.BackgroundServices
 
         internal SlackChannelStatistics SlackChannelStatistics { get; }
 
+        internal MattermostChannelStatistics MattermostChannelStatistics { get; }
+
 
         public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter)
         {
@@ -95,6 +97,7 @@ namespace HSMServer.BackgroundServices
             TreeValueCacheStatistics = new TreeValueChacheStatistics(_collector);
             TelegramBotStatistics = new TelegramBotStatistics(_collector);
             SlackChannelStatistics = new SlackChannelStatistics(_collector);
+            MattermostChannelStatistics = new MattermostChannelStatistics(_collector);
 
             _cache.RequestProcessed += OnRequestProcessed;
 
@@ -106,6 +109,10 @@ namespace HSMServer.BackgroundServices
             _notificationsCenter.SlackChannel.MessageSended += OnSlackMessageSended;
             _notificationsCenter.SlackChannel.ErrorHandled += OnSlackErrorHandled;
             _notificationsCenter.SlackChannel.MessageSending += OnSlackMessageSending;
+
+            _notificationsCenter.MattermostChannel.MessageSended += OnMattermostMessageSended;
+            _notificationsCenter.MattermostChannel.ErrorHandled += OnMattermostErrorHandled;
+            _notificationsCenter.MattermostChannel.MessageSending += OnMattermostMessageSending;
 
 
         }
@@ -124,6 +131,12 @@ namespace HSMServer.BackgroundServices
 
         private void OnSlackErrorHandled(string message) => SlackChannelStatistics.RegisterError(message);
 
+        private void OnMattermostMessageSended(string destination, string message) => MattermostChannelStatistics.RegisterMessageSended(destination, message);
+
+        private void OnMattermostMessageSending() => MattermostChannelStatistics.RegisterMessageSending();
+
+        private void OnMattermostErrorHandled(string message) => MattermostChannelStatistics.RegisterError(message);
+
 
         public void Dispose()
         {
@@ -134,6 +147,9 @@ namespace HSMServer.BackgroundServices
             _notificationsCenter.SlackChannel.MessageSended -= OnSlackMessageSended;
             _notificationsCenter.SlackChannel.ErrorHandled -= OnSlackErrorHandled;
             _notificationsCenter.SlackChannel.MessageSending -= OnSlackMessageSending;
+            _notificationsCenter.MattermostChannel.MessageSended -= OnMattermostMessageSended;
+            _notificationsCenter.MattermostChannel.ErrorHandled -= OnMattermostErrorHandled;
+            _notificationsCenter.MattermostChannel.MessageSending -= OnMattermostMessageSending;
             _collector?.Dispose();
         }
 

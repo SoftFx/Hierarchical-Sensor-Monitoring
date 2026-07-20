@@ -210,8 +210,7 @@
                                 <label class="chat-form-label col-form-label" for="MattermostWebhookUrl">Mattermost Webhook URL</label>
                             </div>
                             <div class="col-12 col-md-7">
-                                <input type="url" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." disabled />
-                                <small class="text-muted d-block mt-1">Mattermost delivery is not yet implemented — the URL saved here will be used once delivery ships.</small>
+                                <input type="url" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." />
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -224,6 +223,7 @@
                         @if (Model.HasMattermost)
                         {
                             <div class="d-flex gap-2">
+                                <a id="sendTestMattermost" data-chat-id="@Model.Id" class="btn btn-outline-secondary" style="cursor: pointer;">Send test Mattermost message</a>
                                 <a id="removeMattermost" class="btn btn-outline-danger" style="cursor: pointer;">Remove Mattermost</a>
                             </div>
                         }
@@ -283,6 +283,13 @@
             $.get("@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)", { id: id })
                 .done(function () { showToast("Test Slack message sent."); })
                 .fail(function () { showToast("Failed to send test Slack message."); });
+        });
+
+        $("#sendTestMattermost").off("click").on("click", function () {
+            var id = $(this).data("chat-id");
+            $.get("@Url.Action(nameof(NotificationsController.SendTestMattermostMessage), ViewConstants.NotificationsController)", { id: id })
+                .done(function () { showToast("Test Mattermost message sent."); })
+                .fail(function () { showToast("Failed to send test Mattermost message."); });
         });
 
         $("#removeTelegram").off("click").on("click", function () {

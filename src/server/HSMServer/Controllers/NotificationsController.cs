@@ -124,6 +124,16 @@ namespace HSMServer.Controllers
             return Ok();
         }
 
+        [HttpGet]
+        [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> SendTestMattermostMessage([FromQuery] Guid id)
+        {
+            if (ChatsManager.TryGetValue(id, out var chat))
+                await _notifications.MattermostChannel.SendTestAsync(chat);
+
+            return Ok();
+        }
+
         [HttpPost]
         [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> RemoveTelegramBinding(Guid id) =>

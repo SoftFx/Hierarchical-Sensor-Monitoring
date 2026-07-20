@@ -13,6 +13,7 @@ namespace HSMServer.Notifications.Chats
 
         private readonly ChannelAccumulator _telegramAccumulator = new();
         private readonly ChannelAccumulator _slackAccumulator = new();
+        private readonly ChannelAccumulator _mattermostAccumulator = new();
 
 
         internal HashSet<Guid> Folders { get; } = [];
@@ -50,7 +51,7 @@ namespace HSMServer.Notifications.Chats
         public string SlackWebhookUrl { get; private set; }
 
 
-        // Mattermost (optional, channel not implemented yet)
+        // Mattermost (optional)
         public string MattermostWebhookUrl { get; private set; }
 
 
@@ -61,6 +62,8 @@ namespace HSMServer.Notifications.Chats
         internal ChannelAccumulator TelegramAccumulator => TelegramChatId is null ? null : _telegramAccumulator;
 
         internal ChannelAccumulator SlackAccumulator => string.IsNullOrEmpty(SlackWebhookUrl) ? null : _slackAccumulator;
+
+        internal ChannelAccumulator MattermostAccumulator => string.IsNullOrEmpty(MattermostWebhookUrl) ? null : _mattermostAccumulator;
 
 
         public Chat(ChatId chatId) : base()

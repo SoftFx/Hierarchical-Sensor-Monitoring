@@ -4,5 +4,6 @@ namespace HSMServer.Core.Notifications
     {
         Telegram = 0,
         Slack = 1,
+        Mattermost = 2,
     }
 }
