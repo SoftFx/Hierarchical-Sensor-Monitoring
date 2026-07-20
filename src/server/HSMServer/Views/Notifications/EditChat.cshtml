@@ -150,22 +150,8 @@
                                     </span>
                                     <small class="text-muted d-block">ChatId: @Model.TelegramChatId</small>
                                     <small class="text-muted d-block">Connected: @Model.AuthorizationTime?.ToLocalTime().ToString("g")</small>
-                                </div>
-                            </div>
-                            <div class="row align-items-center mb-3">
-                                <div class="col-12 col-md-3 text-md-end">
-                                    <label class="chat-form-label col-form-label">Telegram title</label>
-                                </div>
-                                <div class="col-12 col-md-7">
-                                    <small class="text-muted d-block">@(string.IsNullOrEmpty(Model.TelegramChatTitle) ? "—" : Model.TelegramChatTitle)</small>
-                                </div>
-                            </div>
-                            <div class="row align-items-center mb-3">
-                                <div class="col-12 col-md-3 text-md-end">
-                                    <label class="chat-form-label col-form-label">Telegram description</label>
-                                </div>
-                                <div class="col-12 col-md-7">
-                                    <small class="text-muted d-block">@(string.IsNullOrEmpty(Model.TelegramChatDescription) ? "—" : Model.TelegramChatDescription)</small>
+                                    <small class="text-muted d-block">Title: @(string.IsNullOrEmpty(Model.TelegramChatTitle) ? "—" : Model.TelegramChatTitle)</small>
+                                    <small class="text-muted d-block">Description: @(string.IsNullOrEmpty(Model.TelegramChatDescription) ? "—" : Model.TelegramChatDescription)</small>
                                 </div>
                             </div>
                             <div class="d-flex gap-2">
