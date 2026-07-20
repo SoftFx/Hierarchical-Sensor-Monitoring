@@ -28,6 +28,7 @@
     .chat-folders-grid { display: flex; flex-wrap: wrap; gap: 0.25rem; max-width: 320px; justify-content: flex-end; }
     .chat-folder-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; background-color: #f5f5f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 150px; color: inherit; text-decoration: none; }
     .chat-folder-badge:hover { background-color: #eef2ff; border-color: #c7cdd9; }
+    .chat-folder-badge.badge-public { color: #3b82f6; border-color: #93c5fd; background-color: #eff6ff; }
     .chat-folders-more-link { font-size: 0.75rem; color: #3b82f6; text-decoration: none; cursor: pointer; line-height: 2; white-space: nowrap; }
     .chat-folders-more-link:hover { text-decoration: underline; }
 </style>
@@ -91,7 +92,7 @@
                                 var display = chat.Folders.DisplayFolders;
                                 if (display.Count == 0)
                                 {
-                                    <span class="text-secondary" style="font-size: 0.75rem;">No folders</span>
+                                    <span class="chat-folder-badge badge-public">Public</span>
                                 }
                                 else
                                 {
