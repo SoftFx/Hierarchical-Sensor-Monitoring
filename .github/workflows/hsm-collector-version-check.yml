@@ -1,0 +1,29 @@
+name: hsm-collector version check
+
+# The native collector's version is declared in four hand-maintained places that must move together
+# (CMakeLists project VERSION, the C ABI header, the overlay vcpkg port, the conan recipe). Forgetting
+# one silently ships a mismatched package - it already happened once (port + conan stuck at 0.4.0 while
+# the library was 0.6.2), so gate it in CI instead of relying on memory.
+#
+# See docs/releasing-hsm-collector.md for the release procedure.
+
+on:
+  push:
+    paths:
+      - 'src/native/collector/**'
+      - 'scripts/check-collector-version.py'
+      - '.github/workflows/hsm-collector-version-check.yml'
+  pull_request:
+    paths:
+      - 'src/native/collector/**'
+      - 'scripts/check-collector-version.py'
+      - '.github/workflows/hsm-collector-version-check.yml'
+  workflow_dispatch:
+
+jobs:
+  version-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collector version is consistent across all declarations
+        run: python3 scripts/check-collector-version.py

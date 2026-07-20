@@ -74,6 +74,7 @@ jobs:
         id: sha
         env:
           TAG: ${{ steps.v.outputs.tag }}
+          VER: ${{ steps.v.outputs.ver }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -86,6 +87,15 @@ jobs:
           if [ "${#sha}" -ne 128 ] || [ "$sha" = "$empty" ]; then
             echo "::error::bad SHA512 for $url (does the tag exist?)"; exit 1
           fi
+
+          # The tagged source must actually declare the version being published, otherwise the registry
+          # would advertise a version the library doesn't identify as (see scripts/check-collector-version.py).
+          srcver=$(tar -xzOf source.tgz --wildcards '*/src/native/collector/CMakeLists.txt' 2>/dev/null \
+                   | sed -nE 's/.*project\(HsmCollectorNative VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)
+          if [ "$srcver" != "$VER" ]; then
+            echo "::error::tag $TAG points at source declaring version '${srcver:-<unreadable>}', not $VER"; exit 1
+          fi
+
           rm -f source.tgz
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
@@ -106,9 +116,14 @@ jobs:
           sed -i -E "s|SHA512 [0-9a-f]{128}|SHA512 ${SHA}|" ports/hsm-collector/portfile.cmake
           sed -i -E "s|(\"version\"[[:space:]]*:[[:space:]]*\")[0-9]+\.[0-9]+\.[0-9]+(\")|\1${VER}\2|" ports/hsm-collector/vcpkg.json
 
-          # Commit the port first so the recorded git-tree is the NEW port content.
+          # Commit the port first so the recorded git-tree is the NEW port content. --allow-empty because
+          # re-publishing an already-current version leaves the port byte-identical (a legitimate no-op
+          # re-run, and what a dry_run of the current version does) - `git commit` would otherwise abort.
           git add ports/hsm-collector
-          git commit -q -m "vcpkg registry: publish hsm-collector ${VER}"
+          if git diff --cached --quiet; then
+            echo "::notice::ports/hsm-collector already matches ${VER} - nothing to change."
+          fi
+          git commit -q --allow-empty -m "vcpkg registry: publish hsm-collector ${VER}"
           tree=$(git rev-parse "HEAD:ports/hsm-collector")
 
           VER="$VER" TREE="$tree" python3 - <<'PY'
