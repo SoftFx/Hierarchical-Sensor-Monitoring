@@ -28,186 +28,215 @@
 }
 
 
-<div class="container">
-    <div class="row w-100 justify-content-center">
-        <div class="my-3 p-0">
-            <h5 class="text-break">
-                Edit chat '@Model.Name'
-                @if (!string.IsNullOrEmpty(icons))
-                {
-                    @Html.Raw(icons)
-                }
-            </h5>
-        </div>
+<style>
+    .chat-container { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; }
+    .chat-edit-card { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
+    .chat-edit-section { padding: 1.25rem 1rem; border-bottom: 1px solid #e5e7eb; }
+    .chat-edit-section:last-child { border-bottom: none; }
+    .chat-save-btn { background-color: #16a34a; color: #fff; border-color: #16a34a; min-width: 120px; }
+    .chat-save-btn:hover { background-color: #15803d; color: #fff; border-color: #15803d; }
+    .chat-cancel-btn { min-width: 120px; }
+    .chat-form-label { font-weight: 500; color: #374151; }
+</style>
 
-        <form id="chat_form" class="my-2" method="post" asp-action="@formAction">
-            <input asp-for="@Model.Id" value="@Model.Id" style="display: none" />
-            <input asp-for="@Model.TelegramChatId" value="@Model.TelegramChatId" style="display: none" />
-            <input asp-for="@Model.TelegramType" value="@Model.TelegramType" style="display: none" />
-            <input asp-for="@Model.Author" value="@Model.Author" style="display: none" />
-            <input asp-for="@Model.CreationDate" value="@Model.CreationDate" style="display: none" />
-            <input asp-for="@Model.AuthorizationTime" value="@Model.AuthorizationTime" style="display: none" />
 
-            <div class="row">
-                <div class="col-2 d-flex align-items-center">
-                    <label class="col-form-label" asp-for="Name"></label>
-                </div>
-                <div class="col-6">
-                    <input type="text" class="form-control" asp-for="Name" readonly="@isTelegramBound" />
-                    @if (isTelegramBound)
-                    {
-                        <small class="text-muted">Telegram-bound chat: name is synchronized from the bot.</small>
-                    }
-                </div>
-            </div>
+<div class="chat-container">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <h1 class="h4 fw-semibold m-0 d-flex align-items-center gap-2 flex-wrap">
+            @(isNewChat ? "Add chat" : $"Edit chat '{Model.Name}'")
+            @if (!string.IsNullOrEmpty(icons))
+            {
+                <span class="d-inline-flex align-items-center gap-1">@Html.Raw(icons)</span>
+            }
+        </h1>
+    </div>
+    <p class="text-secondary mb-3">
+        @(isNewChat
+            ? "Create a new notification chat. At least one channel is required to deliver alerts."
+            : "Update chat settings. Telegram-bound fields are read-only — they sync from the bot.")
+    </p>
 
-            <div class="row mt-2">
-                <div class="col-2 d-flex align-items-center">
-                    <label class="col-form-label" asp-for="Description"></label>
-                </div>
-                <div class="col-6">
-                    <input type="text" class="form-control" asp-for="Description" readonly="@isTelegramBound" />
-                </div>
-            </div>
+    <form id="chat_form" method="post" asp-action="@formAction">
+        <input asp-for="@Model.Id" value="@Model.Id" type="hidden" />
+        <input asp-for="@Model.TelegramChatId" value="@Model.TelegramChatId" type="hidden" />
+        <input asp-for="@Model.TelegramType" value="@Model.TelegramType" type="hidden" />
+        <input asp-for="@Model.Author" value="@Model.Author" type="hidden" />
+        <input asp-for="@Model.CreationDate" value="@Model.CreationDate" type="hidden" />
+        <input asp-for="@Model.AuthorizationTime" value="@Model.AuthorizationTime" type="hidden" />
 
-            <div class="row mt-2">
-                <div class="col-2 d-flex align-items-center">
-                    <label class="col-form-label" asp-for="EnableMessages"></label>
-                    <i class='fas fa-question-circle ms-2' title='True means that alert notifications for this chat is enabled.'></i>
+        <div class="chat-edit-card">
+            <div class="chat-edit-section">
+                <div class="row align-items-center mb-3">
+                    <div class="col-12 col-md-3">
+                        <label class="chat-form-label col-form-label" asp-for="Name"></label>
+                    </div>
+                    <div class="col-12 col-md-7">
+                        <input type="text" class="form-control" asp-for="Name" readonly="@isTelegramBound" />
+                        @if (isTelegramBound)
+                        {
+                            <small class="text-muted">Telegram-bound chat: name is synchronized from the bot.</small>
+                        }
+                    </div>
                 </div>
-                <div class="col-6">
-                    <div class="form-check form-switch mt-2">
-                        <input id="messages-settings" class="form-check-input" type="checkbox" asp-for="EnableMessages">
+
+                <div class="row align-items-center mb-3">
+                    <div class="col-12 col-md-3">
+                        <label class="chat-form-label col-form-label" asp-for="Description"></label>
+                    </div>
+                    <div class="col-12 col-md-7">
+                        <input type="text" class="form-control" asp-for="Description" readonly="@isTelegramBound" />
+                    </div>
+                </div>
+
+                <div class="row align-items-center mb-3">
+                    <div class="col-12 col-md-3 d-flex align-items-center gap-2">
+                        <label class="chat-form-label col-form-label mb-0" asp-for="EnableMessages"></label>
+                        <i class='fas fa-question-circle text-secondary' title='True means that alert notifications for this chat is enabled.'></i>
+                    </div>
+                    <div class="col-12 col-md-7">
+                        <div class="form-check form-switch m-0">
+                            <input id="messages-settings" class="form-check-input m-0" type="checkbox" asp-for="EnableMessages">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row align-items-center mb-0">
+                    <div class="col-12 col-md-3 d-flex align-items-center gap-2">
+                        <label class="chat-form-label col-form-label mb-0" asp-for="MessagesDelay"></label>
+                        <i class='fas fa-question-circle text-secondary' title='Alert notifications aggregation period in seconds.'></i>
+                    </div>
+                    <div class="col-12 col-md-7">
+                        <div class="input-group">
+                            <input type="number" class="form-control" asp-for="MessagesDelay">
+                            <span class="input-group-text">sec</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="row mt-2">
-                <div class="col-2 d-flex align-items-center">
-                    <label class="col-form-label" asp-for="MessagesDelay"></label>
-                    <i class='fas fa-question-circle ms-2' title='Alert notifications aggregation period in seconds.'></i>
-                </div>
-                <div class="col-6">
-                    <div class="input-group">
-                        <input type="number" class="form-control" asp-for="MessagesDelay">
-                        <span class="input-group-text">sec</span>
-                    </div>
-                </div>
-            </div>
+            <div class="chat-edit-section">
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link @(defaultTab == "telegram" ? "active" : "")" id="telegram-tab"
+                                data-bs-toggle="tab" data-bs-target="#telegram" type="button" role="tab"
+                                aria-controls="telegram" aria-selected="@(defaultTab == "telegram" ? "true" : "false")">
+                            <i class="fab fa-telegram"></i> Telegram
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link @(defaultTab == "slack" ? "active" : "")" id="slack-tab"
+                                data-bs-toggle="tab" data-bs-target="#slack" type="button" role="tab"
+                                aria-controls="slack" aria-selected="@(defaultTab == "slack" ? "true" : "false")">
+                            <i class="fab fa-slack"></i> Slack
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link @(defaultTab == "mattermost" ? "active" : "")" id="mattermost-tab"
+                                data-bs-toggle="tab" data-bs-target="#mattermost" type="button" role="tab"
+                                aria-controls="mattermost" aria-selected="@(defaultTab == "mattermost" ? "true" : "false")">
+                            <i class="fab fa-mattermost"></i> Mattermost
+                        </button>
+                    </li>
+                </ul>
 
-            <ul class="nav nav-tabs mt-3" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link @(defaultTab == "telegram" ? "active" : "")" id="telegram-tab"
-                            data-bs-toggle="tab" data-bs-target="#telegram" type="button" role="tab"
-                            aria-controls="telegram" aria-selected="@(defaultTab == "telegram" ? "true" : "false")">
-                        <i class="fab fa-telegram"></i> Telegram
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link @(defaultTab == "slack" ? "active" : "")" id="slack-tab"
-                            data-bs-toggle="tab" data-bs-target="#slack" type="button" role="tab"
-                            aria-controls="slack" aria-selected="@(defaultTab == "slack" ? "true" : "false")">
-                        <i class="fab fa-slack"></i> Slack
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link @(defaultTab == "mattermost" ? "active" : "")" id="mattermost-tab"
-                            data-bs-toggle="tab" data-bs-target="#mattermost" type="button" role="tab"
-                            aria-controls="mattermost" aria-selected="@(defaultTab == "mattermost" ? "true" : "false")">
-                        <i class="fab fa-mattermost"></i> Mattermost
-                    </button>
-                </li>
-            </ul>
-
-            <div class="tab-content">
-                <div class="tab-pane fade @(defaultTab == "telegram" ? "show active" : "")" id="telegram"
-                     role="tabpanel" aria-labelledby="telegram-tab">
-                    @if (isTelegramBound)
-                    {
-                        <div class="row mt-2">
-                            <label class="col-2 col-form-label">Telegram</label>
-                            <div class="col-6">
-                                <span class="badge bg-secondary">
-                                    <i class="fab fa-telegram"></i>
-                                    @Model.TelegramType?.GetDisplayName()
-                                </span>
-                                <small class="text-muted d-block">ChatId: @Model.TelegramChatId</small>
-                                <small class="text-muted d-block">Connected: @Model.AuthorizationTime?.ToLocalTime().ToString("g")</small>
+                <div class="tab-content">
+                    <div class="tab-pane fade @(defaultTab == "telegram" ? "show active" : "")" id="telegram"
+                         role="tabpanel" aria-labelledby="telegram-tab">
+                        @if (isTelegramBound)
+                        {
+                            <div class="row align-items-center mb-3">
+                                <div class="col-12 col-md-3">
+                                    <label class="chat-form-label col-form-label">Telegram</label>
+                                </div>
+                                <div class="col-12 col-md-7">
+                                    <span class="badge bg-secondary">
+                                        <i class="fab fa-telegram"></i>
+                                        @Model.TelegramType?.GetDisplayName()
+                                    </span>
+                                    <small class="text-muted d-block">ChatId: @Model.TelegramChatId</small>
+                                    <small class="text-muted d-block">Connected: @Model.AuthorizationTime?.ToLocalTime().ToString("g")</small>
+                                </div>
                             </div>
-                        </div>
-                        <div class="d-flex gap-2 mt-2">
-                            <a id="sendTestTelegram" data-chat-id="@Model.TelegramChatId" class="btn btn-outline-secondary" style="cursor: pointer;">Send test Telegram message</a>
-                            <a id="removeTelegram" class="btn btn-outline-danger" style="cursor: pointer;">Remove Telegram</a>
-                        </div>
-                    }
-                    else
-                    {
-                        @await Html.PartialAsync("_NewChatHelpModal.cshtml", Model.Id)
-                        <div class="row mt-2">
-                            <label class="col-2 col-form-label">Telegram</label>
-                            <div class="col-6">
-                                <a href="javascript:showAddChatHelpModal();" class="btn btn-link p-0">
-                                    <i class="fab fa-telegram"></i> Show setup help
+                            <div class="d-flex gap-2">
+                                <a id="sendTestTelegram" data-chat-id="@Model.TelegramChatId" class="btn btn-outline-secondary" style="cursor: pointer;">Send test Telegram message</a>
+                                <a id="removeTelegram" class="btn btn-outline-danger" style="cursor: pointer;">Remove Telegram</a>
+                            </div>
+                        }
+                        else
+                        {
+                            @await Html.PartialAsync("_NewChatHelpModal.cshtml", Model.Id)
+                            <div class="row align-items-center">
+                                <div class="col-12 col-md-3">
+                                    <label class="chat-form-label col-form-label">Telegram</label>
+                                </div>
+                                <div class="col-12 col-md-7">
+                                    <a href="javascript:showAddChatHelpModal();" class="btn btn-link p-0">
+                                        <i class="fab fa-telegram"></i> Show setup help
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="tab-pane fade @(defaultTab == "slack" ? "show active" : "")" id="slack"
+                         role="tabpanel" aria-labelledby="slack-tab">
+                        @await Html.PartialAsync("_SlackHelpModal.cshtml")
+                        <div class="row align-items-center mb-3">
+                            <div class="col-12 col-md-3">
+                                <label class="chat-form-label col-form-label" asp-for="SlackWebhookUrl"></label>
+                            </div>
+                            <div class="col-12 col-md-7">
+                                <input type="url" class="form-control" asp-for="SlackWebhookUrl" placeholder="https://hooks.slack.com/services/..." />
+                                <a href="javascript:showSlackHelpModal();" class="btn btn-link p-0 mt-1">
+                                    <i class="fas fa-question-circle"></i> Show setup help
                                 </a>
                             </div>
                         </div>
-                    }
-                </div>
-
-                <div class="tab-pane fade @(defaultTab == "slack" ? "show active" : "")" id="slack"
-                     role="tabpanel" aria-labelledby="slack-tab">
-                    @await Html.PartialAsync("_SlackHelpModal.cshtml")
-                    <div class="row mt-2">
-                        <div class="col-2 d-flex align-items-center">
-                            <label class="col-form-label" asp-for="SlackWebhookUrl"></label>
-                        </div>
-                        <div class="col-6">
-                            <input type="url" class="form-control" asp-for="SlackWebhookUrl" placeholder="https://hooks.slack.com/services/..." />
-                            <a href="javascript:showSlackHelpModal();" class="btn btn-link p-0 mt-1">
-                                <i class="fas fa-question-circle"></i> Show setup help
-                            </a>
-                        </div>
+                        @if (Model.HasSlack)
+                        {
+                            <div class="d-flex gap-2">
+                                <a id="sendTestSlack" data-chat-id="@Model.Id" class="btn btn-outline-secondary" style="cursor: pointer;">Send test Slack message</a>
+                                <a id="removeSlack" class="btn btn-outline-danger" style="cursor: pointer;">Remove Slack</a>
+                            </div>
+                        }
                     </div>
-                    @if (Model.HasSlack)
-                    {
-                        <div class="d-flex gap-2 mt-2">
-                            <a id="sendTestSlack" data-chat-id="@Model.Id" class="btn btn-outline-secondary" style="cursor: pointer;">Send test Slack message</a>
-                            <a id="removeSlack" class="btn btn-outline-danger" style="cursor: pointer;">Remove Slack</a>
-                        </div>
-                    }
-                </div>
 
-                <div class="tab-pane fade @(defaultTab == "mattermost" ? "show active" : "")" id="mattermost"
-                     role="tabpanel" aria-labelledby="mattermost-tab">
-                    @await Html.PartialAsync("_MattermostHelpModal.cshtml")
-                    <div class="row mt-2">
-                        <div class="col-2 d-flex align-items-center">
-                            <label class="col-form-label" asp-for="MattermostWebhookUrl"></label>
+                    <div class="tab-pane fade @(defaultTab == "mattermost" ? "show active" : "")" id="mattermost"
+                         role="tabpanel" aria-labelledby="mattermost-tab">
+                        @await Html.PartialAsync("_MattermostHelpModal.cshtml")
+                        <div class="row align-items-center mb-3">
+                            <div class="col-12 col-md-3">
+                                <label class="chat-form-label col-form-label" asp-for="MattermostWebhookUrl"></label>
+                            </div>
+                            <div class="col-12 col-md-7">
+                                <input type="url" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." disabled />
+                                <small class="text-muted d-block mt-1">Mattermost delivery is not yet implemented — the URL saved here will be used once delivery ships.</small>
+                                <a href="javascript:showMattermostHelpModal();" class="btn btn-link p-0 mt-1">
+                                    <i class="fas fa-question-circle"></i> Show setup help
+                                </a>
+                            </div>
                         </div>
-                        <div class="col-6">
-                            <input type="url" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." disabled />
-                            <small class="text-muted d-block mt-1">Mattermost delivery is not yet implemented — the URL saved here will be used once delivery ships.</small>
-                            <a href="javascript:showMattermostHelpModal();" class="btn btn-link p-0 mt-1">
-                                <i class="fas fa-question-circle"></i> Show setup help
-                            </a>
-                        </div>
+                        @if (Model.HasMattermost)
+                        {
+                            <div class="d-flex gap-2">
+                                <a id="removeMattermost" class="btn btn-outline-danger" style="cursor: pointer;">Remove Mattermost</a>
+                            </div>
+                        }
                     </div>
-                    @if (Model.HasMattermost)
-                    {
-                        <div class="d-flex gap-2 mt-2">
-                            <a id="removeMattermost" class="btn btn-outline-danger" style="cursor: pointer;">Remove Mattermost</a>
-                        </div>
-                    }
                 </div>
             </div>
 
-            <partial name="_ChatFolders" for="Folders" />
-
-            <div class="d-flex justify-content-end my-2">
-                <button type="submit" class="btn btn-primary independentSizeButton my-1">Save</button>
+            <div class="chat-edit-section">
+                <partial name="_ChatFolders" for="Folders" />
             </div>
-        </form>
-    </div>
+
+            <div class="chat-edit-section d-flex justify-content-end gap-2">
+                <a href="@Url.Action(nameof(NotificationsController.Index), ViewConstants.NotificationsController)"
+                   class="btn btn-outline-secondary chat-cancel-btn">Cancel</a>
+                <button type="submit" class="btn chat-save-btn">Save</button>
+            </div>
+        </div>
+    </form>
 </div>
 
 @await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
