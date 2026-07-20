@@ -10,6 +10,7 @@
 
 
 <style>
+    .chat-container { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; }
     .chat-list { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
     .chat-list-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 0.875rem; color: #6b7280; border-radius: 0.5rem 0.5rem 0 0; }
     .chat-row { display: flex; align-items: center; justify-content: space-between; padding: 1rem; border-bottom: 1px solid #e5e7eb; }
@@ -23,81 +24,75 @@
     .chat-action-btn:hover { background-color: #f9fafb; }
     .chat-action-btn.danger { color: #ef4444; }
     .chat-action-btn.danger:hover { background-color: #fef2f2; border-color: #fca5a5; }
-    .chat-add-btn { background-color: #16a34a; color: #fff; border-color: #16a34a; }
-    .chat-add-btn:hover { background-color: #15803d; color: #fff; border-color: #15803d; }
 </style>
 
 
-<div class="d-flex align-items-center justify-content-between mb-2">
-    <h1 class="h4 fw-semibold m-0">Notification chats</h1>
-    <a href="@Url.Action(nameof(NotificationsController.AddChat), ViewConstants.NotificationsController)"
-       class="btn chat-add-btn d-flex align-items-center gap-1">
-        <i class="fas fa-plus"></i> Add new chat
-    </a>
-</div>
-<p class="text-secondary mb-3">Configure notification destinations for alert delivery. One chat can carry multiple channels (Telegram, Slack, Mattermost).</p>
-
-<div class="d-flex gap-2 mb-3">
-    <div class="position-relative flex-grow-1">
-        <input id="chatSearch" type="text" class="form-control pe-4" placeholder="Find a chat..." autocomplete="off" />
-        <button id="clearChatSearch" type="button" class="btn btn-link position-absolute top-50 end-0 translate-middle-y text-secondary text-decoration-none p-0 me-2 d-none" style="font-size: 0.875rem; line-height: 1;">
-            <i class="fas fa-times"></i>
-        </button>
+<div class="chat-container">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <h1 class="h4 fw-semibold m-0">Notification chats</h1>
+        <a href="@Url.Action(nameof(NotificationsController.AddChat), ViewConstants.NotificationsController)"
+           type="button"
+           class="btn d-flex align-items-center gap-1"
+           style="background-color: #16a34a; color: #fff; border-color: #16a34a;">
+            <i class="fas fa-plus"></i> Add new chat
+        </a>
     </div>
-    <div class="d-flex align-items-center gap-3 ms-2">
-        <label class="d-flex align-items-center gap-1 form-check-label mb-0">
-            <input type="checkbox" class="channel-filter form-check-input" id="filterTelegram">
-            <i class="fab fa-telegram"></i> Telegram
-        </label>
-        <label class="d-flex align-items-center gap-1 form-check-label mb-0">
-            <input type="checkbox" class="channel-filter form-check-input" id="filterSlack">
-            <i class="fab fa-slack"></i> Slack
-        </label>
-        <label class="d-flex align-items-center gap-1 form-check-label mb-0">
-            <input type="checkbox" class="channel-filter form-check-input" id="filterMattermost">
-            <i class="fab fa-mattermost"></i> Mattermost
-        </label>
-    </div>
-</div>
+    <p class="text-secondary mb-3">Configure notification destinations for alert delivery. One chat can carry multiple channels (Telegram, Slack, Mattermost).</p>
 
-<div class="chat-list">
-    <div class="chat-list-header">
-        <span>@(Model.Chats?.Count ?? 0) chats</span>
+    <div class="d-flex gap-2 mb-3">
+        <div class="position-relative flex-grow-1">
+            <input id="chatSearch" type="text" class="form-control pe-4" placeholder="Find a chat..." autocomplete="off" />
+            <button id="clearChatSearch" type="button" class="btn btn-link position-absolute top-50 end-0 translate-middle-y text-secondary text-decoration-none p-0 me-2 d-none" style="font-size: 0.875rem; line-height: 1;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <select id="channelFilter" class="form-select" style="max-width: 180px;">
+            <option value="any" selected>Any channel</option>
+            <option value="telegram">Telegram</option>
+            <option value="slack">Slack</option>
+            <option value="mattermost">Mattermost</option>
+        </select>
     </div>
 
-    @if (Model.Chats is null || Model.Chats.Count == 0)
-    {
-        <div class="text-center text-secondary py-5">No chats configured yet.</div>
-    }
-    else
-    {
-        foreach (var chat in Model.Chats)
+    <div class="chat-list">
+        <div class="chat-list-header">
+            <span>@(Model.Chats?.Count ?? 0) chats</span>
+        </div>
+
+        @if (Model.Chats is null || Model.Chats.Count == 0)
         {
-            var enabledBadgeClass = chat.EnableMessages ? "badge-enabled" : "badge-disabled";
-            var enabledBadgeText = chat.EnableMessages ? "Enabled" : "Disabled";
-
-            <div class="chat-row"
-                 data-name="@(chat.Name?.ToLower() ?? string.Empty)"
-                 data-has-telegram="@chat.HasTelegram.ToString().ToLower()"
-                 data-has-slack="@chat.HasSlack.ToString().ToLower()"
-                 data-has-mattermost="@chat.HasMattermost.ToString().ToLower()">
-                <div class="chat-info">
-                    @Html.Raw(chat.ChatBrandIcons())
-                    <span class="fw-medium">@chat.Name</span>
-                    <span class="chat-badge @enabledBadgeClass">@enabledBadgeText</span>
-                </div>
-                <div class="d-flex align-items-center gap-1">
-                    <a class="chat-action-btn" title="Edit"
-                       href="@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController, new { id = chat.Id })">
-                        <i class="fa-regular fa-pen-to-square"></i>
-                    </a>
-                    <a id="remove_@chat.Id" name="@chat.Name" class="chat-action-btn danger" title="Remove">
-                        <i class="fa-regular fa-trash-can"></i>
-                    </a>
-                </div>
-            </div>
+            <div class="text-center text-secondary py-5">No chats configured yet.</div>
         }
-    }
+        else
+        {
+            foreach (var chat in Model.Chats)
+            {
+                var enabledBadgeClass = chat.EnableMessages ? "badge-enabled" : "badge-disabled";
+                var enabledBadgeText = chat.EnableMessages ? "Enabled" : "Disabled";
+
+                <div class="chat-row"
+                     data-name="@(chat.Name?.ToLower() ?? string.Empty)"
+                     data-has-telegram="@chat.HasTelegram.ToString().ToLower()"
+                     data-has-slack="@chat.HasSlack.ToString().ToLower()"
+                     data-has-mattermost="@chat.HasMattermost.ToString().ToLower()">
+                    <div class="chat-info">
+                        @Html.Raw(chat.ChatBrandIcons())
+                        <span class="fw-medium">@chat.Name</span>
+                        <span class="chat-badge @enabledBadgeClass">@enabledBadgeText</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                        <a class="chat-action-btn" title="Edit"
+                           href="@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController, new { id = chat.Id })">
+                            <i class="fa-regular fa-pen-to-square"></i>
+                        </a>
+                        <a id="remove_@chat.Id" name="@chat.Name" class="chat-action-btn danger" title="Remove">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </a>
+                    </div>
+                </div>
+            }
+        }
+    </div>
 </div>
 
 <form id="removeChat_form" method="post"
@@ -133,14 +128,11 @@
             );
         });
 
-        // Filter rows by Name substring (case-insensitive) AND channel OR-match. Empty checkbox
-        // set means "all channels" — no row is hidden just because nothing is ticked.
+        // Filter rows by Name substring (case-insensitive) AND the selected channel. "Any channel"
+        // (the default) means no channel filter — mirrors Users' "Role" select semantics.
         function applyChatFilters() {
             var q = $("#chatSearch").val().toLowerCase();
-            var tele = $("#filterTelegram").is(":checked");
-            var slack = $("#filterSlack").is(":checked");
-            var matter = $("#filterMattermost").is(":checked");
-            var anyChannel = tele || slack || matter;
+            var channel = $("#channelFilter").val();
 
             $("#clearChatSearch").toggleClass("d-none", !q);
 
@@ -148,16 +140,14 @@
                 var $row = $(this);
                 var name = $row.data("name");
                 var matchSearch = !q || name.indexOf(q) !== -1;
-                var matchChannel = !anyChannel ||
-                    (tele && $row.data("has-telegram") === true) ||
-                    (slack && $row.data("has-slack") === true) ||
-                    (matter && $row.data("has-mattermost") === true);
+                var matchChannel = channel === "any" ||
+                    $row.data("has-" + channel) === true;
                 $row.toggle(matchSearch && matchChannel);
             });
         }
 
         $("#chatSearch").on("input", applyChatFilters);
-        $(".channel-filter").on("change", applyChatFilters);
+        $("#channelFilter").on("change", applyChatFilters);
         $("#clearChatSearch").on("click", function () {
             $("#chatSearch").val("");
             applyChatFilters();
