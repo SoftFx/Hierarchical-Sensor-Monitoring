@@ -20,7 +20,7 @@ Telegram-specific concerns (bot lifecycle, inbound update polling, Telegram titl
 
 - `NotificationsCenter` is the only subscriber to `ITreeValuesCache.NewAlertMessageEvent` (it unsubscribes in `DisposeAsync`). Individual channels must not subscribe to the cache event directly.
 - A channel's `DeliverAsync` must not throw — Telegram's implementation keeps the historical internal `try/catch` that logs and swallows errors. Diagnostics surface via the concrete `TelegramBot` events (`MessageSending`, `MessageSended`, `ErrorHandled`), which `DataCollectorWrapper` subscribes to directly; the interface itself carries no events in this revision.
-- `INotificationChannel.Kind` is informational metadata (`NotificationKind.Telegram = 0`, `NotificationKind.Slack = 1`) used by diagnostics sensors and future channel-list UIs. It is no longer load-bearing for routing — each channel resolves ids against the single `IChatsManager` and then filters by its own channel field, so ids for a chat that doesn't carry this channel are skipped without an error event.
+- `INotificationChannel.Kind` is informational metadata (`NotificationKind.Telegram = 0`, `NotificationKind.Slack = 1`, `NotificationKind.Mattermost = 2`) used by diagnostics sensors and future channel-list UIs. It is no longer load-bearing for routing — each channel resolves ids against the single `IChatsManager` and then filters by its own channel field, so ids for a chat that doesn't carry this channel are skipped without an error event.
 - Telegram delivery, the "Telegram Bot" diagnostics sensors, and the existing folder↔chat event wiring are unchanged end-to-end by the seam introduction.
 
 ## API / Public Contracts
@@ -88,16 +88,21 @@ Alert evaluated -> TreeValuesCache raises NewAlertMessageEvent(AlertMessage)
                  (for each chatId in AlertDestination.Chats:
                     _chats.TryGetValue(chatId, out chat)
                       && !string.IsNullOrEmpty(chat.SlackWebhookUrl) ? POST/buffer : skip)
+            -> MattermostNotificationChannel.DeliverAsync
+                 (for each chatId in AlertDestination.Chats:
+                    _chats.TryGetValue(chatId, out chat)
+                      && !string.IsNullOrEmpty(chat.MattermostWebhookUrl) ? POST/buffer : skip)
 
 NotificationsBackgroundService (timer) -> NotificationsCenter.SendAllMessagesAsync
   -> for each INotificationChannel: await FlushAsync()
        -> TelegramNotificationChannel -> TelegramBot.SendMessagesAsync (drain TelegramAccumulator)
        -> SlackNotificationChannel.FlushAsync (drain SlackAccumulator)
+       -> MattermostNotificationChannel.FlushAsync (drain MattermostAccumulator)
 ```
 
 ## Tests
 
-- `src/tests/HSMServer.Core.Tests/Notifications/ChatFolderBindingTests.cs` — consolidated post-#1261 coverage of `IChatsManager` folder binding. Pins: (a) `RemoveFolderFromChats_DoesNotDeleteChatAtZeroFolders` — a chat transitions to global and stays in the manager; (b) `GetAvailableChats_IncludesZeroFolderChat` / `GetAvailableChats_BoundChatExcludedFromOtherFolder` — global-default picker behavior and narrowing; (c) `AddFolderToChats_AddsFolderIdToChatFolders` / `AddFolderToChats_SingleInvocation_AddsFolderOnce` — single-event fan-out post-merge (regression for the #1261 manager merge that collapsed the Telegram + Slack subscriber pair into one); (d) `RemoveChatHandler_PrunesIdFromAllFolders` — the merged handler prunes the removed chat id from every folder.Chats reference (regression for the dual→single handler merge); (e) `Chat_WithSlackWebhookOnly_HasNoTelegramChatId` / `Chat_WithTelegramOnly_HasNoSlackWebhook` / `Chat_WithBothChannels_KeepsTelegramAndSlackFields` — pin the optional-channel invariants that let each sender null-guard its own field; (f) `Chat_MultiChannel_AccumulatorsAreIndependent` — regression for the shared-buffer bug fixed in PR #1265 (pre-fix, draining Telegram bumped the shared timer and starved Slack; per-channel `ChannelAccumulator` isolates state).
+- `src/tests/HSMServer.Core.Tests/Notifications/ChatFolderBindingTests.cs` — consolidated post-#1261 coverage of `IChatsManager` folder binding. Pins: (a) `RemoveFolderFromChats_DoesNotDeleteChatAtZeroFolders` — a chat transitions to global and stays in the manager; (b) `GetAvailableChats_IncludesZeroFolderChat` / `GetAvailableChats_BoundChatExcludedFromOtherFolder` — global-default picker behavior and narrowing; (c) `AddFolderToChats_AddsFolderIdToChatFolders` / `AddFolderToChats_SingleInvocation_AddsFolderOnce` — single-event fan-out post-merge (regression for the #1261 manager merge that collapsed the Telegram + Slack subscriber pair into one); (d) `RemoveChatHandler_PrunesIdFromAllFolders` — the merged handler prunes the removed chat id from every folder.Chats reference (regression for the dual→single handler merge); (e) `Chat_WithSlackWebhookOnly_HasNoTelegramChatId` / `Chat_WithTelegramOnly_HasNoSlackWebhook` / `Chat_WithBothChannels_KeepsTelegramAndSlackFields` — pin the optional-channel invariants that let each sender null-guard its own field; (f) `Chat_MultiChannel_AccumulatorsAreIndependent` — regression for the shared-buffer bug fixed in PR #1265 (pre-fix, draining Telegram bumped the shared timer and starved Slack; per-channel `ChannelAccumulator` isolates state). Extended in #1288 to cover three channels (Telegram + Slack + Mattermost) — drains Telegram, then Slack, and asserts the third accumulator's next-send timer is still unchanged.
 - `src/tests/HSMServer.Core.Tests/Folders/FolderManagerPruningTests.cs` — covers the pruning-skip rule in `FolderManager.TryUpdate`: when a chat becomes global (last binding removed), `ITreeValuesCache.RemoveChatsFromPoliciesAsync` is NOT invoked and the chat survives; when a chat still has another folder binding, pruning IS invoked with that chat id.
 - `src/tests/HSMServer.Core.Tests/Notifications/ChatsManagerTests.cs` — round-trip, update, remove, and `TelegramChatId` null-handling on the unified manager.
 - `src/tests/HSMServer.Core.Tests/Notifications/ChatMigrationTests.cs` — LevelDB migration of legacy `TelegramChats` / `SlackDestinations` into unified `Chats`, including preservation of `AuthorizationTime` and the self-healing additive write-back on every boot.
@@ -133,7 +138,39 @@ NotificationsBackgroundService (timer) -> NotificationsCenter.SendAllMessagesAsy
 
 ### Storage
 
-Unified `ChatEntity` rows under the `"Chats"` LevelDB key, accessed via the single `IChatsManager`. The channel resolves webhook URLs and names from the same registry that Telegram uses — one chat can deliver through both channels. `IChatsManager.GetChatName(Guid)` is the only name resolver and is wired directly to `IFolderManager.GetChatName`.
+Unified `ChatEntity` rows under the `"Chats"` LevelDB key, accessed via the single `IChatsManager`. The channel resolves webhook URLs and names from the same registry that Telegram uses — one chat can deliver through any combination of Telegram, Slack, and Mattermost simultaneously. `IChatsManager.GetChatName(Guid)` is the only name resolver and is wired directly to `IFolderManager.GetChatName`.
+
+## Mattermost delivery
+
+`MattermostNotificationChannel : INotificationChannel` (`src/server/HSMServer/Notifications/Mattermost/MattermostNotificationChannel.cs`) is a line-for-line port of the Slack stack (#1288). Mattermost's incoming-webhook contract is Slack-compatible — one POST per `(alert, destination)` with `{"text": "..."}` JSON — so the channel is wired into `NotificationsCenter._channels` alongside Telegram and Slack with no top-level discriminator. Each channel resolves its own `MattermostWebhookUrl` field on the unified `Chat`.
+
+### HTTP delivery contract
+
+- One `HttpClient` per channel instance, registered via `services.AddHttpClient<MattermostNotificationChannel>()` in `ApplicationServiceExtensions`. Default request timeout: 30 s.
+- Per-chat aggregation mirrors Telegram and Slack. When `chat.MessagesAggregationTimeSec > 0`, `DeliverAsync` calls `chat.MattermostAccumulator.AddMessage(alert, scheduled)`; the periodic `FlushAsync` drains `MattermostAccumulator` via `ShouldSend` / `GetNotifications` and POSTs one payload per aggregated notification. When `MessagesAggregationTimeSec == 0`, `DeliverAsync` POSTs immediately with no buffering.
+- Payload shape: `MattermostMessageBuilder.BuildPayload(alert)` (or `BuildPayload(string)` for the test message) produces `{"text":"<alert.ToString()>"}` (System.Text.Json, camelCase). Rich blocks / Mattermost overrides are explicitly out of scope for v1.
+- Retry policy: up to 3 attempts (1 initial + 2 retries). Transient failures (HTTP 5xx and `RequestTimeout`) are retried with exponential backoff (initial 2 s, doubled per retry). 4xx responses are terminal — Mattermost returns 200 on success and 4xx for malformed payloads or revoked webhooks, so retrying would not help. Network errors (`HttpRequestException`) and timeouts (`TaskCanceledException`) are retried like 5xx.
+- `DeliverAsync` does not throw — every terminal failure is funneled through `ErrorHandled` and logged, matching the Telegram + Slack contract.
+
+### Events (mirroring TelegramBot + SlackNotificationChannel)
+
+- `event Action MessageSending` — raised once per POST attempt.
+- `event Action<string, string> MessageSended` — `(destinationName, payload)` on HTTP 200.
+- `event Action<string> ErrorHandled` — `(message)` on terminal failure or per-retry warning.
+
+### Diagnostics
+
+`MattermostChannelStatistics` (`src/server/HSMServer/BackgroundServices/DatacollectorService/Nodes/MattermostChannelStatistics.cs`) mirrors `SlackChannelStatistics` under NodeName `"Mattermost"`:
+
+- `Mattermost/Errors` — string sensor aggregating error messages.
+- `Mattermost/Total` — per-minute rate of POST attempts.
+- `Mattermost/Messages/<destinationName>` — per-destination string sensor with the last delivered payload.
+
+`DataCollectorWrapper` instantiates `MattermostChannelStatistics` alongside `SlackChannelStatistics` and subscribes/unsubscribes the three channel events symmetrically to the Slack wiring.
+
+### Storage
+
+Unified `ChatEntity` rows under the `"Chats"` LevelDB key, accessed via the single `IChatsManager`. The `MattermostWebhookUrl` column is nullable and was already round-tripping end-to-end before delivery shipped (#1275 surfaced the field on the edit form with the input disabled). One chat can deliver through any combination of Telegram, Slack, and Mattermost simultaneously — each delivery channel independently decides whether to send by checking its own channel-specific field on the resolved `Chat`.
 
 ## Per-channel aggregation state
 
@@ -141,12 +178,12 @@ A unified `Chat` may carry Telegram, Slack, or both at the same time. Each confi
 
 Post-#1265 each channel owns a dedicated `ChannelAccumulator` (`src/server/HSMServer/Notifications/Chats/ChannelAccumulator.cs`):
 
-- `Chat._telegramAccumulator` + `Chat._slackAccumulator` — separate instances, never aliased.
-- `Chat.TelegramAccumulator` returns `_telegramAccumulator` only when `TelegramChatId is not null`; otherwise null. `Chat.SlackAccumulator` mirrors for `SlackWebhookUrl`. The null return lets senders early-skip a channel without an extra flag check.
+- `Chat._telegramAccumulator` + `Chat._slackAccumulator` + `Chat._mattermostAccumulator` — separate instances, never aliased.
+- `Chat.TelegramAccumulator` returns `_telegramAccumulator` only when `TelegramChatId is not null`; otherwise null. `Chat.SlackAccumulator` mirrors for `SlackWebhookUrl`, `Chat.MattermostAccumulator` mirrors for `MattermostWebhookUrl`. The null return lets senders early-skip a channel without an extra flag check.
 - Each accumulator owns its own `MessageBuilder` + `ScheduleBuilder` + `_nextSendMessageTime`. `ShouldSend(aggregationSec)` checks the timer; `GetNotifications(aggregationSec)` drains both builders and advances the timer in a `try/finally` so a drain failure still resets the schedule.
-- Senders index the accumulator via the channel-specific property. `TelegramBot` uses `chat.TelegramAccumulator.AddMessage` / `ShouldSend` / `GetNotifications`; `SlackNotificationChannel` uses the Slack-named counterparts. When `MessagesAggregationTimeSec == 0`, senders skip the accumulator and POST/send immediately.
+- Senders index the accumulator via the channel-specific property. `TelegramBot` uses `chat.TelegramAccumulator.AddMessage` / `ShouldSend` / `GetNotifications`; `SlackNotificationChannel` and `MattermostNotificationChannel` use their channel-named counterparts. When `MessagesAggregationTimeSec == 0`, senders skip the accumulator and POST/send immediately.
 
-The invariant is pinned by `ChatFolderBindingTests.Chat_MultiChannel_AccumulatorsAreIndependent` — drain Telegram and assert `SlackAccumulator.ShouldSend` is still true. A pre-fix regression (shared buffer) would fail the second assertion because Telegram's drain would have bumped the shared timer into the future.
+The invariant is pinned by `ChatFolderBindingTests.Chat_MultiChannel_AccumulatorsAreIndependent` — drain Telegram and assert `SlackAccumulator.ShouldSend` / `MattermostAccumulator.ShouldSend` are still true. Extended in #1288 to also drain Slack and re-assert Mattermost's timer is intact. A pre-fix regression (shared buffer) would fail the assertions because the first drain would have bumped the shared timer into the future.
 
 ## Management UI
 
@@ -158,14 +195,14 @@ Post-#1261 there is a single `Chat` entity. `NotificationsController` exposes a 
 - `GET  AddChat()` / `POST AddChat(ChatViewModel)` — admin-only entry point for creating a Slack/Mattermost-only chat (Telegram chats are still bootstrapped via the bot invitation flow, not this route).
 - `POST EditChat(ChatViewModel)` — updates any updatable field on an existing chat (Slack/Mattermost webhooks, name, description, enable flag, aggregation delay). Telegram-bound fields are init-only.
 - `POST RemoveChat(Guid id)` — removes the chat; `FolderManager.RemoveChatHandler` prunes its id from every folder.
-- `GET  SendTestSlackMessage(Guid id)` / `GET  SendTestTelegramMessage(long chatId)` — per-channel test action, each gated by the role appropriate to that channel.
+- `GET  SendTestSlackMessage(Guid id)` / `GET  SendTestMattermostMessage(Guid id)` / `GET  SendTestTelegramMessage(long chatId)` — per-channel test action, each gated by the role appropriate to that channel.
 
 `ChatViewModel` is the form DTO. `ToUpdate()` produces the `ChatUpdate` record consumed by `IChatsManager.TryUpdate`.
 
 UI surface (global admin scope):
 - `Views/Notifications/Index.cshtml` is the top-level Chats page (promoted out of Configuration/Settings in #1273 / PR #1274). It renders `Views/Configuration/_Chats.cshtml` as a partial.
 - `Views/Configuration/_Chats.cshtml` is the Chats list. After the #1281 rebuild it follows the Members-layout pattern (`Views/Account/Users.cshtml`): a search-by-name input + a channel-filter `<select>` (Any channel / Telegram / Slack / Mattermost; single-select — pick one channel to filter by, or leave on Any to show all) above a `.chat-list` of rows. Each row shows brand icons + chat Name + an Enabled/Disabled badge, with inline Edit (`fa-pen-to-square`, links to `EditChat`) and Remove (`fa-trash-can`, opens `_ConfirmationModal` then POSTs to `RemoveChat`) buttons. Each row also carries a folder-bindings badge cluster between the Name/Enabled badge and the action buttons — up to three `.chat-folder-badge` anchors (click → `FoldersController.EditFolder`) plus a `+N more` popover link when the chat is bound to more than three folders, with a blue `Public` pill for chats with zero bindings (a zero-binding chat is global — appears in every folder's destination picker, see "Folder binding" below; mirrors the Users products-badge pattern, backed by `ChatFoldersViewModel.DisplayFolders` populated in `ChatsSettingsViewModel(IChatsManager, IFolderManager)` post-#1284). Author and Created are no longer shown. Send-test-message actions were removed from the list — they already live on the `EditChat` form (`EditChat.cshtml`) per channel, so Edit is the single entry point for test sends. "Add new chat" links to `AddChat` (admin-only).
-- `Views/Notifications/EditChat.cshtml` is the unified multi-channel edit form (Common section: Name, Description, EnableMessages, MessagesDelay; tabs for Telegram / Slack / Mattermost — first configured channel wins, see issue #1271 / PR #1272). Telegram tab: bound chat id, type, authorization time — read-only for bot-connected chats, with invitation-link helpers for brand-new chats. Slack tab: webhook URL input with a "Show setup help" link that opens the `_SlackHelpModal.cshtml` modal — a 17-step incoming-webhook setup guide (copy carried over from #1256, retargeted to the unified form in #1275). Mattermost tab: webhook URL input (disabled — delivery not yet implemented) with a parallel "Show setup help" link opening `_MattermostHelpModal.cshtml` — a 12-step Mattermost guide for when delivery ships (#1275). Per-channel Send-test and Remove buttons live inside each tab pane and are shown only for channels the chat actually carries. Whole-chat deletion is **not** exposed from this form — the header used to carry a `Remove chat` link but it was dropped in #1275; per-channel clear (Telegram binding / Slack webhook / Mattermost webhook) stays inside the form. Whole-chat delete lives on the Chats list as an inline Remove button (`Configuration/_Chats.cshtml`, modal-confirmed — see #1281).
+- `Views/Notifications/EditChat.cshtml` is the unified multi-channel edit form (Common section: Name, Description, EnableMessages, MessagesDelay; tabs for Telegram / Slack / Mattermost — first configured channel wins, see issue #1271 / PR #1272). Telegram tab: bound chat id, type, authorization time — read-only for bot-connected chats, with invitation-link helpers for brand-new chats. Slack tab: webhook URL input with a "Show setup help" link that opens the `_SlackHelpModal.cshtml` modal — a 17-step incoming-webhook setup guide (copy carried over from #1256, retargeted to the unified form in #1275). Mattermost tab: webhook URL input with a parallel "Show setup help" link opening `_MattermostHelpModal.cshtml` — a 12-step Mattermost incoming-webhook guide (carried over from #1275; the input was disabled pre-#1288 with a "delivery not yet implemented" caveat — both removed once `MattermostNotificationChannel` shipped). Per-channel Send-test and Remove buttons live inside each tab pane and are shown only for channels the chat actually carries. Whole-chat deletion is **not** exposed from this form — the header used to carry a `Remove chat` link but it was dropped in #1275; per-channel clear (Telegram binding / Slack webhook / Mattermost webhook) stays inside the form. Whole-chat delete lives on the Chats list as an inline Remove button (`Configuration/_Chats.cshtml`, modal-confirmed — see #1281).
 
 ### Unified destination picker
 

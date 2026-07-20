@@ -188,7 +188,7 @@ namespace HSMServer.Core.Tests.Notifications
         // configured, the alert was double-buffered and the first channel to flush bumped the
         // shared timer, so the second channel was skipped. ChannelAccumulator gives each channel
         // its own state — this test pins that contract by draining Telegram and confirming the
-        // Slack timer is unchanged.
+        // Slack/Mattermost timers are unchanged. Extended in #1288 to cover the third channel.
         [Fact]
         public void Chat_MultiChannel_AccumulatorsAreIndependent()
         {
@@ -197,19 +197,28 @@ namespace HSMServer.Core.Tests.Notifications
 
             Assert.NotNull(chat.TelegramAccumulator);
             Assert.NotNull(chat.SlackAccumulator);
+            Assert.NotNull(chat.MattermostAccumulator);
             Assert.NotSame(chat.TelegramAccumulator, chat.SlackAccumulator);
+            Assert.NotSame(chat.TelegramAccumulator, chat.MattermostAccumulator);
+            Assert.NotSame(chat.SlackAccumulator, chat.MattermostAccumulator);
 
-            // Both ready to send initially — _nextSendMessageTime defaults to DateTime.MinValue.
+            // All ready to send initially — _nextSendMessageTime defaults to DateTime.MinValue.
             Assert.True(chat.TelegramAccumulator.ShouldSend(aggregation));
             Assert.True(chat.SlackAccumulator.ShouldSend(aggregation));
+            Assert.True(chat.MattermostAccumulator.ShouldSend(aggregation));
 
-            // Drain Telegram (mirrors NotificationsCenter flush order [Telegram, Slack]). Even
-            // with no buffered alerts, GetNotifications bumps Telegram's timer to the future.
+            // Drain Telegram (mirrors NotificationsCenter flush order [Telegram, Slack, Mattermost]).
+            // Even with no buffered alerts, GetNotifications bumps Telegram's timer to the future.
             _ = chat.TelegramAccumulator.GetNotifications(aggregation).ToList();
 
             // Pre-fix: this was false because Telegram's drain bumped the shared timer.
-            // Post-fix: each accumulator owns its own timer, so Slack is still ready to fire.
+            // Post-fix: each accumulator owns its own timer, so Slack + Mattermost are still ready.
             Assert.True(chat.SlackAccumulator.ShouldSend(aggregation));
+            Assert.True(chat.MattermostAccumulator.ShouldSend(aggregation));
+
+            // Drain Slack too — Mattermost must remain unaffected by either prior drain.
+            _ = chat.SlackAccumulator.GetNotifications(aggregation).ToList();
+            Assert.True(chat.MattermostAccumulator.ShouldSend(aggregation));
         }
 
 
@@ -255,6 +264,7 @@ namespace HSMServer.Core.Tests.Notifications
                 TelegramType = (byte)ConnectedChatType.TelegramGroup,
                 AuthorizationTime = DateTime.UtcNow.Ticks,
                 SlackWebhookUrl = "https://hooks.slack.com/services/X",
+                MattermostWebhookUrl = "https://mattermost.example/hooks/X",
             });
 
         private static (ChatsManager manager, Guid chatId) SeedChat()
