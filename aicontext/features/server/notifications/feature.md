@@ -1,6 +1,6 @@
 # Feature: Notifications
 
-> Owner: server | Last reviewed: 2026-07-17 | Canonical: yes
+> Owner: server | Last reviewed: 2026-07-20 | Canonical: yes
 > Scope: Server-side alert notification delivery channels, the heterogeneous destination model (Telegram + Slack mixed in one alert action), the unified folder/product/node Chats field, the single heterogeneous DefaultChats setting, the unified destination picker, and single-channel FromParent default-destination resolution.
 
 ---
@@ -165,7 +165,7 @@ Post-#1261 there is a single `Chat` entity. `NotificationsController` exposes a 
 UI surface (global admin scope):
 - `Views/Configuration/Index.cshtml` has a "Chats" tab whose panel renders `_Chats.cshtml`. The tab id remains `slack` for URL backward-compat (`?tab=slack` deep links still work); only the visible label changed.
 - `Views/Configuration/_Chats.cshtml` lists chats (Name, per-channel icons via `ChatBrandIcons`, Enabled badge, Author, Created, Edit/Remove/Send-test actions). "Add new chat" links to `AddChat` (admin-only).
-- `Views/Notifications/EditChat.cshtml` is the unified multi-channel edit form (Common section: Name, Description, EnableMessages, MessagesDelay; Telegram section: bound chat id, type, authorization time — read-only for bot-connected chats, with invitation-link helpers for brand-new chats; Slack + Mattermost webhook URL inputs). Test-action buttons are shown only for channels the chat actually carries. Remove uses `_ConfirmationModal.cshtml` and POSTs to `RemoveChat` via AJAX.
+- `Views/Notifications/EditChat.cshtml` is the unified multi-channel edit form (Common section: Name, Description, EnableMessages, MessagesDelay; tabs for Telegram / Slack / Mattermost — first configured channel wins, see issue #1271 / PR #1272). Telegram tab: bound chat id, type, authorization time — read-only for bot-connected chats, with invitation-link helpers for brand-new chats. Slack tab: webhook URL input with a "Show setup help" link that opens the `_SlackHelpModal.cshtml` modal — a 17-step incoming-webhook setup guide (copy carried over from #1256, retargeted to the unified form in #1275). Mattermost tab: webhook URL input (disabled — delivery not yet implemented) with a parallel "Show setup help" link opening `_MattermostHelpModal.cshtml` — a 12-step Mattermost guide for when delivery ships (#1275). Per-channel Send-test and Remove buttons live inside each tab pane and are shown only for channels the chat actually carries. Whole-chat deletion is **not** exposed from this form — the header used to carry a `Remove chat` link but it was dropped in #1275 because the same action is already available from the chats list row action dropdown (`Configuration/_Chats.cshtml`); per-channel clear (Telegram binding / Slack webhook / Mattermost webhook) stays inside the form.
 
 ### Unified destination picker
 
