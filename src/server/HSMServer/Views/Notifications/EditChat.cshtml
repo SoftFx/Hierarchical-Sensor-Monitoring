@@ -13,7 +13,6 @@
     ViewData["Title"] = $"Chat {Model.Name}";
 
     var isTelegramBound = Model.TelegramChatId.HasValue;
-    var icons = Model.ChatBrandIcons();
     var isNewChat = Model.Id == Guid.Empty;
     var formAction = isNewChat ? nameof(NotificationsController.AddChat) : nameof(NotificationsController.EditChat);
 
@@ -52,12 +51,8 @@
 
         <div class="chat-edit-card">
             <div class="chat-edit-header">
-                <h1 class="h4 fw-semibold m-0 d-flex align-items-center gap-2 flex-wrap">
+                <h1 class="h4 fw-semibold m-0">
                     @(isNewChat ? "Add chat" : $"Edit chat '{Model.Name}'")
-                    @if (!string.IsNullOrEmpty(icons))
-                    {
-                        <span class="d-inline-flex align-items-center gap-1">@Html.Raw(icons)</span>
-                    }
                 </h1>
                 <p class="text-secondary small mb-0 mt-1">
                     @(isNewChat
