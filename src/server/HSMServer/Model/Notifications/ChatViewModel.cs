@@ -30,6 +30,10 @@ namespace HSMServer.Model.Notifications
 
         public ConnectedChatType? TelegramType { get; set; }
 
+        public string TelegramChatTitle { get; set; }
+
+        public string TelegramChatDescription { get; set; }
+
 
         [Url(ErrorMessage = "Slack webhook URL must be a valid URL")]
         public string SlackWebhookUrl { get; set; }
@@ -82,6 +86,8 @@ namespace HSMServer.Model.Notifications
             AuthorizationTime = chat.AuthorizationTime;
             TelegramChatId = chat.TelegramChatId?.Identifier;
             TelegramType = chat.TelegramType;
+            TelegramChatTitle = chat.TelegramChatTitle;
+            TelegramChatDescription = chat.TelegramChatDescription;
             SlackWebhookUrl = chat.SlackWebhookUrl;
             MattermostWebhookUrl = chat.MattermostWebhookUrl;
             MessagesDelay = chat.MessagesAggregationTimeSec;

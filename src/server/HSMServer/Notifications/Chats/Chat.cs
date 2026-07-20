@@ -38,6 +38,14 @@ namespace HSMServer.Notifications.Chats
         public DateTime? AuthorizationTime { get; internal set; }
 
 
+        // Telegram title/description mirrored from the bot on every start (see
+        // TelegramBot.ChatNamesSynchronization). Distinct from Name/Description, which are
+        // admin-owned via EditChat and never overwritten by sync.
+        public string TelegramChatTitle { get; private set; }
+
+        public string TelegramChatDescription { get; private set; }
+
+
         // Slack (optional)
         public string SlackWebhookUrl { get; private set; }
 
@@ -84,6 +92,9 @@ namespace HSMServer.Notifications.Chats
                     : null;
             }
 
+            TelegramChatTitle = entity.TelegramChatTitle;
+            TelegramChatDescription = entity.TelegramChatDescription;
+
             SlackWebhookUrl = entity.SlackWebhookUrl;
             MattermostWebhookUrl = entity.MattermostWebhookUrl;
         }
@@ -96,6 +107,9 @@ namespace HSMServer.Notifications.Chats
         {
             SendMessages = update.SendMessages ?? SendMessages;
             MessagesAggregationTimeSec = update.MessagesAggregationTimeSec ?? MessagesAggregationTimeSec;
+
+            TelegramChatTitle = update.TelegramChatTitle ?? TelegramChatTitle;
+            TelegramChatDescription = update.TelegramChatDescription ?? TelegramChatDescription;
 
             SlackWebhookUrl = update.SlackWebhookUrl ?? SlackWebhookUrl;
             MattermostWebhookUrl = update.MattermostWebhookUrl ?? MattermostWebhookUrl;
@@ -130,6 +144,9 @@ namespace HSMServer.Notifications.Chats
                 entity.TelegramChatId = TelegramChatId?.Identifier;
                 entity.AuthorizationTime = AuthorizationTime?.Ticks;
             }
+
+            entity.TelegramChatTitle = TelegramChatTitle;
+            entity.TelegramChatDescription = TelegramChatDescription;
 
             entity.SlackWebhookUrl = SlackWebhookUrl;
             entity.MattermostWebhookUrl = MattermostWebhookUrl;

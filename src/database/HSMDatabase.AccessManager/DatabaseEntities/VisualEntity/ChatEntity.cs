@@ -18,6 +18,12 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public long? AuthorizationTime { get; set; }
 
 
+        // Telegram (synced from bot on every start; not admin-editable)
+        public string TelegramChatTitle { get; set; }
+
+        public string TelegramChatDescription { get; set; }
+
+
         // Slack (optional)
         public string SlackWebhookUrl { get; set; }
 

@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Migrations;
+using HSMServer.Notifications.Chats;
 using Moq;
 using Xunit;
 
@@ -162,6 +165,80 @@ namespace HSMServer.Core.Tests.Notifications
             db.Verify(d => d.AddChat(It.IsAny<ChatEntity>()), Times.Exactly(4));
         }
 
+        [Fact]
+        public void Chat_DeserializedFromLegacyJson_HasNullTelegramTitleAndDescription()
+        {
+            // Real LevelDB read path: EnvironmentDatabaseWorker.GetChat calls
+            // JsonSerializer.Deserialize<ChatEntity>. Legacy rows pre-#1283 lack the
+            // TelegramChatTitle / TelegramChatDescription keys — System.Text.Json must
+            // deserialize them as null (default behavior for missing properties).
+            // Additive migration — no breaking schema change.
+            var entity = new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "On-call alerts",
+                Description = "primary",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+            };
+
+            var json = JsonNode.Parse(JsonSerializer.Serialize(entity)).AsObject();
+            // Precondition: the new keys must be present in the serialized JSON for the
+            // removal below to prove anything. Without this guard, a future [JsonIgnore]
+            // on the new fields would turn this test into a silent no-op.
+            Assert.True(json.ContainsKey(nameof(ChatEntity.TelegramChatTitle)), "serialized JSON should include TelegramChatTitle");
+            Assert.True(json.ContainsKey(nameof(ChatEntity.TelegramChatDescription)), "serialized JSON should include TelegramChatDescription");
+            json.Remove(nameof(ChatEntity.TelegramChatTitle));
+            json.Remove(nameof(ChatEntity.TelegramChatDescription));
+            var legacyJson = json.ToJsonString();
+
+            var deserialized = JsonSerializer.Deserialize<ChatEntity>(legacyJson);
+            var chat = new Chat(deserialized);
+
+            Assert.Null(chat.TelegramChatTitle);
+            Assert.Null(chat.TelegramChatDescription);
+            Assert.Equal("On-call alerts", chat.Name);
+            Assert.Equal("primary", chat.Description);
+        }
+
+        [Fact]
+        public void Chat_SyncUpdate_UpdatesTelegramFieldsAndLeavesNameAndDescriptionUntouched()
+        {
+            // Pins the contract TelegramBot.ChatNamesSynchronization relies on: the sync
+            // update carries only TelegramChatTitle / TelegramChatDescription, so admin-set
+            // Name / Description survive bot restarts. Mocking the Telegram.Bot client is
+            // not worth the complexity for this contract pin.
+            var chat = new Chat(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "On-call alerts",
+                Description = "primary",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+            });
+
+            chat.Update(new ChatUpdate
+            {
+                Id = chat.Id,
+                TelegramChatTitle = "Actual Telegram Group",
+                TelegramChatDescription = "Telegram-side description",
+            });
+
+            Assert.Equal("Actual Telegram Group", chat.TelegramChatTitle);
+            Assert.Equal("Telegram-side description", chat.TelegramChatDescription);
+            Assert.Equal("On-call alerts", chat.Name);
+            Assert.Equal("primary", chat.Description);
+
+            var roundTripped = new Chat(chat.ToEntity());
+            Assert.Equal("Actual Telegram Group", roundTripped.TelegramChatTitle);
+            Assert.Equal("Telegram-side description", roundTripped.TelegramChatDescription);
+            Assert.Equal("On-call alerts", roundTripped.Name);
+            Assert.Equal("primary", roundTripped.Description);
+        }
 
         private static TelegramChatEntity BuildTelegram(Guid id, string name, byte type, long chatId) => new()
         {

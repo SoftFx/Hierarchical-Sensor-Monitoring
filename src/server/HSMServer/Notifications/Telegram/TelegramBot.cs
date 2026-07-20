@@ -274,13 +274,13 @@ namespace HSMServer.Notifications
                         var chatName = chat.TelegramType is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
                         var chatDescription = telegramChat.Description;
 
-                        if (chat.Name != chatName || chat.Description != chatDescription)
+                        if (chat.TelegramChatTitle != chatName || chat.TelegramChatDescription != chatDescription)
                         {
                             var update = new ChatUpdate()
                             {
                                 Id = chat.Id,
-                                Name = chatName,
-                                Description = chatDescription,
+                                TelegramChatTitle = chatName,
+                                TelegramChatDescription = chatDescription,
                             };
 
                             await _chatsManager.TryUpdate(update);
@@ -288,7 +288,7 @@ namespace HSMServer.Notifications
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}");
+                        _logger.Error($"Telegram chat '{chat.Id}' (title='{chat.TelegramChatTitle}') sync failed - {ex}");
                     }
                 }
             }

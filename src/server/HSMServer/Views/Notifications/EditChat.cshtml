@@ -67,11 +67,7 @@
                         <label class="chat-form-label col-form-label" asp-for="Name"></label>
                     </div>
                     <div class="col-12 col-md-7">
-                        <input type="text" class="form-control" asp-for="Name" readonly="@isTelegramBound" />
-                        @if (isTelegramBound)
-                        {
-                            <small class="text-muted">Telegram-bound chat: name is synchronized from the bot.</small>
-                        }
+                        <input type="text" class="form-control" asp-for="Name" />
                     </div>
                 </div>
 
@@ -80,7 +76,7 @@
                         <label class="chat-form-label col-form-label" asp-for="Description"></label>
                     </div>
                     <div class="col-12 col-md-7">
-                        <input type="text" class="form-control" asp-for="Description" readonly="@isTelegramBound" />
+                        <input type="text" class="form-control" asp-for="Description" />
                     </div>
                 </div>
 
@@ -141,7 +137,7 @@
                         @if (isTelegramBound)
                         {
                             <div class="alert alert-secondary small mb-3 py-2">
-                                Telegram-bound fields are read-only — they sync from the bot.
+                                Name and Description are admin-editable. Telegram title and description sync from the bot.
                             </div>
                             <div class="row align-items-center mb-3">
                                 <div class="col-12 col-md-3 text-md-end">
@@ -154,6 +150,8 @@
                                     </span>
                                     <small class="text-muted d-block">ChatId: @Model.TelegramChatId</small>
                                     <small class="text-muted d-block">Connected: @Model.AuthorizationTime?.ToLocalTime().ToString("g")</small>
+                                    <small class="text-muted d-block">Title: @(string.IsNullOrEmpty(Model.TelegramChatTitle) ? "—" : Model.TelegramChatTitle)</small>
+                                    <small class="text-muted d-block">Description: @(string.IsNullOrEmpty(Model.TelegramChatDescription) ? "—" : Model.TelegramChatDescription)</small>
                                 </div>
                             </div>
                             <div class="d-flex gap-2">

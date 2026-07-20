@@ -14,7 +14,7 @@ Notifications are how evaluated alerts reach people. Delivery is organized behin
 1. **Real-time delivery** — `ITreeValuesCache.NewAlertMessageEvent` fires when an alert message is produced. `NotificationsCenter.DispatchAlertMessage` forwards the `AlertMessage` to every channel's `DeliverAsync`. Every channel iterates the same `AlertDestination.Chats` ids and resolves each against the single `IChatsManager`. Each channel then guards on its own channel-specific field (`TelegramChatId` for Telegram, `SlackWebhookUrl` for Slack) so that a unified `Chat` carrying one channel is silently skipped by the other channel's sender.
 2. **Periodic flush** — `NotificationsBackgroundService` calls `NotificationsCenter.SendAllMessagesAsync`, which calls `FlushAsync` on every channel (e.g. draining Telegram's per-chat message aggregation).
 
-Telegram-specific concerns (bot lifecycle, inbound update polling, chat-name sync, invitation tokens, per-chat aggregation) stay internal to `TelegramBot`. Only outbound delivery is exposed through `TelegramNotificationChannel`, a thin facade that delegates to `TelegramBot`.
+Telegram-specific concerns (bot lifecycle, inbound update polling, Telegram title/description sync, invitation tokens, per-chat aggregation) stay internal to `TelegramBot`. Only outbound delivery is exposed through `TelegramNotificationChannel`, a thin facade that delegates to `TelegramBot`.
 
 ## Invariants
 
@@ -255,3 +255,18 @@ The alert picker filter is enforced by `ActionViewModel.AvailableChats` (populat
 ### Send test message
 
 `NotificationsController.SendTestSlackMessage([FromQuery] Guid id)` is admin-gated and loads the unified `Chat` via `ChatsManager.TryGetValue`. It calls `SlackNotificationChannel.SendTestAsync(Chat)`, which builds a fixed `{"text":"Test message from HSM"}` payload via `SlackMessageBuilder.BuildPayload(string)` and POSTs through the same retry path as `DeliverAsync`. The folder Chats tab and Configuration → Chats tab both surface this action per chat row. `SendTestTelegramMessage(long chatId)` (Telegram channel id, not Guid) is exposed separately because Telegram delivery requires the native bot chat id rather than the unified Chat guid.
+
+### Telegram title/description sync (split from admin Name/Description)
+
+Post-#1283 the unified `Chat` carries four distinct name-adjacent fields:
+
+- `Name` / `Description` — admin-owned via `EditChat`. Round-tripped through `ChatViewModel.ToUpdate()` → `ChatUpdate.Name` / `Description` → `BaseServerModel.Update` (`?? current`). Never overwritten by anything other than an admin action.
+- `TelegramChatTitle` / `TelegramChatDescription` — written by `TelegramBot.ChatNamesSynchronization()` (`src/server/HSMServer/Notifications/Telegram/TelegramBot.cs`) on every bot start. Source: `ChatFullInfo.Title` for groups, `ChatFullInfo.Username` for private chats (matching `ConnectedChatType.TelegramPrivate`), and `ChatFullInfo.Description` for the description.
+
+The sync update carries only `Id` + `TelegramChatTitle` + `TelegramChatDescription`. Because `BaseServerModel.Update` uses `?? current` for the base `Name` / `Description`, omitting them from the sync update preserves the admin-set values — admins can finally give a Telegram-bound chat a custom display name like "On-call alerts" and it survives bot restarts. Pre-#1283 sync clobbered `Name` / `Description` wholesale and `EditChat.cshtml` worked around this by marking them readonly for Telegram-bound chats; that workaround is gone.
+
+`ChatMigrator` is intentionally untouched. Legacy `TelegramChatEntity.Name` still maps to `ChatEntity.Name` on first-time migration. Existing unified rows pre-#1283 simply have null `TelegramChatTitle` / `TelegramChatDescription`; the first `ChatNamesSynchronization` pass after deploy populates them naturally (no explicit backfill).
+
+Storage: `ChatEntity.TelegramChatTitle` / `TelegramChatDescription` are nullable string columns on the JSON-serialized `ChatEntity` record (System.Text.Json in `HSMDatabase.LevelDB/.../EnvironmentDatabaseWorker.cs`). Legacy rows deserialize read-tolerant to null — additive, no schema migration code.
+
+UI: `EditChat.cshtml` Name/Description inputs are now editable for every chat. The Telegram tab surfaces `TelegramChatTitle` / `TelegramChatDescription` as read-only info rows (next to ChatId / Connected) when the chat is Telegram-bound, with an em-dash when the bot has not yet run a sync.
