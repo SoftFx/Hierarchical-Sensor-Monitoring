@@ -180,13 +180,19 @@ test('EditChat: per-channel Remove clears Slack webhook without deleting the cha
   await expect(page.locator('#SlackWebhookUrl')).toHaveValue('https://hooks.slack.com/services/remove-test');
   await expect(page.locator('#removeSlack')).toBeVisible();
 
-  // Click Remove Slack → confirmation modal → OK. The AJAX POST hits ClearSlackWebhook and the
-  // page reloads (EditChat.cshtml removeChannel success handler). Wait for the reload to land
-  // before asserting — otherwise the auto-waiting toHaveValue('') can race against the
-  // still-rendering previous DOM and flake.
+  // Click Remove Slack → confirmation modal → OK. The AJAX POST hits ClearSlackWebhook and
+  // removeChannel's success handler navigates to EditChat?id=...&tab=slack (#1292 — used to be a
+  // plain reload()). Wait for the navigation to land before asserting — otherwise the
+  // auto-waiting toHaveValue('') can race against the still-rendering previous DOM and flake.
   await page.locator('#removeSlack').click();
   await page.getByRole('button', { name: 'OK' }).click();
   await page.waitForLoadState('domcontentloaded');
+
+  // The navigation target carries &tab=slack and the view's defaultTab honors it first, so the
+  // Slack tab stays active even though HasSlack is now false (the old heuristic would have
+  // fallen through to Mattermost or Telegram).
+  await expect(page).toHaveURL(/tab=slack/);
+  await expect(page.locator('#slack-tab')).toHaveClass(/\bactive\b/);
 
   // After reload, the webhook field is empty and the per-channel Remove button is gone
   // (HasSlack is now false). The chat still exists — only the webhook was cleared.

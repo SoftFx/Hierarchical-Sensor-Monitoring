@@ -1,5 +1,6 @@
 ﻿using HSMServer.Constants;
 using HSMServer.Model.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
@@ -33,10 +34,22 @@ namespace HSMServer.Filters
             if ((user?.IsAdmin ?? false) || TryCheckRole(context, user)) //Admins have all possible access
                 return;
 
-            context.Result = _redirectToHomeIndex;
+            // AJAX callers (e.g. EditChat's removeChannel POST) follow 302→/Home/Index and end up
+            // with a 200 HTML response — jQuery's `success` fires and the caller reloads the form
+            // looking like the write succeeded when the action was never authorised to run. Return
+            // 403 so jQuery's `error` runs and the user sees the failure toast. Non-AJAX callers
+            // (typed URLs, form GETs) keep the legacy redirect-to-home behavior.
+            context.Result = IsAjaxRequest(context)
+                ? new StatusCodeResult(StatusCodes.Status403Forbidden)
+                : _redirectToHomeIndex;
         }
 
         public void OnActionExecuted(ActionExecutedContext context) { }
+
+
+        private static bool IsAjaxRequest(ActionExecutingContext context) =>
+            context.HttpContext.Request.Headers.TryGetValue("X-Requested-With", out var value)
+            && string.Equals(value, "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
 
 
         protected abstract bool HasRole(User user, Guid? entityId, ProductRoleEnum role);
