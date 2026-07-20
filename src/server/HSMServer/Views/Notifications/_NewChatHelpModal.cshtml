@@ -20,38 +20,22 @@
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Add new chat</h5>
+                <h5 class="modal-title"><i class="fab fa-telegram"></i> Telegram setup</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="hideAddChatHelpModal()" aria-label="Close"></button>
             </div>
 
             <div id="newChatHelp_modalBody" class="modal-body">
-                <h5><i class="fab fa-telegram"></i> Telegram (via bot invite)</h5>
+                <h6 class="mt-2">For group chat</h6>
                 <p class="ms-2">
-                    <h6 class="mt-2">For group chat</h6>
                     1. <a href='https://telegram.org/faq?setln=uz#q-how-do-i-create-a-group' target='_blank'>Create</a> group chat in Telegram. <br />
                     2. <a href='https://telegram.org/faq?setln=uz#q-how-do-i-add-more-members-what-39s-an-invite-link' target='_blank'>Add</a> Telegram Bot (@Config.Telegram.BotName) to group chat. <br />
                     3. <a href='https://telegram.org/faq?setln=uz#q-can-i-assign-administrators' target='_blank'>Give Admin right</a> to Telegram Bot (@Config.Telegram.BotName). <br />
                     4. Send <span title="@botLinksTitle"><a href="javascript:getGroupStartCommand()" class="@botLinksClass">this message</a></span> from clipboard to group chat.
-
-                    <h6 class="mt-3">For direct chat</h6>
-                    Click <span title="@botLinksTitle"><a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenInvitationLink)" asp-route-folderId="@Model" target="_blank" class="@botLinksClass">invitation link</a></span> and press <b>Start</b> button at opened direct chat with Telegram Bot (@Config.Telegram.BotName).
                 </p>
 
-                <hr />
-
-                <h5><i class="fab fa-slack"></i> Slack webhook</h5>
+                <h6 class="mt-3">For direct chat</h6>
                 <p class="ms-2">
-                    1. In Slack, open the channel where alerts should land. <br />
-                    2. Go to <b>Channel settings → Integrations → Add apps → Incoming Webhooks</b> (or configure at the workspace level). <br />
-                    3. Create a new webhook and copy the URL (<code>https://hooks.slack.com/services/...</code>). <br />
-                    4. Close this dialog, click <b>Add new chat → Slack / Mattermost webhook</b>, and paste the URL into the <b>Slack webhook URL</b> field. <br />
-                </p>
-
-                <hr />
-
-                <h5><i class="fab fa-mattermost"></i> Mattermost webhook</h5>
-                <p class="ms-2 text-muted">
-                    <i>Mattermost delivery is not yet implemented.</i> The webhook URL field will be editable once the Mattermost notification channel ships in a follow-up epic.
+                    Click <span title="@botLinksTitle"><a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenInvitationLink)" asp-route-folderId="@Model" target="_blank" class="@botLinksClass">invitation link</a></span> and press <b>Start</b> button at opened direct chat with Telegram Bot (@Config.Telegram.BotName).
                 </p>
             </div>
         </div>

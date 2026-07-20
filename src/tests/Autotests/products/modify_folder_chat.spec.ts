@@ -54,12 +54,12 @@ test('Folder Chats tab: Add-chat dropdown offers Telegram help and Slack webhook
   await page.getByRole('tab', { name: 'Chats' }).click();
   await expect(page.getByText('Choose chats to add')).toBeVisible();
 
-  // Telegram bot-invite path opens the help modal. The title was unified to "Add new chat" in #1262
-  // (previously "Add new telegram chat help"); the link text changed from "Add new telegram chat"
-  // to "Telegram bot invite" inside an "Add new chat" dropdown.
+  // Telegram bot-invite path opens the help modal. The modal was retitled to "Telegram setup" in
+  // #1281 (was "Add new chat" when it carried Slack/Mattermost sections too — those moved into
+  // _SlackHelpModal.cshtml / _MattermostHelpModal.cshtml on the EditChat form).
   await page.getByRole('button', { name: 'Add new chat' }).click();
   await page.getByRole('link', { name: 'Telegram bot invite' }).click();
-  const modalHeading = page.getByRole('heading', { name: 'Add new chat' });
+  const modalHeading = page.getByRole('heading', { name: 'Telegram setup' });
   await expect(modalHeading).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(modalHeading).not.toBeVisible();
