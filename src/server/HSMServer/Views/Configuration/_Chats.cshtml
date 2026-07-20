@@ -31,7 +31,6 @@
     <div class="d-flex align-items-center justify-content-between mb-2">
         <h1 class="h4 fw-semibold m-0">Notification chats</h1>
         <a href="@Url.Action(nameof(NotificationsController.AddChat), ViewConstants.NotificationsController)"
-           type="button"
            class="btn d-flex align-items-center gap-1"
            style="background-color: #16a34a; color: #fff; border-color: #16a34a;">
             <i class="fas fa-plus"></i> Add new chat
@@ -85,9 +84,9 @@
                            href="@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController, new { id = chat.Id })">
                             <i class="fa-regular fa-pen-to-square"></i>
                         </a>
-                        <a id="remove_@chat.Id" name="@chat.Name" class="chat-action-btn danger" title="Remove">
+                        <button type="button" id="remove_@chat.Id" name="@chat.Name" class="chat-action-btn danger" title="Remove">
                             <i class="fa-regular fa-trash-can"></i>
-                        </a>
+                        </button>
                     </div>
                 </div>
             }
@@ -130,6 +129,13 @@
 
         // Filter rows by Name substring (case-insensitive) AND the selected channel. "Any channel"
         // (the default) means no channel filter — mirrors Users' "Role" select semantics.
+        //
+        // Read data-name via .attr() + String() rather than .data() — jQuery's data() coerces
+        // values that look like numbers/booleans/JSON into native types. A chat named e.g.
+        // "123456" (common for Telegram groups) would come back as a Number, and `.indexOf(q)`
+        // would throw TypeError, aborting the whole filter pass and leaving rows in an
+        // inconsistent state. The has-telegram/has-slack/has-mattermost flags below deliberately
+        // rely on the boolean coercion — that path stays on .data().
         function applyChatFilters() {
             var q = $("#chatSearch").val().toLowerCase();
             var channel = $("#channelFilter").val();
@@ -138,7 +144,7 @@
 
             $(".chat-row").each(function () {
                 var $row = $(this);
-                var name = $row.data("name");
+                var name = String($row.attr("data-name") || "");
                 var matchSearch = !q || name.indexOf(q) !== -1;
                 var matchChannel = channel === "any" ||
                     $row.data("has-" + channel) === true;
