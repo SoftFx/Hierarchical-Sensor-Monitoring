@@ -130,6 +130,14 @@
                                             </a>
                                         </li>
                                     }
+                                    @if (!string.IsNullOrEmpty(chat.MattermostWebhookUrl))
+                                    {
+                                        <li>
+                                            <a id="sendMattermostMessage_@chat.Id" name="@chat.Id" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                                Send test Mattermost message
+                                            </a>
+                                        </li>
+                                    }
                                     @if (chat.TelegramChatId is not null && chat.TelegramType == ConnectedChatType.TelegramGroup)
                                     {
                                         <li>
@@ -216,6 +224,17 @@
         let chatId = this.name;
 
         let url = `@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)?id=${chatId}`;
+
+        $.ajax({ url: url });
+    });
+
+    $('[id^=sendMattermostMessage_]').on('click', function () {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        let chatId = this.name;
+
+        let url = `@Url.Action(nameof(NotificationsController.SendTestMattermostMessage), ViewConstants.NotificationsController)?id=${chatId}`;
 
         $.ajax({ url: url });
     });
