@@ -28,7 +28,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string SlackWebhookUrl { get; set; }
 
 
-        // Mattermost (optional, channel not implemented yet)
+        // Mattermost (optional)
         public string MattermostWebhookUrl { get; set; }
     }
 }
