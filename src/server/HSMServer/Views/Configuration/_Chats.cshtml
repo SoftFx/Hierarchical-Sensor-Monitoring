@@ -9,6 +9,24 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
+<style>
+    .chat-list { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
+    .chat-list-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 0.875rem; color: #6b7280; border-radius: 0.5rem 0.5rem 0 0; }
+    .chat-row { display: flex; align-items: center; justify-content: space-between; padding: 1rem; border-bottom: 1px solid #e5e7eb; }
+    .chat-row:last-child { border-bottom: none; }
+    .chat-row:hover { background-color: #f9fafb; }
+    .chat-info { display: flex; align-items: center; gap: 0.75rem; }
+    .chat-info i { font-size: 1rem; }
+    .chat-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; }
+    .chat-badge.badge-enabled { color: #16a34a; border-color: #16a34a; background-color: #f0fdf4; }
+    .chat-badge.badge-disabled { color: #6b7280; background-color: #f5f5f5; }
+    .chat-action-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; background: none; border: 1px solid #d1d5db; border-radius: 0.5rem; cursor: pointer; color: #6b7280; font-size: 1rem; }
+    .chat-action-btn:hover { background-color: #f9fafb; }
+    .chat-action-btn.danger { color: #ef4444; }
+    .chat-action-btn.danger:hover { background-color: #fef2f2; border-color: #fca5a5; }
+</style>
+
+
 <div class="d-flex justify-content-between my-2">
     <h5 class="m-0">Notification chats</h5>
     <div class='d-flex col-md-auto'>
@@ -19,78 +37,68 @@
     </div>
 </div>
 
-@if (Model.Chats is null || Model.Chats.Count == 0)
-{
-    <div class="text-muted">No chats configured yet.</div>
-}
-else
-{
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Channels</th>
-                <th class="text-center">Enabled</th>
-                <th>Author</th>
-                <th>Created</th>
-                <th class="text-center">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var chat in Model.Chats)
-            {
-                <tr>
-                    <td>@chat.Name</td>
-                    <td>@Html.Raw(chat.ChatBrandIcons())</td>
-                    <td class="text-center">
-                        @if (chat.EnableMessages)
-                        {
-                            <i class="fa-solid fa-check fa-lg text-success"></i>
-                        }
-                    </td>
-                    <td>@(chat.Author ?? "—")</td>
-                    <td>@chat.CreationDate.ToLocalTime().ToString("g")</td>
-                    <td nowrap class="text-center w-10">
-                        <div class='btn-group'>
-                            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                                <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
-                            </button>
-                            <ul class='dropdown-menu dropdown-menu-end overflow-auto' aria-labelledby="dropdownMenuButton">
-                                <li>
-                                    <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;"
-                                       href="@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController, new { id = chat.Id })">
-                                        View/Edit
-                                    </a>
-                                </li>
-                                @if (chat.HasTelegram)
-                                {
-                                    <li>
-                                        <a id="sendTelegram_@chat.Id" data-telegram-chat-id="@chat.TelegramChatId" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                            Send test Telegram message
-                                        </a>
-                                    </li>
-                                }
-                                @if (chat.HasSlack)
-                                {
-                                    <li>
-                                        <a id="sendSlack_@chat.Id" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                            Send test Slack message
-                                        </a>
-                                    </li>
-                                }
-                                <li>
-                                    <a id='remove_@chat.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                        Remove
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
+<div class="d-flex gap-2 mb-3">
+    <div class="position-relative flex-grow-1">
+        <input id="chatSearch" type="text" class="form-control pe-4" placeholder="Find a chat..." autocomplete="off" />
+        <button id="clearChatSearch" type="button" class="btn btn-link position-absolute top-50 end-0 translate-middle-y text-secondary text-decoration-none p-0 me-2 d-none" style="font-size: 0.875rem; line-height: 1;">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    <div class="d-flex align-items-center gap-3 ms-2">
+        <label class="d-flex align-items-center gap-1 form-check-label mb-0">
+            <input type="checkbox" class="channel-filter form-check-input" id="filterTelegram">
+            <i class="fab fa-telegram"></i> Telegram
+        </label>
+        <label class="d-flex align-items-center gap-1 form-check-label mb-0">
+            <input type="checkbox" class="channel-filter form-check-input" id="filterSlack">
+            <i class="fab fa-slack"></i> Slack
+        </label>
+        <label class="d-flex align-items-center gap-1 form-check-label mb-0">
+            <input type="checkbox" class="channel-filter form-check-input" id="filterMattermost">
+            <i class="fab fa-mattermost"></i> Mattermost
+        </label>
+    </div>
+</div>
+
+<div class="chat-list">
+    <div class="chat-list-header">
+        <span>@(Model.Chats?.Count ?? 0) chats</span>
+    </div>
+
+    @if (Model.Chats is null || Model.Chats.Count == 0)
+    {
+        <div class="text-center text-secondary py-5">No chats configured yet.</div>
+    }
+    else
+    {
+        foreach (var chat in Model.Chats)
+        {
+            var enabledBadgeClass = chat.EnableMessages ? "badge-enabled" : "badge-disabled";
+            var enabledBadgeText = chat.EnableMessages ? "Enabled" : "Disabled";
+
+            <div class="chat-row"
+                 data-name="@(chat.Name?.ToLower() ?? string.Empty)"
+                 data-has-telegram="@chat.HasTelegram.ToString().ToLower()"
+                 data-has-slack="@chat.HasSlack.ToString().ToLower()"
+                 data-has-mattermost="@chat.HasMattermost.ToString().ToLower()">
+                <div class="chat-info">
+                    @Html.Raw(chat.ChatBrandIcons())
+                    <span class="fw-medium">@chat.Name</span>
+                    <span class="chat-badge @enabledBadgeClass">@enabledBadgeText</span>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <a class="chat-action-btn" title="Edit"
+                       href="@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController, new { id = chat.Id })">
+                        <i class="fa-regular fa-pen-to-square"></i>
+                    </a>
+                    <a id="remove_@chat.Id" name="@chat.Name" class="chat-action-btn danger" title="Remove" style="cursor: pointer;">
+                        <i class="fa-regular fa-trash-can"></i>
+                    </a>
+                </div>
+            </div>
+        }
+    }
+</div>
 
 <form id="removeChat_form" method="post"
       action="@Url.Action(nameof(NotificationsController.RemoveChat), ViewConstants.NotificationsController)">
@@ -98,34 +106,54 @@ else
     <input type="hidden" name="id" id="removeChat_id" />
 </form>
 
+
 <script>
     $(function () {
+        // Remove — opens the shared _ConfirmationModal (rendered by _Layout.cshtml) instead of
+        // window.confirm, matching the Users page delete pattern. The hidden form POSTs to the
+        // existing NotificationsController.RemoveChat handler — same contract as before.
         $(document).off("click", "[id^=remove_]").on("click", "[id^=remove_]", function () {
-            var id = this.id.substring("remove_".length, this.id.length);
-            var row = $(this).closest('tr');
-            var name = row.find('td:first').text().trim();
+            var id = this.id.substring("remove_".length);
+            var name = $(this).attr("name");
 
-            if (!confirm("Remove chat \"" + name + "\"?"))
-                return;
-
-            $("#removeChat_id").val(id);
-            $("#removeChat_form").submit();
+            showConfirmationModal(
+                `Removing chat "${name}"`,
+                `Do you really want to remove chat "${name}"?`,
+                function () {
+                    $("#removeChat_id").val(id);
+                    $("#removeChat_form").submit();
+                }
+            );
         });
 
-        $(document).off("click", "[id^=sendTelegram_]").on("click", "[id^=sendTelegram_]", function () {
-            var chatId = $(this).data("telegram-chat-id");
+        // Filter rows by Name substring (case-insensitive) AND channel OR-match. Empty checkbox
+        // set means "all channels" — no row is hidden just because nothing is ticked.
+        function applyChatFilters() {
+            var q = $("#chatSearch").val().toLowerCase();
+            var tele = $("#filterTelegram").is(":checked");
+            var slack = $("#filterSlack").is(":checked");
+            var matter = $("#filterMattermost").is(":checked");
+            var anyChannel = tele || slack || matter;
 
-            $.get("@Url.Action(nameof(NotificationsController.SendTestTelegramMessage), ViewConstants.NotificationsController)", { chatId: chatId })
-                .done(function () { showToast("Test Telegram message sent."); })
-                .fail(function () { showToast("Failed to send test Telegram message."); });
-        });
+            $("#clearChatSearch").toggleClass("d-none", !q);
 
-        $(document).off("click", "[id^=sendSlack_]").on("click", "[id^=sendSlack_]", function () {
-            var id = this.id.substring("sendSlack_".length, this.id.length);
+            $(".chat-row").each(function () {
+                var $row = $(this);
+                var name = $row.data("name");
+                var matchSearch = !q || name.indexOf(q) !== -1;
+                var matchChannel = !anyChannel ||
+                    (tele && $row.data("has-telegram") === true) ||
+                    (slack && $row.data("has-slack") === true) ||
+                    (matter && $row.data("has-mattermost") === true);
+                $row.toggle(matchSearch && matchChannel);
+            });
+        }
 
-            $.get("@Url.Action(nameof(NotificationsController.SendTestSlackMessage), ViewConstants.NotificationsController)", { id: id })
-                .done(function () { showToast("Test Slack message sent."); })
-                .fail(function () { showToast("Failed to send test Slack message."); });
+        $("#chatSearch").on("input", applyChatFilters);
+        $(".channel-filter").on("change", applyChatFilters);
+        $("#clearChatSearch").on("click", function () {
+            $("#chatSearch").val("");
+            applyChatFilters();
         });
     });
 </script>

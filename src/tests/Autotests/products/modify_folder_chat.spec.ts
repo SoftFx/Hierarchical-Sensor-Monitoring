@@ -163,12 +163,12 @@ test('EditChat: per-channel Remove clears Slack webhook without deleting the cha
   await page.getByRole('button', { name: 'Save' }).click();
 
   // AddChat POST redirects to Configuration. Reopen the Chats tab and click into EditChat via
-  // the row's action dropdown (matches the row pattern in _Chats.cshtml:53-86).
+  // the row's inline Edit button (_Chats.cshtml members-layout rebuild from #1281 — was a three-
+  // dot dropdown with a "View/Edit" item before #1281).
   await page.getByRole('tab', { name: 'Chats' }).click();
-  const chatRow = page.getByRole('row').filter({ hasText: slackRemoveChatName });
+  const chatRow = page.locator('.chat-row').filter({ hasText: slackRemoveChatName });
   await expect(chatRow).toBeVisible();
-  await chatRow.locator('#actionButton').click();
-  await page.getByRole('link', { name: 'View/Edit' }).click();
+  await chatRow.locator('.chat-action-btn[title="Edit"]').click();
 
   // EditChat should show the populated webhook and a "Remove Slack" button alongside the
   // existing "Send test Slack message" button.
