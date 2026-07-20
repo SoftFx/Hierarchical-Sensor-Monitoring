@@ -31,6 +31,7 @@
 <style>
     .chat-container { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; }
     .chat-edit-card { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
+    .chat-edit-header { padding: 1rem 1.25rem; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb; }
     .chat-edit-section { padding: 1.25rem 1rem; border-bottom: 1px solid #e5e7eb; }
     .chat-edit-section:last-child { border-bottom: none; }
     .chat-save-btn { background-color: #16a34a; color: #fff; border-color: #16a34a; min-width: 120px; }
@@ -41,21 +42,6 @@
 
 
 <div class="chat-container">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-        <h1 class="h4 fw-semibold m-0 d-flex align-items-center gap-2 flex-wrap">
-            @(isNewChat ? "Add chat" : $"Edit chat '{Model.Name}'")
-            @if (!string.IsNullOrEmpty(icons))
-            {
-                <span class="d-inline-flex align-items-center gap-1">@Html.Raw(icons)</span>
-            }
-        </h1>
-    </div>
-    <p class="text-secondary mb-3">
-        @(isNewChat
-            ? "Create a new notification chat. At least one channel is required to deliver alerts."
-            : "Update chat settings. Use the channel tabs below to configure delivery.")
-    </p>
-
     <form id="chat_form" method="post" asp-action="@formAction">
         <input asp-for="@Model.Id" value="@Model.Id" type="hidden" />
         <input asp-for="@Model.TelegramChatId" value="@Model.TelegramChatId" type="hidden" />
@@ -65,6 +51,21 @@
         <input asp-for="@Model.AuthorizationTime" value="@Model.AuthorizationTime" type="hidden" />
 
         <div class="chat-edit-card">
+            <div class="chat-edit-header">
+                <h1 class="h4 fw-semibold m-0 d-flex align-items-center gap-2 flex-wrap">
+                    @(isNewChat ? "Add chat" : $"Edit chat '{Model.Name}'")
+                    @if (!string.IsNullOrEmpty(icons))
+                    {
+                        <span class="d-inline-flex align-items-center gap-1">@Html.Raw(icons)</span>
+                    }
+                </h1>
+                <p class="text-secondary small mb-0 mt-1">
+                    @(isNewChat
+                        ? "Create a new notification chat. At least one channel is required to deliver alerts."
+                        : "Update chat settings. Use the channel tabs below to configure delivery.")
+                </p>
+            </div>
+
             <div class="chat-edit-section">
                 <div class="row align-items-center mb-3">
                     <div class="col-12 col-md-3">
