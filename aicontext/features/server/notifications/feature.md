@@ -138,7 +138,7 @@ NotificationsBackgroundService (timer) -> NotificationsCenter.SendAllMessagesAsy
 
 ### Storage
 
-Unified `ChatEntity` rows under the `"Chats"` LevelDB key, accessed via the single `IChatsManager`. The channel resolves webhook URLs and names from the same registry that Telegram uses — one chat can deliver through both channels. `IChatsManager.GetChatName(Guid)` is the only name resolver and is wired directly to `IFolderManager.GetChatName`.
+Unified `ChatEntity` rows under the `"Chats"` LevelDB key, accessed via the single `IChatsManager`. The channel resolves webhook URLs and names from the same registry that Telegram uses — one chat can deliver through any combination of Telegram, Slack, and Mattermost simultaneously. `IChatsManager.GetChatName(Guid)` is the only name resolver and is wired directly to `IFolderManager.GetChatName`.
 
 ## Mattermost delivery
 
