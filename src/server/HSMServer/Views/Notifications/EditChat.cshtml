@@ -230,9 +230,12 @@
                 </div>
             </div>
 
-            <div class="chat-edit-section">
-                <partial name="_ChatFolders" for="Folders" />
-            </div>
+            @if (Model.Folders?.DisplayFolders.Count > 0)
+            {
+                <div class="chat-edit-section">
+                    <partial name="_ChatFolders" for="Folders" />
+                </div>
+            }
 
             <div class="chat-edit-section d-flex justify-content-end gap-2">
                 <a href="@Url.Action(nameof(NotificationsController.Index), ViewConstants.NotificationsController)"
