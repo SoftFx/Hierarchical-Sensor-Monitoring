@@ -71,8 +71,10 @@ test('Folder Chats tab: Add-chat dropdown offers Telegram help and Slack webhook
   await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/test');
   await page.getByRole('button', { name: 'Save' }).click();
 
-  // AddChat POST redirects to Configuration. Verify the chat landed in the unified Chats list.
-  await page.getByRole('tab', { name: 'Chats' }).click();
+  // AddChat POST redirects to /Notifications (the top-level Chats page from #1273). Assert the URL
+  // first — if TryAdd silently fails or the redirect changes, the row check below would surface as
+  // an opaque "row not found" instead of a clear URL mismatch.
+  await expect(page).toHaveURL(/.*Notifications/);
   await expect(page.getByRole('row').filter({ hasText: slackChatName })).toBeVisible();
 
   // --- Logout ---
@@ -94,8 +96,12 @@ test('Folder Chats picker renders chat.Name as inert text (XSS lock-down)', asyn
 
   // --- Create a Slack chat whose Name is an XSS payload ---
   // Slack path is used because EditChat.cshtml leaves Name editable for non-Telegram-bound chats.
-  await page.getByRole('link', { name: 'Configuration' }).click();
-  await page.getByRole('tab', { name: 'Chats' }).click();
+  // Chats was promoted to a top-level Configuration dropdown entry in #1273 (was a Settings tab).
+  // Configuration toggle uses role="button" (Bootstrap dropdown-toggle pattern, see users.ts:4);
+  // getByRole('link') would miss it because the explicit ARIA role wins over the <a> tag default.
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
   await page.getByRole('link', { name: 'Add new chat' }).click();
   await page.locator('#Name').fill(xssChatName);
   await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/xss');

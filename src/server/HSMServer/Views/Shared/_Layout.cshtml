@@ -112,6 +112,14 @@
                                                         </a>
                                                     </li>
                                                 }
+                                                @if (UserRoleHelper.IsChatsPageAllowed((User)Context.User))
+                                                {
+                                                    <li>
+                                                        <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.NotificationsController)">
+                                                            <i class="fas fa-comments me-2"></i>Chats
+                                                        </a>
+                                                    </li>
+                                                }
                                                 <li><hr class="dropdown-divider"></li>
                                                 @if (UserRoleHelper.IsConfigurationPageAllowed((User)Context.User))
                                                 {
