@@ -89,14 +89,14 @@ jobs:
           fi
 
           # The tagged source must actually declare the version being published, otherwise the registry
-          # would advertise a version the library doesn't identify as (see scripts/check-collector-version.py).
-          srcver=$(tar -xzOf source.tgz --wildcards '*/src/native/collector/CMakeLists.txt' 2>/dev/null \
-                   | sed -nE 's/.*project\(HsmCollectorNative VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)
-          if [ "$srcver" != "$VER" ]; then
-            echo "::error::tag $TAG points at source declaring version '${srcver:-<unreadable>}', not $VER"; exit 1
-          fi
+          # would advertise a version the library doesn't identify as. Reuse the very checker the
+          # version-check lane runs (against the unpacked tarball) so both gates agree on what a valid
+          # declaration looks like - a second, subtly different parser here would drift.
+          mkdir -p srcx && tar -xzf source.tgz -C srcx
+          srcroot=$(find srcx -mindepth 1 -maxdepth 1 -type d | head -1)
+          python3 scripts/check-collector-version.py --root "$srcroot" --tag "$TAG"
 
-          rm -f source.tgz
+          rm -rf srcx source.tgz
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Prepare registry update

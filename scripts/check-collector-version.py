@@ -3,11 +3,15 @@
 
 The version lives in four hand-maintained places that must move together; forgetting one publishes a
 mismatched package (this already happened once: the vcpkg port and conan recipe sat at 0.4.0 while the
-library was 0.6.2). The registry port and version database are NOT checked here — those are rewritten
+library was 0.6.2). The registry port and version database are NOT checked here - those are rewritten
 by the hsm-collector-registry-publish workflow.
 
     python scripts/check-collector-version.py
     python scripts/check-collector-version.py --tag collector-v0.6.3   # also assert a release tag
+    python scripts/check-collector-version.py --root /tmp/extracted    # check another checkout
+
+--root lets the publish workflow point this at an unpacked release tarball, so the CI gate and the
+release gate share one definition of "a valid version declaration".
 """
 import argparse
 import json
@@ -15,17 +19,15 @@ import re
 import sys
 from pathlib import Path
 
-COLLECTOR = Path(__file__).resolve().parents[1] / "src" / "native" / "collector"
 
-
-def from_cmake():
-    text = (COLLECTOR / "CMakeLists.txt").read_text(encoding="utf-8")
+def from_cmake(collector):
+    text = (collector / "CMakeLists.txt").read_text(encoding="utf-8")
     m = re.search(r"project\(HsmCollectorNative\s+VERSION\s+(\d+\.\d+\.\d+)", text)
     return m.group(1) if m else None
 
 
-def from_abi_header():
-    text = (COLLECTOR / "include" / "hsm_collector" / "hsm_collector.h").read_text(encoding="utf-8")
+def from_abi_header(collector):
+    text = (collector / "include" / "hsm_collector" / "hsm_collector.h").read_text(encoding="utf-8")
     parts = []
     for component in ("MAJOR", "MINOR", "PATCH"):
         m = re.search(rf"#define\s+HSM_COLLECTOR_VERSION_{component}\s+(\d+)", text)
@@ -35,12 +37,12 @@ def from_abi_header():
     return ".".join(parts)
 
 
-def from_overlay_port():
-    return json.loads((COLLECTOR / "vcpkg-port" / "vcpkg.json").read_text(encoding="utf-8")).get("version")
+def from_overlay_port(collector):
+    return json.loads((collector / "vcpkg-port" / "vcpkg.json").read_text(encoding="utf-8")).get("version")
 
 
-def from_conanfile():
-    text = (COLLECTOR / "conanfile.py").read_text(encoding="utf-8")
+def from_conanfile(collector):
+    text = (collector / "conanfile.py").read_text(encoding="utf-8")
     m = re.search(r'^\s*version\s*=\s*"(\d+\.\d+\.\d+)"', text, re.M)
     return m.group(1) if m else None
 
@@ -56,14 +58,24 @@ SOURCES = {
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--tag", help="release tag (collector-vX.Y.Z) that must match the source version")
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1],
+                        help="repository root to inspect (default: this checkout)")
     args = parser.parse_args()
+
+    collector = args.root / "src" / "native" / "collector"
+    if not collector.is_dir():
+        print(f"::error::no collector sources under {collector}")
+        return 1
 
     found, unreadable = {}, []
     for label, read in SOURCES.items():
         try:
-            value = read()
-        except OSError as ex:
-            value, _ = None, print(f"::error::cannot read {label}: {ex}")
+            value = read(collector)
+        except (OSError, ValueError) as ex:
+            # ValueError covers json.JSONDecodeError: a corrupt manifest must report cleanly, not
+            # crash this gate with a traceback.
+            print(f"::error::cannot read {label}: {ex}")
+            value = None
         if value:
             found[label] = value
         else:
