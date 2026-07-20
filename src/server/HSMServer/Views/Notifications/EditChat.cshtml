@@ -21,7 +21,11 @@
     // field. An existing chat with no channels configured (e.g. right after ClearSlackWebhook)
     // also falls back to Slack — landing on Telegram would surprise the user, who just acted on
     // the Slack webhook. Mattermost only wins if it's the sole configured channel.
-    var defaultTab = isTelegramBound ? "telegram"
+    // An explicit ?tab= from the query string (e.g. after clearing a channel) wins over everything
+    // so the user lands back on the tab they just acted on.
+    var requestedTab = ViewData["Tab"] as string;
+    var defaultTab = !string.IsNullOrEmpty(requestedTab) ? requestedTab
+                   : isTelegramBound ? "telegram"
                    : Model.HasMattermost && !Model.HasSlack ? "mattermost"
                    : "slack";
 }
@@ -252,8 +256,9 @@
 
 <script>
     // Per-channel Remove buttons. Each clears only its channel; the Chat row and the other
-    // channels stay intact. Form reloads to reflect the post-clear state.
-    function removeChannel(channelName, actionUrl, confirmText) {
+    // channels stay intact. On success the form reopens on the just-cleared channel's tab so
+    // the user can paste a new URL without an extra click.
+    function removeChannel(channelName, channelTab, actionUrl, confirmText) {
         showConfirmationModal(
             `Removing ${channelName} from chat '@Model.Name'`,
             confirmText,
@@ -263,7 +268,10 @@
                     url: actionUrl + `?id=@Model.Id`,
                     cache: false,
                     async: true,
-                    success: function () { window.location.reload(); },
+                    success: function () {
+                        window.location.href =
+                            `@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController)?id=@Model.Id&tab=${channelTab}`;
+                    },
                     error: function () { showToast(`Failed to remove ${channelName.toLowerCase()} from chat.`); }
                 });
             }
@@ -295,6 +303,7 @@
         $("#removeTelegram").off("click").on("click", function () {
             removeChannel(
                 "Telegram binding",
+                "telegram",
                 "@Url.Action(nameof(NotificationsController.RemoveTelegramBinding), ViewConstants.NotificationsController)",
                 `Telegram binding will be removed from chat '@Model.Name'. The chat itself, its folder bindings, and other channels stay intact.`
             );
@@ -303,6 +312,7 @@
         $("#removeSlack").off("click").on("click", function () {
             removeChannel(
                 "Slack webhook",
+                "slack",
                 "@Url.Action(nameof(NotificationsController.ClearSlackWebhook), ViewConstants.NotificationsController)",
                 `Slack webhook will be removed from chat '@Model.Name'. The chat itself and other channels stay intact.`
             );
@@ -311,6 +321,7 @@
         $("#removeMattermost").off("click").on("click", function () {
             removeChannel(
                 "Mattermost webhook",
+                "mattermost",
                 "@Url.Action(nameof(NotificationsController.ClearMattermostWebhook), ViewConstants.NotificationsController)",
                 `Mattermost webhook will be removed from chat '@Model.Name'. The chat itself and other channels stay intact.`
             );

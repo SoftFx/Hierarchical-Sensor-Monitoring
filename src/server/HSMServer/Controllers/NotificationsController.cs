@@ -41,9 +41,14 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
-        public IActionResult EditChat(Guid id) => ChatsManager.TryGetValue(id, out var chat)
-            ? View(new ChatViewModel(chat, BuildChatFolders(chat)))
-            : _emptyResult;
+        public IActionResult EditChat(Guid id, string tab = null)
+        {
+            if (!ChatsManager.TryGetValue(id, out var chat))
+                return _emptyResult;
+
+            ViewData["Tab"] = tab;
+            return View(new ChatViewModel(chat, BuildChatFolders(chat)));
+        }
 
         [HttpPost]
         [TelegramRoleFilterByEditModel(nameof(model), ProductRoleEnum.ProductManager)]
