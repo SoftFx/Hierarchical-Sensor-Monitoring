@@ -1,8 +1,10 @@
+@using HSMServer.Extensions
+
 <div class="modal fade" tabindex="-1" role="dialog" id="mattermostHelp_modal">
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fab fa-mattermost"></i> How to create a Mattermost incoming webhook</h5>
+                <h5 class="modal-title">@Html.Raw(ChatIcons.MattermostBrandIconSvg) How to create a Mattermost incoming webhook</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="hideMattermostHelpModal()" aria-label="Close"></button>
             </div>
 
