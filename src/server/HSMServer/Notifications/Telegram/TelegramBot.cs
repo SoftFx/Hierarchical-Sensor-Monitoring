@@ -288,7 +288,7 @@ namespace HSMServer.Notifications
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error($"Telegram chat title '{chat.TelegramChatTitle}' updating is failed - {ex}");
+                        _logger.Error($"Telegram chat '{chat.Id}' (title='{chat.TelegramChatTitle}') sync failed - {ex}");
                     }
                 }
             }

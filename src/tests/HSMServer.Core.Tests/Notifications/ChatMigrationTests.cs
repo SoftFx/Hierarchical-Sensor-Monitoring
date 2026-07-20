@@ -185,6 +185,11 @@ namespace HSMServer.Core.Tests.Notifications
             };
 
             var json = JsonNode.Parse(JsonSerializer.Serialize(entity)).AsObject();
+            // Precondition: the new keys must be present in the serialized JSON for the
+            // removal below to prove anything. Without this guard, a future [JsonIgnore]
+            // on the new fields would turn this test into a silent no-op.
+            Assert.True(json.ContainsKey(nameof(ChatEntity.TelegramChatTitle)), "serialized JSON should include TelegramChatTitle");
+            Assert.True(json.ContainsKey(nameof(ChatEntity.TelegramChatDescription)), "serialized JSON should include TelegramChatDescription");
             json.Remove(nameof(ChatEntity.TelegramChatTitle));
             json.Remove(nameof(ChatEntity.TelegramChatDescription));
             var legacyJson = json.ToJsonString();
