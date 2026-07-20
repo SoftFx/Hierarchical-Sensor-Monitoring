@@ -9,6 +9,7 @@ registration/account screens.
 ## Feature Folders To Add Here
 
 - `sensor-tree/` - hierarchy navigation, search, status display.
+- `node-children-view/` - node "Chart" tab overlaying comparable child sensors (issue #1235).
 - `dashboards/` - dashboard screens, charts, table behavior.
 - `alerts/` - alert UI, templates, schedules, enable/disable workflows.
 - `configuration/` - server/site configuration screens.

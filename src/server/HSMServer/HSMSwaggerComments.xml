@@ -72,6 +72,15 @@
         <member name="M:HSMServer.Controllers.ProductController.UpdateSensorGroups(HSMServer.Model.ViewModel.SensorGroupsRequest)">
             <summary>Update which sensor groups agents under this product should collect (#1198).</summary>
         </member>
+        <member name="M:HSMServer.Controllers.SensorHistoryController.NodeChartHistory(HSMServer.Model.Model.History.NodeChartRequest)">
+            <summary>
+            Node-level overlay chart (issue #1235): returns the node's comparable child sensors as one line
+            series each over the chosen window. Descendants are grouped by (type, unit); the operator picks
+            which group with <c>GroupKey</c> (default: the largest), and within it the top
+            <c>MaxSensorsPerChart</c> children by current value are charted. Read-only; children with no data
+            in the window are omitted (drawn with gaps, never zero-filled).
+            </summary>
+        </member>
         <member name="T:HSMServer.Controllers.SensorsController">
             <summary>
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
@@ -287,6 +296,19 @@
             (BadRequest) so the admin fixes the key first.
             </summary>
         </member>
+        <member name="T:HSMServer.Model.Model.History.NodeChartRequest">
+            <summary>
+            Request for the node-level overlay chart (issue #1235): one node id plus the operator-chosen
+            time window. The server groups the node's comparable descendants by (type, unit); <c>GroupKey</c>
+            selects which group to chart (default: the largest).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.Model.History.NodeChartRequest.GroupKey">
+            <summary>
+            Stable key of the comparable group to overlay (see <c>NodeSensorGroup.Key</c>). When null/unknown
+            the server falls back to the largest comparable group.
+            </summary>
+        </member>
         <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.AddValueFromLists(HSMServer.Model.History.SummaryBarItem{`0})">
             <summary>
             Set fields, for which collecting lists of values is required
@@ -315,8 +337,55 @@
             Sensor group names that should be disabled. All others are considered enabled.
             Valid values: "computer", "system", "disk", "network", "module", "process".
         </member>
+        <member name="T:HSMServer.Model.TreeViewModel.NodeSensorGroup">
+            <summary>
+            A set of a node's descendant sensors that share the same sensor type and effective unit,
+            and can therefore be overlaid on a single multi-line time chart (see issue #1235).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.NodeSensorGroup.#ctor(HSMCommon.Model.SensorType,System.Nullable{System.Int32},System.String,System.Collections.Generic.List{System.Guid})">
+            <summary>
+            A set of a node's descendant sensors that share the same sensor type and effective unit,
+            and can therefore be overlaid on a single multi-line time chart (see issue #1235).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.TreeViewModel.NodeSensorGroup.Key">
+            <summary>Stable identifier of the (type, unit) group — used by the client's group selector.</summary>
+        </member>
         <member name="P:HSMServer.Model.TreeViewModel.ProductNodeViewModel.DisabledSensorGroups">
             Sensor groups currently disabled for agents of this product (#1198).
+        </member>
+        <member name="P:HSMServer.Model.TreeViewModel.SensorNodeViewModel.EffectiveUnitCode">
+            <summary>The unit that identifies this sensor's chart scale: the rate display unit for Rate
+            sensors, otherwise the selected unit. Returned as the raw enum code (no reflection). Note this
+            mixes two enums (RateDisplayUnit vs Unit), so it is only unambiguous when the sensor Type is
+            also part of the key it is compared under (as in GetComparableChildGroups).</summary>
+        </member>
+        <member name="P:HSMServer.Model.TreeViewModel.SensorNodeViewModel.EffectiveUnitLabel">
+            <summary>Display label for <see cref="P:HSMServer.Model.TreeViewModel.SensorNodeViewModel.EffectiveUnitCode"/> (e.g. "%", "MB/sec"), or empty.
+            Must branch on the SAME source as <see cref="P:HSMServer.Model.TreeViewModel.SensorNodeViewModel.EffectiveUnitCode"/>: a Rate sensor without a
+            DisplayUnit has code <c>null</c>, so its label is empty too — never the SelectedUnit, or two
+            such sensors would share the <c>null</c> group key yet show different (conflicting) units.</summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.TreeViewModel.GetComparableChildGroups(System.Guid)">
+            <summary>
+            Groups a node's chart-comparable descendant sensors by (type, effective unit) and returns
+            the groups that contain at least two sensors, ordered from the largest group to the smallest.
+            Drives the overlay endpoint; use <see cref="M:HSMServer.Model.TreeViewModel.TreeViewModel.HasComparableChildGroup(System.Guid)"/> for tab visibility.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.TreeViewModel.TreeViewModel.HasComparableChildGroup(System.Guid)">
+            <summary>
+            Cheap existence check for the node "Chart" tab: returns true as soon as any (type, unit) group
+            reaches two sensors. Runs on every node selection, so it avoids the labels/sort/allocation of
+            <see cref="M:HSMServer.Model.TreeViewModel.TreeViewModel.GetComparableChildGroups(System.Guid)"/>.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.TreeViewModels.SelectedNodeViewModel.ShowChartTab">
+            <summary>
+            True when the selected node has at least one group of >= 2 comparable child sensors to overlay
+            on the node "Chart" tab (issue #1235). Set by the controller after the node is connected.
+            </summary>
         </member>
         <member name="T:HSMServer.ServerConfiguration.AgentConfig">
             <summary>

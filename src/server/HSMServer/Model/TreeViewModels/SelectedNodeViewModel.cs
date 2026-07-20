@@ -17,6 +17,12 @@ public class SelectedNodeViewModel
 
     public bool HasChildren => _nodes.VisibleItems?.Count > 0 || _sensors.VisibleItems?.Count > 0;
 
+    /// <summary>
+    /// True when the selected node has at least one group of >= 2 comparable child sensors to overlay
+    /// on the node "Chart" tab (issue #1235). Set by the controller after the node is connected.
+    /// </summary>
+    public bool ShowChartTab { get; set; }
+
 
     public void ConnectNode(ProductNodeViewModel newNode)
     {
@@ -43,7 +49,13 @@ public class SelectedNodeViewModel
             return;
 
         _selectedNode = newSelected;
-        
+
+        // Reset whenever the selected node/folder changes (this instance is reused) so a previous node's
+        // true can't leak onto the next selection; the node branch of SelectNode re-enables it, folders
+        // leave it off. Selecting a sensor never calls this, but that's safe: the sensor panel
+        // (_NodeDataPanel) doesn't render _ChildrenPanel — only _Node.cshtml / _Folder.cshtml do.
+        ShowChartTab = false;
+
         _nodes.Reset();
         _sensors.Reset();
     }

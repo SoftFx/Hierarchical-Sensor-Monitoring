@@ -12,12 +12,14 @@ using HSMServer.Model.Model.History;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.JsonConverters;
 using System.Linq;
@@ -60,6 +62,21 @@ namespace HSMServer.Controllers
         private const int LatestHistoryCount = -300;
         private const int SensorValuesCount = -5000;
 
+        // Latest N values per child sensor for the node overlay chart (issue #1235). Negative = take the
+        // most recent within the window; bounds the payload when many children are overlaid at once.
+        private const int NodeChartMaxPointsPerSensor = -2000;
+
+        // Max child sensors charted on one node chart. Because the endpoint shortlists candidates by their
+        // current value BEFORE reading history (see NodeChartHistory), this is also the number of history
+        // reads per request — the DB fan-out is bounded to the shortlist, not the whole comparable group.
+        // Kept small so the overlay stays readable and one tab open / period change is cheap.
+        private const int MaxSensorsPerChart = 15;
+
+        // Max concurrent per-sensor history reads for one node chart request. Bounds DB pressure while
+        // cutting latency from the sum of all reads toward the slowest.
+        private const int NodeChartReadConcurrency = 8;
+
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
 
@@ -171,6 +188,208 @@ namespace HSMServer.Controllers
         {
             StoredUser.History.Reload(model);
         }
+
+        /// <summary>
+        /// Node-level overlay chart (issue #1235): returns the node's comparable child sensors as one line
+        /// series each over the chosen window. Descendants are grouped by (type, unit); the operator picks
+        /// which group with <c>GroupKey</c> (default: the largest), and within it the top
+        /// <c>MaxSensorsPerChart</c> children by current value are charted. Read-only; children with no data
+        /// in the window are omitted (drawn with gaps, never zero-filled).
+        /// </summary>
+        [HttpPost]
+        public async Task<JsonResult> NodeChartHistory([FromBody] NodeChartRequest request)
+        {
+            if (request is null)
+                return _emptyJsonResult;
+
+            var nodeId = request.NodeId.ToGuid();
+
+            if (!_tree.Nodes.TryGetValue(nodeId, out var node))
+                return _emptyJsonResult;
+
+            // The node id comes from the client and _tree is a global singleton, so resolving it proves
+            // nothing about access: gate the read on the caller's role for the owning product. Matters more
+            // here than for the per-sensor endpoints — one id fans out to a whole subtree's history plus its
+            // structural metadata (group list, counts, relative paths).
+            if (!CurrentUser.IsProductAvailable(node.RootProduct.Id))
+                return _emptyJsonResult;
+
+            var groups = _tree.GetComparableChildGroups(nodeId);
+
+            if (groups.Count == 0)
+                return new JsonResult(new { error = false, series = Array.Empty<object>() }, _serializationsOptions);
+
+            // The operator picks which comparable (type, unit) group to overlay; default to the largest.
+            var group = groups.FirstOrDefault(g => g.Key == request.GroupKey) ?? groups[0];
+            var from = request.From.ToUtcKind();
+            var to = request.To.ToUtcKind();
+            var nodePath = node.FullPath;
+
+            // Perf: don't read every child's history just to rank by peak. A large comparable group (e.g.
+            // per-process CPU) can be dozens–hundreds of sensors, and reading them all on every tab open /
+            // period change is a heavy DB burst whose results are then mostly discarded. Instead shortlist
+            // the top MaxSensorsPerChart by each child's CURRENT value — already in memory, no DB read —
+            // and read history only for those. Ranking by live value (not tree order) still surfaces the
+            // hot intermittent series (the tree-order-first approach collapsed the chart to one line,
+            // because the first ids by path are usually idle). Tradeoff: a child that peaked earlier in the
+            // window but is idle now can fall outside the shortlist — acceptable for the recent-window case.
+            var candidates = group.SensorIds
+                .Select(id => _tree.Sensors.TryGetValue(id, out var s) ? s : null)
+                .Where(s => s is not null)
+                .OrderByDescending(s => TryGetScalar(s.LastValue, out var v) ? v : double.NegativeInfinity)
+                .Take(MaxSensorsPerChart)
+                .ToList();
+
+            // Reads are independent, so they run with bounded concurrency — safe here because the comparable
+            // types exclude File, the only sensor kind with shared read state.
+            using var readGate = new SemaphoreSlim(NodeChartReadConcurrency);
+
+            var reads = candidates.Select(async sensor =>
+            {
+                await readGate.WaitAsync();
+
+                try
+                {
+                    var (points, truncated) = await ReadNodeChartPoints(sensor, from, to);
+
+                    // no data in the window -> omitted, not zero-filled
+                    return points.Count == 0
+                        ? null
+                        : new NodeChartSeries(sensor.Id, GetNodeRelativeLabel(nodePath, sensor.FullPath), points, truncated);
+                }
+                catch (Exception ex)
+                {
+                    // One malformed/faulting child must not fault Task.WhenAll and 500 the whole overlay:
+                    // drop just that series (same outcome as an empty window) and keep the rest of the chart.
+                    _logger.Error(ex, $"Node chart: failed to read history for sensor {sensor.Id}");
+                    return null;
+                }
+                finally
+                {
+                    readGate.Release();
+                }
+            });
+
+            // Order the rendered lines by in-window peak (the shortlist is already <= MaxSensorsPerChart).
+            var shown = (await Task.WhenAll(reads))
+                .Where(s => s is not null)
+                .OrderByDescending(s => s.Points.Max(p => p.Value))
+                .ToList();
+
+            var series = shown.Select(s => new
+            {
+                id = s.Id,
+                label = s.Label,
+                values = s.Points.Select(p => new { time = p.Time, value = p.Value }),
+            });
+
+            var notes = new List<string>(2);
+
+            if (group.SensorIds.Count > MaxSensorsPerChart)
+                notes.Add($"Group has {group.SensorIds.Count} sensors; charting the {MaxSensorsPerChart} with the highest current value.");
+
+            if (shown.Any(s => s.Truncated))
+                notes.Add($"Dense series show only their most recent {-NodeChartMaxPointsPerSensor} points; earlier data in the window may be omitted.");
+
+            return new JsonResult(new
+            {
+                error = false,
+                unit = group.UnitLabel,
+                note = notes.Count > 0 ? string.Join(" ", notes) : null,
+                selectedKey = group.Key,
+                groups = groups.Select(g => new
+                {
+                    key = g.Key,
+                    label = GetGroupLabel(g),
+                    count = g.SensorIds.Count,
+                }),
+                series,
+            }, _serializationsOptions);
+        }
+
+        private static string GetGroupLabel(NodeSensorGroup group)
+        {
+            var unit = string.IsNullOrEmpty(group.UnitLabel) ? "no unit" : group.UnitLabel;
+
+            return $"{GetFriendlyType(group.Type)}, {unit} ({group.SensorIds.Count})";
+        }
+
+        private static string GetFriendlyType(SensorType type) => type switch
+        {
+            SensorType.IntegerBar => "Integer bar",
+            SensorType.DoubleBar => "Double bar",
+            _ => type.ToString(),
+        };
+
+        private async Task<(List<(DateTime Time, double Value)> Points, bool Truncated)> ReadNodeChartPoints(SensorNodeViewModel sensor, DateTime from, DateTime to)
+        {
+            var maxPoints = -NodeChartMaxPointsPerSensor;
+
+            // Over-read by one (a negative count returns the most-recent |N|) so we can tell "hit the cap"
+            // (older points in the window were dropped) from "the window holds exactly maxPoints" (nothing
+            // dropped) — otherwise the truncation note false-positives at exactly maxPoints.
+            var rawValues = await GetSensorValues(sensor.EncodedId, from, to, NodeChartMaxPointsPerSensor - 1);
+
+            var truncated = rawValues.Count > maxPoints;
+
+            var points = new List<(DateTime Time, double Value)>(rawValues.Count);
+
+            foreach (var raw in rawValues)
+            {
+                var display = sensor.ToDisplayValue(raw);
+
+                if (TryGetScalar(display, out var scalar))
+                    points.Add((display.Time.ToUniversalTime(), scalar));
+            }
+
+            points.Sort((a, b) => a.Time.CompareTo(b.Time));
+
+            // Drop the over-read extra(s) so the displayed series honors the cap (oldest first after sort).
+            if (points.Count > maxPoints)
+                points.RemoveRange(0, points.Count - maxPoints);
+
+            return (points, truncated);
+        }
+
+        private static bool TryGetScalar(BaseValue value, out double scalar)
+        {
+            switch (value)
+            {
+                // NaN/Infinity would serialize as JSON "NaN"/"Infinity" string literals (AllowNamedFloating-
+                // PointLiterals) and Plotly can't plot a string as a number, so drop non-finite points as if
+                // there were no data. int/int-bar means are always finite.
+                case BaseValue<double> doubleValue:
+                    scalar = doubleValue.Value;
+                    return double.IsFinite(scalar);
+                case BaseValue<int> intValue:
+                    scalar = intValue.Value;
+                    return true;
+                case BarBaseValue<double> doubleBar:
+                    scalar = doubleBar.Mean;
+                    return double.IsFinite(scalar);
+                case BarBaseValue<int> intBar:
+                    scalar = intBar.Mean;
+                    return true;
+                default:
+                    scalar = 0;
+                    return false;
+            }
+        }
+
+        private static string GetNodeRelativeLabel(string nodePath, string sensorPath)
+        {
+            // Require a '/' boundary so node "a/b" doesn't match sensor "a/bc/d" (can't happen for ids from
+            // GetAllNodeSensors, which are true descendants, but keeps the intent explicit).
+            if (!string.IsNullOrEmpty(nodePath)
+                && sensorPath.Length > nodePath.Length
+                && sensorPath[nodePath.Length] == '/'
+                && sensorPath.StartsWith(nodePath, StringComparison.Ordinal))
+                return sensorPath.Substring(nodePath.Length + 1);
+
+            return sensorPath;
+        }
+
+        private sealed record NodeChartSeries(Guid Id, string Label, List<(DateTime Time, double Value)> Points, bool Truncated);
 
         [HttpGet]
         public IActionResult GetBackgroundSensorInfo([FromQuery] Guid currentId, [FromQuery] bool isStatusService = false)

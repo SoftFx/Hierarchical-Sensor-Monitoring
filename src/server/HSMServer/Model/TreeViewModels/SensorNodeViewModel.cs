@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Collections.Generic;
+using HSMCommon.Extensions;
 using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensors;
@@ -61,6 +62,22 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsServiceStatus => Name == ServiceStatusName;
 
         public RateDisplayUnit? DisplayUnit { get; private set; }
+
+        /// <summary>The unit that identifies this sensor's chart scale: the rate display unit for Rate
+        /// sensors, otherwise the selected unit. Returned as the raw enum code (no reflection). Note this
+        /// mixes two enums (RateDisplayUnit vs Unit), so it is only unambiguous when the sensor Type is
+        /// also part of the key it is compared under (as in GetComparableChildGroups).</summary>
+        public int? EffectiveUnitCode => Type is SensorType.Rate
+            ? (DisplayUnit.HasValue ? (int)DisplayUnit.Value : null)
+            : (SelectedUnit.HasValue ? (int)SelectedUnit.Value : null);
+
+        /// <summary>Display label for <see cref="EffectiveUnitCode"/> (e.g. "%", "MB/sec"), or empty.
+        /// Must branch on the SAME source as <see cref="EffectiveUnitCode"/>: a Rate sensor without a
+        /// DisplayUnit has code <c>null</c>, so its label is empty too — never the SelectedUnit, or two
+        /// such sensors would share the <c>null</c> group key yet show different (conflicting) units.</summary>
+        public string EffectiveUnitLabel => Type is SensorType.Rate
+            ? (DisplayUnit.HasValue ? DisplayUnit.Value.GetDisplayName() : string.Empty)
+            : (SelectedUnit?.GetDisplayName() ?? string.Empty);
 
         public DateTime CreationTime { get; private set; }
 

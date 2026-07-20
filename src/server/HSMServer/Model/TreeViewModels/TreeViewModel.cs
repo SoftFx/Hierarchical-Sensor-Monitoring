@@ -1,4 +1,5 @@
-﻿using HSMServer.Authentication;
+﻿using HSMCommon.Model;
+using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.TableOfChanges;
@@ -96,6 +97,82 @@ namespace HSMServer.Model.TreeViewModel
 
             return sensors;
         }
+
+        /// <summary>
+        /// Groups a node's chart-comparable descendant sensors by (type, effective unit) and returns
+        /// the groups that contain at least two sensors, ordered from the largest group to the smallest.
+        /// Drives the overlay endpoint; use <see cref="HasComparableChildGroup"/> for tab visibility.
+        /// </summary>
+        internal List<NodeSensorGroup> GetComparableChildGroups(Guid nodeId)
+        {
+            // Key on the raw enum codes (cheap struct equality) — no reflection in this per-sensor loop.
+            // The display label is formatted once per surviving group.
+            var groups = new Dictionary<(SensorType Type, int? Unit), List<Guid>>();
+
+            foreach (var sensorId in GetAllNodeSensors(nodeId))
+            {
+                if (!Sensors.TryGetValue(sensorId, out var sensor) || !IsComparableChartSensor(sensor))
+                    continue;
+
+                var key = (sensor.Type, sensor.EffectiveUnitCode);
+
+                if (!groups.TryGetValue(key, out var ids))
+                    groups[key] = ids = new List<Guid>();
+
+                ids.Add(sensorId);
+            }
+
+            var result = new List<NodeSensorGroup>();
+
+            foreach (var (key, ids) in groups)
+            {
+                if (ids.Count < 2)
+                    continue;
+
+                var unitLabel = Sensors.TryGetValue(ids[0], out var first) ? first.EffectiveUnitLabel : string.Empty;
+                result.Add(new NodeSensorGroup(key.Type, key.Unit, unitLabel, ids));
+            }
+
+            // Final tie-break on the unique group Key so the default group (groups[0]) and the selector
+            // order are stable across requests: groups come from an unordered Dictionary, and count +
+            // UnitLabel alone tie for e.g. a unit-less Integer vs a unit-less Double group (both label "").
+            return result.OrderByDescending(group => group.SensorIds.Count)
+                         .ThenBy(group => group.UnitLabel)
+                         .ThenBy(group => group.Key, StringComparer.Ordinal)
+                         .ToList();
+        }
+
+        /// <summary>
+        /// Cheap existence check for the node "Chart" tab: returns true as soon as any (type, unit) group
+        /// reaches two sensors. Runs on every node selection, so it avoids the labels/sort/allocation of
+        /// <see cref="GetComparableChildGroups"/>.
+        /// </summary>
+        internal bool HasComparableChildGroup(Guid nodeId)
+        {
+            var counts = new Dictionary<(SensorType Type, int? Unit), int>();
+
+            foreach (var sensorId in GetAllNodeSensors(nodeId))
+            {
+                if (!Sensors.TryGetValue(sensorId, out var sensor) || !IsComparableChartSensor(sensor))
+                    continue;
+
+                var key = (sensor.Type, sensor.EffectiveUnitCode);
+
+                if (counts.TryGetValue(key, out var count)) // already seen once -> this is the second
+                    return true;
+
+                counts[key] = count + 1;
+            }
+
+            return false;
+        }
+
+        // v1 overlays numeric line-able sensors only; enum/bool/version/timespan/string and service
+        // status/alive step charts are out of scope here (tracked for later aggregation strategies).
+        private static bool IsComparableChartSensor(SensorNodeViewModel sensor) =>
+            !sensor.IsServiceStatus && !sensor.IsServiceAlive &&
+            sensor.Type is SensorType.Integer or SensorType.Double or SensorType.Rate
+                        or SensorType.IntegerBar or SensorType.DoubleBar;
 
         internal Guid GetBackgroundPlotId(SensorNodeViewModel sensor, bool isStatusService)
         {

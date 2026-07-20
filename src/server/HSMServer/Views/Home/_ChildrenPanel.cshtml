@@ -5,6 +5,7 @@
     var listDivId = $"list_{nodeId}";
     var gridDivId = $"grid_{nodeId}";
     var journalDivId = $"journal_{nodeId}";
+    var chartDivId = $"chart_{nodeId}";
 }
 
 
@@ -15,6 +16,12 @@
     <li class='nav-item'>
         <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getListPage(`listSensors`);getListPage(`listNodes`)" href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
     </li>
+    @if (Model.ShowChartTab)
+    {
+        <li class="nav-item">
+            <a id="chartLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="loadNodeChart('@nodeId')" href='#@chartDivId' role="tab"><i class="fa-solid fa-chart-line"></i> Chart</a>
+        </li>
+    }
     <li class="nav-item">
         <a id="journalLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="initializeJournal(NodeType.Node);" href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
     </li>
@@ -34,6 +41,12 @@
             <label>No data</label>
         </div>
     </div>
+    @if (Model.ShowChartTab)
+    {
+        <div class='tab-pane fade' id=@chartDivId role="tabpanel">
+            @await Html.PartialAsync("_NodeChartTabContent", nodeId)
+        </div>
+    }
     <div class='tab-pane fade mt-2' id=@journalDivId role="tabpanel">
         <table class="display w-100 test" id="journal_table_@nodeId">
             <thead>
