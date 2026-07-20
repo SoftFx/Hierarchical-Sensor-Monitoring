@@ -1,6 +1,6 @@
 # Feature: Per-product HSM Agent download (server side)
 
-> Owner: server | Last reviewed: 2026-06-23 | Canonical: yes
+> Owner: server | Last reviewed: 2026-07-20 | Canonical: yes
 > Scope: The admin-only server endpoint + UI that hand an operator a ready-to-run, per-product HSM Agent
 > bundle (epic #1167, W6/W7). The agent product itself (the C++ Windows service) is `agent/feature.md`.
 
@@ -35,7 +35,7 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
 | Server settings "Agent connection URL" + "Allow untrusted server certificate" + "Report top processes by CPU" | `HSMServer/ServerConfiguration/Sections/AgentConfig.cs` (`ExternalConnectionUrl`, `AllowUntrustedCertificate`, `EnableTopCpuProcesses`) (+ `IServerConfig`/`ServerConfig`) |
 | Settings UI (Agent tab) | `Views/Configuration/_Agent.cshtml`, `Views/Configuration/Index.cshtml`, `AgentSettingsViewModel`, `ConfigurationController.SaveAgentSettings` |
 | Download button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
-| Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` (staged by `server-build.yml` before publish, W9) |
+| Exe drop-point | `HSMServer/wwwroot/agent/hsm-agent.exe` + `version.txt` (gitignored; staged by `server-build.yml` — see *Packaging*) |
 | Key selection / URL resolution (pure, testable) | `Model/Agent/AgentKeySelector.cs`, `Model/Agent/AgentConnectionResolver.cs` |
 | Tests | `tests/HSMServer.Core.Tests/AgentInstallerBundleTests.cs` (7: incl. topCpu on/off) + `AgentDownloadLogicTests.cs` (13: key selection + URL resolution) |
 
@@ -61,12 +61,40 @@ The result is written into the bundle's `config.json`, which the agent maps onto
 
 ## Behavior notes
 
-- The signed exe is **staged into `wwwroot/agent/` by `server-build.yml`** (it builds the agent on the
-  Windows release runner and copies it in before `dotnet publish`, so the published/container server
-  serves a real bundle). If the binary is absent the endpoint returns **503** with a clear message —
-  config/script generation + key/URL selection are unit-tested independently of the binary.
+- If the binary is absent the endpoint returns **503** with a clear message — config/script generation +
+  key/URL selection are unit-tested independently of the binary. See *Packaging* below for how the
+  binary gets there.
 - The generated `config.json` matches the agent's config schema; only `server.address` + `server.accessKey`
   are required, the rest defaults (`identity.computerName: "auto"`, all sensor groups on).
+
+## Packaging: how the exe reaches a release (#1266)
+
+`hsm-agent.exe` and `version.txt` are **generated, gitignored** build outputs, so every path that
+produces a shippable server has to stage them explicitly. `server-build.yml` has two such paths, and
+they are not the same job:
+
+| Path | How it gets the pair |
+|---|---|
+| Windows zip artifact / GitHub release (`build`, windows-latest) | Builds `src/agent` with vcpkg and copies the exe in; parses `project(HsmAgent VERSION …)` from `src/agent/CMakeLists.txt` into `version.txt`, before `dotnet publish` |
+| Docker image (`publish-docker-image`, ubuntu-latest) | Downloads the `hsm-agent-staged` artifact into `wwwroot/agent/` before its own `dotnet publish` |
+
+The image job publishes from its **own checkout**, not from the Windows job's output, and a native
+Windows service cannot be built on an ubuntu runner — so the artifact hand-off is the only way the
+binary can reach the image. Before this was wired up, every container release shipped a UI button that
+could only answer 503, which is exactly what QA hit on 3.40.
+
+Both paths are guarded, because a missing binary is otherwise invisible until a user clicks Download:
+the Windows job fails if the publish output lacks either file, and the image job fails if
+`/app/wwwroot/agent/` inside the built image lacks them.
+
+**`version.txt` must always describe the exe beside it.** `GET /api/agent/version` and the
+`update-available` directive on the hot data path (`SensorsController`) both read it, so a value that
+does not match the staged binary silently disables the self-update channel (#1174) rather than failing
+loudly. It is derived from the agent's CMake version at stage time, never hand-maintained. With nothing
+staged, both readers fall back to `0.0.0`.
+
+For a local image that mirrors CI, `scripts/local-docker-build.ps1 -IncludeAgent` stages the same pair
+(requires `VCPKG_ROOT` + CMake); without the flag the script warns and the endpoint 503s.
 
 ## Out of scope (follow-up)
 

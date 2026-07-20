@@ -95,7 +95,9 @@ defaults. Maps onto `CollectorOptions` + runtime group gates:
 
 Server-driven auto-upgrade of the running Windows service. The server exposes:
 - `GET /api/agent/version` — public, returns `{ version, sha256, updateEnabled }`. Version is read from
-  `wwwroot/agent/version.txt` (staged by CI). SHA-256 is computed from the staged exe at request time.
+  `wwwroot/agent/version.txt` — gitignored, derived from `project(HsmAgent VERSION …)` when CI stages the
+  exe, so it always matches the staged binary (see `server/agent-download/feature.md` → *Packaging*; a
+  stale value here disables this whole channel silently). SHA-256 is computed from the staged exe at request time.
   `updateEnabled` mirrors `ServerConfig.Agent.AutoUpdateEnabled` (admin toggle, default false).
 - `GET /api/agent/exe` — Key-header auth (agent's own access key), returns the binary stream with
   `X-Agent-Sha256` response header.

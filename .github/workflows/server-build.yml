@@ -70,10 +70,42 @@ jobs:
           New-Item -ItemType Directory -Force -Path src/server/HSMServer/wwwroot/agent | Out-Null
           Copy-Item $exe.FullName -Destination src/server/HSMServer/wwwroot/agent/hsm-agent.exe -Force
           if (-not (Test-Path src/server/HSMServer/wwwroot/agent/hsm-agent.exe)) { throw "agent exe missing in wwwroot" }
-          Write-Host "Staged agent: $($exe.FullName) -> wwwroot/agent/hsm-agent.exe"
+          # version.txt must describe the exe staged right above. Both GET /api/agent/version and the
+          # data-path update directive (SensorsController) read it, so a value that does not match the
+          # staged binary silently disables the self-update channel (#1174). Derive it from the agent's
+          # CMake project version — the same source agent-windows-build.yml uses.
+          $match = Select-String -Path src/agent/CMakeLists.txt -Pattern 'project\(HsmAgent VERSION ([0-9][^\s)]*)' | Select-Object -First 1
+          if (-not $match) { throw "could not parse 'project(HsmAgent VERSION ...)' from src/agent/CMakeLists.txt" }
+          $version = $match.Matches[0].Groups[1].Value
+          Set-Content -Path src/server/HSMServer/wwwroot/agent/version.txt -Value $version -NoNewline -Encoding ascii
+          Write-Host "Staged agent $version : $($exe.FullName) -> wwwroot/agent/hsm-agent.exe"
 
       - name: Publish HSMServer
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
+
+      # Release guard (#1266). The product UI shows "Download agent" unconditionally, so a publish
+      # output without the staged binary ships a button that can only answer 503. Fail the build here
+      # instead of finding out from QA.
+      - name: Verify published output contains the agent bundle
+        shell: pwsh
+        run: |
+          $dir = Join-Path "${{ env.OUTPUT_FOLDER }}" "wwwroot/agent"
+          foreach ($name in @("hsm-agent.exe", "version.txt")) {
+            $path = Join-Path $dir $name
+            if (-not (Test-Path $path)) { throw "publish output is missing wwwroot/agent/$name" }
+            if ((Get-Item $path).Length -eq 0) { throw "publish output has an empty wwwroot/agent/$name" }
+          }
+          Write-Host "staged agent version: $(Get-Content (Join-Path $dir 'version.txt'))"
+          Get-ChildItem $dir | Format-Table Name, Length
+
+      # The Linux image job cannot build the agent (it is a native Windows service) and its checkout
+      # has no exe — wwwroot/agent/hsm-agent.exe is gitignored. Hand it the directory staged here.
+      - name: Upload staged agent for the image job
+        uses: actions/upload-artifact@v4
+        with:
+          name: hsm-agent-staged
+          path: src/server/HSMServer/wwwroot/agent
+          if-no-files-found: error
 
       - id: save-version
         name: Try to get server version
@@ -206,8 +238,42 @@ jobs:
       - name: Build full main repos name
         run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
 
+      # #1266: this job publishes from its own checkout rather than from the build job's output, and
+      # wwwroot/agent/hsm-agent.exe is gitignored — so without this download the image shipped a
+      # "Download agent" button that could only answer 503. The agent is a native Windows service and
+      # cannot be built on this runner, so the binary has to arrive as an artifact.
+      - name: Download staged agent from the Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: hsm-agent-staged
+          path: src/server/HSMServer/wwwroot/agent
+
+      - name: Verify staged agent before publish
+        run: |
+          set -euo pipefail
+          ls -l src/server/HSMServer/wwwroot/agent
+          test -s src/server/HSMServer/wwwroot/agent/hsm-agent.exe
+          test -s src/server/HSMServer/wwwroot/agent/version.txt
+
       - name: Build Linux image for Docker
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
+
+      # Guard what the release actually ships — the image layer, not the publish folder it came from.
+      # The app dir is read back from the image config instead of hardcoding /app, so retargeting
+      # ContainerWorkingDirectory later cannot turn this guard into a no-op.
+      - name: Verify agent binary inside the image
+        env:
+          # Passed through the environment rather than interpolated into the script body: the value
+          # comes from another job's output, and ${{ }} inside a shell script is a splice, not a string.
+          IMAGE_VERSION: ${{ needs.build.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          img="${DockerMainName}:${IMAGE_VERSION}"
+          app="$(docker inspect --format '{{.Config.WorkingDir}}' "$img")"
+          app="${app:-/app}"
+          echo "image app dir: $app"
+          docker run --rm --entrypoint /bin/sh "$img" -c \
+            "ls -l '$app/wwwroot/agent' && test -s '$app/wwwroot/agent/hsm-agent.exe' && test -s '$app/wwwroot/agent/version.txt'"
 
       - name: Push VERSION image to remote Docker
         run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"

@@ -106,7 +106,13 @@ try {
         if (-not $exe) { throw "hsm-agent.exe not found after build" }
         New-Item -ItemType Directory -Force -Path src/server/HSMServer/wwwroot/agent | Out-Null
         Copy-Item $exe.FullName -Destination src/server/HSMServer/wwwroot/agent/hsm-agent.exe -Force
-        Write-Host "Staged agent: $($exe.FullName)"
+        # Same pairing CI enforces: the staged version must describe the staged exe, or the update
+        # directive on the data path advertises a version nobody has (#1266).
+        $match = Select-String -Path src/agent/CMakeLists.txt -Pattern 'project\(HsmAgent VERSION ([0-9][^\s)]*)' | Select-Object -First 1
+        if (-not $match) { throw "could not parse 'project(HsmAgent VERSION ...)' from src/agent/CMakeLists.txt" }
+        $agentVersion = $match.Matches[0].Groups[1].Value
+        Set-Content -Path src/server/HSMServer/wwwroot/agent/version.txt -Value $agentVersion -NoNewline -Encoding ascii
+        Write-Host "Staged agent $agentVersion : $($exe.FullName)"
     } else {
         Write-Warning "-IncludeAgent not set — /api/agent/installer will 503. Pass the flag to mirror CI exactly."
     }
