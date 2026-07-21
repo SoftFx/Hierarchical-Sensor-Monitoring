@@ -57,12 +57,12 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return View(model);
 
-            if (await ChatsManager.TryUpdate(model.ToUpdate()))
-                await SyncFolders(model);
+            if (!await ChatsManager.TryUpdate(model.ToUpdate()))
+                return View(model);
 
-            return ChatsManager.TryGetValue(model.Id, out var chat)
-                ? View(new ChatViewModel(chat, BuildChatFolders(chat)))
-                : RedirectToAction(nameof(ProductController.Index), ViewConstants.ProductController);
+            await SyncFolders(model);
+
+            return RedirectToAction(nameof(Index), ViewConstants.NotificationsController);
         }
 
         [HttpGet]
