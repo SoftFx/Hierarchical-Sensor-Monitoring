@@ -128,24 +128,21 @@
     </div>
 </div>
 
-<form id="removeChat_form" method="post"
-      action="@Url.Action(nameof(NotificationsController.RemoveChat), ViewConstants.NotificationsController)">
-    @Html.AntiForgeryToken()
-    <input type="hidden" name="id" id="removeChat_id" />
-</form>
-
-
 <script>
     $(function () {
         // Remove — opens the shared _ConfirmationModal (rendered by _Layout.cshtml) instead of
-        // window.confirm, matching the Users page delete pattern. The hidden form POSTs to the
-        // existing NotificationsController.RemoveChat handler — same contract as before.
+        // window.confirm, matching the Users page delete pattern.
         //
         // Escape chat.Name before interpolating into the modal title/body — confirmation.js feeds
         // both through jQuery .append(), which parses the string as HTML. chat.Name is user-controlled
         // with no regex constraint (only length), so an unescaped name like `<img onerror=...>` would
         // execute when the modal renders. Pre-#1281 the remove flow used window.confirm(), which
         // stringifies — this restore-parity guard keeps that contract.
+        //
+        // AJAX (vs the old hidden-form submit) keeps the page usable: success reloads the list,
+        // error toasts and leaves the row. RemoveChat used to return Task → empty body → blank
+        // page; now it returns Ok/NotFound, so success/error are explicit. The auth filter
+        // returns 403 for unauthorized AJAX callers, which lands here as `error`.
         $(document).off("click", "[id^=remove_]").on("click", "[id^=remove_]", function () {
             var id = this.id.substring("remove_".length);
             var rawName = $(this).attr("name") || "";
@@ -155,8 +152,13 @@
                 `Removing chat "${safeName}"`,
                 `Do you really want to remove chat "${safeName}"?`,
                 function () {
-                    $("#removeChat_id").val(id);
-                    $("#removeChat_form").submit();
+                    $.ajax({
+                        type: 'POST',
+                        url: '@Url.Action(nameof(NotificationsController.RemoveChat), ViewConstants.NotificationsController)',
+                        data: { id: id },
+                        success: function () { document.location.reload(); },
+                        error: function () { showToast(`Failed to remove chat "${safeName}".`); }
+                    });
                 }
             );
         });

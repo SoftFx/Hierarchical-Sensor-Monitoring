@@ -8,11 +8,15 @@ Start working on the GitHub issue specified in $ARGUMENTS (issue number).
 
 2. **Plan the fix** — read the issue body, explore the referenced files, and propose an implementation approach. Use plan mode if the change is non-trivial. Present the plan to the user for approval before writing code.
 
-3. **Create a feature branch** from `master`:
+3. **Create a feature branch** from `master`. First sync local master with the remote — a stale local master is the commonest cause of fixes that target a UI or API that no longer exists on `origin/master` (learned on #1297, where local master was 10+ commits behind and the fix landed against a UI that had already been replaced by a squash-merged PR the day before):
    ```
+   git fetch origin master
+   git checkout master
+   git pull --ff-only           # refuses if local master has diverged; never creates a merge commit
    git checkout -b feature/$ARGUMENTS-<short-slug> master
    ```
    Where `<short-slug>` is a 2-4 word kebab-case summary of the issue (e.g., `feature/1076-alert-schedule-unique-name`).
+   Sanity-check before committing: if the issue references specific UI patterns, file paths, or function signatures, confirm they exist at the chosen base. A mismatch usually means the base is stale — re-fetch and re-branch.
 
 4. **Implement the fix** — make the code changes according to the approved plan. Keep changes focused on the issue scope. Build to verify compilation.
 

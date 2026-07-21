@@ -91,8 +91,10 @@ namespace HSMServer.Controllers
             return RedirectToAction(nameof(Index), ViewConstants.NotificationsController);
         }
 
+        [HttpPost]
         [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
-        public async Task RemoveChat(Guid id) => await ChatsManager.TryRemove(new(id, CurrentInitiator));
+        public async Task<IActionResult> RemoveChat(Guid id) =>
+            await ChatsManager.TryRemove(new(id, CurrentInitiator)) ? Ok() : NotFound();
 
         [HttpGet]
         [FolderRoleFilterByFolderId(nameof(folderId), ProductRoleEnum.ProductManager)]
