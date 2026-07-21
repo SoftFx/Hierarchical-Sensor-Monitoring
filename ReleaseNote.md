@@ -1,25 +1,27 @@
 # HSM Server
 
-## Alerts
+## Notifications
+* Mattermost delivery shipped — third channel alongside Telegram and Slack. Per-folder chats deliver to any combination of the three.
+* Unified Chat entity: Telegram + Slack + Mattermost merged into a single per-folder Chat. LevelDB migration runs on startup; legacy entities preserved.
+* Chats promoted to a top-level Configuration menu entry.
+* Unbound chats are now accessible from any folder.
+* Per-channel Remove buttons and Send-test Slack/Mattermost in the chat editor.
+* Folder bindings shown as badges on the Chats list.
+* XSS hardening: chat names double-encoded in dropdown data attributes.
+* Chat edit save redirects to the Chats list; non-admin PMs no longer 401.
 
-* Inactivity Period is now a condition property inside the regular alert editor. The dedicated TTL section and "Add Inactivity Period" link are removed; every new alert defaults to Inactivity Period and the user can switch back to a regular property.
-* Per-node (Folder/Product) alert editor removed. Templates are the only supported path for non-leaf alerting.
-* TTL labels renamed to "Inactivity Period" across the UI.
-* Atomic AddPolicy / RemovePolicy serialized under the per-product lock — fixes a race on alert group creation.
-* TTL orphan-cleanup now gated on the batch initiator only, so mixed-initiator operations no longer drop TTL policies.
-* Alert template is preserved on partial DB failure during removal.
-* Template mutations are dispatched to each sensor's own queue.
-* Node-level TTL From-Parent is now bounded to the node's own Settings.TTL.
+## Alerts
+* Slack destinations appear in the Alert Template notification dropdown.
+* Saved TTL alert can be demoted back to a regular condition.
+* Mixed-type path templates blocked; stale template policies pruned on edit.
+
+## Folder nodes
+* New Chart tab overlays up to 20 comparable child sensors with a group/type/unit selector.
+
+## Security
+* DOMPurify upgraded 3.0.1 → 3.4.11 (HIGH XSS fixes).
+* Usernames limited to 64 characters across all creation flows.
+* Node Chart gated on caller's product access.
 
 ## Products
-
-* Duplicate DisplayName rejected on AddProductAsync.
-* Rename collision surfaced as a TaskResult error; products are no longer orphaned when a rename target name is taken.
-
-## Sensors
-
-* DB errors during AddSensor are surfaced and partial state is rolled back; a ChangeSensorEvent(Delete) is fired during rollback so the tree stays consistent.
-
-## History API
-
-* History API now returns TimeSpan / Version values directly instead of stringly-typed payloads.
+* "Download agent" action moved to the product edit page.
