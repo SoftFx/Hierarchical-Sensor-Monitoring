@@ -160,7 +160,9 @@ jobs:
             echo "Latest badge untouched — nothing to repair"
             exit 0
           fi
-          server_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '[.[] | select(.draft == false) | .tag_name | select(startswith("server-v"))][0]')
+          # Drafts and prereleases are excluded: GitHub's Latest badge can only sit on a full release,
+          # and this repo routinely publishes server prereleases (e.g. 3.40.29/3.40.30).
+          server_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '[.[] | select(.draft == false and .prerelease == false) | .tag_name | select(startswith("server-v"))][0]')
           if [ -z "$server_tag" ]; then
             echo "::error::this agent release grabbed the Latest badge and no server-v* release exists to give it back to"
             exit 1

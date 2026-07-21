@@ -124,7 +124,8 @@ try {
         } else {
             Write-Host "Downloading pinned agent release agent-v$pin ..."
             New-Item -ItemType Directory -Force -Path $agentDir | Out-Null
-            gh release download "agent-v$pin" -p hsm-agent.exe -p hsm-agent.exe.sha256 -D $agentDir --clobber
+            # Explicit repo: the release lives upstream, and gh must not resolve a fork's origin instead.
+            gh release download "agent-v$pin" --repo SoftFx/Hierarchical-Sensor-Monitoring -p hsm-agent.exe -p hsm-agent.exe.sha256 -D $agentDir --clobber
             if ($LASTEXITCODE -ne 0) { throw "gh release download agent-v$pin failed — does the release exist and is gh authenticated?" }
             $shaFile = Join-Path $agentDir "hsm-agent.exe.sha256"
             $expected = ((Get-Content $shaFile -Raw).Trim() -split '\s+')[0]
