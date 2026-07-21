@@ -22,6 +22,10 @@ on:
     tags:
       - 'agent-v*'
 
+# One publish at a time per tag; two close tag pushes must not interleave their release steps.
+concurrency:
+  group: agent-release-${{ github.ref }}
+
 permissions:
   contents: write # create the GitHub Release
 
