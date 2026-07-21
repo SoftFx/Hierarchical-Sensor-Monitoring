@@ -124,6 +124,17 @@ jobs:
           set -euo pipefail
           version="${GITHUB_REF_NAME#agent-v}"
           sha=$(cut -d' ' -f1 staging/hsm-agent.exe.sha256)
+          # Lane re-runs must not fail on "release already exists": a complete release is skipped, a
+          # partial one (create succeeded, an asset upload didn't) is reported for manual deletion —
+          # never silently kept, never auto-deleted.
+          have=$(gh release view "$GITHUB_REF_NAME" --json assets -q '[.assets[].name] | sort | join(",")' 2>/dev/null || echo "__absent__")
+          if [ "$have" = "hsm-agent.exe,hsm-agent.exe.sha256" ]; then
+            echo "release $GITHUB_REF_NAME already exists with both assets (lane re-run) — skipping create"
+            exit 0
+          elif [ "$have" != "__absent__" ]; then
+            echo "::error::release $GITHUB_REF_NAME exists but is incomplete (assets: '$have') — delete it (gh release delete $GITHUB_REF_NAME) and re-run"
+            exit 1
+          fi
           gh release create "$GITHUB_REF_NAME" \
             staging/hsm-agent.exe \
             staging/hsm-agent.exe.sha256 \
@@ -149,14 +160,21 @@ jobs:
             echo "Latest badge untouched — nothing to repair"
             exit 0
           fi
-          server_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases" -q '[.[] | select(.draft == false) | .tag_name | select(startswith("server-v"))][0]')
+          server_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '[.[] | select(.draft == false) | .tag_name | select(startswith("server-v"))][0]')
           if [ -z "$server_tag" ]; then
             echo "::error::this agent release grabbed the Latest badge and no server-v* release exists to give it back to"
             exit 1
           fi
           server_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$server_tag" -q .id)
           gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$server_id" -f make_latest=true > /dev/null
-          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name)
+          # Re-read with a short retry: the badge update may lag a moment behind the PATCH, and a
+          # propagation delay must not fail an otherwise-successful publish.
+          for attempt in 1 2 3; do
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name)
+            [ "$latest" = "$server_tag" ] && break
+            echo "attempt $attempt: Latest is still $latest, retrying..."
+            sleep 5
+          done
           if [ "$latest" != "$server_tag" ]; then
             echo "::error::failed to return the Latest badge to $server_tag (still $latest)"
             exit 1

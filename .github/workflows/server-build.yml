@@ -231,6 +231,7 @@ jobs:
       # answer 503. The agent is a native Windows service and cannot be built on this runner, so both
       # legs download the same pinned release; the sha check makes them byte-identical by construction.
       - name: Stage pinned HSM Agent release into wwwroot
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
