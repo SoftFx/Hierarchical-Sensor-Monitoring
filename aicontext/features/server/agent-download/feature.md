@@ -1,6 +1,6 @@
 # Feature: Per-product HSM Agent download (server side)
 
-> Owner: server | Last reviewed: 2026-07-20 | Canonical: yes
+> Owner: server | Last reviewed: 2026-07-21 | Canonical: yes
 > Scope: The admin-only server endpoint + UI that hand an operator a ready-to-run, per-product HSM Agent
 > bundle (epic #1167, W6/W7). The agent product itself (the C++ Windows service) is `agent/feature.md`.
 
@@ -67,34 +67,43 @@ The result is written into the bundle's `config.json`, which the agent maps onto
 - The generated `config.json` matches the agent's config schema; only `server.address` + `server.accessKey`
   are required, the rest defaults (`identity.computerName: "auto"`, all sensor groups on).
 
-## Packaging: how the exe reaches a release (#1266)
+## Packaging: the agent is a released artifact the server references (#1266, #1298)
 
-`hsm-agent.exe` and `version.txt` are **generated, gitignored** build outputs, so every path that
-produces a shippable server has to stage them explicitly. `server-build.yml` has two such paths, and
-they are not the same job:
+The agent ships through its **own release channel**, mirroring the collector's `collector-v*` model:
+pushing an `agent-v<version>` tag runs `agent-release.yml`, which fails unless the tag equals
+`project(HsmAgent VERSION …)`, builds `src/agent` (WERROR), runs ctest + the SCM service smoke, and
+publishes a GitHub Release (`--latest=false`) with `hsm-agent.exe` + `hsm-agent.exe.sha256`.
 
-| Path | How it gets the pair |
+The server names the agent it ships in one tracked line — `src/server/HSMServer/agent-release.txt`.
+`hsm-agent.exe` and `version.txt` in `wwwroot/agent/` stay **gitignored staged artifacts**; every
+shippable-server path downloads the pinned release, verifies the SHA-256, and stages the pair before
+`dotnet publish`:
+
+| Path | How it stages the pair |
 |---|---|
-| Windows zip artifact / GitHub release (`build`, windows-latest) | Builds `src/agent` with vcpkg and copies the exe in; parses `project(HsmAgent VERSION …)` from `src/agent/CMakeLists.txt` into `version.txt`, before `dotnet publish` |
-| Docker image (`publish-docker-image`, ubuntu-latest) | Downloads the `hsm-agent-staged` artifact into `wwwroot/agent/` before its own `dotnet publish` |
+| Windows zip artifact / GitHub release (`build`, windows-latest) | `gh release download agent-v<pin>` + sha check, before `dotnet publish` |
+| Docker image (`publish-docker-image`, ubuntu-latest) | Same step in its own checkout (a native Windows service cannot be built there) |
+| Local image (`scripts/local-docker-build.ps1`) | Same download by default; `-IncludeAgent` builds from source instead (dev override, needs vcpkg) |
 
-The image job publishes from its **own checkout**, not from the Windows job's output, and a native
-Windows service cannot be built on an ubuntu runner — so the artifact hand-off is the only way the
-binary can reach the image. Before this was wired up, every container release shipped a UI button that
-could only answer 503, which is exactly what QA hit on 3.40.
+**Nothing in the server pipeline compiles C++ anymore** — the server lane needs no vcpkg, and both CI
+legs are byte-identical by construction (same release asset, checksum-verified). This is also the
+signing seam (#1167): sign the exe in the release lane, and every consumer ships the signed bytes
+untouched (byte-identical invariant).
 
-Both paths are guarded, because a missing binary is otherwise invisible until a user clicks Download:
+Both legs are guarded, because a missing binary is otherwise invisible until a user clicks Download:
 the Windows job fails if the publish output lacks either file, and the image job fails if
-`/app/wwwroot/agent/` inside the built image lacks them.
+`/app/wwwroot/agent/` inside the built image lacks them (#1266 — before those guards, every container
+release shipped a UI button that could only answer 503, which is what QA hit on 3.40).
 
-**`version.txt` must always describe the exe beside it.** `GET /api/agent/version` and the
+**`version.txt` is derived from the pin, never hand-maintained.** `GET /api/agent/version` and the
 `update-available` directive on the hot data path (`SensorsController`) both read it, so a value that
 does not match the staged binary silently disables the self-update channel (#1174) rather than failing
-loudly. It is derived from the agent's CMake version at stage time, never hand-maintained. With nothing
-staged, both readers fall back to `0.0.0`.
+loudly. The release lane's tag==CMake guardrail makes pin == exe version. With nothing staged, both
+readers fall back to `0.0.0`.
 
-For a local image that mirrors CI, `scripts/local-docker-build.ps1 -IncludeAgent` stages the same pair
-(requires `VCPKG_ROOT` + CMake); without the flag the script warns and the endpoint 503s.
+**Shipping a newer agent:** bump `project(HsmAgent VERSION …)` in the change PR (rule in
+`src/agent/AGENTS.md`), push the matching `agent-v*` tag after merge, then bump `agent-release.txt`
+in a one-line PR. Server releases in between keep shipping the previous pin.
 
 ## Out of scope (follow-up)
 

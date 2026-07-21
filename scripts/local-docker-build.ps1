@@ -89,7 +89,9 @@ try {
     docker pull $DepsImage
     if ($LASTEXITCODE -ne 0) { throw "docker pull failed for $DepsImage" }
 
-    # --- Optional: build HSM Agent (mirrors CI; Windows-only, needs vcpkg) ---
+    # --- Stage the HSM Agent: pinned release by default (mirrors CI, #1298); -IncludeAgent builds
+    # --- it from source instead (dev override; Windows-only, needs vcpkg).
+    $agentDir = Join-Path $repoRoot "src/server/HSMServer/wwwroot/agent"
     if ($IncludeAgent) {
         if (-not $env:VCPKG_ROOT) {
             throw "-IncludeAgent requires VCPKG_ROOT env var pointing to a vcpkg checkout."
@@ -97,24 +99,41 @@ try {
         if (-not (Test-Tool "cmake")) {
             throw "-IncludeAgent requires CMake on PATH."
         }
-        Write-Host "Building HSM Agent into wwwroot (vcpkg + curl)..."
+        Write-Host "Building HSM Agent from source into wwwroot (vcpkg + curl)..."
         cmake -S src/agent -B build/agent "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
         if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
         cmake --build build/agent --config Release --parallel
         if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
         $exe = Get-ChildItem -Recurse -Path build/agent -Filter hsm-agent.exe | Select-Object -First 1
         if (-not $exe) { throw "hsm-agent.exe not found after build" }
-        New-Item -ItemType Directory -Force -Path src/server/HSMServer/wwwroot/agent | Out-Null
-        Copy-Item $exe.FullName -Destination src/server/HSMServer/wwwroot/agent/hsm-agent.exe -Force
+        New-Item -ItemType Directory -Force -Path $agentDir | Out-Null
+        Copy-Item $exe.FullName -Destination (Join-Path $agentDir "hsm-agent.exe") -Force
         # Same pairing CI enforces: the staged version must describe the staged exe, or the update
         # directive on the data path advertises a version nobody has (#1266).
         $match = Select-String -Path src/agent/CMakeLists.txt -Pattern 'project\(HsmAgent VERSION ([0-9][^\s)]*)' | Select-Object -First 1
         if (-not $match) { throw "could not parse 'project(HsmAgent VERSION ...)' from src/agent/CMakeLists.txt" }
         $agentVersion = $match.Matches[0].Groups[1].Value
-        Set-Content -Path src/server/HSMServer/wwwroot/agent/version.txt -Value $agentVersion -NoNewline -Encoding ascii
-        Write-Host "Staged agent $agentVersion : $($exe.FullName)"
+        Set-Content -Path (Join-Path $agentDir "version.txt") -Value $agentVersion -NoNewline -Encoding ascii
+        Write-Host "Staged agent $agentVersion (built from source): $($exe.FullName)"
     } else {
-        Write-Warning "-IncludeAgent not set — /api/agent/installer will 503. Pass the flag to mirror CI exactly."
+        # Same source of truth as server-build.yml: download the release named by the pin file and
+        # verify its checksum, so the local image carries the exact released bytes.
+        $pin = (Get-Content (Join-Path $repoRoot "src/server/HSMServer/agent-release.txt") -Raw).Trim()
+        if (-not (Test-Tool "gh")) {
+            Write-Warning "gh CLI not found — cannot download pinned agent release agent-v$pin; /api/agent/installer will 503. Install gh (and 'gh auth login') or pass -IncludeAgent."
+        } else {
+            Write-Host "Downloading pinned agent release agent-v$pin ..."
+            New-Item -ItemType Directory -Force -Path $agentDir | Out-Null
+            gh release download "agent-v$pin" -p hsm-agent.exe -p hsm-agent.exe.sha256 -D $agentDir --clobber
+            if ($LASTEXITCODE -ne 0) { throw "gh release download agent-v$pin failed — does the release exist and is gh authenticated?" }
+            $shaFile = Join-Path $agentDir "hsm-agent.exe.sha256"
+            $expected = ((Get-Content $shaFile -Raw).Trim() -split '\s+')[0]
+            $actual = (Get-FileHash (Join-Path $agentDir "hsm-agent.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expected -ne $actual) { throw "sha256 mismatch for agent-v${pin}: release says $expected, file is $actual" }
+            Remove-Item $shaFile
+            Set-Content -Path (Join-Path $agentDir "version.txt") -Value $pin -NoNewline -Encoding ascii
+            Write-Host "Staged agent $pin (sha256 $actual)"
+        }
     }
 
     # --- Publish server to a folder, then build the image with plain `docker build` ---
