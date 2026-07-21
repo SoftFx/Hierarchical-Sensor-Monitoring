@@ -127,3 +127,34 @@ jobs:
             --latest=false \
             --title "HSM Agent $version" \
             --notes "$(printf 'HSM Agent %s — self-contained Windows service binary.\n\nSHA-256: %s\n\nConsumed by server-build.yml via src/server/HSMServer/agent-release.txt (see #1298). The exe is served byte-identical by the per-product download and the self-update channel.' "$version" "$sha")"
+
+      # --latest=false above is not reliable: the bootstrap agent-v0.5.28 release grabbed the repo's
+      # "Latest" badge despite it (observed 2026-07-21; GET /releases/latest returned the agent
+      # release until the newest server release was re-marked by hand). Clients discover the server
+      # zip through that badge, so assert-and-repair: if this release ended up "latest", hand the
+      # badge back to the newest server-v* release, and fail loudly if that cannot be done.
+      - name: Keep the Latest badge on server releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name)
+          echo "repo Latest after publish: $latest"
+          if [ "$latest" != "$GITHUB_REF_NAME" ]; then
+            echo "Latest badge untouched — nothing to repair"
+            exit 0
+          fi
+          server_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases" -q '[.[] | select(.draft == false) | .tag_name | select(startswith("server-v"))][0]')
+          if [ -z "$server_tag" ]; then
+            echo "::error::this agent release grabbed the Latest badge and no server-v* release exists to give it back to"
+            exit 1
+          fi
+          server_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$server_tag" -q .id)
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$server_id" -f make_latest=true > /dev/null
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name)
+          if [ "$latest" != "$server_tag" ]; then
+            echo "::error::failed to return the Latest badge to $server_tag (still $latest)"
+            exit 1
+          fi
+          echo "Latest badge returned to $server_tag"
