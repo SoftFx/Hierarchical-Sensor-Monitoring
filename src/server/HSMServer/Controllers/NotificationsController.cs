@@ -60,6 +60,13 @@ namespace HSMServer.Controllers
             if (await ChatsManager.TryUpdate(model.ToUpdate()))
                 await SyncFolders(model);
 
+            // Index (the chats list) is [AuthorizeIsAdmin], but EditChat is also open to
+            // ProductManagers of folders the chat is bound to. Redirecting everyone to Index
+            // would 401 those non-admin PMs after a successful save. Send admins to the list
+            // (matching AddChat); keep non-admins on the pre-fix re-render-from-DB path.
+            if (CurrentUser.IsAdmin)
+                return RedirectToAction(nameof(Index), ViewConstants.NotificationsController);
+
             return ChatsManager.TryGetValue(model.Id, out var chat)
                 ? View(new ChatViewModel(chat, BuildChatFolders(chat)))
                 : RedirectToAction(nameof(ProductController.Index), ViewConstants.ProductController);
