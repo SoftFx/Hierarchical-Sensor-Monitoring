@@ -307,7 +307,13 @@ namespace HSMServer.Core.Tests.Infrastructure
             return value;
         }
 
-        private static void TestImmutableSensorData(BaseSensorModel expected, BaseSensorModel actual)
+        /// <summary>
+        /// Everything that identifies a sensor and that no update may change. Status is
+        /// deliberately left out: it is derived from the last value, which the cache
+        /// loads on a background task, so it cannot be compared against a snapshot
+        /// taken at an arbitrary point in that load.
+        /// </summary>
+        internal static void TestSensorIdentity(BaseSensorModel expected, BaseSensorModel actual)
         {
             Assert.NotNull(actual.RootProductName);
             Assert.NotNull(actual.Path);
@@ -322,6 +328,12 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.RootProductName, actual.RootProductName);
             Assert.Equal(expected.Path, actual.Path);
             Assert.Equal(expected.Type, actual.Type);
+        }
+
+        private static void TestImmutableSensorData(BaseSensorModel expected, BaseSensorModel actual)
+        {
+            TestSensorIdentity(expected, actual);
+
             AssertModels(expected.Status, actual.Status);
         }
 

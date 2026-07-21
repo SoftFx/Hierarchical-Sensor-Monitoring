@@ -13,6 +13,7 @@ using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using Moq;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -425,31 +426,53 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Update sensor(s)")]
         public async Task UpdateSensorsTest()
         {
-            var sensor = GetClonedSensorModel(GetSensorByNameFromCache("sensor0"));
+            // The fixture seeds a "sensor0" under every product and GetSensors() enumerates
+            // a ConcurrentDictionary, so "the first sensor0" is whichever namesake the hash
+            // order happens to yield — name the subject of the test instead.
+            var cachedSensor = _valuesCache.GetSensors()
+                                           .Single(s => s.DisplayName == "sensor0" && s.Parent?.DisplayName == "product0");
+
+            var sensor = GetClonedSensorModel(cachedSensor);
             var sensorUpdate = SensorModelFactory.BuildSensorUpdate(sensor.Id);
 
-            int updatedSensorsCount = 0;
+            // The cache loads sensor history in a fire-and-forget task started by its
+            // constructor (TreeValuesCache.FillSensorsData), and that task raises
+            // ChangeSensorEvent for every sensor it initializes. Keep only the
+            // notifications for the sensor under test, in a concurrent collection:
+            // they arrive from the updates queue and from the loader alike.
+            var notifications = new ConcurrentQueue<ActionType>();
             void UpdateSensorEventHandler(BaseSensorModel updatedSensor, ActionType type)
             {
-                Assert.NotNull(updatedSensor);
-                Assert.Equal(ActionType.Update, type);
-
-                if (updatedSensorsCount > 1) //skip first ttl update
-                    ModelsTester.TestSensorModel(sensorUpdate, updatedSensor);
-
-                updatedSensorsCount++;
+                if (updatedSensor?.Id == sensorUpdate.Id)
+                    notifications.Enqueue(type);
             }
 
             _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
 
-            await _valuesCache.UpdateSensorAsync(sensorUpdate);
-
-            await Task.Delay(100);
+            // UpdateSensorAsync completes only once its request has been taken off the
+            // updates queue and handled, so every notification the update raises has
+            // already been delivered by the time it returns — no delay to wait out.
+            var result = await _valuesCache.UpdateSensorAsync(sensorUpdate);
 
             _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 
-            Assert.Equal(1, updatedSensorsCount / 2); //TTL generate one more request
+            Assert.True(result.IsOk, result.Error);
+
+            // Deliberately not an exact count. An update announces itself once, and the
+            // TTL check in BaseNodeModel.Update announces it a second time — but only
+            // when the sensor's history is already loaded, so the total races the
+            // background loader. What the cache guarantees is that the update is
+            // announced, and only ever as an Update.
+            Assert.NotEmpty(notifications);
+            Assert.All(notifications, type => Assert.Equal(ActionType.Update, type));
+
             TestSensorUpdates(sensor, sensorUpdate);
+
+            // An update must not touch the sensor's history: the value seeded by the
+            // fixture is still the only one stored. Asserted against the database,
+            // because the in-memory LastValue is filled in by the background loader
+            // and so cannot be compared against a snapshot taken before the update.
+            Assert.Single(await GetAllSensorValues(cachedSensor));
         }
 
         //[Fact]
@@ -518,18 +541,18 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Remove sensor(s) data")]
         public async Task RemoveSensorsDataTest()
         {
-            int clearedSensorsCount = 0;
-            void UpdateSensorEventHandler(BaseSensorModel clearedSensor, ActionType type)
-            {
-                Assert.NotNull(clearedSensor);
-                Assert.Equal(ActionType.Update, type);
-
-                clearedSensorsCount++;
-            }
-
-
             var product = GetProductByName("product0");
             var sensors = GetAllSensorIdsInBranch(product);
+
+            // Only the branch being cleared: the cache also loads sensor history on a
+            // fire-and-forget task (TreeValuesCache.FillSensorsData) that announces every
+            // sensor it initializes, so a cache-wide count counts the loader's work too.
+            var clearedSensors = new ConcurrentQueue<(Guid Id, ActionType Type)>();
+            void UpdateSensorEventHandler(BaseSensorModel clearedSensor, ActionType type)
+            {
+                if (clearedSensor is not null && sensors.Contains(clearedSensor.Id))
+                    clearedSensors.Enqueue((clearedSensor.Id, type));
+            }
 
             _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
 
@@ -537,7 +560,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 
-            Assert.Equal(4, clearedSensorsCount);
+            Assert.All(clearedSensors, n => Assert.Equal(ActionType.Update, n.Type));
+            Assert.Equal(sensors.OrderBy(id => id), clearedSensors.Select(n => n.Id).Distinct().OrderBy(id => id));
             foreach (var sensorId in sensors)
                 await TestClearedSensor(sensorId);
         }
@@ -578,16 +602,25 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     updatedProductsCount++;
             }
 
-            int addedSensorsCount = 0;
-            int updatedSensorsCount = 0;
+            const string subProductName = "new_subProduct";
+            const string subSubProductName = "new_subSubProduct";
+            const string sensorName = "new_sensor";
+            const string productPath = $"{subProductName}/{subSubProductName}/{sensorName}";
+
+            // Only the sensor this test adds: the cache also loads sensor history on a
+            // fire-and-forget task (TreeValuesCache.FillSensorsData) that announces every
+            // sensor it initializes, so a cache-wide count counts the loader's work too.
+            var addedSensors = new ConcurrentQueue<Guid>();
+            var updatedSensors = new ConcurrentQueue<Guid>();
             void ChangeSensorEventHandler(BaseSensorModel sensor, ActionType type)
             {
-                Assert.NotNull(sensor);
+                if (sensor?.DisplayName != sensorName)
+                    return;
 
                 if (type == ActionType.Add)
-                    addedSensorsCount++;
+                    addedSensors.Enqueue(sensor.Id);
                 else if (type == ActionType.Update)
-                    updatedSensorsCount++;
+                    updatedSensors.Enqueue(sensor.Id);
             }
 
 
@@ -596,17 +629,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var product = _valuesCache.GetProduct(productId);
 
-            const string subProductName = "new_subProduct";
-            const string subSubProductName = "new_subSubProduct";
-            const string sensorName = "new_sensor";
-            const string productPath = $"{subProductName}/{subSubProductName}/{sensorName}";
             var storeInfo = SensorValuesFactory.BuildSensorValue(type, productPath, DateTime.UtcNow);
 
             _valuesCache.ChangeProductEvent += ChangeProductEventHandler;
             _valuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
 
+            // AddSensorValueAsync completes only once its request has been handled, so
+            // every notification it raises has already been delivered by the time it
+            // returns - there is nothing left to wait out.
             await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductId, storeInfo);
-            await Task.Delay(100);
 
             _valuesCache.ChangeProductEvent -= ChangeProductEventHandler;
             _valuesCache.ChangeSensorEvent -= ChangeSensorEventHandler;
@@ -626,8 +657,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             ModelsTester.TestProductModel(_databaseCoreManager.GetProduct(subProduct.Id), subProduct);
             ModelsTester.TestProductModel(_databaseCoreManager.GetProduct(subSubProduct.Id), subSubProduct);
 
-            Assert.Equal(1, addedSensorsCount);
-            Assert.Equal(1, updatedSensorsCount / 2); // TTL generate one more request
+            Assert.Single(addedSensors);
+
+            // Not an exact count: the sensor announces itself once and the TTL check adds
+            // another, but only once its history is loaded (see UpdateSensorsTest).
+            Assert.NotEmpty(updatedSensors);
 
             ModelsTester.TestSensorModel(storeInfo, sensor, parentProduct: subSubProduct);
             ModelsTester.TestSensorModel(GetSensorByIdFromDb(sensor.Id), sensor);
@@ -654,19 +688,20 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Add new sensor value")]
         public async Task AddNewSensorValue_UpdateData_Test(SensorType type)
         {
-            int updatedSensorsCount = 0;
+            const string sensorName = "new_sensor";
+
+            // Only the sensor this test writes to: the cache also loads sensor history on
+            // a fire-and-forget task (TreeValuesCache.FillSensorsData) that announces every
+            // sensor it initializes, so a cache-wide count counts the loader's work too.
+            var notifications = new ConcurrentQueue<ActionType>();
             void ChangeSensorEventHandler(BaseSensorModel sensor, ActionType type)
             {
-                Assert.NotNull(sensor);
-                Assert.Equal(ActionType.Update, type);
-
-                updatedSensorsCount++;
+                if (sensor?.DisplayName == sensorName)
+                    notifications.Enqueue(type);
             }
 
             Guid accessKey = Guid.Parse(TestProductsManager.TestProductKey.Id);
             Guid productId = TestProductsManager.ProductId;
-
-            const string sensorName = "new_sensor";
 
             var timeCollected = DateTime.UtcNow;
 
@@ -686,7 +721,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var sensor = GetSensorByNameFromCache(sensorName);
             var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValuesFromTo(new(1) { [sensor.Id] = (DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks) }).FirstOrDefault().Value;
 
-            Assert.Equal(1, updatedSensorsCount / 2); // TTL generate one more request
+            // Not an exact count: the sensor announces itself once and the TTL check adds
+            // another, but only once its history is loaded (see UpdateSensorsTest).
+            Assert.NotEmpty(notifications);
+            Assert.All(notifications, t => Assert.Equal(ActionType.Update, t));
+
             Assert.NotEmpty(product.Sensors);
 
             ModelsTester.TestSensorModel(storeInfo, sensor, parentProduct: product);
@@ -747,7 +786,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             ModelsTester.TestSensorModel(sensorUpdate, actualSensorFromCache);
             ModelsTester.TestSensorModel(sensorUpdate, actualSensorFromDb);
-            ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromCache, sensor);
+
+            // Identity only for the cached model: the model-to-model overload also
+            // compares LastValue/HasData/Status against the pre-update clone, and those
+            // are owned by the background history loader, not by the update under test.
+            ModelsTester.TestSensorIdentity(actualSensorFromCache, sensor);
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromDb, sensor);
 
             //TODO: return checking TTL after adding an ability to update it
