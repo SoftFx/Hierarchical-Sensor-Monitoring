@@ -1,0 +1,184 @@
+name: HSM Agent release
+
+# Publishes the HSM Agent as a versioned GitHub Release (#1298). Push an `agent-v<semver>` tag whose
+# version equals `project(HsmAgent VERSION …)` in src/agent/CMakeLists.txt and this lane:
+#   1. fails fast if the tag and the CMake version disagree (same guardrail family as the
+#      collector's registry publish, #1277),
+#   2. builds src/agent in Release with warnings-as-errors (statically linked, self-contained exe),
+#   3. runs the config-parser ctest suite + the real SCM service smoke (--install/--console/--uninstall),
+#   4. publishes the release with `hsm-agent.exe` + `hsm-agent.exe.sha256` as assets.
+#
+# Consumers reference the release by version instead of rebuilding the agent from source:
+# server-build.yml downloads the release pinned in src/server/HSMServer/agent-release.txt and stages
+# it into wwwroot/agent/ (both the Windows zip and the Docker image legs). Code-signing, when it
+# arrives (#1167), slots in here — sign the exe before the release step, and every consumer ships the
+# same signed bytes (the byte-identical invariant in agent-download/feature.md).
+#
+# Build steps deliberately mirror agent-windows-build.yml (the per-PR CI lane for src/agent); that
+# lane keeps validating PRs, this one gates what actually ships.
+
+on:
+  push:
+    tags:
+      - 'agent-v*'
+
+# One publish at a time per tag; two close tag pushes must not interleave their release steps.
+concurrency:
+  group: agent-release-${{ github.ref }}
+
+permissions:
+  contents: write # create the GitHub Release
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      VCPKG_DISABLE_METRICS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      # The tag is the delivery key: self-update compares versions, so a release whose tag does not
+      # match the compiled-in HSM_AGENT_VERSION would advertise a version nobody runs.
+      - name: Verify tag matches the agent CMake version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#agent-v}"
+          cmake_version=$(grep 'project(HsmAgent VERSION' src/agent/CMakeLists.txt \
+            | sed 's/.*VERSION \([0-9][^ )]*\).*/\1/')
+          echo "tag: $tag_version, CMakeLists.txt: $cmake_version"
+          if [ "$tag_version" != "$cmake_version" ]; then
+            echo "::error::tag agent-v$tag_version does not match project(HsmAgent VERSION $cmake_version) — bump CMakeLists.txt or fix the tag"
+            exit 1
+          fi
+
+      # Pinned to the agent vcpkg.json builtin-baseline so the curl manifest resolves deterministically.
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
+
+      - name: Configure (Release, HTTP transport on)
+        # x64-windows-static + static CRT are forced by src/agent/CMakeLists.txt, so the produced
+        # hsm-agent.exe is a self-contained single binary. VCPKG_BINARY_SOURCES=clear for the same
+        # GHA-cache-token reason as the other native lanes.
+        env:
+          VCPKG_BINARY_SOURCES: clear
+        run: >
+          cmake -S src/agent -B build/agent
+          -DHSM_AGENT_WERROR=ON
+          -DHSM_COLLECTOR_WERROR=ON
+          -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build
+        run: cmake --build build/agent --config Release --parallel
+
+      - name: Test (config parser)
+        run: ctest --test-dir build/agent -C Release --output-on-failure
+
+      # Release gate, not just CI hygiene: a binary that cannot register/survive/uninstall as a
+      # service must not become a release other machines self-update onto.
+      - name: Service install / console smoke
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem -Recurse -Path build/agent -Filter hsm-agent.exe | Select-Object -First 1).FullName
+          Write-Host "smoke exe: $exe"
+
+          & $exe --install
+          if ($LASTEXITCODE -ne 0) { throw "--install failed ($LASTEXITCODE)" }
+          $qc = (sc.exe qc HSMAgent | Out-String)
+          Write-Host $qc
+          if ($qc -notmatch 'AUTO_START') { throw "service is not auto-start" }
+
+          '{ "server": { "address": "https://127.0.0.1", "port": 65530, "accessKey": "smoke" }, "periods": { "collectMs": 1000 } }' |
+            Out-File -Encoding ascii cfg.json
+          $p = Start-Process -FilePath $exe -ArgumentList '--console','--config','cfg.json' -PassThru
+          Start-Sleep -Seconds 5
+          if ($p.HasExited) { throw "console run exited early (exit $($p.ExitCode)) — should survive an unreachable server" }
+          Stop-Process -Id $p.Id -Force
+
+          & $exe --uninstall
+          if ($LASTEXITCODE -ne 0) { throw "--uninstall failed ($LASTEXITCODE)" }
+          Write-Host "service install + console-resilience + uninstall smoke ok"
+
+      - name: Stage release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          exe=$(find build/agent -name 'hsm-agent.exe' -type f | head -1)
+          echo "agent exe: $exe"
+          cp "$exe" staging/hsm-agent.exe
+          # Standard `sha256sum` format so consumers can `cut -d' ' -f1` or `sha256sum -c`.
+          (cd staging && sha256sum hsm-agent.exe > hsm-agent.exe.sha256)
+          cat staging/hsm-agent.exe.sha256
+          ls -l staging
+
+      # --latest=false: the repo's "Latest release" badge belongs to the server releases; an agent
+      # release must never displace it (clients discover the server through that badge).
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#agent-v}"
+          sha=$(cut -d' ' -f1 staging/hsm-agent.exe.sha256)
+          # Lane re-runs must not fail on "release already exists": a complete release is skipped, a
+          # partial one (create succeeded, an asset upload didn't) is reported for manual deletion —
+          # never silently kept, never auto-deleted.
+          have=$(gh release view "$GITHUB_REF_NAME" --json assets -q '[.assets[].name] | sort | join(",")' 2>/dev/null || echo "__absent__")
+          if [ "$have" = "hsm-agent.exe,hsm-agent.exe.sha256" ]; then
+            echo "release $GITHUB_REF_NAME already exists with both assets (lane re-run) — skipping create"
+            exit 0
+          elif [ "$have" != "__absent__" ]; then
+            echo "::error::release $GITHUB_REF_NAME exists but is incomplete (assets: '$have') — delete it (gh release delete $GITHUB_REF_NAME) and re-run"
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            staging/hsm-agent.exe \
+            staging/hsm-agent.exe.sha256 \
+            --verify-tag \
+            --latest=false \
+            --title "HSM Agent $version" \
+            --notes "$(printf 'HSM Agent %s — self-contained Windows service binary.\n\nSHA-256: %s\n\nConsumed by server-build.yml via src/server/HSMServer/agent-release.txt (see #1298). The exe is served byte-identical by the per-product download and the self-update channel.' "$version" "$sha")"
+
+      # --latest=false above is not reliable: the bootstrap agent-v0.5.28 release grabbed the repo's
+      # "Latest" badge despite it (observed 2026-07-21; GET /releases/latest returned the agent
+      # release until the newest server release was re-marked by hand). Clients discover the server
+      # zip through that badge, so assert-and-repair: if this release ended up "latest", hand the
+      # badge back to the newest server-v* release, and fail loudly if that cannot be done.
+      - name: Keep the Latest badge on server releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name)
+          echo "repo Latest after publish: $latest"
+          if [ "$latest" != "$GITHUB_REF_NAME" ]; then
+            echo "Latest badge untouched — nothing to repair"
+            exit 0
+          fi
+          # Drafts and prereleases are excluded: GitHub's Latest badge can only sit on a full release,
+          # and this repo routinely publishes server prereleases (e.g. 3.40.29/3.40.30).
+          server_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '[.[] | select(.draft == false and .prerelease == false) | .tag_name | select(startswith("server-v"))][0]')
+          if [ -z "$server_tag" ]; then
+            echo "::error::this agent release grabbed the Latest badge and no server-v* release exists to give it back to"
+            exit 1
+          fi
+          server_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$server_tag" -q .id)
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$server_id" -f make_latest=true > /dev/null
+          # Re-read with a short retry: the badge update may lag a moment behind the PATCH, and a
+          # propagation delay must not fail an otherwise-successful publish.
+          for attempt in 1 2 3; do
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name)
+            [ "$latest" = "$server_tag" ] && break
+            echo "attempt $attempt: Latest is still $latest, retrying..."
+            sleep 5
+          done
+          if [ "$latest" != "$server_tag" ]; then
+            echo "::error::failed to return the Latest badge to $server_tag (still $latest)"
+            exit 1
+          fi
+          echo "Latest badge returned to $server_tag"

@@ -47,38 +47,35 @@ jobs:
       - name: Build & Test Solution
         run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
 
-      # HSM Agent (#1167): build the native Windows agent and stage it into wwwroot so the published
-      # server image serves a real per-product download bundle (otherwise /api/agent/installer 503s).
-      # The agent links the collector with the libcurl HTTP transport, so it needs vcpkg (curl). It is
-      # statically linked (x64-windows-static, forced by src/agent/CMakeLists.txt) so the served exe is
-      # a self-contained single binary. This job is already windows-latest, so the agent's MSVC build
-      # fits here. wwwroot is included by the dotnet publish below.
-      - name: Set up vcpkg (HSM Agent curl)
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
-
-      - name: Build HSM Agent into wwwroot
-        shell: pwsh
+      # HSM Agent (#1167/#1298): the served exe is a *released* artifact, not something this lane
+      # compiles. Download the release pinned in agent-release.txt, verify its checksum, and stage it
+      # into wwwroot (included by the dotnet publish below). Bumping the shipped agent = push an
+      # agent-v* tag (agent-release.yml publishes it) + a one-line pin bump here. version.txt is
+      # derived from the pin: both GET /api/agent/version and the data-path update directive
+      # (SensorsController) read it, and the release lane guarantees tag == compiled-in version, so
+      # pin == exe version (#1174).
+      - name: Stage pinned HSM Agent release into wwwroot
+        shell: bash
         env:
-          VCPKG_BINARY_SOURCES: clear
+          GH_TOKEN: ${{ github.token }}
         run: |
-          cmake -S src/agent -B build/agent -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-          cmake --build build/agent --config Release --parallel
-          $exe = Get-ChildItem -Recurse -Path build/agent -Filter hsm-agent.exe | Select-Object -First 1
-          if (-not $exe) { throw "hsm-agent.exe not found after build" }
-          New-Item -ItemType Directory -Force -Path src/server/HSMServer/wwwroot/agent | Out-Null
-          Copy-Item $exe.FullName -Destination src/server/HSMServer/wwwroot/agent/hsm-agent.exe -Force
-          if (-not (Test-Path src/server/HSMServer/wwwroot/agent/hsm-agent.exe)) { throw "agent exe missing in wwwroot" }
-          # version.txt must describe the exe staged right above. Both GET /api/agent/version and the
-          # data-path update directive (SensorsController) read it, so a value that does not match the
-          # staged binary silently disables the self-update channel (#1174). Derive it from the agent's
-          # CMake project version — the same source agent-windows-build.yml uses.
-          $match = Select-String -Path src/agent/CMakeLists.txt -Pattern 'project\(HsmAgent VERSION ([0-9][^\s)]*)' | Select-Object -First 1
-          if (-not $match) { throw "could not parse 'project(HsmAgent VERSION ...)' from src/agent/CMakeLists.txt" }
-          $version = $match.Matches[0].Groups[1].Value
-          Set-Content -Path src/server/HSMServer/wwwroot/agent/version.txt -Value $version -NoNewline -Encoding ascii
-          Write-Host "Staged agent $version : $($exe.FullName) -> wwwroot/agent/hsm-agent.exe"
+          set -euo pipefail
+          pin=$(tr -d ' \r\n' < src/server/HSMServer/agent-release.txt)
+          echo "pinned agent release: agent-v$pin"
+          dir=src/server/HSMServer/wwwroot/agent
+          mkdir -p "$dir"
+          gh release download "agent-v$pin" --repo "$GITHUB_REPOSITORY" \
+            -p hsm-agent.exe -p hsm-agent.exe.sha256 -D "$dir" --clobber
+          expected=$(cut -d' ' -f1 "$dir/hsm-agent.exe.sha256")
+          actual=$(sha256sum "$dir/hsm-agent.exe" | cut -d' ' -f1)
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::sha256 mismatch for agent-v$pin: release says $expected, downloaded file is $actual"
+            exit 1
+          fi
+          rm "$dir/hsm-agent.exe.sha256"
+          printf '%s' "$pin" > "$dir/version.txt"
+          echo "staged agent $pin (sha256 $actual)"
+          ls -l "$dir"
 
       - name: Publish HSMServer
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
@@ -97,15 +94,6 @@ jobs:
           }
           Write-Host "staged agent version: $(Get-Content (Join-Path $dir 'version.txt'))"
           Get-ChildItem $dir | Format-Table Name, Length
-
-      # The Linux image job cannot build the agent (it is a native Windows service) and its checkout
-      # has no exe — wwwroot/agent/hsm-agent.exe is gitignored. Hand it the directory staged here.
-      - name: Upload staged agent for the image job
-        uses: actions/upload-artifact@v4
-        with:
-          name: hsm-agent-staged
-          path: src/server/HSMServer/wwwroot/agent
-          if-no-files-found: error
 
       - id: save-version
         name: Try to get server version
@@ -238,22 +226,32 @@ jobs:
       - name: Build full main repos name
         run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
 
-      # #1266: this job publishes from its own checkout rather than from the build job's output, and
-      # wwwroot/agent/hsm-agent.exe is gitignored — so without this download the image shipped a
-      # "Download agent" button that could only answer 503. The agent is a native Windows service and
-      # cannot be built on this runner, so the binary has to arrive as an artifact.
-      - name: Download staged agent from the Windows build
-        uses: actions/download-artifact@v4
-        with:
-          name: hsm-agent-staged
-          path: src/server/HSMServer/wwwroot/agent
-
-      - name: Verify staged agent before publish
+      # #1266/#1298: this job publishes from its own checkout, where wwwroot/agent/hsm-agent.exe is
+      # gitignored — without this staging the image ships a "Download agent" button that can only
+      # answer 503. The agent is a native Windows service and cannot be built on this runner, so both
+      # legs download the same pinned release; the sha check makes them byte-identical by construction.
+      - name: Stage pinned HSM Agent release into wwwroot
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          ls -l src/server/HSMServer/wwwroot/agent
-          test -s src/server/HSMServer/wwwroot/agent/hsm-agent.exe
-          test -s src/server/HSMServer/wwwroot/agent/version.txt
+          pin=$(tr -d ' \r\n' < src/server/HSMServer/agent-release.txt)
+          echo "pinned agent release: agent-v$pin"
+          dir=src/server/HSMServer/wwwroot/agent
+          mkdir -p "$dir"
+          gh release download "agent-v$pin" --repo "$GITHUB_REPOSITORY" \
+            -p hsm-agent.exe -p hsm-agent.exe.sha256 -D "$dir" --clobber
+          expected=$(cut -d' ' -f1 "$dir/hsm-agent.exe.sha256")
+          actual=$(sha256sum "$dir/hsm-agent.exe" | cut -d' ' -f1)
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::sha256 mismatch for agent-v$pin: release says $expected, downloaded file is $actual"
+            exit 1
+          fi
+          rm "$dir/hsm-agent.exe.sha256"
+          printf '%s' "$pin" > "$dir/version.txt"
+          echo "staged agent $pin (sha256 $actual)"
+          ls -l "$dir"
 
       - name: Build Linux image for Docker
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
