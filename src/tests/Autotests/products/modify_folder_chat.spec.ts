@@ -6,6 +6,7 @@ import { uniqueName, cleanup } from '../fixtures.ts';
 const folderName = uniqueName('Fldr');
 const slackChatName = uniqueName('SlackChat');
 const slackRemoveChatName = uniqueName('SlackRm');
+const listRemoveChatName = uniqueName('ListRm');
 // XSS payload used as chat Name. Cleanup by text still works because Razor default-encodes
 // @chat.Name into the Configuration/_Chats.cshtml row's .chat-info span, so the literal payload
 // text appears in the DOM. The onerror handler would set window.__xss=1 if it ever executed.
@@ -19,6 +20,7 @@ test.afterEach(async ({ browser }) => {
     await login(page, testConfig.admin_user, testConfig.admin_user_password, testConfig.apiUrl);
     await cleanup.chat(page, slackChatName);
     await cleanup.chat(page, slackRemoveChatName);
+    await cleanup.chat(page, listRemoveChatName);
     await cleanup.chat(page, xssChatName);
     await cleanup.folder(page, folderName);
   } finally {
@@ -206,6 +208,54 @@ test('EditChat: per-channel Remove clears Slack webhook without deleting the cha
   await page.getByRole('link', { name: 'Chats' }).click();
   await expect(page).toHaveURL(/.*Notifications/);
   await expect(page.locator('.chat-row').filter({ hasText: slackRemoveChatName })).toBeVisible();
+
+  // --- Logout ---
+  await page.getByRole('link', { name: 'Logout' }).click();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+});
+
+
+// Covers issue #1297: clicking Remove on a chat row used to POST a form to RemoveChat, which
+// returned Task (empty body) — the browser rendered a blank page and the chat was visibly gone
+// only after a manual navigation back. The fix makes RemoveChat return Ok/NotFound and switches
+// the row to AJAX: success reloads the list, error toasts and leaves the row.
+test('Configuration Chats list: Remove deletes the chat and keeps the page usable', async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
+
+  // --- Login ---
+  await login(page, admin_user, admin_user_password, apiUrl);
+
+  // --- Create a Slack chat to remove ---
+  // Configuration dropdown hosts Chats as a link after #1273 (was a Settings tab). The dropdown
+  // toggle is <a role="button"> in _Layout.cshtml, so getByRole('button') wins over the <a> tag
+  // default (same pattern as the XSS test above).
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await page.locator('#Name').fill(listRemoveChatName);
+  await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/list-remove');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  // AddChat POST redirects back to /Notifications (top-level Chats page from #1273). The row is
+  // a .chat-row, not a <tr> — after the #1281 Members-layout rebuild there is no <table> here.
+  await expect(page).toHaveURL(/.*Notifications/);
+  const chatRow = page.locator('.chat-row').filter({ hasText: listRemoveChatName });
+  await expect(chatRow).toBeVisible();
+
+  // The row carries an inline .chat-action-btn.danger (trash-can, _Chats.cshtml:120-122) that
+  // opens the shared _ConfirmationModal. Click Remove → OK → AJAX POST → reload. Wait for
+  // domcontentloaded so the reload lands before the assertions (matches the EditChat test above).
+  await chatRow.locator('.chat-action-btn.danger[title="Remove"]').click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await page.waitForLoadState('domcontentloaded');
+
+  // The page must not be blank — URL stays on /Notifications (regression was an empty body).
+  await expect(page).toHaveURL(/.*Notifications/);
+  await expect(page.getByRole('heading', { name: 'Notification chats' })).toBeVisible();
+
+  // The removed chat must no longer appear in the list.
+  await expect(page.locator('.chat-row').filter({ hasText: listRemoveChatName })).toHaveCount(0);
 
   // --- Logout ---
   await page.getByRole('link', { name: 'Logout' }).click();
