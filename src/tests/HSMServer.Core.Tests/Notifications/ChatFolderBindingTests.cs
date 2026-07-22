@@ -306,8 +306,9 @@ namespace HSMServer.Core.Tests.Notifications
 
         // #1304 conflict policy — incoming Telegram chat already owned by another Chat record.
         // Strict refuse: the other record keeps its binding; the target record stays unbound.
+        // Result carries the owner chat's name so the bot reply can name the record to remove.
         [Fact]
-        public async Task TryConnect_ChatIdToken_TelegramChatOwnedByAnotherRecord_ReturnsFailed()
+        public async Task TryConnect_ChatIdToken_TelegramChatOwnedByAnotherRecord_ReturnsFailedAlreadyBound()
         {
             var manager = BuildManager();
 
@@ -332,7 +333,8 @@ namespace HSMServer.Core.Tests.Notifications
 
             var result = await manager.TryConnect(message, token);
 
-            Assert.Equal(ChatConnectOutcome.Failed, result.Outcome);
+            Assert.Equal(ChatConnectOutcome.FailedAlreadyBound, result.Outcome);
+            Assert.Equal("owner", result.Name); // surfaced to the bot reply
             Assert.Null(manager[target.Id].TelegramChatId); // target untouched
             Assert.Equal(123_456L, manager[owner.Id].TelegramChatId?.Identifier); // owner unchanged
         }
@@ -370,7 +372,7 @@ namespace HSMServer.Core.Tests.Notifications
         // is already bound to another Chat record, refuse even though the chatId in the token
         // doesn't resolve yet. The pre-allocation path must not bypass the conflict policy.
         [Fact]
-        public async Task TryConnect_PreAllocatedGuid_TelegramChatOwnedByAnother_ReturnsFailed()
+        public async Task TryConnect_PreAllocatedGuid_TelegramChatOwnedByAnother_ReturnsFailedAlreadyBound()
         {
             var manager = BuildManager();
 
@@ -393,7 +395,8 @@ namespace HSMServer.Core.Tests.Notifications
 
             var result = await manager.TryConnect(message, token);
 
-            Assert.Equal(ChatConnectOutcome.Failed, result.Outcome);
+            Assert.Equal(ChatConnectOutcome.FailedAlreadyBound, result.Outcome);
+            Assert.Equal("owner", result.Name);
             Assert.False(manager.TryGetValue(preAllocatedId, out _)); // pre-allocated guid not materialised
             Assert.Equal(432_100L, manager[owner.Id].TelegramChatId?.Identifier); // owner unchanged
         }

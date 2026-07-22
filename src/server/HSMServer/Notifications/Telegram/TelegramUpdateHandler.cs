@@ -120,6 +120,7 @@ namespace HSMServer.Notifications
                     {
                         ChatConnectOutcome.FolderAdded => $"Folder '{result.Name}' is successfully added to {target}.",
                         ChatConnectOutcome.ChatBound => $"Chat '{result.Name}' is successfully connected to {target}.",
+                        ChatConnectOutcome.FailedAlreadyBound => $"This Telegram chat is already bound to chat '{result.Name}'. Remove that chat first.",
                         _ => "Sorry, your token is invalid, chat doesn't exist, or this Telegram chat is already bound to another record.",
                     });
                 }

@@ -9,8 +9,13 @@ namespace HSMServer.Notifications.Chats
         // EditChat flow: Telegram was bound in-place to an existing Chat record named `Name`.
         ChatBound,
 
-        // Token invalid/expired, target chat doesn't exist, or conflict refused (target already
-        // bound to a different Telegram chat, or Telegram chat already owned by another record).
+        // Conflict refused because the incoming Telegram chat is already bound to another Chat
+        // record. `Name` carries the owner chat's name so the bot reply can point the user at
+        // the record they need to remove first.
+        FailedAlreadyBound,
+
+        // Token invalid/expired, target chat doesn't exist, or target record already has a
+        // different Telegram binding (rebind refused).
         Failed,
     }
 

@@ -187,7 +187,7 @@ namespace HSMServer.Notifications.Chats
             if (_telegramChatIds.TryGetValue(incomingChat, out var owner))
             {
                 _logger.Warn($"TryConnect: Telegram chat '{incomingChat.Id}' is already bound to chat '{owner.Id}', refusing theft");
-                return new ChatConnectResult(ChatConnectOutcome.Failed);
+                return new ChatConnectResult(ChatConnectOutcome.FailedAlreadyBound, owner.Name ?? owner.Id.ToString());
             }
 
             bool isUserChat = incomingChat.Type == ChatType.Private;
@@ -235,7 +235,7 @@ namespace HSMServer.Notifications.Chats
             if (_telegramChatIds.TryGetValue(incomingChat, out var owner) && owner.Id != existing.Id)
             {
                 _logger.Warn($"TryConnect: Telegram chat '{incomingChat.Id}' is already bound to chat '{owner.Id}', refusing theft");
-                return new ChatConnectResult(ChatConnectOutcome.Failed);
+                return new ChatConnectResult(ChatConnectOutcome.FailedAlreadyBound, owner.Name ?? owner.Id.ToString());
             }
 
             bool isUserChat = incomingChat.Type == ChatType.Private;
