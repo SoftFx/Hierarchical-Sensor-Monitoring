@@ -337,6 +337,67 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(123_456L, manager[owner.Id].TelegramChatId?.Identifier); // owner unchanged
         }
 
+        // #1304 pre-allocated guid flow: GET AddChat hands the EditChat form a fresh guid before
+        // any row is in storage. When the user completes /start against that token, TryConnect
+        // must materialise the Chat record with the pre-allocated guid (so the form the user is
+        // still looking at remains valid), populate the Telegram binding, and leave it global
+        // (no folder binding — token carries Guid.Empty).
+        [Fact]
+        public async Task TryConnect_ChatIdToken_PreAllocatedGuid_CreatesNewGlobalChat()
+        {
+            var manager = BuildManager();
+            var preAllocatedId = Guid.NewGuid();
+            var chatCountBefore = manager.GetValues().Count();
+
+            var token = new InvitationToken(chatId: preAllocatedId, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 778_899);
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, result.Outcome);
+            Assert.Equal(chatCountBefore + 1, manager.GetValues().Count());
+
+            var created = manager[preAllocatedId];
+            Assert.Equal(preAllocatedId, created.Id); // pre-allocated guid preserved, not regenerated
+            Assert.Equal(778_899L, created.TelegramChatId?.Identifier);
+            Assert.Equal(ConnectedChatType.TelegramPrivate, created.TelegramType);
+            Assert.NotNull(created.AuthorizationTime);
+            Assert.Empty(created.Folders); // global — no folder binding
+            Assert.Equal("test-user", created.Author);
+        }
+
+        // #1304 pre-allocated guid flow — theft guard still applies. If the incoming Telegram chat
+        // is already bound to another Chat record, refuse even though the chatId in the token
+        // doesn't resolve yet. The pre-allocation path must not bypass the conflict policy.
+        [Fact]
+        public async Task TryConnect_PreAllocatedGuid_TelegramChatOwnedByAnother_ReturnsFailed()
+        {
+            var manager = BuildManager();
+
+            var owner = new Chat(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "owner",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+                TelegramChatId = 432_100L,
+                TelegramType = (byte)ConnectedChatType.TelegramPrivate,
+            });
+            await manager.TryAdd(owner);
+
+            var preAllocatedId = Guid.NewGuid();
+            var token = new InvitationToken(chatId: preAllocatedId, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 432_100); // collides with owner
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.Failed, result.Outcome);
+            Assert.False(manager.TryGetValue(preAllocatedId, out _)); // pre-allocated guid not materialised
+            Assert.Equal(432_100L, manager[owner.Id].TelegramChatId?.Identifier); // owner unchanged
+        }
+
 
         private static Telegram.Bot.Types.Message BuildDirectMessage(long chatId = 123456) =>
             new()

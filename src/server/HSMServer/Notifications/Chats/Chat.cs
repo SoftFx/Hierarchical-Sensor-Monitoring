@@ -8,8 +8,8 @@ namespace HSMServer.Notifications.Chats
 {
     public sealed class Chat : BaseServerModel<ChatEntity, ChatUpdate>
     {
-        private const bool DefaultSendMessages = true;
-        private const int DefaultMessagesAggregationTimeSec = 60;
+        internal const bool DefaultSendMessages = true;
+        internal const int DefaultMessagesAggregationTimeSec = 60;
 
         private readonly ChannelAccumulator _telegramAccumulator = new();
         private readonly ChannelAccumulator _slackAccumulator = new();

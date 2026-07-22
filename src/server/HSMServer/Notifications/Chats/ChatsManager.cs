@@ -124,9 +124,17 @@ namespace HSMServer.Notifications.Chats
 
         public async Task<ChatConnectResult> TryConnect(Message message, InvitationToken token)
         {
-            // EditChat flow: invite targets an existing Chat record — bind Telegram in place.
-            if (token.ChatId is Guid chatId && chatId != Guid.Empty && TryGetValue(chatId, out var existing))
-                return await BindTelegramToChat(existing, message);
+            // EditChat flow: invite targets a Chat record by guid. Two sub-cases:
+            //   - existing record (EditChat on a saved chat) → bind Telegram in place
+            //   - pre-allocated guid (Add new chat → form not yet saved) → create the record now
+            // Both share the strict conflict policy (refuse rebind / refuse theft).
+            if (token.ChatId is Guid chatId && chatId != Guid.Empty)
+            {
+                if (TryGetValue(chatId, out var existing))
+                    return await BindTelegramToChat(existing, message);
+
+                return await CreateChatWithTelegram(chatId, message, token.User);
+            }
 
             // Folder-scoped flow: create a brand-new chat and bind it to the folder named in the token.
             var isChatExist = _telegramChatIds.TryGetValue(message?.Chat, out var chat);
@@ -162,6 +170,50 @@ namespace HSMServer.Notifications.Chats
 
             chat.Folders.Add(token.FolderId);
             return new ChatConnectResult(ChatConnectOutcome.FolderAdded, folderName);
+        }
+
+        // Pre-allocated guid flow: AddChat (GET) hands the EditChat form a fresh guid before any row
+        // exists in storage. When the user completes /start against that token, we materialise the
+        // Chat record here — carrying the pre-allocated guid so the form the user is still looking
+        // at remains valid after save. The chat is created with no folder binding (global) and
+        // admin-owned by the user who issued the token. Theft guard is shared with BindTelegramToChat.
+        private async Task<ChatConnectResult> CreateChatWithTelegram(Guid chatId, Message message, User user)
+        {
+            if (message?.Chat is null)
+                return new ChatConnectResult(ChatConnectOutcome.Failed);
+
+            var incomingChat = message.Chat;
+
+            if (_telegramChatIds.TryGetValue(incomingChat, out var owner))
+            {
+                _logger.Warn($"TryConnect: Telegram chat '{incomingChat.Id}' is already bound to chat '{owner.Id}', refusing theft");
+                return new ChatConnectResult(ChatConnectOutcome.Failed);
+            }
+
+            bool isUserChat = incomingChat.Type == ChatType.Private;
+
+            var chatEntity = new ChatEntity
+            {
+                Id = chatId.ToByteArray(),
+                Author = user.Id.ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = isUserChat ? message.From?.Username : incomingChat.Title,
+                SendMessages = Chat.DefaultSendMessages,
+                MessagesAggregationTimeSec = Chat.DefaultMessagesAggregationTimeSec,
+                TelegramChatId = incomingChat.Id,
+                TelegramType = (byte)(isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup),
+                AuthorizationTime = DateTime.UtcNow.Ticks,
+            };
+
+            var chat = new Chat(chatEntity)
+            {
+                Author = user.Name,
+            };
+
+            if (!await TryAdd(chat))
+                return new ChatConnectResult(ChatConnectOutcome.Failed);
+
+            return new ChatConnectResult(ChatConnectOutcome.ChatBound, chat.Name);
         }
 
         // Strict conflict policy: refuse if (a) the target Chat already has a different TelegramChatId,

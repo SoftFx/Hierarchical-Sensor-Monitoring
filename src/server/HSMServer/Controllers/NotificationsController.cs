@@ -78,7 +78,12 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         [AuthorizeIsAdmin]
-        public IActionResult AddChat() => View(nameof(EditChat), new ChatViewModel { EnableMessages = true });
+        // Pre-generate the chat guid so the EditChat form opens with a real Id. This lets the
+        // Telegram bot-invite flow build an invitation token against this guid up-front; when the
+        // user completes /start, TryConnect sees a chatId that is not yet in storage and creates
+        // the Chat record on demand. No row is written until /start, so abandoning the form
+        // leaves no orphan.
+        public IActionResult AddChat() => View(nameof(EditChat), new ChatViewModel { Id = Guid.NewGuid(), EnableMessages = true });
 
         [HttpPost]
         [AuthorizeIsAdmin]
