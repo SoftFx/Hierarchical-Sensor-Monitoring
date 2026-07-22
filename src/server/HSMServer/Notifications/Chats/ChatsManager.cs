@@ -110,6 +110,12 @@ namespace HSMServer.Notifications.Chats
 
         public Chat GetChatByChatId(ChatId chatId) => _telegramChatIds.GetValueOrDefault(chatId);
 
+        // Test-only seam to inject a stale _telegramChatIds entry — mirrors the production failure
+        // mode where a binding was cleared through a path that bypassed TryUpdate. Lets the self-heal
+        // tests reproduce the user-facing symptom without relying on a real storage corruption.
+        internal void GetChatByChatId_TestOnly_AddStaleIndexEntry(long telegramChatId, Chat owner) =>
+            _telegramChatIds[new ChatId(telegramChatId)] = owner;
+
         public string GetInvitationLink(Guid folderId, User user) =>
             $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(folderId, user)}";
 
@@ -186,8 +192,19 @@ namespace HSMServer.Notifications.Chats
 
             if (_telegramChatIds.TryGetValue(incomingChat, out var owner))
             {
-                _logger.Warn($"TryConnect: Telegram chat '{incomingChat.Id}' is already bound to chat '{owner.Id}', refusing theft");
-                return new ChatConnectResult(ChatConnectOutcome.FailedAlreadyBound, owner.Name ?? owner.Id.ToString());
+                // Self-heal: the index entry may be stale (chat.TelegramChatId was cleared via a
+                // path that bypassed TryUpdate, or storage was hand-edited during dev). If the
+                // owner no longer claims this Telegram chat, drop the dangling entry and proceed.
+                if (owner.TelegramChatId is null || owner.TelegramChatId != incomingChat)
+                {
+                    _logger.Warn($"TryConnect: dropping stale _telegramChatIds entry for Telegram chat '{incomingChat.Id}' (was pointing at chat '{owner.Id}' which no longer claims it)");
+                    _telegramChatIds.TryRemove(incomingChat, out _);
+                }
+                else
+                {
+                    _logger.Warn($"TryConnect: Telegram chat '{incomingChat.Id}' is already bound to chat '{owner.Id}', refusing theft");
+                    return new ChatConnectResult(ChatConnectOutcome.FailedAlreadyBound, owner.Name ?? owner.Id.ToString());
+                }
             }
 
             bool isUserChat = incomingChat.Type == ChatType.Private;
@@ -234,8 +251,19 @@ namespace HSMServer.Notifications.Chats
 
             if (_telegramChatIds.TryGetValue(incomingChat, out var owner) && owner.Id != existing.Id)
             {
-                _logger.Warn($"TryConnect: Telegram chat '{incomingChat.Id}' is already bound to chat '{owner.Id}', refusing theft");
-                return new ChatConnectResult(ChatConnectOutcome.FailedAlreadyBound, owner.Name ?? owner.Id.ToString());
+                // Self-heal: same stale-index recovery as in CreateChatWithTelegram. If owner no
+                // longer claims this Telegram chat, drop the dangling entry and bind to `existing`
+                // instead of refusing. Only a real conflict (owner actively bound) refuses.
+                if (owner.TelegramChatId is null || owner.TelegramChatId != incomingChat)
+                {
+                    _logger.Warn($"TryConnect: dropping stale _telegramChatIds entry for Telegram chat '{incomingChat.Id}' (was pointing at chat '{owner.Id}' which no longer claims it)");
+                    _telegramChatIds.TryRemove(incomingChat, out _);
+                }
+                else
+                {
+                    _logger.Warn($"TryConnect: Telegram chat '{incomingChat.Id}' is already bound to chat '{owner.Id}', refusing theft");
+                    return new ChatConnectResult(ChatConnectOutcome.FailedAlreadyBound, owner.Name ?? owner.Id.ToString());
+                }
             }
 
             bool isUserChat = incomingChat.Type == ChatType.Private;

@@ -401,6 +401,38 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(432_100L, manager[owner.Id].TelegramChatId?.Identifier); // owner unchanged
         }
 
+        // #1304 self-heal: _telegramChatIds may carry a stale entry if a previous binding was
+        // cleared through a path that bypassed TryUpdate (dev runs, hand-edited storage, future
+        // refactor bugs). When the owner no longer claims the incoming Telegram chat (its
+        // TelegramChatId is null or points elsewhere), drop the dangling index entry and bind
+        // instead of refusing. Pin both branches of the guard.
+        [Fact]
+        public async Task TryConnect_ChatIdToken_StaleIndexEntry_SelfHealsAndBinds()
+        {
+            var manager = BuildManager();
+
+            // Owner exists in storage with no Telegram binding (was cleared earlier) but the index
+            // still points at it for chatId 555_111 — the exact scenario the user hit.
+            var owner = BuildSlackOnlyChat();
+            owner.Update(new ChatUpdate { Id = owner.Id, Name = "SiarheiHanich" });
+            await manager.TryAdd(owner);
+
+            // Force a stale index entry: Telegram chat 555_111 → owner (owner.TelegramChatId is null).
+            manager.GetChatByChatId_TestOnly_AddStaleIndexEntry(555_111L, owner);
+
+            var target = BuildSlackOnlyChat();
+            await manager.TryAdd(target);
+
+            var token = new InvitationToken(chatId: target.Id, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 555_111);
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, result.Outcome);
+            Assert.Equal(555_111L, manager[target.Id].TelegramChatId?.Identifier);
+            Assert.Null(manager[owner.Id].TelegramChatId); // owner untouched
+        }
+
 
         private static Telegram.Bot.Types.Message BuildDirectMessage(long chatId = 123456) =>
             new()
