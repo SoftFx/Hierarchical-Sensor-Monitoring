@@ -8,9 +8,12 @@ namespace HSMServer.Notifications.Telegram.Tokens
         private readonly ConcurrentDictionary<Guid, InvitationToken> _tokens = new();
 
 
-        internal Guid BuildInvitationToken(Guid folderId, Model.Authentication.User user)
+        internal Guid BuildInvitationToken(Guid folderId, Model.Authentication.User user) =>
+            BuildInvitationToken(chatId: null, folderId, user);
+
+        internal Guid BuildInvitationToken(Guid? chatId, Guid folderId, Model.Authentication.User user)
         {
-            var invitationToken = new InvitationToken(folderId, user);
+            var invitationToken = new InvitationToken(chatId, folderId, user);
 
             _tokens[invitationToken.Token] = invitationToken;
 

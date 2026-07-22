@@ -116,8 +116,19 @@ namespace HSMServer.Notifications.Chats
         public string GetGroupInvitation(Guid folderId, User user) =>
             $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(folderId, user)}";
 
-        public async Task<string> TryConnect(Message message, InvitationToken token)
+        public string GetChatInvitationLink(Guid chatId, User user) =>
+            $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(chatId, Guid.Empty, user)}";
+
+        public string GetChatGroupInvitation(Guid chatId, User user) =>
+            $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(chatId, Guid.Empty, user)}";
+
+        public async Task<ChatConnectResult> TryConnect(Message message, InvitationToken token)
         {
+            // EditChat flow: invite targets an existing Chat record — bind Telegram in place.
+            if (token.ChatId is Guid chatId && chatId != Guid.Empty && TryGetValue(chatId, out var existing))
+                return await BindTelegramToChat(existing, message);
+
+            // Folder-scoped flow: create a brand-new chat and bind it to the folder named in the token.
             var isChatExist = _telegramChatIds.TryGetValue(message?.Chat, out var chat);
 
             if (!isChatExist)
@@ -143,15 +154,58 @@ namespace HSMServer.Notifications.Chats
                 ? null
                 : await ConnectChatToFolder.Invoke(chat.Id, token.FolderId, token.User.Name);
 
-            if (!string.IsNullOrEmpty(folderName))
-            {
-                if (!isChatExist)
-                    await TryAdd(chat);
+            if (string.IsNullOrEmpty(folderName))
+                return new ChatConnectResult(ChatConnectOutcome.Failed);
 
-                chat.Folders.Add(token.FolderId);
+            if (!isChatExist)
+                await TryAdd(chat);
+
+            chat.Folders.Add(token.FolderId);
+            return new ChatConnectResult(ChatConnectOutcome.FolderAdded, folderName);
+        }
+
+        // Strict conflict policy: refuse if (a) the target Chat already has a different TelegramChatId,
+        // or (b) the incoming Telegram chat is already bound to another Chat record. Admin must
+        // explicitly Remove Telegram via EditChat to rebind.
+        private async Task<ChatConnectResult> BindTelegramToChat(Chat existing, Message message)
+        {
+            if (message?.Chat is null)
+                return new ChatConnectResult(ChatConnectOutcome.Failed);
+
+            var incomingChat = message.Chat;
+
+            if (existing.TelegramChatId is not null && existing.TelegramChatId != incomingChat)
+            {
+                _logger.Warn($"TryConnect: chat '{existing.Id}' is already bound to Telegram chat '{existing.TelegramChatId}', refusing rebind to '{incomingChat.Id}'");
+                return new ChatConnectResult(ChatConnectOutcome.Failed);
             }
 
-            return folderName;
+            if (_telegramChatIds.TryGetValue(incomingChat, out var owner) && owner.Id != existing.Id)
+            {
+                _logger.Warn($"TryConnect: Telegram chat '{incomingChat.Id}' is already bound to chat '{owner.Id}', refusing theft");
+                return new ChatConnectResult(ChatConnectOutcome.Failed);
+            }
+
+            bool isUserChat = incomingChat.Type == ChatType.Private;
+
+            // TelegramType / AuthorizationTime are internal-set and not exposed by ChatUpdate —
+            // set them directly before TryUpdate, which persists via ToEntity() reading live state.
+            // Description is not on the base Chat type — ChatNamesSynchronization (TelegramBot.cs:255)
+            // will fill it on the next pass via GetChat(ChatFullInfo).
+            existing.TelegramType = isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup;
+            existing.AuthorizationTime = DateTime.UtcNow;
+
+            var update = new ChatUpdate
+            {
+                Id = existing.Id,
+                TelegramChatId = incomingChat.Id,
+                TelegramChatTitle = isUserChat ? message.From?.Username : incomingChat.Title,
+            };
+
+            var updated = await TryUpdate(update);
+            return updated
+                ? new ChatConnectResult(ChatConnectOutcome.ChatBound, existing.Name)
+                : new ChatConnectResult(ChatConnectOutcome.Failed);
         }
 
         public void AddFolderToChats(Guid folderId, List<Guid> chats)
