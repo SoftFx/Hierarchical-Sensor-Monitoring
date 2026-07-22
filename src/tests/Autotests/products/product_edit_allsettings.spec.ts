@@ -36,13 +36,20 @@ test('Edit all products settings', async ({ page }) => {
   await page.getByRole('button', { name: 'create' }).click();
   await expect(page.getByRole('cell', { name: userName1 })).toBeVisible();
   await page.getByRole('link', { name: 'Products' }).click();
+  // The Products page renders every folder/chat/product server-side and can take a moment to
+  // settle after navigation, so wait for the network to idle before asserting on the new row.
+  await page.waitForLoadState('networkidle');
+  // The Products page is heavy (all folders/chats/products server-rendered); give the new row time to appear.
+  await expect(page.getByRole('link', { name: productName, exact: true })).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(userName1)).toBeVisible();
 
   //remove user
   await page.getByRole('link', { name: productName, exact: true }).click();
   await page.getByRole('button', { name: 'remove' }).click();
   await page.getByRole('button', { name: 'Confirm' }).click();
-  await expect(page.getByRole('cell', { name: userName1 })).toHaveCount(0);
+  // Removing the user POSTs (AJAX) and then reloads; the assertion's auto-wait survives the reload,
+  // but needs a longer window than the default 5s to outlast the AJAX round-trip + reload.
+  await expect(page.getByRole('cell', { name: userName1 })).toHaveCount(0, { timeout: 15000 });
 
   //Check exsist default key
   await expect(page.getByRole('cell', { name: 'DefaultKey' })).toBeVisible();
@@ -53,6 +60,8 @@ test('Edit all products settings', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Display name' }).fill('TestKey');
   await page.getByRole('button', { name: 'Select all' }).click();
   await page.locator('#newEditAccessKey_form').getByRole('button', { name: 'Save' }).click();
+  // Saving a key closes the access-keys modal, which triggers a page reload.
+  await page.waitForLoadState('networkidle');
   await expect(page.getByRole('cell', { name: 'TestKey' })).toBeVisible();
  
   //Block user key
@@ -75,6 +84,8 @@ test('Edit all products settings', async ({ page }) => {
   await page.getByRole('button', { name: 'Unselect all' }).click();
   await page.getByRole('checkbox', { name: 'CanSendSensorData' }).check();
   await page.locator('#newEditAccessKey_form').getByRole('button', { name: 'Save' }).click();
+  // Editing a key closes the access-keys modal, which triggers a page reload.
+  await page.waitForLoadState('networkidle');
   await expect(page.getByRole('cell', { name: 'CanSendSensorData' })).toBeVisible();
   
   //remove key
@@ -85,7 +96,8 @@ test('Edit all products settings', async ({ page }) => {
   await expect(blockButton3).toBeVisible();
   await blockButton3.click();
   await page.getByRole('button', { name: 'OK' }).click();
-  await expect(page.getByRole('cell', { name: 'TestKey' })).toHaveCount(0);
+  // Removing the key closes the modal, which triggers a page reload; give the row time to disappear.
+  await expect(page.getByRole('cell', { name: 'TestKey' })).toHaveCount(0, { timeout: 15000 });
 
   
   //Remove the product
