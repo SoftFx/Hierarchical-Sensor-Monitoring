@@ -26,7 +26,12 @@ namespace HSMServer.Notifications.Chats
 
         string GetGroupInvitation(Guid folderId, User user);
 
-        Task<string> TryConnect(Message message, InvitationToken token);
+        // EditChat flow — invite token targets an existing Chat record (binding Telegram in place).
+        string GetChatInvitationLink(Guid chatId, User user);
+
+        string GetChatGroupInvitation(Guid chatId, User user);
+
+        Task<ChatConnectResult> TryConnect(Message message, InvitationToken token);
 
         void AddFolderToChats(Guid folderId, List<Guid> chats);
 

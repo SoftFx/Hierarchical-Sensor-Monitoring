@@ -5,6 +5,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Constants
 @using HSMServer.Model.Folders.ViewModels
+@using HSMServer.Model.Notifications
 
 @model FolderChatsViewModel
 
@@ -15,7 +16,7 @@
 
 @if (Model is not null)
 {
-    @await Html.PartialAsync("~/Views/Notifications/_NewChatHelpModal.cshtml", Model.FolderId)
+    @await Html.PartialAsync("~/Views/Notifications/_NewChatHelpModal.cshtml", new NewChatHelpViewModel { FolderId = Model.FolderId })
 
     <div class="d-flex flex-row text-nowrap align-items-center my-3">
         <partial name="~/Views/Shared/_DefaultChat.cshtml" for="DefaultChats" />

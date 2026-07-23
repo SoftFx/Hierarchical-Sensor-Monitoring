@@ -13,7 +13,7 @@
     ViewData["Title"] = $"Chat {Model.Name}";
 
     var isTelegramBound = Model.TelegramChatId.HasValue;
-    var isNewChat = Model.Id == Guid.Empty;
+    var isNewChat = Model.IsNewChat;
     var formAction = isNewChat ? nameof(NotificationsController.AddChat) : nameof(NotificationsController.EditChat);
 
     // First configured channel wins; for a brand-new chat we land on Slack because Telegram can
@@ -47,6 +47,7 @@
 <div class="chat-container">
     <form id="chat_form" method="post" asp-action="@formAction">
         <input asp-for="@Model.Id" value="@Model.Id" type="hidden" />
+        <input asp-for="@Model.IsNewChat" value="@Model.IsNewChat.ToString().ToLowerInvariant()" type="hidden" />
         <input asp-for="@Model.TelegramChatId" value="@Model.TelegramChatId" type="hidden" />
         <input asp-for="@Model.TelegramType" value="@Model.TelegramType" type="hidden" />
         <input asp-for="@Model.Author" value="@Model.Author" type="hidden" />
@@ -165,7 +166,7 @@
                         }
                         else
                         {
-                            @await Html.PartialAsync("_NewChatHelpModal.cshtml", Model.Id)
+                            @await Html.PartialAsync("_NewChatHelpModal.cshtml", new NewChatHelpViewModel { ChatId = Model.Id })
                             <div class="row align-items-center">
                                 <div class="col-12 col-md-3 text-md-end">
                                     <label class="chat-form-label col-form-label">Telegram</label>

@@ -14,6 +14,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Folders;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
+using HSMServer.Notifications.Telegram.Tokens;
 using HSMServer.ServerConfiguration;
 using Moq;
 using User = HSMServer.Model.Authentication.User;
@@ -220,6 +221,258 @@ namespace HSMServer.Core.Tests.Notifications
             _ = chat.SlackAccumulator.GetNotifications(aggregation).ToList();
             Assert.True(chat.MattermostAccumulator.ShouldSend(aggregation));
         }
+
+
+        // #1304: EditChat flow — token carries a ChatId targeting an existing Chat record.
+        // TryConnect must bind Telegram in place: TelegramChatId/Type/AuthorizationTime populate
+        // on the existing record, and no new Chat is added to storage (no orphan).
+        [Fact]
+        public async Task TryConnect_WithChatIdToken_BindsTelegramToExistingChat()
+        {
+            var manager = BuildManager();
+            var chat = BuildChat();
+            await manager.TryAdd(chat);
+            var chatCountBefore = manager.GetValues().Count();
+
+            var token = new InvitationToken(chatId: chat.Id, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 123456);
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, result.Outcome);
+            Assert.Equal(chat.Name, result.Name);
+            Assert.Equal(chatCountBefore, manager.GetValues().Count()); // no orphan created
+
+            var updatedChat = manager[chat.Id];
+            Assert.Equal(123456L, updatedChat.TelegramChatId?.Identifier);
+            Assert.Equal(ConnectedChatType.TelegramPrivate, updatedChat.TelegramType);
+            Assert.NotNull(updatedChat.AuthorizationTime);
+        }
+
+        // #1304 regression guard: the legacy folder-scoped flow still creates a brand-new chat
+        // bound to the folder. The refactored early branch must not swallow this path.
+        [Fact]
+        public async Task TryConnect_WithFolderToken_StillCreatesNewChat()
+        {
+            var manager = BuildManager();
+            var folderId = Guid.NewGuid();
+            const string folderName = "Production";
+
+            manager.ConnectChatToFolder += (_, id, _) =>
+            {
+                Assert.Equal(folderId, id);
+                return Task.FromResult(folderName);
+            };
+
+            var token = new InvitationToken(folderId, new User("test-user"));
+            var message = BuildDirectMessage(chatId: 654321);
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.FolderAdded, result.Outcome);
+            Assert.Equal(folderName, result.Name);
+            var created = Assert.Single(manager.GetValues());
+            Assert.Contains(folderId, created.Folders);
+            Assert.Equal(654321L, created.TelegramChatId?.Identifier);
+        }
+
+        // #1304 conflict policy — target Chat already bound to a different Telegram chat.
+        // Strict refuse: TelegramChatId on the record must not be overwritten.
+        [Fact]
+        public async Task TryConnect_ChatIdToken_TargetAlreadyBound_ReturnsFailed()
+        {
+            var manager = BuildManager();
+            var chat = new Chat(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "already-bound",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+                TelegramChatId = 999_999L,
+                TelegramType = (byte)ConnectedChatType.TelegramPrivate,
+            });
+            await manager.TryAdd(chat);
+
+            var token = new InvitationToken(chatId: chat.Id, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 123_456); // different Telegram chat id
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.Failed, result.Outcome);
+            Assert.Equal(999_999L, manager[chat.Id].TelegramChatId?.Identifier); // unchanged
+        }
+
+        // #1304 idempotent re-bind: same chat record, same Telegram chat. Neither guard fires
+        // (not a rebind to a *different* chat, not theft because the owner IS the target). The
+        // update path runs through and the chat stays bound. Pins that re-issuing the token (e.g.
+        // admin clicks setup help again after a bot restart) doesn't false-positive on the strict
+        // policy.
+        [Fact]
+        public async Task TryConnect_ChatIdToken_SameTelegramChatAsExisting_RebindsIdempotently()
+        {
+            var manager = BuildManager();
+            var chat = new Chat(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "already-bound",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+                TelegramChatId = 222_222L,
+                TelegramType = (byte)ConnectedChatType.TelegramPrivate,
+            });
+            await manager.TryAdd(chat);
+            var originalAuthTime = manager[chat.Id].AuthorizationTime;
+
+            var token = new InvitationToken(chatId: chat.Id, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 222_222); // same Telegram chat id
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, result.Outcome);
+            Assert.Equal(222_222L, manager[chat.Id].TelegramChatId?.Identifier); // unchanged value
+            Assert.NotEqual(originalAuthTime, manager[chat.Id].AuthorizationTime); // but refreshed
+        }
+
+        // #1304 conflict policy — incoming Telegram chat already owned by another Chat record.
+        // Strict refuse: the other record keeps its binding; the target record stays unbound.
+        // Result carries the owner chat's name so the bot reply can name the record to remove.
+        [Fact]
+        public async Task TryConnect_ChatIdToken_TelegramChatOwnedByAnotherRecord_ReturnsFailedAlreadyBound()
+        {
+            var manager = BuildManager();
+
+            var owner = new Chat(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "owner",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+                TelegramChatId = 123_456L,
+                TelegramType = (byte)ConnectedChatType.TelegramPrivate,
+            });
+            await manager.TryAdd(owner);
+
+            var target = BuildSlackOnlyChat(); // no Telegram binding yet
+            await manager.TryAdd(target);
+
+            var token = new InvitationToken(chatId: target.Id, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 123_456); // same Telegram chat as owner
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.FailedAlreadyBound, result.Outcome);
+            Assert.Equal("owner", result.Name); // surfaced to the bot reply
+            Assert.Null(manager[target.Id].TelegramChatId); // target untouched
+            Assert.Equal(123_456L, manager[owner.Id].TelegramChatId?.Identifier); // owner unchanged
+        }
+
+        // #1304 pre-allocated guid flow: GET AddChat hands the EditChat form a fresh guid before
+        // any row is in storage. When the user completes /start against that token, TryConnect
+        // must materialise the Chat record with the pre-allocated guid (so the form the user is
+        // still looking at remains valid), populate the Telegram binding, and leave it global
+        // (no folder binding — token carries Guid.Empty).
+        [Fact]
+        public async Task TryConnect_ChatIdToken_PreAllocatedGuid_CreatesNewGlobalChat()
+        {
+            var manager = BuildManager();
+            var preAllocatedId = Guid.NewGuid();
+            var chatCountBefore = manager.GetValues().Count();
+
+            var token = new InvitationToken(chatId: preAllocatedId, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 778_899);
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, result.Outcome);
+            Assert.Equal(chatCountBefore + 1, manager.GetValues().Count());
+
+            var created = manager[preAllocatedId];
+            Assert.Equal(preAllocatedId, created.Id); // pre-allocated guid preserved, not regenerated
+            Assert.Equal(778_899L, created.TelegramChatId?.Identifier);
+            Assert.Equal(ConnectedChatType.TelegramPrivate, created.TelegramType);
+            Assert.NotNull(created.AuthorizationTime);
+            Assert.Empty(created.Folders); // global — no folder binding
+            Assert.Equal("test-user", created.Author);
+        }
+
+        // #1304 pre-allocated guid flow — theft guard still applies. If the incoming Telegram chat
+        // is already bound to another Chat record, refuse even though the chatId in the token
+        // doesn't resolve yet. The pre-allocation path must not bypass the conflict policy.
+        [Fact]
+        public async Task TryConnect_PreAllocatedGuid_TelegramChatOwnedByAnother_ReturnsFailedAlreadyBound()
+        {
+            var manager = BuildManager();
+
+            var owner = new Chat(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "owner",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+                TelegramChatId = 432_100L,
+                TelegramType = (byte)ConnectedChatType.TelegramPrivate,
+            });
+            await manager.TryAdd(owner);
+
+            var preAllocatedId = Guid.NewGuid();
+            var token = new InvitationToken(chatId: preAllocatedId, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 432_100); // collides with owner
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.FailedAlreadyBound, result.Outcome);
+            Assert.Equal("owner", result.Name);
+            Assert.False(manager.TryGetValue(preAllocatedId, out _)); // pre-allocated guid not materialised
+            Assert.Equal(432_100L, manager[owner.Id].TelegramChatId?.Identifier); // owner unchanged
+        }
+
+        // #1304 self-heal: _telegramChatIds may carry a stale entry if a previous binding was
+        // cleared through a path that bypassed TryUpdate (dev runs, hand-edited storage, future
+        // refactor bugs). When the owner no longer claims the incoming Telegram chat (its
+        // TelegramChatId is null or points elsewhere), drop the dangling index entry and bind
+        // instead of refusing. Pin both branches of the guard.
+        [Fact]
+        public async Task TryConnect_ChatIdToken_StaleIndexEntry_SelfHealsAndBinds()
+        {
+            var manager = BuildManager();
+
+            // Owner exists in storage with no Telegram binding (was cleared earlier) but the index
+            // still points at it for chatId 555_111 — the exact scenario the user hit.
+            var owner = BuildSlackOnlyChat();
+            owner.Update(new ChatUpdate { Id = owner.Id, Name = "SiarheiHanich" });
+            await manager.TryAdd(owner);
+
+            // Force a stale index entry: Telegram chat 555_111 → owner (owner.TelegramChatId is null).
+            manager.InjectStaleTelegramChatIdIndex_TestOnly(555_111L, owner);
+
+            var target = BuildSlackOnlyChat();
+            await manager.TryAdd(target);
+
+            var token = new InvitationToken(chatId: target.Id, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 555_111);
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, result.Outcome);
+            Assert.Equal(555_111L, manager[target.Id].TelegramChatId?.Identifier);
+            Assert.Null(manager[owner.Id].TelegramChatId); // owner untouched
+        }
+
+
+        private static Telegram.Bot.Types.Message BuildDirectMessage(long chatId = 123456) =>
+            new()
+            {
+                Chat = new() { Id = chatId, Type = Telegram.Bot.Types.Enums.ChatType.Private },
+                From = new() { Id = 789, Username = "tg-user", FirstName = "Test" },
+            };
 
 
         private static ChatsManager BuildManager()

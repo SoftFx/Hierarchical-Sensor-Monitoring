@@ -113,12 +113,16 @@ namespace HSMServer.Notifications
             {
                 if (token.ExpirationTime >= DateTime.UtcNow)
                 {
-                    var folderName = await _chatsManager.TryConnect(message, token);
+                    var result = await _chatsManager.TryConnect(message, token);
+                    var target = message.FromPrivateChat() ? "direct" : $"group by {token.User.Name}";
 
-                    if (string.IsNullOrEmpty(folderName))
-                        response.Append("Sorry, your token is invalid or folder doesn't exsist.");
-                    else
-                        response.Append($"Folder '{folderName}' is successfully added to {(message.FromPrivateChat() ? "direct" : $"group by {token.User.Name}")}.");
+                    response.Append(result.Outcome switch
+                    {
+                        ChatConnectOutcome.FolderAdded => $"Folder '{result.Name}' is successfully added to {target}.",
+                        ChatConnectOutcome.ChatBound => $"Chat '{result.Name}' is successfully connected to {target}.",
+                        ChatConnectOutcome.FailedAlreadyBound => $"This Telegram chat is already bound to chat '{result.Name}'. Remove that chat first.",
+                        _ => "Sorry, your token is invalid, chat doesn't exist, or this Telegram chat is already bound to another record.",
+                    });
                 }
                 else
                     response.Append("Sorry, your invitation token is expired.");

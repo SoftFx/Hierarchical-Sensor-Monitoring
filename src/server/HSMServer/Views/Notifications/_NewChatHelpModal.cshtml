@@ -1,9 +1,10 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Notifications
+@using HSMServer.Model.Notifications
 @using HSMServer.ServerConfiguration
 
-@model Guid
+@model NewChatHelpViewModel
 
 @inject IServerConfig Config
 @inject NotificationsCenter Notifications
@@ -13,6 +14,17 @@
 @{
     var botLinksClass = Notifications.TelegramBot.IsBotRunning ? string.Empty : "disabled-link";
     var botLinksTitle = Notifications.TelegramBot.IsBotRunning ? string.Empty : TelegramBot.BotIsNotRunningError;
+
+    var isChatFlow = Model?.ChatId is { } chatId && chatId != Guid.Empty;
+    var directAction = isChatFlow ? nameof(NotificationsController.OpenChatInvitationLink) : nameof(NotificationsController.OpenInvitationLink);
+    var groupAction = isChatFlow ? nameof(NotificationsController.GetChatGroupInvitation) : nameof(NotificationsController.GetGroupInvitation);
+
+    var routeValues = isChatFlow
+        ? (object)new { chatId = Model.ChatId }
+        : new { folderId = Model?.FolderId ?? Guid.Empty };
+
+    var directLink = Url.Action(directAction, ViewConstants.NotificationsController, routeValues);
+    var groupLink = Url.Action(groupAction, ViewConstants.NotificationsController, routeValues);
 }
 
 
@@ -35,7 +47,7 @@
 
                 <h6 class="mt-3">For direct chat</h6>
                 <p class="ms-2">
-                    Click <span title="@botLinksTitle"><a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenInvitationLink)" asp-route-folderId="@Model" target="_blank" class="@botLinksClass">invitation link</a></span> and press <b>Start</b> button at opened direct chat with Telegram Bot (@Config.Telegram.BotName).
+                    Click <span title="@botLinksTitle"><a href="@directLink" target="_blank" class="@botLinksClass">invitation link</a></span> and press <b>Start</b> button at opened direct chat with Telegram Bot (@Config.Telegram.BotName).
                 </p>
             </div>
         </div>
@@ -58,7 +70,7 @@
     function getGroupStartCommand() {
         $.ajax({
             type: 'GET',
-            url: `@Html.Raw(Url.Action(nameof(NotificationsController.GetGroupInvitation), ViewConstants.NotificationsController))?folderId=@Model`,
+            url: `@Html.Raw(groupLink)`,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
