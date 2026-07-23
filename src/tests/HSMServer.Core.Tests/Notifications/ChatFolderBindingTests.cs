@@ -304,6 +304,39 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(999_999L, manager[chat.Id].TelegramChatId?.Identifier); // unchanged
         }
 
+        // #1304 idempotent re-bind: same chat record, same Telegram chat. Neither guard fires
+        // (not a rebind to a *different* chat, not theft because the owner IS the target). The
+        // update path runs through and the chat stays bound. Pins that re-issuing the token (e.g.
+        // admin clicks setup help again after a bot restart) doesn't false-positive on the strict
+        // policy.
+        [Fact]
+        public async Task TryConnect_ChatIdToken_SameTelegramChatAsExisting_RebindsIdempotently()
+        {
+            var manager = BuildManager();
+            var chat = new Chat(new ChatEntity
+            {
+                Id = Guid.NewGuid().ToByteArray(),
+                Author = Guid.NewGuid().ToByteArray(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                Name = "already-bound",
+                SendMessages = true,
+                MessagesAggregationTimeSec = 60,
+                TelegramChatId = 222_222L,
+                TelegramType = (byte)ConnectedChatType.TelegramPrivate,
+            });
+            await manager.TryAdd(chat);
+            var originalAuthTime = manager[chat.Id].AuthorizationTime;
+
+            var token = new InvitationToken(chatId: chat.Id, folderId: Guid.Empty, user: new User("test-user"));
+            var message = BuildDirectMessage(chatId: 222_222); // same Telegram chat id
+
+            var result = await manager.TryConnect(message, token);
+
+            Assert.Equal(ChatConnectOutcome.ChatBound, result.Outcome);
+            Assert.Equal(222_222L, manager[chat.Id].TelegramChatId?.Identifier); // unchanged value
+            Assert.NotEqual(originalAuthTime, manager[chat.Id].AuthorizationTime); // but refreshed
+        }
+
         // #1304 conflict policy — incoming Telegram chat already owned by another Chat record.
         // Strict refuse: the other record keeps its binding; the target record stays unbound.
         // Result carries the owner chat's name so the bot reply can name the record to remove.
@@ -418,7 +451,7 @@ namespace HSMServer.Core.Tests.Notifications
             await manager.TryAdd(owner);
 
             // Force a stale index entry: Telegram chat 555_111 → owner (owner.TelegramChatId is null).
-            manager.GetChatByChatId_TestOnly_AddStaleIndexEntry(555_111L, owner);
+            manager.InjectStaleTelegramChatIdIndex_TestOnly(555_111L, owner);
 
             var target = BuildSlackOnlyChat();
             await manager.TryAdd(target);

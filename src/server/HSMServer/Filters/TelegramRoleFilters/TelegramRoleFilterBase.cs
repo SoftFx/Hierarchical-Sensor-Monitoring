@@ -14,21 +14,22 @@ namespace HSMServer.Filters.TelegramRoleFilters
 
         protected override bool TryCheckRole(ActionExecutingContext context, User user)
         {
+            if (!TryGetEntityId(context, out var chatId))
+                return false;
+
             // Pre-allocated chat guid (AddChat flow): no Chat row exists in storage yet, so the
             // folder-loop below would find zero folder ids and reject. Admins can pre-allocate;
             // a non-admin has no business issuing a token against a guid that doesn't resolve.
-            if (TryGetEntityId(context, out var chatId)
-                && context.Controller is NotificationsController controller
+            if (context.Controller is NotificationsController controller
                 && !controller.ChatsManager.TryGetValue(chatId.Value, out _))
             {
                 return user.IsAdmin;
             }
 
-            if (TryGetEntityId(context, out chatId))
-                foreach (var folderId in GetFolderIds(chatId.Value, context))
-                    foreach (var role in _roles)
-                        if (HasRole(user, folderId, role))
-                            return true;
+            foreach (var folderId in GetFolderIds(chatId.Value, context))
+                foreach (var role in _roles)
+                    if (HasRole(user, folderId, role))
+                        return true;
 
             return false;
         }
