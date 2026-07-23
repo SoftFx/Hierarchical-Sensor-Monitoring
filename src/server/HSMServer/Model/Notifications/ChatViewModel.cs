@@ -12,6 +12,11 @@ namespace HSMServer.Model.Notifications
     {
         public Guid Id { get; set; }
 
+        // True when the form is rendering for a brand-new chat (AddChat flow). Decoupled from
+        // `Id == Guid.Empty` because AddChat pre-allocates a guid up-front so the Telegram
+        // bot-invite path can build an invitation token against it before any row is in storage.
+        public bool IsNewChat { get; set; }
+
         [Required(ErrorMessage = "Name is required")]
         [StringLength(100, ErrorMessage = "{0} length should be less than {1}.")]
         public string Name { get; set; }

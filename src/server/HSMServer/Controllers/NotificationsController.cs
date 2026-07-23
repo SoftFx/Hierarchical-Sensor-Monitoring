@@ -82,8 +82,10 @@ namespace HSMServer.Controllers
         // Telegram bot-invite flow build an invitation token against this guid up-front; when the
         // user completes /start, TryConnect sees a chatId that is not yet in storage and creates
         // the Chat record on demand. No row is written until /start, so abandoning the form
-        // leaves no orphan.
-        public IActionResult AddChat() => View(nameof(EditChat), new ChatViewModel { Id = Guid.NewGuid(), EnableMessages = true });
+        // leaves no orphan. IsNewChat flag tells the EditChat view to render "Add chat" copy and
+        // submit to AddChat (POST) — `Id == Guid.Empty` no longer works as a new-chat signal
+        // because of the pre-allocation.
+        public IActionResult AddChat() => View(nameof(EditChat), new ChatViewModel { Id = Guid.NewGuid(), EnableMessages = true, IsNewChat = true });
 
         [HttpPost]
         [AuthorizeIsAdmin]
@@ -91,6 +93,19 @@ namespace HSMServer.Controllers
         {
             if (!ModelState.IsValid)
                 return View(nameof(EditChat), model);
+
+            // The user may have already triggered /start against the pre-allocated guid, in which
+            // case the Chat row exists in storage with a Telegram binding but no admin-set name.
+            // TryAdd would refuse (id collision) and silently lose the Name the user just typed.
+            // Detect that case and switch to an update path so the form Save is idempotent w.r.t.
+            // the order of "fill name" vs "click setup help".
+            if (ChatsManager.TryGetValue(model.Id, out _))
+            {
+                if (await ChatsManager.TryUpdate(model.ToUpdate()))
+                    await SyncFolders(model);
+
+                return RedirectToAction(nameof(Index), ViewConstants.NotificationsController);
+            }
 
             var chat = model.ToNewChat(CurrentUser.Id);
 
