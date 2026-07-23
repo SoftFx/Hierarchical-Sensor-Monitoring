@@ -69,7 +69,7 @@ try {
     # --- Worktree hygiene ---
     $dirty = (git status --porcelain) -join "`n"
     if ($dirty -and $origBranch -ne $Branch) {
-        Write-Warning "Working tree has uncommitted changes — switching to '$Branch' may fail:"
+        Write-Warning "Working tree has uncommitted changes - switching to '$Branch' may fail:"
         Write-Host $dirty
         $confirm = Read-Host "Continue anyway? (y/N)"
         if ($confirm -ne "y") { throw "Aborted by user." }
@@ -140,7 +140,7 @@ try {
     # --- Publish server to a folder, then build the image with plain `docker build` ---
     # We avoid the SDK's DefaultContainer profile because its HTTP base-image fetch
     # breaks on Windows Docker Desktop (docker-credential-desktop / CONTAINER1008).
-    $publishDir = Join-Path $repoRoot "build" "local-publish"
+    $publishDir = Join-Path (Join-Path $repoRoot "build") "local-publish"
     if (Test-Path $publishDir) {
         Remove-Item -Recurse -Force $publishDir
     }
@@ -152,7 +152,7 @@ try {
         -o $publishDir
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
 
-    $dockerfile = Join-Path $repoRoot "docker_scripts" "HSMserver" "Dockerfile.local"
+    $dockerfile = Join-Path (Join-Path (Join-Path $repoRoot "docker_scripts") "HSMserver") "Dockerfile.local"
     if (-not (Test-Path $dockerfile)) {
         throw "Missing Dockerfile: $dockerfile"
     }
@@ -165,7 +165,7 @@ try {
     Write-Host "Built: ${ImageName}:$ImageTag" -ForegroundColor Green
 
     if ($NoRun) {
-        Write-Host "-NoRun set — skipping docker compose up."
+        Write-Host "-NoRun set - skipping docker compose up."
         return
     }
 

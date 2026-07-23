@@ -70,17 +70,18 @@ export const cleanup = {
   async chat(page: Page, chatName: string): Promise<void> {
     try {
       // Chats live on the top-level /Notifications page (promoted from a Settings tab in #1273).
-      // The remove handler shows a window.confirm() dialog; waitForEvent('dialog') accepts it
-      // inline so we don't leak a page.on listener across multiple cleanup.chat calls in the
-      // same afterEach.
+      // Rows are `.chat-row` divs, not `<tr>` (rebuilt on the Members-layout pattern in #1281), and
+      // Remove opens the shared _ConfirmationModal (AJAX POST + list reload) instead of a
+      // window.confirm() dialog — see Configuration/_Chats.cshtml.
       await page.goto('/Notifications');
-      const row = page.getByRole('row').filter({ hasText: chatName });
+      const row = page.locator('.chat-row').filter({ hasText: chatName });
       if (await row.count() === 0) return;
-      await row.first().locator('#actionButton').click();
-      const dialogPromise = page.waitForEvent('dialog');
-      await row.first().locator('a.dropdown-item', { hasText: 'Remove' }).click();
-      const dialog = await dialogPromise;
-      await dialog.accept();
+      await row.first().locator('.chat-action-btn.danger[title="Remove"]').click();
+      await page.getByRole('button', { name: 'OK' }).click();
+      // networkidle (not domcontentloaded): the AJAX success handler's own document.location.reload()
+      // can still be in flight when domcontentloaded fires, and a subsequent cleanup.chat() call's
+      // page.goto() racing that in-flight reload aborts with net::ERR_ABORTED.
+      await page.waitForLoadState('networkidle');
     } catch (e) {
       console.warn(`[cleanup] chat "${chatName}":`, e instanceof Error ? e.message : e);
     }
