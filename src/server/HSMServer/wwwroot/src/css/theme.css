@@ -1,0 +1,369 @@
+/* ============================================================
+   HSM design system — theme.css
+   Loaded last in index.js so it overrides Bootstrap and legacy
+   styles via CSS variables and a few targeted rules.
+   ============================================================ */
+
+:root {
+    /* ---------- Surfaces ---------- */
+    --hsm-bg:            #ffffff;            /* page background           */
+    --hsm-surface:       #ffffff;            /* card / panel background   */
+    --hsm-surface-muted: #f6f7f9;            /* metric cards, hover bg    */
+    --hsm-surface-sunk:  #f1f2f5;            /* sidebar / footer strip    */
+
+    /* ---------- Text ---------- */
+    --hsm-text:          #14181f;
+    --hsm-text-muted:    #5b6472;
+    --hsm-text-faint:    #8a93a1;
+    --hsm-text-on-color: #ffffff;
+
+    /* ---------- Borders ---------- */
+    --hsm-border:        rgba(20, 24, 31, 0.08);   /* default 0.5px line */
+    --hsm-border-strong: rgba(20, 24, 31, 0.16);   /* hover / focus      */
+    --hsm-border-focus:  rgba(55, 138, 221, 0.45); /* focus ring         */
+
+    /* ---------- Brand / interactive ---------- */
+    --hsm-accent:        #378add;            /* primary blue              */
+    --hsm-accent-hover:  #1f6fc0;
+    --hsm-accent-soft:   #e6f1fb;            /* tinted background         */
+    --hsm-accent-text:   #0c447c;            /* text on accent-soft       */
+
+    /* ---------- Status (sensor states) ---------- */
+    --hsm-ok:            #639922;            /* green                     */
+    --hsm-ok-soft:       #eaf3de;
+    --hsm-ok-text:       #3b6d11;
+
+    --hsm-error:         #e24b4a;            /* red                       */
+    --hsm-error-soft:    #fcebeb;
+    --hsm-error-text:    #a32d2d;
+
+    --hsm-warn:          #ef9f27;            /* amber                     */
+    --hsm-warn-soft:     #faeeda;
+    --hsm-warn-text:     #854f0b;
+
+    --hsm-offtime:       #888780;            /* gray for offline / muted  */
+    --hsm-offtime-soft:  #f1efe8;
+    --hsm-offtime-text:  #5f5e5a;
+
+    --hsm-unconfigured:  #d4537e;            /* pink — needs setup        */
+
+    /* ---------- Typography ---------- */
+    --hsm-font-sans:     -apple-system, BlinkMacSystemFont, "Segoe UI",
+                         Roboto, "Helvetica Neue", Arial, sans-serif;
+    --hsm-font-mono:     "SF Mono", "JetBrains Mono", Consolas, monospace;
+
+    --hsm-text-xs:       11px;
+    --hsm-text-sm:       12px;
+    --hsm-text-base:     13px;
+    --hsm-text-md:       14px;
+    --hsm-text-lg:       16px;
+    --hsm-text-xl:       20px;
+
+    --hsm-fw-regular:    400;
+    --hsm-fw-medium:     500;
+
+    /* ---------- Spacing scale (4px base) ---------- */
+    --hsm-space-1:       4px;
+    --hsm-space-2:       8px;
+    --hsm-space-3:       12px;
+    --hsm-space-4:       16px;
+    --hsm-space-5:       20px;
+    --hsm-space-6:       24px;
+    --hsm-space-8:       32px;
+
+    /* ---------- Radii ---------- */
+    --hsm-radius-sm:     4px;
+    --hsm-radius-md:     8px;
+    --hsm-radius-lg:     12px;
+    --hsm-radius-pill:   999px;
+
+    /* ---------- Misc ---------- */
+    --hsm-line:          0.5px solid var(--hsm-border);
+    --hsm-transition:    150ms ease;
+}
+
+/* ============================================================
+   Bootstrap 5 variable bridge — let Bootstrap components inherit
+   the new palette without rewriting their classes.
+   ============================================================ */
+
+:root {
+    --bs-body-bg:           var(--hsm-bg);
+    --bs-body-color:        var(--hsm-text);
+    --bs-body-font-family:  var(--hsm-font-sans);
+    --bs-body-font-size:    var(--hsm-text-base);
+    --bs-body-line-height:  1.5;
+
+    --bs-border-color:      var(--hsm-border);
+    --bs-border-radius:     var(--hsm-radius-md);
+    --bs-border-radius-sm:  var(--hsm-radius-sm);
+    --bs-border-radius-lg:  var(--hsm-radius-lg);
+
+    --bs-primary:           var(--hsm-accent);
+    --bs-primary-rgb:       55, 138, 221;
+    --bs-link-color:        var(--hsm-accent);
+    --bs-link-hover-color:  var(--hsm-accent-hover);
+
+    --bs-success:           var(--hsm-ok);
+    --bs-danger:            var(--hsm-error);
+    --bs-warning:           var(--hsm-warn);
+    --bs-secondary:         var(--hsm-text-muted);
+}
+
+/* ============================================================
+   Base / reset light
+   ============================================================ */
+
+html { font-size: var(--hsm-text-md); }
+
+body {
+    background: var(--hsm-bg);
+    color: var(--hsm-text);
+    font-family: var(--hsm-font-sans);
+    font-size: var(--hsm-text-base);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+a { color: var(--hsm-accent); text-decoration: none; transition: color var(--hsm-transition); }
+a:hover { color: var(--hsm-accent-hover); }
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--hsm-text);
+    font-weight: var(--hsm-fw-medium);
+    letter-spacing: -0.01em;
+}
+
+::selection { background: var(--hsm-accent-soft); color: var(--hsm-accent-text); }
+
+/* ============================================================
+   Bootstrap component tweaks (non-destructive)
+   ============================================================ */
+
+.btn {
+    --bs-btn-padding-x: 14px;
+    --bs-btn-padding-y: 6px;
+    --bs-btn-font-size: var(--hsm-text-base);
+    --bs-btn-border-radius: var(--hsm-radius-md);
+    font-weight: var(--hsm-fw-medium);
+    transition: background-color var(--hsm-transition), border-color var(--hsm-transition), color var(--hsm-transition);
+}
+
+.btn-primary {
+    --bs-btn-bg:          var(--hsm-accent);
+    --bs-btn-border-color:var(--hsm-accent);
+    --bs-btn-hover-bg:    var(--hsm-accent-hover);
+    --bs-btn-hover-border-color: var(--hsm-accent-hover);
+    --bs-btn-active-bg:   var(--hsm-accent-hover);
+}
+
+.btn-outline-secondary {
+    --bs-btn-color:       var(--hsm-text);
+    --bs-btn-border-color:var(--hsm-border-strong);
+    --bs-btn-hover-bg:    var(--hsm-surface-muted);
+    --bs-btn-hover-color: var(--hsm-text);
+    --bs-btn-hover-border-color: var(--hsm-border-strong);
+}
+
+.form-control,
+.form-select {
+    border: 0.5px solid var(--hsm-border-strong);
+    border-radius: var(--hsm-radius-md);
+    font-size: var(--hsm-text-base);
+    transition: border-color var(--hsm-transition), box-shadow var(--hsm-transition);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--hsm-accent);
+    box-shadow: 0 0 0 3px var(--hsm-border-focus);
+}
+
+.dropdown-menu {
+    border: 0.5px solid var(--hsm-border-strong);
+    border-radius: var(--hsm-radius-md);
+    box-shadow: 0 4px 16px rgba(20, 24, 31, 0.06);
+    padding: var(--hsm-space-1);
+    font-size: var(--hsm-text-base);
+}
+
+.dropdown-item {
+    border-radius: var(--hsm-radius-sm);
+    padding: 6px 10px;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background: var(--hsm-surface-muted);
+    color: var(--hsm-text);
+}
+
+.modal-content {
+    border: 0.5px solid var(--hsm-border-strong);
+    border-radius: var(--hsm-radius-lg);
+}
+
+.card {
+    border: 0.5px solid var(--hsm-border);
+    border-radius: var(--hsm-radius-lg);
+    box-shadow: none;
+}
+
+/* ============================================================
+   Utility classes — used by new templates
+   ============================================================ */
+
+/* Status dot (replaces the heavy fa icons in the tree) */
+.hsm-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--hsm-text-faint);
+    flex-shrink: 0;
+}
+.hsm-dot--ok           { background: var(--hsm-ok); }
+.hsm-dot--error        { background: var(--hsm-error); }
+.hsm-dot--warn         { background: var(--hsm-warn); }
+.hsm-dot--offtime      { background: var(--hsm-offtime); }
+.hsm-dot--unconfigured { background: var(--hsm-unconfigured); }
+
+/* Status badge (small pill with text) */
+.hsm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: var(--hsm-radius-md);
+    background: var(--hsm-surface-muted);
+    color: var(--hsm-text-muted);
+    font-size: var(--hsm-text-xs);
+    font-weight: var(--hsm-fw-medium);
+    line-height: 1;
+}
+.hsm-badge--ok      { background: var(--hsm-ok-soft);      color: var(--hsm-ok-text); }
+.hsm-badge--error   { background: var(--hsm-error-soft);   color: var(--hsm-error-text); }
+.hsm-badge--warn    { background: var(--hsm-warn-soft);    color: var(--hsm-warn-text); }
+.hsm-badge--offtime { background: var(--hsm-offtime-soft); color: var(--hsm-offtime-text); }
+
+/* Pill navigation (used in the new navbar) */
+.hsm-nav-pills {
+    display: flex;
+    gap: 2px;
+}
+.hsm-nav-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--hsm-radius-md);
+    color: var(--hsm-text-muted);
+    font-size: var(--hsm-text-base);
+    font-weight: var(--hsm-fw-regular);
+    transition: background-color var(--hsm-transition), color var(--hsm-transition);
+}
+.hsm-nav-pill:hover {
+    background: var(--hsm-surface-muted);
+    color: var(--hsm-text);
+}
+.hsm-nav-pill--active {
+    background: var(--hsm-surface-muted);
+    color: var(--hsm-text);
+    font-weight: var(--hsm-fw-medium);
+}
+
+/* Metric card (used in the node detail panel) */
+.hsm-metric {
+    background: var(--hsm-surface-muted);
+    border-radius: var(--hsm-radius-md);
+    padding: 10px 12px;
+}
+.hsm-metric__label {
+    font-size: var(--hsm-text-xs);
+    color: var(--hsm-text-muted);
+    line-height: 1.2;
+}
+.hsm-metric__value {
+    font-size: var(--hsm-text-lg);
+    font-weight: var(--hsm-fw-medium);
+    color: var(--hsm-text);
+    margin-top: 2px;
+    line-height: 1.2;
+}
+.hsm-metric__value--ok    { color: var(--hsm-ok-text); }
+.hsm-metric__value--error { color: var(--hsm-error-text); }
+.hsm-metric__value--warn  { color: var(--hsm-warn-text); }
+
+/* Surface card (replaces ad-hoc bordered boxes) */
+.hsm-surface {
+    background: var(--hsm-surface);
+    border: 0.5px solid var(--hsm-border);
+    border-radius: var(--hsm-radius-lg);
+}
+
+/* Minimal breadcrumb */
+.hsm-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--hsm-text-sm);
+    color: var(--hsm-text-muted);
+}
+.hsm-breadcrumb__sep {
+    color: var(--hsm-text-faint);
+    font-size: 10px;
+}
+.hsm-breadcrumb__current {
+    color: var(--hsm-text);
+    font-weight: var(--hsm-fw-medium);
+}
+
+/* Compact toolbar row (used above tables / panels) */
+.hsm-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--hsm-space-3);
+    padding: var(--hsm-space-2) var(--hsm-space-4);
+    border-bottom: 0.5px solid var(--hsm-border);
+}
+
+/* Search field (text input with leading icon) */
+.hsm-search {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 0.5px solid var(--hsm-border);
+    border-radius: var(--hsm-radius-md);
+    background: var(--hsm-surface);
+    color: var(--hsm-text-faint);
+    font-size: var(--hsm-text-sm);
+    transition: border-color var(--hsm-transition);
+    min-width: 200px;
+}
+.hsm-search:focus-within {
+    border-color: var(--hsm-border-strong);
+}
+.hsm-search > input {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--hsm-text);
+    font-size: inherit;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Section header (used inside panels) */
+.hsm-section-title {
+    font-size: var(--hsm-text-md);
+    font-weight: var(--hsm-fw-medium);
+    color: var(--hsm-text);
+    margin: 0;
+}
+.hsm-section-sub {
+    font-size: var(--hsm-text-sm);
+    color: var(--hsm-text-muted);
+    margin: 0;
+}

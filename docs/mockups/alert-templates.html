@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSM · Alert Templates — mockups</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<style>
+    :root {
+        --color-background-page: #F4F4EF;
+        --color-background-primary: #FFFFFF;
+        --color-background-secondary: #FAFAF7;
+        --color-text-primary: #1B1B1A;
+        --color-text-secondary: #5F5E5A;
+        --color-text-tertiary: #888780;
+        --color-border-tertiary: rgba(0,0,0,0.10);
+        --color-border-secondary: rgba(0,0,0,0.20);
+        --border-radius-md: 8px;
+        --border-radius-lg: 12px;
+        --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+    html, body {
+        margin: 0;
+        padding: 0;
+        font-family: var(--font-sans);
+        background: var(--color-background-page);
+        color: var(--color-text-primary);
+        font-size: 14px;
+        line-height: 1.5;
+    }
+    .doc {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+    }
+    .doc-header {
+        margin-bottom: 32px;
+    }
+    .doc-header h1 {
+        font-size: 24px;
+        font-weight: 500;
+        margin: 0 0 4px;
+        letter-spacing: -0.2px;
+    }
+    .doc-header p {
+        font-size: 13px;
+        color: var(--color-text-secondary);
+        margin: 0;
+    }
+    .mockup-section {
+        margin-bottom: 40px;
+    }
+    .mockup-title {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .mockup-title h2 {
+        font-size: 16px;
+        font-weight: 500;
+        margin: 0;
+    }
+    .mockup-title span {
+        font-size: 12px;
+        color: var(--color-text-secondary);
+    }
+    .mockup-frame {
+        background: var(--color-background-secondary);
+        border-radius: var(--border-radius-lg);
+        border: 0.5px solid var(--color-border-tertiary);
+        overflow: hidden;
+    }
+    code { font-family: var(--font-mono); }
+    .ti { font-style: normal; }
+</style>
+</head>
+<body>
+<main class="doc">
+
+<header class="doc-header">
+    <h1>HSM · Alert templates</h1>
+    <p>Дизайн-мокапы: страница списка шаблонов и редактор шаблона. Минималистичный стиль, общие CSS-токены проекта.</p>
+</header>
+
+<!-- ============================================================== -->
+<!-- 1. ALERT TEMPLATES LIST                                          -->
+<!-- ============================================================== -->
+<section class="mockup-section">
+    <div class="mockup-title">
+        <h2>1. Alert templates — list</h2>
+        <span>Маршрут: Alerts → Alert templates</span>
+    </div>
+
+    <div class="mockup-frame">
+
+        <!-- Top nav -->
+        <div style="background: var(--color-background-primary); border-bottom: 0.5px solid var(--color-border-tertiary); padding: 0 20px; display: flex; align-items: center; gap: 24px; height: 48px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 22px; height: 22px; border-radius: 6px; background: #E6F1FB; display: flex; align-items: center; justify-content: center;">
+                    <i class="ti ti-heartbeat" style="font-size: 13px; color: #185FA5;" aria-hidden="true"></i>
+                </div>
+                <span style="font-size: 13px; font-weight: 500;">HSM</span>
+            </div>
+            <div style="display: flex; gap: 2px; flex: 1;">
+                <span style="padding: 6px 12px; font-size: 13px; color: var(--color-text-secondary); border-radius: 6px;">Home</span>
+                <span style="padding: 6px 12px; font-size: 13px; color: var(--color-text-secondary); border-radius: 6px;">Dashboards</span>
+                <span style="padding: 6px 12px; font-size: 13px; color: var(--color-text-secondary); border-radius: 6px;">Products</span>
+                <span style="padding: 6px 12px; font-size: 13px; color: var(--color-text-primary); background: #E6F1FB; border-radius: 6px; font-weight: 500;">Alerts</span>
+                <span style="padding: 6px 12px; font-size: 13px; color: var(--color-text-secondary); border-radius: 6px;">Configuration</span>
+            </div>
+            <span style="font-size: 12px; color: var(--color-text-secondary);">m.pazniak</span>
+        </div>
+
+        <!-- Sub-tabs -->
+        <div style="background: var(--color-background-primary); border-bottom: 0.5px solid var(--color-border-tertiary); padding: 0 24px; display: flex; align-items: center; gap: 4px; height: 40px;">
+            <span style="padding: 8px 14px; font-size: 13px; color: var(--color-text-primary); font-weight: 500; border-bottom: 2px solid #378ADD; height: 40px; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="ti ti-file-text" style="font-size: 14px;" aria-hidden="true"></i> Alert templates
+            </span>
+            <span style="padding: 8px 14px; font-size: 13px; color: var(--color-text-secondary); font-weight: 500; height: 40px; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="ti ti-calendar-time" style="font-size: 14px;" aria-hidden="true"></i> Alert schedules
+            </span>
+        </div>
+
+        <div style="padding: 20px;">
+
+            <!-- Page header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <div>
+                    <h2 style="font-size: 18px; font-weight: 500; margin: 0;">Alert templates</h2>
+                    <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">5 templates · attached to 47 sensors</div>
+                </div>
+                <button style="height: 32px; padding: 0 12px; background: #378ADD; border: none; border-radius: var(--border-radius-md); font-size: 13px; display: inline-flex; align-items: center; gap: 6px; color: white; cursor: pointer; font-weight: 500;">
+                    <i class="ti ti-plus" style="font-size: 14px;" aria-hidden="true"></i> Add template
+                </button>
+            </div>
+
+            <!-- Search -->
+            <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 10px 12px; display: flex; gap: 8px; align-items: center; margin-bottom: 14px;">
+                <div style="position: relative; flex: 1;">
+                    <i class="ti ti-search" style="position: absolute; left: 10px; top: 9px; font-size: 14px; color: var(--color-text-tertiary);" aria-hidden="true"></i>
+                    <input type="text" placeholder="Search by name or path" style="width: 100%; height: 32px; border: 0.5px solid var(--color-border-secondary); border-radius: 6px; padding: 0 10px 0 30px; font-size: 13px; background: var(--color-background-primary); outline: none;" />
+                </div>
+            </div>
+
+            <!-- Templates table -->
+            <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="background: #FAFAF7;">
+                            <th style="text-align: left; padding: 10px 16px; font-weight: 500; font-size: 12px; color: var(--color-text-secondary); width: 28%;">Name</th>
+                            <th style="text-align: left; padding: 10px 16px; font-weight: 500; font-size: 12px; color: var(--color-text-secondary); width: 38%;">Path template</th>
+                            <th style="text-align: left; padding: 10px 16px; font-weight: 500; font-size: 12px; color: var(--color-text-secondary); width: 18%;">Alerts</th>
+                            <th style="text-align: left; padding: 10px 16px; font-weight: 500; font-size: 12px; color: var(--color-text-secondary); width: 12%;">Affected sensors</th>
+                            <th style="width: 4%;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                        <tr style="border-top: 0.5px solid var(--color-border-tertiary);">
+                            <td style="padding: 12px 16px;">
+                                <div style="font-weight: 500;">PSU voltage critical</div>
+                                <div style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px;">Sensor Lab · Production</div>
+                            </td>
+                            <td style="padding: 12px 16px;">
+                                <code style="font-size: 12px; color: var(--color-text-secondary); background: #FAFAF7; padding: 2px 6px; border-radius: 4px;">**/PSU/voltage</code>
+                            </td>
+                            <td style="padding: 12px 16px; color: var(--color-text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="ti ti-bell" style="font-size: 14px; color: var(--color-text-tertiary);" aria-hidden="true"></i> 2 rules
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; color: var(--color-text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <span style="font-weight: 500; color: var(--color-text-primary);">18</span>
+                                    <i class="ti ti-external-link" style="font-size: 12px; color: var(--color-text-tertiary); cursor: pointer;" title="View sensors" aria-hidden="true"></i>
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; text-align: center;"><i class="ti ti-dots-vertical" style="font-size: 14px; color: var(--color-text-tertiary); cursor: pointer;" aria-hidden="true"></i></td>
+                        </tr>
+
+                        <tr style="border-top: 0.5px solid var(--color-border-tertiary);">
+                            <td style="padding: 12px 16px;">
+                                <div style="font-weight: 500;">Temperature ceiling</div>
+                                <div style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px;">Climate Monitor</div>
+                            </td>
+                            <td style="padding: 12px 16px;">
+                                <code style="font-size: 12px; color: var(--color-text-secondary); background: #FAFAF7; padding: 2px 6px; border-radius: 4px;">**/Climate/*/temperature</code>
+                            </td>
+                            <td style="padding: 12px 16px; color: var(--color-text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="ti ti-bell" style="font-size: 14px; color: var(--color-text-tertiary);" aria-hidden="true"></i> 3 rules
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; color: var(--color-text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <span style="font-weight: 500; color: var(--color-text-primary);">12</span>
+                                    <i class="ti ti-external-link" style="font-size: 12px; color: var(--color-text-tertiary); cursor: pointer;" aria-hidden="true"></i>
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; text-align: center;"><i class="ti ti-dots-vertical" style="font-size: 14px; color: var(--color-text-tertiary); cursor: pointer;" aria-hidden="true"></i></td>
+                        </tr>
+
+                        <tr style="border-top: 0.5px solid var(--color-border-tertiary);">
+                            <td style="padding: 12px 16px;">
+                                <div style="font-weight: 500;">Heartbeat TTL</div>
+                                <div style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px;">All folders</div>
+                            </td>
+                            <td style="padding: 12px 16px;">
+                                <code style="font-size: 12px; color: var(--color-text-secondary); background: #FAFAF7; padding: 2px 6px; border-radius: 4px;">**/heartbeat</code>
+                            </td>
+                            <td style="padding: 12px 16px; color: var(--color-text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="ti ti-bell" style="font-size: 14px; color: var(--color-text-tertiary);" aria-hidden="true"></i> 1 rule
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; color: var(--color-text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <span style="font-weight: 500; color: var(--color-text-primary);">9</span>
+                                    <i class="ti ti-external-link" style="font-size: 12px; color: var(--color-text-tertiary); cursor: pointer;" aria-hidden="true"></i>
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; text-align: center;"><i class="ti ti-dots-vertical" style="font-size: 14px; color: var(--color-text-tertiary); cursor: pointer;" aria-hidden="true"></i></td>
+                        </tr>
+
+                        <tr style="border-top: 0.5px solid var(--color-border-tertiary);">
+                            <td style="padding: 12px 16px;">
+                                <div style="font-weight: 500;">Disk space watcher</div>
+                                <div style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px;">Edge Gateway</div>
+                            </td>
+                            <td style="padding: 12px 16px;">
+                                <code style="font-size: 12px; color: var(--color-text-secondary); background: #FAFAF7; padding: 2px 6px; border-radius: 4px;">**/disk/free_gb</code>
+                            </td>
+                            <td style="padding: 12px 16px; color: var(--color-text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="ti ti-bell" style="font-size: 14px; color: var(--color-text-tertiary);" aria-hidden="true"></i> 2 rules
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; color: var(--color-text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <span style="font-weight: 500; color: var(--color-text-primary);">6</span>
+                                    <i class="ti ti-external-link" style="font-size: 12px; color: var(--color-text-tertiary); cursor: pointer;" aria-hidden="true"></i>
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; text-align: center;"><i class="ti ti-dots-vertical" style="font-size: 14px; color: var(--color-text-tertiary); cursor: pointer;" aria-hidden="true"></i></td>
+                        </tr>
+
+                        <tr style="border-top: 0.5px solid var(--color-border-tertiary);">
+                            <td style="padding: 12px 16px;">
+                                <div style="font-weight: 500;">Build failures</div>
+                                <div style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px;">CI · Staging</div>
+                            </td>
+                            <td style="padding: 12px 16px;">
+                                <code style="font-size: 12px; color: var(--color-text-secondary); background: #FAFAF7; padding: 2px 6px; border-radius: 4px;">**/ci/*/last_build</code>
+                            </td>
+                            <td style="padding: 12px 16px; color: var(--color-text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="ti ti-bell" style="font-size: 14px; color: var(--color-text-tertiary);" aria-hidden="true"></i> 1 rule
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; color: var(--color-text-secondary);">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <span style="font-weight: 500; color: var(--color-text-primary);">2</span>
+                                    <i class="ti ti-external-link" style="font-size: 12px; color: var(--color-text-tertiary); cursor: pointer;" aria-hidden="true"></i>
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; text-align: center;"><i class="ti ti-dots-vertical" style="font-size: 14px; color: var(--color-text-tertiary); cursor: pointer;" aria-hidden="true"></i></td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- 2. ALERT TEMPLATE EDITOR                                         -->
+<!-- ============================================================== -->
+<section class="mockup-section">
+    <div class="mockup-title">
+        <h2>2. Alert template — editor</h2>
+        <span>Маршрут: Alerts → Alert templates → click row / Add template</span>
+    </div>
+
+    <div class="mockup-frame">
+
+        <!-- Top nav -->
+        <div style="background: var(--color-background-primary); border-bottom: 0.5px solid var(--color-border-tertiary); padding: 0 20px; display: flex; align-items: center; gap: 24px; height: 48px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 22px; height: 22px; border-radius: 6px; background: #E6F1FB; display: flex; align-items: center; justify-content: center;">
+                    <i class="ti ti-heartbeat" style="font-size: 13px; color: #185FA5;" aria-hidden="true"></i>
+                </div>
+                <span style="font-size: 13px; font-weight: 500;">HSM</span>
+            </div>
+            <div style="display: flex; gap: 2px; flex: 1;">
+                <span style="padding: 6px 12px; font-size: 13px; color: var(--color-text-secondary); border-radius: 6px;">Home</span>
+                <span style="padding: 6px 12px; font-size: 13px; color: var(--color-text-secondary); border-radius: 6px;">Dashboards</span>
+                <span style="padding: 6px 12px; font-size: 13px; color: var(--color-text-secondary); border-radius: 6px;">Products</span>
+                <span style="padding: 6px 12px; font-size: 13px; color: var(--color-text-primary); background: #E6F1FB; border-radius: 6px; font-weight: 500;">Alerts</span>
+                <span style="padding: 6px 12px; font-size: 13px; color: var(--color-text-secondary); border-radius: 6px;">Configuration</span>
+            </div>
+            <span style="font-size: 12px; color: var(--color-text-secondary);">m.pazniak</span>
+        </div>
+
+        <div style="padding: 24px;">
+
+            <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px;">
+                <a style="color: var(--color-text-secondary); text-decoration: none;">Alert templates</a>
+                <span style="color: var(--color-text-tertiary); margin: 0 6px;">·</span>
+                <span style="color: var(--color-text-primary); font-weight: 500;">PSU voltage critical</span>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h2 style="font-size: 20px; font-weight: 500; margin: 0;">Edit alert template</h2>
+                    <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 4px;">Changes apply to all matching sensors after save</div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button style="height: 34px; padding: 0 16px; background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); font-size: 13px; color: var(--color-text-primary); cursor: pointer;">Cancel</button>
+                    <button style="height: 34px; padding: 0 16px; background: #378ADD; border: none; border-radius: var(--border-radius-md); font-size: 13px; color: white; cursor: pointer; font-weight: 500;">Save</button>
+                </div>
+            </div>
+
+            <!-- General card -->
+            <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 18px 22px; margin-bottom: 14px;">
+                <div style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 14px; display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="ti ti-info-circle" style="font-size: 14px;" aria-hidden="true"></i> General
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; margin-bottom: 14px;">
+                    <div>
+                        <label style="font-size: 12px; color: var(--color-text-secondary); display: block; margin-bottom: 6px; font-weight: 500;">Name</label>
+                        <input type="text" value="PSU voltage critical" style="width: 100%; height: 34px; border: 0.5px solid var(--color-border-secondary); border-radius: 6px; padding: 0 12px; font-size: 13px; background: var(--color-background-primary); outline: none; box-sizing: border-box;" />
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: var(--color-text-secondary); display: block; margin-bottom: 6px; font-weight: 500;">Folder</label>
+                        <select style="width: 100%; height: 34px; border: 0.5px solid var(--color-border-secondary); border-radius: 6px; padding: 0 12px; font-size: 13px; background: var(--color-background-primary); outline: none; box-sizing: border-box;">
+                            <option>Production</option>
+                            <option>Staging</option>
+                            <option>All folders</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px 18px;">
+                    <div>
+                        <label style="font-size: 12px; color: var(--color-text-secondary); display: block; margin-bottom: 6px; font-weight: 500;">Path template</label>
+                        <div style="position: relative;">
+                            <i class="ti ti-route" style="position: absolute; left: 12px; top: 10px; font-size: 14px; color: var(--color-text-tertiary);" aria-hidden="true"></i>
+                            <input type="text" value="**/PSU/voltage" style="width: 100%; height: 34px; border: 0.5px solid var(--color-border-secondary); border-radius: 6px; padding: 0 12px 0 34px; font-size: 13px; font-family: var(--font-mono); background: var(--color-background-primary); outline: none; box-sizing: border-box;" />
+                        </div>
+                        <div style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 6px; line-height: 1.5;">
+                            Use <code style="background: #FAFAF7; padding: 1px 4px; border-radius: 3px;">**</code> for any depth, <code style="background: #FAFAF7; padding: 1px 4px; border-radius: 3px;">*</code> for a single segment, <code style="background: #FAFAF7; padding: 1px 4px; border-radius: 3px;">{product}</code> / <code style="background: #FAFAF7; padding: 1px 4px; border-radius: 3px;">{diskName}</code> for variables.
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: var(--color-text-secondary); display: block; margin-bottom: 6px; font-weight: 500;">Sensor type</label>
+                        <select style="width: 100%; height: 34px; border: 0.5px solid var(--color-border-secondary); border-radius: 6px; padding: 0 12px; font-size: 13px; background: var(--color-background-primary); outline: none; box-sizing: border-box;">
+                            <option>Double</option>
+                            <option>Integer</option>
+                            <option>Boolean</option>
+                            <option>Any</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts section (single section, two add buttons) -->
+            <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 18px 22px; margin-bottom: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                    <div style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary); display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="ti ti-bell" style="font-size: 14px;" aria-hidden="true"></i> Alerts
+                        <span style="font-weight: 400; color: var(--color-text-tertiary);">· 3 active</span>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button style="height: 30px; padding: 0 12px; background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: 6px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; color: var(--color-text-primary); cursor: pointer;">
+                            <i class="ti ti-plus" style="font-size: 12px;" aria-hidden="true"></i> Add alert
+                        </button>
+                        <button style="height: 30px; padding: 0 12px; background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: 6px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; color: var(--color-text-primary); cursor: pointer;">
+                            <i class="ti ti-plus" style="font-size: 12px;" aria-hidden="true"></i> Add TTL alert
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Alert 1: data, schedule = Business hours -->
+                <div style="border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 14px 16px; margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; line-height: 2;">
+                        <span style="font-size: 11px; color: var(--color-text-tertiary); padding: 2px 6px; background: #FAFAF7; border-radius: 4px; font-weight: 500; letter-spacing: 0.3px;">DATA</span>
+                        <span style="color: var(--color-text-secondary);">When</span>
+                        <span style="padding: 4px 10px; background: #E6F1FB; color: #185FA5; border-radius: 5px; font-weight: 500; cursor: pointer;">value</span>
+                        <span style="padding: 4px 10px; background: #E6F1FB; color: #185FA5; border-radius: 5px; font-weight: 500; cursor: pointer;">&gt;</span>
+                        <span style="padding: 4px 10px; background: #E6F1FB; color: #185FA5; border-radius: 5px; font-weight: 500; cursor: pointer;">50</span>
+                        <span style="padding: 4px 10px; background: #E6F1FB; color: #185FA5; border-radius: 5px; font-weight: 500; cursor: pointer;">V</span>
+                        <span style="color: var(--color-text-secondary);">→ send to</span>
+                        <span style="padding: 4px 10px; background: #EAF3DE; color: #3B6D11; border-radius: 5px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            <i class="ti ti-brand-telegram" style="font-size: 12px;" aria-hidden="true"></i> @ops-critical
+                        </span>
+                        <span style="color: var(--color-text-secondary);">, set status</span>
+                        <span style="padding: 4px 10px; background: #FCEBEB; color: #A32D2D; border-radius: 5px; font-weight: 500; cursor: pointer;">Error</span>
+                        <span style="margin-left: auto;">
+                            <button style="width: 26px; height: 26px; border: none; background: transparent; color: var(--color-text-tertiary); border-radius: 4px; cursor: pointer;"><i class="ti ti-dots-vertical" style="font-size: 13px;" aria-hidden="true"></i></button>
+                        </span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--color-border-tertiary);">
+                        <i class="ti ti-calendar-time" style="font-size: 13px; color: var(--color-text-tertiary);" aria-hidden="true"></i>
+                        <span style="font-size: 12px; color: var(--color-text-secondary);">Active</span>
+                        <span style="padding: 3px 8px; background: #FAFAF7; color: var(--color-text-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: 5px; font-size: 12px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            Business hours
+                            <i class="ti ti-chevron-down" style="font-size: 11px; color: var(--color-text-tertiary);" aria-hidden="true"></i>
+                        </span>
+                        <span style="font-size: 11px; color: var(--color-text-tertiary);">Mon–Fri, 09:00–18:00 UTC+3</span>
+                    </div>
+                </div>
+
+                <!-- Alert 2: data, always -->
+                <div style="border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 14px 16px; margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; line-height: 2;">
+                        <span style="font-size: 11px; color: var(--color-text-tertiary); padding: 2px 6px; background: #FAFAF7; border-radius: 4px; font-weight: 500; letter-spacing: 0.3px;">DATA</span>
+                        <span style="color: var(--color-text-secondary);">When</span>
+                        <span style="padding: 4px 10px; background: #E6F1FB; color: #185FA5; border-radius: 5px; font-weight: 500; cursor: pointer;">value</span>
+                        <span style="padding: 4px 10px; background: #E6F1FB; color: #185FA5; border-radius: 5px; font-weight: 500; cursor: pointer;">&lt;</span>
+                        <span style="padding: 4px 10px; background: #E6F1FB; color: #185FA5; border-radius: 5px; font-weight: 500; cursor: pointer;">10</span>
+                        <span style="padding: 4px 10px; background: #E6F1FB; color: #185FA5; border-radius: 5px; font-weight: 500; cursor: pointer;">V</span>
+                        <span style="color: var(--color-text-secondary);">→ send to</span>
+                        <span style="padding: 4px 10px; background: #EAF3DE; color: #3B6D11; border-radius: 5px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            <i class="ti ti-brand-telegram" style="font-size: 12px;" aria-hidden="true"></i> @ops-warn
+                        </span>
+                        <span style="color: var(--color-text-secondary);">, set status</span>
+                        <span style="padding: 4px 10px; background: #FAEEDA; color: #854F0B; border-radius: 5px; font-weight: 500; cursor: pointer;">Warning</span>
+                        <span style="margin-left: auto;">
+                            <button style="width: 26px; height: 26px; border: none; background: transparent; color: var(--color-text-tertiary); border-radius: 4px; cursor: pointer;"><i class="ti ti-dots-vertical" style="font-size: 13px;" aria-hidden="true"></i></button>
+                        </span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--color-border-tertiary);">
+                        <i class="ti ti-calendar-time" style="font-size: 13px; color: var(--color-text-tertiary);" aria-hidden="true"></i>
+                        <span style="font-size: 12px; color: var(--color-text-secondary);">Active</span>
+                        <span style="padding: 3px 8px; background: transparent; color: var(--color-text-secondary); border: 0.5px dashed var(--color-border-secondary); border-radius: 5px; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            Always
+                            <i class="ti ti-chevron-down" style="font-size: 11px; color: var(--color-text-tertiary);" aria-hidden="true"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Alert 3: TTL -->
+                <div style="border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 14px 16px;">
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; line-height: 2;">
+                        <span style="font-size: 11px; color: #854F0B; padding: 2px 6px; background: #FAEEDA; border-radius: 4px; font-weight: 500; letter-spacing: 0.3px;">TTL</span>
+                        <span style="color: var(--color-text-secondary);">If no data for</span>
+                        <span style="padding: 4px 10px; background: #E6F1FB; color: #185FA5; border-radius: 5px; font-weight: 500; cursor: pointer;">5 min</span>
+                        <span style="color: var(--color-text-secondary);">→ send to</span>
+                        <span style="padding: 4px 10px; background: #EAF3DE; color: #3B6D11; border-radius: 5px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            <i class="ti ti-brand-telegram" style="font-size: 12px;" aria-hidden="true"></i> @ops-critical
+                        </span>
+                        <span style="color: var(--color-text-secondary);">, set status</span>
+                        <span style="padding: 4px 10px; background: #FCEBEB; color: #A32D2D; border-radius: 5px; font-weight: 500; cursor: pointer;">Error</span>
+                        <span style="margin-left: auto;">
+                            <button style="width: 26px; height: 26px; border: none; background: transparent; color: var(--color-text-tertiary); border-radius: 4px; cursor: pointer;"><i class="ti ti-dots-vertical" style="font-size: 13px;" aria-hidden="true"></i></button>
+                        </span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--color-border-tertiary);">
+                        <i class="ti ti-calendar-time" style="font-size: 13px; color: var(--color-text-tertiary);" aria-hidden="true"></i>
+                        <span style="font-size: 12px; color: var(--color-text-secondary);">Active</span>
+                        <span style="padding: 3px 8px; background: transparent; color: var(--color-text-secondary); border: 0.5px dashed var(--color-border-secondary); border-radius: 5px; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            Always
+                            <i class="ti ti-chevron-down" style="font-size: 11px; color: var(--color-text-tertiary);" aria-hidden="true"></i>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Affected sensors preview -->
+            <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 18px 22px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary); display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="ti ti-target" style="font-size: 14px;" aria-hidden="true"></i> Affected sensors
+                    </div>
+                    <span style="font-size: 12px; color: var(--color-text-tertiary);">18 sensors will be updated on save</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-family: var(--font-mono); color: var(--color-text-secondary);">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="width: 6px; height: 6px; border-radius: 50%; background: #639922;"></span>
+                        Production / Sensor Lab / Power / PSU / voltage
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="width: 6px; height: 6px; border-radius: 50%; background: #639922;"></span>
+                        Production / Sensor Lab / Power-B / PSU / voltage
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="width: 6px; height: 6px; border-radius: 50%; background: #E24B4A;"></span>
+                        Production / Power Grid v2 / unit-01 / PSU / voltage
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="width: 6px; height: 6px; border-radius: 50%; background: #639922;"></span>
+                        Production / Power Grid v2 / unit-02 / PSU / voltage
+                    </div>
+                    <div style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px; font-family: var(--font-sans);">+ 14 more</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSM — Redesign mockups (preview)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root{
+    --green:#16a34a; --green-hover:#15803d;
+    --border:#e5e7eb; --hover:#f9fafb; --muted:#6b7280;
+    --blue:#3b82f6; --danger:#ef4444; --danger-bg:#fef2f2; --danger-border:#fca5a5;
+    --chip-bg:#f5f5f5; --chip-border:#d1d5db; --navbg:#edf0f5;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#111827;background:#fff;}
+  a{color:var(--blue);text-decoration:none;} a:hover{text-decoration:underline;}
+  .rnav{position:sticky;top:0;z-index:50;background:var(--navbg);border-bottom:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .rnav .inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:.25rem;padding:0 1.25rem;font-size:.9rem;}
+  .rnav .brand{font-weight:700;color:#111827;margin-right:1rem;}
+  .rnav .spacer{flex:1;}
+  .rnav .item{position:relative;}
+  .rnav .link{display:flex;align-items:center;gap:.35rem;color:#374151;padding:.85rem .8rem;cursor:pointer;user-select:none;white-space:nowrap;border-bottom:2px solid transparent;}
+  .rnav .link:hover{color:#111827;}
+  .rnav .item.active > .link{color:var(--green);border-bottom-color:var(--green);font-weight:600;}
+  .rnav .link .chev{font-size:.6rem;opacity:.6;transition:transform .15s;}
+  .rnav .item.open .link .chev{transform:rotate(180deg);}
+  .rnav .ddmenu{display:none;position:absolute;top:100%;left:0;min-width:220px;background:#fff;border:1px solid var(--border);border-radius:.5rem;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:.35rem;z-index:60;}
+  .rnav .ddmenu.right{left:auto;right:0;}
+  .rnav .item.open .ddmenu{display:block;}
+  .rnav .ddmenu a{display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border-radius:.4rem;color:#374151;font-size:.86rem;cursor:pointer;white-space:nowrap;}
+  .rnav .ddmenu a:hover{background:var(--hover);text-decoration:none;color:#111827;}
+  .rnav .ddmenu a i{width:1rem;text-align:center;color:var(--muted);}
+  .rnav .ddmenu .muted-lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:.4rem .7rem .2rem;}
+  .rnav .ddmenu hr{border:none;border-top:1px solid var(--border);margin:.35rem .2rem;}
+  .rnav .user{color:var(--muted);}
+  .members-container{max-width:960px;margin:0 auto;padding:2rem 1rem;}
+  .wide{max-width:1120px;}
+  .page-title{font-size:1.4rem;font-weight:600;margin:0;}
+  .subtitle{color:var(--muted);margin:.4rem 0 1rem;font-size:.92rem;}
+  .btn-green{background:var(--green);color:#fff;border:1px solid var(--green);border-radius:.5rem;padding:.45rem .85rem;font-size:.88rem;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem;}
+  .btn-green:hover{background:var(--green-hover);}
+  .btn-outline{background:#fff;color:#374151;border:1px solid var(--chip-border);border-radius:.5rem;padding:.45rem .85rem;font-size:.88rem;cursor:pointer;}
+  .btn-outline:hover{background:var(--hover);}
+  .row-between{display:flex;align-items:center;justify-content:space-between;}
+  .toolbar{display:flex;gap:.5rem;margin-bottom:1rem;}
+  .search{position:relative;flex:1;}
+  .search input,.select{width:100%;border:1px solid var(--chip-border);border-radius:.5rem;padding:.5rem .75rem;font-size:.88rem;}
+  .search i{position:absolute;right:.7rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.8rem;}
+  .select{width:auto;min-width:140px;}
+  .list{border:1px solid var(--border);border-radius:.5rem;overflow:hidden;}
+  .list-header{display:flex;justify-content:space-between;align-items:center;padding:.6rem 1rem;background:var(--hover);border-bottom:1px solid var(--border);font-size:.8rem;color:var(--muted);}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:.85rem 1rem;border-bottom:1px solid var(--border);}
+  .row:last-child{border-bottom:none;} .row:hover{background:var(--hover);}
+  .cell-main{display:flex;align-items:center;gap:.75rem;min-width:0;}
+  .avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:500;font-size:.85rem;flex:none;}
+  .avatar.square{border-radius:.6rem;}
+  .name{font-weight:500;} .sub{color:var(--muted);font-size:.78rem;margin-top:2px;}
+  .chip{padding:.12rem .55rem;font-size:.72rem;border:1px solid var(--chip-border);border-radius:9999px;background:var(--chip-bg);white-space:nowrap;}
+  .chip.plain{background:#fff;}
+  .chip.green{background:#f0fdf4;border-color:#bbf7d0;color:#166534;}
+  .chip.blue{background:#eff6ff;border-color:#bfdbfe;color:#1e40af;}
+  .chip.gray{background:#f3f4f6;border-color:#e5e7eb;color:#4b5563;}
+  .chip.amber{background:#fffbeb;border-color:#fde68a;color:#92400e;}
+  .chips{display:flex;flex-wrap:wrap;gap:.25rem;justify-content:flex-end;max-width:340px;}
+  .more-link{font-size:.72rem;color:var(--blue);cursor:pointer;line-height:2;white-space:nowrap;}
+  .status{display:inline-flex;align-items:center;gap:.4rem;font-size:.8rem;}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;}
+  .dot.ok{background:var(--green);} .dot.warn{background:#f59e0b;} .dot.err{background:var(--danger);} .dot.off{background:#9ca3af;}
+  .actions{display:flex;align-items:center;gap:.35rem;}
+  .action-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--chip-border);border-radius:.5rem;color:var(--muted);cursor:pointer;font-size:.9rem;}
+  .action-btn:hover{background:var(--hover);}
+  .action-btn.danger{color:var(--danger);} .action-btn.danger:hover{background:var(--danger-bg);border-color:var(--danger-border);}
+  .meta{color:var(--muted);font-size:.8rem;white-space:nowrap;}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;color:#374151;}
+  .tabs{display:flex;gap:.25rem;border-bottom:1px solid var(--border);margin-bottom:1.25rem;flex-wrap:wrap;}
+  .tab{padding:.5rem .9rem;font-size:.88rem;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .tab.active{color:var(--green);border-bottom-color:var(--green);font-weight:600;}
+  .card{border:1px solid var(--border);border-radius:.5rem;padding:1.25rem;margin-bottom:1rem;}
+  .card h3{margin:0 0 .25rem;font-size:1rem;} .card .hint{color:var(--muted);font-size:.82rem;margin:0 0 1rem;}
+  .field{display:grid;grid-template-columns:220px 1fr;gap:1rem;align-items:center;padding:.6rem 0;border-top:1px solid var(--border);}
+  .field:first-of-type{border-top:none;}
+  .field label{font-size:.86rem;color:#374151;} .field .desc{font-size:.76rem;color:var(--muted);margin-top:2px;}
+  .field input[type=text],.field input[type=number],.field select,.field textarea{width:100%;border:1px solid var(--chip-border);border-radius:.5rem;padding:.45rem .65rem;font-size:.86rem;font-family:inherit;}
+  .toggle{width:40px;height:22px;border-radius:9999px;background:var(--green);position:relative;cursor:pointer;flex:none;}
+  .toggle::after{content:"";position:absolute;top:2px;left:20px;width:18px;height:18px;border-radius:50%;background:#fff;}
+  .toggle.off{background:#cbd5e1;} .toggle.off::after{left:2px;}
+  .save-bar{display:flex;justify-content:flex-end;gap:.5rem;}
+  .section-label{max-width:1120px;margin:2rem auto .25rem;padding:0 1rem;}
+  .section-label h2{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0;}
+  .mock{display:none;} .mock.show{display:block;}
+  .folder-head{display:flex;align-items:center;gap:.6rem;padding:.7rem 1rem;background:var(--hover);border-bottom:1px solid var(--border);font-weight:600;font-size:.9rem;}
+  .folder-head{cursor:pointer;}
+  .fh-title{display:flex;flex-direction:column;line-height:1.2;}
+  .fh-name{display:flex;align-items:center;gap:.5rem;font-weight:600;}
+  .fh-count{font-weight:400;color:var(--muted);font-size:.75rem;margin-top:2px;}
+  .fh-spacer{flex:1;}
+  .fh-edit{color:var(--muted);font-size:.8rem;line-height:1;text-decoration:none;}
+  .fh-edit:hover{color:#111827;}
+  .fh-toggle{color:var(--muted);cursor:pointer;transition:transform .15s;font-size:.85rem;}
+  .list.collapsed .row{display:none;}
+  .list.collapsed .fh-toggle{transform:rotate(180deg);}
+  .folder-head .count{font-weight:400;color:var(--muted);font-size:.8rem;}
+  .mon{display:grid;grid-template-columns:300px 1fr;gap:1rem;}
+  .panel{border:1px solid var(--border);border-radius:.5rem;overflow:hidden;}
+  .panel .phead{padding:.6rem .85rem;background:var(--hover);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem;font-size:.85rem;}
+  .tree{padding:.4rem 0;font-size:.85rem;}
+  .tnode{display:flex;align-items:center;gap:.5rem;padding:.3rem .6rem;cursor:pointer;border-radius:.35rem;}
+  .tnode:hover{background:var(--hover);} .tnode.sel{background:#eff6ff;}
+  .tnode .caret{color:var(--muted);width:.8rem;font-size:.7rem;}
+  .ind1{padding-left:1.4rem;} .ind2{padding-left:2.4rem;} .ind3{padding-left:3.4rem;}
+  .breadcrumb{font-size:.8rem;color:var(--muted);margin-bottom:.5rem;} .breadcrumb a{color:var(--muted);}
+  .bigval{font-size:2rem;font-weight:600;}
+  .kv{display:flex;gap:2rem;flex-wrap:wrap;margin-top:.5rem;}
+  .kv .k{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;}
+  .kv .v{font-size:.9rem;font-weight:500;display:block;}
+  .chart{height:180px;border:1px solid var(--border);border-radius:.5rem;padding:.5rem;display:flex;align-items:flex-end;gap:3px;background:linear-gradient(180deg,#fff,#fbfdff);}
+  .bar{flex:1;background:linear-gradient(180deg,#93c5fd,#3b82f6);border-radius:2px 2px 0 0;}
+  .dgrid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+  .dpanel{border:1px solid var(--border);border-radius:.5rem;padding:.75rem;}
+  .dpanel .dt{font-size:.85rem;font-weight:500;margin-bottom:.5rem;display:flex;justify-content:space-between;}
+  .auth-wrap{max-width:400px;margin:4rem auto;}
+  .auth-card{border:1px solid var(--border);border-radius:.75rem;padding:2rem;box-shadow:0 6px 24px rgba(0,0,0,.05);}
+  .auth-card h1{font-size:1.3rem;margin:0 0 .35rem;text-align:center;}
+  .auth-card p{color:var(--muted);font-size:.85rem;text-align:center;margin:0 0 1.5rem;}
+  .auth-card label{font-size:.8rem;color:#374151;display:block;margin:.75rem 0 .25rem;}
+  .auth-card input[type=text],.auth-card input[type=password]{width:100%;border:1px solid var(--chip-border);border-radius:.5rem;padding:.6rem .75rem;font-size:.9rem;}
+  .auth-card .btn-green{width:100%;justify-content:center;margin-top:1.25rem;padding:.6rem;}
+  .brand-badge{width:48px;height:48px;border-radius:.75rem;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;margin:0 auto 1rem;font-size:1.1rem;}
+</style>
+</head>
+<body>
+
+<nav class="rnav">
+  <div class="inner">
+    <span class="brand">HSM</span>
+    <div class="item" data-group="home"><div class="link" data-page="home">Home</div></div>
+    <div class="item" data-group="dash" data-dd>
+      <div class="link"><span data-page="dashlist">Dashboards</span> <i class="fas fa-chevron-down chev"></i></div>
+      <div class="ddmenu">
+        <div class="muted-lbl">Your dashboards</div>
+        <a data-page="dashboard"><i class="fas fa-chart-line"></i> Infrastructure overview</a>
+        <a data-page="dashboard"><i class="fas fa-chart-line"></i> Payments health</a>
+        <a data-page="dashboard"><i class="fas fa-chart-line"></i> Draft — SLA report</a>
+        <hr>
+        <a data-page="dashlist"><i class="fas fa-list"></i> All dashboards</a>
+      </div>
+    </div>
+    <div class="item" data-group="products"><div class="link" data-page="products">Products</div></div>
+    <div class="item" data-group="alerts" data-dd>
+      <div class="link">Alerts <i class="fas fa-chevron-down chev"></i></div>
+      <div class="ddmenu">
+        <a data-page="templates"><i class="fas fa-bell"></i> Alert Templates</a>
+        <a data-page="schedules"><i class="fas fa-clock"></i> Alert Schedules</a>
+      </div>
+    </div>
+    <div class="item" data-group="config" data-dd>
+      <div class="link">Configuration <i class="fas fa-chevron-down chev"></i></div>
+      <div class="ddmenu">
+        <a data-page="keys"><i class="fas fa-key"></i> Access keys</a>
+        <a data-page="users"><i class="fas fa-users"></i> Users</a>
+        <a data-page="notif"><i class="fab fa-telegram"></i> Telegram chats</a>
+        <hr>
+        <a data-page="settings"><i class="fas fa-cog"></i> Settings</a>
+        <a><i class="fas fa-plug"></i> API</a>
+      </div>
+    </div>
+    <span class="spacer"></span>
+    <div class="item" data-dd>
+      <div class="link user">Hello, admin <i class="fas fa-chevron-down chev"></i></div>
+      <div class="ddmenu right">
+        <div class="muted-lbl">Preview auth screens</div>
+        <a data-page="login"><i class="fas fa-sign-in-alt"></i> Login screen</a>
+        <a data-page="register"><i class="fas fa-user-plus"></i> Registration screen</a>
+        <hr>
+        <a><i class="fas fa-sign-out-alt"></i> Logout</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="mock" id="mock-home">
+  <div class="section-label"><h2>Home · Monitoring</h2></div>
+  <div class="members-container wide">
+    <div class="mon">
+      <div class="panel">
+        <div class="phead">
+          <button class="btn-outline" style="padding:.25rem .6rem;font-size:.78rem;"><i class="fas fa-filter"></i> Filters</button>
+          <div class="search" style="flex:1;"><input placeholder="Search tree…" style="padding:.35rem .6rem;"><i class="fas fa-search"></i></div>
+        </div>
+        <div class="tree">
+          <div class="tnode"><span class="caret"><i class="fas fa-chevron-down"></i></span><i class="fas fa-folder" style="color:#586bef;"></i> Backend Services</div>
+          <div class="tnode ind1 sel"><span class="caret"><i class="fas fa-chevron-down"></i></span><span class="dot ok"></span> Payments API</div>
+          <div class="tnode ind2"><span class="caret"><i class="fas fa-chevron-down"></i></span><span class="dot ok"></span> .computer</div>
+          <div class="tnode ind3"><span class="caret"></span><span class="dot ok"></span> CPU load</div>
+          <div class="tnode ind3"><span class="caret"></span><span class="dot warn"></span> Free disk space</div>
+          <div class="tnode ind3"><span class="caret"></span><span class="dot ok"></span> RAM usage</div>
+          <div class="tnode ind1"><span class="caret"><i class="fas fa-chevron-right"></i></span><span class="dot warn"></span> Auth Service</div>
+          <div class="tnode ind1"><span class="caret"><i class="fas fa-chevron-right"></i></span><span class="dot err"></span> Notifications</div>
+          <div class="tnode"><span class="caret"><i class="fas fa-chevron-right"></i></span><i class="fas fa-folder" style="color:#16a34a;"></i> Infrastructure</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="phead" style="justify-content:space-between;">
+          <div class="breadcrumb" style="margin:0;"><a>Payments API</a> / <a>.computer</a> / <strong style="color:#111827;">Free disk space</strong></div>
+          <div class="actions">
+            <button class="action-btn" title="Mute"><i class="fas fa-bell-slash"></i></button>
+            <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button>
+            <button class="action-btn" title="Export"><i class="fas fa-download"></i></button>
+          </div>
+        </div>
+        <div style="padding:1.25rem;">
+          <div class="row-between">
+            <div><div class="status"><span class="dot warn"></span> Warning</div>
+              <div class="bigval">18.4 <span style="font-size:1rem;color:var(--muted);">GB free</span></div></div>
+            <span class="chip amber">Below threshold (20 GB)</span>
+          </div>
+          <div class="kv">
+            <div><span class="k">Type</span><span class="v">Double</span></div>
+            <div><span class="k">Unit</span><span class="v">GB</span></div>
+            <div><span class="k">Last update</span><span class="v">12 sec ago</span></div>
+            <div><span class="k">Sensor status</span><span class="v">Open</span></div>
+          </div>
+          <div class="tabs" style="margin-top:1.25rem;">
+            <span class="tab active">History</span><span class="tab">Info</span><span class="tab">Alerts</span><span class="tab">Journal</span>
+          </div>
+          <div class="chart">
+            <div class="bar" style="height:78%"></div><div class="bar" style="height:72%"></div><div class="bar" style="height:65%"></div><div class="bar" style="height:60%"></div>
+            <div class="bar" style="height:52%"></div><div class="bar" style="height:48%"></div><div class="bar" style="height:44%"></div><div class="bar" style="height:40%"></div>
+            <div class="bar" style="height:36%"></div><div class="bar" style="height:33%"></div><div class="bar" style="height:31%"></div><div class="bar" style="height:29%"></div>
+          </div>
+          <div class="meta" style="margin-top:.5rem;text-align:right;">Last 24 hours · 1-min aggregation</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mock" id="mock-dashlist">
+  <div class="section-label"><h2>Dashboards</h2></div>
+  <div class="members-container">
+    <div class="row-between"><h1 class="page-title">Dashboards</h1><button class="btn-green"><i class="fas fa-plus"></i> New dashboard</button></div>
+    <p class="subtitle">Curated views combining sensor panels and charts.</p>
+    <div class="toolbar"><div class="search"><input placeholder="Find a dashboard…"><i class="fas fa-search"></i></div></div>
+    <div class="list">
+      <div class="list-header"><span>3 dashboards</span><span>Panels</span></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#586bef;"><i class="fas fa-chart-line"></i></div>
+        <div><div class="name"><a data-page="dashboard">Infrastructure overview</a></div><div class="sub">by admin · CPU, memory, disk across the fleet</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="chip gray">6 panels</span>
+          <button class="action-btn" title="Open" data-page="dashboard"><i class="fas fa-arrow-up-right-from-square"></i></button>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button>
+          <button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#16a34a;"><i class="fas fa-chart-line"></i></div>
+        <div><div class="name"><a data-page="dashboard">Payments health</a></div><div class="sub">by k.lee · latency & error rates</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="chip gray">4 panels</span>
+          <button class="action-btn" title="Open" data-page="dashboard"><i class="fas fa-arrow-up-right-from-square"></i></button>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button>
+          <button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#9ca3af;"><i class="fas fa-chart-line"></i></div>
+        <div><div class="name">Draft — SLA report</div><div class="sub">by a.smirnov · no panels yet</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="chip plain">No panels</span>
+          <button class="action-btn" title="Open" data-page="dashboard"><i class="fas fa-arrow-up-right-from-square"></i></button>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button>
+          <button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mock" id="mock-dashboard">
+  <div class="section-label"><h2>Dashboards · Dashboard</h2></div>
+  <div class="members-container wide">
+    <div class="row-between">
+      <div><h1 class="page-title">Infrastructure overview</h1><p class="subtitle" style="margin:.35rem 0 0;">by admin · updated 2 min ago</p></div>
+      <div class="actions"><select class="select"><option>Last 24 hours</option><option>Last 7 days</option></select>
+        <button class="btn-outline"><i class="fas fa-plus"></i> Add panel</button><button class="btn-green">Save</button></div>
+    </div>
+    <div class="dgrid" style="margin-top:1rem;">
+      <div class="dpanel"><div class="dt"><span>CPU load — fleet avg</span><span class="chip green">42%</span></div>
+        <div class="chart"><div class="bar" style="height:40%"></div><div class="bar" style="height:52%"></div><div class="bar" style="height:48%"></div><div class="bar" style="height:60%"></div><div class="bar" style="height:55%"></div><div class="bar" style="height:66%"></div><div class="bar" style="height:58%"></div><div class="bar" style="height:44%"></div></div></div>
+      <div class="dpanel"><div class="dt"><span>Free disk space</span><span class="chip amber">18 GB</span></div>
+        <div class="chart"><div class="bar" style="height:80%"></div><div class="bar" style="height:70%"></div><div class="bar" style="height:64%"></div><div class="bar" style="height:55%"></div><div class="bar" style="height:48%"></div><div class="bar" style="height:40%"></div><div class="bar" style="height:34%"></div><div class="bar" style="height:30%"></div></div></div>
+      <div class="dpanel"><div class="dt"><span>RAM usage</span><span class="chip green">61%</span></div>
+        <div class="chart"><div class="bar" style="height:55%"></div><div class="bar" style="height:58%"></div><div class="bar" style="height:62%"></div><div class="bar" style="height:60%"></div><div class="bar" style="height:66%"></div><div class="bar" style="height:63%"></div><div class="bar" style="height:61%"></div><div class="bar" style="height:59%"></div></div></div>
+      <div class="dpanel"><div class="dt"><span>Requests / sec</span><span class="chip blue">1.2k</span></div>
+        <div class="chart"><div class="bar" style="height:30%"></div><div class="bar" style="height:45%"></div><div class="bar" style="height:70%"></div><div class="bar" style="height:85%"></div><div class="bar" style="height:78%"></div><div class="bar" style="height:64%"></div><div class="bar" style="height:52%"></div><div class="bar" style="height:40%"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mock" id="mock-products">
+  <div class="members-container" style="padding-top:1.25rem;">
+    <div class="row-between" style="margin-bottom:1rem;">
+      <h1 class="page-title">Products</h1>
+      <div class="actions">
+        <button class="btn-green"><i class="fas fa-plus"></i> New product</button>
+        <button class="btn-outline"><i class="fas fa-folder-plus"></i> New folder</button>
+      </div>
+    </div>
+    <div class="toolbar"><div class="search"><input placeholder="Find a product…"><i class="fas fa-search"></i></div></div>
+    <div class="list" style="margin-bottom:1rem;border-left:3px solid #586bef;">
+      <div class="folder-head" style="background:#eef1fb;">
+        <i class="fas fa-folder" style="color:#586bef;"></i>
+        <div class="fh-title">
+          <div class="fh-name">Backend Services
+            <a class="fh-edit" title="Edit folder"><i class="fas fa-edit"></i></a>
+          </div>
+          <div class="fh-count">3 products</div>
+        </div>
+        <span class="fh-spacer"></span>
+        <i class="fas fa-chevron-up fh-toggle" title="Collapse / expand"></i>
+      </div>
+      <div class="row"><div class="cell-main"><div class="avatar" style="background:#586bef;">PA</div>
+        <div><div class="name"><a data-page="editproduct">Payments API</a></div><div class="sub">Managers: a.smirnov, k.lee</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="status"><span class="dot ok"></span>Updated 3 min ago</span>
+          <button class="action-btn" title="Edit" data-page="editproduct"><i class="fa-regular fa-pen-to-square"></i></button>
+          <button class="action-btn" title="Move to…"><i class="fa-solid fa-arrow-right-arrow-left"></i></button>
+          <button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar" style="background:#7a87c5;">AU</div>
+        <div><div class="name"><a data-page="editproduct">Auth Service</a></div><div class="sub">Managers: k.lee</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="status"><span class="dot warn"></span>Updated 2 h ago</span>
+          <button class="action-btn" title="Edit" data-page="editproduct"><i class="fa-regular fa-pen-to-square"></i></button>
+          <button class="action-btn" title="Move to…"><i class="fa-solid fa-arrow-right-arrow-left"></i></button>
+          <button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar" style="background:#9ca3af;">NO</div>
+        <div><div class="name"><a data-page="editproduct">Notifications</a></div><div class="sub">Managers: —</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="status"><span class="dot err"></span>No data for 5 d</span>
+          <button class="action-btn" title="Edit" data-page="editproduct"><i class="fa-regular fa-pen-to-square"></i></button>
+          <button class="action-btn" title="Move to…"><i class="fa-solid fa-arrow-right-arrow-left"></i></button>
+          <button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+    </div>
+    <div class="list collapsed" style="border-left:3px solid #16a34a;">
+      <div class="folder-head" style="background:#f0fdf4;">
+        <i class="fas fa-folder" style="color:#16a34a;"></i>
+        <div class="fh-title">
+          <div class="fh-name">Infrastructure
+            <a class="fh-edit" title="Edit folder"><i class="fas fa-edit"></i></a>
+          </div>
+          <div class="fh-count">1 product</div>
+        </div>
+        <span class="fh-spacer"></span>
+        <i class="fas fa-chevron-up fh-toggle" title="Collapse / expand"></i>
+      </div>
+      <div class="row"><div class="cell-main"><div class="avatar" style="background:#16a34a;">MO</div>
+        <div><div class="name"><a data-page="editproduct">Monitoring Cluster</a></div><div class="sub">Managers: devops-team</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="status"><span class="dot ok"></span>Updated 1 min ago</span>
+          <button class="action-btn" title="Edit" data-page="editproduct"><i class="fa-regular fa-pen-to-square"></i></button>
+          <button class="action-btn" title="Move to…"><i class="fa-solid fa-arrow-right-arrow-left"></i></button>
+          <button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mock" id="mock-editproduct">
+  <div class="section-label"><h2>Products · Edit Product</h2></div>
+  <div class="members-container">
+    <div class="breadcrumb"><a data-page="products">Products</a> / <a data-page="products">Backend Services</a> / <strong style="color:#111827;">Payments API</strong></div>
+    <div class="row-between"><h1 class="page-title">Payments API</h1><button class="btn-green">Save changes</button></div>
+    <p class="subtitle">General settings, members and access keys for this product.</p>
+    <div class="card">
+      <h3>General</h3><p class="hint">Basic product information.</p>
+      <div class="field"><div><label>Name</label></div><input type="text" value="Payments API"></div>
+      <div class="field"><div><label>Description</label></div><textarea rows="2">Core payment processing service.</textarea></div>
+      <div class="field"><div><label>Expected update interval (TTL)</label><div class="desc">Warn if no data arrives within this period.</div></div><input type="text" value="10 minutes"></div>
+      <div class="field"><div><label>Keep sensor history</label></div><input type="text" value="90 days"></div>
+    </div>
+    <div class="card" style="padding:0;">
+      <div style="padding:1.25rem 1.25rem .5rem;"><div class="row-between"><h3 style="margin:0;">Members</h3>
+        <button class="btn-outline" style="padding:.3rem .7rem;font-size:.82rem;"><i class="fas fa-plus"></i> Add member</button></div>
+        <p class="hint" style="margin:.4rem 0 0;">People with access to this product and their roles.</p></div>
+      <div class="list" style="border:none;border-top:1px solid var(--border);border-radius:0;">
+        <div class="row"><div class="cell-main"><div class="avatar" style="background:#586bef;">AS</div>
+          <div><div class="name">a.smirnov</div><div class="sub">a.smirnov@corp.io</div></div></div>
+          <div class="actions" style="gap:.75rem;"><span class="chip green">Manager</span>
+            <button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+        <div class="row"><div class="cell-main"><div class="avatar" style="background:#7a87c5;">KL</div>
+          <div><div class="name">k.lee</div><div class="sub">k.lee@corp.io</div></div></div>
+          <div class="actions" style="gap:.75rem;"><span class="chip blue">Viewer</span>
+            <button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mock" id="mock-templates">
+  <div class="section-label"><h2>Alerts · Alert Templates</h2></div>
+  <div class="members-container">
+    <div class="row-between"><h1 class="page-title">Alert templates</h1><button class="btn-green"><i class="fas fa-plus"></i> New template</button></div>
+    <p class="subtitle">Reusable alert rules applied to sensors matching a path pattern.</p>
+    <div class="toolbar"><div class="search"><input placeholder="Find a template…"><i class="fas fa-search"></i></div>
+      <select class="select"><option>Folder</option></select><select class="select"><option>Sensor type</option><option>Any</option><option>Double</option><option>Boolean</option></select></div>
+    <div class="list">
+      <div class="list-header"><span>3 templates</span><span>Affected sensors</span></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#586bef;"><i class="fas fa-bell"></i></div>
+        <div><div class="name">Low disk space</div><div class="sub"><span class="mono">{product}/.computer/*/Free space on {diskName} disk</span></div></div></div>
+        <div class="actions" style="gap:.75rem;"><div class="chips"><span class="chip blue">Double</span><span class="chip gray">2 alerts</span></div><span class="chip plain">128 sensors</span>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#16a34a;"><i class="fas fa-bell"></i></div>
+        <div><div class="name">Sensor TTL expired</div><div class="sub"><span class="mono">{product}/**</span></div></div></div>
+        <div class="actions" style="gap:.75rem;"><div class="chips"><span class="chip green">Any</span><span class="chip gray">1 alert</span></div><span class="chip plain">540 sensors</span>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#ef4444;"><i class="fas fa-bell"></i></div>
+        <div><div class="name">Service down</div><div class="sub"><span class="mono">{product}/.module/*/IsAlive</span></div></div></div>
+        <div class="actions" style="gap:.75rem;"><div class="chips"><span class="chip blue">Boolean</span><span class="chip gray">1 alert</span></div><span class="chip plain">36 sensors</span>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mock" id="mock-schedules">
+  <div class="section-label"><h2>Alerts · Alert Schedules</h2></div>
+  <div class="members-container">
+    <div class="row-between"><h1 class="page-title">Alert schedules</h1><button class="btn-green"><i class="fas fa-plus"></i> New schedule</button></div>
+    <p class="subtitle">Time windows that mute or route alerts for selected sensors.</p>
+    <div class="toolbar"><div class="search"><input placeholder="Find a schedule…"><i class="fas fa-search"></i></div><select class="select"><option>TimeZone</option></select></div>
+    <div class="list">
+      <div class="list-header"><span>2 schedules</span><span>Affected sensors</span></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#586bef;"><i class="fas fa-clock"></i></div>
+        <div><div class="name">Weekend quiet hours</div><div class="sub">Sat–Sun, all day</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="chip plain"><i class="fas fa-globe" style="opacity:.5;"></i> UTC+02:00</span><span class="chip gray">64 sensors</span>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#f59e0b;"><i class="fas fa-clock"></i></div>
+        <div><div class="name">Nightly maintenance</div><div class="sub">Daily, 01:00–03:00</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="chip plain"><i class="fas fa-globe" style="opacity:.5;"></i> UTC+00:00</span><span class="chip gray">210 sensors</span>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mock" id="mock-keys">
+  <div class="section-label"><h2>Configuration · Access Keys</h2></div>
+  <div class="members-container">
+    <div class="row-between"><h1 class="page-title">Access keys</h1><button class="btn-green"><i class="fas fa-plus"></i> New access key</button></div>
+    <p class="subtitle">Manage API keys used by agents to send data to your products.</p>
+    <div class="toolbar"><div class="search"><input placeholder="Find a key by name or product…"><i class="fas fa-search"></i></div>
+      <select class="select"><option>Product</option></select><select class="select"><option>State</option><option>Active</option><option>Blocked</option><option>Expired</option></select></div>
+    <div class="list">
+      <div class="list-header"><span>4 keys</span><span>Last access</span></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#16a34a;"><i class="fas fa-key"></i></div>
+        <div><div class="name">Master Key</div><div class="sub"><span class="mono">a1f3…9c2e</span> · by admin</div></div></div>
+        <div class="actions" style="gap:.75rem;"><div class="chips"><span class="chip green">CanSendSensorData</span><span class="chip blue">CanAddNodes</span></div>
+          <span class="status"><span class="dot ok"></span>Active</span><span class="meta">2 min ago</span>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn" title="Block"><i class="fa-solid fa-ban"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#586bef;"><i class="fas fa-key"></i></div>
+        <div><div class="name">prod-collector</div><div class="sub">BackendServices · <span class="mono">7b2c…41aa</span> <a class="more-link">copy</a></div></div></div>
+        <div class="actions" style="gap:.75rem;"><div class="chips"><span class="chip green">CanSendSensorData</span></div>
+          <span class="status"><span class="dot ok"></span>Active</span><span class="meta">14:22, Jun 30</span>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn" title="Block"><i class="fa-solid fa-ban"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#f59e0b;"><i class="fas fa-key"></i></div>
+        <div><div class="name">ci-runner-temp</div><div class="sub">DevOps/CI · <span class="mono">e19d…07f5</span> <a class="more-link">copy</a></div></div></div>
+        <div class="actions" style="gap:.75rem;"><div class="chips"><span class="chip green">CanSendSensorData</span><span class="chip blue">CanReadSensorData</span></div>
+          <span class="status"><span class="dot warn"></span>Blocked</span><span class="meta">Jun 12</span>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn" title="Unblock"><i class="fa-solid fa-unlock"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#9ca3af;"><i class="fas fa-key"></i></div>
+        <div><div class="name">legacy-metrics</div><div class="sub">Analytics · <span class="mono">33ab…9910</span> <a class="more-link">copy</a></div></div></div>
+        <div class="actions" style="gap:.75rem;"><div class="chips"><span class="chip gray">CanReadSensorData</span></div>
+          <span class="status"><span class="dot err"></span>Expired</span><span class="meta">Mar 03</span>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mock" id="mock-users">
+  <div class="section-label"><h2>Configuration · Users (reference — already live)</h2></div>
+  <div class="members-container">
+    <div class="row-between"><h1 class="page-title">Members</h1><button class="btn-green"><i class="fas fa-plus"></i> Add member</button></div>
+    <p class="subtitle">Manage your organization's members and their access to products.</p>
+    <div class="toolbar"><div class="search"><input placeholder="Find a member…"><i class="fas fa-search"></i></div>
+      <select class="select"><option>Role</option><option>Admin</option><option>User</option></select></div>
+    <div class="list">
+      <div class="list-header"><span>3 members</span></div>
+      <div class="row"><div class="cell-main"><div class="avatar" style="background:#2d3fc7;">AD</div>
+        <div><div class="name" style="display:flex;gap:.5rem;align-items:center;">admin <span class="chip">Admin</span></div></div></div>
+        <div class="actions" style="gap:.75rem;"><div class="chips"><span class="chip">All products (Manager)</span></div>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar" style="background:#586bef;">AS</div>
+        <div><div class="name">a.smirnov</div></div></div>
+        <div class="actions" style="gap:.75rem;"><div class="chips"><span class="chip">Payments API (Manager)</span><span class="chip">Auth Service (Viewer)</span></div>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar" style="background:#7a87c5;">KL</div>
+        <div><div class="name">k.lee</div></div></div>
+        <div class="actions" style="gap:.75rem;"><div class="chips"><span class="chip">Payments API (Viewer)</span></div>
+          <button class="action-btn" title="Edit"><i class="fa-regular fa-pen-to-square"></i></button><button class="action-btn danger" title="Remove"><i class="fa-regular fa-trash-can"></i></button></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mock" id="mock-settings">
+  <div class="section-label"><h2>Configuration · Settings</h2></div>
+  <div class="members-container">
+    <div class="row-between"><h1 class="page-title">Settings</h1></div>
+    <p class="subtitle">Server configuration, backups, integrations and database options.</p>
+    <div class="tabs"><span class="tab active">Server</span><span class="tab">Backup</span><span class="tab">Self monitoring</span><span class="tab">Telegram</span><span class="tab">Database</span><span class="tab">Agent</span></div>
+    <div class="card"><h3>Server</h3><p class="hint">General server behaviour and network settings.</p>
+      <div class="field"><div><label>Server name</label><div class="desc">Displayed in the header and notifications.</div></div><input type="text" value="HSM Production"></div>
+      <div class="field"><div><label>Sensor history period</label><div class="desc">How long raw sensor values are retained.</div></div><input type="text" value="90 days"></div>
+      <div class="field"><div><label>Certificate expiration warning</label><div class="desc">Warn this many days before a key expires.</div></div><input type="number" value="14"></div>
+      <div class="field"><div><label>Allow anonymous read</label></div><div><span class="toggle off"></span></div></div>
+    </div>
+    <div class="card"><h3>Backup</h3><p class="hint">Automatic database snapshots.</p>
+      <div class="field"><div><label>Enable scheduled backups</label></div><div><span class="toggle"></span></div></div>
+      <div class="field"><div><label>Backup period</label></div><input type="text" value="24 hours"></div>
+      <div class="field"><div><label>Stored backups count</label></div><input type="number" value="7"></div>
+    </div>
+    <div class="save-bar"><button class="btn-outline">Cancel</button><button class="btn-green">Save changes</button></div>
+  </div>
+</div>
+
+<div class="mock" id="mock-notif">
+  <div class="section-label"><h2>Configuration · Telegram chats</h2></div>
+  <div class="members-container">
+    <div class="row-between"><h1 class="page-title">Telegram chats</h1><button class="btn-green"><i class="fas fa-plus"></i> Connect chat</button></div>
+    <p class="subtitle">Chats and groups that receive alert notifications.</p>
+    <div class="toolbar"><div class="search"><input placeholder="Find a chat…"><i class="fas fa-search"></i></div><select class="select"><option>Folder</option></select></div>
+    <div class="list">
+      <div class="list-header"><span>3 chats</span><span>Status</span></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#229ED9;"><i class="fab fa-telegram"></i></div>
+        <div><div class="name">#ops-alerts</div><div class="sub">Group · Backend Services</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="status"><span class="dot ok"></span>Connected</span>
+          <button class="action-btn" title="Settings"><i class="fas fa-gear"></i></button><button class="action-btn danger" title="Disconnect"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#229ED9;"><i class="fab fa-telegram"></i></div>
+        <div><div class="name">@oncall_bot</div><div class="sub">Private · Infrastructure</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="status"><span class="dot ok"></span>Connected</span>
+          <button class="action-btn" title="Settings"><i class="fas fa-gear"></i></button><button class="action-btn danger" title="Disconnect"><i class="fa-regular fa-trash-can"></i></button></div></div>
+      <div class="row"><div class="cell-main"><div class="avatar square" style="background:#9ca3af;"><i class="fab fa-telegram"></i></div>
+        <div><div class="name">#analytics</div><div class="sub">Group · pending invite</div></div></div>
+        <div class="actions" style="gap:.75rem;"><span class="status"><span class="dot warn"></span>Awaiting</span>
+          <button class="action-btn" title="Settings"><i class="fas fa-gear"></i></button><button class="action-btn danger" title="Disconnect"><i class="fa-regular fa-trash-can"></i></button></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mock" id="mock-login">
+  <div class="section-label"><h2>Account · Login</h2></div>
+  <div class="auth-wrap"><div class="auth-card">
+    <div class="brand-badge">HSM</div>
+    <h1>Welcome back</h1><p>Sign in to Hierarchical Sensor Monitoring</p>
+    <label>Username</label><input type="text" placeholder="Enter your username">
+    <label>Password</label><input type="password" placeholder="••••••••">
+    <div style="display:flex;align-items:center;gap:.5rem;margin-top:.9rem;font-size:.82rem;color:#374151;"><input type="checkbox"> Keep me logged in</div>
+    <button class="btn-green">Sign in <i class="fas fa-arrow-right"></i></button>
+  </div></div>
+</div>
+
+<div class="mock" id="mock-register">
+  <div class="section-label"><h2>Account · Registration</h2></div>
+  <div class="auth-wrap"><div class="auth-card">
+    <div class="brand-badge">HSM</div>
+    <h1>Create account</h1><p>Complete your invitation to HSM</p>
+    <label>Username</label><input type="text" placeholder="Choose a username">
+    <label>Password</label><input type="password" placeholder="At least 8 characters">
+    <label>Confirm password</label><input type="password" placeholder="Repeat password">
+    <button class="btn-green">Create account</button>
+  </div></div>
+</div>
+
+<script>
+  const mocks=document.querySelectorAll('.mock');
+  const items=document.querySelectorAll('.rnav .item');
+  const pageGroup={home:'home',dashlist:'dash',dashboard:'dash',products:'products',
+    editproduct:'products',templates:'alerts',schedules:'alerts',
+    keys:'config',users:'config',settings:'config',notif:'config',login:null,register:null};
+  function closeAll(){items.forEach(i=>i.classList.remove('open'));}
+  function show(page){
+    mocks.forEach(x=>x.classList.toggle('show',x.id==='mock-'+page));
+    const g=pageGroup[page];
+    items.forEach(i=>i.classList.toggle('active', g!=null && i.dataset.group===g));
+    closeAll();
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  document.querySelectorAll('.rnav .item[data-dd] > .link').forEach(link=>{
+    link.addEventListener('click',e=>{
+      const item=link.closest('.item');
+      const wasOpen=item.classList.contains('open');
+      closeAll();
+      if(!wasOpen) item.classList.add('open');
+      e.stopPropagation();
+    });
+  });
+  document.addEventListener('click',e=>{
+    const t=e.target.closest('[data-page]');
+    if(t){e.preventDefault();e.stopPropagation();show(t.dataset.page);}
+    else closeAll();
+  });
+  document.querySelectorAll('.folder-head').forEach(fh=>{
+    fh.addEventListener('click',e=>{
+      if(e.target.closest('.fh-edit')) return;
+      fh.closest('.list').classList.toggle('collapsed');
+    });
+  });
+  show('home');
+</script>
+</body>
+</html>
