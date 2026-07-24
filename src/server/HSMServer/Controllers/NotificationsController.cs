@@ -177,6 +177,15 @@ namespace HSMServer.Controllers
             return Ok();
         }
 
+        // Polled by EditChat: the /start binding completes async in the bot, outside any browser request.
+        [HttpGet]
+        [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
+        public IActionResult TelegramConnectionStatus(Guid id)
+        {
+            var connected = ChatsManager.TryGetValue(id, out var chat) && chat.TelegramChatId is not null;
+            return Json(new { connected });
+        }
+
         [HttpPost]
         [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> RemoveTelegramBinding(Guid id) =>

@@ -280,6 +280,13 @@
     }
 
     $(function () {
+        // Strip justConnected so an F5 or URL re-share does not replay the toast.
+        var justConnected = new URLSearchParams(window.location.search).get('justConnected');
+        if (justConnected === '1') {
+            showToast("Telegram chat connected.");
+            window.history.replaceState({}, document.title, window.location.pathname + "?id=@Model.Id&tab=telegram");
+        }
+
         $("#sendTestTelegram").off("click").on("click", function () {
             var chatId = $(this).data("chat-id");
             $.get("@Url.Action(nameof(NotificationsController.SendTestTelegramMessage), ViewConstants.NotificationsController)", { chatId: chatId })
@@ -329,3 +336,44 @@
         });
     });
 </script>
+
+@if (!isTelegramBound)
+{
+<script>
+    // The /start binding runs in the bot, outside any browser request, so poll until connected.
+    (function () {
+        var pollIntervalMs = 5000;
+        var maxPollMs = 5 * 60 * 1000;
+        var startedAt = Date.now();
+        var pollHandle = null;
+
+        function stop() { if (pollHandle) { clearTimeout(pollHandle); pollHandle = null; } }
+
+        function schedule() {
+            if (Date.now() - startedAt < maxPollMs) pollHandle = setTimeout(check, pollIntervalMs);
+            else stop();
+        }
+
+        function check() {
+            $.get("@Url.Action(nameof(NotificationsController.TelegramConnectionStatus), ViewConstants.NotificationsController)", { id: "@Model.Id" })
+                .done(function (data) {
+                    if (data && data.connected) {
+                        stop();
+                        window.location.href =
+                            "@Url.Action(nameof(NotificationsController.EditChat), ViewConstants.NotificationsController)?id=@Model.Id&tab=telegram&justConnected=1";
+                        return;
+                    }
+                    schedule();
+                })
+                .fail(function (xhr) {
+                    // Auth lost (session/folder membership) — stop, don't spin for 5 min.
+                    if (xhr.status === 401 || xhr.status === 403) return stop();
+                    schedule();
+                });
+        }
+
+        $(check);
+        $(window).on('beforeunload', stop);
+    })();
+</script>
+}
