@@ -477,6 +477,13 @@ namespace HSMDatabase.LevelDB
             {
                 var fileInfo = new FileInfo($"{backupPath}.zip");
 
+                // The SoftFX LevelDB wrapper does not create the parent directory for a brand-new
+                // DB path — without this, new DB(backupPath, ...) fails with
+                // "NotFound: <path>/LOCK: The system cannot find the path specified" the first
+                // time a backup is taken after the server starts (BackupDatabaseService builds a
+                // fresh <dbName>_<timestamp> path per run).
+                Directory.CreateDirectory(backupPath);
+
                 using (var backupDb = new DB(backupPath, _databaseOptions))
                 {
                     using (var snapshot = _database.CreateSnapshot())
