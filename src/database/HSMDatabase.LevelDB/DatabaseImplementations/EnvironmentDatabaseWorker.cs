@@ -11,7 +11,7 @@ using System.Text.Json.Serialization;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
-    internal sealed class EnvironmentDatabaseWorker : IEnvironmentDatabase
+    public sealed class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
         private static readonly JsonSerializerOptions _options = new()
         {
@@ -37,6 +37,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public EnvironmentDatabaseWorker(string name)
         {
             _database = new LevelDBDatabaseAdapter(name);
+            _logger = LogManager.GetCurrentClassLogger();
+        }
+
+        // Used by the restore flow to wrap a pre-built adapter (typically read-only, opened
+        // against an unpacked backup) instead of constructing one from a relative-path name.
+        public EnvironmentDatabaseWorker(LevelDBDatabaseAdapter adapter)
+        {
+            _database = adapter;
             _logger = LogManager.GetCurrentClassLogger();
         }
 

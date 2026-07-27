@@ -11,7 +11,9 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
+using HSMDatabase.AccessManager;
 using HSMDatabase.DatabaseWorkCore;
+using HSMDatabase.Settings;
 using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
 using HSMServer.ConcurrentStorage;
@@ -45,6 +47,7 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton(config);
 
             services.AddSingleton<IDatabaseCore, DatabaseCore>()
+                    .AddSingleton<IDatabaseSettings, DatabaseSettings>()
                     .AddSingleton<ChatMigrator>()
                     .AddSingleton<IAlertScheduleProvider, AlertScheduleProvider>()
                     .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
@@ -65,11 +68,14 @@ namespace HSMServer.ServiceExtensions
             services.AddHttpClient<SlackNotificationChannel>();
             services.AddHttpClient<MattermostNotificationChannel>();
 
+            services.AddSingleton<HSMServer.Core.Restore.IRestoreService, HSMServer.Core.Restore.RestoreService>();
+
             services.AddHostedService<TreeSnapshotService>()
                     .AddHostedService<ClearDatabaseService>()
                     //                .AddHostedService<MonitoringBackgroundService>()
                     .AddHostedService<DataCollectorService>()
                     .AddHostedService<NotificationsBackgroundService>()
+                    .AddHostedService<BackgroundServices.DatabaseServices.RestoreTempCleanupService>()
                     .AddHostedService(provider => provider.GetService<BackupDatabaseService>());
 
             services.AddSwaggerGen(o =>

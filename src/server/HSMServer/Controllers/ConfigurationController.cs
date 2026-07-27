@@ -13,15 +13,19 @@ using NLog;
 using HSMCommon.Extensions;
 using System.Text;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Restore;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
     [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService, IDatabaseCore database) : Controller
+    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService, IDatabaseCore database, IRestoreService restoreService) : Controller
     {
         private readonly TelegramBot _telegramBot = notifications.TelegramBot;
+        private readonly IRestoreService _restoreService = restoreService;
 
         protected readonly Logger _logger = LogManager.GetLogger(typeof(ConfigurationController).Name);
 
@@ -171,6 +175,75 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public Task<string> CreateBackup() => backupService.CreateBackupAsync();
+
+        // -------- Restore wizard endpoints (Alert Templates only in v1) --------
+        // All admin-only via the class-level [AuthorizeIsAdmin]. The 3-step wizard in
+        // _RestoreWizard.cshtml drives these: ListBackups -> OpenBackup -> ListAlertTemplates
+        // -> RestoreTemplates -> CloseSession.
+
+        [HttpGet]
+        public IActionResult ListBackups()
+        {
+            try { return Json(_restoreService.ListBackups()); }
+            catch (Exception ex) { _logger.Error(ex, "ListBackups failed"); return BadRequest(ex.Message); }
+        }
+
+        [HttpPost]
+        public IActionResult OpenBackup([FromQuery] string fileName)
+        {
+            try
+            {
+                var sessionId = _restoreService.OpenBackup(fileName);
+                return Json(new { sessionId });
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"OpenBackup failed for '{fileName}'");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpGet]
+        public IActionResult ListAlertTemplates(Guid session)
+        {
+            try { return Json(_restoreService.ListAlertTemplates(session)); }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"ListAlertTemplates failed for session {session}");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        public sealed class RestoreRequest
+        {
+            public Guid Session { get; set; }
+            public List<RestoreRequestItem> Items { get; set; } = [];
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> RestoreAlertTemplates([FromBody] RestoreRequest request)
+        {
+            if (request?.Items == null || request.Items.Count == 0)
+                return BadRequest("No templates selected.");
+
+            try
+            {
+                var result = await _restoreService.RestoreTemplatesAsync(request.Session, request.Items, GetUserName());
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"RestoreAlertTemplates failed for session {request.Session}");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPost]
+        public IActionResult CloseRestoreSession(Guid session)
+        {
+            _restoreService.CloseSession(session);
+            return Ok();
+        }
 
         [HttpPost]
         public Task<string> CheckSftpConnection(BackupSettingsViewModel settings)
