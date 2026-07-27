@@ -2012,14 +2012,18 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(IDatabaseCore.GetAllAlertTemplates)} requested");
 
             _logger.Info($"{nameof(alertTemlatesEntities)} are applying");
+            // NOTE: GetAllAlertTemplates expands from the "AlertTemplates" index, which historically
+            // could contain duplicate GUIDs (AddAlertTemplateIdToList used reference equality on byte[]).
+            // Do NOT delete template entities here for duplicates seen during iteration — that wiped
+            // every template on restart once the index had grown duplicates (see #1312). Just populate
+            // the in-memory cache with the first occurrence of each GUID and ignore subsequent copies.
             foreach (var template in alertTemlatesEntities)
             {
                 var model = new AlertTemplateModel(template);
-                if (!_alertTemplates.ContainsKey(new Guid(template.Id)))
-                    _alertTemplates.TryAdd(model.Id, model);
-                else
-                    _database.RemoveAlertTemplate(new Guid(template.Id));
+                _alertTemplates.TryAdd(model.Id, model);
             }
+            if (alertTemlatesEntities.Count != _alertTemplates.Count)
+                _logger.Warn($"AlertTemplates index contained duplicates: {alertTemlatesEntities.Count} entries for {_alertTemplates.Count} unique templates. Run database compaction cleanup to deduplicate.");
             _logger.Info($"{nameof(alertTemlatesEntities)} applied");
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");

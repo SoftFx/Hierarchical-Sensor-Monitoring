@@ -717,7 +717,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 var ids = GetAllAlertTemplatesIds();
 
-                if (!ids.Contains(id))
+                if (!ids.Any(existingId => existingId.SequenceEqual(id)))
                 {
                     ids.Add(id);
                     _database.Put(_alertTemplatesIdsKey, JsonSerializer.SerializeToUtf8Bytes(ids));
