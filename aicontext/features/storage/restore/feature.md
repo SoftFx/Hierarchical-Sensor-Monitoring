@@ -61,11 +61,14 @@ Scope of v1: **Alert Templates only**. The entity-type selector in the wizard is
 admin opens wizard
   → ListBackups                                   (enumerate DatabasesBackups/EnvironmentData_*.zip)
   → OpenBackup(fileName)                          (extract zip → restore_<guid>/, open read-only, return sessionId)
-  → ListAlertTemplates(sessionId)                 (read AlertTemplates index from read-only worker)
+  → ListAlertTemplates(sessionId)                 (read AlertTemplates index from read-only worker; per item,
+                                                   also reports ExistsOnLive = whether the live cache
+                                                   already has that Id — drives the wizard defaults)
   → user ticks items + per-item CollisionResolution
+       defaults: existing rows unchecked + Duplicate; new rows checked + Overwrite
   → RestoreAlertTemplates({Session, Items})
        for each item:
-         Skip         → no-op, record outcome
+         Skip         → no-op (kept in enum; the wizard never sends it)
          Overwrite    → new AlertTemplateModel(entity), AddAlertTemplateAsync(model)  (same Id → cache replaces)
          Duplicate    → model.Id = NewGuid, model.Name = $"{name} (restored …)", AddAlertTemplateAsync(model)
   → CloseRestoreSession(sessionId)                (dispose worker → delete temp folder)
@@ -85,7 +88,7 @@ The wizard is reached from **Configuration → Backup tab → "Restore" button**
 
 1. Dropdown of `EnvironmentData_*.zip` files (name, size, last-write time).
 2. Disabled radio locked to "Alert Template".
-3. Searchable checklist of `{Id, Name}` with a per-row collision `<select>` (default **Duplicate** for safety). Final "Restore" button shows per-item outcomes in a result table.
+3. Searchable checklist of `{Id, Name}` with an `(exists)` badge for templates already present on the live server. Rows that already exist are **unchecked** by default with resolution **Duplicate**; new rows are **checked** by default with resolution **Overwrite** (which is an insert in that case). Final "Restore" button shows per-item outcomes in a result table.
 
 `showToast` announces completion. The modal calls `CloseRestoreSession` on close so the temp DB is reclaimed immediately.
 

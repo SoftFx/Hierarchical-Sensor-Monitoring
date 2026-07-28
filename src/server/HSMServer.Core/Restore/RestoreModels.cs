@@ -24,6 +24,11 @@ namespace HSMServer.Core.Restore
         public Guid Id { get; init; }
 
         public string Name { get; init; }
+
+        // True when a template with the same Id already exists on the live server. The wizard
+        // uses this to (a) uncheck such rows by default and (b) render an "(exists)" badge so
+        // the admin understands why Duplicate is the safer default there.
+        public bool ExistsOnLive { get; init; }
     }
 
     public sealed record RestoreRequestItem

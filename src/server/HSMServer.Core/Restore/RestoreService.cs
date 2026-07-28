@@ -129,6 +129,12 @@ namespace HSMServer.Core.Restore
         {
             var backup = GetSessionOrThrow(session);
 
+            // One-time snapshot of live Ids so ExistsOnLive reflects a consistent view across
+            // all rows even if a concurrent add/remove happens mid-iteration.
+            var liveIds = _cache.GetAlertTemplateModels()?
+                                .Select(t => t.Id)
+                                .ToHashSet() ?? new HashSet<Guid>();
+
             var result = new List<BackupTemplateItem>();
 
             foreach (var idBytes in backup.Worker.GetAllAlertTemplatesIds())
@@ -139,10 +145,12 @@ namespace HSMServer.Core.Restore
                     if (entity == null)
                         continue;
 
+                    var id = new Guid(entity.Id);
                     result.Add(new BackupTemplateItem
                     {
-                        Id = new Guid(entity.Id),
+                        Id = id,
                         Name = entity.Name,
+                        ExistsOnLive = liveIds.Contains(id),
                     });
                 }
                 catch (Exception ex)

@@ -45,9 +45,11 @@
                     </div>
                     <div id="restoreItemList" class="border rounded p-2" style="max-height: 50vh; overflow-y: auto;"></div>
                     <div class="form-text small mt-1">
-                        Collision resolution applies when a template with the same Id already exists on the live server:
-                        <strong>Overwrite</strong> replaces it, <strong>Skip</strong> leaves it untouched,
-                        <strong>Duplicate</strong> inserts with a new Id (safe default).
+                        Resolution for each ticked template:
+                        <strong>Overwrite</strong> inserts or replaces using the original Id,
+                        <strong>Duplicate</strong> inserts with a new Id.
+                        Rows already present on the live server are <em>unchecked</em> by default and marked
+                        <span class="badge bg-warning text-dark">exists</span>.
                     </div>
                     <div id="restoreStep3Error" class="text-danger small mt-2" style="display:none;"></div>
                 </div>
@@ -133,11 +135,16 @@
                     }
                     backupSelect.innerHTML = '';
                     list.forEach(b => {
+                        // ASP.NET serializes JSON in camelCase by default, so the wire format is
+                        // { fileName, lastWriteTimeUtc, sizeBytes }. Read both spellings defensively.
+                        const fileName = b.fileName ?? b.FileName;
+                        const sizeBytes = b.sizeBytes ?? b.SizeBytes ?? 0;
+                        const lastWrite = b.lastWriteTimeUtc ?? b.LastWriteTimeUtc;
                         const opt = document.createElement('option');
-                        opt.value = b.FileName;
-                        const sizeKb = Math.max(1, Math.round(b.SizeBytes / 1024));
-                        const date = new Date(b.LastWriteTimeUtc).toLocaleString();
-                        opt.textContent = `${b.FileName}  (${sizeKb} KB, ${date})`;
+                        opt.value = fileName;
+                        const sizeKb = Math.max(1, Math.round(sizeBytes / 1024));
+                        const date = lastWrite ? new Date(lastWrite).toLocaleString() : '';
+                        opt.textContent = `${fileName}  (${sizeKb} KB${date ? ', ' + date : ''})`;
                         backupSelect.appendChild(opt);
                     });
                 },
@@ -172,36 +179,59 @@
         function renderItems(filter) {
             itemList.innerHTML = '';
             const f = (filter || '').toLowerCase();
-            const filtered = itemsCache.filter(i => !f || (i.Name || '').toLowerCase().includes(f));
+            const filtered = itemsCache.filter(i => !f || (itemName(i).toLowerCase().includes(f)));
             if (filtered.length === 0) {
                 itemList.innerHTML = '<div class="text-muted small">No templates match.</div>';
                 return;
             }
             filtered.forEach(item => {
-                resolutionPerId[item.Id] = resolutionPerId[item.Id] ?? 2; // default Duplicate
+                const id = itemId(item);
+                const name = itemName(item);
+                const exists = itemExistsOnLive(item);
+
+                // Defaults: rows that already exist on the live server are unchecked by default
+                // (the admin is restoring the surviving set, not re-adding what's already there),
+                // and their default resolution is Duplicate so accidentally ticking them won't
+                // clobber the live template. Fresh rows default to checked + Overwrite (= insert).
+                const defaultChecked = !exists;
+                const defaultResolution = exists ? 2 /*Duplicate*/ : 0 /*Overwrite*/;
+
+                if (resolutionPerId[id] === undefined) resolutionPerId[id] = defaultResolution;
+
                 const row = document.createElement('div');
                 row.className = 'd-flex align-items-center mb-1';
+                const existsBadge = exists
+                    ? ' <span class="badge bg-warning text-dark ms-1">exists</span>'
+                    : '';
                 row.innerHTML = `
                     <div class="form-check me-3">
-                        <input class="form-check-input restore-item-check" type="checkbox" data-id="${item.Id}" checked>
-                        <label class="form-check-label mb-0">${escapeHtml(item.Name || item.Id)} <span class="text-muted small">(${item.Id})</span></label>
+                        <input class="form-check-input restore-item-check" type="checkbox" data-id="${escapeHtml(id)}"${defaultChecked ? ' checked' : ''}>
+                        <label class="form-check-label mb-0">${escapeHtml(name || id)}${existsBadge} <span class="text-muted small">(${escapeHtml(id)})</span></label>
                     </div>
-                    <select class="form-select form-select-sm ms-auto" style="width: 150px;" data-id="${item.Id}">
+                    <select class="form-select form-select-sm ms-auto" style="width: 150px;" data-id="${escapeHtml(id)}"${defaultChecked ? '' : ' disabled'}>
                         <option value="0">Overwrite</option>
-                        <option value="1">Skip</option>
                         <option value="2">Duplicate</option>
                     </select>`;
                 const select = row.querySelector('select');
-                select.value = String(resolutionPerId[item.Id]);
-                select.addEventListener('change', () => { resolutionPerId[item.Id] = parseInt(select.value, 10); });
+                select.value = String(resolutionPerId[id]);
+                select.addEventListener('change', () => { resolutionPerId[id] = parseInt(select.value, 10); });
                 const check = row.querySelector('input.restore-item-check');
                 check.addEventListener('change', () => {
                     select.disabled = !check.checked;
                     row.style.opacity = check.checked ? '1' : '0.5';
                 });
+                row.style.opacity = defaultChecked ? '1' : '0.5';
                 itemList.appendChild(row);
             });
         }
+
+        // Tolerant field accessors: ASP.NET serializes in camelCase by default, but other
+        // serializers (and tests) may produce PascalCase. Read both.
+        function itemId(i) { return i.id ?? i.Id; }
+        function itemName(i) { return i.name ?? i.Name; }
+        function itemExistsOnLive(i) { return !!(i.existsOnLive ?? i.ExistsOnLive); }
+        function itemOutcome(i) { return i.outcome ?? i.Outcome ?? ''; }
+        function itemResolution(i) { return i.resolution ?? i.Resolution; }
 
         function escapeHtml(s) {
             return (s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -237,9 +267,11 @@
 
         function renderResult(result) {
             resultBody.innerHTML = '';
-            (result.Items || []).forEach(it => {
+            const items = (result && (result.items || result.Items)) || [];
+            items.forEach(it => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${escapeHtml(it.Name || '')}</td><td>${resolutionLabels[it.Resolution] ?? it.Resolution}</td><td>${escapeHtml(it.Outcome || '')}</td>`;
+                const res = itemResolution(it);
+                tr.innerHTML = `<td>${escapeHtml(itemName(it) || '')}</td><td>${resolutionLabels[res] ?? res}</td><td>${escapeHtml(itemOutcome(it))}</td>`;
                 resultBody.appendChild(tr);
             });
         }
@@ -267,7 +299,7 @@
             if (currentStep === 2) {
                 try {
                     itemsCache = await loadTemplates();
-                    itemsCache.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+                    itemsCache.sort((a, b) => (itemName(a) || '').localeCompare(itemName(b) || ''));
                     resolutionPerId = {};
                     renderItems('');
                     setStep(3);
