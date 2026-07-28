@@ -1,5 +1,8 @@
 # HSM Server
 
-## Notifications
-* Connecting a Telegram chat from the chat editor now binds to the chat being edited (including a brand-new chat saved from the editor) instead of creating a separate orphan chat. Stale Telegram bindings self-heal on reconnect, and when a Telegram chat is already bound elsewhere, the owning chat is named in the refusal message.
-* The chat editor shows a "Telegram chat connected" toast and auto-refreshes to the bound state once the bot completes `/start` — the binding is async (handled by the bot), so the page previously required a manual refresh.
+## Restore
+* New Alert Template restore wizard: import alert templates from a backup file into the current server, with existing templates detected and marked, and camelCase field mapping preserved.
+
+## Bug fixes
+* Fixed silent wipe of alert templates on server restart caused by erroneous deduplication compaction; the misleading compaction hint was also removed.
+* Backup restore now creates the target directory before opening the backup database, preventing a failure on fresh paths.
