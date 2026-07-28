@@ -6,6 +6,8 @@ namespace HSMDatabase.AccessManager
     {
         public string DatabaseBackupsFolder { get; init; }
 
+        public string DatabaseRestoreTempFolder { get; init; }
+
         public string DatabaseFolder { get; init; }
 
         public string JournalFolder { get; init; }

@@ -58,6 +58,47 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        // Opens an already-existing LevelDB at an absolute path for read-only use (restore flow).
+        // Distinct from the ctor above on purpose: this path must never create a missing DB —
+        // a wrong path should surface as a LevelDB open error rather than silently producing an
+        // empty database that "successfully" reads zero templates. Also skips the CreateDirectory
+        // no-op the read/write ctor performs. Tunables mirror the read/write ctor above.
+        private LevelDBDatabaseAdapter(string absolutePath, bool readOnly)
+        {
+            if (!readOnly)
+                throw new ArgumentException("This ctor is for the read-only path only.");
+
+            var readOptions = new Options
+            {
+                CreateIfMissing = false,
+                MaxOpenFiles = 100000,
+                CompressionLevel = CompressionLevel.SnappyCompression,
+                BlockSize = 200 * 1024,
+                WriteBufferSize = 8 * 1024 * 1024,
+            };
+
+            _databaseName = absolutePath;
+
+            var attempts = 0;
+            while (++attempts <= OpenDbMaxAttempts)
+            {
+                try
+                {
+                    _database = new DB(absolutePath, readOptions);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error opening read-only database {absolutePath} (attempt: {attempts}). {ex.Message}");
+
+                    if (attempts == OpenDbMaxAttempts)
+                        throw;
+                }
+            }
+        }
+
+        public static LevelDBDatabaseAdapter ForReadOnly(string absolutePath) => new(absolutePath, readOnly: true);
+
         public void Delete(byte[] key)
         {
             try
@@ -435,6 +476,13 @@ namespace HSMDatabase.LevelDB
             try
             {
                 var fileInfo = new FileInfo($"{backupPath}.zip");
+
+                // The SoftFX LevelDB wrapper does not create the parent directory for a brand-new
+                // DB path — without this, new DB(backupPath, ...) fails with
+                // "NotFound: <path>/LOCK: The system cannot find the path specified" the first
+                // time a backup is taken after the server starts (BackupDatabaseService builds a
+                // fresh <dbName>_<timestamp> path per run).
+                Directory.CreateDirectory(backupPath);
 
                 using (var backupDb = new DB(backupPath, _databaseOptions))
                 {

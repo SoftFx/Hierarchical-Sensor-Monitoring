@@ -1,0 +1,349 @@
+@using HSMServer.Constants
+@using HSMServer.Controllers
+
+<div class="modal fade" id="restoreWizardModal" tabindex="-1" aria-labelledby="restoreWizardModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="restoreWizardModalLabel">Restore from backup</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Stepper header -->
+                <div class="d-flex justify-content-between mb-4" id="restoreStepper">
+                    <div class="step active" data-step="1"><span class="badge bg-primary rounded-circle">1</span> Backup file</div>
+                    <div class="step" data-step="2"><span class="badge bg-secondary rounded-circle">2</span> Entity type</div>
+                    <div class="step" data-step="3"><span class="badge bg-secondary rounded-circle">3</span> Pick items</div>
+                </div>
+
+                <!-- Step 1: pick backup file -->
+                <div class="restore-step" id="restoreStep1">
+                    <p class="text-muted small">Choose an environment database backup (created automatically by the server, or via the Backup button on the left).</p>
+                    <div class="mb-2">
+                        <select id="restoreBackupSelect" class="form-select">
+                            <option value="">(loading…)</option>
+                        </select>
+                    </div>
+                    <div id="restoreStep1Error" class="text-danger small" style="display:none;"></div>
+                </div>
+
+                <!-- Step 2: pick entity type -->
+                <div class="restore-step" id="restoreStep2" style="display:none;">
+                    <p class="text-muted small">Choose the entity type to restore. Only Alert Templates are supported in this version.</p>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="restoreEntityType" id="restoreEntityTypeAlertTemplate" value="AlertTemplate" checked disabled>
+                        <label class="form-check-label" for="restoreEntityTypeAlertTemplate">Alert Template</label>
+                    </div>
+                </div>
+
+                <!-- Step 3: pick items -->
+                <div class="restore-step" id="restoreStep3" style="display:none;">
+                    <div class="d-flex mb-2">
+                        <input type="text" id="restoreItemSearch" class="form-control me-2" placeholder="Filter by name…">
+                        <button type="button" id="restoreSelectAll" class="btn btn-sm btn-outline-secondary">Select all</button>
+                        <button type="button" id="restoreSelectNone" class="btn btn-sm btn-outline-secondary ms-1">Clear</button>
+                    </div>
+                    <div id="restoreItemList" class="border rounded p-2" style="max-height: 50vh; overflow-y: auto;"></div>
+                    <div class="form-text small mt-1">
+                        Resolution for each ticked template:
+                        <strong>Overwrite</strong> inserts or replaces using the original Id,
+                        <strong>Duplicate</strong> inserts with a new Id.
+                        Rows already present on the live server are <em>unchecked</em> by default and marked
+                        <span class="badge bg-warning text-dark">exists</span>.
+                    </div>
+                    <div id="restoreStep3Error" class="text-danger small mt-2" style="display:none;"></div>
+                </div>
+
+                <!-- Result panel -->
+                <div class="restore-step" id="restoreResult" style="display:none;">
+                    <h6>Restore result</h6>
+                    <table class="table table-sm">
+                        <thead><tr><th>Name</th><th>Resolution</th><th>Outcome</th></tr></thead>
+                        <tbody id="restoreResultBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="restoreBackBtn" style="display:none;">Back</button>
+                <button type="button" class="btn btn-primary" id="restoreNextBtn">Next</button>
+                <button type="button" class="btn btn-success" id="restoreSubmitBtn" style="display:none;">Restore</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="restoreCloseBtn">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const stepEls = {
+            1: document.getElementById('restoreStep1'),
+            2: document.getElementById('restoreStep2'),
+            3: document.getElementById('restoreStep3'),
+            result: document.getElementById('restoreResult'),
+        };
+        const stepperBadges = document.querySelectorAll('#restoreStepper .badge');
+        const nextBtn = document.getElementById('restoreNextBtn');
+        const backBtn = document.getElementById('restoreBackBtn');
+        const submitBtn = document.getElementById('restoreSubmitBtn');
+        const closeBtn = document.getElementById('restoreCloseBtn');
+
+        const backupSelect = document.getElementById('restoreBackupSelect');
+        const step1Err = document.getElementById('restoreStep1Error');
+        const step3Err = document.getElementById('restoreStep3Error');
+        const itemList = document.getElementById('restoreItemList');
+        const search = document.getElementById('restoreItemSearch');
+        const selectAll = document.getElementById('restoreSelectAll');
+        const selectNone = document.getElementById('restoreSelectNone');
+        const resultBody = document.getElementById('restoreResultBody');
+
+        let currentStep = 1;
+        let sessionId = null;
+        let itemsCache = []; // [{Id, Name}]
+        let resolutionPerId = {}; // id -> 'Overwrite' | 'Skip' | 'Duplicate'
+
+        const resolutionLabels = { 0: 'Overwrite', 1: 'Skip', 2: 'Duplicate' };
+
+        const url = (action, query) => {
+            const base = '@Html.Raw(Url.Action("__ACTION__", ViewConstants.ConfigurationController))'.replace('__ACTION__', action);
+            return query ? `${base}?${query}` : base;
+        };
+
+        function showError(el, msg) { el.textContent = msg; el.style.display = 'block'; }
+        function hideError(el) { el.style.display = 'none'; el.textContent = ''; }
+
+        function setStep(n) {
+            currentStep = n;
+            Object.values(stepEls).forEach(el => el.style.display = 'none');
+            stepEls[n].style.display = 'block';
+            stepperBadges.forEach((b, i) => {
+                b.classList.remove('bg-primary', 'bg-secondary');
+                b.classList.add(i + 1 <= n ? 'bg-primary' : 'bg-secondary');
+            });
+            backBtn.style.display = n > 1 && n < 4 ? 'inline-block' : 'none';
+            nextBtn.style.display = n < 3 ? 'inline-block' : 'none';
+            submitBtn.style.display = n === 3 ? 'inline-block' : 'none';
+        }
+
+        function loadBackups() {
+            backupSelect.innerHTML = '<option value="">(loading…)</option>';
+            $.ajax({
+                type: 'GET', url: url('ListBackups'), dataType: 'json', cache: false,
+                success: function (list) {
+                    if (!list || list.length === 0) {
+                        backupSelect.innerHTML = '<option value="">(no backups found)</option>';
+                        return;
+                    }
+                    backupSelect.innerHTML = '';
+                    list.forEach(b => {
+                        // ASP.NET serializes JSON in camelCase by default, so the wire format is
+                        // { fileName, lastWriteTimeUtc, sizeBytes }. Read both spellings defensively.
+                        const fileName = b.fileName ?? b.FileName;
+                        const sizeBytes = b.sizeBytes ?? b.SizeBytes ?? 0;
+                        const lastWrite = b.lastWriteTimeUtc ?? b.LastWriteTimeUtc;
+                        const opt = document.createElement('option');
+                        opt.value = fileName;
+                        const sizeKb = Math.max(1, Math.round(sizeBytes / 1024));
+                        const date = lastWrite ? new Date(lastWrite).toLocaleString() : '';
+                        opt.textContent = `${fileName}  (${sizeKb} KB${date ? ', ' + date : ''})`;
+                        backupSelect.appendChild(opt);
+                    });
+                },
+                error: function () { backupSelect.innerHTML = '<option value="">(failed to load)</option>'; }
+            });
+        }
+
+        function openBackup(fileName) {
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    type: 'POST',
+                    url: url('OpenBackup', 'fileName=' + encodeURIComponent(fileName)),
+                    dataType: 'json',
+                    success: resolve,
+                    error: function (xhr) { reject(xhr.responseText || xhr.statusText); }
+                });
+            });
+        }
+
+        function loadTemplates() {
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    type: 'GET',
+                    url: url('ListAlertTemplates', 'session=' + encodeURIComponent(sessionId)),
+                    dataType: 'json',
+                    success: resolve,
+                    error: function (xhr) { reject(xhr.responseText || xhr.statusText); }
+                });
+            });
+        }
+
+        function renderItems(filter) {
+            itemList.innerHTML = '';
+            const f = (filter || '').toLowerCase();
+            const filtered = itemsCache.filter(i => !f || (itemName(i).toLowerCase().includes(f)));
+            if (filtered.length === 0) {
+                itemList.innerHTML = '<div class="text-muted small">No templates match.</div>';
+                return;
+            }
+            filtered.forEach(item => {
+                const id = itemId(item);
+                const name = itemName(item);
+                const exists = itemExistsOnLive(item);
+
+                // Defaults: rows that already exist on the live server are unchecked by default
+                // (the admin is restoring the surviving set, not re-adding what's already there),
+                // and their default resolution is Duplicate so accidentally ticking them won't
+                // clobber the live template. Fresh rows default to checked + Overwrite (= insert).
+                const defaultChecked = !exists;
+                const defaultResolution = exists ? 2 /*Duplicate*/ : 0 /*Overwrite*/;
+
+                if (resolutionPerId[id] === undefined) resolutionPerId[id] = defaultResolution;
+
+                const row = document.createElement('div');
+                row.className = 'd-flex align-items-center mb-1';
+                const existsBadge = exists
+                    ? ' <span class="badge bg-warning text-dark ms-1">exists</span>'
+                    : '';
+                row.innerHTML = `
+                    <div class="form-check me-3">
+                        <input class="form-check-input restore-item-check" type="checkbox" data-id="${escapeHtml(id)}"${defaultChecked ? ' checked' : ''}>
+                        <label class="form-check-label mb-0">${escapeHtml(name || id)}${existsBadge} <span class="text-muted small">(${escapeHtml(id)})</span></label>
+                    </div>
+                    <select class="form-select form-select-sm ms-auto" style="width: 150px;" data-id="${escapeHtml(id)}"${defaultChecked ? '' : ' disabled'}>
+                        <option value="0">Overwrite</option>
+                        <option value="2">Duplicate</option>
+                    </select>`;
+                const select = row.querySelector('select');
+                select.value = String(resolutionPerId[id]);
+                select.addEventListener('change', () => { resolutionPerId[id] = parseInt(select.value, 10); });
+                const check = row.querySelector('input.restore-item-check');
+                check.addEventListener('change', () => {
+                    select.disabled = !check.checked;
+                    row.style.opacity = check.checked ? '1' : '0.5';
+                });
+                row.style.opacity = defaultChecked ? '1' : '0.5';
+                itemList.appendChild(row);
+            });
+        }
+
+        // Tolerant field accessors: ASP.NET serializes in camelCase by default, but other
+        // serializers (and tests) may produce PascalCase. Read both.
+        function itemId(i) { return i.id ?? i.Id; }
+        function itemName(i) { return i.name ?? i.Name; }
+        function itemExistsOnLive(i) { return !!(i.existsOnLive ?? i.ExistsOnLive); }
+        function itemOutcome(i) { return i.outcome ?? i.Outcome ?? ''; }
+        function itemResolution(i) { return i.resolution ?? i.Resolution; }
+
+        function escapeHtml(s) {
+            return (s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+        }
+
+        function submitRestore() {
+            hideError(step3Err);
+            const selected = [];
+            itemList.querySelectorAll('input.restore-item-check:checked').forEach(c => {
+                const id = c.getAttribute('data-id');
+                selected.push({ Id: id, Resolution: resolutionPerId[id] ?? 2 });
+            });
+            if (selected.length === 0) {
+                showError(step3Err, 'Select at least one template.');
+                return;
+            }
+            const body = { Session: sessionId, Items: selected };
+            $.ajax({
+                type: 'POST',
+                url: url('RestoreAlertTemplates'),
+                contentType: 'application/json',
+                data: JSON.stringify(body),
+                success: function (result) {
+                    renderResult(result);
+                    setStep('result');
+                    if (window.showToast) showToast('Restore finished');
+                },
+                error: function (xhr) {
+                    showError(step3Err, xhr.responseText || xhr.statusText || 'Restore failed');
+                }
+            });
+        }
+
+        function renderResult(result) {
+            resultBody.innerHTML = '';
+            const items = (result && (result.items || result.Items)) || [];
+            items.forEach(it => {
+                const tr = document.createElement('tr');
+                const res = itemResolution(it);
+                tr.innerHTML = `<td>${escapeHtml(itemName(it) || '')}</td><td>${resolutionLabels[res] ?? res}</td><td>${escapeHtml(itemOutcome(it))}</td>`;
+                resultBody.appendChild(tr);
+            });
+        }
+
+        function closeSession() {
+            if (!sessionId) return;
+            const id = sessionId;
+            sessionId = null;
+            $.ajax({ type: 'POST', url: url('CloseRestoreSession', 'session=' + encodeURIComponent(id)) });
+        }
+
+        nextBtn.addEventListener('click', async function () {
+            hideError(step1Err);
+            hideError(step3Err);
+            if (currentStep === 1) {
+                const fileName = backupSelect.value;
+                if (!fileName) { showError(step1Err, 'Pick a backup file first.'); return; }
+                try {
+                    const res = await openBackup(fileName);
+                    sessionId = res.sessionId;
+                    setStep(2);
+                } catch (e) { showError(step1Err, e || 'Failed to open backup.'); }
+                return;
+            }
+            if (currentStep === 2) {
+                try {
+                    itemsCache = await loadTemplates();
+                    itemsCache.sort((a, b) => (itemName(a) || '').localeCompare(itemName(b) || ''));
+                    resolutionPerId = {};
+                    renderItems('');
+                    setStep(3);
+                } catch (e) { showError(step3Err, e || 'Failed to read templates from backup.'); }
+                return;
+            }
+        });
+
+        backBtn.addEventListener('click', function () {
+            if (currentStep === 'result') {
+                // Allow closing result via Back? No — only forward from step 3.
+                return;
+            }
+            if (currentStep > 1) setStep(currentStep - 1);
+        });
+
+        submitBtn.addEventListener('click', submitRestore);
+
+        search.addEventListener('input', () => renderItems(search.value));
+        selectAll.addEventListener('click', () => {
+            itemList.querySelectorAll('input.restore-item-check').forEach(c => {
+                c.checked = true; c.disabled = false;
+                const row = c.closest('.d-flex'); if (row) row.style.opacity = '1';
+                const sel = row && row.querySelector('select'); if (sel) sel.disabled = false;
+            });
+        });
+        selectNone.addEventListener('click', () => {
+            itemList.querySelectorAll('input.restore-item-check').forEach(c => {
+                c.checked = false;
+                const row = c.closest('.d-flex'); if (row) row.style.opacity = '0.5';
+                const sel = row && row.querySelector('select'); if (sel) sel.disabled = true;
+            });
+        });
+
+        // Reset wizard state every time it's opened.
+        const modalEl = document.getElementById('restoreWizardModal');
+        modalEl.addEventListener('show.bs.modal', function () {
+            sessionId = null;
+            itemsCache = [];
+            resolutionPerId = {};
+            search.value = '';
+            setStep(1);
+            loadBackups();
+        });
+        modalEl.addEventListener('hidden.bs.modal', function () { closeSession(); });
+    })();
+</script>
