@@ -6,6 +6,7 @@ using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
+using System.Threading;
 using HSMServer.Sftp;
 using System;
 using System.IO;
@@ -221,15 +222,20 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> RestoreAlertTemplates([FromBody] RestoreRequest request)
+        public async Task<IActionResult> RestoreAlertTemplates([FromBody] RestoreRequest request, CancellationToken cancellationToken)
         {
             if (request?.Items == null || request.Items.Count == 0)
                 return BadRequest("No templates selected.");
 
             try
             {
-                var result = await _restoreService.RestoreTemplatesAsync(request.Session, request.Items, GetUserName());
+                var result = await _restoreService.RestoreTemplatesAsync(request.Session, request.Items, GetUserName(), cancellationToken);
                 return Json(result);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.Info($"RestoreAlertTemplates cancelled for session {request.Session}");
+                return BadRequest("Restore cancelled.");
             }
             catch (Exception ex)
             {

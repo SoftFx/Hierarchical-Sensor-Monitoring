@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Restore
@@ -15,7 +16,10 @@ namespace HSMServer.Core.Restore
 
         List<BackupTemplateItem> ListAlertTemplates(Guid session);
 
-        Task<RestoreResult> RestoreTemplatesAsync(Guid session, List<RestoreRequestItem> items, string adminUserName);
+        // The cancellation token lets the controller abort a long restore if the client
+        // disconnects. Restore also pins the session for the duration of the call so the
+        // idle-expiry timer can't reap it mid-batch.
+        Task<RestoreResult> RestoreTemplatesAsync(Guid session, List<RestoreRequestItem> items, string adminUserName, CancellationToken cancellationToken = default);
 
         // Releases the session (closes the LevelDB handle and deletes the temp folder).
         // Optional: the service also expires idle sessions on a timer, but explicit close

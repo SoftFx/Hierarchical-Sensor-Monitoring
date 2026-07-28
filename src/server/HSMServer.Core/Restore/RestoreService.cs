@@ -162,71 +162,84 @@ namespace HSMServer.Core.Restore
             return result;
         }
 
-        public async Task<RestoreResult> RestoreTemplatesAsync(Guid session, List<RestoreRequestItem> items, string adminUserName)
+        public async Task<RestoreResult> RestoreTemplatesAsync(Guid session, List<RestoreRequestItem> items, string adminUserName, CancellationToken cancellationToken = default)
         {
             if (items == null)
                 throw new ArgumentNullException(nameof(items));
 
             var backup = GetSessionOrThrow(session);
 
-            _logger.Info($"{adminUserName} started restore from '{backup.SourceBackupFileName}': " +
-                         string.Join(", ", items.Select(i => $"{i.Id}:{i.Resolution}")));
-
-            var result = new RestoreResult();
-
-            foreach (var item in items)
+            // Pin the session for the whole batch so the 10-min idle expiry timer can't rip it
+            // out from under items 2..N. RestoreOneAsync still re-checks the session per item
+            // via _sessions, but the in-flight guard is the durable protection.
+            backup.BeginInFlightRestore();
+            try
             {
-                var entity = backup.Worker.GetAlertTemplate(item.Id.ToByteArray());
-                if (entity == null)
+                _logger.Info($"{adminUserName} started restore from '{backup.SourceBackupFileName}': " +
+                             string.Join(", ", items.Select(i => $"{i.Id}:{i.Resolution}")));
+
+                var result = new RestoreResult();
+
+                foreach (var item in items)
                 {
-                    result.Items.Add(new RestoreResultItem
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var entity = backup.Worker.GetAlertTemplate(item.Id.ToByteArray());
+                    if (entity == null)
                     {
-                        Id = item.Id,
-                        Name = "(missing)",
-                        Resolution = item.Resolution,
-                        Outcome = "error: template not found in backup",
-                    });
-                    continue;
-                }
-
-                var displayName = entity.Name ?? item.Id.ToString();
-
-                switch (item.Resolution)
-                {
-                    case CollisionResolution.Skip:
                         result.Items.Add(new RestoreResultItem
                         {
                             Id = item.Id,
-                            Name = displayName,
+                            Name = "(missing)",
                             Resolution = item.Resolution,
-                            Outcome = "skipped",
+                            Outcome = "error: template not found in backup",
                         });
-                        break;
+                        continue;
+                    }
 
-                    case CollisionResolution.Overwrite:
-                        result.Items.Add(await RestoreOneAsync(item, entity, displayName, keepId: true, adminUserName));
-                        break;
+                    var displayName = entity.Name ?? item.Id.ToString();
 
-                    case CollisionResolution.Duplicate:
-                        result.Items.Add(await RestoreOneAsync(item, entity, displayName, keepId: false, adminUserName));
-                        break;
+                    switch (item.Resolution)
+                    {
+                        case CollisionResolution.Skip:
+                            result.Items.Add(new RestoreResultItem
+                            {
+                                Id = item.Id,
+                                Name = displayName,
+                                Resolution = item.Resolution,
+                                Outcome = "skipped",
+                            });
+                            break;
 
-                    default:
-                        result.Items.Add(new RestoreResultItem
-                        {
-                            Id = item.Id,
-                            Name = displayName,
-                            Resolution = item.Resolution,
-                            Outcome = $"error: unknown resolution {item.Resolution}",
-                        });
-                        break;
+                        case CollisionResolution.Overwrite:
+                            result.Items.Add(await RestoreOneAsync(item, entity, displayName, keepId: true, adminUserName, cancellationToken));
+                            break;
+
+                        case CollisionResolution.Duplicate:
+                            result.Items.Add(await RestoreOneAsync(item, entity, displayName, keepId: false, adminUserName, cancellationToken));
+                            break;
+
+                        default:
+                            result.Items.Add(new RestoreResultItem
+                            {
+                                Id = item.Id,
+                                Name = displayName,
+                                Resolution = item.Resolution,
+                                Outcome = $"error: unknown resolution {item.Resolution}",
+                            });
+                            break;
+                    }
                 }
+
+                _logger.Info($"{adminUserName} restore finished: " +
+                             string.Join(", ", result.Items.Select(r => $"{r.Name}={r.Outcome}")));
+
+                return result;
             }
-
-            _logger.Info($"{adminUserName} restore finished: " +
-                         string.Join(", ", result.Items.Select(r => $"{r.Name}={r.Outcome}")));
-
-            return result;
+            finally
+            {
+                backup.EndInFlightRestore();
+            }
         }
 
         public void CloseSession(Guid session)
@@ -236,13 +249,21 @@ namespace HSMServer.Core.Restore
                 backup.Dispose();
                 _logger.Info($"Closed backup session {session}");
             }
+            else
+            {
+                // Likely a double-close, or the session already expired (10-min idle). Not an
+                // error, but worth logging so the operator can correlate "I closed the wizard
+                // but the temp folder lingered" cases.
+                _logger.Warn($"CloseSession called for unknown session {session} (already expired or already closed)");
+            }
         }
 
         private async Task<RestoreResultItem> RestoreOneAsync(RestoreRequestItem item,
                                                               HSMDatabase.AccessManager.DatabaseEntities.AlertTemplateEntity entity,
                                                               string displayName,
                                                               bool keepId,
-                                                              string adminUserName)
+                                                              string adminUserName,
+                                                              CancellationToken cancellationToken)
         {
             var model = new AlertTemplateModel(entity);
 
@@ -252,11 +273,29 @@ namespace HSMServer.Core.Restore
                 model.Name = $"{entity.Name} (restored {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss})";
             }
 
+            // AddAlertTemplateAsync does NOT enforce unique Name (the controller does, on its
+            // own save path). Without this check, restoring a template whose Name collides with
+            // a different live template would silently create a duplicate Name in the cache.
+            // For Duplicate we already substituted a new Name with a timestamp suffix, but a
+            // second restore within the same second would collide — check both branches.
+            var existingWithSameName = _cache.GetAlertTemplateModels()?
+                                             .FirstOrDefault(t => t.Name == model.Name && t.Id != model.Id);
+            if (existingWithSameName != null)
+            {
+                return new RestoreResultItem
+                {
+                    Id = item.Id,
+                    Name = displayName,
+                    Resolution = item.Resolution,
+                    Outcome = $"error: a template with name '{model.Name}' already exists (Id {existingWithSameName.Id})",
+                };
+            }
+
             string outcome;
             try
             {
                 var existsBefore = _cache.GetAlertTemplate(item.Id) != null;
-                var (success, error) = await _cache.AddAlertTemplateAsync(model, CancellationToken.None);
+                var (success, error) = await _cache.AddAlertTemplateAsync(model, cancellationToken);
 
                 if (!success)
                 {
@@ -274,6 +313,10 @@ namespace HSMServer.Core.Restore
                 {
                     outcome = "inserted";
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -304,6 +347,14 @@ namespace HSMServer.Core.Restore
             var cutoff = DateTime.UtcNow - SessionIdleTimeout;
             foreach (var (id, session) in _sessions)
             {
+                // Skip sessions that are mid-restore: a long RestoreTemplatesAsync batch can
+                // outlive the idle window, but the session must stay alive until the batch
+                // finishes. RestoreOneAsync keeps LastAccessUtc fresh per item, but a slow
+                // AddAlertTemplateAsync (folder with many sensors) could still span the window
+                // for a single item — HasInFlightRestore is the authoritative guard.
+                if (session.HasInFlightRestore)
+                    continue;
+
                 if (session.LastAccessUtc < cutoff && _sessions.TryRemove(id, out var expired))
                 {
                     try { expired.Dispose(); }

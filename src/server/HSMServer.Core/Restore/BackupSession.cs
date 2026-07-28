@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using HSMDatabase.LevelDB.DatabaseImplementations;
 using NLog;
 
@@ -17,6 +18,12 @@ namespace HSMServer.Core.Restore
         private readonly string _sourceBackupFileName;
         private bool _disposed;
 
+        // Non-zero while a RestoreTemplatesAsync call is iterating over this session. SweepExpired
+        // must NOT expire a session that's mid-restore (a long batch would otherwise see the
+        // session disappear out from under items 2..N). Touched via Interlocked so the timer and
+        // restore path can race safely.
+        private int _inFlightRestores;
+
         public Guid Id { get; }
 
         public EnvironmentDatabaseWorker Worker => _worker;
@@ -24,6 +31,8 @@ namespace HSMServer.Core.Restore
         public string SourceBackupFileName => _sourceBackupFileName;
 
         public DateTime LastAccessUtc { get; private set; }
+
+        public bool HasInFlightRestore => Volatile.Read(ref _inFlightRestores) > 0;
 
 
         public BackupSession(Guid id, EnvironmentDatabaseWorker worker, string tempFolderPath, string sourceBackupFileName)
@@ -36,6 +45,20 @@ namespace HSMServer.Core.Restore
         }
 
         public void Touch() => LastAccessUtc = DateTime.UtcNow;
+
+        // Restores use Begin/EndInFlightRestore as a scope guard so the expiry timer doesn't
+        // tear the session down while items are still being written.
+        public void BeginInFlightRestore()
+        {
+            Touch();
+            Interlocked.Increment(ref _inFlightRestores);
+        }
+
+        public void EndInFlightRestore()
+        {
+            Touch();
+            Interlocked.Decrement(ref _inFlightRestores);
+        }
 
         public void Dispose()
         {
