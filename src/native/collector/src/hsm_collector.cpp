@@ -4361,8 +4361,8 @@ namespace
                             // instant sensor: no EMA statistics (network is a bar with statistics=EMA),
                             // and keep_history is left unset so TotalCPUPrototype's server-default
                             // behavior applies identically on both collectors.
-                            opts.unit = 100;                       // Unit::Percents
-                            opts.ttl_ms = 300000;                  // 5 min
+                            opts.unit = 100; // Unit::Percents
+                            opts.ttl_ms = 300000; // 5 min
                             opts.enable_grafana = TriBool::True;
                             opts.is_computer_sensor = true;
                             // .NET InstantSensorOptions.ToApi emits DisplayUnit = null (not 0), so the
