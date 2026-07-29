@@ -6,7 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
+using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
+using HSMSensorDataObjects.SensorRequests;
 using SysProcess = System.Diagnostics.Process;
 
 
@@ -58,6 +60,19 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
         // normal rotation; once reached, new names are skipped and already-tracked names keep
         // updating. Mirrors the native collector's max_tracked_names bound.
         private readonly int _maxTrackedNames;
+
+        // Per-process sensors are computer-level defaults (nest under .computer, see Sample()), and
+        // must expire when their process disappears — without TTL the server registry would grow
+        // forever as the host churns through distinctly named exes. Forked per-sensor via Copy()
+        // before the description is set. Mirrors the network-interface speed sensor template (#1189);
+        // KeepHistory intentionally left unset to match TotalCPUPrototype (server default applies).
+        private static readonly InstantSensorOptions TemplateOptions = new InstantSensorOptions
+        {
+            IsComputerSensor = true,
+            TTL = TimeSpan.FromMinutes(5),
+            SensorUnit = Unit.Percents,
+            EnableForGrafana = true,
+        };
 
         // name -> sensor handle (created lazily on first appearance)
         private readonly Dictionary<string, IInstantValueSensor<double>> _sensors =
@@ -235,12 +250,16 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                         pathLine = "\n\n**Path:** _(system process - path unavailable)_"; // ASCII '-' to match native
                     else
                         pathLine = "";
-                    sensor = _storage.CreateInstantSensor<double>(
-                        "Top CPU processes/" + name,
-                        new InstantSensorOptions
-                        {
-                            Description = "Top **" + _count + "** CPU consumers by % of machine CPU" + pathLine
-                        });
+
+                    var opts = (InstantSensorOptions)TemplateOptions.Copy();
+                    opts.Description = "Top **" + _count + "** CPU consumers by % of machine CPU" + pathLine;
+
+                    // RevealDefaultPath + IsComputerSensor => SensorBase calls CalculateSystemPath,
+                    // producing <ComputerName>/.computer/Top CPU processes/<name>. A bare
+                    // "Top CPU processes/<name>" here would instead create a separate top-level node
+                    // next to .computer (#1189 bug class).
+                    var path = DefaultPrototype.RevealDefaultPath(opts, "Top CPU processes", name);
+                    sensor = _storage.CreateInstantSensor<double>(path, opts);
                     _sensors[name] = sensor;
                 }
                 sensor.AddValue(percent);
