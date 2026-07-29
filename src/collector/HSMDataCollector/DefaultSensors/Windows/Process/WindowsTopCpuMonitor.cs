@@ -61,16 +61,15 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
         // updating. Mirrors the native collector's max_tracked_names bound.
         private readonly int _maxTrackedNames;
 
-        // Per-process sensors are computer-level defaults, so they nest under ".computer/Top CPU
-        // processes/<name>" like every other host sensor — see IsComputerSensor on SensorOptions and
-        // the path-build in DefaultPrototype.RevealDefaultPath. TTL expires a sensor when its process
-        // disappears (a build finishing, a service stopping); without it the registry would grow
-        // forever. Mirrors the network-interface speed sensor template (#1189).
+        // Per-process sensors are computer-level defaults (nest under .computer, see Sample()), and
+        // must expire when their process disappears — without TTL the server registry would grow
+        // forever as the host churns through distinctly named exes. Forked per-sensor via Copy()
+        // before the description is set. Mirrors the network-interface speed sensor template (#1189);
+        // KeepHistory intentionally left unset to match TotalCPUPrototype (server default applies).
         private static readonly InstantSensorOptions TemplateOptions = new InstantSensorOptions
         {
             IsComputerSensor = true,
             TTL = TimeSpan.FromMinutes(5),
-            KeepHistory = TimeSpan.FromDays(90),
             SensorUnit = Unit.Percents,
             EnableForGrafana = true,
         };
@@ -255,9 +254,10 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                     var opts = (InstantSensorOptions)TemplateOptions.Copy();
                     opts.Description = "Top **" + _count + "** CPU consumers by % of machine CPU" + pathLine;
 
-                    // RevealDefaultPath nests under ".computer/Top CPU processes/<name>" like every
-                    // default host sensor — a bare "Top CPU processes/<name>" here would create a
-                    // SEPARATE top-level node next to .computer (#1189 bug class).
+                    // RevealDefaultPath + IsComputerSensor => SensorBase calls CalculateSystemPath,
+                    // producing <ComputerName>/.computer/Top CPU processes/<name>. A bare
+                    // "Top CPU processes/<name>" here would instead create a separate top-level node
+                    // next to .computer (#1189 bug class).
                     var path = DefaultPrototype.RevealDefaultPath(opts, "Top CPU processes", name);
                     sensor = _storage.CreateInstantSensor<double>(path, opts);
                     _sensors[name] = sensor;
