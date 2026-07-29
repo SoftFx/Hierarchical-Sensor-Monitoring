@@ -1,5 +1,9 @@
 # Hierarchical-Sensor-Monitoring [HSM]
 
+![HSMServer](https://img.shields.io/github/v/release/SoftFx/Hierarchical-Sensor-Monitoring?filter=server-v*&label=HSMServer)
+![HSMDataCollector](https://img.shields.io/nuget/v/HSMDataCollector.HSMDataCollector?label=HSMDataCollector)
+![HSM Agent](https://img.shields.io/github/v/release/SoftFx/Hierarchical-Sensor-Monitoring?filter=agent-v*&label=HSM%20Agent)
+
 HSM is a solution, that allows users to collect, store and process different monitoring data from various sources. Besides traditional data sources, there is a DataCollector library, fully compatible with HSM.
 
 ![image](https://user-images.githubusercontent.com/43994777/236455407-9c34bbea-c718-46e2-85cb-5eac422f7543.png)

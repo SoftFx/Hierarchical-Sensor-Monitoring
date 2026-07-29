@@ -38,3 +38,33 @@ jobs:
 
       - name: Push nuget
         run: dotnet nuget push ${{ env.OutputFolder }}/*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
+
+  create-tag:
+    # Tag the release only after the NuGet push has succeeded, so a failed build
+    # never plants a baseline tag that the next /release-collector run would
+    # treat as the previous release. Mirrors the server-build.yml pattern.
+    needs: build-nuget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from csproj
+        id: read-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          csproj="src/collector/HSMDataCollector/HSMDataCollector.csproj"
+          version=$(grep -oP '(?<=<Version>)[^<]+' "$csproj" | head -1 | tr -d ' \r\n')
+          if [ -z "$version" ]; then
+            echo "::error::could not extract <Version> from $csproj"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=collector-v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Push tag
+        uses: rickstaa/action-create-tag@v1
+        with:
+          tag: ${{ steps.read-version.outputs.tag }}
+          message: "Release HSMDataCollector ${{ steps.read-version.outputs.version }}"
+          force_push_tag: false
