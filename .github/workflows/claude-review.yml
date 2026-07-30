@@ -9,7 +9,7 @@ on:
 # Each review is a paid API call, and the incident that motivated fail-loud was an API usage
 # limit. Without this, ten pushes to one PR buy ten reviews and ten competing check results.
 concurrency:
-  group: claude-review-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -37,12 +37,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Recorded before the agent runs. The verify step gates on "the bot posted a comment after
-      # this moment", a property that needs no cooperation from the model — see that step.
-      - name: Record start time
-        id: t0
-        run: echo "since=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
-
       # No continue-on-error: a review that did not run must fail the check —
       # otherwise API-limit/auth failures silently produce a green "pass" with no review.
       - uses: anthropics/claude-code-action@v1
@@ -56,7 +50,7 @@ jobs:
           base_branch: master
           claude_args: >-
             --verbose
-            --allowedTools "Bash(gh pr comment*),Bash(gh pr diff*),Bash(gh pr view*),Bash(git diff*),Bash(git log*),Write"
+            --allowedTools "Bash(gh pr diff*),Bash(gh pr view*),Bash(git diff*),Bash(git log*),Write"
           show_full_output: true
           prompt: |
             REPO: ${{ github.repository }}
@@ -73,60 +67,33 @@ jobs:
             reach for `git diff origin/<base>...origin/<head>`: this job checks out the PR merge
             ref at depth 1, so neither remote branch exists locally and there is no merge base.
 
-            Write your review to review_output.md. Its last line must be exactly:
-            <!-- claude-review: ${{ github.run_id }}-${{ github.run_attempt }} -->
+            Write your review to review_output.md and stop there. Do NOT post it — the workflow
+            posts that file itself, so that delivery is a deterministic step outcome rather than
+            something inferred from whether you followed an instruction.
 
-            Then post it:
-            gh pr comment ${{ github.event.pull_request.number }} --body-file review_output.md
-
-      # A green action is not proof of a review: the agent can exit 0 after hitting a turn or
-      # output limit, or write the file and then fail to post it. The gated property is delivery.
-      #
-      # Gate on "a github-actions[bot] comment exists that was created after this job started" —
-      # deterministic, and true whatever the model did with its instructions. The run marker is
-      # only a correlation aid: making the gate depend on a model reproducing a string verbatim
-      # would red-flag delivered reviews, and a check that lies gets bypassed. This workflow is
-      # the only one in the repo that comments, so bot authorship is unambiguous.
-      - name: Verify a review was posted
-        if: steps.claude.outcome == 'success'
+      # Delivery is a workflow step, not an instruction to the model. A green action is not proof
+      # of a review — the agent can exit 0 after a turn/output limit — and inferring delivery from
+      # "a bot comment appeared" was unsound: claude-agent.yml also replies as github-actions[bot],
+      # so an unrelated @claude reply could satisfy the gate while this review silently produced
+      # nothing. Posting here makes the gated property the exit status of this step.
+      - name: Post the review
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          marker='claude-review: ${{ github.run_id }}-${{ github.run_attempt }}'
-          since='${{ steps.t0.outputs.since }}'
-          url="repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+          # 200 bytes: a stub or truncated write is not a review, and -s alone passes on one byte.
+          if [ ! -s review_output.md ] || [ "$(wc -c < review_output.md)" -lt 200 ]; then
+            echo "::error title=Claude review::The agent exited 0 without writing a review."
+            exit 1
+          fi
 
-          # Deliberately not `gh ... | grep -q`. Without pipefail the pipeline reports grep's
-          # status, so a failed gh read is indistinguishable from "no comment posted" and the
-          # error message asserts something untrue. With pipefail it is worse: grep -q closes
-          # the pipe on the first match, gh dies of SIGPIPE, and a SUCCESSFUL check fails.
-          # gh api --paginate rather than `gh pr view --json comments`, whose single fixed page
-          # can exclude the new comment on a PR with a long comment history.
-          #
-          # Both failure modes share the retry budget: a transient 502 on the first read must not
-          # sink a delivered review, and the comments read may briefly lag the just-posted comment.
-          for attempt in 1 2 3; do
-            if bodies=$(gh api --paginate "$url" \
-                  --jq ".[] | select(.user.login == \"github-actions[bot]\" and .created_at > \"$since\") | .body"); then
-              if [ -n "$bodies" ]; then
-                if ! grep -qF "$marker" <<<"$bodies"; then
-                  echo "::warning title=Claude review::Review delivered, but without this run's marker — cannot correlate it to this run."
-                fi
+          # Appended by the workflow, so it is always present and always correct — it correlates
+          # the comment with this run for anyone reading the PR later.
+          {
+            echo ""
+            echo "<!-- claude-review: ${{ github.run_id }}-${{ github.run_attempt }} -->"
+          } >> review_output.md
 
-                exit 0
-              fi
-            elif [ "$attempt" -eq 3 ]; then
-              echo "::error title=Claude review::Could not read PR comments to verify delivery (gh failed) — this is not a verdict on the review itself."
-              exit 1
-            fi
-
-            if [ "$attempt" -lt 3 ]; then
-              sleep 5
-            fi
-          done
-
-          echo "::error title=Claude review::The agent exited 0 but posted no review comment for this run."
-          exit 1
+          gh pr comment ${{ github.event.pull_request.number }} --body-file review_output.md
 
       - name: Dump review output (when no review was delivered)
         # failure() and not an outcome check on the agent step: the case this whole guard exists
@@ -152,9 +119,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # A skipped job satisfies branch protection, so without this a fork PR shows nothing at all on
-  # the checks tab — the same silent pass this workflow exists to remove, by another route. This
-  # job produces a visible, named check saying a human has to do the review.
+  # Visibility aid, NOT a gate: it passes, so it cannot block anything. A skipped claude-review
+  # job already satisfies branch protection on fork PRs; this only makes that state visible on the
+  # checks tab instead of showing nothing. Making fork PRs actually blocked is a policy decision.
   fork-review-notice:
     if: >-
       github.event.pull_request.draft == false
