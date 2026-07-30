@@ -27,7 +27,9 @@ namespace HSMServer.Core.Model
         private readonly IDatabaseCore _database;
 
 
-        private bool _isInitialized;
+        // volatile: TryAddValue/TryUpdateLastValue/CheckTimeout read it lock-free, and "true" must
+        // never be observable before the history load in Initialize() has finished filling Storage.
+        private volatile bool _isInitialized;
         private readonly object _lock = new();
 
         protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 
@@ -122,13 +124,11 @@ namespace HSMServer.Core.Model
 
             lock (_lock)
             {
+                if (_isInitialized)
+                    return;
+
                 try
                 {
-                    if (_isInitialized)
-                        return;
-
-                    _isInitialized = true;
-
                     BaseValue last, first;
                     var lastBytes = _database.GetLatestValue(Id, DateTime.MaxValue.Ticks);
                     if (lastBytes != null)
@@ -160,9 +160,17 @@ namespace HSMServer.Core.Model
 
                     _logger.Info($"Sensor {Id} initialized {From}-{To}");
                 }
-                catch (Exception ex) 
+                catch (Exception ex)
                 {
                     _logger.Error(ex, $"Sensor initialization error {Id}");
+                }
+                finally
+                {
+                    // Published only after the load has finished: callers gate on this flag before
+                    // touching Storage, so a concurrent writer must wait on _lock instead of racing
+                    // past on an empty Storage (#1296). A failed load still latches — one loud error
+                    // above instead of a per-value retry storm against a broken database.
+                    _isInitialized = true;
                 }
             }
 
