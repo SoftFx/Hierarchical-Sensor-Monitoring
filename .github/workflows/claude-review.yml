@@ -17,9 +17,9 @@ jobs:
     # Skip review while the PR is a draft. This workflow only triggers on pull_request,
     # so the draft flag is always present.
     # Same-repo heads only. Two reasons, and do NOT relax this to "get fork coverage back":
-    #  1. Security. --allowedTools grants Bash(gh pr comment*), and the wildcard also accepts
-    #     --body-file <any path>. Feeding that agent a diff written by an untrusted contributor
-    #     is a prompt-injection surface; restricting to same-repo heads closes it.
+    #  1. Security. The job holds a write-scoped GITHUB_TOKEN that the agent's shell can reach,
+    #     and its tool grants are prefix wildcards. Feeding that agent a diff written by an
+    #     untrusted contributor is a prompt-injection surface; same-repo heads close it.
     #  2. It cannot work anyway: GitHub withholds repository secrets from forked-repo events, so
     #     ANTHROPIC_API_KEY is empty and pull-requests write is downgraded to read.
     # Caveat: branch protection counts a skipped job as satisfying a required check, so if this
@@ -50,7 +50,7 @@ jobs:
           base_branch: master
           claude_args: >-
             --verbose
-            --allowedTools "Bash(gh pr diff*),Bash(gh pr view*),Bash(git diff*),Bash(git log*),Write"
+            --allowedTools "Bash(gh pr diff*),Bash(gh pr view*),Write"
           show_full_output: true
           prompt: |
             REPO: ${{ github.repository }}
@@ -80,14 +80,37 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 200 bytes: a stub or truncated write is not a review, and -s alone passes on one byte.
-          if [ ! -s review_output.md ] || [ "$(wc -c < review_output.md)" -lt 200 ]; then
+          if [ ! -s review_output.md ]; then
             echo "::error title=Claude review::The agent exited 0 without writing a review."
             exit 1
           fi
 
+          size=$(wc -c < review_output.md)
+
+          # A floor, not a quality bar: distinguishes a stub write from a real (possibly very
+          # short) verdict. Worded separately from the missing-file case so the annotation does
+          # not send a reader hunting for an agent crash that did not happen.
+          if [ "$size" -lt 50 ]; then
+            echo "::error title=Claude review::The agent wrote only $size bytes — not a review."
+            exit 1
+          fi
+
+          # GitHub rejects comment bodies over 65536 characters with a 422, which would fail this
+          # step. That scales with PR size, so it would fire on exactly the PRs most needing a
+          # review. wc -c counts bytes, so this is conservative for multi-byte characters.
+          MAX=60000
+          if [ "$size" -gt "$MAX" ]; then
+            head -c "$MAX" review_output.md > review_trimmed.md
+            printf '\n\n_Review truncated at %s bytes. Full text: the `claude-logs` artifact of run %s._\n' \
+              "$MAX" '${{ github.run_id }}' >> review_trimmed.md
+            mv review_trimmed.md review_output.md
+            echo "::warning title=Claude review::Review was $size bytes and got truncated to fit GitHub's comment limit."
+          fi
+
           # Appended by the workflow, so it is always present and always correct — it correlates
-          # the comment with this run for anyone reading the PR later.
+          # the comment with this run for anyone reading the PR later. Deliberately not used to
+          # find and edit a previous comment via --edit-last: that targets the last comment by
+          # this identity, and claude-agent.yml replies as the same bot, so it could clobber one.
           {
             echo ""
             echo "<!-- claude-review: ${{ github.run_id }}-${{ github.run_attempt }} -->"
@@ -101,8 +124,8 @@ jobs:
         if: failure()
         run: |
           # Surface it on the checks tab; the detail is otherwise buried in a long log. Worded to
-          # stay true on every path failure() covers, including a failed comments read — which is
-          # explicitly NOT a verdict on whether a review was written.
+          # stay true on every path failure() covers — the agent failing, the step timing out, and
+          # the review being written but rejected when posted.
           echo "::error title=Claude review::Review check failed — no review confirmed for this run. See the failing step's log."
           echo "=== review_output.md ==="
           cat review_output.md 2>/dev/null || echo "(file not created)"
