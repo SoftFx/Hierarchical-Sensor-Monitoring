@@ -24,9 +24,15 @@ jobs:
     #     ANTHROPIC_API_KEY is empty and pull-requests write is downgraded to read.
     # Caveat: branch protection counts a skipped job as satisfying a required check, so if this
     # check is ever made required, fork PRs pass it unreviewed and must be reviewed by hand.
+    #
+    # Dependabot is excluded for the same structural reason as forks: its pull_request events read
+    # from the separate Dependabot secret store, so ANTHROPIC_API_KEY is empty and every such PR
+    # would go permanently red. (No dependabot.yml exists today — this is here so enabling it
+    # later does not silently break the check.)
     if: >-
       github.event.pull_request.draft == false
       && github.event.pull_request.head.repo.full_name == github.repository
+      && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -100,6 +106,10 @@ jobs:
           # review. wc -c counts bytes, so this is conservative for multi-byte characters.
           MAX=60000
           if [ "$size" -gt "$MAX" ]; then
+            # Keep the full text: the notice below points at the artifact, and the artifact
+            # collects review_output.md — which is about to become the truncated version.
+            cp review_output.md review_full.md
+
             head -c "$MAX" review_output.md > review_trimmed.md
             printf '\n\n_Review truncated at %s bytes. Full text: the `claude-logs` artifact of run %s._\n' \
               "$MAX" '${{ github.run_id }}' >> review_trimmed.md
@@ -134,9 +144,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: claude-logs
+          # run_attempt in the name: re-running only the failed job would otherwise collide with
+          # the artifact the first attempt already uploaded, and fail on a path this PR makes
+          # more likely to be taken.
+          name: claude-logs-${{ github.run_attempt }}
           path: |
             review_output.md
+            review_full.md
             *.log
             /home/runner/work/_temp/claude-execution-output.json
           if-no-files-found: ignore
