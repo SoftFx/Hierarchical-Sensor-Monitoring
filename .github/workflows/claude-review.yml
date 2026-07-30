@@ -17,9 +17,11 @@ jobs:
     # Skip review while the PR is a draft. This workflow only triggers on pull_request,
     # so the draft flag is always present.
     # Same-repo heads only. Two reasons, and do NOT relax this to "get fork coverage back":
-    #  1. Security. The job holds a write-scoped GITHUB_TOKEN that the agent's shell can reach,
-    #     and its tool grants are prefix wildcards. Feeding that agent a diff written by an
-    #     untrusted contributor is a prompt-injection surface; same-repo heads close it.
+    #  1. Security, and this restriction IS the boundary — not --allowedTools. Read-only shell
+    #     commands run without being on that list (observed: ls, git log, git remote -v); the
+    #     allowlist gates writes. The job also holds a write-scoped GITHUB_TOKEN the agent's shell
+    #     can reach. Feeding that agent a diff written by an untrusted contributor is a
+    #     prompt-injection surface, and same-repo heads are what closes it.
     #  2. It cannot work anyway: GitHub withholds repository secrets from forked-repo events, so
     #     ANTHROPIC_API_KEY is empty and pull-requests write is downgraded to read.
     # Caveat: branch protection counts a skipped job as satisfying a required check, so if this
@@ -42,6 +44,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          # Without this the checkout token sits in the remote URL, where `git remote -v` prints
+          # it in cleartext — and with show_full_output that tool result reaches the uploaded
+          # artifact, which GitHub does not scrub the way it masks logs. Nothing here needs it:
+          # the agent and the post step authenticate through GH_TOKEN.
+          persist-credentials: false
 
       # No continue-on-error: a review that did not run must fail the check —
       # otherwise API-limit/auth failures silently produce a green "pass" with no review.
@@ -71,7 +78,7 @@ jobs:
 
             Use `gh pr diff ${{ github.event.pull_request.number }}` to see the changes. Do not
             reach for `git diff origin/<base>...origin/<head>`: this job checks out the PR merge
-            ref at depth 1, so neither remote branch exists locally and there is no merge base.
+            ref, so the head branch ref is not fetched, and depth-1 leaves no merge base.
 
             Write your review to review_output.md and stop there. Do NOT post it — the workflow
             posts that file itself, so that delivery is a deterministic step outcome rather than
@@ -82,24 +89,33 @@ jobs:
       # "a bot comment appeared" was unsound: claude-agent.yml also replies as github-actions[bot],
       # so an unrelated @claude reply could satisfy the gate while this review silently produced
       # nothing. Posting here makes the gated property the exit status of this step.
+      # always(): a review that exists must reach the PR even if the agent step then failed — a
+      # late API error or the timeout firing during teardown would otherwise discard a finished
+      # review, which is this PR's own failure shape one step later. The check still goes red.
       - name: Post the review
+        if: always() && steps.claude.outcome != 'skipped'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ ! -s review_output.md ]; then
-            echo "::error title=Claude review::The agent exited 0 without writing a review."
+          agent_outcome='${{ steps.claude.outcome }}'
+
+          # Whitespace-only counts as nothing written. Deliberately no length floor beyond that:
+          # "No issues found in this diff." is a legitimate 29-byte review, and failing the check
+          # on it would both lose the review and annotate something untrue.
+          visible=0
+          if [ -f review_output.md ]; then
+            visible=$(tr -d '[:space:]' < review_output.md | wc -c)
+          fi
+
+          if [ "$visible" -eq 0 ]; then
+            if [ "$agent_outcome" = "success" ]; then
+              echo "::error title=Claude review::The agent exited 0 without writing a review."
+            fi
+
             exit 1
           fi
 
           size=$(wc -c < review_output.md)
-
-          # A floor, not a quality bar: distinguishes a stub write from a real (possibly very
-          # short) verdict. Worded separately from the missing-file case so the annotation does
-          # not send a reader hunting for an agent crash that did not happen.
-          if [ "$size" -lt 50 ]; then
-            echo "::error title=Claude review::The agent wrote only $size bytes — not a review."
-            exit 1
-          fi
 
           # GitHub rejects comment bodies over 65536 characters with a 422, which would fail this
           # step. That scales with PR size, so it would fire on exactly the PRs most needing a
@@ -110,11 +126,16 @@ jobs:
             # collects review_output.md — which is about to become the truncated version.
             cp review_output.md review_full.md
 
-            # iconv -c drops the partial UTF-8 sequence head -c can leave at the cut. If it is
-            # unavailable the raw cut is kept: gh encodes the stray bytes as U+FFFD, which is
-            # cosmetic — losing the whole review because a cleanup tool is missing would not be.
+            # iconv -c drops the partial UTF-8 sequence head -c can leave at the cut. Judge it by
+            # its OUTPUT, not its exit status: GNU iconv -c omits invalid sequences but still
+            # exits non-zero on an incomplete one at end of input — precisely the case this
+            # exists for, so keying on the status would discard the cleaned file every time.
+            # An empty result means iconv is missing or unusable; then the raw cut is kept, since
+            # gh renders stray bytes as U+FFFD and losing the review would be the worse outcome.
             head -c "$MAX" review_output.md > review_cut.md
-            if iconv -c -f utf-8 -t utf-8 review_cut.md > review_trimmed.md; then
+            iconv -c -f utf-8 -t utf-8 review_cut.md > review_trimmed.md || true
+
+            if [ -s review_trimmed.md ]; then
               rm -f review_cut.md
             else
               mv review_cut.md review_trimmed.md
@@ -122,10 +143,14 @@ jobs:
 
             # If the cut landed inside a fenced block, everything appended after it is swallowed
             # into that block — including the HTML-comment marker, which would then render as
-            # visible noise instead of staying invisible. An odd fence count means we are inside.
-            fences=$(grep -c '^```' review_trimmed.md || true)
+            # visible noise instead of staying invisible. An odd fence count means we are inside;
+            # close it with the same marker the last fence opened, since ``` cannot close ~~~ or
+            # a four-backtick fence. Indented fences (up to three spaces) are valid CommonMark.
+            fence_re='^ {0,3}(`{3,}|~{3,})'
+            fences=$(grep -cE "$fence_re" review_trimmed.md || true)
             if [ $(( fences % 2 )) -eq 1 ]; then
-              printf '\n```\n' >> review_trimmed.md
+              closer=$(grep -E "$fence_re" review_trimmed.md | tail -1 | sed -E 's/^ *((`{3,})|(~{3,})).*/\1/')
+              printf '\n%s\n' "$closer" >> review_trimmed.md
             fi
 
             printf '\n\n_Review truncated at %s bytes. Full text: the `claude-logs-%s` artifact of run %s._\n' \
@@ -144,6 +169,13 @@ jobs:
           } >> review_output.md
 
           gh pr comment ${{ github.event.pull_request.number }} --body-file review_output.md
+
+          # The review is delivered, but a failed agent step still means this run is not
+          # trustworthy — post first, then report the truth.
+          if [ "$agent_outcome" != "success" ]; then
+            echo "::error title=Claude review::Review posted, but the agent step did not succeed ($agent_outcome) — it may be incomplete. See its log."
+            exit 1
+          fi
 
       - name: Dump review output (when no review was delivered)
         # failure() and not an outcome check on the agent step: the case this whole guard exists
