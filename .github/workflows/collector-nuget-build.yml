@@ -77,6 +77,3 @@ jobs:
           tag: ${{ steps.read-version.outputs.tag }}
           message: "Release HSMDataCollector ${{ steps.read-version.outputs.version }}"
           force_push_tag: false
-=======
-        run: dotnet nuget push ${{ env.OutputFolder }}/*.nupkg --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
->>>>>>> Stashed changes
