@@ -95,6 +95,7 @@ jobs:
       # still goes red. But always() also fires on cancellation, and cancel-in-progress means a
       # superseded run would then post a review of a commit that has already been replaced.
       - name: Post the review
+        id: post
         if: ${{ !cancelled() && steps.claude.outcome != 'skipped' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -123,6 +124,7 @@ jobs:
           # step. That scales with PR size, so it would fire on exactly the PRs most needing a
           # review. wc -c counts bytes, so this is conservative for multi-byte characters.
           MAX=60000
+          truncated=""
           if [ "$size" -gt "$MAX" ]; then
             # Keep the full text: the notice below points at the artifact, and the artifact
             # collects review_output.md — which is about to become the truncated version.
@@ -143,34 +145,41 @@ jobs:
               mv review_cut.md review_trimmed.md
             fi
 
-            # If the cut landed inside a fenced block, everything appended after it is swallowed
-            # into that block — including the HTML-comment marker, which would then render as
-            # visible noise instead of staying invisible. An odd fence count means we are inside;
-            # close it with the same marker the last fence opened, since ``` cannot close ~~~ or
-            # a four-backtick fence. Indented fences (up to three spaces) are valid CommonMark.
-            fence_re='^ {0,3}(`{3,}|~{3,})'
-            fences=$(grep -cE "$fence_re" review_trimmed.md || true)
-            if [ $(( fences % 2 )) -eq 1 ]; then
-              closer=$(grep -E "$fence_re" review_trimmed.md | tail -1 | sed -E 's/^ *((`{3,})|(~{3,})).*/\1/')
-              printf '\n%s\n' "$closer" >> review_trimmed.md
-            fi
-
-            printf '\n\n_Review truncated at %s bytes. Full text: the `claude-logs-%s` artifact of run %s._\n' \
-              "$MAX" '${{ github.run_attempt }}' '${{ github.run_id }}' >> review_trimmed.md
             mv review_trimmed.md review_output.md
+            truncated=yes
             echo "::warning title=Claude review::Review was $size bytes and got truncated to fit GitHub's comment limit."
           fi
 
-          # Appended by the workflow, so it is always present and always correct — it correlates
-          # the comment with this run for anyone reading the PR later. Deliberately not used to
-          # find and edit a previous comment via --edit-last: that targets the last comment by
-          # this identity, and claude-agent.yml replies as the same bot, so it could clobber one.
+          # Everything the workflow adds goes at the TOP of the body. A byte-offset cut can leave
+          # an unclosed code fence, and a fence only swallows what FOLLOWS it — so a header is
+          # unconditionally safe and needs no fence repair (parity counting cannot handle nested
+          # or cut-in-half fences anyway). It also means the marker survives on the pathological
+          # input where the whole review is one huge code block.
+          #
+          # The marker correlates the comment with this run. Deliberately not used with
+          # --edit-last to collapse older reviews: that targets the last comment by this identity,
+          # and claude-agent.yml replies as the same bot, so it could clobber one.
           {
-            echo ""
             echo "<!-- claude-review: ${{ github.run_id }}-${{ github.run_attempt }} -->"
-          } >> review_output.md
+            echo ""
 
-          gh pr comment ${{ github.event.pull_request.number }} --body-file review_output.md
+            # The caveat belongs in the artifact a human reads, not only in a checks-tab
+            # annotation: an agent that died partway through enumerating findings otherwise
+            # renders as a complete, authoritative review.
+            if [ "$agent_outcome" != "success" ]; then
+              printf '> [!WARNING]\n> The review agent did not finish (%s) — this review may be incomplete.\n\n' "$agent_outcome"
+            fi
+
+            if [ -n "$truncated" ]; then
+              printf '_Review truncated at %s bytes. Full text: the `claude-logs-%s` artifact of run %s._\n\n' \
+                "$MAX" '${{ github.run_attempt }}' '${{ github.run_id }}'
+            fi
+
+            cat review_output.md
+          } > review_body.md
+
+          gh pr comment ${{ github.event.pull_request.number }} --body-file review_body.md
+          echo "posted=true" >> "$GITHUB_OUTPUT"
 
           # The review is delivered, but a failed agent step still means this run is not
           # trustworthy — post first, then report the truth.
@@ -182,12 +191,13 @@ jobs:
       - name: Dump review output (when no review was delivered)
         # failure() and not an outcome check on the agent step: the case this whole guard exists
         # for — file written, posting failed — leaves that step 'success' and would skip the dump.
-        if: failure()
+        # The posted check excludes the opposite case: the review DID reach the PR and the job is
+        # red only because the agent step was unhealthy. Without it this annotation contradicts
+        # the one the post step just emitted, and dumps the delivered review into the log.
+        if: failure() && steps.post.outputs.posted != 'true'
         run: |
-          # Surface it on the checks tab; the detail is otherwise buried in a long log. Worded to
-          # stay true on every path failure() covers — the agent failing, the step timing out, and
-          # the review being written but rejected when posted.
-          echo "::error title=Claude review::Review check failed — no review confirmed for this run. See the failing step's log."
+          # Surface it on the checks tab; the detail is otherwise buried in a long log.
+          echo "::error title=Claude review::Review check failed — no review reached the PR for this run. See the failing step's log."
           echo "=== review_output.md ==="
           cat review_output.md 2>/dev/null || echo "(file not created)"
 
