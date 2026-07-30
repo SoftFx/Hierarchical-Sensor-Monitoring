@@ -57,6 +57,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             load.Gate.Set();
             Assert.True(Task.WaitAll(new[] { init, add }, _waitTimeout), "init/add did not finish");
+            Assert.False(load.TimedOut, "the load gate was never opened");
 
             Assert.True(added);
             var lastValue = Assert.IsType<IntegerValue>(sensor.LastValue);
@@ -71,13 +72,16 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void ValueGate_DuringHistoryLoad_WaitsForLoadedStorage(ValueGate gate)
         {
-            using var load = new GatedLoad(History(DateTime.UtcNow.AddMinutes(-5), 1));
+            var historyTime = DateTime.UtcNow.AddMinutes(-5);
+
+            using var load = new GatedLoad(History(historyTime, 1));
             var sensor = new IntegerSensorModel(BuildEntity(), load.Database.Object, null);
 
             var init = Task.Run(sensor.Initialize);
             Assert.True(load.Entered.Wait(_waitTimeout), "history load never started");
 
             using var callStarted = new ManualResetEventSlim(false);
+            var observedFrom = DateTime.MaxValue;
             var call = Task.Run(() =>
             {
                 callStarted.Set();
@@ -93,6 +97,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         sensor.CheckTimeout();
                         break;
                 }
+
+                // Captured the instant the gate returns, before the load could have finished
+                // afterwards — this is the assertion that actually encodes the contract.
+                observedFrom = sensor.From;
             });
 
             Assert.True(callStarted.Wait(_waitTimeout), $"{gate} task never started");
@@ -101,6 +109,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             load.Gate.Set();
             Assert.True(Task.WaitAll(new[] { init, call }, _waitTimeout), "init/call did not finish");
+            Assert.False(load.TimedOut, "the load gate was never opened");
+
+            // Storage.Cut(first.Time) runs at the end of the load, so From is the loaded history's
+            // timestamp only if the caller really waited. Pre-fix it returned first and saw MinValue.
+            Assert.Equal(historyTime, observedFrom);
         }
 
         [Fact]
@@ -135,6 +148,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             load.Gate.Set();
             Assert.True(Task.WaitAll(new[] { init, add }, _waitTimeout), "init/add did not finish");
+            Assert.False(load.TimedOut, "the load gate was never opened");
 
             // Pre-fix the writer met an empty Storage, so singleton dedup had nothing to compare
             // against and stored the stale value as current. Against the loaded history it is
@@ -181,7 +195,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void Initialize_Concurrent_LoadsHistoryOnce()
         {
-            using var load = new GatedLoad(null);
+            using var load = new GatedLoad(History(DateTime.UtcNow.AddMinutes(-5), 1));
             var sensor = new IntegerSensorModel(BuildEntity(), load.Database.Object, null);
 
             var first = Task.Run(sensor.Initialize);
@@ -191,10 +205,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // task later than the bound below makes the Wait return false for the wrong reason and
             // the test passes having verified nothing.
             using var secondStarted = new ManualResetEventSlim(false);
+            var secondSawHistory = false;
             var second = Task.Run(() =>
             {
                 secondStarted.Set();
                 sensor.Initialize();
+                secondSawHistory = sensor.HasData;
             });
 
             Assert.True(secondStarted.Wait(_waitTimeout), "second Initialize task never started");
@@ -204,7 +220,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             load.Gate.Set();
             Assert.True(Task.WaitAll(new[] { first, second }, _waitTimeout), "initializations did not finish");
+            Assert.False(load.TimedOut, "the load gate was never opened");
 
+            // Times.Once alone does not discriminate — pre-fix the second caller also skipped the
+            // load, on the early latch. This does: returning from Initialize() must mean the
+            // history is visible, which pre-fix it was not.
+            Assert.True(secondSawHistory, "Initialize() returned before the history was visible");
             load.Database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once);
         }
 
@@ -242,6 +263,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             public ManualResetEventSlim Gate { get; } = new(false);
 
+            /// <summary>Set when the gate was never opened. Throwing instead is not enough: the
+            /// throw lands inside Initialize()'s catch, which swallows it and latches an empty
+            /// Storage, so a test asserting no post-conditions would still pass. Every test asserts
+            /// this is false.</summary>
+            public bool TimedOut { get; private set; }
+
 
             public GatedLoad(byte[] history)
             {
@@ -250,10 +277,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     {
                         Entered.Set();
 
-                        // Throw rather than return: a test that forgets to open the gate would
-                        // otherwise get its history 10s later and pass having proved nothing.
                         if (!Gate.Wait(_waitTimeout))
+                        {
+                            TimedOut = true;
                             throw new TimeoutException("the test never opened the load gate");
+                        }
 
                         return history;
                     });
