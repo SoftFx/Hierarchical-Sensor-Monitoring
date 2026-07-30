@@ -6,6 +6,12 @@ on:
     # (marking ready does not emit a synchronize event).
     types: [opened, synchronize, reopened, ready_for_review]
 
+# Each review is a paid API call, and the incident that motivated fail-loud was an API usage
+# limit. Without this, ten pushes to one PR buy ten reviews and ten competing check results.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   claude-review:
     # Skip review while the PR is a draft. This workflow only triggers on pull_request,
@@ -69,25 +75,49 @@ jobs:
 
       # A green action is not proof of a review: the agent can exit 0 after hitting a turn or
       # output limit, or write the file and then fail to post it. The gated property is delivery,
-      # so assert on the comment — keyed by this run's id, which is what keeps an earlier run's
-      # comment on the same PR from satisfying the check.
+      # so assert on the comment — keyed by run id AND attempt, which keeps an earlier run's
+      # comment (or the previous attempt of a `gh run rerun`) from satisfying the check.
       - name: Verify a review was posted
         if: steps.claude.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr view ${{ github.event.pull_request.number }} --json comments --jq '.comments[].body' \
-            | grep -qF 'claude-review: ${{ github.run_id }}-${{ github.run_attempt }}' || {
-            echo "::error title=Claude review::The action exited 0 but posted no review comment for this run."
-            exit 1
-          }
+          marker='claude-review: ${{ github.run_id }}-${{ github.run_attempt }}'
 
-      - name: Dump review output (when the agent did not succeed)
-        # 'cancelled' covers the timeout-minutes case, which would otherwise annotate nothing.
-        if: always() && (steps.claude.outcome == 'failure' || steps.claude.outcome == 'cancelled')
+          # Deliberately not `gh ... | grep -q`. Without pipefail the pipeline reports grep's
+          # status, so a failed gh read is indistinguishable from "no comment posted" and the
+          # error message asserts something untrue. With pipefail it is worse: grep -q closes
+          # the pipe on the first match, gh dies of SIGPIPE, and a SUCCESSFUL check fails.
+          # gh api --paginate rather than `gh pr view --json comments`, whose single fixed page
+          # can exclude the new comment on a PR with a long comment history.
+          for attempt in 1 2 3; do
+            if ! bodies=$(gh api --paginate \
+                  "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+                  --jq '.[].body'); then
+              echo "::error title=Claude review::Could not read PR comments to verify delivery (gh failed) — this is not a verdict on the review itself."
+              exit 1
+            fi
+
+            if grep -qF "$marker" <<<"$bodies"; then
+              exit 0
+            fi
+
+            # The comment was posted seconds ago; the read is not guaranteed to see it at once.
+            if [ "$attempt" -lt 3 ]; then
+              sleep 5
+            fi
+          done
+
+          echo "::error title=Claude review::The agent exited 0 but posted no review comment for this run."
+          exit 1
+
+      - name: Dump review output (when no review was delivered)
+        # failure() and not an outcome check on the agent step: the case this whole guard exists
+        # for — file written, posting failed — leaves that step 'success' and would skip the dump.
+        if: failure()
         run: |
-          # Surface the cause on the checks tab; the reason is otherwise buried in a long log.
-          echo "::error title=Claude review::The review step did not succeed — see job logs for the cause (API usage limit, auth, agent error, or timeout)."
+          # Surface it on the checks tab; the detail is otherwise buried in a long log.
+          echo "::error title=Claude review::No review was delivered for this run — see the failing step's log."
           echo "=== review_output.md ==="
           cat review_output.md 2>/dev/null || echo "(file not created)"
 
