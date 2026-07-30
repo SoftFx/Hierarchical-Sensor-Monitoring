@@ -110,9 +110,26 @@ jobs:
             # collects review_output.md — which is about to become the truncated version.
             cp review_output.md review_full.md
 
-            head -c "$MAX" review_output.md > review_trimmed.md
-            printf '\n\n_Review truncated at %s bytes. Full text: the `claude-logs` artifact of run %s._\n' \
-              "$MAX" '${{ github.run_id }}' >> review_trimmed.md
+            # iconv -c drops the partial UTF-8 sequence head -c can leave at the cut. If it is
+            # unavailable the raw cut is kept: gh encodes the stray bytes as U+FFFD, which is
+            # cosmetic — losing the whole review because a cleanup tool is missing would not be.
+            head -c "$MAX" review_output.md > review_cut.md
+            if iconv -c -f utf-8 -t utf-8 review_cut.md > review_trimmed.md; then
+              rm -f review_cut.md
+            else
+              mv review_cut.md review_trimmed.md
+            fi
+
+            # If the cut landed inside a fenced block, everything appended after it is swallowed
+            # into that block — including the HTML-comment marker, which would then render as
+            # visible noise instead of staying invisible. An odd fence count means we are inside.
+            fences=$(grep -c '^```' review_trimmed.md || true)
+            if [ $(( fences % 2 )) -eq 1 ]; then
+              printf '\n```\n' >> review_trimmed.md
+            fi
+
+            printf '\n\n_Review truncated at %s bytes. Full text: the `claude-logs-%s` artifact of run %s._\n' \
+              "$MAX" '${{ github.run_attempt }}' '${{ github.run_id }}' >> review_trimmed.md
             mv review_trimmed.md review_output.md
             echo "::warning title=Claude review::Review was $size bytes and got truncated to fit GitHub's comment limit."
           fi
@@ -157,13 +174,15 @@ jobs:
           retention-days: 7
 
   # Visibility aid, NOT a gate: it passes, so it cannot block anything. A skipped claude-review
-  # job already satisfies branch protection on fork PRs; this only makes that state visible on the
-  # checks tab instead of showing nothing. Making fork PRs actually blocked is a policy decision.
-  fork-review-notice:
+  # job already satisfies branch protection; this only makes that state visible on the checks tab
+  # instead of showing nothing. Making such PRs actually blocked is a policy decision.
+  # Covers both skip reasons — fork heads and Dependabot — since both are invisible otherwise.
+  review-skipped-notice:
     if: >-
       github.event.pull_request.draft == false
-      && github.event.pull_request.head.repo.full_name != github.repository
+      && (github.event.pull_request.head.repo.full_name != github.repository
+      || github.actor == 'dependabot[bot]')
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - run: echo "::warning title=Claude review::Skipped for a fork PR — secrets are withheld from forked-repo events, so this PR needs a manual review."
+      - run: echo "::warning title=Claude review::Skipped — secrets are withheld from fork and Dependabot events, so this PR needs a manual review."
