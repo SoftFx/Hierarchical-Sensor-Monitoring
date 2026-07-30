@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.Formatters;
@@ -119,7 +120,12 @@ namespace HSMServer.Core.Model
 
         internal override void Initialize()
         {
-            if (_isInitialized)
+            // Monitor is reentrant, and _isInitialized is deliberately still false while the load
+            // runs, so a same-thread re-entry would replay the whole history load: the TryValidate
+            // calls below can reach SensorTimeout -> SensorExpired -> TryAddValue -> Initialize.
+            // That path is currently unreachable only by an ordering accident (HasData is still
+            // false at both TryValidate sites), which nothing in the code states or enforces.
+            if (_isInitialized || Monitor.IsEntered(_lock))
                 return;
 
             lock (_lock)
@@ -166,10 +172,14 @@ namespace HSMServer.Core.Model
                 }
                 finally
                 {
-                    // Published only after the load has finished: callers gate on this flag before
-                    // touching Storage, so a concurrent writer must wait on _lock instead of racing
-                    // past on an empty Storage (#1296). A failed load still latches — one loud error
-                    // above instead of a per-value retry storm against a broken database.
+                    // Published only after the load has finished, so the three value-ingress gates
+                    // (TryAddValue/TryUpdateLastValue/CheckTimeout) park on _lock instead of racing
+                    // past on an empty Storage (#1296). Scope: only those three wait. Direct Storage
+                    // readers — LastValue, LastDbValue, HasData, LastUpdate, From/To, Result,
+                    // Revalidate(), Cut(), Clear() — remain unguarded and may still observe a
+                    // mid-load sensor; that read-path staleness predates #1296 and is not fixed here.
+                    // A failed load still latches — one loud error above instead of a per-value
+                    // retry storm against a broken database.
                     _isInitialized = true;
                 }
             }
