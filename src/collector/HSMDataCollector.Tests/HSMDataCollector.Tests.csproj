@@ -13,6 +13,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HSMDataCollector\HSMDataCollector.csproj" />
+    <!-- Explicit: HSMDataCollector marks this reference PrivateAssets="all" (NuGet bundling),
+         so it no longer flows transitively. -->
+    <ProjectReference Include="..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
     <!-- Build-only dependency: CollectorCrashIsolationTests spawns the net6.0 crash host as a
          separate process, so the assembly is not referenced (different TFM), only built. -->
     <ProjectReference Include="..\HSMDataCollector.CrashTests.Host\HSMDataCollector.CrashTests.Host.csproj">

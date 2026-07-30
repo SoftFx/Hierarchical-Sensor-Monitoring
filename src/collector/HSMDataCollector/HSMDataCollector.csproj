@@ -45,6 +45,16 @@
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
+    <!-- PrivateAssets="all" keeps HSMSensorDataObjects out of the .nuspec dependencies;
+         its DLL is bundled into this package instead (see IncludeSensorDataObjectsInPackage). -->
+    <ProjectReference Include="..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" PrivateAssets="all" />
   </ItemGroup>
+  <PropertyGroup>
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeSensorDataObjectsInPackage</TargetsForTfmSpecificBuildOutput>
+  </PropertyGroup>
+  <Target Name="IncludeSensorDataObjectsInPackage">
+    <ItemGroup>
+      <BuildOutputInPackage Include="$(OutputPath)HSMSensorDataObjects.dll" />
+    </ItemGroup>
+  </Target>
 </Project>

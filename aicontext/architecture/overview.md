@@ -57,7 +57,9 @@ Key internals:
 
 ## HSMSensorDataObjects (shared DTOs)
 
-Shared C# library defining the data contract between collector and server:
+Shared C# library defining the data contract between collector and server.
+Since collector 3.5.0 its assembly ships inside the `HSMDataCollector.HSMDataCollector` NuGet package (bundled DLL, not a package dependency); the standalone `HSMDataCollector.HSMSensorDataObjects` package is no longer published.
+Contents:
 - `SensorValueBase` and typed descendants (BoolSensorValue, IntSensorValue, etc.)
 - `CommandRequestBase` for server->collector commands
 - `SensorRequests` for sensor registration and metadata
