@@ -64,6 +64,9 @@ jobs:
           claude_args: >-
             --verbose
             --allowedTools "Bash(gh pr diff*),Bash(gh pr view*),Write"
+          # Kept for in-log diagnosis — reading the raw tool results in the job log is how the
+          # API-limit failure that motivated this workflow change was identified. It no longer
+          # feeds an artifact: claude-execution-output.json is deliberately not archived.
           show_full_output: true
           prompt: |
             REPO: ${{ github.repository }}
@@ -199,7 +202,15 @@ jobs:
           # Surface it on the checks tab; the detail is otherwise buried in a long log.
           echo "::error title=Claude review::Review check failed — no review reached the PR for this run. See the failing step's log."
           echo "=== review_output.md ==="
+
+          # The runner parses stdout for workflow commands, and a review of THIS file quotes
+          # ::error:: lines verbatim — so dumping one unguarded would emit bogus annotations, and
+          # a ::stop-commands:: line inside it would mute every later annotation in the job.
+          # Fence the dump with an unguessable token.
+          tok="dump-$(date +%s%N)"
+          echo "::stop-commands::$tok"
           cat review_output.md 2>/dev/null || echo "(file not created)"
+          echo "::$tok::"
 
       - name: Upload Claude logs
         if: always()
@@ -215,6 +226,7 @@ jobs:
           # but does not scrub artifact contents, and retention outlives the token. The two files
           # below carry everything anyone actually wants; agent diagnostics stay in the job log.
           path: |
+            review_body.md
             review_output.md
             review_full.md
             *.log
