@@ -24,31 +24,20 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     {
         private static readonly TimeSpan _waitTimeout = TimeSpan.FromSeconds(10);
 
+        /// <summary>Bounds how long a call may be given to prove it did NOT complete. Asserting
+        /// non-completion is the safe polarity: a loaded agent makes it more likely to hold.</summary>
+        private static readonly TimeSpan _mustNotComplete = TimeSpan.FromMilliseconds(200);
+
 
         [Fact]
         [Trait("Category", "Initialization race")]
         public void TryAddValue_DuringHistoryLoad_WaitsForLoadedStorage()
         {
-            var historyBytes = new MemoryPackFormatter().Serialize(
-                new IntegerValue { Time = DateTime.UtcNow.AddMinutes(-5), Status = SensorStatus.Ok, Value = 1 });
-
-            using var loadEntered = new ManualResetEventSlim(false);
-            using var loadGate = new ManualResetEventSlim(false);
-
-            var database = new Mock<IDatabaseCore>();
-            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
-                .Returns(() =>
-                {
-                    loadEntered.Set();
-                    loadGate.Wait(_waitTimeout);
-                    return historyBytes;
-                });
-            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(historyBytes);
-
-            var sensor = new IntegerSensorModel(BuildEntity(), database.Object, null);
+            using var load = new GatedLoad(History(DateTime.UtcNow.AddMinutes(-5), 1));
+            var sensor = new IntegerSensorModel(BuildEntity(), load.Database.Object, null);
 
             var init = Task.Run(sensor.Initialize);
-            Assert.True(loadEntered.Wait(_waitTimeout), "history load never started");
+            Assert.True(load.Entered.Wait(_waitTimeout), "history load never started");
 
             var newValue = new IntegerValue { Time = DateTime.UtcNow, Status = SensorStatus.Ok, Value = 2 };
             var added = false;
@@ -63,59 +52,42 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // The load is still in flight (the gate is closed), so the writer must be parked on the
             // initialization lock. Pre-fix code latched the flag before reading the database, and
             // this Wait returned true immediately — TryAddValue completed against an empty Storage.
-            Assert.False(add.Wait(TimeSpan.FromMilliseconds(200)),
+            Assert.False(add.Wait(_mustNotComplete),
                 "TryAddValue completed while the history load was still in flight");
 
-            loadGate.Set();
+            load.Gate.Set();
             Assert.True(Task.WaitAll(new[] { init, add }, _waitTimeout), "init/add did not finish");
 
             Assert.True(added);
             var lastValue = Assert.IsType<IntegerValue>(sensor.LastValue);
             Assert.Equal(2, lastValue.Value);
             Assert.Equal(newValue.Time, lastValue.Time);
-            database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once);
+            load.Database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once);
         }
 
         /// <summary>
-        /// The three entry points that gate on _isInitialized. TryAddValue is covered in depth
-        /// above; this pins that the other two honour the same publication contract, which matters
-        /// operationally — CheckTimeout is reached from ProductModel.CheckTimeout() and from
-        /// BaseNodeModel.TryUpdate, so a settings change during startup walks every sensor.
+        /// The other two entry points that gate on _isInitialized (TryAddValue is covered in depth
+        /// by the test above). CheckTimeout is the operationally interesting one: it is reached from
+        /// ProductModel.CheckTimeout() and BaseNodeModel.TryUpdate, so a settings change during
+        /// startup walks every sensor and can park on each in-flight load.
         /// </summary>
         public enum ValueGate
         {
-            TryAddValue,
             TryUpdateLastValue,
             CheckTimeout,
         }
 
         [Theory]
-        [InlineData(ValueGate.TryAddValue)]
         [InlineData(ValueGate.TryUpdateLastValue)]
         [InlineData(ValueGate.CheckTimeout)]
         [Trait("Category", "Initialization race")]
         public void ValueGate_DuringHistoryLoad_WaitsForLoadedStorage(ValueGate gate)
         {
-            var historyBytes = new MemoryPackFormatter().Serialize(
-                new IntegerValue { Time = DateTime.UtcNow.AddMinutes(-5), Status = SensorStatus.Ok, Value = 1 });
-
-            using var loadEntered = new ManualResetEventSlim(false);
-            using var loadGate = new ManualResetEventSlim(false);
-
-            var database = new Mock<IDatabaseCore>();
-            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
-                .Returns(() =>
-                {
-                    loadEntered.Set();
-                    loadGate.Wait(_waitTimeout);
-                    return historyBytes;
-                });
-            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(historyBytes);
-
-            var sensor = new IntegerSensorModel(BuildEntity(), database.Object, null);
+            using var load = new GatedLoad(History(DateTime.UtcNow.AddMinutes(-5), 1));
+            var sensor = new IntegerSensorModel(BuildEntity(), load.Database.Object, null);
 
             var init = Task.Run(sensor.Initialize);
-            Assert.True(loadEntered.Wait(_waitTimeout), "history load never started");
+            Assert.True(load.Entered.Wait(_waitTimeout), "history load never started");
 
             using var callStarted = new ManualResetEventSlim(false);
             var call = Task.Run(() =>
@@ -126,9 +98,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
                 switch (gate)
                 {
-                    case ValueGate.TryAddValue:
-                        sensor.TryAddValue(value);
-                        break;
                     case ValueGate.TryUpdateLastValue:
                         sensor.TryUpdateLastValue(value);
                         break;
@@ -139,10 +108,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             });
 
             Assert.True(callStarted.Wait(_waitTimeout), $"{gate} task never started");
-            Assert.False(call.Wait(TimeSpan.FromMilliseconds(200)),
+            Assert.False(call.Wait(_mustNotComplete),
                 $"{gate} completed while the history load was still in flight");
 
-            loadGate.Set();
+            load.Gate.Set();
             Assert.True(Task.WaitAll(new[] { init, call }, _waitTimeout), "init/call did not finish");
         }
 
@@ -151,28 +120,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void TryAddValue_StaleValueDuringHistoryLoad_IsJudgedAgainstLoadedHistory()
         {
             var historyTime = DateTime.UtcNow.AddMinutes(-1);
-            var historyBytes = new MemoryPackFormatter().Serialize(
-                new IntegerValue { Time = historyTime, Status = SensorStatus.Ok, Value = 1 });
 
-            using var loadEntered = new ManualResetEventSlim(false);
-            using var loadGate = new ManualResetEventSlim(false);
-
-            var database = new Mock<IDatabaseCore>();
-            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
-                .Returns(() =>
-                {
-                    loadEntered.Set();
-                    loadGate.Wait(_waitTimeout);
-                    return historyBytes;
-                });
-            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(historyBytes);
-
+            using var load = new GatedLoad(History(historyTime, 1));
             // Singleton: TryAddValue decides by comparing against Storage.LastValue, so the verdict
             // is a direct readout of whether the history was already published when the writer ran.
-            var sensor = new IntegerSensorModel(BuildEntity(isSingleton: true), database.Object, null);
+            var sensor = new IntegerSensorModel(BuildEntity(isSingleton: true), load.Database.Object, null);
 
             var init = Task.Run(sensor.Initialize);
-            Assert.True(loadEntered.Wait(_waitTimeout), "history load never started");
+            Assert.True(load.Entered.Wait(_waitTimeout), "history load never started");
 
             // Older than the history the in-flight load is about to publish.
             var stale = new IntegerValue { Time = historyTime.AddMinutes(-9), Status = SensorStatus.Ok, Value = 2 };
@@ -187,19 +142,42 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // Pin the overlap rather than assuming it: without these two the writer could run
             // entirely after the load and the outcome assert below would pass without a race.
             Assert.True(addStarted.Wait(_waitTimeout), "TryAddValue task never started");
-            Assert.False(add.Wait(TimeSpan.FromMilliseconds(200)),
+            Assert.False(add.Wait(_mustNotComplete),
                 "TryAddValue completed while the history load was still in flight");
 
-            loadGate.Set();
+            load.Gate.Set();
             Assert.True(Task.WaitAll(new[] { init, add }, _waitTimeout), "init/add did not finish");
 
             // Pre-fix the writer met an empty Storage, so singleton dedup had nothing to compare
             // against and stored the stale value as current. Against the loaded history it is
-            // correctly recognised as older and dropped.
+            // correctly recognised as older and dropped. These asserts are order-sensitive and
+            // cannot pass by accident, unlike the non-completion bound above.
             Assert.False(added, "stale value was accepted because Storage was still empty");
             var lastValue = Assert.IsType<IntegerValue>(sensor.LastValue);
             Assert.Equal(1, lastValue.Value);
             Assert.Equal(historyTime, lastValue.Time);
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void ShouldDestroy_UninitializedSensor_JudgesByHistoryNotCreationDate()
+        {
+            // A long-lived sensor that is still receiving data: created 10 days ago, last value a
+            // minute old, self-destroy after an hour of inactivity.
+            var database = new Mock<IDatabaseCore>();
+            var recent = History(DateTime.UtcNow.AddMinutes(-1), 1);
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>())).Returns(recent);
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(recent);
+
+            var entity = BuildEntity(selfDestroy: TimeSpan.FromHours(1), creationDate: DateTime.UtcNow.AddDays(-10));
+            var sensor = new IntegerSensorModel(entity, database.Object, null);
+
+            // Unguarded, ShouldDestroy() reads HasData == false on an uninitialized sensor and falls
+            // back to CreationDate — 10 days > 1 hour — and the self-destroy sweep deletes the
+            // sensor with its history. Only the ordering inside ClearDatabaseService.ServiceActionAsync
+            // keeps that from firing today, which is three statements, not an invariant.
+            Assert.False(sensor.ShouldDestroy(), "a sensor with fresh history was judged by its CreationDate");
+            database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once);
         }
 
         [Fact]
@@ -237,25 +215,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void Initialize_Concurrent_LoadsHistoryOnce()
         {
-            using var loadEntered = new ManualResetEventSlim(false);
-            using var loadGate = new ManualResetEventSlim(false);
-
-            var database = new Mock<IDatabaseCore>();
-            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
-                .Returns(() =>
-                {
-                    loadEntered.Set();
-                    loadGate.Wait(_waitTimeout);
-                    return null;
-                });
-
-            var sensor = new IntegerSensorModel(BuildEntity(), database.Object, null);
+            using var load = new GatedLoad(null);
+            var sensor = new IntegerSensorModel(BuildEntity(), load.Database.Object, null);
 
             var first = Task.Run(sensor.Initialize);
-            Assert.True(loadEntered.Wait(_waitTimeout), "history load never started");
+            Assert.True(load.Entered.Wait(_waitTimeout), "history load never started");
 
             // secondStarted proves the task body ran: without it a thread pool that schedules the
-            // task later than the 200 ms below makes the Wait return false for the wrong reason and
+            // task later than the bound below makes the Wait return false for the wrong reason and
             // the test passes having verified nothing.
             using var secondStarted = new ManualResetEventSlim(false);
             var second = Task.Run(() =>
@@ -266,13 +233,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.True(secondStarted.Wait(_waitTimeout), "second Initialize task never started");
             // The second caller must wait for the in-flight load, not skip ahead on the early latch.
-            Assert.False(second.Wait(TimeSpan.FromMilliseconds(200)),
+            Assert.False(second.Wait(_mustNotComplete),
                 "second Initialize returned while the first was still loading");
 
-            loadGate.Set();
+            load.Gate.Set();
             Assert.True(Task.WaitAll(new[] { first, second }, _waitTimeout), "initializations did not finish");
 
-            database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once);
+            load.Database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once);
         }
 
         [Fact]
@@ -296,14 +263,63 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        private static SensorEntity BuildEntity(bool isSingleton = false) =>
-            new()
+        /// <summary>
+        /// A mocked database whose history read blocks until <see cref="Gate"/> is set, so a test can
+        /// hold Initialize() mid-load and act while it is in flight. <see cref="Entered"/> signals
+        /// that the load actually reached the database.
+        /// </summary>
+        private sealed class GatedLoad : IDisposable
+        {
+            public Mock<IDatabaseCore> Database { get; } = new();
+
+            public ManualResetEventSlim Entered { get; } = new(false);
+
+            public ManualResetEventSlim Gate { get; } = new(false);
+
+
+            public GatedLoad(byte[] history)
+            {
+                Database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                    .Returns(() =>
+                    {
+                        Entered.Set();
+                        Gate.Wait(_waitTimeout);
+                        return history;
+                    });
+
+                Database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(history);
+            }
+
+
+            public void Dispose()
+            {
+                Entered.Dispose();
+                Gate.Dispose();
+            }
+        }
+
+
+        private static byte[] History(DateTime time, int value) =>
+            new MemoryPackFormatter().Serialize(
+                new IntegerValue { Time = time, Status = SensorStatus.Ok, Value = value });
+
+        private static SensorEntity BuildEntity(bool isSingleton = false, TimeSpan? selfDestroy = null,
+            DateTime? creationDate = null)
+        {
+            var entity = new SensorEntity
             {
                 Id = Guid.NewGuid().ToString(),
                 ProductId = Guid.NewGuid().ToString(),
                 DisplayName = RandomGenerator.GetRandomString(),
                 Type = (byte)SensorType.Integer,
                 IsSingleton = isSingleton,
+                CreationDate = (creationDate ?? DateTime.UtcNow).Ticks,
             };
+
+            if (selfDestroy.HasValue)
+                entity.Settings["SelfDestroy"] = new TimeIntervalEntity((long)TimeInterval.Ticks, selfDestroy.Value.Ticks);
+
+            return entity;
+        }
     }
 }

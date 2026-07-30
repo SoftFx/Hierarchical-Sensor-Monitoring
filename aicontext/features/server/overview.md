@@ -39,7 +39,11 @@ Typed sensor model. Manages:
 
 Initialization is expected before values are accepted. `Initialize()` loads history from LevelDB under a per-sensor lock and publishes its `_isInitialized` flag only once that load has **finished or failed** (#1296), so the three value-ingress gates — `TryAddValue`, `TryUpdateLastValue`, `CheckTimeout` — park on the lock instead of racing past on an empty `Storage`. Two limits the contract does not cover: a failed load latches as well and leaves an empty `Storage` (deliberate — one logged error beats a per-value retry storm against a broken database), and only those three gates wait; direct readers such as `LastValue`, `HasData`, or `Revalidate()` are unguarded and may observe a mid-load sensor.
 
-Policy evaluation runs inside that lock, so `TreeValuesCache.SetExpiredSnapshot` and `ChangeSensorEvent` subscribers must not block on the `UpdatesQueue` — it is a `SingleReader` channel, and its reader waiting on a sensor lock would stall the whole product's ingest.
+Policy evaluation runs inside that lock, and it fans out: `SensorTimeout` → `SensorExpired` → `TreeValuesCache.SetExpiredSnapshot` → `SensorUpdateView` → every `ChangeSensorEvent` subscriber. So the lock is held across up to three LevelDB reads plus that fan-out, and **subscribers must do no blocking work** — today they are all `ConcurrentDictionary` lookups. In particular nothing there may wait on the `UpdatesQueue`: it is a `SingleReader` channel (`MaxQueueSize` 1000, `FullMode.Wait`), so its reader parked on a sensor lock back-pressures all the way to the HTTP ingest threads.
+
+Why startup is nonetheless not serialized: `FillSensorsData` loads sensors one at a time on a single background thread, so at most one queue reader is parked at any moment, and only for that one sensor's load.
+
+`ShouldDestroy()` calls `Initialize()` before reading `HasData`/`LastUpdate`: that path deletes the sensor with its history, and an uninitialized sensor would fall back to `CreationDate` and destroy itself. Other direct readers are still unguarded.
 
 Changes around `TryAddValue`, `TryUpdateLastValue`, TTL, or policy loading should include tests for first-value initialization and timeout behavior.
 

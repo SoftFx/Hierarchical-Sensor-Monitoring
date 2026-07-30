@@ -25,6 +25,11 @@ namespace HSMServer.Core.Model.Policies
         internal protected PolicyResult ConfimationResult { get; protected set; } = PolicyResult.Ok;
 
         internal Action<ActionType, Policy> Uploaded;
+
+        // Fires from CalculateStorageResult/SensorTimeout, which BaseSensorModel.Initialize() calls
+        // while holding that sensor's initialization lock (#1296). Subscribers must therefore do no
+        // blocking work — in particular nothing that waits on the UpdatesQueue, a SingleReader
+        // channel whose reader would then be parked on a sensor lock, stalling the product's ingest.
         internal Action<BaseSensorModel, bool> SensorExpired;
 
 

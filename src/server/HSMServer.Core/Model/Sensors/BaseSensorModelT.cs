@@ -120,13 +120,21 @@ namespace HSMServer.Core.Model
 
         internal override void Initialize()
         {
+            if (_isInitialized)
+                return;
+
             // Monitor is reentrant, and _isInitialized is deliberately still false while the load
             // runs, so a same-thread re-entry would replay the whole history load: the TryValidate
             // calls below can reach SensorTimeout -> SensorExpired -> TryAddValue -> Initialize.
-            // That path is currently unreachable only by an ordering accident (HasData is still
-            // false at both TryValidate sites), which nothing in the code states or enforces.
-            if (_isInitialized || Monitor.IsEntered(_lock))
+            // Returning here stops the replay but leaves that nested caller running against a
+            // half-built Storage — #1296 on the initializing thread. Unreachable today only by an
+            // ordering accident (HasData is false at both TryValidate sites), so log it: if a
+            // policy change ever makes it reachable, this line is the only thing that will say so.
+            if (Monitor.IsEntered(_lock))
+            {
+                _logger.Warn($"Reentrant Initialize on sensor {Id} during history load — the nested value path sees a partial Storage (#1296)");
                 return;
+            }
 
             lock (_lock)
             {

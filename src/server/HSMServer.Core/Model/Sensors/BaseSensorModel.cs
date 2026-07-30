@@ -85,7 +85,13 @@ namespace HSMServer.Core.Model
             if (Settings.SelfDestroy.Value == null)
                 return false;
 
-            return Settings.SelfDestroy.Value.TimeIsUp(HasData ? LastUpdate : CreationDate); 
+            // HasData/LastUpdate read Storage directly, and this path DELETES the sensor with its
+            // history. An uninitialized sensor reports HasData == false and falls back to
+            // CreationDate, which for any long-lived sensor is well past its self-destroy interval
+            // (#1296). Idempotent once latched, and only sensors with self-destroy configured pay.
+            Initialize();
+
+            return Settings.SelfDestroy.Value.TimeIsUp(HasData ? LastUpdate : CreationDate);
         }
 
         public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);
