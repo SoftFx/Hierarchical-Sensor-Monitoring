@@ -38,16 +38,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
-      issues: write
+      pull-requests: write # gh pr comment; issues: write is not needed for it
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
           # Without this the checkout token sits in the remote URL, where `git remote -v` prints
-          # it in cleartext — and with show_full_output that tool result reaches the uploaded
-          # artifact, which GitHub does not scrub the way it masks logs. Nothing here needs it:
-          # the agent and the post step authenticate through GH_TOKEN.
+          # it in cleartext. Nothing here needs it: the agent and the post step authenticate
+          # through GH_TOKEN. This closes one route, not the class — a write-scoped token is still
+          # in the agent's shell environment, which is why the transcript is no longer archived
+          # (see the artifact step) and why the same-repo restriction is the real boundary.
           persist-credentials: false
 
       # No continue-on-error: a review that did not run must fail the check —
@@ -89,11 +89,13 @@ jobs:
       # "a bot comment appeared" was unsound: claude-agent.yml also replies as github-actions[bot],
       # so an unrelated @claude reply could satisfy the gate while this review silently produced
       # nothing. Posting here makes the gated property the exit status of this step.
-      # always(): a review that exists must reach the PR even if the agent step then failed — a
-      # late API error or the timeout firing during teardown would otherwise discard a finished
-      # review, which is this PR's own failure shape one step later. The check still goes red.
+      # !cancelled(), not always(): a review that exists must reach the PR even if the agent step
+      # then failed — a late API error or the timeout firing during teardown would otherwise
+      # discard a finished review, which is this PR's own failure shape one step later. The check
+      # still goes red. But always() also fires on cancellation, and cancel-in-progress means a
+      # superseded run would then post a review of a commit that has already been replaced.
       - name: Post the review
-        if: always() && steps.claude.outcome != 'skipped'
+        if: ${{ !cancelled() && steps.claude.outcome != 'skipped' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -197,11 +199,15 @@ jobs:
           # the artifact the first attempt already uploaded, and fail on a path this PR makes
           # more likely to be taken.
           name: claude-logs-${{ github.run_attempt }}
+          # claude-execution-output.json is deliberately NOT collected. show_full_output puts raw
+          # tool results in it, and a write-scoped GH_TOKEN sits in the agent's environment — one
+          # `env` while orienting itself would archive a live token. GitHub masks secrets in logs
+          # but does not scrub artifact contents, and retention outlives the token. The two files
+          # below carry everything anyone actually wants; agent diagnostics stay in the job log.
           path: |
             review_output.md
             review_full.md
             *.log
-            /home/runner/work/_temp/claude-execution-output.json
           if-no-files-found: ignore
           retention-days: 7
 
