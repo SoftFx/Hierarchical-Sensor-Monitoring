@@ -31,7 +31,7 @@ namespace HSMServer.Notifications.Chats
             {
                 try
                 {
-                    var effective = GetEffectiveChats(sensor);
+                    var effective = ResolveSensorChats(sensor);
                     foreach (var chatId in effective)
                         counts[chatId] = counts.GetValueOrDefault(chatId) + 1;
                 }
@@ -39,7 +39,7 @@ namespace HSMServer.Notifications.Chats
                 {
                     // The cache mutates concurrently with reads (PolicyDestination.Update clears
                     // Chats without a lock); skip the sensor and keep the rest of the count useful.
-                    _log.Warn(ex, $"Sensor usage count: skipping sensor {sensor?.Id}");
+                    _log.Warn(ex, $"Sensor usage count: skipping sensor {sensor.Id}");
                 }
             }
 
@@ -63,10 +63,12 @@ namespace HSMServer.Notifications.Chats
             return set;
         }
 
-        private HashSet<Guid> GetEffectiveChats(BaseSensorModel sensor)
+        private HashSet<Guid> ResolveSensorChats(BaseSensorModel sensor)
         {
             IEnumerable<Guid> folderDefaultChats = null;
-            var rootFolderId = sensor?.Root?.FolderId;
+            // `Root` casts to ProductModel internally; `as` converts an orphaned-sensor cast into a
+            // null so the sensor still gets policy-chat credit instead of being dropped wholesale.
+            var rootFolderId = (sensor?.Root as ProductModel)?.FolderId;
             if (rootFolderId.HasValue && _folders.TryGetValue(rootFolderId.Value, out FolderModel folder))
                 folderDefaultChats = folder.DefaultChats.SelectedChats;
 
@@ -77,15 +79,18 @@ namespace HSMServer.Notifications.Chats
         // FromParent against the ProductModel parent chain; folder default chats are added separately
         // — that mirrors TreeValuesCache.SendAlertMessage, which injects folder.DefaultChats at
         // delivery time (Policy.cs has a TODO to fold folder chats into GetParentChats, so the two
-        // sets stay distinct today).
+        // sets stay distinct today). Disabled policies are intentionally counted — the badge shows
+        // where the chat is wired into alert config, not whether it would deliver today.
         private static IEnumerable<IEnumerable<Guid>> EnumeratePolicyChats(BaseSensorModel sensor)
         {
             var policies = sensor?.Policies;
             if (policies is null)
                 yield break;
 
-            foreach (Policy policy in policies.Cast<Policy>()
-                           .Concat((policies.TTLPolicies ?? Enumerable.Empty<TTLPolicy>()).Cast<Policy>()))
+            // TTLPolicies is never null (PolicyCollectionBase initializes to []), but the getter
+            // takes a lock — a concurrent reassignment could throw during enumeration; that surfaces
+            // inside the try in Compute() and is handled as a best-effort skip.
+            foreach (Policy policy in policies.Concat(policies.TTLPolicies.Cast<Policy>()))
             {
                 var chats = policy?.TargetChats?.Chats;
                 if (chats is not null)

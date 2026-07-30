@@ -21,7 +21,7 @@ namespace HSMServer.Model.Configuration
                 .OrderBy(c => c.Name)
                 .Select(c => new ChatViewModel(c, BuildChatFolders(c, allFolders))
                 {
-                    SensorUsageCount = usageCounts?.GetValueOrDefault(c.Id) ?? 0,
+                    SensorUsageCount = usageCounts.GetValueOrDefault(c.Id),
                 })
                 .ToList();
         }

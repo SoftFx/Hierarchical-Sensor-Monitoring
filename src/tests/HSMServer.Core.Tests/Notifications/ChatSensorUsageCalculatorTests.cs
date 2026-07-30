@@ -23,7 +23,7 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         [Fact]
-        public void RegularAndTtlPolicy_BothUnioned_DedupedPerChat()
+        public void TwoPolicySets_BothUnioned_DedupedPerChat()
         {
             var chatX = Guid.NewGuid();
             var chatY = Guid.NewGuid();
@@ -95,6 +95,22 @@ namespace HSMServer.Core.Tests.Notifications
 
             Assert.Single(set);
             Assert.Contains(chatX, set);
+        }
+
+        // Pins the user's decision that disabled policies still count: the seam receives each
+        // policy's chat set unconditionally (no IsDisabled filter), so a chat wired through a
+        // disabled policy contributes. EnumeratePolicyChats is the consumer contract for this.
+        [Fact]
+        public void PolicyChatSets_AreCounted_Unconditionally()
+        {
+            var chatX = Guid.NewGuid();
+            var chatY = Guid.NewGuid();
+
+            var set = ChatSensorUsageCalculator.GetEffectiveChats(
+                policyChatSets: new[] { new[] { chatX }, new[] { chatY } },
+                folderDefaultChats: null);
+
+            Assert.Equal(2, set.Count);
         }
 
         [Theory]
