@@ -10,7 +10,12 @@ jobs:
   claude-review:
     # Skip review while the PR is a draft. This workflow only triggers on pull_request,
     # so the draft flag is always present.
-    if: github.event.pull_request.draft == false
+    # Fork PRs are skipped rather than failed: GitHub withholds repository secrets from
+    # forked-repo events, so ANTHROPIC_API_KEY is empty and pull-requests write is downgraded
+    # to read — the review structurally cannot run, and "skipped" is the honest signal.
+    if: >-
+      github.event.pull_request.draft == false
+      && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,9 +53,24 @@ jobs:
             Write your review to review_output.md, then post it:
             gh pr comment ${{ github.event.pull_request.number }} --body-file review_output.md
 
+      # A green action is not proof of a review: the agent can exit 0 after hitting a turn or
+      # output limit without ever writing the file it was told to post. Catch that here rather
+      # than shipping another silent pass. (This asserts the review was produced, not that the
+      # gh pr comment call landed — checking for the comment itself would match stale comments
+      # from earlier runs on the same PR.)
+      - name: Verify a review was produced
+        if: steps.claude.outcome == 'success'
+        run: |
+          test -s review_output.md || {
+            echo "::error title=Claude review::The action exited 0 but produced no review output."
+            exit 1
+          }
+
       - name: Dump review output (on failure)
         if: always() && steps.claude.outcome == 'failure'
         run: |
+          # Surface the cause on the checks tab; the reason is otherwise buried in a long log.
+          echo "::error title=Claude review::The review did not run (API usage limit, auth, or agent error). See job logs."
           echo "=== review_output.md ==="
           cat review_output.md 2>/dev/null || echo "(file not created)"
 
