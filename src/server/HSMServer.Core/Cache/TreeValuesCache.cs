@@ -1047,9 +1047,7 @@ namespace HSMServer.Core.Cache
         private void SendNotification(Guid sensorId, PolicyResult result) => _confirmationManager.RegisterNotification(sensorId, result);
 
         // Reachable from inside a sensor's initialization lock via SetExpiredSnapshot (#1296), so
-        // every ChangeSensorEvent subscriber must be non-blocking: today they are all
-        // ConcurrentDictionary lookups. A subscriber that waits on the UpdatesQueue — a
-        // SingleReader channel — would deadlock the product's ingest against that sensor lock.
+        // subscribers must not block. Reasoning: aicontext/features/server/overview.md.
         private void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
 
@@ -2719,11 +2717,8 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        // May run while the sensor holds its initialization lock (#1296): policy evaluation inside
-        // BaseSensorModel.Initialize() reaches here through SensorTimeout -> SensorExpired. Nothing
-        // below — nor any ChangeSensorEvent subscriber — may block on the UpdatesQueue: that channel
-        // has SingleReader = true, so its reader waiting on this sensor's lock would deadlock the
-        // whole product's ingest and surface as a queue problem rather than an init problem.
+        // May run while the sensor holds its initialization lock (#1296), so nothing below — the
+        // notification path included — may block. Reasoning: aicontext/features/server/overview.md.
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
         {
             if (sensor.IsExpired != timeout)

@@ -180,13 +180,10 @@ namespace HSMServer.Core.Model
                 }
                 finally
                 {
-                    // Published once the load has finished OR failed, so the three value-ingress
-                    // gates (TryAddValue/TryUpdateLastValue/CheckTimeout) park on _lock instead of
-                    // racing past on an empty Storage (#1296). Two limits this does NOT cover:
-                    // a failed load latches too and publishes an empty Storage — deliberate, one
-                    // loud error above beats a per-value retry storm against a broken database —
-                    // and only those three gates wait; direct Storage readers (LastValue, HasData,
-                    // Revalidate, Cut, ...) stay unguarded exactly as they were before #1296.
+                    // Published once the load has finished OR FAILED (#1296): a failed load latches
+                    // too and publishes an empty Storage, deliberately — one loud error above beats
+                    // a per-value retry storm against a broken database. Contract and its limits:
+                    // aicontext/features/server/overview.md, BaseSensorModel<T>.
                     _isInitialized = true;
                 }
             }

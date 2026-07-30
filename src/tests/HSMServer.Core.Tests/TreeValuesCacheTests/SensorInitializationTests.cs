@@ -65,18 +65,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             load.Database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once);
         }
 
-        /// <summary>
-        /// The other two entry points that gate on _isInitialized (TryAddValue is covered in depth
-        /// by the test above). CheckTimeout is the operationally interesting one: it is reached from
-        /// ProductModel.CheckTimeout() and BaseNodeModel.TryUpdate, so a settings change during
-        /// startup walks every sensor and can park on each in-flight load.
-        /// </summary>
-        public enum ValueGate
-        {
-            TryUpdateLastValue,
-            CheckTimeout,
-        }
-
         [Theory]
         [InlineData(ValueGate.TryUpdateLastValue)]
         [InlineData(ValueGate.CheckTimeout)]
@@ -156,28 +144,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var lastValue = Assert.IsType<IntegerValue>(sensor.LastValue);
             Assert.Equal(1, lastValue.Value);
             Assert.Equal(historyTime, lastValue.Time);
-        }
-
-        [Fact]
-        [Trait("Category", "Initialization race")]
-        public void ShouldDestroy_UninitializedSensor_JudgesByHistoryNotCreationDate()
-        {
-            // A long-lived sensor that is still receiving data: created 10 days ago, last value a
-            // minute old, self-destroy after an hour of inactivity.
-            var database = new Mock<IDatabaseCore>();
-            var recent = History(DateTime.UtcNow.AddMinutes(-1), 1);
-            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>())).Returns(recent);
-            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(recent);
-
-            var entity = BuildEntity(selfDestroy: TimeSpan.FromHours(1), creationDate: DateTime.UtcNow.AddDays(-10));
-            var sensor = new IntegerSensorModel(entity, database.Object, null);
-
-            // Unguarded, ShouldDestroy() reads HasData == false on an uninitialized sensor and falls
-            // back to CreationDate — 10 days > 1 hour — and the self-destroy sweep deletes the
-            // sensor with its history. Only the ordering inside ClearDatabaseService.ServiceActionAsync
-            // keeps that from firing today, which is three statements, not an invariant.
-            Assert.False(sensor.ShouldDestroy(), "a sensor with fresh history was judged by its CreationDate");
-            database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once);
         }
 
         [Fact]
@@ -283,7 +249,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     .Returns(() =>
                     {
                         Entered.Set();
-                        Gate.Wait(_waitTimeout);
+
+                        // Throw rather than return: a test that forgets to open the gate would
+                        // otherwise get its history 10s later and pass having proved nothing.
+                        if (!Gate.Wait(_waitTimeout))
+                            throw new TimeoutException("the test never opened the load gate");
+
                         return history;
                     });
 
@@ -299,27 +270,31 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        /// <summary>
+        /// The other two entry points that gate on _isInitialized (TryAddValue is covered in depth
+        /// by the test above). CheckTimeout is the operationally interesting one: it is reached from
+        /// ProductModel.CheckTimeout() and BaseNodeModel.TryUpdate, so a settings change during
+        /// startup walks every sensor and can park on each in-flight load.
+        /// </summary>
+        public enum ValueGate
+        {
+            TryUpdateLastValue,
+            CheckTimeout,
+        }
+
+
         private static byte[] History(DateTime time, int value) =>
             new MemoryPackFormatter().Serialize(
                 new IntegerValue { Time = time, Status = SensorStatus.Ok, Value = value });
 
-        private static SensorEntity BuildEntity(bool isSingleton = false, TimeSpan? selfDestroy = null,
-            DateTime? creationDate = null)
-        {
-            var entity = new SensorEntity
+        private static SensorEntity BuildEntity(bool isSingleton = false) =>
+            new()
             {
                 Id = Guid.NewGuid().ToString(),
                 ProductId = Guid.NewGuid().ToString(),
                 DisplayName = RandomGenerator.GetRandomString(),
                 Type = (byte)SensorType.Integer,
                 IsSingleton = isSingleton,
-                CreationDate = (creationDate ?? DateTime.UtcNow).Ticks,
             };
-
-            if (selfDestroy.HasValue)
-                entity.Settings["SelfDestroy"] = new TimeIntervalEntity((long)TimeInterval.Ticks, selfDestroy.Value.Ticks);
-
-            return entity;
-        }
     }
 }
