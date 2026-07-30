@@ -10,9 +10,14 @@ jobs:
   claude-review:
     # Skip review while the PR is a draft. This workflow only triggers on pull_request,
     # so the draft flag is always present.
-    # Fork PRs are skipped rather than failed: GitHub withholds repository secrets from
-    # forked-repo events, so ANTHROPIC_API_KEY is empty and pull-requests write is downgraded
-    # to read — the review structurally cannot run, and "skipped" is the honest signal.
+    # Same-repo heads only. Two reasons, and do NOT relax this to "get fork coverage back":
+    #  1. Security. --allowedTools grants Bash(gh pr comment*), and the wildcard also accepts
+    #     --body-file <any path>. Feeding that agent a diff written by an untrusted contributor
+    #     is a prompt-injection surface; restricting to same-repo heads closes it.
+    #  2. It cannot work anyway: GitHub withholds repository secrets from forked-repo events, so
+    #     ANTHROPIC_API_KEY is empty and pull-requests write is downgraded to read.
+    # Caveat: branch protection counts a skipped job as satisfying a required check, so if this
+    # check is ever made required, fork PRs pass it unreviewed and must be reviewed by hand.
     if: >-
       github.event.pull_request.draft == false
       && github.event.pull_request.head.repo.full_name == github.repository
@@ -30,6 +35,9 @@ jobs:
       # otherwise API-limit/auth failures silently produce a green "pass" with no review.
       - uses: anthropics/claude-code-action@v1
         id: claude
+        # Bounded so a wedged agent fails in 20 minutes instead of holding the runner — and the
+        # check — for the 6-hour default. Full reviews here run in ~3 minutes.
+        timeout-minutes: 20
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -49,28 +57,37 @@ jobs:
             - Code quality and maintainability
             - Performance issues
 
-            Use `git diff origin/${{ github.base_ref }}...origin/${{ github.head_ref }}` to see the changes.
-            Write your review to review_output.md, then post it:
+            Use `gh pr diff ${{ github.event.pull_request.number }}` to see the changes. Do not
+            reach for `git diff origin/<base>...origin/<head>`: this job checks out the PR merge
+            ref at depth 1, so neither remote branch exists locally and there is no merge base.
+
+            Write your review to review_output.md. Its last line must be exactly:
+            <!-- claude-review: ${{ github.run_id }}-${{ github.run_attempt }} -->
+
+            Then post it:
             gh pr comment ${{ github.event.pull_request.number }} --body-file review_output.md
 
       # A green action is not proof of a review: the agent can exit 0 after hitting a turn or
-      # output limit without ever writing the file it was told to post. Catch that here rather
-      # than shipping another silent pass. (This asserts the review was produced, not that the
-      # gh pr comment call landed — checking for the comment itself would match stale comments
-      # from earlier runs on the same PR.)
-      - name: Verify a review was produced
+      # output limit, or write the file and then fail to post it. The gated property is delivery,
+      # so assert on the comment — keyed by this run's id, which is what keeps an earlier run's
+      # comment on the same PR from satisfying the check.
+      - name: Verify a review was posted
         if: steps.claude.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          test -s review_output.md || {
-            echo "::error title=Claude review::The action exited 0 but produced no review output."
+          gh pr view ${{ github.event.pull_request.number }} --json comments --jq '.comments[].body' \
+            | grep -qF 'claude-review: ${{ github.run_id }}-${{ github.run_attempt }}' || {
+            echo "::error title=Claude review::The action exited 0 but posted no review comment for this run."
             exit 1
           }
 
-      - name: Dump review output (on failure)
-        if: always() && steps.claude.outcome == 'failure'
+      - name: Dump review output (when the agent did not succeed)
+        # 'cancelled' covers the timeout-minutes case, which would otherwise annotate nothing.
+        if: always() && (steps.claude.outcome == 'failure' || steps.claude.outcome == 'cancelled')
         run: |
           # Surface the cause on the checks tab; the reason is otherwise buried in a long log.
-          echo "::error title=Claude review::The review did not run (API usage limit, auth, or agent error). See job logs."
+          echo "::error title=Claude review::The review step did not succeed — see job logs for the cause (API usage limit, auth, agent error, or timeout)."
           echo "=== review_output.md ==="
           cat review_output.md 2>/dev/null || echo "(file not created)"
 
