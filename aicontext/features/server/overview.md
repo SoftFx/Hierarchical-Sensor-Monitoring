@@ -37,7 +37,11 @@ Typed sensor model. Manages:
 - Alert policies and conditions
 - Status computation
 
-Initialization is expected before values are accepted. Changes around `TryAddValue`, `TryUpdateLastValue`, TTL, or policy loading should include tests for first-value initialization and timeout behavior.
+Initialization is expected before values are accepted. `Initialize()` loads history from LevelDB under a per-sensor lock and publishes its `_isInitialized` flag only once that load has **finished or failed** (#1296), so the three value-ingress gates — `TryAddValue`, `TryUpdateLastValue`, `CheckTimeout` — park on the lock instead of racing past on an empty `Storage`. Two limits the contract does not cover: a failed load latches as well and leaves an empty `Storage` (deliberate — one logged error beats a per-value retry storm against a broken database), and only those three gates wait; direct readers such as `LastValue`, `HasData`, or `Revalidate()` are unguarded and may observe a mid-load sensor.
+
+Policy evaluation runs inside that lock, so `TreeValuesCache.SetExpiredSnapshot` and `ChangeSensorEvent` subscribers must not block on the `UpdatesQueue` — it is a `SingleReader` channel, and its reader waiting on a sensor lock would stall the whole product's ingest.
+
+Changes around `TryAddValue`, `TryUpdateLastValue`, TTL, or policy loading should include tests for first-value initialization and timeout behavior.
 
 ### ConcurrentStorage<T>
 Thread-safe in-memory storage pattern that syncs writes to LevelDB. Used for products, users, access keys, sensor configs.

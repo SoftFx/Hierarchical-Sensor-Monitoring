@@ -76,6 +76,76 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once);
         }
 
+        /// <summary>
+        /// The three entry points that gate on _isInitialized. TryAddValue is covered in depth
+        /// above; this pins that the other two honour the same publication contract, which matters
+        /// operationally — CheckTimeout is reached from ProductModel.CheckTimeout() and from
+        /// BaseNodeModel.TryUpdate, so a settings change during startup walks every sensor.
+        /// </summary>
+        public enum ValueGate
+        {
+            TryAddValue,
+            TryUpdateLastValue,
+            CheckTimeout,
+        }
+
+        [Theory]
+        [InlineData(ValueGate.TryAddValue)]
+        [InlineData(ValueGate.TryUpdateLastValue)]
+        [InlineData(ValueGate.CheckTimeout)]
+        [Trait("Category", "Initialization race")]
+        public void ValueGate_DuringHistoryLoad_WaitsForLoadedStorage(ValueGate gate)
+        {
+            var historyBytes = new MemoryPackFormatter().Serialize(
+                new IntegerValue { Time = DateTime.UtcNow.AddMinutes(-5), Status = SensorStatus.Ok, Value = 1 });
+
+            using var loadEntered = new ManualResetEventSlim(false);
+            using var loadGate = new ManualResetEventSlim(false);
+
+            var database = new Mock<IDatabaseCore>();
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Returns(() =>
+                {
+                    loadEntered.Set();
+                    loadGate.Wait(_waitTimeout);
+                    return historyBytes;
+                });
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(historyBytes);
+
+            var sensor = new IntegerSensorModel(BuildEntity(), database.Object, null);
+
+            var init = Task.Run(sensor.Initialize);
+            Assert.True(loadEntered.Wait(_waitTimeout), "history load never started");
+
+            using var callStarted = new ManualResetEventSlim(false);
+            var call = Task.Run(() =>
+            {
+                callStarted.Set();
+
+                var value = new IntegerValue { Time = DateTime.UtcNow, Status = SensorStatus.Ok, Value = 2 };
+
+                switch (gate)
+                {
+                    case ValueGate.TryAddValue:
+                        sensor.TryAddValue(value);
+                        break;
+                    case ValueGate.TryUpdateLastValue:
+                        sensor.TryUpdateLastValue(value);
+                        break;
+                    case ValueGate.CheckTimeout:
+                        sensor.CheckTimeout();
+                        break;
+                }
+            });
+
+            Assert.True(callStarted.Wait(_waitTimeout), $"{gate} task never started");
+            Assert.False(call.Wait(TimeSpan.FromMilliseconds(200)),
+                $"{gate} completed while the history load was still in flight");
+
+            loadGate.Set();
+            Assert.True(Task.WaitAll(new[] { init, call }, _waitTimeout), "init/call did not finish");
+        }
+
         [Fact]
         [Trait("Category", "Initialization race")]
         public void TryAddValue_StaleValueDuringHistoryLoad_IsJudgedAgainstLoadedHistory()
@@ -107,11 +177,18 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // Older than the history the in-flight load is about to publish.
             var stale = new IntegerValue { Time = historyTime.AddMinutes(-9), Status = SensorStatus.Ok, Value = 2 };
             var added = true;
-            var add = Task.Run(() => { added = sensor.TryAddValue(stale); });
+            using var addStarted = new ManualResetEventSlim(false);
+            var add = Task.Run(() =>
+            {
+                addStarted.Set();
+                added = sensor.TryAddValue(stale);
+            });
 
-            // Settle, not an assertion: gives the writer time to reach the gate and park on _lock.
-            // Pre-fix it runs straight through here instead, which is what the asserts below catch.
-            add.Wait(TimeSpan.FromMilliseconds(200));
+            // Pin the overlap rather than assuming it: without these two the writer could run
+            // entirely after the load and the outcome assert below would pass without a race.
+            Assert.True(addStarted.Wait(_waitTimeout), "TryAddValue task never started");
+            Assert.False(add.Wait(TimeSpan.FromMilliseconds(200)),
+                "TryAddValue completed while the history load was still in flight");
 
             loadGate.Set();
             Assert.True(Task.WaitAll(new[] { init, add }, _waitTimeout), "init/add did not finish");
@@ -177,7 +254,17 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var first = Task.Run(sensor.Initialize);
             Assert.True(loadEntered.Wait(_waitTimeout), "history load never started");
 
-            var second = Task.Run(sensor.Initialize);
+            // secondStarted proves the task body ran: without it a thread pool that schedules the
+            // task later than the 200 ms below makes the Wait return false for the wrong reason and
+            // the test passes having verified nothing.
+            using var secondStarted = new ManualResetEventSlim(false);
+            var second = Task.Run(() =>
+            {
+                secondStarted.Set();
+                sensor.Initialize();
+            });
+
+            Assert.True(secondStarted.Wait(_waitTimeout), "second Initialize task never started");
             // The second caller must wait for the in-flight load, not skip ahead on the early latch.
             Assert.False(second.Wait(TimeSpan.FromMilliseconds(200)),
                 "second Initialize returned while the first was still loading");

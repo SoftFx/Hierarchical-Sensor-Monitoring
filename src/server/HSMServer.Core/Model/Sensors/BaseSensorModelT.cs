@@ -172,14 +172,13 @@ namespace HSMServer.Core.Model
                 }
                 finally
                 {
-                    // Published only after the load has finished, so the three value-ingress gates
-                    // (TryAddValue/TryUpdateLastValue/CheckTimeout) park on _lock instead of racing
-                    // past on an empty Storage (#1296). Scope: only those three wait. Direct Storage
-                    // readers — LastValue, LastDbValue, HasData, LastUpdate, From/To, Result,
-                    // Revalidate(), Cut(), Clear() — remain unguarded and may still observe a
-                    // mid-load sensor; that read-path staleness predates #1296 and is not fixed here.
-                    // A failed load still latches — one loud error above instead of a per-value
-                    // retry storm against a broken database.
+                    // Published once the load has finished OR failed, so the three value-ingress
+                    // gates (TryAddValue/TryUpdateLastValue/CheckTimeout) park on _lock instead of
+                    // racing past on an empty Storage (#1296). Two limits this does NOT cover:
+                    // a failed load latches too and publishes an empty Storage — deliberate, one
+                    // loud error above beats a per-value retry storm against a broken database —
+                    // and only those three gates wait; direct Storage readers (LastValue, HasData,
+                    // Revalidate, Cut, ...) stay unguarded exactly as they were before #1296.
                     _isInitialized = true;
                 }
             }

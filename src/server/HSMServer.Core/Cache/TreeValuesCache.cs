@@ -2715,6 +2715,11 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        // May run while the sensor holds its initialization lock (#1296): policy evaluation inside
+        // BaseSensorModel.Initialize() reaches here through SensorTimeout -> SensorExpired. Nothing
+        // below — nor any ChangeSensorEvent subscriber — may block on the UpdatesQueue: that channel
+        // has SingleReader = true, so its reader waiting on this sensor's lock would deadlock the
+        // whole product's ingest and surface as a queue problem rather than an init problem.
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
         {
             if (sensor.IsExpired != timeout)
