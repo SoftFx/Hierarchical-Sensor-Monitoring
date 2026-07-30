@@ -54,6 +54,11 @@ namespace HSMServer.Model.Notifications
         public bool EnableMessages { get; set; } = true;
 
 
+        public int SensorUsageCount { get; set; }
+
+        public string SensorUsageBadgeText => SensorUsageCount == 1 ? "1 sensor" : $"{SensorUsageCount} sensors";
+
+
         public ChatFoldersViewModel Folders { get; set; } = new();
 
 

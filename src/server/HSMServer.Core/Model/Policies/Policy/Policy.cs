@@ -69,7 +69,9 @@ namespace HSMServer.Core.Model.Policies
 
         internal virtual bool UseScheduleManagerLogic => Schedule.IsActive;
 
-        internal IPolicyDestinationHandler TargetChats
+        // Public so the ChatSensorUsageCalculator (HSMServer assembly) can read effective chats
+        // without duplicating FromParent resolution.
+        public IPolicyDestinationHandler TargetChats
         {
             get
             {
