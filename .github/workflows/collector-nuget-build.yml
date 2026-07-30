@@ -3,10 +3,16 @@ name: Collector nuget build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-nuget:
     runs-on: ubuntu-latest
     environment: Nuget
+    permissions:
+      contents: read
+      id-token: write # OIDC token for nuget.org Trusted Publishing
     env:
       SolutionPath: src/collector/HSMDataCollector.sln
       CollectorPath: src/collector/HSMDataCollector/HSMDataCollector.csproj
@@ -18,26 +24,27 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-     # - name: Intall nuget
-     #   uses: nuget/setup-nuget@v2
-     #   with:
-     #   nuget-api-key: ${{ secrets.NUGETKEY }}
-
-
       - name: Install dependencies
         run: dotnet restore ${{ env.SolutionPath }}
 
       - name: Build Solution
         run: dotnet build ${{ env.SolutionPath }} -c Release --no-restore
 
-    #  - name: Test Solution
-    #    run: dotnet test ${{ env.SolutionPath }}
-
       - name: Pack collector
         run: dotnet pack ${{ env.CollectorPath }} -c Release -o ${{ env.OutputFolder }}
 
+      # Exchanges the job's GitHub OIDC token for a short-lived nuget.org API key.
+      # Requires a Trusted Publishing policy on nuget.org (owner: SoftFx,
+      # repo: Hierarchical-Sensor-Monitoring, workflow: collector-nuget-build.yml,
+      # environment: Nuget) owned by the nuget.org user in vars.NUGET_USER.
+      - name: NuGet login (trusted publishing)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Push nuget
-        run: dotnet nuget push ${{ env.OutputFolder }}/*.nupkg --api-key ${{ secrets.NUGETKEY }} --source https://api.nuget.org/v3/index.json
+        run: dotnet nuget push ${{ env.OutputFolder }}/*.nupkg --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
   create-tag:
     # Tag the release only after the NuGet push has succeeded, so a failed build
@@ -45,6 +52,8 @@ jobs:
     # treat as the previous release. Mirrors the server-build.yml pattern.
     needs: build-nuget
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # pushes the collector-v* tag
     steps:
       - uses: actions/checkout@v4
 
@@ -68,3 +77,6 @@ jobs:
           tag: ${{ steps.read-version.outputs.tag }}
           message: "Release HSMDataCollector ${{ steps.read-version.outputs.version }}"
           force_push_tag: false
+=======
+        run: dotnet nuget push ${{ env.OutputFolder }}/*.nupkg --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+>>>>>>> Stashed changes
