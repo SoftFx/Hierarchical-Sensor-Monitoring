@@ -21,9 +21,10 @@ jobs:
         with:
           fetch-depth: 1
 
+      # No continue-on-error: a review that did not run must fail the check —
+      # otherwise API-limit/auth failures silently produce a green "pass" with no review.
       - uses: anthropics/claude-code-action@v1
         id: claude
-        continue-on-error: true
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
