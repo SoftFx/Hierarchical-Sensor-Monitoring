@@ -150,14 +150,19 @@ namespace HSMServer.Core.Model
                         var firstBytes = _database.GetFirstValue(Id);
 
                         last = Convert(lastBytes);
-                        first = Convert(firstBytes);
+                        // Null-guarded because the catch below now latches: a throw here would leave
+                        // _isInitialized true over an empty Storage permanently — the #1296 symptom,
+                        // no longer bounded to a startup window. Both reads are reachable as null:
+                        // retention (KeepHistory) can sweep every real value and leave only the
+                        // timeout marker SetExpiredSnapshot wrote as the newest row.
+                        first = firstBytes != null ? Convert(firstBytes) : null;
 
                         if (last.IsTimeout)
                         {
                             var valueBytes = _database.GetLatestValue(Id, last.Time.Ticks-1);
-                            var value = Convert(valueBytes);
+                            var value = valueBytes != null ? Convert(valueBytes) : null;
 
-                            if (!value.IsTimeout && Policies.TryValidate(value, out _))
+                            if (value is not null && !value.IsTimeout && Policies.TryValidate(value, out _))
                                 Storage.AddValue((T)value);
 
                             IsExpired = true;

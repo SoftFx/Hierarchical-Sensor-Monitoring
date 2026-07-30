@@ -162,6 +162,35 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Initialization race")]
+        public void Initialize_TimeoutOnlyHistory_LoadsWithoutThrowing()
+        {
+            // Reachable state, not a synthetic one: KeepHistory retention sweeps a quiet sensor's
+            // real values and leaves only the timeout marker SetExpiredSnapshot wrote as the newest
+            // row. The lookup for the value *before* the marker then returns null.
+            var timeoutTime = DateTime.UtcNow.AddMinutes(-30);
+            var timeoutBytes = new MemoryPackFormatter().Serialize(
+                new IntegerValue { Time = timeoutTime, Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
+
+            var database = new Mock<IDatabaseCore>();
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), DateTime.MaxValue.Ticks)).Returns(timeoutBytes);
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), timeoutTime.Ticks - 1)).Returns((byte[])null);
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(timeoutBytes);
+
+            var sensor = new IntegerSensorModel(BuildEntity(), database.Object, null);
+
+            sensor.Initialize();
+
+            // Unguarded, Convert(null) throws, the catch swallows it and the finally latches — the
+            // sensor is left initialized over an empty Storage with no expiry state, permanently.
+            // That is the #1296 symptom, no longer bounded to a startup window.
+            Assert.True(sensor.IsExpired, "expiry state was lost — the load threw before setting it");
+            // AddValueBase routes a timeout marker to _lastTimeout, not _lastValue.
+            Assert.NotNull(sensor.LastTimeout);
+            Assert.Equal(timeoutTime, sensor.LastTimeout.Time);
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
         public void Initialize_ReentrantOnSameThread_DoesNotReloadHistory()
         {
             IntegerSensorModel sensor = null;
