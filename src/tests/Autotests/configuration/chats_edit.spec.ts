@@ -18,6 +18,7 @@ const partialEditChatName = uniqueName('PartialEditChat');
 const folderBindingChatName = uniqueName('FolderBindingChat');
 const folderBindingFolderName = uniqueName('FolderBindingFldr');
 const dualChannelChatName = uniqueName('DualChannelChat');
+const emptyFieldChatName = uniqueName('EmptyFieldChat');
 
 test.afterEach(async ({ browser }) => {
   const page = await browser.newPage();
@@ -32,6 +33,7 @@ test.afterEach(async ({ browser }) => {
     await cleanup.chat(page, partialEditChatName);
     await cleanup.chat(page, folderBindingChatName);
     await cleanup.chat(page, dualChannelChatName);
+    await cleanup.chat(page, emptyFieldChatName);
     await cleanup.folder(page, folderBindingFolderName);
   } finally {
     await page.close();
@@ -313,6 +315,48 @@ test('EditChat: a partial edit of the masked webhook is rejected, stored value u
   await page.locator('.chat-row').filter({ hasText: partialEditChatName }).locator('.chat-action-btn[title="Edit"]').click();
   await expect(page.locator('#MattermostWebhookUrl')).toHaveValue(`https://${originalHost}/hooks/orig••••oken`);
   expect(await page.content()).not.toContain(editedHost);
+
+  await page.getByRole('link', { name: 'Logout' }).click();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+});
+
+
+// Regression for #1329 review: pre-PR, ToUpdate passed the posted value straight through, so an
+// empty field cleared the stored webhook (Chat.ApplyUpdate's `?? current` only checks null). After
+// ResolveWebhook mapped empty → null = "no change", deleting the field contents became a silent
+// no-op — the admin sees a success redirect while the old webhook stays live, exactly the silent-
+// rotation failure the partial-edit guard was added to prevent. The sanctioned path is Remove Slack
+// (ClearSlackWebhook), so the guard rejects empty with a pointer to that button.
+test('EditChat: clearing the webhook field is rejected, not silently ignored', async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
+
+  // --- Login + create a Slack chat ---
+  await login(page, admin_user, admin_user_password, apiUrl);
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await page.locator('#Name').fill(emptyFieldChatName);
+  await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/empty-field-secret');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+
+  // --- Reopen EditChat and clear the webhook field entirely ---
+  await page.locator('.chat-row').filter({ hasText: emptyFieldChatName }).locator('.chat-action-btn[title="Edit"]').click();
+  await page.locator('#SlackWebhookUrl').fill('');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  // --- The save is rejected: form stays on EditChat with an inline error pointing to Remove Slack.
+  // Before the guard, this redirected to the chats list and the old webhook stayed live silently.
+  await expect(page).toHaveURL(/EditChat/);
+  await expect(page.locator('[data-valmsg-for="SlackWebhookUrl"]')).toContainText('Use Remove Slack to delete the webhook');
+
+  // --- Reopen from the list (fresh GET) → stored webhook is unchanged: still masked from the
+  // ORIGINAL URL, the secret nowhere in the page.
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await page.locator('.chat-row').filter({ hasText: emptyFieldChatName }).locator('.chat-action-btn[title="Edit"]').click();
+  await expect(page.locator('#SlackWebhookUrl')).toHaveValue('https://hooks.slack.com/services/empt••••cret');
+  expect(await page.content()).not.toContain('empty-field-secret');
 
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();

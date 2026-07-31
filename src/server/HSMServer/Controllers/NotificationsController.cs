@@ -273,13 +273,28 @@ namespace HSMServer.Controllers
         // IsMasked is a substring test (#1329 review: a rotation could appear to succeed while
         // nothing changed). The classification lives in WebhookUrlMasker.ValidatePosted so it's unit-
         // covered; a real pasted URL still has to pass the absolute http/https check here.
+        //
+        // Empty-on-stored regression guard: pre-PR, ToUpdate passed the posted value straight
+        // through, so Chat.ApplyUpdate (`update.SlackWebhookUrl ?? SlackWebhookUrl`) received "" and
+        // the webhook was cleared. Now ResolveWebhook maps empty → null = "no change", so deleting
+        // the field contents became a silent no-op — the admin sees a success redirect while the
+        // old webhook stays live (#1329 review). The sanctioned path is Remove Slack / Remove
+        // Mattermost (ClearSlackWebhook/ClearMattermostWebhook flags); reject empty and point there.
+        // No stored webhook → empty is valid (e.g. brand-new chat, or clearing an already-cleared
+        // field), so the guard only fires when stored has a value.
         private void ValidateWebhooks(ChatViewModel model, Chat stored)
         {
-            ValidateWebhook(model.SlackWebhookUrl, stored?.SlackWebhookUrl, nameof(ChatViewModel.SlackWebhookUrl));
-            ValidateWebhook(model.MattermostWebhookUrl, stored?.MattermostWebhookUrl, nameof(ChatViewModel.MattermostWebhookUrl));
+            ValidateWebhook(model.SlackWebhookUrl, stored?.SlackWebhookUrl, nameof(ChatViewModel.SlackWebhookUrl), "Slack");
+            ValidateWebhook(model.MattermostWebhookUrl, stored?.MattermostWebhookUrl, nameof(ChatViewModel.MattermostWebhookUrl), "Mattermost");
 
-            void ValidateWebhook(string posted, string storedUrl, string key)
+            void ValidateWebhook(string posted, string storedUrl, string key, string channelName)
             {
+                if (string.IsNullOrWhiteSpace(posted) && !string.IsNullOrEmpty(storedUrl))
+                {
+                    ModelState.AddModelError(key, $"Use Remove {channelName} to delete the webhook.");
+                    return;
+                }
+
                 var maskError = WebhookUrlMasker.ValidatePosted(posted, storedUrl);
                 if (maskError != null)
                 {
@@ -287,9 +302,9 @@ namespace HSMServer.Controllers
                     return;
                 }
 
-                // ValidatePosted returned null: either empty (no change) or a real URL. Real URLs
-                // must still be well-formed absolute http/https — masked/empty values skip this.
-                if (string.IsNullOrWhiteSpace(posted) || WebhookUrlMasker.IsMasked(posted))
+                // ValidatePosted returned null: either empty (no stored webhook, valid) or a real
+                // URL. Real URLs must still be well-formed absolute http/https.
+                if (WebhookUrlMasker.IsMasked(posted))
                     return;
 
                 if (!Uri.TryCreate(posted, UriKind.Absolute, out var uri) ||
