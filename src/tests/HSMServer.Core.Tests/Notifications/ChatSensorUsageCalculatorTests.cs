@@ -133,5 +133,35 @@ namespace HSMServer.Core.Tests.Notifications
             var vm = new ChatViewModel { SensorUsageCount = count };
             Assert.Equal(expected, vm.SensorUsageBadgeText);
         }
+
+        // Pins the incomplete-count path: when Compute() skips at least one sensor (concurrent
+        // cache mutation), the badge prepends "≥" so the admin cannot mistake a partial count for
+        // an authoritative total. Singular/plural rule still applies on top of the prefix.
+        [Theory]
+        [InlineData(0, "≥0 sensors")]
+        [InlineData(1, "≥1 sensor")]
+        [InlineData(5, "≥5 sensors")]
+        [InlineData(1247, "≥1,247 sensors")]
+        public void SensorUsageBadgeText_Incomplete_PrependsGreaterThanOrEqual(int count, string expected)
+        {
+            var vm = new ChatViewModel { SensorUsageCount = count, SensorUsageIncomplete = true };
+            Assert.Equal(expected, vm.SensorUsageBadgeText);
+        }
+
+        [Fact]
+        public void SensorUsageBadgeTitle_Incomplete_ExplainsPartialCount()
+        {
+            var vm = new ChatViewModel { SensorUsageIncomplete = true };
+
+            Assert.Contains("incomplete", vm.SensorUsageBadgeTitle);
+        }
+
+        [Fact]
+        public void SensorUsageBadgeTitle_Complete_NoIncompleteCaveat()
+        {
+            var vm = new ChatViewModel { SensorUsageIncomplete = false };
+
+            Assert.DoesNotContain("incomplete", vm.SensorUsageBadgeTitle);
+        }
     }
 }

@@ -66,7 +66,9 @@ namespace HSMServer.Model.Notifications
             {
                 var prefix = SensorUsageIncomplete ? "≥" : string.Empty;
                 var noun = SensorUsageCount == 1 ? "sensor" : "sensors";
-                return $"{prefix}{SensorUsageCount:N0} {noun}";
+                // InvariantCulture so the group separator is stable (1,247) regardless of the
+                // server's ambient culture — the badge text is asserted in tests and docs.
+                return $"{prefix}{SensorUsageCount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} {noun}";
             }
         }
 

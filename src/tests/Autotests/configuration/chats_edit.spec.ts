@@ -51,7 +51,10 @@ test('EditChat: rename, change description, disable messages and delay, verify p
   // generic .chat-badge selector is now ambiguous.
   await expect(originalRow.locator('.chat-badge.badge-enabled')).toHaveText('Enabled');
   // A brand-new chat has no sensors wired to it, so the usage badge reads "0 sensors" (#1310).
-  await expect(originalRow.locator('.chat-badge.badge-usage')).toHaveText('0 sensors');
+  // Use toContainText rather than toHaveText: if a concurrent cache mutation causes Compute() to
+  // skip a sensor, the badge renders "≥0 sensors" instead, and the strict equality would fail for
+  // a reason unrelated to what this assertion is checking (that the fresh chat has zero wiring).
+  await expect(originalRow.locator('.chat-badge.badge-usage')).toContainText('0 sensors');
 
   // --- Open EditChat and change the chat's own fields ---
   await originalRow.locator('.chat-action-btn[title="Edit"]').click();

@@ -36,27 +36,49 @@ namespace HSMServer.Notifications.Chats
             // resolves the whole ancestor chain; we walk each ancestor's chain once and share the
             // result across every policy/sensor that hangs off the same parent — instead of the
             // per-policy TargetChats call, which re-walks and allocates a fresh Dictionary each
-            // time. Mirrors the (post-routing-fix) semantics of Policy.GetParentChats: walk up
-            // while each ancestor's DefaultChats.IsFromParent is true, stop at the first that
-            // isn't.
-            var inheritedChatsByProduct = new Dictionary<Guid, (HashSet<Guid> Chats, bool IsAllChats)>();
+            // time.
+            //
+            // NOTE on divergence from delivery: this walk stops at the first ancestor whose
+            // DefaultChats.IsFromParent is false, matching what the destination picker UI shows
+            // (DefaultChatViewModel.GetParentChats). Alert delivery (Policy.GetParentChats in
+            // HSMServer.Core) uses a broader rule — once the immediate parent IsFromParent, it
+            // walks every remaining strict ancestor unconditionally, so a chat configured on a
+            // higher non-inheriting ancestor still receives alerts but is NOT counted by this
+            // badge. That divergence is tracked in issue #1330; until the delivery side is
+            // reconciled, the badge can undercount relative to real delivery on chains deeper
+            // than two levels with a non-inheriting middle node. There is no overcount case.
+            var inheritedChatsByProduct = new Dictionary<Guid, HashSet<Guid>>();
+            var folderChatsByFolderId = new Dictionary<Guid, IEnumerable<Guid>>();
+
+            Exception firstError = null;
+            Guid? firstSkippedSensorId = null;
 
             foreach (var sensor in _cache.GetSensors())
             {
                 try
                 {
-                    var effective = ResolveSensorChats(sensor, inheritedChatsByProduct);
+                    var effective = ResolveSensorChats(sensor, inheritedChatsByProduct, folderChatsByFolderId);
                     foreach (var chatId in effective)
                         counts[chatId] = counts.GetValueOrDefault(chatId) + 1;
                 }
-                catch (Exception ex)
+                catch (InvalidOperationException ex)
                 {
-                    // The cache mutates concurrently with reads (PolicyDestination.Update clears
-                    // Chats without a lock). Increment `skipped` so the UI can render "≥N sensors"
-                    // and signal the uncertainty — silently logging would understate the count.
-                    _log.Warn(ex, $"Sensor usage count: skipping sensor {sensor.Id}");
+                    // Expected race: PolicyDestination.Update clears and refills the plain
+                    // Dictionary<Guid, string> without a lock, so an enumerator over .Keys or
+                    // .Values thrown mid-mutation. Skip the sensor and let the UI surface "≥N".
+                    // Only the first skip carries the full exception — the rest roll up into the
+                    // aggregate line after the loop, so a systematic failure on a large install
+                    // does not flood the log with one Warn per sensor.
+                    firstError ??= ex;
+                    firstSkippedSensorId ??= sensor?.Id;
                     skipped++;
                 }
+            }
+
+            if (skipped > 0)
+            {
+                var id = firstSkippedSensorId is Guid g ? g.ToString() : "<unknown>";
+                _log.Warn(firstError, $"Sensor usage count: skipped {skipped} sensor(s) due to concurrent cache mutation. First skipped sensor: {id}.");
             }
 
             return (counts, skipped);
@@ -88,7 +110,10 @@ namespace HSMServer.Notifications.Chats
             return set;
         }
 
-        private HashSet<Guid> ResolveSensorChats(BaseSensorModel sensor, Dictionary<Guid, (HashSet<Guid> Chats, bool IsAllChats)> inheritedChatsByProduct)
+        private HashSet<Guid> ResolveSensorChats(
+            BaseSensorModel sensor,
+            Dictionary<Guid, HashSet<Guid>> inheritedChatsByProduct,
+            Dictionary<Guid, IEnumerable<Guid>> folderChatsByFolderId)
         {
             var (policyChatSets, hasAlertCapablePolicy) = EnumeratePolicyChats(sensor, inheritedChatsByProduct);
 
@@ -99,8 +124,24 @@ namespace HSMServer.Notifications.Chats
             if (hasAlertCapablePolicy && sensor?.Parent is not null)
             {
                 var rootFolderId = sensor.Root.FolderId;
-                if (rootFolderId.HasValue && _folders.TryGetValue(rootFolderId.Value, out FolderModel folder))
-                    folderDefaultChats = folder.DefaultChats.SelectedChats;
+                if (rootFolderId.HasValue)
+                {
+                    var folderId = rootFolderId.Value;
+                    if (folderChatsByFolderId.TryGetValue(folderId, out var cached))
+                    {
+                        folderDefaultChats = cached;
+                    }
+                    else if (_folders.TryGetValue(folderId, out FolderModel folder))
+                    {
+                        // Snapshot once per Compute() pass — DefaultChatViewModel mutates
+                        // SelectedChats in place (Clear + Add), and a concurrent folder save could
+                        // throw mid-union or produce a torn read. Memoized because every sensor
+                        // under the same root folder resolves to the same set.
+                        var snapshot = folder.DefaultChats.SelectedChats.ToArray();
+                        folderChatsByFolderId[folderId] = snapshot;
+                        folderDefaultChats = snapshot;
+                    }
+                }
             }
 
             return GetEffectiveChats(policyChatSets, folderDefaultChats, hasAlertCapablePolicy);
@@ -119,13 +160,14 @@ namespace HSMServer.Notifications.Chats
 
         // Yields each policy's resolved chat id set (regular + TTL). For each policy we resolve
         // the effective destination ONCE: Destination.Chats.Keys directly for Custom/Empty/All
-        // modes, and the memoized ancestor chain for FromParent — bypassing Policy.TargetChats,
+        // modes (no per-policy HashSet allocation — GetEffectiveChats only UnionWith's the
+        // contents), and the memoized ancestor chain for FromParent — bypassing Policy.TargetChats,
         // which allocates a fresh Dictionary + handler per call. Disabled policies are
         // intentionally counted — the badge shows where the chat is wired into alert config, not
         // whether it would deliver today.
         private (List<IEnumerable<Guid>> ChatSets, bool HasAlertCapablePolicy) EnumeratePolicyChats(
             BaseSensorModel sensor,
-            Dictionary<Guid, (HashSet<Guid> Chats, bool IsAllChats)> inheritedChatsByProduct)
+            Dictionary<Guid, HashSet<Guid>> inheritedChatsByProduct)
         {
             var policies = sensor?.Policies;
             if (policies is null)
@@ -142,46 +184,66 @@ namespace HSMServer.Notifications.Chats
                 var destination = policy.Destination;
                 var parent = sensor.Parent;
 
-                // Mirror Policy.TargetChats exactly: when Destination.IsFromParentChats, the parent
-                // chain is unioned in FIRST, then Destination.Chats is layered on top (TryAdd
-                // semantics — explicit chats do not overwrite inherited ones). FromParent + extra
-                // chats is a first-class state: the alert form JS keeps the chats array when
-                // switching to FromParent (_AlertsFormCollection.cshtml), alert import preserves
-                // chats only in FromParent mode (AlertExportViewModel), and PolicyDestination.ToString
-                // has a dedicated "from parent chats, {extra}" case. The previous form returned only
-                // the inherited set and dropped Destination.Chats, silently undercounting — an admin
-                // would see "0 sensors" on a chat that actually receives alerts through this path.
-                HashSet<Guid> resolvedChats;
+                // Mirror Policy.TargetChats: when Destination.IsFromParentChats, the parent chain
+                // is unioned in FIRST, then Destination.Chats is layered on top (TryAdd semantics
+                // — explicit chats do not overwrite inherited ones). FromParent + extra chats is
+                // a first-class state: the alert form JS keeps the chats array when switching to
+                // FromParent (_AlertsFormCollection.cshtml), alert import preserves chats only in
+                // FromParent mode (AlertExportViewModel), and PolicyDestination.ToString has a
+                // dedicated "from parent chats, {extra}" case. The previous form returned only
+                // the inherited set and dropped Destination.Chats, silently undercounting.
+                //
+                // NOTE: this resolver's parent-chain walk stops at the first non-inheriting
+                // ancestor (matches the picker UI). Delivery uses a broader rule — see the
+                // divergence note in Compute().
+                IEnumerable<Guid> resolvedChats;
+                int resolvedChatCount;
                 bool resolvedIsAllChats;
 
                 if (destination.IsFromParentChats && parent is not null)
                 {
-                    var (inherited, parentIsAllChats) = ResolveInheritedChats(parent, inheritedChatsByProduct);
-                    // Copy-on-write: most FromParent policies have empty Destination.Chats, so reuse
-                    // the memoized set directly and only allocate a new HashSet when there's an
-                    // explicit chat to layer on top.
+                    var inherited = ResolveInheritedChats(parent, inheritedChatsByProduct);
+
                     if (destination.Chats.Count == 0)
                     {
+                        // Common case: FromParent with no explicit extras — reuse the memoized set
+                        // directly. UnionWith in GetEffectiveChats enumerates without mutating it.
                         resolvedChats = inherited;
+                        resolvedChatCount = inherited.Count;
                     }
                     else
                     {
-                        resolvedChats = new HashSet<Guid>(inherited);
+                        var union = new HashSet<Guid>(inherited);
                         foreach (var id in destination.Chats.Keys)
-                            resolvedChats.Add(id);
+                            union.Add(id);
+
+                        resolvedChats = union;
+                        resolvedChatCount = union.Count;
                     }
-                    // PolicyDestinationHandler.IsAllChats = parent.DefaultChats.IsAllChats && Destination.IsAllChats.
-                    resolvedIsAllChats = parentIsAllChats && destination.IsAllChats;
+
+                    // Destination.IsAllChats is mutually exclusive with IsFromParentChats
+                    // (PolicyDestinationMode.AllChats != .FromParent), so this branch is always
+                    // false — but pass it through for parity with the Custom/Empty/All branch.
+                    resolvedIsAllChats = false;
                 }
                 else
                 {
-                    resolvedChats = new HashSet<Guid>(destination.Chats.Keys);
+                    // Read Dictionary.Keys directly — no per-policy HashSet allocation.
+                    resolvedChats = destination.Chats.Keys;
+                    resolvedChatCount = destination.Chats.Count;
                     resolvedIsAllChats = destination.IsAllChats && (parent?.Settings?.DefaultChats?.Value?.IsAllChats ?? false);
                 }
 
-                if (IsAlertCapable(policy, resolvedChats.Count, resolvedIsAllChats))
+                if (IsAlertCapable(policy, resolvedChatCount, resolvedIsAllChats))
                     hasAlertCapablePolicy = true;
 
+                // chatSets.Add is unconditional — a policy with no Template, or a disabled policy,
+                // still contributes its chats. The badge is a configuration-reference count ("is
+                // this chat wired into alert config at all"), not a would-it-deliver-today count,
+                // so a half-saved policy (Template removed but Destination intact) still counts.
+                // This is asymmetric with the folder-default chats union (which IS gated on
+                // hasAlertCapablePolicy) — that gating exists specifically to avoid swamping fresh
+                // sensors with folder-default chats, not to express admissibility.
                 chatSets.Add(resolvedChats);
             }
 
@@ -196,21 +258,18 @@ namespace HSMServer.Notifications.Chats
             return (chatSets, hasAlertCapablePolicy);
         }
 
-        // Resolves the inherited chat set for a product, memoized per Compute() pass. Mirrors the
-        // (post-routing-fix) Policy.GetParentChats: single linear walk up the chain, stopping at
-        // the first ancestor whose DefaultChats.IsFromParent is false. AllChats is ANDed across
-        // the chain — true only if every visited ancestor has it set. This previously reentered
-        // itself once per ancestor (O(2^depth) allocations); the single-walk form is what the
-        // DefaultChatViewModel UI resolver already does.
-        private (HashSet<Guid> Chats, bool IsAllChats) ResolveInheritedChats(
+        // Resolves the inherited chat set for a product, memoized per Compute() pass. Single
+        // linear walk up the chain, stopping at the first ancestor whose DefaultChats.IsFromParent
+        // is false — matches the destination picker UI (DefaultChatViewModel.GetParentChats), so a
+        // non-inheriting intermediate node breaks the chain the same way the picker shows.
+        private HashSet<Guid> ResolveInheritedChats(
             ProductModel parent,
-            Dictionary<Guid, (HashSet<Guid> Chats, bool IsAllChats)> memo)
+            Dictionary<Guid, HashSet<Guid>> memo)
         {
             if (memo.TryGetValue(parent.Id, out var cached))
                 return cached;
 
             var chats = new HashSet<Guid>();
-            var isAllChats = true;
 
             for (var node = parent; node is not null; node = node.Parent)
             {
@@ -219,15 +278,12 @@ namespace HSMServer.Notifications.Chats
                 foreach (var id in curValue.Chats.Keys)
                     chats.Add(id);
 
-                isAllChats = isAllChats && curValue.IsAllChats;
-
                 if (!curValue.IsFromParent)
                     break;
             }
 
-            var entry = (chats, isAllChats);
-            memo[parent.Id] = entry;
-            return entry;
+            memo[parent.Id] = chats;
+            return chats;
         }
     }
 }

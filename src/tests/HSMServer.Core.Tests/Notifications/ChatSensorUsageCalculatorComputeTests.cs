@@ -20,10 +20,11 @@ using EntitiesFactory = HSMServer.Core.Tests.Infrastructure.EntitiesFactory;
 
 namespace HSMServer.Core.Tests.Notifications
 {
-    // Integration coverage for Compute()'s entry-point contract and for the GetParentChats
-    // routing change (PR #1327 follow-up). The GetParentChats test pins the 3-level chain with a
-    // non-inheriting middle node — the case where the old "walk every ancestor" form disagreed
-    // with the UI resolver and with the new stop-on-non-inheriting form.
+    // Integration coverage for Compute()'s entry-point contract: empty cache → empty counts,
+    // the calculator's parent-chain resolution (stops at the first non-inheriting ancestor,
+    // matching the destination picker UI — diverges from delivery routing, tracked in #1330),
+    // FromParent + explicit Destination.Chats union, and the concurrent-mutation skip path
+    // (InvalidOperationException → skipped++, UI renders "≥N sensors").
     public class ChatSensorUsageCalculatorComputeTests
     {
         [Fact]
@@ -78,10 +79,10 @@ namespace HSMServer.Core.Tests.Notifications
         // explicit chats. FromParent + extra chats is a first-class state (the alert form JS
         // keeps the chats array when switching to FromParent, alert import preserves chats only
         // in FromParent mode, and PolicyDestination.ToString has a dedicated "from parent chats,
-        // {extra}" case). Policy.TargetChats unions Destination.Chats on top of the inherited
-        // parent-chain set; the calculator used to return only the inherited set in the FromParent
-        // branch and silently drop the extras — an undercount in exactly the failure direction
-        // that matters for a blast-radius badge.
+        // {extra}" case). The calculator's FromParent branch layers Destination.Chats on top of
+        // the inherited parent-chain set; it used to return only the inherited set and silently
+        // drop the extras — an undercount in exactly the failure direction that matters for a
+        // blast-radius badge.
         [Fact]
         public void Compute_FromParentPolicyWithExtraChats_CountsBothInheritedAndExplicit()
         {
