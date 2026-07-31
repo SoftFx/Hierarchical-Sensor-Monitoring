@@ -1,0 +1,13 @@
+{
+  "enabledPlugins": {
+    "matt@hsm": true
+  },
+  "extraKnownMarketplaces": {
+    "hsm": {
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  }
+}
