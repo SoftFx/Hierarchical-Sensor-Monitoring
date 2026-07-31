@@ -57,6 +57,8 @@ namespace HSMServer.Controllers
         [TelegramRoleFilterByEditModel(nameof(model), ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> EditChat(ChatViewModel model)
         {
+            ValidateWebhooks(model);
+
             if (!ModelState.IsValid)
                 return View(model);
 
@@ -98,6 +100,8 @@ namespace HSMServer.Controllers
         [AuthorizeIsAdmin]
         public async Task<IActionResult> AddChat(ChatViewModel model)
         {
+            ValidateWebhooks(model);
+
             if (!ModelState.IsValid)
                 return View(nameof(EditChat), model);
 
@@ -220,6 +224,27 @@ namespace HSMServer.Controllers
             };
 
             return await ChatsManager.TryUpdate(update) ? Ok() : NotFound();
+        }
+
+
+        // Webhook URL validation moved server-side (was [Url] on ChatViewModel — the masked display
+        // value `https://…/••••` fails Uri.TryCreate, so the attribute was removed). The masked
+        // sentinel and empty values are "no change" and skip the check; a freshly-pasted URL must be
+        // an absolute http/https URL or the submit is rejected (parity with chats_validation.spec.ts).
+        private void ValidateWebhooks(ChatViewModel model)
+        {
+            ValidateWebhook(model.SlackWebhookUrl, nameof(ChatViewModel.SlackWebhookUrl), "Slack webhook URL must be a valid URL");
+            ValidateWebhook(model.MattermostWebhookUrl, nameof(ChatViewModel.MattermostWebhookUrl), "Mattermost webhook URL must be a valid URL");
+
+            void ValidateWebhook(string posted, string key, string errorMessage)
+            {
+                if (string.IsNullOrWhiteSpace(posted) || WebhookUrlMasker.IsMasked(posted))
+                    return;
+
+                if (!Uri.TryCreate(posted, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                    ModelState.AddModelError(key, errorMessage);
+            }
         }
 
 

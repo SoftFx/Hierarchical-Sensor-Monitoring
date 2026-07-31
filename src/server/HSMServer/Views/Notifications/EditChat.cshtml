@@ -188,7 +188,11 @@
                                 <label class="chat-form-label col-form-label" for="SlackWebhookUrl">Slack Webhook URL</label>
                             </div>
                             <div class="col-12 col-md-7">
-                                <input type="url" class="form-control" asp-for="SlackWebhookUrl" placeholder="https://hooks.slack.com/services/..." />
+                                <input type="text" class="form-control" asp-for="SlackWebhookUrl" placeholder="https://hooks.slack.com/services/..." />
+                                @if (Model.HasSlack)
+                                {
+                                    <small class="text-muted d-block mt-1">Type a new URL to replace; leave as-is to keep the current webhook.</small>
+                                }
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -215,7 +219,11 @@
                                 <label class="chat-form-label col-form-label" for="MattermostWebhookUrl">Mattermost Webhook URL</label>
                             </div>
                             <div class="col-12 col-md-7">
-                                <input type="url" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." />
+                                <input type="text" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." />
+                                @if (Model.HasMattermost)
+                                {
+                                    <small class="text-muted d-block mt-1">Type a new URL to replace; leave as-is to keep the current webhook.</small>
+                                }
                             </div>
                         </div>
                         <div class="row mb-3">

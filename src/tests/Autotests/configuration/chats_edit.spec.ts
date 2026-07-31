@@ -12,6 +12,8 @@ const chatName = uniqueName('EditChat');
 const renamedChatName = uniqueName('EditChatRenamed');
 const mattermostChatName = uniqueName('MMChat');
 const sendTestChatName = uniqueName('SendTestChat');
+const maskSlackChatName = uniqueName('MaskSlackChat');
+const maskMattermostChatName = uniqueName('MaskMattermostChat');
 
 test.afterEach(async ({ browser }) => {
   const page = await browser.newPage();
@@ -21,6 +23,8 @@ test.afterEach(async ({ browser }) => {
     await cleanup.chat(page, renamedChatName);
     await cleanup.chat(page, mattermostChatName);
     await cleanup.chat(page, sendTestChatName);
+    await cleanup.chat(page, maskSlackChatName);
+    await cleanup.chat(page, maskMattermostChatName);
   } finally {
     await page.close();
   }
@@ -111,9 +115,10 @@ test('Add and remove a Mattermost webhook chat (channel-type parity with Slack)'
   await expect(chatRow).toBeVisible();
   await expect(chatRow).toHaveAttribute('data-has-mattermost', 'true');
 
-  // --- EditChat: webhook value persisted, per-channel Remove button present ---
+  // --- EditChat: webhook value persisted (masked, #1329), per-channel Remove button present ---
   await chatRow.locator('.chat-action-btn[title="Edit"]').click();
-  await expect(page.locator('#MattermostWebhookUrl')).toHaveValue('https://hooks.mattermost.example/hooks/test');
+  // The raw webhook is never rendered (#1329); the field shows host + first path segment + `••••`.
+  await expect(page.locator('#MattermostWebhookUrl')).toHaveValue('https://hooks.mattermost.example/hooks/••••');
   await expect(page.locator('#removeMattermost')).toBeVisible();
 
   // --- Remove Mattermost clears only the webhook, chat itself stays (parity with Slack test) ---
@@ -175,6 +180,81 @@ test('EditChat: Send test Slack/Mattermost message buttons trigger the request a
   await expect(page.locator('#toast_body')).toHaveText('Test Mattermost message sent.', { timeout: 10000 });
 
   // --- Logout ---
+  await page.getByRole('link', { name: 'Logout' }).click();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+});
+
+
+// Covers #1329: the Slack/Mattermost webhook URL is a secret, so EditChat must render a masked
+// display value and never expose the raw URL in the page source or the input value attribute. The
+// masked sentinel also round-trips: saving other fields without touching the webhook keeps the
+// stored cleartext URL intact (ToUpdate treats the mask + empty as "no change").
+test('EditChat: Slack webhook is masked, raw URL is not in the page, and survives a no-change save', async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
+  const rawSecret = 'mask-coverage-secret';
+  const rotatedSecret = 'rotated-slack-secret';
+
+  // --- Login + create a Slack chat ---
+  await login(page, admin_user, admin_user_password, apiUrl);
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await page.locator('#Name').fill(maskSlackChatName);
+  await page.locator('#SlackWebhookUrl').fill(`https://hooks.slack.com/services/${rawSecret}`);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+
+  // --- Reopen EditChat: field shows the masked sentinel, not the raw URL ---
+  const chatRow = page.locator('.chat-row').filter({ hasText: maskSlackChatName });
+  await chatRow.locator('.chat-action-btn[title="Edit"]').click();
+  await expect(page.locator('#SlackWebhookUrl')).toHaveValue('https://hooks.slack.com/services/••••');
+
+  // The raw secret must not appear anywhere in the rendered HTML (covers input value attr + any
+  // incidental rendering). This is the hard acceptance criterion from #1329.
+  const pageHtml = await page.content();
+  expect(pageHtml).not.toContain(rawSecret);
+
+  // --- Save a non-webhook field without touching the webhook → stored webhook must survive ---
+  await page.locator('#Description').fill('edited without touching webhook');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+  await page.locator('.chat-row').filter({ hasText: maskSlackChatName }).locator('.chat-action-btn[title="Edit"]').click();
+  await expect(page.locator('#SlackWebhookUrl')).toHaveValue('https://hooks.slack.com/services/••••');
+
+  // --- Replace the webhook: clear, paste a new URL, save → mask reflects the new value ---
+  await page.locator('#SlackWebhookUrl').fill(`https://hooks.slack.com/services/${rotatedSecret}`);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+  await page.locator('.chat-row').filter({ hasText: maskSlackChatName }).locator('.chat-action-btn[title="Edit"]').click();
+  await expect(page.locator('#SlackWebhookUrl')).toHaveValue('https://hooks.slack.com/services/••••');
+  expect(await page.content()).not.toContain(rotatedSecret);
+
+  // --- Logout ---
+  await page.getByRole('link', { name: 'Logout' }).click();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+});
+
+
+// Mattermost parity with the Slack masking test above (#1329).
+test('EditChat: Mattermost webhook is masked and the raw URL is not in the page', async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
+  const rawSecret = 'mattermost-mask-secret';
+
+  await login(page, admin_user, admin_user_password, apiUrl);
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await page.locator('#Name').fill(maskMattermostChatName);
+  await page.getByRole('tab', { name: 'Mattermost' }).click();
+  await page.locator('#MattermostWebhookUrl').fill(`https://mattermost.example.com/hooks/${rawSecret}`);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+
+  const chatRow = page.locator('.chat-row').filter({ hasText: maskMattermostChatName });
+  await chatRow.locator('.chat-action-btn[title="Edit"]').click();
+  await expect(page.locator('#MattermostWebhookUrl')).toHaveValue('https://mattermost.example.com/hooks/••••');
+  expect(await page.content()).not.toContain(rawSecret);
+
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
 });
