@@ -39,15 +39,15 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(0, skipped);
         }
 
-        // Pins the GetParentChats routing change: with a chain root(C) → mid(Custom, not FromParent)
-        // → leaf(FromParent), calling GetParentChats(leaf) must STOP at mid and NOT include root's
-        // chats. The old code walked every ancestor unconditionally once parent.IsFromParent was
-        // true, which disagreed with DefaultChatViewModel.GetParentChats (UI resolver).
-        //
-        // The memoization path in ChatSensorUsageCalculator.ResolveInheritedChats mirrors this
-        // stop-on-non-inheriting semantics, so pinning it here guards both code paths at once.
+        // Pins the calculator's parent-chain resolution: with a chain root(C) → mid(Custom, not
+        // FromParent) → leaf(FromParent), a sensor under leaf with a FromParent policy must count
+        // mid's chats but NOT root's. ResolveInheritedChats stops at the first ancestor whose
+        // DefaultChats.IsFromParent is false. This is the calculator's own badge-counting rule —
+        // it does NOT depend on Policy.GetParentChats (which delivers alerts) and is intentionally
+        // stricter: a non-inheriting middle node breaks the inheritance for the badge the same way
+        // the destination picker UI shows.
         [Fact]
-        public void GetParentChats_StopsAtFirstNonInheritingAncestor()
+        public void Compute_FromParentUnderNonInheritingMiddle_StopsAtMiddle()
         {
             var rootChat = Guid.NewGuid();
             var midChat = Guid.NewGuid();
@@ -59,14 +59,19 @@ namespace HSMServer.Core.Tests.Notifications
             root.AddSubProduct(mid);
             mid.AddSubProduct(leaf);
 
-            // GetParentChats is internal on Policy; reach it through BooleanPolicy (no Sensor
-            // needed — GetParentChats takes parent explicitly and does not touch policy state).
-            var policy = new BooleanPolicy();
+            var provider = new Mock<IAlertScheduleProvider>().Object;
+            var sensor = BuildIntegerSensorUnder(leaf, provider);
+            AddPolicy(sensor, PolicyDestinationMode.FromParent);
 
-            var resolved = policy.GetParentChats(leaf);
+            var calc = new ChatSensorUsageCalculator(
+                CacheReturning(new[] { sensor }),
+                FolderManagerStub());
 
-            Assert.Contains(midChat, resolved.Keys);
-            Assert.DoesNotContain(rootChat, resolved.Keys);
+            var (counts, skipped) = calc.Compute();
+
+            Assert.Equal(0, skipped);
+            Assert.Equal(1, counts[midChat]);
+            Assert.False(counts.ContainsKey(rootChat));
         }
 
         // Pins that a FromParent policy with ADDITIONAL Destination.Chats still counts those
@@ -99,11 +104,11 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(1, counts[extraChat]);
         }
 
-        // Pins the contract that when EVERY ancestor in the chain is FromParent, GetParentChats
-        // walks the whole way to the root. This is the "no non-inheriting break" branch and
-        // guards against over-eager break-on-first-iteration regressions.
+        // Pins that when EVERY ancestor in the chain is FromParent, the calculator walks all the
+        // way to the root. This is the "no non-inheriting break" branch and guards against
+        // over-eager break-on-first-iteration regressions in ResolveInheritedChats.
         [Fact]
-        public void GetParentChats_AllAncestorsFromParent_WalksToRoot()
+        public void Compute_AllAncestorsFromParent_WalksToRoot()
         {
             var rootChat = Guid.NewGuid();
             var midChat = Guid.NewGuid();
@@ -116,11 +121,20 @@ namespace HSMServer.Core.Tests.Notifications
             root.AddSubProduct(mid);
             mid.AddSubProduct(leaf);
 
-            var policy = new BooleanPolicy();
+            var provider = new Mock<IAlertScheduleProvider>().Object;
+            var sensor = BuildIntegerSensorUnder(leaf, provider);
+            AddPolicy(sensor, PolicyDestinationMode.FromParent);
 
-            var resolved = policy.GetParentChats(leaf);
+            var calc = new ChatSensorUsageCalculator(
+                CacheReturning(new[] { sensor }),
+                FolderManagerStub());
 
-            Assert.Equal(new[] { leafChat, midChat, rootChat }.ToHashSet(), resolved.Keys.ToHashSet());
+            var (counts, skipped) = calc.Compute();
+
+            Assert.Equal(0, skipped);
+            Assert.Equal(1, counts[rootChat]);
+            Assert.Equal(1, counts[midChat]);
+            Assert.Equal(1, counts[leafChat]);
         }
 
 

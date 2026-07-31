@@ -94,31 +94,29 @@ namespace HSMServer.Core.Model.Policies
             }
         }
 
-        // ROUTING CHANGE (PR #1327, #1310 follow-up): single linear walk up the parent chain,
-        // stopping at the first ancestor whose DefaultChats.IsFromParent is false. The previous
-        // implementation walked every strict ancestor UNCONDITIONALLY once `parent.IsFromParent`
-        // was true, so on a chain like root(chats = {C}) → mid(mode = Custom) → leaf(FromParent)
-        // alerts would still reach root's chats. That disagreed with what the destination picker
-        // showed the user — DefaultChatViewModel.GetParentChats only recurses while each ancestor
-        // IsFromParent (matching the visible default-chats UI). This method now matches the UI
-        // resolution, so a non-inheriting intermediate node breaks the chain the same way in both
-        // places. Recipients can only shrink relative to the old behavior, and only on chains
-        // deeper than two levels with a non-inheriting middle node — there is no expansion case.
-        // This was also O(2^depth) on deep trees; the linear form is the natural shape for the
-        // stop-on-non-inheriting semantics.
         internal Dictionary<Guid, string> GetParentChats(ProductModel parent)
         {
             var dict = new Dictionary<Guid, string>();
 
-            //TODO: Add folder chats when parent.FolderId.HasValue
+            if (parent is null)
+                return dict;
 
-            for (var node = parent; node is not null; node = node.Parent)
+            foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
+                dict.TryAdd(id, name);
+
+            if (parent.Settings.DefaultChats.CurValue.IsFromParent)
             {
-                foreach (var (id, name) in node.Settings.DefaultChats.CurValue.Chats)
-                    dict.TryAdd(id, name);
+                var par = parent.Parent;
 
-                if (!node.Settings.DefaultChats.CurValue.IsFromParent)
-                    break;
+                //TODO: Add folder chats when parent.FolderId.HasValue
+
+                while (par != null)
+                {
+                    foreach (var (id, name) in GetParentChats(par))
+                        dict.TryAdd(id, name);
+
+                    par = par.Parent;
+                }
             }
 
             return dict;
