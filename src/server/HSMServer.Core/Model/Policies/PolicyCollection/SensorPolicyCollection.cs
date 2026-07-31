@@ -25,6 +25,9 @@ namespace HSMServer.Core.Model.Policies
         internal protected PolicyResult ConfimationResult { get; protected set; } = PolicyResult.Ok;
 
         internal Action<ActionType, Policy> Uploaded;
+
+        // Fires while the sensor holds its initialization lock (#1296), so subscribers must not
+        // block. Reasoning: aicontext/features/server/overview.md, BaseSensorModel<T>.
         internal Action<BaseSensorModel, bool> SensorExpired;
 
 

@@ -37,7 +37,19 @@ Typed sensor model. Manages:
 - Alert policies and conditions
 - Status computation
 
-Initialization is expected before values are accepted. Changes around `TryAddValue`, `TryUpdateLastValue`, TTL, or policy loading should include tests for first-value initialization and timeout behavior.
+Initialization is expected before values are accepted. `Initialize()` loads history from LevelDB under a per-sensor lock and publishes its `_isInitialized` flag only once that load has **finished or failed** (#1296), so the three value-ingress gates — `TryAddValue`, `TryUpdateLastValue`, `CheckTimeout` — park on the lock instead of racing past on an empty `Storage`. Two limits the contract does not cover: a failed load latches as well and leaves an empty `Storage` (deliberate — one logged error beats a per-value retry storm against a broken database), and only those three gates wait; direct readers such as `LastValue`, `HasData`, or `Revalidate()` are unguarded and may observe a mid-load sensor.
+
+**Invariant — nothing reached from inside a sensor's initialization lock may block.** This is the canonical statement; the code carries one-line pointers here rather than four copies of the reasoning.
+
+Policy evaluation runs inside that lock and fans out well past a database read: `Policies.TryValidate` → `CalculateStorageResult` → `SensorTimeout` → `SensorExpired` → `TreeValuesCache.SetExpiredSnapshot`, and from there both `SensorUpdateView` → every `ChangeSensorEvent` subscriber (view-model updates in `TreeViewModel`, panel bookkeeping in `Dashboard`) and `SendNotification` → `ConfirmationManager` → alert dispatch. So the lock is held across up to three LevelDB reads plus all of that. None of those paths takes a blocking lock today, and none may start — in particular nothing there may wait on the `UpdatesQueue`, a `SingleReader` channel (`MaxQueueSize` 1000, `FullMode.Wait`) whose reader, parked on a sensor lock, back-pressures all the way to the HTTP ingest threads.
+
+Why startup is nonetheless not serialized: **the lock is per-sensor**, so a waiter only ever blocks behind that one sensor's load. `Initialize()` is driven from several places at once — `FillSensorsData`, `CheckSensorsTimeout` → `CheckTimeout()` on each product's queue reader, `ProductModel.CheckTimeout()` from `BaseNodeModel.TryUpdate`, and the ingest path — so several sensors can be mid-load on several threads, and more than one reader can be parked at a time.
+
+Worst case worth knowing (not new — `master` does the same loads): a product-settings save during startup runs `TryUpdate` → `ProductModel.CheckTimeout()` → a serial history load for every sensor in the product, on the caller's thread, and now also stalls that product's queue reader behind each in turn. Bounded, but it is the latency ceiling this change makes visible.
+
+Direct `Storage` readers stay unguarded. One of them is a known data-loss path: `ShouldDestroy()` reads `HasData`/`LastUpdate`, and an uninitialized sensor falls back to `CreationDate` and destroys itself with its history — see #1328.
+
+Changes around `TryAddValue`, `TryUpdateLastValue`, TTL, or policy loading should include tests for first-value initialization and timeout behavior.
 
 ### ConcurrentStorage<T>
 Thread-safe in-memory storage pattern that syncs writes to LevelDB. Used for products, users, access keys, sensor configs.

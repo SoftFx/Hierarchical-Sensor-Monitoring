@@ -1046,6 +1046,8 @@ namespace HSMServer.Core.Cache
 
         private void SendNotification(Guid sensorId, PolicyResult result) => _confirmationManager.RegisterNotification(sensorId, result);
 
+        // Reachable from inside a sensor's initialization lock via SetExpiredSnapshot (#1296), so
+        // subscribers must not block. Reasoning: aicontext/features/server/overview.md.
         private void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
 
@@ -2715,6 +2717,8 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        // May run while the sensor holds its initialization lock (#1296), so nothing below — the
+        // notification path included — may block. Reasoning: aicontext/features/server/overview.md.
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
         {
             if (sensor.IsExpired != timeout)

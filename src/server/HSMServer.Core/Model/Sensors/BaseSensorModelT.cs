@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.Formatters;
@@ -27,7 +28,9 @@ namespace HSMServer.Core.Model
         private readonly IDatabaseCore _database;
 
 
-        private bool _isInitialized;
+        // volatile: TryAddValue/TryUpdateLastValue/CheckTimeout read it lock-free, and "true" must
+        // never be observable before the history load in Initialize() has finished filling Storage.
+        private volatile bool _isInitialized;
         private readonly object _lock = new();
 
         protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 
@@ -120,15 +123,26 @@ namespace HSMServer.Core.Model
             if (_isInitialized)
                 return;
 
+            // Monitor is reentrant, and _isInitialized is deliberately still false while the load
+            // runs, so a same-thread re-entry would replay the whole history load: the TryValidate
+            // calls below can reach SensorTimeout -> SensorExpired -> TryAddValue -> Initialize.
+            // Returning here stops the replay but leaves that nested caller running against a
+            // half-built Storage — #1296 on the initializing thread. Unreachable today only by an
+            // ordering accident (HasData is false at both TryValidate sites), so log it: if a
+            // policy change ever makes it reachable, this line is the only thing that will say so.
+            if (Monitor.IsEntered(_lock))
+            {
+                _logger.Warn($"Reentrant Initialize on sensor {Id} during history load — the nested value path sees a partial Storage (#1296)");
+                return;
+            }
+
             lock (_lock)
             {
+                if (_isInitialized)
+                    return;
+
                 try
                 {
-                    if (_isInitialized)
-                        return;
-
-                    _isInitialized = true;
-
                     BaseValue last, first;
                     var lastBytes = _database.GetLatestValue(Id, DateTime.MaxValue.Ticks);
                     if (lastBytes != null)
@@ -136,14 +150,19 @@ namespace HSMServer.Core.Model
                         var firstBytes = _database.GetFirstValue(Id);
 
                         last = Convert(lastBytes);
-                        first = Convert(firstBytes);
+                        // Null-guarded because the catch below now latches: a throw here would leave
+                        // _isInitialized true over an empty Storage permanently — the #1296 symptom,
+                        // no longer bounded to a startup window. Both reads are reachable as null:
+                        // retention (KeepHistory) can sweep every real value and leave only the
+                        // timeout marker SetExpiredSnapshot wrote as the newest row.
+                        first = firstBytes != null ? Convert(firstBytes) : null;
 
                         if (last.IsTimeout)
                         {
                             var valueBytes = _database.GetLatestValue(Id, last.Time.Ticks-1);
-                            var value = Convert(valueBytes);
+                            var value = valueBytes != null ? Convert(valueBytes) : null;
 
-                            if (!value.IsTimeout && Policies.TryValidate(value, out _))
+                            if (value is not null && !value.IsTimeout && Policies.TryValidate(value, out _))
                                 Storage.AddValue((T)value);
 
                             IsExpired = true;
@@ -160,9 +179,17 @@ namespace HSMServer.Core.Model
 
                     _logger.Info($"Sensor {Id} initialized {From}-{To}");
                 }
-                catch (Exception ex) 
+                catch (Exception ex)
                 {
                     _logger.Error(ex, $"Sensor initialization error {Id}");
+                }
+                finally
+                {
+                    // Published once the load has finished OR FAILED (#1296): a failed load latches
+                    // too and publishes an empty Storage, deliberately — one loud error above beats
+                    // a per-value retry storm against a broken database. Contract and its limits:
+                    // aicontext/features/server/overview.md, BaseSensorModel<T>.
+                    _isInitialized = true;
                 }
             }
 

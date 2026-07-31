@@ -85,7 +85,7 @@ namespace HSMServer.Core.Model
             if (Settings.SelfDestroy.Value == null)
                 return false;
 
-            return Settings.SelfDestroy.Value.TimeIsUp(HasData ? LastUpdate : CreationDate); 
+            return Settings.SelfDestroy.Value.TimeIsUp(HasData ? LastUpdate : CreationDate);
         }
 
         public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);
