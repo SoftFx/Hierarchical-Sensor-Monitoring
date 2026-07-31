@@ -154,6 +154,7 @@ src/tests/Autotests/test-results/
 /.claude/*
 # ...but share slash-commands, the in-repo plugin, and its enablement with the team
 !/.claude/commands/
+!/.claude/commands-parked/
 !/.claude/plugins/
 !/.claude/settings.json
 

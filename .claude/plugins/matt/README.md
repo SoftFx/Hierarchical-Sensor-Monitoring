@@ -8,12 +8,32 @@ workspace, which does not belong in a code repo.
 
 Skills load namespaced: `matt:tdd`, `matt:code-review`, `matt:grilling`. The
 namespace is what keeps `matt:code-review` from colliding with Claude Code's own
-`/code-review`.
+`/code-review`. Upstream, the skills refer to each other by bare slash — `/tdd`,
+`/code-review` — which under a namespace resolves to whatever else owns that name;
+those references are rewritten to `/matt:<name>` here, and any future snapshot
+needs the same pass. `LICENSE` is upstream's, carried with the copy as MIT requires.
 
 Wiring: [`/.claude-plugin/marketplace.json`](../../../.claude-plugin/marketplace.json)
 lists this plugin, [`/.claude/settings.json`](../../settings.json) declares the
 marketplace and enables `matt@hsm`. Nothing is installed by hand — the prompt
 appears when you trust the repo folder.
+
+## This is a trial
+
+The whole set is enabled on purpose: we are evaluating whether this way of working
+beats what we do today, and half a set answers nothing. Two consequences while the
+trial runs:
+
+- **Our overlapping slash-commands are parked**, not deleted — `/create-issue` and
+  `/work-issue` sit in [`.claude/commands-parked/`](../../commands-parked), which
+  Claude Code does not scan. Move them back to `.claude/commands/` to end the trial.
+  `/release-collector` and `/release-server` stay live; nothing here replaces them.
+- **The upstream document layout is left as the author wrote it.** These skills
+  expect one `CONTEXT.md` at the repo root and `docs/adr/`; this repo keeps its
+  canon in `aicontext/` and `docs/decisions/`. We deliberately did not repoint
+  them, so the trial shows the workflow as designed. Expect a parallel `CONTEXT.md`
+  and `docs/adr/` to appear once `domain-modeling` or `setup-matt-pocock-skills`
+  runs — reconciling or reverting that is a decision for the end of the trial.
 
 ## Turning a skill off
 

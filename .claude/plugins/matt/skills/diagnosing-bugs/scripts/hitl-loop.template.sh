@@ -14,6 +14,14 @@
 
 set -euo pipefail
 
+# Both helpers block on `read`. Without a terminal on stdin the first one hits
+# EOF and `set -e` kills the script with no output — precisely when the skill has
+# decided a human is needed. Fail loudly instead.
+if [ ! -t 0 ]; then
+  echo "hitl-loop: stdin is not a terminal — run this in the user's terminal, not through a tool call." >&2
+  exit 64
+fi
+
 step() {
   printf '\n>>> %s\n' "$1"
   read -r -p "    [Enter when done] " _
