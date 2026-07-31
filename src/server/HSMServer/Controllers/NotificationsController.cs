@@ -289,9 +289,18 @@ namespace HSMServer.Controllers
 
             void ValidateWebhook(string posted, string storedUrl, string key, string channelName)
             {
-                if (string.IsNullOrWhiteSpace(posted) && !string.IsNullOrEmpty(storedUrl))
+                // MVC binds an empty text input to null via ConvertEmptyStringToNull, so both null
+                // and "" reach here. Empty + stored webhook = the regression guard (point to Remove).
+                // Empty + no stored webhook is legitimate (new chat, or an already-cleared channel) —
+                // MUST return here, not fall through: Uri.TryCreate(null, Absolute) returns false,
+                // which would add a spurious "must be a valid URL" error to a field the user never
+                // filled in, breaking AddChat for any chat missing one of the two webhooks (#1329
+                // review).
+                if (string.IsNullOrWhiteSpace(posted))
                 {
-                    ModelState.AddModelError(key, $"Use Remove {channelName} to delete the webhook.");
+                    if (!string.IsNullOrEmpty(storedUrl))
+                        ModelState.AddModelError(key, $"Use Remove {channelName} to delete the webhook.");
+
                     return;
                 }
 
@@ -302,8 +311,10 @@ namespace HSMServer.Controllers
                     return;
                 }
 
-                // ValidatePosted returned null: either empty (no stored webhook, valid) or a real
-                // URL. Real URLs must still be well-formed absolute http/https.
+                // ValidatePosted returned null: the only remaining case is a real URL. Masked values
+                // can't reach here (IsMasked + matching Mask(stored) returned null from ValidatePosted;
+                // IsMasked + mismatch returned an error). Real URLs must be well-formed absolute
+                // http/https.
                 if (WebhookUrlMasker.IsMasked(posted))
                     return;
 

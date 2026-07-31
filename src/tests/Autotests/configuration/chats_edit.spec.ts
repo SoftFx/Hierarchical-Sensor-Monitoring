@@ -407,9 +407,11 @@ test('EditChat: a rejected webhook edit surfaces the error on the failing channe
   await expect(page.locator('[data-valmsg-for="MattermostWebhookUrl"]')).toBeVisible();
   await expect(page.locator('[data-valmsg-for="MattermostWebhookUrl"]')).toContainText('Paste the full webhook URL');
 
-  // The Slack tab carries no error and must not be the active tab — otherwise the same display:none
-  // bug could hide behind a different default-tab order.
-  await expect(page.locator('[data-valmsg-for="SlackWebhookUrl"]')).toHaveCount(0);
+  // The Slack field carries no error: ValidationMessageTagHelper always emits the <span> (only its
+  // inner text is conditional), so assert emptiness rather than count. This is the "the Slack tab
+  // has nothing to complain about" intent — without it the same display:none bug could hide behind a
+  // different default-tab order.
+  await expect(page.locator('[data-valmsg-for="SlackWebhookUrl"]')).toBeEmpty();
 
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
