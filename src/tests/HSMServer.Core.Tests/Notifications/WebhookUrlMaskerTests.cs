@@ -70,6 +70,59 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Contains("5678", masked);
         }
 
+        // Regression: a trailing slash used to defeat masking entirely. The old string-slicing took
+        // url.LastIndexOf('/'), found the trailing slash, and returned the full token verbatim with
+        // just a marker appended — the secret was in the page source and the input value attribute,
+        // exactly the leak #1329 closes. Segment-based masking (via Uri.Segments) walks back past the
+        // empty trailing segment to the real token and masks it.
+        [Fact]
+        public void Mask_TrailingSlash_MasksTheRealLastSegmentNotTheEmptyTail()
+        {
+            var masked = WebhookUrlMasker.Mask("https://hooks.slack.com/services/T0ABCDE/B0123456/abcXYZsecret/");
+
+            Assert.Equal("https://hooks.slack.com/services/T0ABCDE/B0123456/abcX••••cret", masked);
+        }
+
+        [Fact]
+        public void Mask_TrailingSlash_SecretTokenIsAbsentFromResult()
+        {
+            const string secret = "abcXYZsecret";
+
+            var masked = WebhookUrlMasker.Mask($"https://hooks.slack.com/services/T0ABCDE/B0123456/{secret}/");
+
+            Assert.DoesNotContain(secret, masked);
+        }
+
+        // Regression: a query string containing '/' used to move the split point past the token
+        // (`…/SECRETTOKEN?redirect=/x` masked the query, not the token). The query is now dropped
+        // from the display value entirely and the token segment is masked.
+        [Fact]
+        public void Mask_QueryStringWithSlash_MasksTheTokenNotTheQuery()
+        {
+            var masked = WebhookUrlMasker.Mask("https://host/hooks/SECRETTOKEN?redirect=/x");
+
+            Assert.Equal("https://host/hooks/SECR••••OKEN", masked);
+        }
+
+        [Fact]
+        public void Mask_Fragment_MasksTheTokenNotTheFragment()
+        {
+            var masked = WebhookUrlMasker.Mask("https://host/hooks/SECRETTOKEN#section");
+
+            Assert.Equal("https://host/hooks/SECR••••OKEN", masked);
+        }
+
+        // A path that is only root segments (`/`) collapses to authority + marker — same behavior as
+        // a URL with no path at all.
+        [Fact]
+        public void Mask_RootPathOnly_ShowsAuthorityAndMarker()
+        {
+            var masked = WebhookUrlMasker.Mask("https://hooks.slack.com/");
+
+            Assert.Equal("https://hooks.slack.com/••••", masked);
+            Assert.True(WebhookUrlMasker.IsMasked(masked));
+        }
+
         // A short last segment (≤ 8 chars = head+tail threshold) is shown verbatim per UX decision,
         // with the marker appended as a trailing sentinel so IsMasked stays true (otherwise the
         // round-tripped value would look like a fresh URL and overwrite the stored webhook on save).
@@ -82,14 +135,15 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.True(WebhookUrlMasker.IsMasked(masked));
         }
 
-        // A webhook URL with no path (no '/' after the host) gets the marker appended so IsMasked
-        // stays true; nothing recognition-worthy is leaked since there's no token to show.
+        // A webhook URL with no path (no '/' after the host) collapses to authority + marker. Uri
+        // still reports Segments=["/"] for the implicit root, so the slash appears before the marker;
+        // nothing recognition-worthy is leaked since there's no token to show.
         [Fact]
         public void Mask_UrlWithoutPath_AppendsMarker()
         {
             var masked = WebhookUrlMasker.Mask("https://hooks.slack.com");
 
-            Assert.Equal("https://hooks.slack.com••••", masked);
+            Assert.Equal("https://hooks.slack.com/••••", masked);
             Assert.True(WebhookUrlMasker.IsMasked(masked));
         }
 

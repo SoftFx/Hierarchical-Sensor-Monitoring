@@ -12,6 +12,10 @@ namespace HSMServer.Notifications
     // The marker doubles as the POST sentinel: EditChat posts the masked value back when the admin
     // didn't replace the webhook, and ChatViewModel.ToUpdate treats any IsMasked value as "no change"
     // (null in the ChatUpdate → Chat.ApplyUpdate keeps the stored URL).
+    //
+    // Masking is segment-based via Uri parsing, NOT raw string slicing, so trailing slashes and
+    // query strings don't move the split point past the secret token (regression coverage lives in
+    // WebhookUrlMaskerTests).
     public static class WebhookUrlMasker
     {
         public const string MaskMarker = "••••";
@@ -29,24 +33,53 @@ namespace HSMServer.Notifications
             if (string.IsNullOrWhiteSpace(url))
                 return null;
 
-            // Find the last '/' that is NOT part of `scheme://`. Without this guard, a URL with no
-            // real path (`https://hooks.slack.com`) would mask the host itself. `schemeIndex` points
-            // at the second slash of `://`; only slashes after it count as path separators.
-            var schemeIndex = url.IndexOf("://", StringComparison.Ordinal);
-            var searchFrom = schemeIndex >= 0 ? schemeIndex + 3 : 0;
-            var lastSlash = url.LastIndexOf('/');
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !uri.IsFile)
+                return MaskAbsoluteUri(uri);
 
-            if (lastSlash < searchFrom)
-                return url + MaskMarker;
-
-            var head = url.Substring(0, lastSlash + 1); // includes the trailing '/'
-            var lastSegment = url.Substring(lastSlash + 1);
-            return head + MaskLastSegment(lastSegment);
+            // Unparseable input (rare for a stored webhook) — fall back to masking everything after
+            // the first '/' so the host-ish prefix survives. This path is best-effort; the structured
+            // path above is the one real webhook URLs take.
+            var firstSlash = url.IndexOf('/', StringComparison.Ordinal);
+            return firstSlash < 0 ? url + MaskMarker : url.Substring(0, firstSlash + 1) + MaskMarker;
         }
 
         // True iff url carries the mask marker — i.e. it's a value we (or someone typing the literal
         // bullets) emitted, not a real webhook URL. Real URLs never contain `••••`.
         public static bool IsMasked(string url) => url != null && url.Contains(MaskMarker);
+
+        // Rebuild the display value from the URI's structured parts: authority verbatim + every path
+        // segment except the last non-empty one verbatim + the last non-empty segment masked. Query
+        // and fragment are dropped from the display value (they're not needed to recognize the
+        // webhook and a `?redirect=/x` query must not move the mask split past the token).
+        private static string MaskAbsoluteUri(Uri uri)
+        {
+            var authority = uri.GetLeftPart(UriPartial.Authority);
+            var segments = uri.Segments;
+
+            // uri.Segments is `/`-prefixed and never empty for an absolute URI (worst case: ["/"]).
+            // Walk back from the end to find the last segment that carries a non-slash token; a
+            // trailing-slash URL (`…/token/`) has its last real segment one step before the end.
+            var lastIdx = -1;
+            for (var i = segments.Length - 1; i >= 0; i--)
+            {
+                if (!string.IsNullOrWhiteSpace(segments[i]) && segments[i] != "/")
+                {
+                    lastIdx = i;
+                    break;
+                }
+            }
+
+            if (lastIdx < 0)
+                return authority + "/" + MaskMarker;
+
+            // Leading segments verbatim (each already carries its trailing '/'); then the masked
+            // last segment WITHOUT its trailing slash (slashes after the token were display noise).
+            var prefix = new System.Text.StringBuilder();
+            for (var i = 0; i < lastIdx; i++)
+                prefix.Append(segments[i]);
+            var lastSegment = segments[lastIdx].TrimEnd('/');
+            return authority + prefix.ToString() + MaskLastSegment(lastSegment);
+        }
 
         // Reduces the last path segment to `head4 + MaskMarker + tail4`. A short segment (≤ 8 chars)
         // is shown verbatim per UX decision, with the marker appended as a trailing sentinel so
