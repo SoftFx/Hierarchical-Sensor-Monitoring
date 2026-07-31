@@ -16,7 +16,8 @@ namespace HSMServer.Core.Tests.Notifications
 
             var set = ChatSensorUsageCalculator.GetEffectiveChats(
                 policyChatSets: new[] { new[] { chatX }, new[] { chatX } },
-                folderDefaultChats: null);
+                folderDefaultChats: null,
+                includeFolderChats: false);
 
             Assert.Single(set);
             Assert.Contains(chatX, set);
@@ -30,7 +31,8 @@ namespace HSMServer.Core.Tests.Notifications
 
             var set = ChatSensorUsageCalculator.GetEffectiveChats(
                 policyChatSets: new[] { new[] { chatX }, new[] { chatX, chatY } },
-                folderDefaultChats: null);
+                folderDefaultChats: null,
+                includeFolderChats: false);
 
             Assert.Equal(2, set.Count);
             Assert.Contains(chatX, set);
@@ -38,14 +40,15 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         [Fact]
-        public void FolderDefaultChats_UnionedWithPolicyChats()
+        public void FolderDefaultChats_UnionedWithPolicyChats_WhenIncluded()
         {
             var chatX = Guid.NewGuid();
             var chatY = Guid.NewGuid();
 
             var set = ChatSensorUsageCalculator.GetEffectiveChats(
                 policyChatSets: new[] { new[] { chatX } },
-                folderDefaultChats: new[] { chatY });
+                folderDefaultChats: new[] { chatY },
+                includeFolderChats: true);
 
             Assert.Equal(2, set.Count);
             Assert.Contains(chatX, set);
@@ -59,28 +62,33 @@ namespace HSMServer.Core.Tests.Notifications
 
             var set = ChatSensorUsageCalculator.GetEffectiveChats(
                 policyChatSets: new[] { new[] { chatX } },
-                folderDefaultChats: new[] { chatX });
+                folderDefaultChats: new[] { chatX },
+                includeFolderChats: true);
 
             Assert.Single(set);
         }
 
+        // Pins the rule that folder-default chats are folded in ONLY when the sensor has at least
+        // one alert-capable policy — mirroring TreeValuesCache.SendAlertMessage, which injects
+        // folder.DefaultChats per alert rather than unconditionally per sensor. With
+        // includeFolderChats=false the folder chat is dropped even though it was passed in.
         [Fact]
-        public void NoPolicyChats_OnlyFolderDefaultChats_Counted()
+        public void FolderDefaultChats_NotIncluded_DroppedEvenWhenPassed()
         {
             var chatY = Guid.NewGuid();
 
             var set = ChatSensorUsageCalculator.GetEffectiveChats(
                 policyChatSets: Enumerable.Empty<IEnumerable<Guid>>(),
-                folderDefaultChats: new[] { chatY });
+                folderDefaultChats: new[] { chatY },
+                includeFolderChats: false);
 
-            Assert.Single(set);
-            Assert.Contains(chatY, set);
+            Assert.Empty(set);
         }
 
         [Fact]
         public void NullInputs_YieldEmptySet()
         {
-            var set = ChatSensorUsageCalculator.GetEffectiveChats(null, null);
+            var set = ChatSensorUsageCalculator.GetEffectiveChats(null, null, includeFolderChats: false);
             Assert.Empty(set);
         }
 
@@ -91,7 +99,8 @@ namespace HSMServer.Core.Tests.Notifications
 
             var set = ChatSensorUsageCalculator.GetEffectiveChats(
                 policyChatSets: new IEnumerable<Guid>[] { null, Enumerable.Empty<Guid>(), new[] { chatX } },
-                folderDefaultChats: null);
+                folderDefaultChats: null,
+                includeFolderChats: false);
 
             Assert.Single(set);
             Assert.Contains(chatX, set);
@@ -108,7 +117,8 @@ namespace HSMServer.Core.Tests.Notifications
 
             var set = ChatSensorUsageCalculator.GetEffectiveChats(
                 policyChatSets: new[] { new[] { chatX }, new[] { chatY } },
-                folderDefaultChats: null);
+                folderDefaultChats: null,
+                includeFolderChats: false);
 
             Assert.Equal(2, set.Count);
         }

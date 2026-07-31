@@ -94,31 +94,23 @@ namespace HSMServer.Core.Model.Policies
             }
         }
 
+        // Single linear walk up the parent chain, stopping at the first ancestor whose
+        // DefaultChats.IsFromParent is false. Previously this reentered itself for every ancestor
+        // in the while-loop, producing O(2^depth) chat dictionaries on deep product trees; the
+        // union semantics (TryAdd) are unchanged.
         internal Dictionary<Guid, string> GetParentChats(ProductModel parent)
         {
             var dict = new Dictionary<Guid, string>();
 
-            if (parent is null)
-                return dict;
+            //TODO: Add folder chats when parent.FolderId.HasValue
 
-            foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
-                dict.TryAdd(id, name);
-
-            if (parent.Settings.DefaultChats.CurValue.IsFromParent)
+            for (var node = parent; node is not null; node = node.Parent)
             {
-                var par = parent.Parent;
+                foreach (var (id, name) in node.Settings.DefaultChats.CurValue.Chats)
+                    dict.TryAdd(id, name);
 
-                //TODO: Add folder chats when parent.FolderId.HasValue
-
-                while (par != null)
-                {
-                    foreach (var (id, name) in GetParentChats(par))
-                        dict.TryAdd(id, name);
-
-                    par = par.Parent;
-                }
-
-                return dict;
+                if (!node.Settings.DefaultChats.CurValue.IsFromParent)
+                    break;
             }
 
             return dict;
