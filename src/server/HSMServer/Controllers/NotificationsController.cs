@@ -64,7 +64,18 @@ namespace HSMServer.Controllers
             ValidateWebhooks(model, stored);
 
             if (!ModelState.IsValid)
+            {
+                // Re-render must carry the server-owned folder data, not the model-bound shell.
+                // ChatFoldersViewModel.DisplayFolders is get-only and populated only by the server
+                // ctor; the form never posts it, so the re-render would otherwise drop the folders
+                // table AND the hidden Folders.Folders[i] inputs. The next Save (the user pasting the
+                // full URL as the error tells them to) would then post empty Folders, and SyncFolders
+                // would unbind the chat from every managed folder (#1329 review).
+                if (stored is not null)
+                    model.Folders = BuildChatFolders(stored);
+
                 return View(model);
+            }
 
             if (await ChatsManager.TryUpdate(model.ToUpdate()))
                 await SyncFolders(model);
@@ -111,7 +122,14 @@ namespace HSMServer.Controllers
             ValidateWebhooks(model, stored);
 
             if (!ModelState.IsValid)
+            {
+                // Same folder-rebuild as EditChat POST — see there for why the server-owned folder
+                // data must be repopulated before re-render or the next Save unbinds folders.
+                if (stored is not null)
+                    model.Folders = BuildChatFolders(stored);
+
                 return View(nameof(EditChat), model);
+            }
 
             // The user may have already triggered /start against the pre-allocated guid, in which
             // case the Chat row exists in storage with a Telegram binding but no admin-set name.

@@ -15,6 +15,8 @@ const sendTestChatName = uniqueName('SendTestChat');
 const maskSlackChatName = uniqueName('MaskSlackChat');
 const maskMattermostChatName = uniqueName('MaskMattermostChat');
 const partialEditChatName = uniqueName('PartialEditChat');
+const folderBindingChatName = uniqueName('FolderBindingChat');
+const folderBindingFolderName = uniqueName('FolderBindingFldr');
 
 test.afterEach(async ({ browser }) => {
   const page = await browser.newPage();
@@ -27,6 +29,8 @@ test.afterEach(async ({ browser }) => {
     await cleanup.chat(page, maskSlackChatName);
     await cleanup.chat(page, maskMattermostChatName);
     await cleanup.chat(page, partialEditChatName);
+    await cleanup.chat(page, folderBindingChatName);
+    await cleanup.folder(page, folderBindingFolderName);
   } finally {
     await page.close();
   }
@@ -307,6 +311,76 @@ test('EditChat: a partial edit of the masked webhook is rejected, stored value u
   await page.locator('.chat-row').filter({ hasText: partialEditChatName }).locator('.chat-action-btn[title="Edit"]').click();
   await expect(page.locator('#MattermostWebhookUrl')).toHaveValue(`https://${originalHost}/hooks/orig••••oken`);
   expect(await page.content()).not.toContain(editedHost);
+
+  await page.getByRole('link', { name: 'Logout' }).click();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+});
+
+
+// Regression for #1329 review: when EditChat POST rejects a partial mask edit, the re-render must
+// carry the server-owned folder data (Connected folders table + the hidden Folders.Folders[i]
+// inputs). The POST-bound ChatViewModel has DisplayFolders empty (get-only, never posted), so
+// without a rebuild the next Save — the user pasting the full URL as the error tells them to —
+// posts empty Folders and SyncFolders unbinds the chat from every managed folder. For an admin
+// that means every folder; the rotation looks successful while the chat silently stops receiving
+// alerts from everywhere.
+test('EditChat: a rejected webhook edit preserves folder bindings across the re-save', async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password, folder_description, folder_color } = testConfig;
+
+  // --- Login + create a Slack chat ---
+  await login(page, admin_user, admin_user_password, apiUrl);
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await page.locator('#Name').fill(folderBindingChatName);
+  await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/binding-test-secret');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+
+  // --- Create a folder and bind the chat to it via the folder's Chats tab ---
+  await page.getByRole('link', { name: 'Products' }).click();
+  await page.getByRole('link', { name: 'Add folder' }).click();
+  await page.getByRole('textbox', { name: 'Name' }).fill(folderBindingFolderName);
+  await page.getByRole('textbox', { name: 'Description' }).fill(folder_description);
+  await page.locator('#Color').fill(folder_color);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue(folderBindingFolderName);
+
+  await page.getByRole('tab', { name: 'Chats' }).click();
+  const picker = page.locator('#chatsSelect .bootstrap-select');
+  await picker.locator('button.dropdown-toggle').click();
+  await picker.locator('.dropdown-menu').locator('li, a').filter({ hasText: folderBindingChatName }).first().click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/EditFolder|Folder/);
+
+  // --- EditChat: the chat now shows the folder under "Connected folders" ---
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await page.locator('.chat-row').filter({ hasText: folderBindingChatName }).locator('.chat-action-btn[title="Edit"]').click();
+  await expect(page.getByText('Connected folders')).toBeVisible();
+  await expect(page.locator('table').filter({ hasText: folderBindingFolderName })).toBeVisible();
+
+  // --- Partially edit the masked webhook → rejected with an inline error, form stays on EditChat ---
+  const masked = await page.locator('#SlackWebhookUrl').inputValue();
+  await page.locator('#SlackWebhookUrl').fill(masked.replace('hooks.slack.com', 'hooks.different.host'));
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/EditChat/);
+  await expect(page.locator('[data-valmsg-for="SlackWebhookUrl"]')).toContainText('Paste the full webhook URL');
+
+  // The Connected folders table must still be rendered after the rejection — that is the bug: the
+  // re-render used to drop it along with the hidden Folders.Folders[i] inputs.
+  await expect(page.locator('table').filter({ hasText: folderBindingFolderName })).toBeVisible();
+
+  // --- Do what the error says: paste the full URL and Save again ---
+  await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/rotated-binding-secret');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+
+  // --- Reopen EditChat → the folder binding must have survived the rejected-then-successful save.
+  // Without the rebuild-on-reject fix, SyncFolders would have unbound the chat from the folder on
+  // the second Save because the rejection re-render posted an empty Folders list.
+  await page.locator('.chat-row').filter({ hasText: folderBindingChatName }).locator('.chat-action-btn[title="Edit"]').click();
+  await expect(page.locator('table').filter({ hasText: folderBindingFolderName })).toBeVisible();
 
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
