@@ -1,8 +1,11 @@
 # HSM Server
 
-## Restore
-* New Alert Template restore wizard: import alert templates from a backup file into the current server, with existing templates detected and marked, and camelCase field mapping preserved.
+## Chats
+* Added per-chat sensor usage count badge so operators can see how many sensors feed each chat at a glance.
 
-## Bug fixes
-* Fixed silent wipe of alert templates on server restart caused by erroneous deduplication compaction; the misleading compaction hint was also removed.
-* Backup restore now creates the target directory before opening the backup database, preventing a failure on fresh paths.
+## Sensors
+* Top CPU sensors are now nested under the `.computer` node, matching the parent-node convention used by the rest of the tree.
+* Sensor initialization now publishes its `initialized` flag only after the history load completes, with same-thread re-entry guarded — previously a latch-on-failure could lock the sensor into an unreadable state on startup.
+
+## Dependencies
+* Bundled `HSMDataCollector` 3.5.0.
