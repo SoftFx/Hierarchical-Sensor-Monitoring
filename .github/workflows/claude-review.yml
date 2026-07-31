@@ -64,10 +64,12 @@ jobs:
           claude_args: >-
             --verbose
             --allowedTools "Bash(gh pr diff*),Bash(gh pr view*),Write"
-          # Kept for in-log diagnosis — reading the raw tool results in the job log is how the
-          # API-limit failure that motivated this workflow change was identified. It no longer
-          # feeds an artifact: claude-execution-output.json is deliberately not archived.
-          show_full_output: true
+          # show_full_output is deliberately NOT enabled. Its own description warns that it prints
+          # every Claude message including raw tool results, "which may contain secrets, API keys,
+          # or other sensitive information", into logs that are publicly visible — and this repo
+          # is public. A write-scoped GH_TOKEN sits in the agent's environment, so one `env` or
+          # `git remote -v` in the transcript would publish it. The action's own error line (e.g.
+          # the API usage limit that motivated this workflow change) is in the log without it.
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -220,11 +222,10 @@ jobs:
           # the artifact the first attempt already uploaded, and fail on a path this PR makes
           # more likely to be taken.
           name: claude-logs-${{ github.run_attempt }}
-          # claude-execution-output.json is deliberately NOT collected. show_full_output puts raw
-          # tool results in it, and a write-scoped GH_TOKEN sits in the agent's environment — one
-          # `env` while orienting itself would archive a live token. GitHub masks secrets in logs
-          # but does not scrub artifact contents, and retention outlives the token. The two files
-          # below carry everything anyone actually wants; agent diagnostics stay in the job log.
+          # claude-execution-output.json is deliberately NOT collected — same reasoning as
+          # show_full_output above, and worse here: GitHub masks secrets in logs but does not
+          # scrub artifact contents, and retention outlives the token. The files below carry
+          # everything anyone actually wants.
           path: |
             review_body.md
             review_output.md
