@@ -253,10 +253,13 @@
                 </div>
             }
 
-            <div class="chat-edit-section d-flex justify-content-end gap-2">
-                <a href="@Url.Action(nameof(NotificationsController.Index), ViewConstants.NotificationsController)"
-                   class="btn btn-outline-secondary chat-cancel-btn">Cancel</a>
-                <button type="submit" class="btn chat-save-btn">Save</button>
+            <div class="chat-edit-section">
+                <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="@Url.Action(nameof(NotificationsController.Index), ViewConstants.NotificationsController)"
+                       class="btn btn-outline-secondary chat-cancel-btn">Cancel</a>
+                    <button type="submit" class="btn chat-save-btn">Save</button>
+                </div>
             </div>
         </div>
     </form>

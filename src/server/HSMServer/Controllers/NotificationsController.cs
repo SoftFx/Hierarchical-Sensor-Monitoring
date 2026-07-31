@@ -74,6 +74,14 @@ namespace HSMServer.Controllers
                 if (stored is not null)
                     model.Folders = BuildChatFolders(stored);
 
+                // Land the user on the tab whose field actually has the error. EditChat.cshtml
+                // renders asp-validation-for spans inside .tab-pane fade divs that are display:none
+                // unless that tab is active; without this the default-tab heuristic (telegram → slack
+                // → mattermost) hides the rejection on most chat configurations — e.g. a Telegram-
+                // bound chat with a Slack webhook lands on the telegram tab and the Slack error is
+                // invisible, recreating exactly the silent-rotation failure the guard exists to fix.
+                SetTabFromWebhookErrors();
+
                 return View(model);
             }
 
@@ -127,6 +135,10 @@ namespace HSMServer.Controllers
                 // data must be repopulated before re-render or the next Save unbinds folders.
                 if (stored is not null)
                     model.Folders = BuildChatFolders(stored);
+
+                // And the same tab-routing — see EditChat POST for why the failing field's tab must
+                // become active or the rejection error is rendered into a display:none pane.
+                SetTabFromWebhookErrors();
 
                 return View(nameof(EditChat), model);
             }
@@ -284,6 +296,22 @@ namespace HSMServer.Controllers
                     (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
                     ModelState.AddModelError(key, "Webhook URL must be a valid URL");
             }
+        }
+
+        // Routes the re-rendered EditChat form to the tab whose webhook field actually has an error,
+        // so the asp-validation-for span (rendered inside a display:none .tab-pane unless the tab is
+        // active) is visible. EditChat.cshtml honors ViewData["Tab"] over its default-tab heuristic;
+        // both POST actions call this right before return View(model). Slack wins over Mattermost
+        // when both error (arbitrary but deterministic), matching the default-tab fallback's order.
+        private void SetTabFromWebhookErrors()
+        {
+            if (HasWebhookErrors(nameof(ChatViewModel.SlackWebhookUrl)))
+                ViewData["Tab"] = "slack";
+            else if (HasWebhookErrors(nameof(ChatViewModel.MattermostWebhookUrl)))
+                ViewData["Tab"] = "mattermost";
+
+            bool HasWebhookErrors(string key) =>
+                ModelState.ContainsKey(key) && ModelState[key].Errors.Count > 0;
         }
 
 

@@ -17,6 +17,7 @@ const maskMattermostChatName = uniqueName('MaskMattermostChat');
 const partialEditChatName = uniqueName('PartialEditChat');
 const folderBindingChatName = uniqueName('FolderBindingChat');
 const folderBindingFolderName = uniqueName('FolderBindingFldr');
+const dualChannelChatName = uniqueName('DualChannelChat');
 
 test.afterEach(async ({ browser }) => {
   const page = await browser.newPage();
@@ -30,6 +31,7 @@ test.afterEach(async ({ browser }) => {
     await cleanup.chat(page, maskMattermostChatName);
     await cleanup.chat(page, partialEditChatName);
     await cleanup.chat(page, folderBindingChatName);
+    await cleanup.chat(page, dualChannelChatName);
     await cleanup.folder(page, folderBindingFolderName);
   } finally {
     await page.close();
@@ -317,7 +319,57 @@ test('EditChat: a partial edit of the masked webhook is rejected, stored value u
 });
 
 
-// Regression for #1329 review: when EditChat POST rejects a partial mask edit, the re-render must
+// Regression for #1329 review: the rejection error span lives INSIDE the .tab-pane for its channel,
+// and a .tab-pane is display:none unless its tab is active. Without SetTabFromWebhookErrors the
+// default-tab heuristic (telegram → slack → mattermost) hides the rejection for any chat whose
+// failing channel is not the heuristic's pick. This test covers the Slack+Mattermost case (Telegram
+// binding can't be simulated in Playwright without a live bot-invite flow, but Slack+Mattermost
+// fails the same way: default-tab lands on Slack, so a Mattermost-only error would be invisible).
+// SetTabFromWebhookErrors must switch the active tab to the failing field's channel.
+test('EditChat: a rejected webhook edit surfaces the error on the failing channel\'s tab', async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
+
+  // --- Login + create a chat with BOTH Slack and Mattermost webhooks ---
+  await login(page, admin_user, admin_user_password, apiUrl);
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await page.locator('#Name').fill(dualChannelChatName);
+  await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/dual-channel-slack');
+  await page.getByRole('tab', { name: 'Mattermost' }).click();
+  await page.locator('#MattermostWebhookUrl').fill('https://mattermost.example.com/hooks/dual-channel-mm');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+
+  // --- Reopen EditChat. Default-tab heuristic picks Slack (both channels configured → falls
+  // through to "slack" per EditChat.cshtml:26-30). Verify that assumption before the rejection.
+  await page.locator('.chat-row').filter({ hasText: dualChannelChatName }).locator('.chat-action-btn[title="Edit"]').click();
+  await expect(page.locator('#slack-tab')).toHaveClass(/\bactive\b/);
+  await expect(page.locator('#mattermost-tab')).not.toHaveClass(/\bactive\b/);
+
+  // --- Partially edit only the MATTERMOST webhook (switch to its tab first to type, then submit) ---
+  await page.getByRole('tab', { name: 'Mattermost' }).click();
+  const masked = await page.locator('#MattermostWebhookUrl').inputValue();
+  await page.locator('#MattermostWebhookUrl').fill(masked.replace('mattermost.example.com', 'mattermost.tampered.host'));
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  // --- The save is rejected and the form re-renders ON THE MATTERMOST TAB — not the Slack tab the
+  // default heuristic would pick. The asp-validation-for span is inside the Mattermost .tab-pane;
+  // it's only visible if the Mattermost tab is active. Before SetTabFromWebhookErrors this was
+  // rendered into a display:none Slack-tab DOM and the admin saw an unchanged-looking form.
+  await expect(page).toHaveURL(/EditChat/);
+  await expect(page.locator('#mattermost-tab')).toHaveClass(/\bactive\b/);
+  await expect(page.locator('#slack-tab')).not.toHaveClass(/\bactive\b/);
+  await expect(page.locator('[data-valmsg-for="MattermostWebhookUrl"]')).toBeVisible();
+  await expect(page.locator('[data-valmsg-for="MattermostWebhookUrl"]')).toContainText('Paste the full webhook URL');
+
+  // The Slack tab carries no error and must not be the active tab — otherwise the same display:none
+  // bug could hide behind a different default-tab order.
+  await expect(page.locator('[data-valmsg-for="SlackWebhookUrl"]')).toHaveCount(0);
+
+  await page.getByRole('link', { name: 'Logout' }).click();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+});
 // carry the server-owned folder data (Connected folders table + the hidden Folders.Folders[i]
 // inputs). The POST-bound ChatViewModel has DisplayFolders empty (get-only, never posted), so
 // without a rebuild the next Save — the user pasting the full URL as the error tells them to —
