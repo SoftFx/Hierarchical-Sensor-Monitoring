@@ -6,32 +6,70 @@ on:
     # (marking ready does not emit a synchronize event).
     types: [opened, synchronize, reopened, ready_for_review]
 
+# Each review is a paid API call, and the incident that motivated fail-loud was an API usage
+# limit. Without this, ten pushes to one PR buy ten reviews and ten competing check results.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   claude-review:
     # Skip review while the PR is a draft. This workflow only triggers on pull_request,
     # so the draft flag is always present.
-    if: github.event.pull_request.draft == false
+    # Same-repo heads only. Two reasons, and do NOT relax this to "get fork coverage back":
+    #  1. Security, and this restriction IS the boundary — not --allowedTools. Read-only shell
+    #     commands run without being on that list (observed: ls, git log, git remote -v); the
+    #     allowlist gates writes. The job also holds a write-scoped GITHUB_TOKEN the agent's shell
+    #     can reach. Feeding that agent a diff written by an untrusted contributor is a
+    #     prompt-injection surface, and same-repo heads are what closes it.
+    #  2. It cannot work anyway: GitHub withholds repository secrets from forked-repo events, so
+    #     ANTHROPIC_API_KEY is empty and pull-requests write is downgraded to read.
+    # Caveat: branch protection counts a skipped job as satisfying a required check, so if this
+    # check is ever made required, fork PRs pass it unreviewed and must be reviewed by hand.
+    #
+    # Dependabot is excluded for the same structural reason as forks: its pull_request events read
+    # from the separate Dependabot secret store, so ANTHROPIC_API_KEY is empty and every such PR
+    # would go permanently red. (No dependabot.yml exists today — this is here so enabling it
+    # later does not silently break the check.)
+    if: >-
+      github.event.pull_request.draft == false
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
-      issues: write
+      pull-requests: write # gh pr comment; issues: write is not needed for it
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          # Without this the checkout token sits in the remote URL, where `git remote -v` prints
+          # it in cleartext. Nothing here needs it: the agent and the post step authenticate
+          # through GH_TOKEN. This closes one route, not the class — a write-scoped token is still
+          # in the agent's shell environment, which is why the transcript is no longer archived
+          # (see the artifact step) and why the same-repo restriction is the real boundary.
+          persist-credentials: false
 
+      # No continue-on-error: a review that did not run must fail the check —
+      # otherwise API-limit/auth failures silently produce a green "pass" with no review.
       - uses: anthropics/claude-code-action@v1
         id: claude
-        continue-on-error: true
+        # Bounded so a wedged agent fails in 20 minutes instead of holding the runner — and the
+        # check — for the 6-hour default. Full reviews here run in ~3 minutes.
+        timeout-minutes: 20
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           base_branch: master
           claude_args: >-
             --verbose
-            --allowedTools "Bash(gh pr comment*),Bash(gh pr diff*),Bash(gh pr view*),Bash(git diff*),Bash(git log*),Write"
-          show_full_output: true
+            --allowedTools "Bash(gh pr diff*),Bash(gh pr view*),Write"
+          # show_full_output is deliberately NOT enabled. Its own description warns that it prints
+          # every Claude message including raw tool results, "which may contain secrets, API keys,
+          # or other sensitive information", into logs that are publicly visible — and this repo
+          # is public. A write-scoped GH_TOKEN sits in the agent's environment, so one `env` or
+          # `git remote -v` in the transcript would publish it. The action's own error line (e.g.
+          # the API usage limit that motivated this workflow change) is in the log without it.
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -43,24 +81,169 @@ jobs:
             - Code quality and maintainability
             - Performance issues
 
-            Use `git diff origin/${{ github.base_ref }}...origin/${{ github.head_ref }}` to see the changes.
-            Write your review to review_output.md, then post it:
-            gh pr comment ${{ github.event.pull_request.number }} --body-file review_output.md
+            Use `gh pr diff ${{ github.event.pull_request.number }}` to see the changes. Do not
+            reach for `git diff origin/<base>...origin/<head>`: this job checks out the PR merge
+            ref, so the head branch ref is not fetched, and depth-1 leaves no merge base.
 
-      - name: Dump review output (on failure)
-        if: always() && steps.claude.outcome == 'failure'
+            Write your review to review_output.md and stop there. Do NOT post it — the workflow
+            posts that file itself, so that delivery is a deterministic step outcome rather than
+            something inferred from whether you followed an instruction.
+
+      # Delivery is a workflow step, not an instruction to the model. A green action is not proof
+      # of a review — the agent can exit 0 after a turn/output limit — and inferring delivery from
+      # "a bot comment appeared" was unsound: claude-agent.yml also replies as github-actions[bot],
+      # so an unrelated @claude reply could satisfy the gate while this review silently produced
+      # nothing. Posting here makes the gated property the exit status of this step.
+      # !cancelled(), not always(): a review that exists must reach the PR even if the agent step
+      # then failed — a late API error or the timeout firing during teardown would otherwise
+      # discard a finished review, which is this PR's own failure shape one step later. The check
+      # still goes red. But always() also fires on cancellation, and cancel-in-progress means a
+      # superseded run would then post a review of a commit that has already been replaced.
+      - name: Post the review
+        id: post
+        if: ${{ !cancelled() && steps.claude.outcome != 'skipped' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          agent_outcome='${{ steps.claude.outcome }}'
+
+          # Whitespace-only counts as nothing written. Deliberately no length floor beyond that:
+          # "No issues found in this diff." is a legitimate 29-byte review, and failing the check
+          # on it would both lose the review and annotate something untrue.
+          visible=0
+          if [ -f review_output.md ]; then
+            visible=$(tr -d '[:space:]' < review_output.md | wc -c)
+          fi
+
+          if [ "$visible" -eq 0 ]; then
+            if [ "$agent_outcome" = "success" ]; then
+              echo "::error title=Claude review::The agent exited 0 without writing a review."
+            fi
+
+            exit 1
+          fi
+
+          size=$(wc -c < review_output.md)
+
+          # GitHub rejects comment bodies over 65536 characters with a 422, which would fail this
+          # step. That scales with PR size, so it would fire on exactly the PRs most needing a
+          # review. wc -c counts bytes, so this is conservative for multi-byte characters.
+          MAX=60000
+          truncated=""
+          if [ "$size" -gt "$MAX" ]; then
+            # Keep the full text: the notice below points at the artifact, and the artifact
+            # collects review_output.md — which is about to become the truncated version.
+            cp review_output.md review_full.md
+
+            # iconv -c drops the partial UTF-8 sequence head -c can leave at the cut. Judge it by
+            # its OUTPUT, not its exit status: GNU iconv -c omits invalid sequences but still
+            # exits non-zero on an incomplete one at end of input — precisely the case this
+            # exists for, so keying on the status would discard the cleaned file every time.
+            # An empty result means iconv is missing or unusable; then the raw cut is kept, since
+            # gh renders stray bytes as U+FFFD and losing the review would be the worse outcome.
+            head -c "$MAX" review_output.md > review_cut.md
+            iconv -c -f utf-8 -t utf-8 review_cut.md > review_trimmed.md || true
+
+            if [ -s review_trimmed.md ]; then
+              rm -f review_cut.md
+            else
+              mv review_cut.md review_trimmed.md
+            fi
+
+            mv review_trimmed.md review_output.md
+            truncated=yes
+            echo "::warning title=Claude review::Review was $size bytes and got truncated to fit GitHub's comment limit."
+          fi
+
+          # Everything the workflow adds goes at the TOP of the body. A byte-offset cut can leave
+          # an unclosed code fence, and a fence only swallows what FOLLOWS it — so a header is
+          # unconditionally safe and needs no fence repair (parity counting cannot handle nested
+          # or cut-in-half fences anyway). It also means the marker survives on the pathological
+          # input where the whole review is one huge code block.
+          #
+          # The marker correlates the comment with this run. Deliberately not used with
+          # --edit-last to collapse older reviews: that targets the last comment by this identity,
+          # and claude-agent.yml replies as the same bot, so it could clobber one.
+          {
+            echo "<!-- claude-review: ${{ github.run_id }}-${{ github.run_attempt }} -->"
+            echo ""
+
+            # The caveat belongs in the artifact a human reads, not only in a checks-tab
+            # annotation: an agent that died partway through enumerating findings otherwise
+            # renders as a complete, authoritative review.
+            if [ "$agent_outcome" != "success" ]; then
+              printf '> [!WARNING]\n> The review agent did not finish (%s) — this review may be incomplete.\n\n' "$agent_outcome"
+            fi
+
+            if [ -n "$truncated" ]; then
+              printf '_Review truncated at %s bytes. Full text: the `claude-logs-%s` artifact of run %s._\n\n' \
+                "$MAX" '${{ github.run_attempt }}' '${{ github.run_id }}'
+            fi
+
+            cat review_output.md
+          } > review_body.md
+
+          gh pr comment ${{ github.event.pull_request.number }} --body-file review_body.md
+          echo "posted=true" >> "$GITHUB_OUTPUT"
+
+          # The review is delivered, but a failed agent step still means this run is not
+          # trustworthy — post first, then report the truth.
+          if [ "$agent_outcome" != "success" ]; then
+            echo "::error title=Claude review::Review posted, but the agent step did not succeed ($agent_outcome) — it may be incomplete. See its log."
+            exit 1
+          fi
+
+      - name: Dump review output (when no review was delivered)
+        # failure() and not an outcome check on the agent step: the case this whole guard exists
+        # for — file written, posting failed — leaves that step 'success' and would skip the dump.
+        # The posted check excludes the opposite case: the review DID reach the PR and the job is
+        # red only because the agent step was unhealthy. Without it this annotation contradicts
+        # the one the post step just emitted, and dumps the delivered review into the log.
+        if: failure() && steps.post.outputs.posted != 'true'
+        run: |
+          # Surface it on the checks tab; the detail is otherwise buried in a long log.
+          echo "::error title=Claude review::Review check failed — no review reached the PR for this run. See the failing step's log."
           echo "=== review_output.md ==="
+
+          # The runner parses stdout for workflow commands, and a review of THIS file quotes
+          # ::error:: lines verbatim — so dumping one unguarded would emit bogus annotations, and
+          # a ::stop-commands:: line inside it would mute every later annotation in the job.
+          # Fence the dump with an unguessable token.
+          tok="dump-$(date +%s%N)"
+          echo "::stop-commands::$tok"
           cat review_output.md 2>/dev/null || echo "(file not created)"
+          echo "::$tok::"
 
       - name: Upload Claude logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: claude-logs
+          # run_attempt in the name: re-running only the failed job would otherwise collide with
+          # the artifact the first attempt already uploaded, and fail on a path this PR makes
+          # more likely to be taken.
+          name: claude-logs-${{ github.run_attempt }}
+          # claude-execution-output.json is deliberately NOT collected — same reasoning as
+          # show_full_output above, and worse here: GitHub masks secrets in logs but does not
+          # scrub artifact contents, and retention outlives the token. The files below carry
+          # everything anyone actually wants.
           path: |
+            review_body.md
             review_output.md
+            review_full.md
             *.log
-            /home/runner/work/_temp/claude-execution-output.json
           if-no-files-found: ignore
           retention-days: 7
+
+  # Visibility aid, NOT a gate: it passes, so it cannot block anything. A skipped claude-review
+  # job already satisfies branch protection; this only makes that state visible on the checks tab
+  # instead of showing nothing. Making such PRs actually blocked is a policy decision.
+  # Covers both skip reasons — fork heads and Dependabot — since both are invisible otherwise.
+  review-skipped-notice:
+    if: >-
+      github.event.pull_request.draft == false
+      && (github.event.pull_request.head.repo.full_name != github.repository
+      || github.actor == 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo "::warning title=Claude review::Skipped — secrets are withheld from fork and Dependabot events, so this PR needs a manual review."
