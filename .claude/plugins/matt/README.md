@@ -24,10 +24,18 @@ The whole set is enabled on purpose: we are evaluating whether this way of worki
 beats what we do today, and half a set answers nothing. Two consequences while the
 trial runs:
 
-- **Our overlapping slash-commands are parked**, not deleted — `/create-issue` and
-  `/work-issue` sit in [`.claude/commands-parked/`](../../commands-parked), which
-  Claude Code does not scan. Move them back to `.claude/commands/` to end the trial.
-  `/release-collector` and `/release-server` stay live; nothing here replaces them.
+- **Our overlapping slash-commands are parked**, not deleted —
+  [`.claude/commands-parked/`](../../commands-parked) holds `create-issue.md` and
+  `work-issue-full.md`, and Claude Code does not scan it. Move them back to
+  `.claude/commands/` to end the trial. `/release-collector` and
+  `/release-server` stay live; nothing here replaces them.
+- **One gap is filled rather than trialled.** Issue creation maps cleanly onto
+  `matt:to-spec`, `matt:to-tickets`, `matt:wayfinder` and `matt:triage`, but no
+  skill in the set touches branches, draft PRs or `Closes #N`: `matt:implement`
+  takes a spec as given and stops at "commit". So `/work-issue` stays live in a
+  thin form — fresh-master sync, branch naming, draft PR, hand-off — and delegates
+  the thinking to the trialled skills. Those mechanics are repo policy, not
+  methodology, and the stale-master rule in it was paid for on #1297.
 - **The upstream document layout is left as the author wrote it.** These skills
   expect one `CONTEXT.md` at the repo root and `docs/adr/`; this repo keeps its
   canon in `aicontext/` and `docs/decisions/`. We deliberately did not repoint
