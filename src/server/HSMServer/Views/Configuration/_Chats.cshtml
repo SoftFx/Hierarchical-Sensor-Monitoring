@@ -21,6 +21,7 @@
     .chat-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; }
     .chat-badge.badge-enabled { color: #16a34a; border-color: #16a34a; background-color: #f0fdf4; }
     .chat-badge.badge-disabled { color: #6b7280; background-color: #f5f5f5; }
+    .chat-badge.badge-usage { color: #4b5563; background-color: #f3f4f6; border-color: #d1d5db; }
     .chat-action-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; background: none; border: 1px solid #d1d5db; border-radius: 0.5rem; cursor: pointer; color: #6b7280; font-size: 1rem; text-decoration: none; }
     .chat-action-btn:hover { background-color: #f9fafb; }
     .chat-action-btn.danger { color: #ef4444; }
@@ -85,6 +86,7 @@
                         @Html.Raw(chat.ChatBrandIcons())
                         <span class="fw-medium">@chat.Name</span>
                         <span class="chat-badge @enabledBadgeClass">@enabledBadgeText</span>
+                        <span class="chat-badge badge-usage" title="@chat.SensorUsageBadgeTitle">@chat.SensorUsageBadgeText</span>
                     </div>
                     <div class="d-flex align-items-center gap-3">
                         <div class="chat-folders-grid">

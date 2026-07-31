@@ -47,7 +47,14 @@ test('EditChat: rename, change description, disable messages and delay, verify p
   const originalRow = page.locator('.chat-row').filter({ hasText: chatName });
   await expect(originalRow).toBeVisible();
   // ChatViewModel defaults EnableMessages=true, so a freshly created chat starts Enabled.
-  await expect(originalRow.locator('.chat-badge')).toHaveText('Enabled');
+  // Scope to .badge-enabled — a row also carries a .badge-usage ("N sensors") pill (#1310), so the
+  // generic .chat-badge selector is now ambiguous.
+  await expect(originalRow.locator('.chat-badge.badge-enabled')).toHaveText('Enabled');
+  // A brand-new chat has no sensors wired to it, so the usage badge reads "0 sensors" (#1310).
+  // Use toContainText rather than toHaveText: if a concurrent cache mutation causes Compute() to
+  // skip a sensor, the badge renders "≥0 sensors" instead, and the strict equality would fail for
+  // a reason unrelated to what this assertion is checking (that the fresh chat has zero wiring).
+  await expect(originalRow.locator('.chat-badge.badge-usage')).toContainText('0 sensors');
 
   // --- Open EditChat and change the chat's own fields ---
   await originalRow.locator('.chat-action-btn[title="Edit"]').click();
@@ -64,7 +71,7 @@ test('EditChat: rename, change description, disable messages and delay, verify p
   await expect(page.locator('.chat-row').filter({ hasText: chatName })).toHaveCount(0);
   const renamedRow = page.locator('.chat-row').filter({ hasText: renamedChatName });
   await expect(renamedRow).toBeVisible();
-  await expect(renamedRow.locator('.chat-badge')).toHaveText('Disabled');
+  await expect(renamedRow.locator('.chat-badge.badge-disabled')).toHaveText('Disabled');
 
   // --- Re-open EditChat: every field must have survived the round-trip, not just the list badge ---
   await renamedRow.locator('.chat-action-btn[title="Edit"]').click();

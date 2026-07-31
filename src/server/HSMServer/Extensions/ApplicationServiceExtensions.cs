@@ -63,7 +63,8 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<TelemetryCollector>()
                     .AddSingleton<BackupDatabaseService>()
-                    .AddSingleton<NotificationsCenter>();
+                    .AddSingleton<NotificationsCenter>()
+                    .AddSingleton<ChatSensorUsageCalculator>();
 
             services.AddHttpClient<SlackNotificationChannel>();
             services.AddHttpClient<MattermostNotificationChannel>();

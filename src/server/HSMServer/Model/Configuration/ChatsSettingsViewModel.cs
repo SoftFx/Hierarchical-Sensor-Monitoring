@@ -2,6 +2,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Notifications;
 using HSMServer.Notifications.Chats;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -12,13 +13,17 @@ namespace HSMServer.Model.Configuration
         public List<ChatViewModel> Chats { get; }
 
 
-        public ChatsSettingsViewModel(IChatsManager chats, IFolderManager folders)
+        public ChatsSettingsViewModel(IChatsManager chats, IFolderManager folders, Dictionary<Guid, int> usageCounts, bool usageIncomplete = false)
         {
             var allFolders = folders.GetValues();
 
             Chats = chats.GetValues()
                 .OrderBy(c => c.Name)
-                .Select(c => new ChatViewModel(c, BuildChatFolders(c, allFolders)))
+                .Select(c => new ChatViewModel(c, BuildChatFolders(c, allFolders))
+                {
+                    SensorUsageCount = usageCounts?.GetValueOrDefault(c.Id) ?? 0,
+                    SensorUsageIncomplete = usageIncomplete,
+                })
                 .ToList();
         }
 

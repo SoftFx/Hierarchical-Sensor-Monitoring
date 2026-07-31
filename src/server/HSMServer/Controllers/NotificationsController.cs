@@ -25,17 +25,20 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TelegramBot _telegramBot;
         private readonly NotificationsCenter _notifications;
+        private readonly ChatSensorUsageCalculator _usageCalculator;
 
         internal IChatsManager ChatsManager { get; }
 
 
         public NotificationsController(IChatsManager chatsManager, NotificationsCenter notifications,
-            IFolderManager folderManager, IUserManager userManager) : base(userManager)
+            IFolderManager folderManager, IUserManager userManager,
+            ChatSensorUsageCalculator usageCalculator) : base(userManager)
         {
             ChatsManager = chatsManager;
             _folderManager = folderManager;
             _notifications = notifications;
             _telegramBot = notifications.TelegramBot;
+            _usageCalculator = usageCalculator;
         }
 
 
@@ -74,7 +77,11 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         [AuthorizeIsAdmin]
-        public IActionResult Index() => View(nameof(Index), new ChatsSettingsViewModel(ChatsManager, _folderManager));
+        public IActionResult Index()
+        {
+            var (usageCounts, skipped) = _usageCalculator.Compute();
+            return View(nameof(Index), new ChatsSettingsViewModel(ChatsManager, _folderManager, usageCounts, skipped > 0));
+        }
 
         [HttpGet]
         [AuthorizeIsAdmin]

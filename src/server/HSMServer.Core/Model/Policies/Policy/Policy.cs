@@ -69,6 +69,8 @@ namespace HSMServer.Core.Model.Policies
 
         internal virtual bool UseScheduleManagerLogic => Schedule.IsActive;
 
+        // Allocates a new dictionary + handler per call (merges FromParent state on read);
+        // callers in hot paths should cache the result.
         internal IPolicyDestinationHandler TargetChats
         {
             get
@@ -114,8 +116,6 @@ namespace HSMServer.Core.Model.Policies
 
                     par = par.Parent;
                 }
-
-                return dict;
             }
 
             return dict;
