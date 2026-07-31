@@ -14,6 +14,7 @@ const mattermostChatName = uniqueName('MMChat');
 const sendTestChatName = uniqueName('SendTestChat');
 const maskSlackChatName = uniqueName('MaskSlackChat');
 const maskMattermostChatName = uniqueName('MaskMattermostChat');
+const partialEditChatName = uniqueName('PartialEditChat');
 
 test.afterEach(async ({ browser }) => {
   const page = await browser.newPage();
@@ -25,6 +26,7 @@ test.afterEach(async ({ browser }) => {
     await cleanup.chat(page, sendTestChatName);
     await cleanup.chat(page, maskSlackChatName);
     await cleanup.chat(page, maskMattermostChatName);
+    await cleanup.chat(page, partialEditChatName);
   } finally {
     await page.close();
   }
@@ -259,6 +261,52 @@ test('EditChat: Mattermost webhook is masked and the raw URL is not in the page'
   // Only the last path segment is masked: rawSecret=`mattermost-mask-secret` → `matt` + `••••` + `cret`.
   await expect(page.locator('#MattermostWebhookUrl')).toHaveValue('https://mattermost.example.com/hooks/matt••••cret');
   expect(await page.content()).not.toContain(rawSecret);
+
+  await page.getByRole('link', { name: 'Logout' }).click();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+});
+
+
+// Covers #1329 review: a partial in-place edit of the masked value (e.g. changing only the host)
+// used to be silently discarded — IsMasked is a substring test, so ResolveWebhook treated the edited
+// mask as the unchanged sentinel and emitted null ("no change"), and the admin was redirected to the
+// chats list with no signal that their rotation attempt did nothing. The save must now be rejected
+// with a visible error, and the stored webhook must be untouched.
+test('EditChat: a partial edit of the masked webhook is rejected, stored value untouched', async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
+  const originalHost = 'mattermost.old.example';
+  const editedHost = 'mattermost.new.example';
+
+  // --- Login + create a Mattermost chat ---
+  await login(page, admin_user, admin_user_password, apiUrl);
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await page.locator('#Name').fill(partialEditChatName);
+  await page.getByRole('tab', { name: 'Mattermost' }).click();
+  await page.locator('#MattermostWebhookUrl').fill(`https://${originalHost}/hooks/original-secret-token`);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+
+  // --- Reopen and partially edit just the host of the masked value ---
+  const chatRow = page.locator('.chat-row').filter({ hasText: partialEditChatName });
+  await chatRow.locator('.chat-action-btn[title="Edit"]').click();
+  const masked = await page.locator('#MattermostWebhookUrl').inputValue();
+  await page.locator('#MattermostWebhookUrl').fill(masked.replace(originalHost, editedHost));
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  // --- The save is rejected: form stays on EditChat (no redirect to the list) and an inline error
+  // is rendered next to the field. The "••••" in the edited value is what trips the guard.
+  await expect(page).toHaveURL(/EditChat/);
+  await expect(page.locator('[data-valmsg-for="MattermostWebhookUrl"]')).toContainText('Paste the full webhook URL');
+
+  // --- Reopen the same chat from the list (fresh GET) → the stored webhook is unchanged: still
+  // masked from the ORIGINAL host, the edited host nowhere in the page.
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await page.locator('.chat-row').filter({ hasText: partialEditChatName }).locator('.chat-action-btn[title="Edit"]').click();
+  await expect(page.locator('#MattermostWebhookUrl')).toHaveValue(`https://${originalHost}/hooks/orig••••oken`);
+  expect(await page.content()).not.toContain(editedHost);
 
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();

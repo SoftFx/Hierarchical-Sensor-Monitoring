@@ -57,7 +57,11 @@ namespace HSMServer.Controllers
         [TelegramRoleFilterByEditModel(nameof(model), ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> EditChat(ChatViewModel model)
         {
-            ValidateWebhooks(model);
+            // Load the stored chat so ValidateWebhooks can tell "the unchanged masked sentinel was
+            // posted back" (expected, no change) from "the admin partially edited the masked value"
+            // (must be rejected — see #1329 review: a partial edit used to be silently discarded).
+            ChatsManager.TryGetValue(model.Id, out var stored);
+            ValidateWebhooks(model, stored);
 
             if (!ModelState.IsValid)
                 return View(model);
@@ -100,7 +104,11 @@ namespace HSMServer.Controllers
         [AuthorizeIsAdmin]
         public async Task<IActionResult> AddChat(ChatViewModel model)
         {
-            ValidateWebhooks(model);
+            // AddChat is for brand-new chats; a masked sentinel should never appear here (the new-chat
+            // form renders empty webhook fields). Still, if /start pre-created the chat, load it so the
+            // same partial-edit guard applies on the idempotent update path.
+            ChatsManager.TryGetValue(model.Id, out var stored);
+            ValidateWebhooks(model, stored);
 
             if (!ModelState.IsValid)
                 return View(nameof(EditChat), model);
@@ -229,21 +237,34 @@ namespace HSMServer.Controllers
 
         // Webhook URL validation moved server-side (was [Url] on ChatViewModel — the masked display
         // value `https://…/••••` fails Uri.TryCreate, so the attribute was removed). The masked
-        // sentinel and empty values are "no change" and skip the check; a freshly-pasted URL must be
-        // an absolute http/https URL or the submit is rejected (parity with chats_validation.spec.ts).
-        private void ValidateWebhooks(ChatViewModel model)
+        // sentinel must match Mask(stored) exactly, or the post is rejected: the field is a plain
+        // editable input pre-filled with the mask, so an admin who partially edits it (e.g. changes
+        // only the host) must be told — otherwise ToUpdate would silently drop the edit because
+        // IsMasked is a substring test (#1329 review: a rotation could appear to succeed while
+        // nothing changed). The classification lives in WebhookUrlMasker.ValidatePosted so it's unit-
+        // covered; a real pasted URL still has to pass the absolute http/https check here.
+        private void ValidateWebhooks(ChatViewModel model, Chat stored)
         {
-            ValidateWebhook(model.SlackWebhookUrl, nameof(ChatViewModel.SlackWebhookUrl), "Slack webhook URL must be a valid URL");
-            ValidateWebhook(model.MattermostWebhookUrl, nameof(ChatViewModel.MattermostWebhookUrl), "Mattermost webhook URL must be a valid URL");
+            ValidateWebhook(model.SlackWebhookUrl, stored?.SlackWebhookUrl, nameof(ChatViewModel.SlackWebhookUrl));
+            ValidateWebhook(model.MattermostWebhookUrl, stored?.MattermostWebhookUrl, nameof(ChatViewModel.MattermostWebhookUrl));
 
-            void ValidateWebhook(string posted, string key, string errorMessage)
+            void ValidateWebhook(string posted, string storedUrl, string key)
             {
+                var maskError = WebhookUrlMasker.ValidatePosted(posted, storedUrl);
+                if (maskError != null)
+                {
+                    ModelState.AddModelError(key, maskError);
+                    return;
+                }
+
+                // ValidatePosted returned null: either empty (no change) or a real URL. Real URLs
+                // must still be well-formed absolute http/https — masked/empty values skip this.
                 if (string.IsNullOrWhiteSpace(posted) || WebhookUrlMasker.IsMasked(posted))
                     return;
 
                 if (!Uri.TryCreate(posted, UriKind.Absolute, out var uri) ||
                     (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-                    ModelState.AddModelError(key, errorMessage);
+                    ModelState.AddModelError(key, "Webhook URL must be a valid URL");
             }
         }
 

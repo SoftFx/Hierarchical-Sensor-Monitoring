@@ -189,6 +189,7 @@
                             </div>
                             <div class="col-12 col-md-7">
                                 <input type="text" class="form-control" asp-for="SlackWebhookUrl" placeholder="https://hooks.slack.com/services/..." />
+                                <span class="text-danger small d-block mt-1" asp-validation-for="SlackWebhookUrl"></span>
                                 @if (Model.HasSlack)
                                 {
                                     <small class="text-muted d-block mt-1">Type a new URL to replace; leave as-is to keep the current webhook.</small>
@@ -220,6 +221,7 @@
                             </div>
                             <div class="col-12 col-md-7">
                                 <input type="text" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." />
+                                <span class="text-danger small d-block mt-1" asp-validation-for="MattermostWebhookUrl"></span>
                                 @if (Model.HasMattermost)
                                 {
                                     <small class="text-muted d-block mt-1">Type a new URL to replace; leave as-is to keep the current webhook.</small>

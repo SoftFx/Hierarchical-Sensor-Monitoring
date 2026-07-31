@@ -183,5 +183,78 @@ namespace HSMServer.Core.Tests.Notifications
         {
             Assert.False(WebhookUrlMasker.IsMasked(null));
         }
+
+
+        // ValidatePosted classifies a POSTed webhook value against the stored URL. The masked
+        // sentinel must match Mask(stored) EXACTLY — the field is a plain editable input pre-filled
+        // with the mask, so a partial edit (e.g. changing only the host) must be rejected, not
+        // silently dropped. ResolveWebhook treats any IsMasked value as "no change", and IsMasked is
+        // just a substring test, so the controller-side exact-match guard is the only thing standing
+        // between a rotation attempt and a silent no-op (#1329 review).
+
+        [Fact]
+        public void ValidatePosted_EmptyPosted_Allowed_NoChange()
+        {
+            Assert.Null(WebhookUrlMasker.ValidatePosted("", "https://hooks.slack.com/services/stored-secret-token"));
+        }
+
+        [Fact]
+        public void ValidatePosted_NullPosted_Allowed_NoChange()
+        {
+            Assert.Null(WebhookUrlMasker.ValidatePosted(null, "https://hooks.slack.com/services/stored-secret-token"));
+        }
+
+        [Fact]
+        public void ValidatePosted_PostedEqualsMaskOfStored_Allowed_NoChange()
+        {
+            const string stored = "https://hooks.slack.com/services/stored-secret-token";
+            var posted = WebhookUrlMasker.Mask(stored); // exactly what the GET rendered
+
+            Assert.Null(WebhookUrlMasker.ValidatePosted(posted, stored));
+        }
+
+        // The regression: admin sees the masked value, edits just the host, saves. Without the
+        // exact-match guard this is swallowed (IsMasked is true → ResolveWebhook → null → no change),
+        // and the rotation silently fails while the success redirect plays.
+        [Fact]
+        public void ValidatePosted_PartiallyEditedMask_Rejected()
+        {
+            const string stored = "https://mattermost.old.com/hooks/stored-secret-token";
+            var posted = WebhookUrlMasker.Mask(stored).Replace("mattermost.old.com", "mattermost.new.com");
+
+            var error = WebhookUrlMasker.ValidatePosted(posted, stored);
+
+            Assert.NotNull(error);
+            Assert.Contains("Paste the full webhook URL", error);
+        }
+
+        // A different partial edit — tweaking the visible prefix of the mask — is just as silently
+        // dropped without the guard.
+        [Fact]
+        public void ValidatePosted_EditedVisiblePrefix_Rejected()
+        {
+            const string stored = "https://hooks.slack.com/services/stored-secret-token";
+            // Mask is `…/stor••••token`; change the visible head `stor` → `XXXX`.
+            var posted = WebhookUrlMasker.Mask(stored).Replace("stor", "XXXX");
+
+            Assert.NotNull(WebhookUrlMasker.ValidatePosted(posted, stored));
+        }
+
+        // A fresh full URL paste is always acceptable at this layer — URL-shape validation runs in
+        // the controller after this returns null.
+        [Fact]
+        public void ValidatePosted_RealUrl_Allowed()
+        {
+            Assert.Null(WebhookUrlMasker.ValidatePosted("https://hooks.slack.com/services/brand-new-token", "https://hooks.slack.com/services/stored-secret-token"));
+        }
+
+        // New-chat path: no stored URL, so the sentinel can't match. Empty posted (the expected
+        // new-chat value) is allowed; a stray masked value would be rejected.
+        [Fact]
+        public void ValidatePosted_NoStoredUrl_EmptyAllowed_MaskedRejected()
+        {
+            Assert.Null(WebhookUrlMasker.ValidatePosted("", null));
+            Assert.NotNull(WebhookUrlMasker.ValidatePosted("https://host/hooks/abcd••••5678", null));
+        }
     }
 }

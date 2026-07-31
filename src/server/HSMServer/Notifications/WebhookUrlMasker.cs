@@ -47,6 +47,28 @@ namespace HSMServer.Notifications
         // bullets) emitted, not a real webhook URL. Real URLs never contain `••••`.
         public static bool IsMasked(string url) => url != null && url.Contains(MaskMarker);
 
+        // Classifies a posted webhook value against the stored URL. Returns null when the post is
+        // acceptable (empty = no change; unchanged sentinel; or a real URL), and an error message
+        // when it must be rejected. The "unchanged sentinel" check compares against Mask(stored) —
+        // NOT just IsMasked — because the field is a plain editable input pre-filled with the mask,
+        // so an admin who partially edits it (e.g. changes only the host) would otherwise have the
+        // edit silently dropped by ResolveWebhook (IsMasked is a substring test, see #1329 review).
+        //
+        //   null/empty posted                     → null  (no change; new chat stays empty)
+        //   posted == Mask(stored)                → null  (the unchanged sentinel round-tripped)
+        //   posted IsMasked but ≠ Mask(stored)    → error (partial edit of the masked value)
+        //   otherwise                             → null  (a real pasted URL; caller runs Uri checks)
+        public static string ValidatePosted(string posted, string storedUrl)
+        {
+            if (string.IsNullOrWhiteSpace(posted))
+                return null;
+
+            if (IsMasked(posted) && posted != Mask(storedUrl))
+                return "Paste the full webhook URL to replace it, or leave the field unchanged.";
+
+            return null;
+        }
+
         // Rebuild the display value from the URI's structured parts: authority verbatim + every path
         // segment except the last non-empty one verbatim + the last non-empty segment masked. Query
         // and fragment are dropped from the display value (they're not needed to recognize the
