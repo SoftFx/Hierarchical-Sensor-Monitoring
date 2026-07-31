@@ -15,16 +15,18 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         [Fact]
-        public void Mask_SlackExample_KeepsSchemeHostAndFirstSegment_MasksRest()
+        public void Mask_SlackExample_KeepsHostPathPrefixAndTail()
         {
             var masked = WebhookUrlMasker.Mask("https://hooks.slack.com/services/T0ABCDE/B0123456/abcXYZsecret");
 
-            Assert.Equal("https://hooks.slack.com/services/••••", masked);
+            // host verbatim + first 8 chars of PathAndQuery (`/service`) + marker + last 4 chars (`cret`).
+            Assert.Equal("https://hooks.slack.com/service••••cret", masked);
         }
 
-        // The hard security requirement: the secret tail must not leak into the rendered mask.
+        // The hard security requirement: the secret middle must not leak into the rendered mask.
+        // Both the path tail segment and the secret substring sit between the visible windows.
         [Fact]
-        public void Mask_SlackUrl_SecretTailIsAbsentFromResult()
+        public void Mask_SlackUrl_SecretMiddleIsAbsentFromResult()
         {
             const string secret = "abcXYZsecret";
 
@@ -32,42 +34,52 @@ namespace HSMServer.Core.Tests.Notifications
 
             Assert.DoesNotContain(secret, masked);
             Assert.DoesNotContain("B0123456", masked);
+            // The visible tail ("cret") is allowed — it's only the last 4 chars, not the full secret.
         }
 
         [Fact]
-        public void Mask_MattermostExample_KeepsSchemeHostAndFirstSegment()
+        public void Mask_MattermostExample_KeepsHostPathPrefixAndTail()
         {
             var masked = WebhookUrlMasker.Mask("https://mattermost.example.com/hooks/abcd1234efgh5678");
 
-            Assert.Equal("https://mattermost.example.com/hooks/••••", masked);
+            // host verbatim + first 8 chars of PathAndQuery (`/hooks/a`) + marker + last 4 chars (`5678`).
+            Assert.Equal("https://mattermost.example.com/hooks/a••••5678", masked);
         }
 
         [Fact]
-        public void Mask_MattermostUrl_SecretTailIsAbsentFromResult()
+        public void Mask_MattermostUrl_SecretMiddleIsAbsentFromResult()
         {
             const string secret = "abcd1234efgh5678";
 
             var masked = WebhookUrlMasker.Mask($"https://mattermost.example.com/hooks/{secret}");
 
+            // The full secret must not appear; only its 8-char path-inclusive prefix and 4-char tail
+            // are visible. `/hooks/a` + `••••` + `5678`.
             Assert.DoesNotContain(secret, masked);
+            Assert.Contains("5678", masked);
         }
 
-        // A webhook URL with no path segment still gets the marker, so the POST-sentinel detection in
-        // ToUpdate works uniformly (any masked value ends in `••••`).
+        // A webhook URL with no path collapses to host + marker — the marker MUST be present so the
+        // POST sentinel detection (IsMasked) works for every masked value, and an empty path has
+        // nothing recognition-worthy to expose anyway.
         [Fact]
-        public void Mask_UrlWithoutPath_StillAppendsMarker()
+        public void Mask_UrlWithoutPath_ShowsHostAndMarkerOnly()
         {
             var masked = WebhookUrlMasker.Mask("https://hooks.slack.com");
 
             Assert.Equal("https://hooks.slack.com/••••", masked);
+            Assert.True(WebhookUrlMasker.IsMasked(masked));
         }
 
+        // A short path (≤ prefix+tail threshold) is also collapsed to the marker — showing it
+        // verbatim would leak the whole short secret, and the marker must be present for IsMasked.
         [Fact]
-        public void Mask_UrlWithOnlyRootPath_StillAppendsMarker()
+        public void Mask_UrlWithShortPath_ShowsHostAndMarkerOnly()
         {
-            var masked = WebhookUrlMasker.Mask("https://hooks.slack.com/");
+            var masked = WebhookUrlMasker.Mask("https://hooks.slack.com/short");
 
             Assert.Equal("https://hooks.slack.com/••••", masked);
+            Assert.True(WebhookUrlMasker.IsMasked(masked));
         }
 
         // Weird/unparseable input must mask rather than throw — a stored webhook should never be
@@ -75,7 +87,7 @@ namespace HSMServer.Core.Tests.Notifications
         [Fact]
         public void Mask_NonParseableInput_DoesNotThrowAndMasks()
         {
-            var masked = WebhookUrlMasker.Mask("not-a-url-with-a-slash/and/secret/tail");
+            var masked = WebhookUrlMasker.Mask("not-a-url-with-a-slash/and/secret/tail-value");
 
             Assert.NotNull(masked);
             Assert.Contains(WebhookUrlMasker.MaskMarker, masked);

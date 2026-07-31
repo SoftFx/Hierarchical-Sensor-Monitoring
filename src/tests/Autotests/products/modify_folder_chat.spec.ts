@@ -177,9 +177,10 @@ test('EditChat: per-channel Remove clears Slack webhook without deleting the cha
   await expect(chatRow).toBeVisible();
   await chatRow.locator('.chat-action-btn[title="Edit"]').click();
 
-  // EditChat should show the masked webhook (#1329 — host + first path segment + `••••`) and a
-  // "Remove Slack" button alongside the existing "Send test Slack message" button.
-  await expect(page.locator('#SlackWebhookUrl')).toHaveValue('https://hooks.slack.com/services/••••');
+  // EditChat should show the masked webhook (#1329 — host + 8-char path prefix + `••••` + 4-char
+  // tail) and a "Remove Slack" button alongside the existing "Send test Slack message" button.
+  // Original was `/services/remove-test` → `/service` + `••••` + `test`.
+  await expect(page.locator('#SlackWebhookUrl')).toHaveValue('https://hooks.slack.com/service••••test');
   await expect(page.locator('#removeSlack')).toBeVisible();
 
   // Click Remove Slack → confirmation modal → OK. The AJAX POST hits ClearSlackWebhook and
