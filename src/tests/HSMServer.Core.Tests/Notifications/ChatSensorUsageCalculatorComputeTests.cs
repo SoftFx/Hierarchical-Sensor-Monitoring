@@ -1,9 +1,13 @@
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Schedule;
+using HSMServer.Core.TableOfChanges;
+using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Folders;
 using HSMServer.Model.Folders;
 using HSMServer.Notifications.Chats;
@@ -12,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
+using EntitiesFactory = HSMServer.Core.Tests.Infrastructure.EntitiesFactory;
 
 namespace HSMServer.Core.Tests.Notifications
 {
@@ -64,6 +69,36 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.DoesNotContain(rootChat, resolved.Keys);
         }
 
+        // Pins that a FromParent policy with ADDITIONAL Destination.Chats still counts those
+        // explicit chats. FromParent + extra chats is a first-class state (the alert form JS
+        // keeps the chats array when switching to FromParent, alert import preserves chats only
+        // in FromParent mode, and PolicyDestination.ToString has a dedicated "from parent chats,
+        // {extra}" case). Policy.TargetChats unions Destination.Chats on top of the inherited
+        // parent-chain set; the calculator used to return only the inherited set in the FromParent
+        // branch and silently drop the extras — an undercount in exactly the failure direction
+        // that matters for a blast-radius badge.
+        [Fact]
+        public void Compute_FromParentPolicyWithExtraChats_CountsBothInheritedAndExplicit()
+        {
+            var parentChat = Guid.NewGuid();
+            var extraChat = Guid.NewGuid();
+
+            var root = BuildProduct(DefaultChatsMode.Custom, (parentChat, "parent"));
+            var provider = new Mock<IAlertScheduleProvider>().Object;
+            var sensor = BuildIntegerSensorUnder(root, provider);
+            AddPolicy(sensor, PolicyDestinationMode.FromParent, extraChat);
+
+            var calc = new ChatSensorUsageCalculator(
+                CacheReturning(new[] { sensor }),
+                FolderManagerStub());
+
+            var (counts, skipped) = calc.Compute();
+
+            Assert.Equal(0, skipped);
+            Assert.Equal(1, counts[parentChat]);
+            Assert.Equal(1, counts[extraChat]);
+        }
+
         // Pins the contract that when EVERY ancestor in the chain is FromParent, GetParentChats
         // walks the whole way to the root. This is the "no non-inheriting break" branch and
         // guards against over-eager break-on-first-iteration regressions.
@@ -104,6 +139,31 @@ namespace HSMServer.Core.Tests.Notifications
 
             return new ProductModel(entity);
         }
+
+        private static IntegerSensorModel BuildIntegerSensorUnder(ProductModel parent, IAlertScheduleProvider provider)
+        {
+            var entity = EntitiesFactory.BuildSensorEntity(type: (byte)SensorType.Integer);
+            var sensor = new IntegerSensorModel(entity, null, provider);
+            parent.AddSensor(sensor);
+            return sensor;
+        }
+
+        private static void AddPolicy(IntegerSensorModel sensor, PolicyDestinationMode mode, params Guid[] chats)
+        {
+            var collection = (SensorPolicyCollection<IntegerValue, IntegerPolicy>)sensor.Policies;
+
+            var chatDict = chats.ToDictionary(c => c, c => c.ToString());
+            var update = new PolicyUpdate
+            {
+                Id = Guid.NewGuid(),
+                Template = "tmpl",
+                Status = SensorStatus.Ok,
+                Destination = new PolicyDestinationUpdate(chatDict, mode),
+            };
+
+            collection.TryUpdate(new List<PolicyUpdate> { update }, InitiatorInfo.AsUser("test"), out _);
+        }
+
 
         private static ITreeValuesCache CacheReturning(IEnumerable<BaseSensorModel> sensors)
         {

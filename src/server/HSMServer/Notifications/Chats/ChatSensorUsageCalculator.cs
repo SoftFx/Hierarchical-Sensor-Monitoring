@@ -142,26 +142,47 @@ namespace HSMServer.Notifications.Chats
                 var destination = policy.Destination;
                 var parent = sensor.Parent;
 
-                IEnumerable<Guid> resolvedChatKeys;
+                // Mirror Policy.TargetChats exactly: when Destination.IsFromParentChats, the parent
+                // chain is unioned in FIRST, then Destination.Chats is layered on top (TryAdd
+                // semantics — explicit chats do not overwrite inherited ones). FromParent + extra
+                // chats is a first-class state: the alert form JS keeps the chats array when
+                // switching to FromParent (_AlertsFormCollection.cshtml), alert import preserves
+                // chats only in FromParent mode (AlertExportViewModel), and PolicyDestination.ToString
+                // has a dedicated "from parent chats, {extra}" case. The previous form returned only
+                // the inherited set and dropped Destination.Chats, silently undercounting — an admin
+                // would see "0 sensors" on a chat that actually receives alerts through this path.
+                HashSet<Guid> resolvedChats;
                 bool resolvedIsAllChats;
 
                 if (destination.IsFromParentChats && parent is not null)
                 {
-                    var (chats, parentIsAllChats) = ResolveInheritedChats(parent, inheritedChatsByProduct);
-                    resolvedChatKeys = chats;
+                    var (inherited, parentIsAllChats) = ResolveInheritedChats(parent, inheritedChatsByProduct);
+                    // Copy-on-write: most FromParent policies have empty Destination.Chats, so reuse
+                    // the memoized set directly and only allocate a new HashSet when there's an
+                    // explicit chat to layer on top.
+                    if (destination.Chats.Count == 0)
+                    {
+                        resolvedChats = inherited;
+                    }
+                    else
+                    {
+                        resolvedChats = new HashSet<Guid>(inherited);
+                        foreach (var id in destination.Chats.Keys)
+                            resolvedChats.Add(id);
+                    }
                     // PolicyDestinationHandler.IsAllChats = parent.DefaultChats.IsAllChats && Destination.IsAllChats.
                     resolvedIsAllChats = parentIsAllChats && destination.IsAllChats;
                 }
                 else
                 {
-                    resolvedChatKeys = destination.Chats.Keys;
+                    resolvedChats = new HashSet<Guid>(destination.Chats.Keys);
                     resolvedIsAllChats = destination.IsAllChats && (parent?.Settings?.DefaultChats?.Value?.IsAllChats ?? false);
                 }
 
-                if (IsAlertCapable(policy, resolvedChatKeys.Count(), resolvedIsAllChats))
+                if (IsAlertCapable(policy, resolvedChats.Count, resolvedIsAllChats))
                     hasAlertCapablePolicy = true;
 
-                chatSets.Add(resolvedChatKeys);
+                chatSets.Add(resolvedChats);
             }
 
             foreach (Policy policy in policies)
