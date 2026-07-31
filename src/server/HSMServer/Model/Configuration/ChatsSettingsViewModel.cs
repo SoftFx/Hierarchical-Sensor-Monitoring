@@ -13,7 +13,7 @@ namespace HSMServer.Model.Configuration
         public List<ChatViewModel> Chats { get; }
 
 
-        public ChatsSettingsViewModel(IChatsManager chats, IFolderManager folders, Dictionary<Guid, int> usageCounts)
+        public ChatsSettingsViewModel(IChatsManager chats, IFolderManager folders, Dictionary<Guid, int> usageCounts, bool usageIncomplete = false)
         {
             var allFolders = folders.GetValues();
 
@@ -21,7 +21,8 @@ namespace HSMServer.Model.Configuration
                 .OrderBy(c => c.Name)
                 .Select(c => new ChatViewModel(c, BuildChatFolders(c, allFolders))
                 {
-                    SensorUsageCount = usageCounts.GetValueOrDefault(c.Id),
+                    SensorUsageCount = usageCounts?.GetValueOrDefault(c.Id) ?? 0,
+                    SensorUsageIncomplete = usageIncomplete,
                 })
                 .ToList();
         }

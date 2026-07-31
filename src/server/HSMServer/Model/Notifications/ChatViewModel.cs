@@ -56,7 +56,23 @@ namespace HSMServer.Model.Notifications
 
         public int SensorUsageCount { get; set; }
 
-        public string SensorUsageBadgeText => SensorUsageCount == 1 ? "1 sensor" : $"{SensorUsageCount} sensors";
+        // True when Compute() skipped at least one sensor due to a concurrent cache mutation —
+        // the count is a lower bound, not an authoritative total. Rendered as "≥N sensors".
+        public bool SensorUsageIncomplete { get; set; }
+
+        public string SensorUsageBadgeText
+        {
+            get
+            {
+                var prefix = SensorUsageIncomplete ? "≥" : string.Empty;
+                var noun = SensorUsageCount == 1 ? "sensor" : "sensors";
+                return $"{prefix}{SensorUsageCount:N0} {noun}";
+            }
+        }
+
+        public string SensorUsageBadgeTitle => SensorUsageIncomplete
+            ? "Number of sensors whose alerts would be delivered to this chat. Count may be incomplete — at least one sensor was skipped during the scan."
+            : "Number of sensors whose alerts would be delivered to this chat";
 
 
         public ChatFoldersViewModel Folders { get; set; } = new();

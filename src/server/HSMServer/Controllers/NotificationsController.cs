@@ -79,8 +79,8 @@ namespace HSMServer.Controllers
         [AuthorizeIsAdmin]
         public IActionResult Index()
         {
-            var usageCounts = _usageCalculator.Compute();
-            return View(nameof(Index), new ChatsSettingsViewModel(ChatsManager, _folderManager, usageCounts));
+            var (usageCounts, skipped) = _usageCalculator.Compute();
+            return View(nameof(Index), new ChatsSettingsViewModel(ChatsManager, _folderManager, usageCounts, skipped > 0));
         }
 
         [HttpGet]
