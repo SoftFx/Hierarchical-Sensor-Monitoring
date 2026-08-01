@@ -14,6 +14,6 @@ When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the 
 
 Edit the right-hand column to match whatever vocabulary you actually use.
 
-**Not yet created in this repo.** Of the five, only `wontfix` exists today. The other four have to be
-created before `/matt:triage` can apply them — `gh label create needs-triage`, and so on. Creating
-labels in a shared public repo is a maintainer decision, so this file records the intent and stops there.
+All five exist in the repo. `wontfix` was already there; `needs-triage`, `needs-info`,
+`ready-for-agent` and `ready-for-human` were created for the trial, so `/matt:triage` can apply them
+without inventing anything.

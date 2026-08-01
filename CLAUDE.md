@@ -10,7 +10,7 @@ GitHub Issues in `SoftFx/Hierarchical-Sensor-Monitoring`, via the `gh` CLI. See 
 
 ### Triage labels
 
-The five canonical roles, each label string equal to its name; only `wontfix` exists in the repo so far. See `docs/agents/triage-labels.md`.
+The five canonical roles, each label string equal to its name, all present in the repo. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
