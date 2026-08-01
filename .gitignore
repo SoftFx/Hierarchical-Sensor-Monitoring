@@ -152,8 +152,11 @@ src/tests/Autotests/test-results/
 #AI
 # Claude Code local state (permissions, worktrees) - machine-local, never commit
 /.claude/*
-# ...but share slash-command definitions with the team
+# ...but share slash-commands, the in-repo plugin, and its enablement with the team
 !/.claude/commands/
+!/.claude/commands-parked/
+!/.claude/plugins/
+!/.claude/settings.json
 
 # Conan/CMake user presets (generated, never committed)
 CMakeUserPresets.json

@@ -1,62 +1,56 @@
-# /work-issue — Start working on a GitHub issue with branch and draft PR
+# /work-issue — branch, PR and hand-off mechanics for a GitHub issue
 
-Start working on the GitHub issue specified in $ARGUMENTS (issue number).
+Take the GitHub issue in $ARGUMENTS (issue number) from "not started" to "draft PR open".
 
-## Instructions
+**This command owns the git mechanics only.** The thinking — how to solve it, in what order, test-first or not — belongs to the skills being trialled: `/matt:implement` for work that already has a spec or tickets, `/matt:grilling` when the approach is not settled, `/matt:tdd` at the seams, `/matt:diagnosing-bugs` when the issue is a defect. This command exists because none of them touch branches, draft PRs or `Closes #N`, and because the rules below were learned the hard way in this repo.
 
-1. **Fetch the issue** — run `gh issue view $ARGUMENTS --json number,title,labels,body` to get full details.
+## 1. Read the issue
 
-2. **Plan the fix** — read the issue body, explore the referenced files, and propose an implementation approach. Use plan mode if the change is non-trivial. Present the plan to the user for approval before writing code.
+```
+gh issue view $ARGUMENTS --json number,title,labels,body --comments
+```
 
-3. **Create a feature branch** from `master`. First sync local master with the remote — a stale local master is the commonest cause of fixes that target a UI or API that no longer exists on `origin/master` (learned on #1297, where local master was 10+ commits behind and the fix landed against a UI that had already been replaced by a squash-merged PR the day before):
-   ```
-   git fetch origin master
-   git checkout master
-   git pull --ff-only           # refuses if local master has diverged; never creates a merge commit
-   git checkout -b feature/$ARGUMENTS-<short-slug> master
-   ```
-   Where `<short-slug>` is a 2-4 word kebab-case summary of the issue (e.g., `feature/1076-alert-schedule-unique-name`).
-   Sanity-check before committing: if the issue references specific UI patterns, file paths, or function signatures, confirm they exist at the chosen base. A mismatch usually means the base is stale — re-fetch and re-branch.
+If the issue carries an agent brief from `/matt:triage`, that brief is the spec — do not re-derive it.
 
-4. **Implement the fix** — make the code changes according to the approved plan. Keep changes focused on the issue scope. Build to verify compilation.
+## 2. Branch from a fresh master
 
-5. **Commit and push**:
-   ```
-   git add <changed files>
-   git commit -m "Short description of the change
+A stale local master is the commonest cause of fixes that target code that no longer exists. On #1297 local master was 10+ commits behind and the fix landed against a UI a squash-merged PR had already replaced the day before.
 
-   Longer explanation if needed.
+```
+git fetch origin master
+git checkout master
+git pull --ff-only           # refuses if local master diverged; never creates a merge commit
+git checkout -b feature/$ARGUMENTS-<short-slug> master
+```
 
-   Closes #$ARGUMENTS
+`<short-slug>` is a 2–4 word kebab-case summary, e.g. `feature/1076-alert-schedule-unique-name`.
 
-   Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
-   git push -u origin feature/$ARGUMENTS-<short-slug>
-   ```
+Before writing code, confirm that the UI patterns, file paths or signatures the issue names actually exist at this base. A mismatch means the base is stale — re-fetch and re-branch.
 
-6. **Create a draft PR** linked to the issue:
-   ```
-   gh pr create --draft --base master --title "Short description" --body "$(cat <<'EOF'
-   ## Summary
-   <1-2 sentences on what this does>
+## 3. Do the work
 
-   ## Test plan
-   - [ ] <manual verification steps from acceptance criteria>
+Hand over to the trialled skills. Keep the change inside the issue's scope; build to verify compilation.
 
-   Closes #$ARGUMENTS
+## 4. Commit and push
 
-   🤖 Generated with [Claude Code](https://claude.com/claude-code)
-   EOF
-   )"
-   ```
+```
+git add <changed files>
+git commit -m "Short description of the change
 
-7. **Report back** — share the branch name and PR URL with the user.
+Longer explanation if needed.
 
-## Guidelines
+Closes #$ARGUMENTS
 
-- If $ARGUMENTS is empty, ask the user for the issue number
-- Always create the branch from `master` unless the issue specifies otherwise
-- The commit message should end with `Closes #$ARGUMENTS` to auto-link
-- Use draft PR so it doesn't trigger full CI until ready
-- Keep the PR title under 70 characters
-- If the issue references specific files, read them before planning
-- If the user just wants the branch and PR without implementation (e.g., to code it themselves), skip steps 2 and 4 — just create the branch, push, and open the draft PR with a placeholder body
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+git push -u origin feature/$ARGUMENTS-<short-slug>
+```
+
+`Closes #N` goes in before the PR is merged — added afterwards it does not close the issue.
+
+## 5. Open a draft PR
+
+```
+gh pr create --draft --base master --title "Short description" --body "..."
+```
+
+Then stop. Never merge to `master` — review and merge are the human's call, green checks are not permission.

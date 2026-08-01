@@ -1,0 +1,6 @@
+{
+  "name": "matt",
+  "description": "Matt Pocock's engineering skills, vendored for this repo — grilling, spec/ticket flows, TDD, diagnosis, domain modelling.",
+  "author": { "name": "Matt Pocock", "url": "https://github.com/mattpocock/skills" },
+  "license": "MIT"
+}

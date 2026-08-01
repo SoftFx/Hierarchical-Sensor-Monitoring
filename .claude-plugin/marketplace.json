@@ -1,0 +1,11 @@
+{
+  "name": "hsm",
+  "owner": { "name": "SoftFx" },
+  "plugins": [
+    {
+      "name": "matt",
+      "source": "./.claude/plugins/matt",
+      "description": "Matt Pocock's engineering skills, vendored into this repo."
+    }
+  ]
+}
