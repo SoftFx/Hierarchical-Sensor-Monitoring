@@ -1,6 +1,6 @@
 # HSM — Agent Instructions
 
-> Owner: shared | Last reviewed: 2026-05-26 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-08-01 | Canonical: yes
 
 ## Project Overview
 
@@ -15,6 +15,7 @@ HSM (Hierarchical Sensor Monitoring) — система мониторинга �
 | Server | ASP.NET Core 8.0 MVC + Razor Views |
 | DataCollector (client library) | .NET 6.0 / .NET Framework 4.7.2 (NuGet) |
 | Shared API DTOs | C# Class Library (`HSMSensorDataObjects`) |
+| Native collector / agent / wrapper | C++17, MSVC + CMake, libcurl; distributed via vcpkg registry (`hsm-collector`) |
 | Database | LevelDB (через LightningDB) |
 | Frontend | TypeScript 5.3 + Webpack 5 + jQuery + Bootstrap 5 + Plotly.js |
 | Auth | Cookie-based + custom roles (Viewer, Manager) |
@@ -33,6 +34,9 @@ HSM (Hierarchical Sensor Monitoring) — система мониторинга �
     /server/HSMServer.Core           -> Business logic (cache, models, services)
     /server/HSMServer                -> ASP.NET Core MVC web app
     /database/HSMDatabase*           -> LevelDB data access layer
+    /native/collector                -> Native C++ collector (stable C ABI + RAII C++ wrapper); vcpkg port + registry
+    /wrapper                         -> HSMCppWrapper: legacy C++ ABI kept for the aggregator, now native under the hood
+    /agent                           -> HsmAgent (C++): standalone monitoring agent with self-update
     /module/HSMPingModule            -> Standalone ping monitoring module
     /sandbox/*                       -> Test/benchmark apps
     /tests/Autotests                 -> Playwright E2E tests (TypeScript)
@@ -78,6 +82,7 @@ HSM (Hierarchical Sensor Monitoring) — система мониторинга �
 - Docker setup: `aicontext/architecture/docker.md`
 - Development lifecycle: `aicontext/architecture/development-lifecycle.md`
 - Glossary: `aicontext/glossary.md`
+- Directory-scoped rules: `src/native/collector/CLAUDE.md`, `src/agent/CLAUDE.md` — more specific than this file where they overlap
 
 ## Feature Documentation
 
@@ -101,7 +106,7 @@ When adding new functionality:
 - `Dispose()` must work from any state and must not throw
 - `CollectorScheduler` is a per-collector instance (owned and disposed by its `DataCollector`); there is no process-global scheduler
 - Sensor values are queued in `Channel<QueueItem<T>>` and sent in batches by `QueueProcessorBase`; overflow/retry policy per `aicontext/features/collector/data-pipeline/feature.md`
-- HTTP retries use Polly with exponential backoff; currently no `ShouldHandle` for HTTP status codes (known issue)
+- HTTP retries use Polly with exponential backoff; `BaseHandlers.ShouldRetry` retries 5xx on bounded data/priority/file requests only — commands retry on exceptions, 4xx never (#1096)
 - `MessageDeduplicator` bounds cache size to prevent memory leaks from diverse exception messages
 
 ## Versioning
