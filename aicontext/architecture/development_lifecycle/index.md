@@ -9,7 +9,7 @@ off without merging.
 ## Stages
 
 1. **Context / Requirements**
-   - Read `AGENTS.md`, `aicontext/README.md`, `aicontext/glossary.md`, and relevant feature docs.
+   - Read `CLAUDE.md`, `aicontext/README.md`, `aicontext/glossary.md`, and relevant feature docs.
    - Create or update feature docs when the behavior is not yet documented.
 
 2. **Implementation**

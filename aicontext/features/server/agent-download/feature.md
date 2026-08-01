@@ -102,7 +102,7 @@ loudly. The release lane's tag==CMake guardrail makes pin == exe version. With n
 readers fall back to `0.0.0`.
 
 **Shipping a newer agent:** bump `project(HsmAgent VERSION …)` in the change PR (rule in
-`src/agent/AGENTS.md`), push the matching `agent-v*` tag after merge, then bump `agent-release.txt`
+`src/agent/CLAUDE.md`), push the matching `agent-v*` tag after merge, then bump `agent-release.txt`
 in a one-line PR. Server releases in between keep shipping the previous pin.
 
 ## Out of scope (follow-up)

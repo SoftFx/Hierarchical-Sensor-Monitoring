@@ -44,7 +44,7 @@ Native (C++) collector is out of scope — this only ships the managed NuGet.
    occurrences of the old version (`<Version>`, `<AssemblyVersion>`,
    `<AssemblyFileVersion>`, `<ProductVersion>`) with the new value. Do not touch
    `HSMServer.csproj` or `HSMSensorDataObjects.csproj` — those are separate
-   releases (see AGENTS.md Versioning). For a pre-release, set only `<Version>`
+   releases (see CLAUDE.md Versioning). For a pre-release, set only `<Version>`
    to `<NEW>-preview` (NuGet accepts prerelease suffix there); leave the other
    three numeric so the assembly file version stays clean.
 
@@ -84,7 +84,7 @@ Native (C++) collector is out of scope — this only ships the managed NuGet.
     package emits.
    - **Drop**: pure refactors, internal cleanups, CI-only changes, test-only
     changes, native-only C++ internals (unless they change wire format or
-    default-sensor surface), doc-only changes (`aicontext/`, `AGENTS.md`).
+    default-sensor surface), doc-only changes (`aicontext/`, `CLAUDE.md`).
    - **Call out default-sensor additions explicitly** — consumers using
     `AddAllComputerSensors` will see new sensors after upgrading.
    - **Lead with the most impactful change** in each area; merge related commits
