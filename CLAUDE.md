@@ -137,6 +137,7 @@ When adding new functionality:
 ## Documentation Rules
 
 - Update `aicontext/features/...` when behavior or invariants change.
+- During the trial a parallel `CONTEXT.md` and `docs/adr/` may appear, created by the trialled skills. They are the experiment, not a second canon: `aicontext/` and `docs/decisions/` remain authoritative until the trial is decided.
 - Update `aicontext/glossary.md` before introducing new canonical terms.
 - Add an ADR under `docs/decisions/` for durable architecture decisions.
 - Add an initiative under `docs/initiatives/` for multi-PR or ambiguous product/technical work.
@@ -144,6 +145,7 @@ When adding new functionality:
 
 ## Review Rules
 
+- **Trial in progress.** The skills under `.claude/plugins/matt/` are being evaluated against the process rules in this section and the next. Where they disagree, prefer the trialled skill and note what it cost; the rules here are the baseline being measured, not a veto. Scope, and what is deliberately left unreconciled, is in `.claude/plugins/matt/README.md`.
 - Use `aicontext/architecture/development_lifecycle/technical_review_orchestration.md` for role-based review.
 - Initial review may use a role pack selected from changed surfaces.
 - Re-review after fixes must be focused: rerun only roles whose risk area changed.
