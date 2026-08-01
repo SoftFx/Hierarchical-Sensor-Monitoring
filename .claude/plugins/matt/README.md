@@ -18,6 +18,8 @@ lists this plugin, [`/.claude/settings.json`](../../settings.json) declares the
 marketplace and enables `matt@hsm`. Nothing is installed by hand — the prompt
 appears when you trust the repo folder.
 
+Team-facing onboarding lives in [`docs/agents/getting-started.md`](../../../docs/agents/getting-started.md).
+
 ## This is a trial
 
 The whole set is enabled on purpose: we are evaluating whether this way of working

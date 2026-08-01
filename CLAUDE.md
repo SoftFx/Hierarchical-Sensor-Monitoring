@@ -160,6 +160,8 @@ When adding new functionality:
 
 ## Agent skills
 
+Onboarding for the team — what changed, how to work, what we measure: `docs/agents/getting-started.md`.
+
 ### Issue tracker
 
 GitHub Issues in `SoftFx/Hierarchical-Sensor-Monitoring`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
