@@ -33,7 +33,7 @@ user merges.
 5. **Bump version** — edit `src/server/HSMServer/HSMServer.csproj` and replace
    `<Version>OLD</Version>` with `<Version>NEW</Version>`. Do not touch
    `HSMDataCollector.csproj` or `HSMSensorDataObjects.csproj` — those are
-   separate releases (see AGENTS.md Versioning).
+   separate releases (see CLAUDE.md Versioning).
 
 6. **Collect commits since the last release** — find the most recent `server-v*`
    tag:
@@ -62,7 +62,7 @@ user merges.
    - **Keep**: new features, user-visible bug fixes, behavior changes, UI changes,
      schema/storage changes that operators need to know about.
    - **Drop**: pure refactors, internal cleanups, CI-only changes, test-only
-     changes, doc-only changes (`aicontext/`, `AGENTS.md`).
+     changes, doc-only changes (`aicontext/`, `CLAUDE.md`).
    - **Lead with the most impactful change** in each area; merge related commits
      under one bullet.
    - **Hard limit: 2000 characters total** (count the rendered markdown bytes

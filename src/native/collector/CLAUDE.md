@@ -1,8 +1,8 @@
 # HSM Native Collector — Codex Instructions
 
 Directory-scoped rules for `src/native/collector/` (the native C++ HSM collector + its C ABI). These
-supplement the root [`AGENTS.md`](../../../AGENTS.md); where a rule here refines the root, the more
-specific rule wins. Sibling: [`../../agent/AGENTS.md`](../../agent/AGENTS.md) (the agent that embeds this
+supplement the root [`CLAUDE.md`](../../../CLAUDE.md); where a rule here refines the root, the more
+specific rule wins. Sibling: [`../../agent/CLAUDE.md`](../../agent/CLAUDE.md) (the agent that embeds this
 collector).
 
 ## Versioning — the native collector's own version

@@ -6,7 +6,7 @@ Lightweight documentation checks for HSM.
 
 | Script | Purpose |
 |---|---|
-| `check-links.sh` | Checks local markdown links under `AGENTS.md`, `aicontext/`, `docs/`, and `.github/`. |
+| `check-links.sh` | Checks local markdown links under `CLAUDE.md`, `aicontext/`, `docs/`, and `.github/`. |
 | `check-frontmatter.sh` | Verifies canonical docs have `> Owner: ... | Last reviewed: YYYY-MM-DD | Canonical: yes`. |
 | `check-feature-folders.sh` | Verifies feature folders are listed in their area `overview.md` and contain `feature.md`. |
 | `check-deprecated-terms.sh` | Flags curated deprecated terms from `aicontext/glossary.md`. |

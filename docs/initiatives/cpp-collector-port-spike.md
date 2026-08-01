@@ -706,7 +706,7 @@ number-format matrix, #1114 registration, #1115/#1117 differential fuzzer,
 - **DSL formalized** (`tests/conformance/README.md`): file format, text tokens,
   canonical payload shapes, the full ~70-verb catalog, determinism/authoring
   rules, versioning policy, driver contract, unsupported-marker mechanism.
-  AGENTS.md rule #9 makes conformance coverage a review gate.
+  CLAUDE.md rule #9 makes conformance coverage a review gate.
 - **Number-format matrix**: the native serializer printed `setprecision(17)`
   (0.1 → 0.10000000000000001) — invisible under tolerant compares. Rewrote
   `DoubleJson` to .NET shortest-round-trip (`R`) semantics; pinned by an

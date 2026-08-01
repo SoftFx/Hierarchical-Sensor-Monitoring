@@ -11,7 +11,7 @@ extern "C"
 
 /* The native collector's OWN version (semver) — INDEPENDENT of the managed C# collector, the host
    application (e.g. the agent), and the server; each is a distinct product with its own version.
-   Bump per src/native/collector/AGENTS.md: MAJOR for a breaking ABI change; MINOR for additive ABI
+   Bump per src/native/collector/CLAUDE.md: MAJOR for a breaking ABI change; MINOR for additive ABI
    growth (a new exported hsm_* function / appended struct field); PATCH for a backward-compatible
    behavior/logic change that does not touch the ABI (e.g. a logging change). hsm_collector_version()
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form

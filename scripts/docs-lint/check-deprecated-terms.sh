@@ -35,7 +35,7 @@ for rule in "${RULES[@]}"; do
     echo "DEPRECATED  $file:$lineno  $description"
     echo "  > $content"
     found=$((found + 1))
-  done < <(grep -rnE --include='*.md' "$pattern" AGENTS.md aicontext docs .github 2>/dev/null || true)
+  done < <(grep -rnE --include='*.md' "$pattern" CLAUDE.md aicontext docs .github 2>/dev/null || true)
 done
 
 echo ""

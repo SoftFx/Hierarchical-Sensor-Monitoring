@@ -8,7 +8,7 @@ cd "$REPO_ROOT"
 
 mapfile -t FILES < <(
   {
-    printf '%s\n' "AGENTS.md" "README.md" "ReleaseNote.md" "QWEN.md" "WORK_SESSION_NOTES.md"
+    printf '%s\n' "CLAUDE.md" "README.md" "ReleaseNote.md" "QWEN.md" "WORK_SESSION_NOTES.md"
     find aicontext docs .github -type f -name '*.md' 2>/dev/null
   } | sort -u
 )
