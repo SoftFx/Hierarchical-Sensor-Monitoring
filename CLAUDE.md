@@ -157,3 +157,17 @@ When adding new functionality:
 - Public collector APIs, DTOs in `HSMSensorDataObjects`, C++ wrapper headers, and serialized storage formats are compatibility-sensitive.
 - Treat scheduler/lifecycle, storage key formats, alert delivery, notification routing, and long-running queues as high-risk areas.
 - Document intentional breaking changes explicitly in PR text and public docs.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in `SoftFx/Hierarchical-Sensor-Monitoring`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, each label string equal to its name, all present in the repo. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at the repo root, ADRs under `docs/adr/`. See `docs/agents/domain.md`.
