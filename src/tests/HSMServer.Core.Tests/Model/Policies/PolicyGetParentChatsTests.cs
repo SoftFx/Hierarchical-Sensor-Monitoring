@@ -7,12 +7,11 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Schedule;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.Infrastructure;
+using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Moq;
 using Xunit;
-using EntitiesFactory = HSMServer.Core.Tests.Infrastructure.EntitiesFactory;
 
 namespace HSMServer.Core.Tests.Model.Policies
 {
