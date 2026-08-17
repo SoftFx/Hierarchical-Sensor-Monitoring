@@ -38,8 +38,9 @@ namespace HSMServer.Notifications.Chats
             // per-policy TargetChats call, which re-walks and allocates a fresh Dictionary each
             // time.
             //
-            // Parent-chain rule: this walk stops at the first ancestor whose
-            // DefaultChats.IsFromParent is false, matching the destination picker UI
+            // Parent-chain rule: this walk stops at the first ancestor that made an explicit
+            // non-inheriting choice (Custom/Empty); NotInitialized (no decision made) keeps
+            // the walk going. Same rule as the destination picker UI
             // (DefaultChatViewModel.GetParentChats) and alert delivery (Policy.GetParentChats
             // in HSMServer.Core — aligned in #1330). The badge and delivery agree on every
             // chain shape.
@@ -255,9 +256,10 @@ namespace HSMServer.Notifications.Chats
         }
 
         // Resolves the inherited chat set for a product, memoized per Compute() pass. Single
-        // linear walk up the chain, stopping at the first ancestor whose DefaultChats.IsFromParent
-        // is false — matches the destination picker UI (DefaultChatViewModel.GetParentChats), so a
-        // non-inheriting intermediate node breaks the chain the same way the picker shows.
+        // linear walk up the chain, stopping at the first ancestor that made an explicit
+        // non-inheriting choice (Custom/Empty); NotInitialized (no decision made — byte 0, the
+        // deserialisation default) does not break the chain. Matches the destination picker UI
+        // (DefaultChatViewModel.GetParentChats) and delivery (Policy.GetParentChats, #1330).
         private HashSet<Guid> ResolveInheritedChats(
             ProductModel parent,
             Dictionary<Guid, HashSet<Guid>> memo)
@@ -274,7 +276,7 @@ namespace HSMServer.Notifications.Chats
                 foreach (var id in curValue.Chats.Keys)
                     chats.Add(id);
 
-                if (!curValue.IsFromParent)
+                if (!curValue.IsFromParent && !curValue.IsNotInitialized)
                     break;
             }
 

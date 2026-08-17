@@ -112,7 +112,9 @@ namespace HSMServer.Model.Controls
             var parentIds = new HashSet<Guid>();
             parentIds.UnionWith(parent?.SelectedChats ?? []);
 
-            if (parent?.IsFromParent ?? false)
+            // NotInitialized is the absence of a decision (byte 0, the deserialisation
+            // default) — it keeps the walk going; only Custom/Empty break the chain (#1330).
+            if (parent is not null && (parent.IsFromParent || parent.IsNotInitialized))
             {
                 var (a, b) = parent.GetParentChats();
                 parentIds.UnionWith(a);

@@ -21,11 +21,11 @@ using EntitiesFactory = HSMServer.Core.Tests.Infrastructure.EntitiesFactory;
 namespace HSMServer.Core.Tests.Notifications
 {
     // Integration coverage for Compute()'s entry-point contract: empty cache → empty counts,
-    // the calculator's parent-chain resolution (stops at the first non-inheriting ancestor,
-    // matching the destination picker UI and delivery routing — Policy.GetParentChats was
-    // aligned to the same rule in #1330), FromParent + explicit Destination.Chats union, and
-    // the concurrent-mutation skip path (InvalidOperationException → skipped++, UI renders
-    // "≥N sensors").
+    // the calculator's parent-chain resolution (stops at the first explicitly non-inheriting
+    // ancestor — Custom/Empty; NotInitialized keeps walking — matching the destination picker
+    // UI and delivery routing, Policy.GetParentChats aligned to the same rule in #1330),
+    // FromParent + explicit Destination.Chats union, and the concurrent-mutation skip path
+    // (InvalidOperationException → skipped++, UI renders "≥N sensors").
     public class ChatSensorUsageCalculatorComputeTests
     {
         [Fact]
@@ -43,9 +43,10 @@ namespace HSMServer.Core.Tests.Notifications
 
         // Pins the calculator's parent-chain resolution: with a chain root(C) → mid(Custom, not
         // FromParent) → leaf(FromParent), a sensor under leaf with a FromParent policy must count
-        // mid's chats but NOT root's. ResolveInheritedChats stops at the first ancestor whose
-        // DefaultChats.IsFromParent is false — the same rule as delivery routing
-        // (Policy.GetParentChats, aligned in #1330) and the destination picker UI.
+        // mid's chats but NOT root's. ResolveInheritedChats stops at the first ancestor that made
+        // an explicit non-inheriting choice (Custom/Empty) — the same rule as delivery routing
+        // (Policy.GetParentChats, aligned in #1330) and the destination picker UI; NotInitialized
+        // does not break the chain.
         [Fact]
         public void Compute_FromParentUnderNonInheritingMiddle_StopsAtMiddle()
         {
