@@ -97,26 +97,19 @@ namespace HSMServer.Core.Model.Policies
         {
             var dict = new Dictionary<Guid, string>();
 
-            if (parent is null)
-                return dict;
-
-            foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
-                dict.TryAdd(id, name);
-
-            if (parent.Settings.DefaultChats.CurValue.IsFromParent)
+            // Single linear walk up the chain, stopping at the first ancestor whose
+            // DefaultChats.IsFromParent is false — matches the destination picker UI
+            // (DefaultChatViewModel.GetParentChats). See #1330.
+            for (var node = parent; node is not null; node = node.Parent)
             {
-                var par = parent.Parent;
+                foreach (var (id, name) in node.Settings.DefaultChats.CurValue.Chats)
+                    dict.TryAdd(id, name);
 
-                //TODO: Add folder chats when parent.FolderId.HasValue
-
-                while (par != null)
-                {
-                    foreach (var (id, name) in GetParentChats(par))
-                        dict.TryAdd(id, name);
-
-                    par = par.Parent;
-                }
+                if (!node.Settings.DefaultChats.CurValue.IsFromParent)
+                    break;
             }
+
+            //TODO: Add folder chats when node.FolderId.HasValue
 
             return dict;
         }
