@@ -22,9 +22,10 @@ namespace HSMServer.Core.Tests.Notifications
 {
     // Integration coverage for Compute()'s entry-point contract: empty cache → empty counts,
     // the calculator's parent-chain resolution (stops at the first non-inheriting ancestor,
-    // matching the destination picker UI — diverges from delivery routing, tracked in #1330),
-    // FromParent + explicit Destination.Chats union, and the concurrent-mutation skip path
-    // (InvalidOperationException → skipped++, UI renders "≥N sensors").
+    // matching the destination picker UI and delivery routing — Policy.GetParentChats was
+    // aligned to the same rule in #1330), FromParent + explicit Destination.Chats union, and
+    // the concurrent-mutation skip path (InvalidOperationException → skipped++, UI renders
+    // "≥N sensors").
     public class ChatSensorUsageCalculatorComputeTests
     {
         [Fact]
@@ -43,10 +44,8 @@ namespace HSMServer.Core.Tests.Notifications
         // Pins the calculator's parent-chain resolution: with a chain root(C) → mid(Custom, not
         // FromParent) → leaf(FromParent), a sensor under leaf with a FromParent policy must count
         // mid's chats but NOT root's. ResolveInheritedChats stops at the first ancestor whose
-        // DefaultChats.IsFromParent is false. This is the calculator's own badge-counting rule —
-        // it does NOT depend on Policy.GetParentChats (which delivers alerts) and is intentionally
-        // stricter: a non-inheriting middle node breaks the inheritance for the badge the same way
-        // the destination picker UI shows.
+        // DefaultChats.IsFromParent is false — the same rule as delivery routing
+        // (Policy.GetParentChats, aligned in #1330) and the destination picker UI.
         [Fact]
         public void Compute_FromParentUnderNonInheritingMiddle_StopsAtMiddle()
         {

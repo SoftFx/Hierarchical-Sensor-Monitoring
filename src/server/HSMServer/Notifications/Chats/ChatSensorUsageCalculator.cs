@@ -38,15 +38,11 @@ namespace HSMServer.Notifications.Chats
             // per-policy TargetChats call, which re-walks and allocates a fresh Dictionary each
             // time.
             //
-            // NOTE on divergence from delivery: this walk stops at the first ancestor whose
-            // DefaultChats.IsFromParent is false, matching what the destination picker UI shows
-            // (DefaultChatViewModel.GetParentChats). Alert delivery (Policy.GetParentChats in
-            // HSMServer.Core) uses a broader rule — once the immediate parent IsFromParent, it
-            // walks every remaining strict ancestor unconditionally, so a chat configured on a
-            // higher non-inheriting ancestor still receives alerts but is NOT counted by this
-            // badge. That divergence is tracked in issue #1330; until the delivery side is
-            // reconciled, the badge can undercount relative to real delivery on chains deeper
-            // than two levels with a non-inheriting middle node. There is no overcount case.
+            // Parent-chain rule: this walk stops at the first ancestor whose
+            // DefaultChats.IsFromParent is false, matching the destination picker UI
+            // (DefaultChatViewModel.GetParentChats) and alert delivery (Policy.GetParentChats
+            // in HSMServer.Core — aligned in #1330). The badge and delivery agree on every
+            // chain shape.
             var inheritedChatsByProduct = new Dictionary<Guid, HashSet<Guid>>();
             var folderChatsByFolderId = new Dictionary<Guid, IEnumerable<Guid>>();
 
