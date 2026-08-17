@@ -102,14 +102,14 @@ namespace HSMServer.Core.Model.Policies
             // (DefaultChatViewModel.GetParentChats). See #1330.
             for (var node = parent; node is not null; node = node.Parent)
             {
+                //TODO: Add folder chats when node.FolderId.HasValue
+
                 foreach (var (id, name) in node.Settings.DefaultChats.CurValue.Chats)
                     dict.TryAdd(id, name);
 
                 if (!node.Settings.DefaultChats.CurValue.IsFromParent)
                     break;
             }
-
-            //TODO: Add folder chats when node.FolderId.HasValue
 
             return dict;
         }

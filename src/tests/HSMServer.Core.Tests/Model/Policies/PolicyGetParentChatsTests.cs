@@ -68,12 +68,28 @@ namespace HSMServer.Core.Tests.Model.Policies
             Assert.Equal("mid", chats[midChat]);
         }
 
+        // An ancestor in Empty mode (alerts without notifications) also breaks the chain:
+        // IsFromParent is false for any mode other than FromParent.
+        [Fact]
+        public void EmptyModeMiddleNode_BreaksChain()
+        {
+            var rootChat = Guid.NewGuid();
+            var midChat = Guid.NewGuid();
+
+            var root = BuildProduct(DefaultChatsMode.Custom, (rootChat, "root"));
+            var mid = BuildProduct(DefaultChatsMode.Empty, (midChat, "mid"));
+            root.AddSubProduct(mid);
+
+            var chats = new IntegerPolicy().GetParentChats(mid);
+
+            Assert.Equal(new Dictionary<Guid, string> { [midChat] = "mid" }, chats);
+        }
+
         [Fact]
         public void NullParent_ReturnsEmpty()
         {
             Assert.Empty(new IntegerPolicy().GetParentChats(null));
         }
-
 
         private static ProductModel BuildProduct(DefaultChatsMode mode, params (Guid Id, string Name)[] chats)
         {
