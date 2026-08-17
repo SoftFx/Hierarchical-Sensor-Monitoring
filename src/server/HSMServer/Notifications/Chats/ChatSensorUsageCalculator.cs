@@ -189,9 +189,9 @@ namespace HSMServer.Notifications.Chats
                 // dedicated "from parent chats, {extra}" case. The previous form returned only
                 // the inherited set and dropped Destination.Chats, silently undercounting.
                 //
-                // NOTE: this resolver's parent-chain walk stops at the first non-inheriting
-                // ancestor (matches the picker UI). Delivery uses a broader rule — see the
-                // divergence note in Compute().
+                // This resolver's parent-chain walk stops at the first non-inheriting ancestor,
+                // matching the picker UI — delivery (Policy.GetParentChats) uses the same rule
+                // since #1330.
                 IEnumerable<Guid> resolvedChats;
                 int resolvedChatCount;
                 bool resolvedIsAllChats;

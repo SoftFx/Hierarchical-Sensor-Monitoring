@@ -122,6 +122,32 @@ namespace HSMServer.Core.Tests.Model.Policies
             Assert.False(chats.ContainsKey(rootChat));
         }
 
+        // A NotInitialized middle node breaks the chain the same way. NotInitialized is the
+        // mode most likely to appear by accident: it's byte 0, so any DB record predating the
+        // DefaultChatsSettings field deserialises to it, and it stays there because
+        // MigrationManager.RunProductMigrations (which rewrites NotInitialized non-root
+        // products to FromParent) is never invoked.
+        [Fact]
+        public void NotInitializedMiddleNode_BreaksChainForFromParentDescendant()
+        {
+            var rootChat = Guid.NewGuid();
+            var midChat = Guid.NewGuid();
+            var leafChat = Guid.NewGuid();
+
+            var root = BuildProduct(DefaultChatsMode.Custom, (rootChat, "root"));
+            var mid = BuildProduct(DefaultChatsMode.NotInitialized, (midChat, "mid"));
+            var leaf = BuildProduct(DefaultChatsMode.FromParent, (leafChat, "leaf"));
+            root.AddSubProduct(mid);
+            mid.AddSubProduct(leaf);
+
+            var chats = new IntegerPolicy().GetParentChats(leaf);
+
+            Assert.Equal(2, chats.Count);
+            Assert.Equal("leaf", chats[leafChat]);
+            Assert.Equal("mid", chats[midChat]);
+            Assert.False(chats.ContainsKey(rootChat));
+        }
+
         // Pins the delivery entry point itself: TargetChats gates GetParentChats on
         // Destination.IsFromParentChats and layers explicit Destination.Chats on top.
         [Fact]
