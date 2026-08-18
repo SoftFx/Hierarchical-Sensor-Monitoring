@@ -14,9 +14,9 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Null(WebhookUrlMasker.Mask(url));
         }
 
-        // The canonical example from the review discussion: Mattermost-style URL where the last path
-        // segment is the secret token. Scheme + host + preceding path segments stay verbatim; only
-        // the last segment is reduced to head4 + `••••` + tail4.
+        // Mattermost-style URL where the last path segment is the secret token (non-default port
+        // exercises authority rebuilding). Scheme + host[:port] + preceding path segments stay
+        // verbatim; only the last segment is reduced to head4 + `••••` + tail4.
         [Fact]
         public void Mask_LocalhostMattermostExample_MasksOnlyLastSegment()
         {
@@ -123,16 +123,30 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.True(WebhookUrlMasker.IsMasked(masked));
         }
 
-        // A short last segment (≤ 8 chars = head+tail threshold) is shown verbatim per UX decision,
-        // with the marker appended as a trailing sentinel so IsMasked stays true (otherwise the
-        // round-tripped value would look like a fresh URL and overwrite the stored webhook on save).
+        // A short last segment (≤ 8 chars = head+tail threshold) is masked entirely: revealing
+        // head+tail of a short token would disclose most or all of the secret, and a mask must
+        // never emit its input verbatim (#1329 review).
         [Fact]
-        public void Mask_LastSegmentShortEnough_ShownVerbatimWithTrailingMarker()
+        public void Mask_LastSegmentTooShort_MaskedEntirely()
         {
             var masked = WebhookUrlMasker.Mask("https://hooks.slack.com/services/short");
 
-            Assert.Equal("https://hooks.slack.com/services/short••••", masked);
+            Assert.Equal("https://hooks.slack.com/services/••••", masked);
+            Assert.DoesNotContain("short", masked);
             Assert.True(WebhookUrlMasker.IsMasked(masked));
+        }
+
+        // userinfo must be stripped from the display value: GetLeftPart(UriPartial.Authority)
+        // includes user:password@, which would render basic-auth credentials in cleartext (#1329
+        // review).
+        [Fact]
+        public void Mask_UrlWithUserinfo_StripsCredentialsFromDisplay()
+        {
+            var masked = WebhookUrlMasker.Mask("https://svc:S3cretPass@mattermost.internal/hooks/abcd1234efgh5678");
+
+            Assert.Equal("https://mattermost.internal/hooks/abcd••••5678", masked);
+            Assert.DoesNotContain("svc", masked);
+            Assert.DoesNotContain("S3cretPass", masked);
         }
 
         // A webhook URL with no path (no '/' after the host) collapses to authority + marker. Uri
@@ -148,16 +162,26 @@ namespace HSMServer.Core.Tests.Notifications
         }
 
         // Weird/unparseable input must mask rather than throw — a stored webhook should never be
-        // unparseable, but the helper is a boundary and must degrade safely. It still slices at the
-        // last '/' so the trailing segment is masked.
+        // unparseable, but the helper is a boundary and must degrade safely. The fallback slices at
+        // the first '/', so everything after the host-ish prefix is masked. With no '/' at all the
+        // whole value is one opaque blob (e.g. a bare token) and the marker alone is returned.
         [Fact]
-        public void Mask_NonParseableInputWithSlashes_DoesNotThrowAndMasksLastSegment()
+        public void Mask_NonParseableInput_MasksEverythingAfterFirstSlash()
         {
             var masked = WebhookUrlMasker.Mask("not-a-url/and/secret-tail-value-here");
 
             Assert.NotNull(masked);
             Assert.Contains(WebhookUrlMasker.MaskMarker, masked);
             Assert.DoesNotContain("secret-tail-value-here", masked);
+        }
+
+        [Fact]
+        public void Mask_NonParseableInputWithoutSlashes_ReturnsMarkerOnly()
+        {
+            var masked = WebhookUrlMasker.Mask("bare-secret-token");
+
+            Assert.Equal(WebhookUrlMasker.MaskMarker, masked);
+            Assert.True(WebhookUrlMasker.IsMasked(masked));
         }
 
         [Theory]
@@ -234,7 +258,7 @@ namespace HSMServer.Core.Tests.Notifications
         public void ValidatePosted_EditedVisiblePrefix_Rejected()
         {
             const string stored = "https://hooks.slack.com/services/stored-secret-token";
-            // Mask is `…/stor••••token`; change the visible head `stor` → `XXXX`.
+            // Mask is `…/stor••••oken`; change the visible head `stor` → `XXXX`.
             var posted = WebhookUrlMasker.Mask(stored).Replace("stor", "XXXX");
 
             Assert.NotNull(WebhookUrlMasker.ValidatePosted(posted, stored));

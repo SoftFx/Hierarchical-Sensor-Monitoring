@@ -416,11 +416,12 @@ test('EditChat: a rejected webhook edit surfaces the error on the failing channe
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
 });
-// carry the server-owned folder data (Connected folders table + the hidden Folders.Folders[i]
-// inputs). The POST-bound ChatViewModel has DisplayFolders empty (get-only, never posted), so
-// without a rebuild the next Save — the user pasting the full URL as the error tells them to —
-// posts empty Folders and SyncFolders unbinds the chat from every managed folder. For an admin
-// that means every folder; the rotation looks successful while the chat silently stops receiving
+// A rejected webhook edit must re-render with the server-owned folder data (Connected folders
+// table + the hidden Folders.Folders[i] inputs). The POST-bound ChatViewModel has DisplayFolders
+// empty (get-only, never posted), so without a rebuild the next Save — the user pasting the full
+// URL as the error tells them to — posts empty Folders and SyncFolders unbinds the chat from
+// every managed folder. For an admin that means every folder; the rotation looks successful
+// while the chat silently stops receiving
 // alerts from everywhere.
 test('EditChat: a rejected webhook edit preserves folder bindings across the re-save', async ({ page }) => {
   const { apiUrl, admin_user, admin_user_password, folder_description, folder_color } = testConfig;

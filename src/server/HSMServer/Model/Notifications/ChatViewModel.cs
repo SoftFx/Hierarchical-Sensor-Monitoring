@@ -140,18 +140,21 @@ namespace HSMServer.Model.Notifications
                 MessagesAggregationTimeSec = MessagesDelay,
                 // ResolveWebhook: null = "no change" (Chat.ApplyUpdate uses ?? current). The masked
                 // sentinel posted back from the unchanged field, and an empty field, both mean "keep
-                // the stored webhook"; only a real pasted URL overwrites. ToNewChat reads the raw
-                // props directly (a brand-new chat posts a real URL, never the mask).
+                // the stored webhook"; only a real pasted URL overwrites.
                 SlackWebhookUrl = ResolveWebhook(SlackWebhookUrl),
                 MattermostWebhookUrl = ResolveWebhook(MattermostWebhookUrl),
             };
 
         // null  → don't change the stored webhook (ApplyUpdate: ?? current).
-        // value → overwrite with the newly-pasted URL.
-        private static string ResolveWebhook(string posted) =>
-            string.IsNullOrWhiteSpace(posted) || WebhookUrlMasker.IsMasked(posted)
-                ? null
-                : posted;
+        // value → overwrite with the newly-pasted URL. Trims surrounding whitespace so a sloppy
+        // paste isn't persisted verbatim (Uri.TryCreate trims when validating, storage did not).
+        private static string ResolveWebhook(string posted)
+        {
+            if (string.IsNullOrWhiteSpace(posted) || WebhookUrlMasker.IsMasked(posted))
+                return null;
+
+            return posted.Trim();
+        }
 
         internal Chat ToNewChat(Guid authorId)
         {
@@ -164,8 +167,10 @@ namespace HSMServer.Model.Notifications
                 Description = Description ?? string.Empty,
                 SendMessages = EnableMessages,
                 MessagesAggregationTimeSec = MessagesDelay,
-                SlackWebhookUrl = SlackWebhookUrl,
-                MattermostWebhookUrl = MattermostWebhookUrl,
+                // Route through ResolveWebhook so a masked/whitespace value can never be persisted
+                // as a live webhook (a brand-new chat posts a real URL, never the mask).
+                SlackWebhookUrl = ResolveWebhook(SlackWebhookUrl),
+                MattermostWebhookUrl = ResolveWebhook(MattermostWebhookUrl),
             };
 
             return new Chat(entity);

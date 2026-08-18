@@ -3,15 +3,17 @@ import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 import { uniqueName, cleanup } from '../fixtures.ts';
 
-// Covers AddChat validation (ChatViewModel: [Required] Name, [Url] SlackWebhookUrl/MattermostWebhookUrl).
+// Covers AddChat validation (ChatViewModel: [Required] Name; server-side webhook URL checks in
+// NotificationsController.ValidateWebhooks — the [Url] attribute and <input type="url"> were removed
+// with webhook masking, #1329).
 // Note: ChatsManager enforces uniqueness only on TelegramChatId (Notifications/Chats/ChatsManager.cs:54-70)
 // — chat Name has no uniqueness constraint server-side, so there is deliberately no "duplicate name
 // is rejected" case here; that behavior doesn't exist to test.
 //
-// Neither invalid field renders a visible inline error (EditChat.cshtml has no asp-validation-for
-// spans), so both cases assert on the only observable, deterministic signal: an invalid submit never
-// leaves /Notifications/AddChat (a valid one redirects to the /Notifications list), and the chat
-// never shows up in the list.
+// An invalid webhook URL is rejected server-side and the form re-renders with an inline
+// asp-validation-for error on the failing channel's tab; both cases also assert the durable
+// signal: an invalid submit never leaves /Notifications/AddChat (a valid one redirects to the
+// /Notifications list), and the chat never shows up in the list.
 
 const emptyNameSlackUrl = 'https://hooks.slack.com/services/validation-empty-name';
 const invalidUrlChatName = uniqueName('BadUrlChat');
@@ -69,8 +71,8 @@ test('AddChat: an invalid Slack webhook URL is rejected — no chat is created',
   await expect(page).toHaveURL(/AddChat/);
 
   await page.locator('#Name').fill(invalidUrlChatName);
-  // Not an absolute URL — violates both the <input type="url"> native constraint and the
-  // [Url] DataAnnotation on ChatViewModel.SlackWebhookUrl.
+  // Not an absolute URL — rejected server-side by NotificationsController.ValidateWebhooks
+  // (Uri.TryCreate + http/https scheme check).
   await page.locator('#SlackWebhookUrl').fill('not-a-valid-url');
   await page.getByRole('button', { name: 'Save' }).click();
 

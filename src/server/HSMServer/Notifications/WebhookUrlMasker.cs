@@ -37,10 +37,11 @@ namespace HSMServer.Notifications
                 return MaskAbsoluteUri(uri);
 
             // Unparseable input (rare for a stored webhook) — fall back to masking everything after
-            // the first '/' so the host-ish prefix survives. This path is best-effort; the structured
-            // path above is the one real webhook URLs take.
+            // the first '/' so the host-ish prefix survives. With no '/' at all the value is one
+            // opaque blob (e.g. a bare token), so nothing is safe to echo: fail closed. This path is
+            // best-effort; the structured path above is the one real webhook URLs take.
             var firstSlash = url.IndexOf('/', StringComparison.Ordinal);
-            return firstSlash < 0 ? url + MaskMarker : url.Substring(0, firstSlash + 1) + MaskMarker;
+            return firstSlash < 0 ? MaskMarker : url.Substring(0, firstSlash + 1) + MaskMarker;
         }
 
         // True iff url carries the mask marker — i.e. it's a value we (or someone typing the literal
@@ -75,12 +76,16 @@ namespace HSMServer.Notifications
         // webhook and a `?redirect=/x` query must not move the mask split past the token).
         private static string MaskAbsoluteUri(Uri uri)
         {
-            var authority = uri.GetLeftPart(UriPartial.Authority);
+            // Build the authority from parsed parts instead of GetLeftPart(UriPartial.Authority) —
+            // that includes userinfo, so a `https://user:pass@host/…` webhook would render the
+            // credentials in cleartext. Uri.Authority excludes userinfo.
+            var authority = uri.IsDefaultPort
+                ? $"{uri.Scheme}://{uri.Host}"
+                : $"{uri.Scheme}://{uri.Host}:{uri.Port}";
             var segments = uri.Segments;
 
             // uri.Segments is `/`-prefixed and never empty for an absolute URI (worst case: ["/"]).
-            // Walk back from the end to find the last segment that carries a non-slash token; a
-            // trailing-slash URL (`…/token/`) has its last real segment one step before the end.
+            // Walk back from the end to find the last segment that carries a non-slash token.
             var lastIdx = -1;
             for (var i = segments.Length - 1; i >= 0; i--)
             {
@@ -103,17 +108,16 @@ namespace HSMServer.Notifications
             return authority + prefix.ToString() + MaskLastSegment(lastSegment);
         }
 
-        // Reduces the last path segment to `head4 + MaskMarker + tail4`. A short segment (≤ 8 chars)
-        // is shown verbatim per UX decision, with the marker appended as a trailing sentinel so
-        // IsMasked stays true for every masked value (without it, the POST "no change" detection in
-        // ToUpdate would treat the round-tripped value as a fresh URL and overwrite the stored one).
+        // Reduces the last path segment to `head4 + MaskMarker + tail4`. A short segment
+        // (≤ head+tail chars) is masked entirely: revealing anything of a short token leaves too
+        // little hidden, and a mask must never emit the secret verbatim (#1329 review).
         private static string MaskLastSegment(string segment)
         {
             if (string.IsNullOrEmpty(segment))
                 return MaskMarker;
 
             if (segment.Length <= LastSegmentRevealThreshold)
-                return segment + MaskMarker;
+                return MaskMarker;
 
             var head = segment.Substring(0, LastSegmentHeadChars);
             var tail = segment.Substring(segment.Length - LastSegmentTailChars);

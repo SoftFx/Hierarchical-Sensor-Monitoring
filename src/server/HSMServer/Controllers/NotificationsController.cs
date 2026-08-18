@@ -65,14 +65,7 @@ namespace HSMServer.Controllers
 
             if (!ModelState.IsValid)
             {
-                // Re-render must carry the server-owned folder data, not the model-bound shell.
-                // ChatFoldersViewModel.DisplayFolders is get-only and populated only by the server
-                // ctor; the form never posts it, so the re-render would otherwise drop the folders
-                // table AND the hidden Folders.Folders[i] inputs. The next Save (the user pasting the
-                // full URL as the error tells them to) would then post empty Folders, and SyncFolders
-                // would unbind the chat from every managed folder (#1329 review).
-                if (stored is not null)
-                    model.Folders = BuildChatFolders(stored);
+                RestoreStoredDisplayState(model, stored);
 
                 // Land the user on the tab whose field actually has the error. EditChat.cshtml
                 // renders asp-validation-for spans inside .tab-pane fade divs that are display:none
@@ -131,10 +124,9 @@ namespace HSMServer.Controllers
 
             if (!ModelState.IsValid)
             {
-                // Same folder-rebuild as EditChat POST — see there for why the server-owned folder
-                // data must be repopulated before re-render or the next Save unbinds folders.
-                if (stored is not null)
-                    model.Folders = BuildChatFolders(stored);
+                // Same re-render restoration as EditChat POST — see there for why the server-owned
+                // folder/display data must be repopulated before re-render.
+                RestoreStoredDisplayState(model, stored);
 
                 // And the same tab-routing — see EditChat POST for why the failing field's tab must
                 // become active or the rejection error is rendered into a display:none pane.
@@ -274,14 +266,14 @@ namespace HSMServer.Controllers
         // nothing changed). The classification lives in WebhookUrlMasker.ValidatePosted so it's unit-
         // covered; a real pasted URL still has to pass the absolute http/https check here.
         //
-        // Empty-on-stored regression guard: pre-PR, ToUpdate passed the posted value straight
-        // through, so Chat.ApplyUpdate (`update.SlackWebhookUrl ?? SlackWebhookUrl`) received "" and
-        // the webhook was cleared. Now ResolveWebhook maps empty → null = "no change", so deleting
-        // the field contents became a silent no-op — the admin sees a success redirect while the
-        // old webhook stays live (#1329 review). The sanctioned path is Remove Slack / Remove
-        // Mattermost (ClearSlackWebhook/ClearMattermostWebhook flags); reject empty and point there.
-        // No stored webhook → empty is valid (e.g. brand-new chat, or clearing an already-cleared
-        // field), so the guard only fires when stored has a value.
+        // Empty-field guard: an empty/whitespace post with a stored webhook is rejected with a
+        // pointer to Remove Slack / Remove Mattermost. This is a deliberate UX tightening, not a
+        // regression fix — empty input has always bound to null (MVC ConvertEmptyStringToNull) and
+        // Chat.ApplyUpdate's `?? current` has always meant "no change", so clearing the field was a
+        // silent no-op before this PR too. Rejecting turns that no-op into feedback. storedUrl uses
+        // IsNullOrWhiteSpace to stay symmetric with Mask/ResolveWebhook — a whitespace-only stored
+        // value would otherwise make the chat unsavable (the "Use Remove …" error fires while the
+        // whitespace hides the Remove button via HasSlack, see #1329 review).
         private void ValidateWebhooks(ChatViewModel model, Chat stored)
         {
             ValidateWebhook(model.SlackWebhookUrl, stored?.SlackWebhookUrl, nameof(ChatViewModel.SlackWebhookUrl), "Slack");
@@ -290,15 +282,14 @@ namespace HSMServer.Controllers
             void ValidateWebhook(string posted, string storedUrl, string key, string channelName)
             {
                 // MVC binds an empty text input to null via ConvertEmptyStringToNull, so both null
-                // and "" reach here. Empty + stored webhook = the regression guard (point to Remove).
-                // Empty + no stored webhook is legitimate (new chat, or an already-cleared channel) —
-                // MUST return here, not fall through: Uri.TryCreate(null, Absolute) returns false,
-                // which would add a spurious "must be a valid URL" error to a field the user never
-                // filled in, breaking AddChat for any chat missing one of the two webhooks (#1329
-                // review).
+                // and "" reach here. Empty + stored webhook = point to Remove. Empty + no stored
+                // webhook is legitimate (new chat, or an already-cleared channel) — MUST return
+                // here, not fall through: Uri.TryCreate(null, Absolute) returns false, which would
+                // add a spurious "must be a valid URL" error to a field the user never filled in,
+                // breaking AddChat for any chat missing one of the two webhooks (#1329 review).
                 if (string.IsNullOrWhiteSpace(posted))
                 {
-                    if (!string.IsNullOrEmpty(storedUrl))
+                    if (!string.IsNullOrWhiteSpace(storedUrl))
                         ModelState.AddModelError(key, $"Use Remove {channelName} to delete the webhook.");
 
                     return;
@@ -340,6 +331,36 @@ namespace HSMServer.Controllers
                 ModelState.ContainsKey(key) && ModelState[key].Errors.Count > 0;
         }
 
+
+        // Repopulates server-owned display state that the model-bound shell lost on a validation
+        // rejection, so the re-rendered form is both correct and actionable:
+        //  - Folders: ChatFoldersViewModel.DisplayFolders is get-only and populated only by the
+        //    server ctor; the form never posts it. Without the rebuild, the re-render drops the
+        //    folders table AND the hidden Folders.Folders[i] inputs, so the next Save (pasting the
+        //    full URL as the error tells the user to) posts empty Folders and SyncFolders unbinds
+        //    the chat from every managed folder. The just-picked SelectedFolders are carried over
+        //    so a pending folder selection survives the round-trip.
+        //  - Webhook fields: a rejected empty post binds to null, which would render an empty field
+        //    with HasSlack=false — hiding the very Remove button the rejection error points to.
+        //    Restore the stored mask so the error is actionable. A posted (edited/pasted) value is
+        //    kept as-is so the user sees what they submitted.
+        //  - Telegram title/description: display-only fields not posted by the form.
+        private void RestoreStoredDisplayState(ChatViewModel model, Chat stored)
+        {
+            if (stored is null)
+                return;
+
+            var postedSelectedFolders = model.Folders?.SelectedFolders;
+            model.Folders = BuildChatFolders(stored);
+
+            if (postedSelectedFolders is not null)
+                model.Folders.SelectedFolders = postedSelectedFolders;
+
+            model.SlackWebhookUrl ??= WebhookUrlMasker.Mask(stored.SlackWebhookUrl);
+            model.MattermostWebhookUrl ??= WebhookUrlMasker.Mask(stored.MattermostWebhookUrl);
+            model.TelegramChatTitle = stored.TelegramChatTitle;
+            model.TelegramChatDescription = stored.TelegramChatDescription;
+        }
 
         private ChatFoldersViewModel BuildChatFolders(Chat chat)
         {
