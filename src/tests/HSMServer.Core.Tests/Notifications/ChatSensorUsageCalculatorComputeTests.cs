@@ -105,6 +105,39 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(1, counts[extraChat]);
         }
 
+        // Pins that a NotInitialized middle node does NOT break the badge's parent chain — the
+        // same rule as delivery (Policy.GetParentChats) and the picker: NotInitialized expresses
+        // the absence of a decision (byte 0, the deserialisation default for records predating
+        // the DefaultChatsSettings field), so the badge keeps walking past it and counts root's
+        // chats too.
+        [Fact]
+        public void Compute_NotInitializedMiddleNode_DoesNotBreakChain()
+        {
+            var rootChat = Guid.NewGuid();
+            var midChat = Guid.NewGuid();
+
+            var root = BuildProduct(DefaultChatsMode.Custom, (rootChat, "root"));
+            var mid = BuildProduct(DefaultChatsMode.NotInitialized, (midChat, "mid"));
+            var leaf = BuildProduct(DefaultChatsMode.FromParent);
+
+            root.AddSubProduct(mid);
+            mid.AddSubProduct(leaf);
+
+            var provider = new Mock<IAlertScheduleProvider>().Object;
+            var sensor = BuildIntegerSensorUnder(leaf, provider);
+            AddPolicy(sensor, PolicyDestinationMode.FromParent);
+
+            var calc = new ChatSensorUsageCalculator(
+                CacheReturning(new[] { sensor }),
+                FolderManagerStub());
+
+            var (counts, skipped) = calc.Compute();
+
+            Assert.Equal(0, skipped);
+            Assert.Equal(1, counts[rootChat]);
+            Assert.Equal(1, counts[midChat]);
+        }
+
         // Pins that when EVERY ancestor in the chain is FromParent, the calculator walks all the
         // way to the root. This is the "no non-inheriting break" branch and guards against
         // over-eager break-on-first-iteration regressions in ResolveInheritedChats.

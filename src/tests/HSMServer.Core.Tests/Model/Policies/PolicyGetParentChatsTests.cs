@@ -18,7 +18,8 @@ namespace HSMServer.Core.Tests.Model.Policies
     // Pins Policy.GetParentChats (alert delivery) to the same parent-chain resolution as the
     // destination picker UI (DefaultChatViewModel.GetParentChats) and the usage badge
     // (ChatSensorUsageCalculator.ResolveInheritedChats): a single linear walk that stops at
-    // the first ancestor whose DefaultChats.IsFromParent is false. See #1330.
+    // the first ancestor that made an explicit non-inheriting choice (Custom/Empty);
+    // NotInitialized (no decision made) keeps walking. See #1330.
     public class PolicyGetParentChatsTests
     {
         [Fact]
@@ -31,7 +32,7 @@ namespace HSMServer.Core.Tests.Model.Policies
             var mid = BuildProduct(DefaultChatsMode.Custom, (midChat, "mid")); // NOT FromParent
             root.AddSubProduct(mid);
 
-            var chats = new IntegerPolicy().GetParentChats(mid);
+            var chats = Policy.GetParentChats(mid);
 
             Assert.Equal(new Dictionary<Guid, string> { [midChat] = "mid" }, chats);
         }
@@ -49,7 +50,7 @@ namespace HSMServer.Core.Tests.Model.Policies
             root.AddSubProduct(mid);
             mid.AddSubProduct(leaf);
 
-            var chats = new IntegerPolicy().GetParentChats(leaf);
+            var chats = Policy.GetParentChats(leaf);
 
             Assert.Equal(3, chats.Count);
             Assert.Equal("root", chats[rootChat]);
@@ -67,7 +68,7 @@ namespace HSMServer.Core.Tests.Model.Policies
             var mid = BuildProduct(DefaultChatsMode.FromParent, (midChat, "mid"));
             root.AddSubProduct(mid);
 
-            var chats = new IntegerPolicy().GetParentChats(mid);
+            var chats = Policy.GetParentChats(mid);
 
             Assert.Equal(2, chats.Count);
             Assert.Equal("root", chats[rootChat]);
@@ -91,7 +92,7 @@ namespace HSMServer.Core.Tests.Model.Policies
             root.AddSubProduct(mid);
             mid.AddSubProduct(leaf);
 
-            var chats = new IntegerPolicy().GetParentChats(leaf);
+            var chats = Policy.GetParentChats(leaf);
 
             Assert.Equal(2, chats.Count);
             Assert.Equal("leaf", chats[leafChat]);
@@ -114,7 +115,7 @@ namespace HSMServer.Core.Tests.Model.Policies
             root.AddSubProduct(mid);
             mid.AddSubProduct(leaf);
 
-            var chats = new IntegerPolicy().GetParentChats(leaf);
+            var chats = Policy.GetParentChats(leaf);
 
             Assert.Equal(2, chats.Count);
             Assert.Equal("leaf", chats[leafChat]);
@@ -140,7 +141,7 @@ namespace HSMServer.Core.Tests.Model.Policies
             root.AddSubProduct(mid);
             mid.AddSubProduct(leaf);
 
-            var chats = new IntegerPolicy().GetParentChats(leaf);
+            var chats = Policy.GetParentChats(leaf);
 
             Assert.Equal(3, chats.Count);
             Assert.Equal("root", chats[rootChat]);
@@ -176,7 +177,7 @@ namespace HSMServer.Core.Tests.Model.Policies
         }
 
         // An ancestor in Empty mode (alerts without notifications) also breaks the chain:
-        // IsFromParent is false for any mode other than FromParent.
+        // Empty is an explicit operator choice not to inherit, so the walk must stop there.
         [Fact]
         public void EmptyModeMiddleNode_BreaksChain()
         {
@@ -187,7 +188,7 @@ namespace HSMServer.Core.Tests.Model.Policies
             var mid = BuildProduct(DefaultChatsMode.Empty, (midChat, "mid"));
             root.AddSubProduct(mid);
 
-            var chats = new IntegerPolicy().GetParentChats(mid);
+            var chats = Policy.GetParentChats(mid);
 
             Assert.Equal(new Dictionary<Guid, string> { [midChat] = "mid" }, chats);
         }
@@ -195,7 +196,7 @@ namespace HSMServer.Core.Tests.Model.Policies
         [Fact]
         public void NullParent_ReturnsEmpty()
         {
-            Assert.Empty(new IntegerPolicy().GetParentChats(null));
+            Assert.Empty(Policy.GetParentChats(null));
         }
 
         private static ProductModel BuildProduct(DefaultChatsMode mode, params (Guid Id, string Name)[] chats)

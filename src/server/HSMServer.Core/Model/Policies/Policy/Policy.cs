@@ -93,7 +93,7 @@ namespace HSMServer.Core.Model.Policies
             }
         }
 
-        internal Dictionary<Guid, string> GetParentChats(ProductModel parent)
+        internal static Dictionary<Guid, string> GetParentChats(ProductModel parent)
         {
             var dict = new Dictionary<Guid, string>();
 
@@ -107,10 +107,13 @@ namespace HSMServer.Core.Model.Policies
             {
                 //TODO: Add folder chats when node.FolderId.HasValue
 
-                foreach (var (id, name) in node.Settings.DefaultChats.CurValue.Chats)
+                // Read CurValue once: TrySetValue swaps it under no lock, and two reads could
+                // mix chats from the old snapshot with the stop-decision from the new one.
+                var curValue = node.Settings.DefaultChats.CurValue;
+
+                foreach (var (id, name) in curValue.Chats)
                     dict.TryAdd(id, name);
 
-                var curValue = node.Settings.DefaultChats.CurValue;
                 if (!curValue.IsFromParent && !curValue.IsNotInitialized)
                     break;
             }
