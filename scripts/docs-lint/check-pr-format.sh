@@ -73,7 +73,7 @@ fi
 echo ""
 echo "Errors: $err"
 if [ "$err" -gt 0 ]; then
-  echo "Fix: use the generic HSM PR body sections from AGENTS.md / task-branch-pr-workflow.md."
+  echo "Fix: use the generic HSM PR body sections from CLAUDE.md / task-branch-pr-workflow.md."
   exit 1
 fi
 echo "PR format OK."

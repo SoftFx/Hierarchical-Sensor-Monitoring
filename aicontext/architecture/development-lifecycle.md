@@ -6,13 +6,13 @@
 
 ### 1. Before coding
 
-1.1. Read `AGENTS.md` and relevant `aicontext/features/` docs.
+1.1. Read `CLAUDE.md` and relevant `aicontext/features/` docs.
 1.2. If changing DataCollector public API: check backward compatibility with net472.
 1.3. If fixing a bug: write a failing test first if possible.
 
 ### 2. Implementation
 
-2.1. Write code following `AGENTS.md` Architecture Rules.
+2.1. Write code following `CLAUDE.md` Architecture Rules.
 2.2. Write or update tests.
 2.3. Run relevant test suite locally.
 2.4. Update `aicontext/` docs from the actual diff when behavior or architecture changes.

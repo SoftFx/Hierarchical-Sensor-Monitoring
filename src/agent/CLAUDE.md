@@ -1,7 +1,7 @@
 # HSM Agent — Codex Instructions
 
 Directory-scoped rules for `src/agent/` (the native Windows self-update HSM Agent). These supplement
-the root [`AGENTS.md`](../../AGENTS.md); where a rule here refines the root, the more specific rule wins.
+the root [`CLAUDE.md`](../../CLAUDE.md); where a rule here refines the root, the more specific rule wins.
 
 ## Versioning — the agent version is the self-update delivery key
 

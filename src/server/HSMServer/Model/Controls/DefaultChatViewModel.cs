@@ -112,7 +112,9 @@ namespace HSMServer.Model.Controls
             var parentIds = new HashSet<Guid>();
             parentIds.UnionWith(parent?.SelectedChats ?? []);
 
-            if (parent?.IsFromParent ?? false)
+            // Only FromParent keeps the walk going: NotInitialized is a user-selectable mode,
+            // so it breaks the chain like any other explicit non-inheriting choice (#1330).
+            if (parent is not null && parent.IsFromParent)
             {
                 var (a, b) = parent.GetParentChats();
                 parentIds.UnionWith(a);

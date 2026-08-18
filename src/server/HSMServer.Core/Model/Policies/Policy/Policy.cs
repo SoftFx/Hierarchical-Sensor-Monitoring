@@ -93,29 +93,28 @@ namespace HSMServer.Core.Model.Policies
             }
         }
 
-        internal Dictionary<Guid, string> GetParentChats(ProductModel parent)
+        internal static Dictionary<Guid, string> GetParentChats(ProductModel parent)
         {
             var dict = new Dictionary<Guid, string>();
 
-            if (parent is null)
-                return dict;
-
-            foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
-                dict.TryAdd(id, name);
-
-            if (parent.Settings.DefaultChats.CurValue.IsFromParent)
+            // Single linear walk up the chain, stopping at the first ancestor in any mode
+            // other than FromParent (Custom/Empty/NotInitialized). NotInitialized is a
+            // user-selectable mode in the destination picker, so it must not silently behave
+            // as FromParent — the #1330 fix is recipient-shrink-only relative to master.
+            // Matches the destination picker UI (DefaultChatViewModel.GetParentChats).
+            for (var node = parent; node is not null; node = node.Parent)
             {
-                var par = parent.Parent;
+                //TODO: Add folder chats when node.FolderId.HasValue
 
-                //TODO: Add folder chats when parent.FolderId.HasValue
+                // Read CurValue once: TrySetValue swaps it under no lock, and two reads could
+                // mix chats from the old snapshot with the stop-decision from the new one.
+                var curValue = node.Settings.DefaultChats.CurValue;
 
-                while (par != null)
-                {
-                    foreach (var (id, name) in GetParentChats(par))
-                        dict.TryAdd(id, name);
+                foreach (var (id, name) in curValue.Chats)
+                    dict.TryAdd(id, name);
 
-                    par = par.Parent;
-                }
+                if (!curValue.IsFromParent)
+                    break;
             }
 
             return dict;
