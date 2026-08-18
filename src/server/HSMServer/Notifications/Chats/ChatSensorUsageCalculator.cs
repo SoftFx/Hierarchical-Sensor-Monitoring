@@ -38,15 +38,12 @@ namespace HSMServer.Notifications.Chats
             // per-policy TargetChats call, which re-walks and allocates a fresh Dictionary each
             // time.
             //
-            // NOTE on divergence from delivery: this walk stops at the first ancestor whose
-            // DefaultChats.IsFromParent is false, matching what the destination picker UI shows
-            // (DefaultChatViewModel.GetParentChats). Alert delivery (Policy.GetParentChats in
-            // HSMServer.Core) uses a broader rule — once the immediate parent IsFromParent, it
-            // walks every remaining strict ancestor unconditionally, so a chat configured on a
-            // higher non-inheriting ancestor still receives alerts but is NOT counted by this
-            // badge. That divergence is tracked in issue #1330; until the delivery side is
-            // reconciled, the badge can undercount relative to real delivery on chains deeper
-            // than two levels with a non-inheriting middle node. There is no overcount case.
+            // Parent-chain rule: this walk stops at the first ancestor in any mode other than
+            // FromParent (Custom/Empty/NotInitialized — the picker offers all of them as
+            // explicit choices). Same rule as the destination picker UI
+            // (DefaultChatViewModel.GetParentChats) and alert delivery (Policy.GetParentChats
+            // in HSMServer.Core — aligned in #1330). The badge and delivery agree on every
+            // chain shape.
             var inheritedChatsByProduct = new Dictionary<Guid, HashSet<Guid>>();
             var folderChatsByFolderId = new Dictionary<Guid, IEnumerable<Guid>>();
 
@@ -193,9 +190,9 @@ namespace HSMServer.Notifications.Chats
                 // dedicated "from parent chats, {extra}" case. The previous form returned only
                 // the inherited set and dropped Destination.Chats, silently undercounting.
                 //
-                // NOTE: this resolver's parent-chain walk stops at the first non-inheriting
-                // ancestor (matches the picker UI). Delivery uses a broader rule — see the
-                // divergence note in Compute().
+                // This resolver's parent-chain walk stops at the first non-inheriting ancestor,
+                // matching the picker UI — delivery (Policy.GetParentChats) uses the same rule
+                // since #1330.
                 IEnumerable<Guid> resolvedChats;
                 int resolvedChatCount;
                 bool resolvedIsAllChats;
@@ -259,9 +256,9 @@ namespace HSMServer.Notifications.Chats
         }
 
         // Resolves the inherited chat set for a product, memoized per Compute() pass. Single
-        // linear walk up the chain, stopping at the first ancestor whose DefaultChats.IsFromParent
-        // is false — matches the destination picker UI (DefaultChatViewModel.GetParentChats), so a
-        // non-inheriting intermediate node breaks the chain the same way the picker shows.
+        // linear walk up the chain, stopping at the first ancestor in any mode other than
+        // FromParent (Custom/Empty/NotInitialized). Matches the destination picker UI
+        // (DefaultChatViewModel.GetParentChats) and delivery (Policy.GetParentChats, #1330).
         private HashSet<Guid> ResolveInheritedChats(
             ProductModel parent,
             Dictionary<Guid, HashSet<Guid>> memo)

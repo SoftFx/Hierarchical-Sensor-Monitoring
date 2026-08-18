@@ -21,8 +21,9 @@ using EntitiesFactory = HSMServer.Core.Tests.Infrastructure.EntitiesFactory;
 namespace HSMServer.Core.Tests.Notifications
 {
     // Integration coverage for Compute()'s entry-point contract: empty cache → empty counts,
-    // the calculator's parent-chain resolution (stops at the first non-inheriting ancestor,
-    // matching the destination picker UI — diverges from delivery routing, tracked in #1330),
+    // the calculator's parent-chain resolution (stops at the first ancestor in any mode other
+    // than FromParent — Custom/Empty/NotInitialized — matching the destination picker UI and
+    // delivery routing, Policy.GetParentChats aligned to the same rule in #1330),
     // FromParent + explicit Destination.Chats union, and the concurrent-mutation skip path
     // (InvalidOperationException → skipped++, UI renders "≥N sensors").
     public class ChatSensorUsageCalculatorComputeTests
@@ -42,11 +43,9 @@ namespace HSMServer.Core.Tests.Notifications
 
         // Pins the calculator's parent-chain resolution: with a chain root(C) → mid(Custom, not
         // FromParent) → leaf(FromParent), a sensor under leaf with a FromParent policy must count
-        // mid's chats but NOT root's. ResolveInheritedChats stops at the first ancestor whose
-        // DefaultChats.IsFromParent is false. This is the calculator's own badge-counting rule —
-        // it does NOT depend on Policy.GetParentChats (which delivers alerts) and is intentionally
-        // stricter: a non-inheriting middle node breaks the inheritance for the badge the same way
-        // the destination picker UI shows.
+        // mid's chats but NOT root's. ResolveInheritedChats stops at the first ancestor in any
+        // mode other than FromParent (Custom/Empty/NotInitialized) — the same rule as delivery
+        // routing (Policy.GetParentChats, aligned in #1330) and the destination picker UI.
         [Fact]
         public void Compute_FromParentUnderNonInheritingMiddle_StopsAtMiddle()
         {
@@ -103,6 +102,37 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Equal(0, skipped);
             Assert.Equal(1, counts[parentChat]);
             Assert.Equal(1, counts[extraChat]);
+        }
+
+        // Pins that a NotInitialized middle node breaks the badge's parent chain — the same
+        // rule as delivery (Policy.GetParentChats) and the picker: "Not initialized" is a
+        // user-selectable mode in the picker, so it must not silently behave as FromParent.
+        [Fact]
+        public void Compute_NotInitializedMiddleNode_BreaksChain()
+        {
+            var rootChat = Guid.NewGuid();
+            var midChat = Guid.NewGuid();
+
+            var root = BuildProduct(DefaultChatsMode.Custom, (rootChat, "root"));
+            var mid = BuildProduct(DefaultChatsMode.NotInitialized, (midChat, "mid"));
+            var leaf = BuildProduct(DefaultChatsMode.FromParent);
+
+            root.AddSubProduct(mid);
+            mid.AddSubProduct(leaf);
+
+            var provider = new Mock<IAlertScheduleProvider>().Object;
+            var sensor = BuildIntegerSensorUnder(leaf, provider);
+            AddPolicy(sensor, PolicyDestinationMode.FromParent);
+
+            var calc = new ChatSensorUsageCalculator(
+                CacheReturning(new[] { sensor }),
+                FolderManagerStub());
+
+            var (counts, skipped) = calc.Compute();
+
+            Assert.Equal(0, skipped);
+            Assert.Equal(1, counts[midChat]);
+            Assert.False(counts.ContainsKey(rootChat));
         }
 
         // Pins that when EVERY ancestor in the chain is FromParent, the calculator walks all the
