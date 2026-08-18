@@ -188,7 +188,12 @@
                                 <label class="chat-form-label col-form-label" for="SlackWebhookUrl">Slack Webhook URL</label>
                             </div>
                             <div class="col-12 col-md-7">
-                                <input type="url" class="form-control" asp-for="SlackWebhookUrl" placeholder="https://hooks.slack.com/services/..." />
+                                <input type="text" class="form-control" asp-for="SlackWebhookUrl" placeholder="https://hooks.slack.com/services/..." />
+                                <span class="text-danger small d-block mt-1" asp-validation-for="SlackWebhookUrl"></span>
+                                @if (Model.HasSlack)
+                                {
+                                    <small class="text-muted d-block mt-1">Type a new URL to replace; leave as-is to keep the current webhook.</small>
+                                }
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -215,7 +220,12 @@
                                 <label class="chat-form-label col-form-label" for="MattermostWebhookUrl">Mattermost Webhook URL</label>
                             </div>
                             <div class="col-12 col-md-7">
-                                <input type="url" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." />
+                                <input type="text" class="form-control" asp-for="MattermostWebhookUrl" placeholder="https://your-mattermost/hooks/..." />
+                                <span class="text-danger small d-block mt-1" asp-validation-for="MattermostWebhookUrl"></span>
+                                @if (Model.HasMattermost)
+                                {
+                                    <small class="text-muted d-block mt-1">Type a new URL to replace; leave as-is to keep the current webhook.</small>
+                                }
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -243,10 +253,13 @@
                 </div>
             }
 
-            <div class="chat-edit-section d-flex justify-content-end gap-2">
-                <a href="@Url.Action(nameof(NotificationsController.Index), ViewConstants.NotificationsController)"
-                   class="btn btn-outline-secondary chat-cancel-btn">Cancel</a>
-                <button type="submit" class="btn chat-save-btn">Save</button>
+            <div class="chat-edit-section">
+                <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="@Url.Action(nameof(NotificationsController.Index), ViewConstants.NotificationsController)"
+                       class="btn btn-outline-secondary chat-cancel-btn">Cancel</a>
+                    <button type="submit" class="btn chat-save-btn">Save</button>
+                </div>
             </div>
         </div>
     </form>

@@ -40,10 +40,14 @@ namespace HSMServer.Model.Notifications
         public string TelegramChatDescription { get; set; }
 
 
-        [Url(ErrorMessage = "Slack webhook URL must be a valid URL")]
+        // Bound to the EditChat input. On GET this carries the masked display value
+        // (WebhookUrlMasker.Mask) — the raw secret is never rendered. On POST it carries either the
+        // unchanged masked sentinel (→ ToUpdate emits null, "no change") or a freshly-pasted URL.
+        // URL-shape validation moved server-side: the masked value (with non-ASCII bullets) fails
+        // [Url], so the attribute was removed and the controller runs Uri.TryCreate on non-masked
+        // values, adding ModelState errors for genuinely malformed input.
         public string SlackWebhookUrl { get; set; }
 
-        [Url(ErrorMessage = "Mattermost webhook URL must be a valid URL")]
         public string MattermostWebhookUrl { get; set; }
 
 
@@ -116,8 +120,10 @@ namespace HSMServer.Model.Notifications
             TelegramType = chat.TelegramType;
             TelegramChatTitle = chat.TelegramChatTitle;
             TelegramChatDescription = chat.TelegramChatDescription;
-            SlackWebhookUrl = chat.SlackWebhookUrl;
-            MattermostWebhookUrl = chat.MattermostWebhookUrl;
+            // Mask on read — the raw webhook secret never reaches the view. ToUpdate treats the
+            // masked sentinel as "no change" on POST, so the stored cleartext URL survives.
+            SlackWebhookUrl = WebhookUrlMasker.Mask(chat.SlackWebhookUrl);
+            MattermostWebhookUrl = WebhookUrlMasker.Mask(chat.MattermostWebhookUrl);
             MessagesDelay = chat.MessagesAggregationTimeSec;
             EnableMessages = chat.SendMessages;
             Folders = folders ?? new ChatFoldersViewModel();
@@ -132,9 +138,23 @@ namespace HSMServer.Model.Notifications
                 Description = Description,
                 SendMessages = EnableMessages,
                 MessagesAggregationTimeSec = MessagesDelay,
-                SlackWebhookUrl = SlackWebhookUrl,
-                MattermostWebhookUrl = MattermostWebhookUrl,
+                // ResolveWebhook: null = "no change" (Chat.ApplyUpdate uses ?? current). The masked
+                // sentinel posted back from the unchanged field, and an empty field, both mean "keep
+                // the stored webhook"; only a real pasted URL overwrites.
+                SlackWebhookUrl = ResolveWebhook(SlackWebhookUrl),
+                MattermostWebhookUrl = ResolveWebhook(MattermostWebhookUrl),
             };
+
+        // null  → don't change the stored webhook (ApplyUpdate: ?? current).
+        // value → overwrite with the newly-pasted URL. Trims surrounding whitespace so a sloppy
+        // paste isn't persisted verbatim (Uri.TryCreate trims when validating, storage did not).
+        private static string ResolveWebhook(string posted)
+        {
+            if (string.IsNullOrWhiteSpace(posted) || WebhookUrlMasker.IsMasked(posted))
+                return null;
+
+            return posted.Trim();
+        }
 
         internal Chat ToNewChat(Guid authorId)
         {
@@ -147,8 +167,10 @@ namespace HSMServer.Model.Notifications
                 Description = Description ?? string.Empty,
                 SendMessages = EnableMessages,
                 MessagesAggregationTimeSec = MessagesDelay,
-                SlackWebhookUrl = SlackWebhookUrl,
-                MattermostWebhookUrl = MattermostWebhookUrl,
+                // Route through ResolveWebhook so a masked/whitespace value can never be persisted
+                // as a live webhook (a brand-new chat posts a real URL, never the mask).
+                SlackWebhookUrl = ResolveWebhook(SlackWebhookUrl),
+                MattermostWebhookUrl = ResolveWebhook(MattermostWebhookUrl),
             };
 
             return new Chat(entity);
