@@ -18,8 +18,8 @@ namespace HSMServer.Core.Tests.Model.Policies
     // Pins Policy.GetParentChats (alert delivery) to the same parent-chain resolution as the
     // destination picker UI (DefaultChatViewModel.GetParentChats) and the usage badge
     // (ChatSensorUsageCalculator.ResolveInheritedChats): a single linear walk that stops at
-    // the first ancestor that made an explicit non-inheriting choice (Custom/Empty);
-    // NotInitialized (no decision made) keeps walking. See #1330.
+    // the first ancestor in any mode other than FromParent (Custom/Empty/NotInitialized).
+    // See #1330.
     public class PolicyGetParentChatsTests
     {
         [Fact]
@@ -123,13 +123,13 @@ namespace HSMServer.Core.Tests.Model.Policies
             Assert.False(chats.ContainsKey(rootChat));
         }
 
-        // A NotInitialized middle node does NOT break the chain: it expresses the absence of a
-        // decision (byte 0, the deserialisation default for records predating the
-        // DefaultChatsSettings field; MigrationManager.RunProductMigrations, which rewrites it
-        // to FromParent, is never invoked), and cutting delivery there could silently reach
-        // zero recipients. Only Custom/Empty — explicit operator choices — break the chain.
+        // A NotInitialized middle node breaks the chain like any other mode other than
+        // FromParent: "Not initialized" is a user-selectable choice in the destination picker
+        // (_DefaultChat.cshtml), so it must not silently behave as FromParent. Treating it as
+        // keep-walking would EXPAND recipients relative to master when the sensor's direct
+        // parent is NotInitialized — the #1330 fix is shrink-only.
         [Fact]
-        public void NotInitializedMiddleNode_DoesNotBreakChain()
+        public void NotInitializedMiddleNode_BreaksChain()
         {
             var rootChat = Guid.NewGuid();
             var midChat = Guid.NewGuid();
@@ -143,10 +143,10 @@ namespace HSMServer.Core.Tests.Model.Policies
 
             var chats = Policy.GetParentChats(leaf);
 
-            Assert.Equal(3, chats.Count);
-            Assert.Equal("root", chats[rootChat]);
-            Assert.Equal("mid", chats[midChat]);
+            Assert.Equal(2, chats.Count);
             Assert.Equal("leaf", chats[leafChat]);
+            Assert.Equal("mid", chats[midChat]);
+            Assert.False(chats.ContainsKey(rootChat));
         }
 
         // Pins the delivery entry point itself: TargetChats gates GetParentChats on

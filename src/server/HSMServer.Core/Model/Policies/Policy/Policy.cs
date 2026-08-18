@@ -97,12 +97,11 @@ namespace HSMServer.Core.Model.Policies
         {
             var dict = new Dictionary<Guid, string>();
 
-            // Single linear walk up the chain, stopping at the first ancestor that made an
-            // explicit non-inheriting choice (Custom/Empty). NotInitialized expresses the
-            // absence of a decision — byte 0, the deserialisation default for records predating
-            // the DefaultChatsSettings field — and does NOT break the chain: breaking there
-            // could silently cut delivery to zero recipients (#1330 review). Matches the
-            // destination picker UI (DefaultChatViewModel.GetParentChats).
+            // Single linear walk up the chain, stopping at the first ancestor in any mode
+            // other than FromParent (Custom/Empty/NotInitialized). NotInitialized is a
+            // user-selectable mode in the destination picker, so it must not silently behave
+            // as FromParent — the #1330 fix is recipient-shrink-only relative to master.
+            // Matches the destination picker UI (DefaultChatViewModel.GetParentChats).
             for (var node = parent; node is not null; node = node.Parent)
             {
                 //TODO: Add folder chats when node.FolderId.HasValue
@@ -114,7 +113,7 @@ namespace HSMServer.Core.Model.Policies
                 foreach (var (id, name) in curValue.Chats)
                     dict.TryAdd(id, name);
 
-                if (!curValue.IsFromParent && !curValue.IsNotInitialized)
+                if (!curValue.IsFromParent)
                     break;
             }
 
