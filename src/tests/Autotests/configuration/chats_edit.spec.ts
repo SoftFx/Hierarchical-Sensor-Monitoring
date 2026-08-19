@@ -525,8 +525,13 @@ test('Telegram tab shows the configured bot name without opening the setup modal
     await saveTelegramSettings(page, dummyBotName, dummyBotToken, false);
     await openAddChatTelegramTab(page);
 
-    const botRow = page.locator('#telegram').getByText(dummyBotName).first();
-    await expect(botRow).toBeVisible();
+    // Scope to the row itself — _NewChatHelpModal (rendered earlier inside #telegram) also mentions
+    // the bot name inside its hidden markup, so an unscoped getByText would match the modal <p>s.
+    const botRow = page.getByTestId('telegram-bot-row');
+    await expect(botRow).toContainText(dummyBotName);
+    // The whole point of #1311: the name is visible WITHOUT the setup modal being opened. Bootstrap
+    // only adds the `show` class (display:block + aria-modal) when the modal is actually opened.
+    await expect(page.locator('#newChatHelp_modal')).not.toHaveClass(/show/);
     // The bot token must never appear anywhere on the chat form.
     await expect(page.locator('#telegram')).not.toContainText(dummyBotToken);
     // Setup help stays available in the configured state.

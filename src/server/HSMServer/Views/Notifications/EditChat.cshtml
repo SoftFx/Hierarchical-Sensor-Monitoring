@@ -173,7 +173,7 @@
                         else
                         {
                             @await Html.PartialAsync("_NewChatHelpModal.cshtml", new NewChatHelpViewModel { ChatId = Model.Id })
-                            <div class="row align-items-center mb-3">
+                            <div class="row align-items-center mb-3" data-testid="telegram-bot-row">
                                 <div class="col-12 col-md-3 text-md-end">
                                     <label class="chat-form-label col-form-label">Telegram bot</label>
                                 </div>
