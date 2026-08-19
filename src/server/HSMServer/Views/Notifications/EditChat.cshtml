@@ -4,8 +4,11 @@
 @using HSMCommon.Extensions
 @using HSMServer.Model.Notifications
 @using HSMServer.Notifications
+@using HSMServer.ServerConfiguration
 
 @model ChatViewModel
+
+@inject IServerConfig Config
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -13,6 +16,9 @@
     ViewData["Title"] = $"Chat {Model.Name}";
 
     var isTelegramBound = Model.TelegramChatId.HasValue;
+    // Mirrors TelegramConfig.IsValid (internal, not reachable from the view): both BotName and
+    // BotToken must be set. The token itself is never rendered.
+    var isTelegramBotConfigured = !string.IsNullOrEmpty(Config.Telegram.BotName) && !string.IsNullOrEmpty(Config.Telegram.BotToken);
     var isNewChat = Model.IsNewChat;
     var formAction = isNewChat ? nameof(NotificationsController.AddChat) : nameof(NotificationsController.EditChat);
 
@@ -167,6 +173,26 @@
                         else
                         {
                             @await Html.PartialAsync("_NewChatHelpModal.cshtml", new NewChatHelpViewModel { ChatId = Model.Id })
+                            <div class="row align-items-center mb-3" data-testid="telegram-bot-row">
+                                <div class="col-12 col-md-3 text-md-end">
+                                    <label class="chat-form-label col-form-label">Telegram bot</label>
+                                </div>
+                                <div class="col-12 col-md-7">
+                                    @if (isTelegramBotConfigured)
+                                    {
+                                        <small class="text-muted d-block">
+                                            <i class="fab fa-telegram"></i> @Config.Telegram.BotName
+                                        </small>
+                                    }
+                                    else
+                                    {
+                                        <div class="alert alert-warning small py-2 mb-0">
+                                            Telegram bot is not configured. Configure it in
+                                            <a href="@Url.Action(nameof(ConfigurationController.Index), ViewConstants.ConfigurationController)?tab=telegram">Settings -&gt; Telegram</a>.
+                                        </div>
+                                    }
+                                </div>
+                            </div>
                             <div class="row align-items-center">
                                 <div class="col-12 col-md-3 text-md-end">
                                     <label class="chat-form-label col-form-label">Telegram</label>

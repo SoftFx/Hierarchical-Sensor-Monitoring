@@ -484,3 +484,93 @@ test('EditChat: a rejected webhook edit preserves folder bindings across the re-
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
 });
+
+// #1311: the Add/Edit chat Telegram tab must show the configured bot name (or a "not configured"
+// warning with a Settings -> Telegram deep link) before the admin opens the setup-help modal.
+// The bot config is flipped through SaveTelegramSettings (saving does NOT restart the bot — only
+// NotificationsCenter.StartAsync / RestartTelegramBot do — so a dummy token is safe) and restored
+// from values scraped off the Configuration page in a finally block.
+const dummyBotName = 'hsm_autotest_bot';
+const dummyBotToken = '123456:autotest-dummy-token';
+
+async function saveTelegramSettings(page: import('@playwright/test').Page, botName: string, botToken: string, isEnabled: boolean) {
+  const response = await page.request.post('/Configuration/SaveTelegramSettings', {
+    multipart: { BotName: botName, BotToken: botToken, IsEnabled: isEnabled ? 'true' : 'false' },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
+async function openAddChatTelegramTab(page: import('@playwright/test').Page) {
+  await page.getByRole('button', { name: 'Configuration' }).click();
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await expect(page.getByRole('heading', { name: 'Add chat' })).toBeVisible();
+  // A brand-new chat lands on the Slack tab; the Telegram bot row lives on the Telegram tab.
+  await page.getByRole('tab', { name: 'Telegram' }).click();
+}
+
+test('Telegram tab shows the configured bot name without opening the setup modal (#1311)', async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
+
+  await login(page, admin_user, admin_user_password, apiUrl);
+
+  // Scrape the current config so it can be restored even if the test fails mid-way.
+  await page.goto('/Configuration');
+  const originalName = await page.locator('#telegramSettings_form #BotName').inputValue();
+  const originalToken = await page.locator('#telegramSettings_form #BotToken').inputValue();
+  const originalEnabled = await page.locator('#telegramSettings_form #IsEnabled').isChecked();
+
+  try {
+    await saveTelegramSettings(page, dummyBotName, dummyBotToken, false);
+    await openAddChatTelegramTab(page);
+
+    // Scope to the row itself — _NewChatHelpModal (rendered earlier inside #telegram) also mentions
+    // the bot name inside its hidden markup, so an unscoped getByText would match the modal <p>s.
+    const botRow = page.getByTestId('telegram-bot-row');
+    await expect(botRow).toContainText(dummyBotName);
+    // The whole point of #1311: the name is visible WITHOUT the setup modal being opened. Bootstrap
+    // only adds the `show` class (display:block + aria-modal) when the modal is actually opened.
+    await expect(page.locator('#newChatHelp_modal')).not.toHaveClass(/show/);
+    // The bot token must never appear anywhere on the chat form.
+    await expect(page.locator('#telegram')).not.toContainText(dummyBotToken);
+    // Setup help stays available in the configured state.
+    await expect(page.locator('#telegram').getByRole('link', { name: 'Show setup help' })).toBeVisible();
+  } finally {
+    await saveTelegramSettings(page, originalName, originalToken, originalEnabled);
+  }
+
+  await page.getByRole('link', { name: 'Logout' }).click();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+});
+
+test('Telegram tab warns about unconfigured bot and deep-links to Settings -> Telegram (#1311)', async ({ page }) => {
+  const { apiUrl, admin_user, admin_user_password } = testConfig;
+
+  await login(page, admin_user, admin_user_password, apiUrl);
+
+  await page.goto('/Configuration');
+  const originalName = await page.locator('#telegramSettings_form #BotName').inputValue();
+  const originalToken = await page.locator('#telegramSettings_form #BotToken').inputValue();
+  const originalEnabled = await page.locator('#telegramSettings_form #IsEnabled').isChecked();
+
+  try {
+    await saveTelegramSettings(page, '', '', false);
+    await openAddChatTelegramTab(page);
+
+    const warning = page.locator('#telegram .alert-warning');
+    await expect(warning).toContainText('Telegram bot is not configured');
+
+    // The Settings -> Telegram link must land on the Configuration page with the Telegram tab open.
+    await warning.getByRole('link', { name: /Telegram/ }).click();
+    await expect(page).toHaveURL(/.*Configuration.*tab=telegram/);
+    await expect(page.locator('#telegram[role="tabpanel"]')).toBeVisible();
+    await expect(page.locator('#telegram .alert')).toBeHidden();
+    await expect(page.locator('#telegramSettings_form #BotName')).toBeVisible();
+  } finally {
+    await saveTelegramSettings(page, originalName, originalToken, originalEnabled);
+  }
+
+  await page.getByRole('link', { name: 'Logout' }).click();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+});
