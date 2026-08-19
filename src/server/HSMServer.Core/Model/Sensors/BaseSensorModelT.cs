@@ -31,6 +31,8 @@ namespace HSMServer.Core.Model
         // volatile: TryAddValue/TryUpdateLastValue/CheckTimeout read it lock-free, and "true" must
         // never be observable before the history load in Initialize() has finished filling Storage.
         private volatile bool _isInitialized;
+
+        internal override bool IsInitialized => _isInitialized;
         private readonly object _lock = new();
 
         protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 

@@ -80,9 +80,19 @@ namespace HSMServer.Core.Model
         public PolicyResult ConfirmationResult => Policies.ConfimationResult;
 
 
+        // False until Initialize() has published the history load (#1296). Direct Storage readers
+        // can use it to defer decisions instead of acting on an empty Storage.
+        internal abstract bool IsInitialized { get; }
+
         public bool ShouldDestroy()
         {
-            if (Settings.SelfDestroy.Value == null)
+            // An uninitialized sensor has an empty Storage, so HasData is false and the check would
+            // fall back to CreationDate — deleting a live sensor older than its self-destroy
+            // interval (#1328). The decision is unknown, not "destroy": defer to the next sweep,
+            // which runs after CheckSensorsHistoryAsync has initialized every sensor. Deliberately
+            // no Initialize() call here — it would run the policy fan-out and let a predicate emit
+            // TTL-expired alerts for a sensor this very check may delete.
+            if (Settings.SelfDestroy.Value == null || !IsInitialized)
                 return false;
 
             return Settings.SelfDestroy.Value.TimeIsUp(HasData ? LastUpdate : CreationDate);
