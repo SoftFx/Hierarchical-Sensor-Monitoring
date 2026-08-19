@@ -94,6 +94,16 @@
     });
     
     $(document).ready(function() {
+        // Deep-link support: ?tab=<name> opens the requested tab (e.g. the EditChat Telegram tab
+        // links here with ?tab=telegram when the bot is not configured). Whitelisted so an
+        // arbitrary query value can't reach unrelated element ids.
+        const allowedTabs = ['server', 'backup', 'monitoring', 'telegram', 'database', 'agent'];
+        const requestedTab = new URLSearchParams(window.location.search).get('tab');
+        if (allowedTabs.includes(requestedTab)) {
+            const tabButton = document.getElementById(requestedTab + '-tab');
+            if (tabButton) new bootstrap.Tab(tabButton).show();
+        }
+
         obs["serverSettings_form"] = createFormObserver("serverSettings_form");
         obs["backupSettings_form"] = createFormObserver("backupSettings_form");
         obs["selfMonitoringSettings_form"] = createFormObserver("selfMonitoringSettings_form");
