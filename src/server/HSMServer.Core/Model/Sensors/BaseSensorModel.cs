@@ -84,6 +84,11 @@ namespace HSMServer.Core.Model
         // can use it to defer decisions instead of acting on an empty Storage.
         internal abstract bool IsInitialized { get; }
 
+        // True when a load was attempted but failed: IsInitialized is false for the lifetime of
+        // the process (the latch is not retried), so for such sensors self-destroy is disabled
+        // until restart, not deferred.
+        internal abstract bool HistoryLoadFailed { get; }
+
         public bool ShouldDestroy()
         {
             // IsInitialized means "Storage reflects history", not just "a load was attempted" —

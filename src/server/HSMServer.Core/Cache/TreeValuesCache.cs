@@ -394,6 +394,7 @@ namespace HSMServer.Core.Cache
             var sensors = GetSensors();
             var removed = 0;
             var deferred = 0;
+            var failedLoads = 0;
             foreach (var sensor in sensors)
             {
                 if (token.IsCancellationRequested)
@@ -404,14 +405,18 @@ namespace HSMServer.Core.Cache
                     await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), token: token);
                     removed++;
                 }
+                else if (sensor.HistoryLoadFailed)
+                    failedLoads++;
                 else if (!sensor.IsInitialized)
                     deferred++;
             }
 
-            // Deferred sensors were skipped because their history is not loaded (failed or
-            // incomplete CheckSensorsHistoryAsync) — the destroy decision is deferred, and a
-            // non-zero count here means the ordering this sweep relies on did not hold.
             _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} (history not loaded)");
+
+            // Not "deferred": the latch is never retried, so for these sensors self-destroy is
+            // off until restart. Separate from the Info line so operators can alert on it.
+            if (failedLoads > 0)
+                _logger.Warn($"Sensors self destroy disabled until restart for {failedLoads} sensor(s): history load failed");
         }
 
         public async Task RunProductsSelfDestroyAsync(CancellationToken token = default)
@@ -868,21 +873,31 @@ namespace HSMServer.Core.Cache
             int cleared = 0;
             foreach (var sensor in value.Sensors.Values)
             {
-                sensor.Initialize();
-
-                var from = sensor.From;
-
-                var policy = sensor.Settings.KeepHistory.Value;
-
-                if (policy.TimeIsUp(from))
+                // One throwing sensor must not freeze maintenance for the whole product: without
+                // this catch the throw aborts the loop, every later sensor stays uninitialized and
+                // the self-destroy sweep that runs right after silently skips them.
+                try
                 {
-                    _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
-                    ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
-                    cleared++;
+                    sensor.Initialize();
+
+                    var from = sensor.From;
+
+                    var policy = sensor.Settings.KeepHistory.Value;
+
+                    if (policy.TimeIsUp(from))
+                    {
+                        _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
+                        ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
+                        cleared++;
+                    }
+                    else
+                    {
+                        _logger.Info($"Skipped [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    _logger.Info($"Skipped [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
+                    _logger.Error(ex, $"Check sensor history failed for [{sensor.Id}][{sensor.FullPath}]");
                 }
             }
 

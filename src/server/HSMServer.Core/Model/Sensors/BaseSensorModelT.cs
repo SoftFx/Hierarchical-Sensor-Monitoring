@@ -41,6 +41,8 @@ namespace HSMServer.Core.Model
 
         internal override bool IsInitialized => _isInitialized && _historyLoaded;
 
+        internal override bool HistoryLoadFailed => _isInitialized && !_historyLoaded;
+
         protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 
         {
             _database = database;
