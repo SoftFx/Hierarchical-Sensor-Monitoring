@@ -119,7 +119,9 @@ namespace HSMServer.Core.Model
             // An empty Storage (retention purge swept the cache, or the newest row is the
             // SetExpiredSnapshot timeout marker, which never enters the cache) still has the
             // timeout marker as evidence of recent activity — only fall back to CreationDate
-            // when there is no signal at all.
+            // when there is no signal at all. Marker .Time, not .LastUpdateTime: GetTimeoutValue
+            // copies LastReceivingTime from the previous value, so LastUpdateTime would
+            // under-estimate activity.
             var lastActivity = HasData ? LastUpdate : (LastTimeout?.Time ?? CreationDate);
 
             return Settings.SelfDestroy.Value.TimeIsUp(lastActivity);

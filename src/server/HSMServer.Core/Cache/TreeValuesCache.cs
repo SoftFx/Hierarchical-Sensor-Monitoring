@@ -76,6 +76,8 @@ namespace HSMServer.Core.Cache
 
         private readonly CDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
+        private const int FailedLoadSampleSize = 10;
+
         private readonly Logger _logger = LogManager.GetLogger(nameof(TreeValuesCache));
 
         private readonly ConfirmationManager _confirmationManager = new();
@@ -395,7 +397,7 @@ namespace HSMServer.Core.Cache
             var removed = 0;
             var deferred = 0;
             var failedLoadCount = 0;
-            var failedLoadSample = new List<Guid>(10);
+            var failedLoadSample = new List<Guid>(FailedLoadSampleSize);
             foreach (var sensor in sensors)
             {
                 if (token.IsCancellationRequested)
@@ -413,7 +415,7 @@ namespace HSMServer.Core.Cache
                     if (sensor.HistoryLoadFailed)
                     {
                         failedLoadCount++;
-                        if (failedLoadSample.Count < 10)
+                        if (failedLoadSample.Count < FailedLoadSampleSize)
                             failedLoadSample.Add(sensor.Id);
                     }
                     else if (!sensor.IsHistoryLoaded)
