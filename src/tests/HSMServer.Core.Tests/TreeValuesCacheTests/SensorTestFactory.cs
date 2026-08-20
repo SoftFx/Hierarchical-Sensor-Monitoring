@@ -18,7 +18,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             new MemoryPackFormatter().Serialize(
                 new IntegerValue { Time = time, Status = SensorStatus.Ok, Value = value });
 
-        internal static SensorEntity BuildEntity(bool isSingleton = false, TimeSpan? selfDestroyInterval = null) =>
+        internal static SensorEntity BuildEntity(bool isSingleton = false, TimeSpan? selfDestroyInterval = null, DateTime? creationDate = null) =>
             new()
             {
                 Id = Guid.NewGuid().ToString(),
@@ -26,7 +26,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 DisplayName = RandomGenerator.GetRandomString(),
                 Type = (byte)SensorType.Integer,
                 IsSingleton = isSingleton,
-                CreationDate = selfDestroyInterval.HasValue ? DateTime.UtcNow.AddMonths(-1).Ticks : 0L,
+                CreationDate = (creationDate ?? DateTime.UtcNow.AddMonths(-1)).Ticks,
                 Settings = selfDestroyInterval.HasValue
                     ? new Dictionary<string, TimeIntervalEntity>
                     {

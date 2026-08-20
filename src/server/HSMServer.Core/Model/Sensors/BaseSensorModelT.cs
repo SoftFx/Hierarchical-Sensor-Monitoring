@@ -194,8 +194,9 @@ namespace HSMServer.Core.Model
                             Storage.Cut(first.Time);
                     }
 
-                    _logger.Info($"Sensor {Id} initialized {From}-{To}");
+                    // Before the log line: an NLog throw must not classify a successful load as failed.
                     _historyLoaded = true;
+                    _logger.Info($"Sensor {Id} initialized {From}-{To}");
                 }
                 catch (Exception ex)
                 {

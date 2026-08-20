@@ -394,7 +394,8 @@ namespace HSMServer.Core.Cache
             var sensors = GetSensors();
             var removed = 0;
             var deferred = 0;
-            var failedLoadIds = new List<Guid>();
+            var failedLoadCount = 0;
+            var failedLoadSample = new List<Guid>(10);
             foreach (var sensor in sensors)
             {
                 if (token.IsCancellationRequested)
@@ -407,10 +408,14 @@ namespace HSMServer.Core.Cache
                 }
                 // Count only sensors the sweep could act on: SelfDestroy is None (the default)
                 // for most of the tree, and for those a failed load changes nothing.
-                else if (sensor.Settings.SelfDestroy.Value?.IsNone == false)
+                else if (sensor.SelfDestroyIsActive)
                 {
                     if (sensor.HistoryLoadFailed)
-                        failedLoadIds.Add(sensor.Id);
+                    {
+                        failedLoadCount++;
+                        if (failedLoadSample.Count < 10)
+                            failedLoadSample.Add(sensor.Id);
+                    }
                     else if (!sensor.IsHistoryLoaded)
                         deferred++;
                 }
@@ -421,8 +426,8 @@ namespace HSMServer.Core.Cache
             // Not "deferred": the latch is never retried, so for these sensors self-destroy is
             // off until restart. Separate from the Info line so operators can alert on it; the
             // id sample makes the alert diagnosable without grepping hours-old init logs.
-            if (failedLoadIds.Count > 0)
-                _logger.Warn($"Sensors self destroy disabled until restart for {failedLoadIds.Count} sensor(s): history load failed — {string.Join(", ", failedLoadIds.Take(10))}{(failedLoadIds.Count > 10 ? ", ..." : string.Empty)}");
+            if (failedLoadCount > 0)
+                _logger.Warn($"Sensors self destroy disabled until restart for {failedLoadCount} sensor(s): history load failed — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
         }
 
         public async Task RunProductsSelfDestroyAsync(CancellationToken token = default)

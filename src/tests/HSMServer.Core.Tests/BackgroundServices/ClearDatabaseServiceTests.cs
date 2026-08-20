@@ -10,21 +10,34 @@ using Xunit;
 namespace HSMServer.Core.Tests.BackgroundServices;
 
 /// <summary>
-/// Pins the ordering the #1328 self-destroy guard relies on: ClearDatabaseService must run
-/// CheckSensorsHistoryAsync (which initializes every sensor) BEFORE the self-destroy sweeps.
-/// Swapping the two awaits silently degrades the fix into "self-destroy never runs" with only
-/// a log line as evidence — this test is what catches that edit.
+/// Pins the ordering the #1328 self-destroy guard relies on: ClearDatabaseService must RUN TO
+/// COMPLETION CheckSensorsHistoryAsync (which initializes every sensor) BEFORE the self-destroy
+/// sweeps. Swapping the two awaits silently degrades the fix into "self-destroy never runs";
+/// dropping the await on the history check does the same while still invoking it first — both
+/// edits are caught here.
 /// </summary>
 public class ClearDatabaseServiceTests
 {
+    private sealed class TestableClearDatabaseService(ITreeValuesCache cache) : ClearDatabaseService(cache)
+    {
+        public Task Run(CancellationToken token) => ServiceActionAsync(token);
+    }
+
     [Fact]
-    public async Task ServiceActionAsync_RunsHistoryCheckBeforeSelfDestroySweeps()
+    public async Task ServiceActionAsync_CompletesHistoryCheckBeforeSelfDestroySweeps()
     {
         var calls = new List<string>();
         var cache = new Mock<ITreeValuesCache>();
+
+        // Completes asynchronously and records a completion marker, so a fire-and-forget
+        // history check (invocation order still correct) fails the assertion.
         cache.Setup(c => c.CheckSensorsHistoryAsync(It.IsAny<CancellationToken>()))
-            .Callback(() => calls.Add(nameof(ITreeValuesCache.CheckSensorsHistoryAsync)))
-            .Returns(Task.CompletedTask);
+            .Returns(async () =>
+            {
+                calls.Add(nameof(ITreeValuesCache.CheckSensorsHistoryAsync));
+                await Task.Yield();
+                calls.Add("historyCheckCompleted");
+            });
         cache.Setup(c => c.RunSensorsSelfDestroyAsync(It.IsAny<CancellationToken>()))
             .Callback(() => calls.Add(nameof(ITreeValuesCache.RunSensorsSelfDestroyAsync)))
             .Returns(Task.CompletedTask);
@@ -32,17 +45,14 @@ public class ClearDatabaseServiceTests
             .Callback(() => calls.Add(nameof(ITreeValuesCache.RunProductsSelfDestroyAsync)))
             .Returns(Task.CompletedTask);
 
-        using var service = new ClearDatabaseService(cache.Object);
+        using var service = new TestableClearDatabaseService(cache.Object);
 
-        var method = typeof(BaseDelayedBackgroundService)
-            .GetMethod("ServiceActionAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("ServiceActionAsync not found — was it renamed in BaseDelayedBackgroundService?");
-
-        await (Task)method.Invoke(service, new object[] { CancellationToken.None });
+        await service.Run(CancellationToken.None);
 
         Assert.Equal(new[]
         {
             nameof(ITreeValuesCache.CheckSensorsHistoryAsync),
+            "historyCheckCompleted",
             nameof(ITreeValuesCache.RunSensorsSelfDestroyAsync),
             nameof(ITreeValuesCache.RunProductsSelfDestroyAsync),
         }, calls);

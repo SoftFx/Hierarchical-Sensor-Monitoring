@@ -90,6 +90,19 @@ namespace HSMServer.Core.Model
         // until restart, not deferred.
         internal abstract bool HistoryLoadFailed { get; }
 
+        // Mirrors the interval states TimeIsUp can actually fire in (None never fires; a Ticks
+        // interval with Ticks <= 0 never fires). Single source for ShouldDestroy() and for the
+        // sweep's deferred/failed-load counters, so the two cannot drift apart.
+        internal bool SelfDestroyIsActive
+        {
+            get
+            {
+                var interval = Settings.SelfDestroy.Value;
+
+                return !interval.IsNone && (!interval.UseTicks || interval.Ticks > 0);
+            }
+        }
+
         public bool ShouldDestroy()
         {
             // IsHistoryLoaded means "Storage reflects history", not just "a load was attempted" —
