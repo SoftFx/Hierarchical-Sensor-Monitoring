@@ -421,7 +421,11 @@ namespace HSMServer.Core.Cache
                 }
             }
 
-            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} (history not loaded)");
+            // "deferred" counts only self-destroy-enabled sensors (SelfDestroy = None, the
+            // default, is not counted), and it is not necessarily a startup race: sensors dropped
+            // from the cache by a product-name or sensor-path collision are swept here but never
+            // reached by CheckSensorsHistoryAsync, so they stay deferred permanently.
+            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} of the self-destroy-enabled sensors (history not loaded)");
 
             // Not "deferred": the latch is never retried, so for these sensors self-destroy is
             // off until restart. Separate from the Info line so operators can alert on it; the
