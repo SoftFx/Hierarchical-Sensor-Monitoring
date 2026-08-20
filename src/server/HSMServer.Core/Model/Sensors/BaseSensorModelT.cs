@@ -39,6 +39,9 @@ namespace HSMServer.Core.Model
 
         private readonly object _lock = new();
 
+        // _historyLoaded alone would suffice here (it is written only inside Initialize's try,
+        // strictly before the latch); the _isInitialized term documents the publication contract
+        // rather than adding a state combination that can occur.
         internal override bool IsHistoryLoaded => _isInitialized && _historyLoaded;
 
         internal override bool HistoryLoadFailed => _isInitialized && !_historyLoaded;

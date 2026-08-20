@@ -1,12 +1,9 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using HSMCommon.Model;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.Formatters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Sensors.SensorModels;
 using HSMServer.Core.Tests.Infrastructure;
 using Moq;
 using Xunit;
@@ -64,7 +61,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void ShouldDestroy_FailedHistoryLoad_ReturnsFalse()
         {
             // A failed load latches _isInitialized over an empty Storage (anti-retry-storm), so
-            // "IsInitialized" must mean "history actually loaded", not "a load was attempted" —
+            // "IsHistoryLoaded" must mean "history actually loaded", not "a load was attempted" —
             // otherwise this exact sensor is deleted by the same tick's sweep (#1328 review).
             var (sensor, database) = BuildSensor(historyTime: DateTime.UtcNow.AddMinutes(-1));
             database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
@@ -104,8 +101,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void ShouldDestroy_SelfDestroyNotConfigured_ReturnsFalse()
         {
-            // No SelfDestroy in settings: the interval resolves to None (TimeIsUp never fires),
-            // so even a years-old initialized sensor with empty Storage must not be destroyed.
+            // No SelfDestroy in settings: the value resolves to a non-null TimeIntervalModel.None
+            // (the == null guard never fires), whose GetShiftedTime is DateTime.MaxValue, so
+            // TimeIsUp can never fire — the real "never destroy" path.
             var (sensor, _) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3), configureSelfDestroy: false);
             sensor.Initialize();
 
@@ -141,27 +139,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private static (IntegerSensorModel Sensor, Mock<IDatabaseCore> DatabaseMock) BuildSensor(DateTime historyTime, bool configureSelfDestroy = true)
         {
-            var history = new MemoryPackFormatter().Serialize(
-                new IntegerValue { Time = historyTime, Status = SensorStatus.Ok, Value = 42 });
+            var history = SensorTestFactory.History(historyTime, 42);
 
             var database = new Mock<IDatabaseCore>();
             database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>())).Returns(history);
             database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(history);
 
-            var entity = new SensorEntity
-            {
-                Id = Guid.NewGuid().ToString(),
-                ProductId = Guid.NewGuid().ToString(),
-                DisplayName = RandomGenerator.GetRandomString(),
-                Type = (byte)SensorType.Integer,
-                CreationDate = DateTime.UtcNow.AddMonths(-1).Ticks,
-                Settings = configureSelfDestroy
-                    ? new Dictionary<string, TimeIntervalEntity>
-                    {
-                        [nameof(BaseSensorModel.Settings.SelfDestroy)] = new((long)TimeInterval.Ticks, _selfDestroyInterval.Ticks),
-                    }
-                    : null,
-            };
+            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: configureSelfDestroy ? _selfDestroyInterval : null);
 
             return (new IntegerSensorModel(entity, database.Object, null), database);
         }

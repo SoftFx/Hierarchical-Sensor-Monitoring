@@ -394,7 +394,7 @@ namespace HSMServer.Core.Cache
             var sensors = GetSensors();
             var removed = 0;
             var deferred = 0;
-            var failedLoads = 0;
+            var failedLoadIds = new List<Guid>();
             foreach (var sensor in sensors)
             {
                 if (token.IsCancellationRequested)
@@ -405,18 +405,24 @@ namespace HSMServer.Core.Cache
                     await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), token: token);
                     removed++;
                 }
-                else if (sensor.HistoryLoadFailed)
-                    failedLoads++;
-                else if (!sensor.IsHistoryLoaded)
-                    deferred++;
+                // Count only sensors the sweep could act on: SelfDestroy is None (the default)
+                // for most of the tree, and for those a failed load changes nothing.
+                else if (sensor.Settings.SelfDestroy.Value?.IsNone == false)
+                {
+                    if (sensor.HistoryLoadFailed)
+                        failedLoadIds.Add(sensor.Id);
+                    else if (!sensor.IsHistoryLoaded)
+                        deferred++;
+                }
             }
 
             _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} (history not loaded)");
 
             // Not "deferred": the latch is never retried, so for these sensors self-destroy is
-            // off until restart. Separate from the Info line so operators can alert on it.
-            if (failedLoads > 0)
-                _logger.Warn($"Sensors self destroy disabled until restart for {failedLoads} sensor(s): history load failed");
+            // off until restart. Separate from the Info line so operators can alert on it; the
+            // id sample makes the alert diagnosable without grepping hours-old init logs.
+            if (failedLoadIds.Count > 0)
+                _logger.Warn($"Sensors self destroy disabled until restart for {failedLoadIds.Count} sensor(s): history load failed — {string.Join(", ", failedLoadIds.Take(10))}{(failedLoadIds.Count > 10 ? ", ..." : string.Empty)}");
         }
 
         public async Task RunProductsSelfDestroyAsync(CancellationToken token = default)
@@ -876,6 +882,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"Clear history started: [{value.Product.Id}] {value.Product.DisplayName}");
 
             int cleared = 0;
+            int failed = 0;
             foreach (var sensor in value.Sensors.Values)
             {
                 // One throwing sensor must not freeze maintenance for the whole product: without
@@ -902,11 +909,12 @@ namespace HSMServer.Core.Cache
                 }
                 catch (Exception ex)
                 {
+                    failed++;
                     _logger.Error(ex, $"Check sensor history failed for [{sensor.Id}][{sensor.FullPath}]");
                 }
             }
 
-            _logger.Info($"Clear history ended: [{value.Product.Id}] {value.Product.DisplayName} cleared {cleared} of {value.Sensors.Values.Count}");
+            _logger.Info($"Clear history ended: [{value.Product.Id}] {value.Product.DisplayName} cleared {cleared} of {value.Sensors.Values.Count}, failed {failed}");
         }
 
         public async Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default)

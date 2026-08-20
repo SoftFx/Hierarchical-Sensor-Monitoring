@@ -7,7 +7,7 @@ using HSMServer.Core.Cache;
 using Moq;
 using Xunit;
 
-namespace HSMServer.Core.Tests.TreeValuesCacheTests;
+namespace HSMServer.Core.Tests.BackgroundServices;
 
 /// <summary>
 /// Pins the ordering the #1328 self-destroy guard relies on: ClearDatabaseService must run
@@ -34,10 +34,11 @@ public class ClearDatabaseServiceTests
 
         using var service = new ClearDatabaseService(cache.Object);
 
-        var action = (Task)typeof(BaseDelayedBackgroundService)
+        var method = typeof(BaseDelayedBackgroundService)
             .GetMethod("ServiceActionAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-            .Invoke(service, new object[] { CancellationToken.None });
-        await action;
+            ?? throw new InvalidOperationException("ServiceActionAsync not found — was it renamed in BaseDelayedBackgroundService?");
+
+        await (Task)method.Invoke(service, new object[] { CancellationToken.None });
 
         Assert.Equal(new[]
         {
