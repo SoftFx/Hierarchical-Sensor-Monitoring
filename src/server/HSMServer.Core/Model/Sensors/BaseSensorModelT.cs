@@ -32,15 +32,25 @@ namespace HSMServer.Core.Model
         // never be observable before the history load in Initialize() has finished filling Storage.
         private volatile bool _isInitialized;
 
-        internal override bool IsInitialized => _isInitialized;
+        // Set only when the history load completed without throwing. _isInitialized latches on
+        // failure too (anti-retry-storm, see Initialize()); IsInitialized is the stricter
+        // "Storage reflects history" predicate that destructive readers key on.
+        private volatile bool _historyLoaded;
+
         private readonly object _lock = new();
+
+        internal override bool IsInitialized => _isInitialized && _historyLoaded;
 
         protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 
         {
             _database = database;
 
             if (database == null)
+            {
+                // No database -> nothing to load; Storage is the only source of truth.
                 _isInitialized = true;
+                _historyLoaded = true;
+            }
         }
 
 
@@ -180,6 +190,7 @@ namespace HSMServer.Core.Model
                     }
 
                     _logger.Info($"Sensor {Id} initialized {From}-{To}");
+                    _historyLoaded = true;
                 }
                 catch (Exception ex)
                 {

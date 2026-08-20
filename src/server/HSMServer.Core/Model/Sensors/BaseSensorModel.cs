@@ -86,16 +86,23 @@ namespace HSMServer.Core.Model
 
         public bool ShouldDestroy()
         {
-            // An uninitialized sensor has an empty Storage, so HasData is false and the check would
-            // fall back to CreationDate — deleting a live sensor older than its self-destroy
-            // interval (#1328). The decision is unknown, not "destroy": defer to the next sweep,
-            // which runs after CheckSensorsHistoryAsync has initialized every sensor. Deliberately
-            // no Initialize() call here — it would run the policy fan-out and let a predicate emit
-            // TTL-expired alerts for a sensor this very check may delete.
+            // IsInitialized means "Storage reflects history", not just "a load was attempted" —
+            // a failed load latches _isInitialized but never publishes, so the guard below also
+            // covers permanently failed loads (#1328 review). The decision is unknown, not
+            // "destroy": defer to the next sweep, which runs after CheckSensorsHistoryAsync has
+            // initialized every sensor. Deliberately no Initialize() call here — it would run the
+            // policy fan-out and let a predicate emit TTL-expired alerts for a sensor this very
+            // check may delete.
             if (Settings.SelfDestroy.Value == null || !IsInitialized)
                 return false;
 
-            return Settings.SelfDestroy.Value.TimeIsUp(HasData ? LastUpdate : CreationDate);
+            // An empty Storage (retention purge swept the cache, or the newest row is the
+            // SetExpiredSnapshot timeout marker, which never enters the cache) still has the
+            // timeout marker as evidence of recent activity — only fall back to CreationDate
+            // when there is no signal at all.
+            var lastActivity = HasData ? LastUpdate : (LastTimeout?.Time ?? CreationDate);
+
+            return Settings.SelfDestroy.Value.TimeIsUp(lastActivity);
         }
 
         public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);

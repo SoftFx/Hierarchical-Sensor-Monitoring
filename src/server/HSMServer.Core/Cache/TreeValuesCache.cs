@@ -393,6 +393,7 @@ namespace HSMServer.Core.Cache
 
             var sensors = GetSensors();
             var removed = 0;
+            var deferred = 0;
             foreach (var sensor in sensors)
             {
                 if (token.IsCancellationRequested)
@@ -403,9 +404,14 @@ namespace HSMServer.Core.Cache
                     await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), token: token);
                     removed++;
                 }
+                else if (!sensor.IsInitialized)
+                    deferred++;
             }
 
-            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count} ");
+            // Deferred sensors were skipped because their history is not loaded (failed or
+            // incomplete CheckSensorsHistoryAsync) — the destroy decision is deferred, and a
+            // non-zero count here means the ordering this sweep relies on did not hold.
+            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} (history not loaded)");
         }
 
         public async Task RunProductsSelfDestroyAsync(CancellationToken token = default)
@@ -843,7 +849,13 @@ namespace HSMServer.Core.Cache
         {
             foreach (var product in GetProducts())
             {
-                await ProcessRequestAsync(product.Id, new CheckSensorsHistoryRequest(product.Id), token);
+                var result = await ProcessRequestAsync(product.Id, new CheckSensorsHistoryRequest(product.Id), token);
+
+                // The self-destroy sweep runs right after this and skips uninitialized sensors,
+                // so a swallowed failure here would silently disable self-destroy for the whole
+                // product — log it instead of discarding the TaskResult.
+                if (!result.IsOk)
+                    _logger.Error($"Check sensors history failed for product {product.Id} ({product.DisplayName}): {result.Error}");
             }
         }
 

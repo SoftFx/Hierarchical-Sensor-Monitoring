@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.Formatters;
@@ -60,6 +61,59 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Initialization race")]
+        public void ShouldDestroy_FailedHistoryLoad_ReturnsFalse()
+        {
+            // A failed load latches _isInitialized over an empty Storage (anti-retry-storm), so
+            // "IsInitialized" must mean "history actually loaded", not "a load was attempted" —
+            // otherwise this exact sensor is deleted by the same tick's sweep (#1328 review).
+            var (sensor, database) = BuildSensor(historyTime: DateTime.UtcNow.AddMinutes(-1));
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"));
+
+            sensor.Initialize();
+
+            Assert.False(sensor.ShouldDestroy(),
+                "sensor with a failed history load was scheduled for destruction");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void ShouldDestroy_RecentTimeoutMarkerOnly_ReturnsFalse()
+        {
+            // Retention can sweep a quiet sensor's real values and leave only the newest row —
+            // the SetExpiredSnapshot timeout marker, which never enters the Storage cache, so
+            // HasData is false. The marker's time is still evidence of recent activity; falling
+            // back straight to CreationDate destroyed such a sensor weeks early.
+            var markerTime = DateTime.UtcNow.AddMinutes(-10);
+            var (sensor, database) = BuildSensor(historyTime: markerTime);
+            var marker = new MemoryPackFormatter().Serialize(
+                new IntegerValue { Time = markerTime, Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), DateTime.MaxValue.Ticks)).Returns(marker);
+            // No real value before the marker.
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), markerTime.Ticks - 1)).Returns((byte[])null);
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(marker);
+
+            sensor.Initialize();
+
+            Assert.False(sensor.HasData, "test premise: the marker alone leaves Storage empty");
+            Assert.False(sensor.ShouldDestroy(),
+                "sensor with only a recent timeout marker was scheduled for destruction");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void ShouldDestroy_SelfDestroyNotConfigured_ReturnsFalse()
+        {
+            // No SelfDestroy in settings: the interval resolves to None (TimeIsUp never fires),
+            // so even a years-old initialized sensor with empty Storage must not be destroyed.
+            var (sensor, _) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3), configureSelfDestroy: false);
+            sensor.Initialize();
+
+            Assert.False(sensor.ShouldDestroy());
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
         public void ShouldDestroy_UninitializedSensor_HasNoSideEffects()
         {
             var (sensor, database) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
@@ -85,7 +139,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        private static (IntegerSensorModel Sensor, Mock<IDatabaseCore> DatabaseMock) BuildSensor(DateTime historyTime)
+        private static (IntegerSensorModel Sensor, Mock<IDatabaseCore> DatabaseMock) BuildSensor(DateTime historyTime, bool configureSelfDestroy = true)
         {
             var history = new MemoryPackFormatter().Serialize(
                 new IntegerValue { Time = historyTime, Status = SensorStatus.Ok, Value = 42 });
@@ -101,10 +155,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 DisplayName = RandomGenerator.GetRandomString(),
                 Type = (byte)SensorType.Integer,
                 CreationDate = DateTime.UtcNow.AddMonths(-1).Ticks,
-                Settings = new Dictionary<string, TimeIntervalEntity>
-                {
-                    [nameof(BaseSensorModel.Settings.SelfDestroy)] = new((long)TimeInterval.Ticks, _selfDestroyInterval.Ticks),
-                },
+                Settings = configureSelfDestroy
+                    ? new Dictionary<string, TimeIntervalEntity>
+                    {
+                        [nameof(BaseSensorModel.Settings.SelfDestroy)] = new((long)TimeInterval.Ticks, _selfDestroyInterval.Ticks),
+                    }
+                    : null,
             };
 
             return (new IntegerSensorModel(entity, database.Object, null), database);
