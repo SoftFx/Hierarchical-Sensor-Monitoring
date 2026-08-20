@@ -395,7 +395,9 @@ namespace HSMServer.Core.Cache
 
             var sensors = GetSensors();
             var removed = 0;
+            var notRemoved = 0;
             var deferred = 0;
+            var deferredSample = new List<Guid>(FailedLoadSampleSize);
             var failedLoadCount = 0;
             var failedLoadSample = new List<Guid>(FailedLoadSampleSize);
             foreach (var sensor in sensors)
@@ -406,7 +408,14 @@ namespace HSMServer.Core.Cache
                 if (sensor.ShouldDestroy())
                 {
                     await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), token: token);
-                    removed++;
+
+                    // RemoveSensorAsync discards its TaskResult and the handler swallows throws,
+                    // so verify: a sensor still present after the call failed to delete and is
+                    // retried silently every hour — count attempts and successes separately.
+                    if (TryGetSensorById(sensor.Id, out _))
+                        notRemoved++;
+                    else
+                        removed++;
                 }
                 // Count only sensors the sweep could act on: SelfDestroy is None (the default)
                 // for most of the tree, and for those a failed load changes nothing.
@@ -419,21 +428,32 @@ namespace HSMServer.Core.Cache
                             failedLoadSample.Add(sensor.Id);
                     }
                     else if (!sensor.IsHistoryLoaded)
+                    {
                         deferred++;
+                        if (deferredSample.Count < FailedLoadSampleSize)
+                            deferredSample.Add(sensor.Id);
+                    }
                 }
             }
 
-            // "deferred" counts only self-destroy-enabled sensors (SelfDestroy = None, the
-            // default, is not counted), and it is not necessarily a startup race: sensors dropped
-            // from the cache by a product-name or sensor-path collision are swept here but never
-            // reached by CheckSensorsHistoryAsync, so they stay deferred permanently.
-            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} of the self-destroy-enabled sensors (history not loaded)");
+            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} self-destroy-enabled (history not loaded), not removed {notRemoved}");
+
+            // The sweep runs right after CheckSensorsHistoryAsync, which initializes every
+            // sensor reachable through the cache — so beyond the registration race between the
+            // two awaits, a deferred sensor is almost certainly permanent (a sensor lost to a
+            // product-name or sensor-path collision is swept here but never initialized). Same
+            // severity as the failed-load case: self-destroy is off until restart either way.
+            if (deferred > 0)
+                _logger.Warn($"Sensors self destroy deferred for {deferred} self-destroy-enabled sensor(s) — likely permanent, never initialized — {string.Join(", ", deferredSample)}{(deferred > deferredSample.Count ? ", ..." : string.Empty)}");
 
             // Not "deferred": the latch is never retried, so for these sensors self-destroy is
             // off until restart. Separate from the Info line so operators can alert on it; the
             // id sample makes the alert diagnosable without grepping hours-old init logs.
             if (failedLoadCount > 0)
                 _logger.Warn($"Sensors self destroy disabled until restart for {failedLoadCount} sensor(s): history load failed — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
+
+            if (notRemoved > 0)
+                _logger.Warn($"{notRemoved} sensor(s) due for destruction were not removed (removal failed) and will be retried next sweep");
         }
 
         public async Task RunProductsSelfDestroyAsync(CancellationToken token = default)
