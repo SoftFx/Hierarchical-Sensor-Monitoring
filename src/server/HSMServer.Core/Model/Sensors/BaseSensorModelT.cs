@@ -33,13 +33,13 @@ namespace HSMServer.Core.Model
         private volatile bool _isInitialized;
 
         // Set only when the history load completed without throwing. _isInitialized latches on
-        // failure too (anti-retry-storm, see Initialize()); IsInitialized is the stricter
+        // failure too (anti-retry-storm, see Initialize()); IsHistoryLoaded is the stricter
         // "Storage reflects history" predicate that destructive readers key on.
         private volatile bool _historyLoaded;
 
         private readonly object _lock = new();
 
-        internal override bool IsInitialized => _isInitialized && _historyLoaded;
+        internal override bool IsHistoryLoaded => _isInitialized && _historyLoaded;
 
         internal override bool HistoryLoadFailed => _isInitialized && !_historyLoaded;
 

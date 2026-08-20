@@ -407,7 +407,7 @@ namespace HSMServer.Core.Cache
                 }
                 else if (sensor.HistoryLoadFailed)
                     failedLoads++;
-                else if (!sensor.IsInitialized)
+                else if (!sensor.IsHistoryLoaded)
                     deferred++;
             }
 
@@ -854,12 +854,17 @@ namespace HSMServer.Core.Cache
         {
             foreach (var product in GetProducts())
             {
+                if (token.IsCancellationRequested)
+                    break;
+
                 var result = await ProcessRequestAsync(product.Id, new CheckSensorsHistoryRequest(product.Id), token);
 
                 // The self-destroy sweep runs right after this and skips uninitialized sensors,
                 // so a swallowed failure here would silently disable self-destroy for the whole
-                // product — log it instead of discarding the TaskResult.
-                if (!result.IsOk)
+                // product — log it instead of discarding the TaskResult. Cancellation is not a
+                // failure: the queue logs it itself, and a burst of Error lines per remaining
+                // product on an ordinary shutdown is noise, not signal.
+                if (!result.IsOk && !token.IsCancellationRequested)
                     _logger.Error($"Check sensors history failed for product {product.Id} ({product.DisplayName}): {result.Error}");
             }
         }

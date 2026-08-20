@@ -80,25 +80,26 @@ namespace HSMServer.Core.Model
         public PolicyResult ConfirmationResult => Policies.ConfimationResult;
 
 
-        // False until Initialize() has published the history load (#1296). Direct Storage readers
-        // can use it to defer decisions instead of acting on an empty Storage.
-        internal abstract bool IsInitialized { get; }
+        // False until Initialize() has published a SUCCESSFUL history load (#1296, #1328). Not a
+        // retry gate: the internal latch stays latched on failure — use for deferring decisions,
+        // not for deciding whether to attempt a load.
+        internal abstract bool IsHistoryLoaded { get; }
 
-        // True when a load was attempted but failed: IsInitialized is false for the lifetime of
+        // True when a load was attempted but failed: IsHistoryLoaded is false for the lifetime of
         // the process (the latch is not retried), so for such sensors self-destroy is disabled
         // until restart, not deferred.
         internal abstract bool HistoryLoadFailed { get; }
 
         public bool ShouldDestroy()
         {
-            // IsInitialized means "Storage reflects history", not just "a load was attempted" —
+            // IsHistoryLoaded means "Storage reflects history", not just "a load was attempted" —
             // a failed load latches _isInitialized but never publishes, so the guard below also
             // covers permanently failed loads (#1328 review). The decision is unknown, not
             // "destroy": defer to the next sweep, which runs after CheckSensorsHistoryAsync has
             // initialized every sensor. Deliberately no Initialize() call here — it would run the
             // policy fan-out and let a predicate emit TTL-expired alerts for a sensor this very
             // check may delete.
-            if (Settings.SelfDestroy.Value == null || !IsInitialized)
+            if (Settings.SelfDestroy.Value == null || !IsHistoryLoaded)
                 return false;
 
             // An empty Storage (retention purge swept the cache, or the newest row is the
