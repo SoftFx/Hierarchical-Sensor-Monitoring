@@ -91,8 +91,9 @@ namespace HSMServer.Core.Model
         internal abstract bool HistoryLoadFailed { get; }
 
         // Mirrors the interval states TimeIsUp can actually fire in (None never fires; a Ticks
-        // interval with Ticks <= 0 never fires). Single source for ShouldDestroy() and for the
-        // sweep's deferred/failed-load counters, so the two cannot drift apart.
+        // interval with Ticks <= 0 never fires). Used by ShouldDestroy() and by the sweep's
+        // deferred/failed-load counters. Value is never null: CustomSettingsProperty falls back
+        // through the parent chain to EmptyValue (TimeIntervalModel.None).
         internal bool SelfDestroyIsActive
         {
             get
@@ -112,7 +113,7 @@ namespace HSMServer.Core.Model
             // initialized every sensor. Deliberately no Initialize() call here — it would run the
             // policy fan-out and let a predicate emit TTL-expired alerts for a sensor this very
             // check may delete.
-            if (Settings.SelfDestroy.Value == null || !IsHistoryLoaded)
+            if (!SelfDestroyIsActive || !IsHistoryLoaded)
                 return false;
 
             // An empty Storage (retention purge swept the cache, or the newest row is the
