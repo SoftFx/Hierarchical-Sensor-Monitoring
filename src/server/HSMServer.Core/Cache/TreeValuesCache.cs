@@ -76,6 +76,8 @@ namespace HSMServer.Core.Cache
 
         private readonly CDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
+        private const int LogSampleSize = 10;
+
         private readonly Logger _logger = LogManager.GetLogger(nameof(TreeValuesCache));
 
         private readonly ConfirmationManager _confirmationManager = new();
@@ -393,19 +395,93 @@ namespace HSMServer.Core.Cache
 
             var sensors = GetSensors();
             var removed = 0;
+            var notRemoved = 0;
+            var deferred = 0;
+            var deferredSample = new List<Guid>(LogSampleSize);
+            var failedLoadCount = 0;
+            var failedLoadSample = new List<Guid>(LogSampleSize);
+            var failedSweep = 0;
+
+            static void Sample(List<Guid> sample, Guid id)
+            {
+                if (sample.Count < LogSampleSize)
+                    sample.Add(id);
+            }
+
             foreach (var sensor in sensors)
             {
                 if (token.IsCancellationRequested)
                     break;
 
-                if (sensor.ShouldDestroy())
+                // Same isolation as CheckSensorHistory: one throwing sensor (e.g.
+                // TimeIntervalModel.GetShiftedTime's NotImplementedException on a legacy
+                // Interval value) must not skip the destruction check for every later sensor.
+                try
                 {
-                    await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), token: token);
-                    removed++;
+                    // Self-sufficiency: CheckSensorsHistoryAsync only reaches sensors present in
+                    // a CachedValue, and sensors lost to a product-name or sensor-path collision
+                    // are not. Initialize them here (the load was never attempted — the failed-
+                    // load latch case stays deferred until restart). The Initialize()-inside-
+                    // ShouldDestroy() objection does not apply: this is the maintenance sweep,
+                    // where policy evaluation belongs.
+                    if (sensor.SelfDestroyIsActive && !sensor.IsHistoryLoaded && !sensor.HistoryLoadFailed)
+                        sensor.Initialize();
+
+                    if (sensor.ShouldDestroy())
+                    {
+                        await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), token: token);
+
+                        // RemoveSensorAsync discards its TaskResult and the handler swallows throws,
+                        // so verify: a sensor still present after the call failed to delete and is
+                        // retried silently every hour — count attempts and successes separately.
+                        // Cancellation is not a removal failure.
+                        if (token.IsCancellationRequested)
+                            break;
+                        if (TryGetSensorById(sensor.Id, out _))
+                            notRemoved++;
+                        else
+                            removed++;
+                    }
+                    // Count only sensors the sweep could act on: SelfDestroy is None (the default)
+                    // for most of the tree, and for those a failed load changes nothing.
+                    else if (sensor.SelfDestroyIsActive)
+                    {
+                        if (sensor.HistoryLoadFailed)
+                        {
+                            failedLoadCount++;
+                            Sample(failedLoadSample, sensor.Id);
+                        }
+                        else if (!sensor.IsHistoryLoaded)
+                        {
+                            deferred++;
+                            Sample(deferredSample, sensor.Id);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failedSweep++;
+                    _logger.Error(ex, $"Self destroy check failed for [{sensor.Id}][{sensor.FullPath}]");
                 }
             }
 
-            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count} ");
+            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} self-destroy-enabled (history not loaded), not removed {notRemoved}, failed {failedSweep}");
+
+            // Beyond the registration race between the two awaits, a deferred sensor is a
+            // permanently uninitialized one (a sensor lost to a product-name or sensor-path
+            // collision, or one whose Initialize() here threw). Same severity as the failed-load
+            // case: self-destroy is off until restart either way.
+            if (deferred > 0)
+                _logger.Warn($"Sensors self destroy deferred for {deferred} self-destroy-enabled sensor(s) — never initialized — {string.Join(", ", deferredSample)}{(deferred > deferredSample.Count ? ", ..." : string.Empty)}");
+
+            // Not "deferred": the latch is never retried, so for these sensors self-destroy is
+            // off until restart. Separate from the Info line so operators can alert on it; the
+            // id sample makes the alert diagnosable without grepping hours-old init logs.
+            if (failedLoadCount > 0)
+                _logger.Warn($"Sensors self destroy disabled until restart for {failedLoadCount} sensor(s): history load failed (retry tracked in #1344) — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
+
+            if (notRemoved > 0 && !token.IsCancellationRequested)
+                _logger.Warn($"{notRemoved} sensor(s) due for destruction were not removed (removal failed) and will be retried next sweep");
         }
 
         public async Task RunProductsSelfDestroyAsync(CancellationToken token = default)
@@ -843,7 +919,18 @@ namespace HSMServer.Core.Cache
         {
             foreach (var product in GetProducts())
             {
-                await ProcessRequestAsync(product.Id, new CheckSensorsHistoryRequest(product.Id), token);
+                if (token.IsCancellationRequested)
+                    break;
+
+                var result = await ProcessRequestAsync(product.Id, new CheckSensorsHistoryRequest(product.Id), token);
+
+                // The self-destroy sweep runs right after this and skips uninitialized sensors,
+                // so a swallowed failure here would silently disable self-destroy for the whole
+                // product — log it instead of discarding the TaskResult. Cancellation is not a
+                // failure: the queue logs it itself, and a burst of Error lines per remaining
+                // product on an ordinary shutdown is noise, not signal.
+                if (!result.IsOk && !token.IsCancellationRequested)
+                    _logger.Error($"Check sensors history failed for product {product.Id} ({product.DisplayName}): {result.Error}");
             }
         }
 
@@ -854,27 +941,39 @@ namespace HSMServer.Core.Cache
             _logger.Info($"Clear history started: [{value.Product.Id}] {value.Product.DisplayName}");
 
             int cleared = 0;
+            int failed = 0;
             foreach (var sensor in value.Sensors.Values)
             {
-                sensor.Initialize();
-
-                var from = sensor.From;
-
-                var policy = sensor.Settings.KeepHistory.Value;
-
-                if (policy.TimeIsUp(from))
+                // One throwing sensor must not freeze maintenance for the whole product: without
+                // this catch the throw aborts the loop, every later sensor stays uninitialized and
+                // the self-destroy sweep that runs right after silently skips them.
+                try
                 {
-                    _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
-                    ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
-                    cleared++;
+                    sensor.Initialize();
+
+                    var from = sensor.From;
+
+                    var policy = sensor.Settings.KeepHistory.Value;
+
+                    if (policy.TimeIsUp(from))
+                    {
+                        _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
+                        ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
+                        cleared++;
+                    }
+                    else
+                    {
+                        _logger.Info($"Skipped [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    _logger.Info($"Skipped [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
+                    failed++;
+                    _logger.Error(ex, $"Check sensor history failed for [{sensor.Id}][{sensor.FullPath}]");
                 }
             }
 
-            _logger.Info($"Clear history ended: [{value.Product.Id}] {value.Product.DisplayName} cleared {cleared} of {value.Sensors.Values.Count}");
+            _logger.Info($"Clear history ended: [{value.Product.Id}] {value.Product.DisplayName} cleared {cleared} of {value.Sensors.Values.Count}, failed {failed}");
         }
 
         public async Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default)
