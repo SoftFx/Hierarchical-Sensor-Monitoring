@@ -99,6 +99,23 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Initialization race")]
+        public void ShouldDestroy_FullyClearedHistory_ReturnsFalse()
+        {
+            // A UI/API "clear history" wipes the cache (HasData false) with no timeout marker;
+            // before the Storage.To fallback the very next sweep judged the month-old
+            // CreationDate and deleted an actively reporting sensor.
+            var (sensor, _) = BuildSensor(historyTime: DateTime.UtcNow.AddMinutes(-1));
+            sensor.Initialize();
+
+            sensor.Clear(DateTime.MaxValue);
+
+            Assert.False(sensor.HasData, "test premise: the wipe emptied the cache");
+            Assert.False(sensor.ShouldDestroy(),
+                "sensor with fully cleared but recent history was scheduled for destruction");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
         public void ShouldDestroy_SelfDestroyNotConfigured_ReturnsFalse()
         {
             // No SelfDestroy in settings: the value resolves to a non-null TimeIntervalModel.None

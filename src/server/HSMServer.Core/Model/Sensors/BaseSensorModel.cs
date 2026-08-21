@@ -94,37 +94,35 @@ namespace HSMServer.Core.Model
         // interval with Ticks <= 0 never fires). Used by ShouldDestroy() and by the sweep's
         // deferred/failed-load counters. Value is never null: CustomSettingsProperty falls back
         // through the parent chain to EmptyValue (TimeIntervalModel.None).
-        internal bool SelfDestroyIsActive
-        {
-            get
-            {
-                var interval = Settings.SelfDestroy.Value;
+        internal bool SelfDestroyIsActive => IsActive(Settings.SelfDestroy.Value);
 
-                return !interval.IsNone && (!interval.UseTicks || interval.Ticks > 0);
-            }
-        }
+        private static bool IsActive(TimeIntervalModel interval) =>
+            !interval.IsNone && (!interval.UseTicks || interval.Ticks > 0);
 
         public bool ShouldDestroy()
         {
             // IsHistoryLoaded means "Storage reflects history", not just "a load was attempted" —
             // a failed load latches _isInitialized but never publishes, so the guard below also
             // covers permanently failed loads (#1328 review). The decision is unknown, not
-            // "destroy": defer to the next sweep, which runs after CheckSensorsHistoryAsync has
-            // initialized every sensor. Deliberately no Initialize() call here — it would run the
-            // policy fan-out and let a predicate emit TTL-expired alerts for a sensor this very
-            // check may delete.
-            if (!SelfDestroyIsActive || !IsHistoryLoaded)
+            // "destroy": defer to the next sweep. Deliberately no Initialize() call here — it
+            // would run the policy fan-out and let a predicate emit TTL-expired alerts for a
+            // sensor this very check may delete.
+            var interval = Settings.SelfDestroy.Value;
+
+            if (!IsActive(interval) || !IsHistoryLoaded)
                 return false;
 
-            // An empty Storage (retention purge swept the cache, or the newest row is the
-            // SetExpiredSnapshot timeout marker, which never enters the cache) still has the
-            // timeout marker as evidence of recent activity — only fall back to CreationDate
-            // when there is no signal at all. Marker .Time, not .LastUpdateTime: GetTimeoutValue
+            // An empty Storage cache (retention purge, a full history clear, or the newest row
+            // being the SetExpiredSnapshot timeout marker, which never enters the cache) still
+            // leaves evidence of recent activity: the timeout marker, or — because Clear() does
+            // not reset it — Storage.To, the last real value's time (MaxValue only for a sensor
+            // that never received a value). Marker .Time, not .LastUpdateTime: GetTimeoutValue
             // copies LastReceivingTime from the previous value, so LastUpdateTime would
-            // under-estimate activity.
-            var lastActivity = HasData ? LastUpdate : (LastTimeout?.Time ?? CreationDate);
+            // under-estimate activity. CreationDate is the last resort.
+            var lastActivity = HasData ? LastUpdate
+                : LastTimeout?.Time ?? (To != DateTime.MaxValue ? To : CreationDate);
 
-            return Settings.SelfDestroy.Value.TimeIsUp(lastActivity);
+            return interval.TimeIsUp(lastActivity);
         }
 
         public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);
