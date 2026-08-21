@@ -478,7 +478,7 @@ namespace HSMServer.Core.Cache
             // off until restart. Separate from the Info line so operators can alert on it; the
             // id sample makes the alert diagnosable without grepping hours-old init logs.
             if (failedLoadCount > 0)
-                _logger.Warn($"Sensors self destroy disabled until restart for {failedLoadCount} sensor(s): history load failed — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
+                _logger.Warn($"Sensors self destroy disabled until restart for {failedLoadCount} sensor(s): history load failed (retry tracked in #1344) — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
 
             if (notRemoved > 0 && !token.IsCancellationRequested)
                 _logger.Warn($"{notRemoved} sensor(s) due for destruction were not removed (removal failed) and will be retried next sweep");
