@@ -400,43 +400,55 @@ namespace HSMServer.Core.Cache
             var deferredSample = new List<Guid>(FailedLoadSampleSize);
             var failedLoadCount = 0;
             var failedLoadSample = new List<Guid>(FailedLoadSampleSize);
+            var failedSweep = 0;
             foreach (var sensor in sensors)
             {
                 if (token.IsCancellationRequested)
                     break;
 
-                if (sensor.ShouldDestroy())
+                // Same isolation as CheckSensorHistory: one throwing sensor (e.g.
+                // TimeIntervalModel.GetShiftedTime's NotImplementedException on a legacy
+                // Interval value) must not skip the destruction check for every later sensor.
+                try
                 {
-                    await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), token: token);
+                    if (sensor.ShouldDestroy())
+                    {
+                        await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), token: token);
 
-                    // RemoveSensorAsync discards its TaskResult and the handler swallows throws,
-                    // so verify: a sensor still present after the call failed to delete and is
-                    // retried silently every hour — count attempts and successes separately.
-                    if (TryGetSensorById(sensor.Id, out _))
-                        notRemoved++;
-                    else
-                        removed++;
+                        // RemoveSensorAsync discards its TaskResult and the handler swallows throws,
+                        // so verify: a sensor still present after the call failed to delete and is
+                        // retried silently every hour — count attempts and successes separately.
+                        if (TryGetSensorById(sensor.Id, out _))
+                            notRemoved++;
+                        else
+                            removed++;
+                    }
+                    // Count only sensors the sweep could act on: SelfDestroy is None (the default)
+                    // for most of the tree, and for those a failed load changes nothing.
+                    else if (sensor.SelfDestroyIsActive)
+                    {
+                        if (sensor.HistoryLoadFailed)
+                        {
+                            failedLoadCount++;
+                            if (failedLoadSample.Count < FailedLoadSampleSize)
+                                failedLoadSample.Add(sensor.Id);
+                        }
+                        else if (!sensor.IsHistoryLoaded)
+                        {
+                            deferred++;
+                            if (deferredSample.Count < FailedLoadSampleSize)
+                                deferredSample.Add(sensor.Id);
+                        }
+                    }
                 }
-                // Count only sensors the sweep could act on: SelfDestroy is None (the default)
-                // for most of the tree, and for those a failed load changes nothing.
-                else if (sensor.SelfDestroyIsActive)
+                catch (Exception ex)
                 {
-                    if (sensor.HistoryLoadFailed)
-                    {
-                        failedLoadCount++;
-                        if (failedLoadSample.Count < FailedLoadSampleSize)
-                            failedLoadSample.Add(sensor.Id);
-                    }
-                    else if (!sensor.IsHistoryLoaded)
-                    {
-                        deferred++;
-                        if (deferredSample.Count < FailedLoadSampleSize)
-                            deferredSample.Add(sensor.Id);
-                    }
+                    failedSweep++;
+                    _logger.Error(ex, $"Self destroy check failed for [{sensor.Id}][{sensor.FullPath}]");
                 }
             }
 
-            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} self-destroy-enabled (history not loaded), not removed {notRemoved}");
+            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count}, deferred {deferred} self-destroy-enabled (history not loaded), not removed {notRemoved}, failed {failedSweep}");
 
             // The sweep runs right after CheckSensorsHistoryAsync, which initializes every
             // sensor reachable through the cache — so beyond the registration race between the
