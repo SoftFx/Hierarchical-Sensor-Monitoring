@@ -421,11 +421,18 @@ namespace HSMServer.Core.Cache
                     // Self-sufficiency: CheckSensorsHistoryAsync only reaches sensors present in
                     // a CachedValue, and sensors lost to a product-name or sensor-path collision
                     // are not. Initialize them here (the load was never attempted — the failed-
-                    // load latch case stays deferred until restart). The Initialize()-inside-
-                    // ShouldDestroy() objection does not apply: this is the maintenance sweep,
-                    // where policy evaluation belongs.
+                    // load latch case is handled by the bounded retry below). The Initialize()-
+                    // inside-ShouldDestroy() objection does not apply: this is the maintenance
+                    // sweep, where policy evaluation belongs.
                     if (sensor.SelfDestroyIsActive && !sensor.IsHistoryLoaded && !sensor.HistoryLoadFailed)
                         sensor.Initialize();
+
+                    // #1344: without a retry, one transient LevelDB error during a lazily
+                    // triggered load disables self-destroy for the sensor until restart. Re-arm
+                    // the failed-load latch at most once per sensor per day — the maintenance
+                    // sweep is the safe place for it, the per-value paths never retry (#1296).
+                    if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed)
+                        sensor.RetryFailedHistoryLoad(DateTime.UtcNow);
 
                     if (sensor.ShouldDestroy())
                     {
@@ -474,11 +481,11 @@ namespace HSMServer.Core.Cache
             if (deferred > 0)
                 _logger.Warn($"Sensors self destroy deferred for {deferred} self-destroy-enabled sensor(s) — never initialized — {string.Join(", ", deferredSample)}{(deferred > deferredSample.Count ? ", ..." : string.Empty)}");
 
-            // Not "deferred": the latch is never retried, so for these sensors self-destroy is
-            // off until restart. Separate from the Info line so operators can alert on it; the
-            // id sample makes the alert diagnosable without grepping hours-old init logs.
+            // Not "deferred": until the bounded retry succeeds, self-destroy stays off for these
+            // sensors. Separate from the Info line so operators can alert on it; the id sample
+            // makes the alert diagnosable without grepping hours-old init logs.
             if (failedLoadCount > 0)
-                _logger.Warn($"Sensors self destroy disabled until restart for {failedLoadCount} sensor(s): history load failed (retry tracked in #1344) — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
+                _logger.Warn($"Sensors self destroy disabled after failed history load for {failedLoadCount} sensor(s) (bounded retry in progress, #1344) — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
 
             if (notRemoved > 0 && !token.IsCancellationRequested)
                 _logger.Warn($"{notRemoved} sensor(s) due for destruction were not removed (removal failed) and will be retried next sweep");

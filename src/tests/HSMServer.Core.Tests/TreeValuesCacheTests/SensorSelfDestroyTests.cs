@@ -154,6 +154,75 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void RetryFailedHistoryLoad_AfterDbRecovers_EnablesSelfDestroy()
+        {
+            // #1344 acceptance: a transient LevelDB error during a lazily triggered load used to
+            // disable self-destroy until restart. After the DB recovers, the bounded retry must
+            // re-evaluate the sensor without a restart.
+            var history = SensorTestFactory.History(DateTime.UtcNow.AddDays(-3), 42);
+
+            var database = new Mock<IDatabaseCore>();
+            database.SetupSequence(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"))
+                .Returns(history);
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(history);
+
+            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: _selfDestroyInterval);
+            var sensor = new IntegerSensorModel(entity, database.Object, null);
+
+            sensor.Initialize();
+            Assert.True(sensor.HistoryLoadFailed, "test premise: the first load failed");
+            Assert.False(sensor.ShouldDestroy(), "failed load defers destruction");
+
+            sensor.RetryFailedHistoryLoad(DateTime.UtcNow);
+
+            Assert.True(sensor.IsHistoryLoaded, "retry did not load history after recovery");
+            Assert.True(sensor.ShouldDestroy(), "stale history must be destroyable after the retry");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void RetryFailedHistoryLoad_IsRateLimitedToFailsAgain()
+        {
+            // The latch exists to prevent a per-value retry storm (#1296): a still-broken
+            // database must see at most one retry per retry interval, not one per sweep tick.
+            var (sensor, database) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"));
+
+            sensor.Initialize();
+
+            var now = DateTime.UtcNow;
+            sensor.RetryFailedHistoryLoad(now);
+            sensor.RetryFailedHistoryLoad(now.AddHours(1));
+            sensor.RetryFailedHistoryLoad(now.AddHours(2));
+
+            database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Exactly(2),
+                "retry must fire at most once per retry interval");
+            Assert.True(sensor.HistoryLoadFailed, "retry against a broken DB must re-latch as failed");
+
+            sensor.RetryFailedHistoryLoad(now.AddHours(25));
+            database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Exactly(3),
+                "retry must fire again once the interval has passed");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void RetryFailedHistoryLoad_SuccessfulSensor_IsNoOp()
+        {
+            var (sensor, database) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
+            sensor.Initialize();
+
+            sensor.RetryFailedHistoryLoad(DateTime.UtcNow);
+
+            database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once,
+                "retry must not reload history for a healthy sensor");
+            Assert.True(sensor.IsHistoryLoaded);
+        }
+
+
         private static (IntegerSensorModel Sensor, Mock<IDatabaseCore> DatabaseMock) BuildSensor(DateTime historyTime, bool configureSelfDestroy = true)
         {
             var history = SensorTestFactory.History(historyTime, 42);

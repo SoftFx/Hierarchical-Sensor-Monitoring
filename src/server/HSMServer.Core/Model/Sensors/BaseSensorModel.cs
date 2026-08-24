@@ -81,14 +81,19 @@ namespace HSMServer.Core.Model
 
 
         // False until Initialize() has published a SUCCESSFUL history load (#1296, #1328). Not a
-        // retry gate: the internal latch stays latched on failure — use for deferring decisions,
-        // not for deciding whether to attempt a load.
+        // retry gate: the internal latch stays latched on failure (until the bounded
+        // RetryFailedHistoryLoad re-arm, #1344) — use for deferring decisions, not for deciding
+        // whether to attempt a load.
         internal abstract bool IsHistoryLoaded { get; }
 
-        // True when a load was attempted but failed: IsHistoryLoaded is false for the lifetime of
-        // the process (the latch is not retried), so for such sensors self-destroy is disabled
-        // until restart, not deferred.
+        // True when a load was attempted but failed: the latch stays latched on failure until
+        // RetryFailedHistoryLoad re-arms it (bounded, #1344), so between retries self-destroy is
+        // disabled for such sensors, not deferred.
         internal abstract bool HistoryLoadFailed { get; }
+
+        // Bounded re-arm of the failed-load latch (#1344): reruns the history load at most once
+        // per retry interval, from the maintenance sweep only — never from the per-value paths.
+        internal abstract void RetryFailedHistoryLoad(DateTime utcNow);
 
         // Mirrors the interval states TimeIsUp can actually fire in (None never fires; a Ticks
         // interval with Ticks <= 0 never fires). Used by ShouldDestroy() and by the sweep's

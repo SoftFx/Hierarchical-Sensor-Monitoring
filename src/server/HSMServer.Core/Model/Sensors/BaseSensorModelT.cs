@@ -39,6 +39,14 @@ namespace HSMServer.Core.Model
 
         private readonly object _lock = new();
 
+        // Bounded retry of failed loads (#1344): the maintenance sweep re-arms the latch at most
+        // once per this interval, so a broken database sees at most one retry attempt per sensor
+        // per day, never a per-value storm.
+        private static readonly TimeSpan HistoryLoadRetryInterval = TimeSpan.FromHours(24);
+
+        // Ticks of the last RetryFailedHistoryLoad re-arm (0 = never); guarded by _lock.
+        private long _lastLoadRetryTicks;
+
         // _historyLoaded alone would suffice here (it is written only inside Initialize's try,
         // strictly before the latch); the _isInitialized term documents the publication contract
         // rather than adding a state combination that can occur.
@@ -158,60 +166,93 @@ namespace HSMServer.Core.Model
                 if (_isInitialized)
                     return;
 
-                try
-                {
-                    BaseValue last, first;
-                    var lastBytes = _database.GetLatestValue(Id, DateTime.MaxValue.Ticks);
-                    if (lastBytes != null)
-                    {
-                        var firstBytes = _database.GetFirstValue(Id);
-
-                        last = Convert(lastBytes);
-                        // Null-guarded because the catch below now latches: a throw here would leave
-                        // _isInitialized true over an empty Storage permanently — the #1296 symptom,
-                        // no longer bounded to a startup window. Both reads are reachable as null:
-                        // retention (KeepHistory) can sweep every real value and leave only the
-                        // timeout marker SetExpiredSnapshot wrote as the newest row.
-                        first = firstBytes != null ? Convert(firstBytes) : null;
-
-                        if (last.IsTimeout)
-                        {
-                            var valueBytes = _database.GetLatestValue(Id, last.Time.Ticks-1);
-                            var value = valueBytes != null ? Convert(valueBytes) : null;
-
-                            if (value is not null && !value.IsTimeout && Policies.TryValidate(value, out _))
-                                Storage.AddValue((T)value);
-
-                            IsExpired = true;
-                            foreach (var ttl in Policies.TTLPolicies)
-                                ttl.InitLastTtlTime(last.Time);
-                        }
-
-                        if (last.IsTimeout || Policies.TryValidate(last, out _))
-                            Storage.AddValue((T)last);
-
-                        if (first != null)
-                            Storage.Cut(first.Time);
-                    }
-
-                    // Before the log line: an NLog throw must not classify a successful load as failed.
-                    _historyLoaded = true;
-                    _logger.Info($"Sensor {Id} initialized {From}-{To}");
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, $"Sensor initialization error {Id}");
-                }
-                finally
-                {
-                    // Published once the load has finished OR FAILED (#1296): a failed load latches
-                    // too and publishes an empty Storage, deliberately — one loud error above beats
-                    // a per-value retry storm against a broken database. Contract and its limits:
-                    // aicontext/features/server/overview.md, BaseSensorModel<T>.
-                    _isInitialized = true;
-                }
+                LoadHistoryUnderLock();
             }
 
+        }
+
+        // Re-arm the failed-load latch and rerun the load, at most once per interval (#1344).
+        // Called only from the maintenance sweep (hourly), so a broken database sees at most one
+        // load attempt per sensor per interval — not the per-value retry storm the latch prevents
+        // (#1296). The interval gate is checked and stamped inside the lock so concurrent sweeps
+        // cannot double-fire it.
+        internal override void RetryFailedHistoryLoad(DateTime utcNow)
+        {
+            if (!HistoryLoadFailed)
+                return;
+
+            lock (_lock)
+            {
+                if (!HistoryLoadFailed)
+                    return;
+
+                if (utcNow.Ticks - _lastLoadRetryTicks < HistoryLoadRetryInterval.Ticks)
+                    return;
+
+                _lastLoadRetryTicks = utcNow.Ticks;
+                _isInitialized = false;
+
+                LoadHistoryUnderLock();
+            }
+        }
+
+        // Must be called with _lock held. Publishes the latch (on success OR failure) via its
+        // finally block, so a caller below can never observe an unlatched sensor.
+        private void LoadHistoryUnderLock()
+        {
+            try
+            {
+                BaseValue last, first;
+                var lastBytes = _database.GetLatestValue(Id, DateTime.MaxValue.Ticks);
+                if (lastBytes != null)
+                {
+                    var firstBytes = _database.GetFirstValue(Id);
+
+                    last = Convert(lastBytes);
+                    // Null-guarded because the catch below now latches: a throw here would leave
+                    // _isInitialized true over an empty Storage permanently — the #1296 symptom,
+                    // no longer bounded to a startup window. Both reads are reachable as null:
+                    // retention (KeepHistory) can sweep every real value and leave only the
+                    // timeout marker SetExpiredSnapshot wrote as the newest row.
+                    first = firstBytes != null ? Convert(firstBytes) : null;
+
+                    if (last.IsTimeout)
+                    {
+                        var valueBytes = _database.GetLatestValue(Id, last.Time.Ticks-1);
+                        var value = valueBytes != null ? Convert(valueBytes) : null;
+
+                        if (value is not null && !value.IsTimeout && Policies.TryValidate(value, out _))
+                            Storage.AddValue((T)value);
+
+                        IsExpired = true;
+                        foreach (var ttl in Policies.TTLPolicies)
+                            ttl.InitLastTtlTime(last.Time);
+                    }
+
+                    if (last.IsTimeout || Policies.TryValidate(last, out _))
+                        Storage.AddValue((T)last);
+
+                    if (first != null)
+                        Storage.Cut(first.Time);
+                }
+
+                // Before the log line: an NLog throw must not classify a successful load as failed.
+                _historyLoaded = true;
+                _logger.Info($"Sensor {Id} initialized {From}-{To}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Sensor initialization error {Id}");
+            }
+            finally
+            {
+                // Published once the load has finished OR FAILED (#1296): a failed load latches
+                // too and publishes an empty Storage, deliberately — one loud error above beats
+                // a per-value retry storm against a broken database. Contract and its limits:
+                // aicontext/features/server/overview.md, BaseSensorModel<T>. Bounded re-arm:
+                // RetryFailedHistoryLoad (#1344).
+                _isInitialized = true;
+            }
         }
     }
 }
