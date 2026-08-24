@@ -148,13 +148,15 @@ namespace HSMServer.Core.Model
             if (_isInitialized)
                 return;
 
-            // Monitor is reentrant, and _isInitialized is deliberately still false while the load
-            // runs, so a same-thread re-entry would replay the whole history load: the TryValidate
-            // calls below can reach SensorTimeout -> SensorExpired -> TryAddValue -> Initialize.
-            // Returning here stops the replay but leaves that nested caller running against a
-            // half-built Storage — #1296 on the initializing thread. Unreachable today only by an
-            // ordering accident (HasData is false at both TryValidate sites), so log it: if a
-            // policy change ever makes it reachable, this line is the only thing that will say so.
+            // Monitor is reentrant, and _isInitialized is deliberately still false while a cold
+            // load runs, so a same-thread re-entry would replay the whole history load: the
+            // TryValidate calls below can reach SensorTimeout -> SensorExpired -> TryAddValue ->
+            // Initialize. Returning here stops the replay but leaves that nested caller running
+            // against a half-built Storage — #1296 on the initializing thread. On the cold path
+            // this is unreachable except by an ordering accident (HasData is false at both
+            // TryValidate sites), so log it: if a policy change ever makes it reachable, this line
+            // is the only thing that will say so. The retry path (RetryFailedHistoryLoad) never
+            // clears _isInitialized, so it cannot reach this guard.
             if (Monitor.IsEntered(_lock))
             {
                 _logger.Warn($"Reentrant Initialize on sensor {Id} during history load — the nested value path sees a partial Storage (#1296)");
@@ -190,7 +192,14 @@ namespace HSMServer.Core.Model
                     return;
 
                 _lastLoadRetryTicks = utcNow.Ticks;
-                _isInitialized = false;
+
+                // Only _historyLoaded flips: _isInitialized must stay true. Clearing it would make
+                // a reentrant TryAddValue (SensorExpired -> SetExpiredSnapshot path) re-enter
+                // Initialize() on a Storage that is now populated, re-opening the #1296 hazard the
+                // Monitor.IsEntered guard above only warns about. With _isInitialized left set the
+                // guard contract ("Storage is safe to read lock-free") still holds during a reload:
+                // Storage is non-empty and only gains values.
+                _historyLoaded = false;
 
                 LoadHistoryUnderLock();
             }
@@ -216,21 +225,42 @@ namespace HSMServer.Core.Model
                     // timeout marker SetExpiredSnapshot wrote as the newest row.
                     first = firstBytes != null ? Convert(firstBytes) : null;
 
+                    // On a retry (RetryFailedHistoryLoad) Storage already holds live values that
+                    // arrived after the failed load. Only DB rows strictly newer than what Storage
+                    // already has may be added (equal timestamps duplicate the newest value in the
+                    // Plotly cache and swap _lastValue's computed EMA state for a DB copy), and
+                    // stale rows must not run through Policies.TryValidate: SensorTimeout inside
+                    // it fires SensorExpired -> SetExpiredSnapshot -> TryAddValue, i.e. policy
+                    // fan-out and notifications triggered from the maintenance sweep. A timeout
+                    // marker older than Storage.LastValue must not force IsExpired onto a
+                    // currently-reporting sensor either. On a cold load storageLast is null and
+                    // every gate below is open — behavior is unchanged for Initialize().
+                    var storageLast = Storage.LastValue;
+
                     if (last.IsTimeout)
                     {
-                        var valueBytes = _database.GetLatestValue(Id, last.Time.Ticks-1);
-                        var value = valueBytes != null ? Convert(valueBytes) : null;
+                        if (storageLast is null || last.Time >= storageLast.Time)
+                        {
+                            var valueBytes = _database.GetLatestValue(Id, last.Time.Ticks - 1);
+                            var value = valueBytes != null ? Convert(valueBytes) : null;
 
-                        if (value is not null && !value.IsTimeout && Policies.TryValidate(value, out _))
-                            Storage.AddValue((T)value);
+                            if (value is not null && !value.IsTimeout &&
+                                (storageLast is null || value.Time > storageLast.Time) &&
+                                Policies.TryValidate(value, out _))
+                                Storage.AddValue((T)value);
 
-                        IsExpired = true;
-                        foreach (var ttl in Policies.TTLPolicies)
-                            ttl.InitLastTtlTime(last.Time);
+                            IsExpired = true;
+                            foreach (var ttl in Policies.TTLPolicies)
+                                ttl.InitLastTtlTime(last.Time);
+
+                            Storage.AddValue((T)last);
+                        }
                     }
-
-                    if (last.IsTimeout || Policies.TryValidate(last, out _))
-                        Storage.AddValue((T)last);
+                    else if (storageLast is null || last.Time > storageLast.Time)
+                    {
+                        if (Policies.TryValidate(last, out _))
+                            Storage.AddValue((T)last);
+                    }
 
                     if (first != null)
                         Storage.Cut(first.Time);
