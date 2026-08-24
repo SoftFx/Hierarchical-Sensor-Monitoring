@@ -32,7 +32,11 @@ namespace HSMServer.BackgroundServices
         protected override Task ExecuteAsync(CancellationToken token)
         {
             var now = DateTime.UtcNow;
-            return PeriodicTask.Run(() => ServiceActionAsync(token), (now + StartDelay).Ceil(Delay) - now, Delay, token);
+            // The logger is load-bearing: PeriodicTask.Run swallows action throws into
+            // logger?.Error, so without it a throw out of ServiceActionAsync (e.g. a failed
+            // RemoveSensorAsync aborting the self-destroy sweep mid-loop) skips every remaining
+            // sensor for that tick with zero output.
+            return PeriodicTask.Run(() => ServiceActionAsync(token), (now + StartDelay).Ceil(Delay) - now, Delay, token, _logger);
         }
 
         protected virtual void RunAction(Action action)

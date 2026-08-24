@@ -31,14 +31,31 @@ namespace HSMServer.Core.Model
         // volatile: TryAddValue/TryUpdateLastValue/CheckTimeout read it lock-free, and "true" must
         // never be observable before the history load in Initialize() has finished filling Storage.
         private volatile bool _isInitialized;
+
+        // Set only when the history load completed without throwing. _isInitialized latches on
+        // failure too (anti-retry-storm, see Initialize()); IsHistoryLoaded is the stricter
+        // "Storage reflects history" predicate that destructive readers key on.
+        private volatile bool _historyLoaded;
+
         private readonly object _lock = new();
+
+        // _historyLoaded alone would suffice here (it is written only inside Initialize's try,
+        // strictly before the latch); the _isInitialized term documents the publication contract
+        // rather than adding a state combination that can occur.
+        internal override bool IsHistoryLoaded => _isInitialized && _historyLoaded;
+
+        internal override bool HistoryLoadFailed => _isInitialized && !_historyLoaded;
 
         protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 
         {
             _database = database;
 
             if (database == null)
+            {
+                // No database -> nothing to load; Storage is the only source of truth.
                 _isInitialized = true;
+                _historyLoaded = true;
+            }
         }
 
 
@@ -177,6 +194,8 @@ namespace HSMServer.Core.Model
                             Storage.Cut(first.Time);
                     }
 
+                    // Before the log line: an NLog throw must not classify a successful load as failed.
+                    _historyLoaded = true;
                     _logger.Info($"Sensor {Id} initialized {From}-{To}");
                 }
                 catch (Exception ex)

@@ -33,8 +33,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void TryAddValue_DuringHistoryLoad_WaitsForLoadedStorage()
         {
-            using var load = new GatedLoad(History(DateTime.UtcNow.AddMinutes(-5), 1));
-            var sensor = new IntegerSensorModel(BuildEntity(), load.Database.Object, null);
+            using var load = new GatedLoad(SensorTestFactory.History(DateTime.UtcNow.AddMinutes(-5), 1));
+            var sensor = new IntegerSensorModel(SensorTestFactory.BuildEntity(), load.Database.Object, null);
 
             var init = Task.Run(sensor.Initialize);
             Assert.True(load.Entered.Wait(_waitTimeout), "history load never started");
@@ -74,8 +74,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var historyTime = DateTime.UtcNow.AddMinutes(-5);
 
-            using var load = new GatedLoad(History(historyTime, 1));
-            var sensor = new IntegerSensorModel(BuildEntity(), load.Database.Object, null);
+            using var load = new GatedLoad(SensorTestFactory.History(historyTime, 1));
+            var sensor = new IntegerSensorModel(SensorTestFactory.BuildEntity(), load.Database.Object, null);
 
             var init = Task.Run(sensor.Initialize);
             Assert.True(load.Entered.Wait(_waitTimeout), "history load never started");
@@ -122,10 +122,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var historyTime = DateTime.UtcNow.AddMinutes(-1);
 
-            using var load = new GatedLoad(History(historyTime, 1));
+            using var load = new GatedLoad(SensorTestFactory.History(historyTime, 1));
             // Singleton: TryAddValue decides by comparing against Storage.LastValue, so the verdict
             // is a direct readout of whether the history was already published when the writer ran.
-            var sensor = new IntegerSensorModel(BuildEntity(isSingleton: true), load.Database.Object, null);
+            var sensor = new IntegerSensorModel(SensorTestFactory.BuildEntity(isSingleton: true), load.Database.Object, null);
 
             var init = Task.Run(sensor.Initialize);
             Assert.True(load.Entered.Wait(_waitTimeout), "history load never started");
@@ -176,7 +176,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), timeoutTime.Ticks - 1)).Returns((byte[])null);
             database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(timeoutBytes);
 
-            var sensor = new IntegerSensorModel(BuildEntity(), database.Object, null);
+            var sensor = new IntegerSensorModel(SensorTestFactory.BuildEntity(), database.Object, null);
 
             sensor.Initialize();
 
@@ -212,7 +212,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     return null;
                 });
 
-            sensor = new IntegerSensorModel(BuildEntity(), database.Object, null);
+            sensor = new IntegerSensorModel(SensorTestFactory.BuildEntity(), database.Object, null);
 
             sensor.Initialize();
 
@@ -224,8 +224,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void Initialize_Concurrent_LoadsHistoryOnce()
         {
-            using var load = new GatedLoad(History(DateTime.UtcNow.AddMinutes(-5), 1));
-            var sensor = new IntegerSensorModel(BuildEntity(), load.Database.Object, null);
+            using var load = new GatedLoad(SensorTestFactory.History(DateTime.UtcNow.AddMinutes(-5), 1));
+            var sensor = new IntegerSensorModel(SensorTestFactory.BuildEntity(), load.Database.Object, null);
 
             var first = Task.Run(sensor.Initialize);
             Assert.True(load.Entered.Wait(_waitTimeout), "history load never started");
@@ -266,7 +266,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
                 .Throws(new IOException("database is broken"));
 
-            var sensor = new IntegerSensorModel(BuildEntity(), database.Object, null);
+            var sensor = new IntegerSensorModel(SensorTestFactory.BuildEntity(), database.Object, null);
 
             sensor.Initialize(); // must swallow + log, not throw
 
@@ -339,19 +339,5 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             CheckTimeout,
         }
 
-
-        private static byte[] History(DateTime time, int value) =>
-            new MemoryPackFormatter().Serialize(
-                new IntegerValue { Time = time, Status = SensorStatus.Ok, Value = value });
-
-        private static SensorEntity BuildEntity(bool isSingleton = false) =>
-            new()
-            {
-                Id = Guid.NewGuid().ToString(),
-                ProductId = Guid.NewGuid().ToString(),
-                DisplayName = RandomGenerator.GetRandomString(),
-                Type = (byte)SensorType.Integer,
-                IsSingleton = isSingleton,
-            };
     }
 }
