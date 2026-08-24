@@ -19,6 +19,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     public class SensorSelfDestroyTests
     {
         private static readonly TimeSpan _selfDestroyInterval = TimeSpan.FromHours(1);
+        private static readonly TimeSpan _longSelfDestroyInterval = TimeSpan.FromDays(7);
 
 
         [Fact]
@@ -112,6 +113,30 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.False(sensor.HasData, "test premise: the wipe emptied the cache");
             Assert.False(sensor.ShouldDestroy(),
                 "sensor with fully cleared but recent history was scheduled for destruction");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void ShouldDestroy_StaleMarkerAndNewerClearedHistory_UsesNewest()
+        {
+            // Quiet sensor -> marker on day 1; one report on day 5 (To = day 5); retention then
+            // empties the cache, and the later re-expiry writes no marker (SetExpiredSnapshot
+            // requires HasData). A priority chain would pick the stale day-1 marker and destroy
+            // the sensor a TTL-interval too early; the newest-of must win.
+            // 7-day interval: the day-1 marker (-8d) is past it, the day-5 To (-5d) is not —
+            // a priority chain picks the marker and destroys, the newest-of does not.
+            var (sensor, _) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-5), interval: _longSelfDestroyInterval);
+            sensor.Initialize();
+
+            // Stand-in for the marker written on day 1, older than the loaded history.
+            sensor.TryAddValue(new IntegerValue { Time = DateTime.UtcNow.AddDays(-8), Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
+
+            sensor.Clear(DateTime.MaxValue);
+
+            Assert.False(sensor.HasData, "test premise: the wipe emptied the cache");
+            Assert.NotNull(sensor.LastTimeout);
+            Assert.False(sensor.ShouldDestroy(),
+                "stale day-1 marker shadowed the newer day-5 To and destroyed the sensor early");
         }
 
         [Fact]
@@ -231,7 +256,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>())).Returns(history);
             database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(history);
 
-            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: configureSelfDestroy ? _selfDestroyInterval : null);
+            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: configureSelfDestroy ? (interval ?? _selfDestroyInterval) : null);
 
             return (new IntegerSensorModel(entity, database.Object, null), database);
         }

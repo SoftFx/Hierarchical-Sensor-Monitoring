@@ -104,6 +104,8 @@ namespace HSMServer.Core.Model
         private static bool IsActive(TimeIntervalModel interval) =>
             !interval.IsNone && (!interval.UseTicks || interval.Ticks > 0);
 
+        private static DateTime Newest(DateTime a, DateTime b) => a > b ? a : b;
+
         public bool ShouldDestroy()
         {
             // IsHistoryLoaded means "Storage reflects history", not just "a load was attempted" —
@@ -119,13 +121,17 @@ namespace HSMServer.Core.Model
 
             // An empty Storage cache (retention purge, a full history clear, or the newest row
             // being the SetExpiredSnapshot timeout marker, which never enters the cache) still
-            // leaves evidence of recent activity: the timeout marker, or — because Clear() does
-            // not reset it — Storage.To, the last real value's time (MaxValue only for a sensor
-            // that never received a value). Marker .Time, not .LastUpdateTime: GetTimeoutValue
-            // copies LastReceivingTime from the previous value, so LastUpdateTime would
-            // under-estimate activity. CreationDate is the last resort.
-            var lastActivity = HasData ? LastUpdate
-                : LastTimeout?.Time ?? (To != DateTime.MaxValue ? To : CreationDate);
+            // leaves evidence of recent activity. Take the NEWEST of the two signals, not a
+            // priority chain: _lastTimeout is never updated after a newer real value arrives
+            // (and a later re-expiry writes no marker because SetExpiredSnapshot requires
+            // HasData), while Storage.To is — so a stale marker must not shadow a newer To.
+            // To is MaxValue only for a sensor that never received a value. Marker .Time, not
+            // .LastUpdateTime: GetTimeoutValue copies LastReceivingTime from the previous value,
+            // so LastUpdateTime would under-estimate activity. CreationDate is the last resort.
+            var lastActivity = HasData
+                ? LastUpdate
+                : Newest(LastTimeout?.Time ?? DateTime.MinValue,
+                         To != DateTime.MaxValue ? To : CreationDate);
 
             return interval.TimeIsUp(lastActivity);
         }
