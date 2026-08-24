@@ -188,7 +188,11 @@ namespace HSMServer.Core.Model
                 if (!HistoryLoadFailed)
                     return;
 
-                if (utcNow.Ticks - _lastLoadRetryTicks < HistoryLoadRetryInterval.Ticks)
+                // Wall clock on purpose (testable); a backwards NTP step makes the delta
+                // negative — treat anything below zero as "interval elapsed" so a clock
+                // correction cannot silently suppress retries.
+                var sinceLastRetry = utcNow.Ticks - _lastLoadRetryTicks;
+                if (sinceLastRetry >= 0 && sinceLastRetry < HistoryLoadRetryInterval.Ticks)
                     return;
 
                 _lastLoadRetryTicks = utcNow.Ticks;
@@ -225,27 +229,28 @@ namespace HSMServer.Core.Model
                     // timeout marker SetExpiredSnapshot wrote as the newest row.
                     first = firstBytes != null ? Convert(firstBytes) : null;
 
-                    // On a retry (RetryFailedHistoryLoad) Storage already holds live values that
-                    // arrived after the failed load. Only DB rows strictly newer than what Storage
-                    // already has may be added (equal timestamps duplicate the newest value in the
-                    // Plotly cache and swap _lastValue's computed EMA state for a DB copy), and
-                    // stale rows must not run through Policies.TryValidate: SensorTimeout inside
-                    // it fires SensorExpired -> SetExpiredSnapshot -> TryAddValue, i.e. policy
-                    // fan-out and notifications triggered from the maintenance sweep. A timeout
-                    // marker older than Storage.LastValue must not force IsExpired onto a
-                    // currently-reporting sensor either. On a cold load storageLast is null and
-                    // every gate below is open — behavior is unchanged for Initialize().
-                    var storageLast = Storage.LastValue;
-
-                    if (last.IsTimeout)
+                    // A retry (RetryFailedHistoryLoad) can run against a *hot* sensor: after the
+                    // failed load the sensor kept reporting, so Storage holds live values. On a
+                    // hot Storage the sweep must not write anything except Cut below: the value
+                    // paths run lock-free once _isInitialized is set, and ValuesStorage is not
+                    // thread-safe for concurrent writes, so a DB row added here races live
+                    // ingestion (torn _lastValue/_to, a duplicated newest point in the Plotly
+                    // cache). Policy fan-out must not run either: TryValidate reaches
+                    // SensorExpired -> SetExpiredSnapshot -> TryAddValue (notifications and DB
+                    // writes from the maintenance sweep), and a stale timeout marker as the
+                    // newest DB row must not force IsExpired onto a currently-reporting sensor.
+                    // The retry's actual purpose — latching _historyLoaded so self-destroy
+                    // decisions stop being deferred — is satisfied without touching live values.
+                    // On a cold load (Initialize) Storage is empty, so the original first-load
+                    // body below runs unchanged.
+                    if (Storage.LastValue is null)
                     {
-                        if (storageLast is null || last.Time >= storageLast.Time)
+                        if (last.IsTimeout)
                         {
                             var valueBytes = _database.GetLatestValue(Id, last.Time.Ticks - 1);
                             var value = valueBytes != null ? Convert(valueBytes) : null;
 
                             if (value is not null && !value.IsTimeout &&
-                                (storageLast is null || value.Time > storageLast.Time) &&
                                 Policies.TryValidate(value, out _))
                                 Storage.AddValue((T)value);
 
@@ -255,11 +260,10 @@ namespace HSMServer.Core.Model
 
                             Storage.AddValue((T)last);
                         }
-                    }
-                    else if (storageLast is null || last.Time > storageLast.Time)
-                    {
-                        if (Policies.TryValidate(last, out _))
+                        else if (Policies.TryValidate(last, out _))
+                        {
                             Storage.AddValue((T)last);
+                        }
                     }
 
                     if (first != null)

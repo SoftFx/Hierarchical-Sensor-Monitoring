@@ -209,7 +209,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Initialization race")]
-        public void RetryFailedHistoryLoad_IsRateLimitedToFailsAgain()
+        public void RetryFailedHistoryLoad_StillBrokenDb_IsRateLimited()
         {
             // The latch exists to prevent a per-value retry storm (#1296): a still-broken
             // database must see at most one retry per retry interval, not one per sweep tick.
@@ -235,6 +235,42 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Initialization race")]
+        public void RetryFailedHistoryLoad_HotSensor_DoesNotTouchLiveStorageOrPolicies()
+        {
+            // The PR's motivating scenario (#1344): the lazily triggered load fails, the sensor
+            // keeps reporting, the DB recovers, the sweep retries. The retry must only latch
+            // _historyLoaded — no duplicate DB copy of the live value, no timeout-marker
+            // IsExpired forced onto a reporting sensor, no policy fan-out re-entering TryAddValue.
+            var staleMarkerTime = DateTime.UtcNow.AddDays(-2);
+            var marker = new MemoryPackFormatter().Serialize(
+                new IntegerValue { Time = staleMarkerTime, Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
+
+            var database = new Mock<IDatabaseCore>();
+            database.SetupSequence(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"))
+                .Returns(marker); // newest DB row: a timeout marker older than the live value
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(marker);
+
+            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: _selfDestroyInterval);
+            var sensor = new IntegerSensorModel(entity, database.Object, null);
+
+            var liveValue = new IntegerValue { Time = DateTime.UtcNow.AddMinutes(-1), Status = SensorStatus.Ok, Value = 7 };
+            Assert.True(sensor.TryAddValue(liveValue), "test premise: the live value was accepted");
+            Assert.True(sensor.HistoryLoadFailed, "test premise: the lazy load failed");
+
+            var expiredFired = false;
+            sensor.Policies.SensorExpired += (_, _) => expiredFired = true;
+
+            sensor.RetryFailedHistoryLoad(DateTime.UtcNow);
+
+            Assert.True(sensor.IsHistoryLoaded, "retry must latch the history load for a hot sensor");
+            Assert.False(sensor.IsExpired, "stale timeout marker forced IsExpired onto a reporting sensor");
+            Assert.False(expiredFired, "retry ran the SensorExpired fan-out from the sweep");
+            Assert.Same(liveValue, sensor.LastValue);
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
         public void RetryFailedHistoryLoad_SuccessfulSensor_IsNoOp()
         {
             var (sensor, database) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
@@ -248,7 +284,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        private static (IntegerSensorModel Sensor, Mock<IDatabaseCore> DatabaseMock) BuildSensor(DateTime historyTime, bool configureSelfDestroy = true)
+        private static (IntegerSensorModel Sensor, Mock<IDatabaseCore> DatabaseMock) BuildSensor(DateTime historyTime, bool configureSelfDestroy = true, TimeSpan? interval = null)
         {
             var history = SensorTestFactory.History(historyTime, 42);
 
