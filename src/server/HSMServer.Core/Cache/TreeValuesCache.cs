@@ -431,7 +431,11 @@ namespace HSMServer.Core.Cache
                     // triggered load disables self-destroy for the sensor until restart. Re-arm
                     // the failed-load latch at most once per sensor per day — the maintenance
                     // sweep is the safe place for it, the per-value paths never retry (#1296).
-                    if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed)
+                    // else if: a first-attempt failure in the Initialize() above must not fire
+                    // the retry in the same iteration — that would hit the DB twice back-to-back
+                    // and stamp _lastLoadRetryTicks at the moment of the first failure, burning
+                    // the sensor's 24h budget on an attempt it never really got.
+                    else if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed)
                         sensor.RetryFailedHistoryLoad(DateTime.UtcNow);
 
                     if (sensor.ShouldDestroy())
