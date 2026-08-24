@@ -4355,8 +4355,26 @@ namespace
                                 (usage.full_path.empty()
                                      ? "\n\n**Path:** _(system process - path unavailable)_"
                                      : "\n\n**Path:** `" + usage.full_path + "`");
+                            // Computer-sensor registration — mirrors the managed WindowsTopCpuMonitor
+                            // (#1318) for wire parity. Same is_computer_sensor/TTL/grafana shape as the
+                            // per-interface network speed sensors (#1189 at L4005-L4016), but this is an
+                            // instant sensor: no EMA statistics (network is a bar with statistics=EMA),
+                            // and keep_history is left unset so TotalCPUPrototype's server-default
+                            // behavior applies identically on both collectors.
+                            opts.unit = 100;      // Unit::Percents
+                            opts.ttl_ms = 300000; // 5 min
+                            opts.enable_grafana = TriBool::True;
+                            opts.is_computer_sensor = true;
+                            // .NET InstantSensorOptions.ToApi emits DisplayUnit = null (not 0), so the
+                            // native registration must too or conformance parity breaks.
+                            opts.has_display_unit = false;
                             std::shared_ptr<NativeSensor> sensor;
-                            if (CreateSensor(("Top CPU processes/" + usage.name).c_str(),
+                            // RevealDefaultPath + is_computer_sensor => CalculateSystemPath produces
+                            // <ComputerName>/.computer/Top CPU processes/<name>. A bare
+                            // "Top CPU processes/<name>" here would instead create a separate top-level
+                            // node next to .computer (#1189 bug class).
+                            const std::string path = RevealDefaultPath("Top CPU processes", usage.name, /*is_computer_sensor=*/true);
+                            if (CreateSensor(path.c_str(),
                                              HSM_SENSOR_TYPE_DOUBLE, false, "", sensor, opts) == HSM_RESULT_OK)
                             {
                                 it = sensor_cache.emplace(usage.name, sensor).first;
