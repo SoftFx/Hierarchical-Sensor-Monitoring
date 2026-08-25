@@ -215,7 +215,7 @@ Persistence rules:
 - A failure after persistence but before the one-time response must revoke/delete the unusable record safely; do not attempt to expose it later.
 - Revocation is idempotent.
 - Persist monotonic global and per-owner revocation generations in the token store. Every authentication compares the token's issuance generations with current authoritative values; missing, unreadable, or regressed generation state fails authentication closed. New tokens capture the current generations.
-- Revoked and expired records do not count toward `MaxTokensPerUser`; they are retained for `TokenRecordRetention` and then removed by bounded maintenance while lifecycle/security audit records follow their own retention policies.
+- Revoked, expired, orphaned, and generation-invalidated records do not count toward `MaxTokensPerUser`. A record is generation-invalidated immediately when either issuance generation is lower than the current authoritative global/owner generation; quota evaluation must not wait for per-record reconciliation. Such records are retained for `TokenRecordRetention` and then removed by bounded maintenance while lifecycle/security audit records follow their own retention policies.
 - Last-used updates must not create excessive synchronous database writes. Use an established coalescing/background pattern with bounded loss acceptable only for this non-security-critical timestamp.
 - Unknown operations, boundary kinds, or resource identifiers must fail closed during deserialization/authorization.
 - The lifecycle service canonicalizes grants and rejects duplicate operation/boundary pairs before the atomic LevelDB write; do not assume relational uniqueness constraints.
@@ -403,7 +403,7 @@ Requirements:
 - `ApiTokens.Enabled` defaults to false for upgrades and must be enabled explicitly. Token verification requires no deployment secret beyond the persisted database.
 - Configuration validation occurs at startup with actionable errors.
 - `ApiTokens.Enabled = false` is an emergency authentication/issuance kill switch: all API-token authentication plus create/rotate/restrict is denied immediately. Cookie-authenticated list/revoke and IsAdmin emergency revoke-user/revoke-all remain available for cleanup.
-- `MaxTokensPerUser` counts only active, unexpired records. Revoked/expired records remain queryable for `TokenRecordRetention`, then a bounded cleanup job removes them; they never block new issuance.
+- `MaxTokensPerUser` counts only unexpired records whose individual state is active and whose issuance global/owner generations equal the current authoritative generations. Revoked, expired, orphaned, or generation-invalidated records remain queryable for `TokenRecordRetention`, then bounded cleanup removes them; they never block new issuance, even before reconciliation writes `RevokedAtUtc`.
 - Limits and retention cleanup prevent unbounded token records and abuse.
 
 ## Work Breakdown
@@ -455,7 +455,7 @@ Each PR must update the actual behavior documentation and run focused server/sec
 - Grant expansion fails in place and through rotation; owner promotion does not create latent grants.
 - Deleted owner invalidates token.
 - Persistence survives server restart and a consistent backup/restore of token records together with owner/access state, without any separate token-verification secret.
-- Deterministic-clock tests prove that N active tokens block N+1 at `MaxTokensPerUser`; revoked, expired, and orphaned records do not count; rotation at the cap atomically replaces the source slot without consuming another slot.
+- Deterministic-clock tests prove that N active tokens block N+1 at `MaxTokensPerUser`; revoked, expired, orphaned, and generation-invalidated records do not count; rotation at the cap atomically replaces the source slot without consuming another slot. A user at the cap can issue a new token immediately after emergency revoke-user/revoke-all advances the applicable generation, before per-record reconciliation.
 - Deterministic-clock retention tests pin the exact cutoff semantics. Cleanup uses bounded batches, eventually drains eligible records, preserves newer revoked/expired records, is restart/failure safe, and leaves lifecycle/security-audit retention independent.
 - IsAdmin emergency revoke-user/revoke-all requires cookie authentication, CSRF, confirmation, and reason. Tests prove the persist-first per-owner/global generation increment invalidates all pre-generation tokens before `204`, survives restart, permits newly issued tokens at the new generation, and reconciles per-token metadata in bounded retryable batches. Injected generation-write failure performs no partial cleanup and returns `503` with correlation. Injected post-persistence publication failure makes all API-token authentication unavailable until generation reload; missing/corrupt/regressed generation state rejects authentication. Tests also assert `400/401/403/404` mappings and disabled-mode availability.
 
