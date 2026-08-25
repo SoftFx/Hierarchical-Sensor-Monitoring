@@ -6,6 +6,25 @@
 
 HSM has cookie authentication for its web UI and collector access keys for ingestion, but no durable fine-grained credential for management automation. This standalone initiative defines that missing authentication foundation.
 
+## Goals
+Add a single, self-hosted API-token authentication mechanism for IsAdmin users, per-resource ProductManager and ProductViewer users, scheduled scripts, resident services, CLI clients, MCP tools, and AI agents.
+
+An authenticated user creates a named token once, copies it to a protected environment or secret store, and uses it as an HTTP bearer credential without repeating the interactive HSM login. HSM must never persist the recoverable token value.
+
+The implementation must support deliberate privilege reduction. A highly privileged user must be able to issue a narrowly restricted token, for example an IsAdmin user creating a read-only token for monitoring. A token can reduce its owner's grant set. Owner promotion cannot create an operation/resource grant that was not explicitly issued; it may restore effective access within a previously issued grant after a temporary owner downgrade.
+
+## Non-Goals
+
+- Building a general OAuth/OIDC authorization server.
+- JWT access tokens.
+- Replacing cookie authentication for the web UI.
+- Replacing collector `ClientName`/access-key authentication.
+- Accepting API tokens on ordinary MVC/Razor browser routes.
+- HMAC signing of every HTTP request.
+- Unattended self-rotation or self-revocation by an API token in v1. Operators use the cookie-authenticated lifecycle flow and plan an atomic human-in-the-loop cutover.
+- Service-account administration unless it is explicitly pulled into this task after product review. The same token model must be compatible with service accounts later.
+- Implementing all management API resources. This task provides the authentication and authorization foundation used by those APIs.
+
 ## Current Behavior
 
 - Cookie is the only registered ASP.NET Core authentication scheme.
@@ -18,12 +37,19 @@ HSM has cookie authentication for its web UI and collector access keys for inges
 - Existing Grafana datasource routes are anonymous `ControllerBase` endpoints with no fallback authorization policy and are reachable on both listeners; this initiative must not silently change them.
 - HSM has no existing `/api/v1` management-route convention; establishing it and coexistence with unversioned and Grafana routes is part of this initiative.
 
-## Goals
-Add a single, self-hosted API-token authentication mechanism for IsAdmin users, per-resource ProductManager and ProductViewer users, scheduled scripts, resident services, CLI clients, MCP tools, and AI agents.
+## Proposed Direction
 
-An authenticated user creates a named token once, copies it to a protected environment or secret store, and uses it as an HTTP bearer credential without repeating the interactive HSM login. HSM must never persist the recoverable token value.
+### In scope
 
-The implementation must support deliberate privilege reduction. A highly privileged user must be able to issue a narrowly restricted token, for example an IsAdmin user creating a read-only token for monitoring. A token can reduce its owner's grant set. Owner promotion cannot create an operation/resource grant that was not explicitly issued; it may restore effective access within a previously issued grant after a temporary owner downgrade.
+- Create, list, inspect metadata, restrict, rotate, and revoke personal API tokens.
+- One API-token scheme whose authorization composes with current IsAdmin and per-resource ProductManager/ProductViewer access.
+- Opaque high-entropy bearer-token generation and validation.
+- Current-owner authorization intersected with explicit operation/boundary grants on every request.
+- Token metadata persistence in the existing HSM database stack.
+- Authentication integration for the new versioned management API.
+- Audit records and secret-safe diagnostics.
+- Environment-variable usage documentation for unattended clients.
+- Unit, integration, authorization-matrix, persistence, and security regression tests.
 
 ## Core Authorization Invariant
 
@@ -50,32 +76,6 @@ Consequences:
 - No API token may call token-management endpoints in the initial implementation.
 
 The invariant must be enforced in domain services and authorization policies, not only in the web UI.
-
-## Proposed Direction
-
-### In scope
-
-- Create, list, inspect metadata, restrict, rotate, and revoke personal API tokens.
-- One API-token scheme whose authorization composes with current IsAdmin and per-resource ProductManager/ProductViewer access.
-- Opaque high-entropy bearer-token generation and validation.
-- Current-owner authorization intersected with explicit operation/boundary grants on every request.
-- Token metadata persistence in the existing HSM database stack.
-- Authentication integration for the new versioned management API.
-- Audit records and secret-safe diagnostics.
-- Environment-variable usage documentation for unattended clients.
-- Unit, integration, authorization-matrix, persistence, and security regression tests.
-
-## Non-Goals
-
-- Building a general OAuth/OIDC authorization server.
-- JWT access tokens.
-- Replacing cookie authentication for the web UI.
-- Replacing collector `ClientName`/access-key authentication.
-- Accepting API tokens on ordinary MVC/Razor browser routes.
-- HMAC signing of every HTTP request.
-- Unattended self-rotation or self-revocation by an API token in v1. Operators use the cookie-authenticated lifecycle flow and plan an atomic human-in-the-loop cutover.
-- Service-account administration unless it is explicitly pulled into this task after product review. The same token model must be compatible with service accounts later.
-- Implementing all management API resources. This task provides the authentication and authorization foundation used by those APIs.
 
 ## User Experience
 
