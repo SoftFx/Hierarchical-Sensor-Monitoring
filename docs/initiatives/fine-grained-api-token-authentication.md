@@ -1,12 +1,12 @@
-# Task: Fine-grained API token authentication
+# Initiative: Fine-grained API token authentication
 
-> Owner: server/security | Last reviewed: 2026-08-25 | Status: Draft for implementation review | Canonical: no
+> Owner: server | Last reviewed: 2026-08-25 | Status: Draft for implementation review | Canonical: no
 
-## Parent Initiative
+## Problem
 
-This task is the authentication foundation for the AI-manageable HSM control plane described in [`ai-manageable-control-plane.md`](./ai-manageable-control-plane.md).
+HSM has cookie authentication for its web UI and collector access keys for ingestion, but no durable fine-grained credential for management automation. This standalone initiative defines that missing authentication foundation.
 
-## Objective
+## Goals
 
 Add a single, self-hosted API-token authentication mechanism that can be used by Administrator, Manager, and Client/Viewer accounts, scheduled scripts, resident services, CLI clients, MCP tools, and AI agents.
 
@@ -43,7 +43,7 @@ Consequences:
 
 The invariant must be enforced in the domain/service layer and authorization policies, not only in the web UI.
 
-## Scope
+## Proposed Direction
 
 ### In scope
 
@@ -57,7 +57,7 @@ The invariant must be enforced in the domain/service layer and authorization pol
 - Environment-variable usage documentation for unattended clients.
 - Unit, integration, authorization-matrix, persistence, and security regression tests.
 
-### Out of scope
+## Non-Goals
 
 - Building a general OAuth/OIDC authorization server.
 - JWT access tokens.
@@ -252,7 +252,7 @@ This list is illustrative until the API capability inventory is approved. Requir
 | Client/Viewer | Forged request containing `alerts:write` | Creation fails or strips the impossible grant; runtime mutation is denied in all cases. Prefer failing the creation request with a clear validation error. |
 | Any owner later downgraded | Previously broader token | Effective access is reduced immediately without changing the token record. |
 
-## Resource Boundaries
+## Resource Scope
 
 Define a normalized boundary model after the capability inventory confirms HSM hierarchy semantics. The initial implementation should prefer stable IDs rather than paths/names.
 
@@ -380,7 +380,7 @@ Requirements:
 - Pepper values must be treated as secrets by configuration diagnostics.
 - Limits prevent unbounded token records and abuse.
 
-## Test Plan
+## Verification
 
 ### Cryptographic/token format tests
 
@@ -441,7 +441,7 @@ Requirements:
 - Add a permission catalog/API operation matrix under `aicontext/features/api/` as management endpoints land.
 - Add an ADR explaining opaque tokens, HMAC verifier storage, current-rights intersection, and rejection of long-lived JWT for this use case.
 
-## Suggested Delivery Breakdown
+## Work Breakdown
 
 This architecture should be delivered in focused pull requests rather than one large change:
 
@@ -475,3 +475,94 @@ Each PR must update the actual behavior documentation and run focused server/sec
 6. Which existing audit/journal storage should own security events, and what retention is required?
 7. How will the server pepper be generated, persisted, backed up, and rotated in Docker and non-Docker installations?
 8. Should service accounts be included in the first delivery or follow after personal tokens prove the model?
+
+## Current Behavior and Normative Architecture Corrections
+
+This section is normative and supersedes any earlier wording that conflicts with it.
+
+### Existing authentication and role model
+
+- Cookie is the only registered ASP.NET Core authentication scheme.
+- UserProcessorMiddleware runs after authentication and authorization on site port 44333 and replaces HttpContext.User with the stored HSM User selected by Identity.Name.
+- BaseController requires HttpContext.User to be an HSM User.
+- IsAdmin is a global flag. ProductManager and ProductViewer are per-Product/per-Folder roles. There is no global Client role.
+- Ports 44330 and 44333 share the same routing table unless an endpoint explicitly constrains the local port.
+- Collector ClientName/access-key authentication remains unchanged.
+
+### Per-resource authorization invariant
+
+Authorization is evaluated for the concrete operation and target resource:
+
+    allowed(operation, resource) =
+        ownerCurrentlyAllows(operation, resource)
+        AND tokenPermissions contains operation
+        AND tokenResourceScope contains resource
+
+ownerCurrentlyAllows uses the current IsAdmin flag or ProductManager/ProductViewer assignment for the target Product/Folder. Owner permissions and resource scope must not be flattened into independent global sets.
+
+An IsAdmin user can issue a read-only token. A ProductManager can issue a token restricted to one managed Product. A ProductViewer token remains read-only. Owner downgrade, owner disablement, resource-role removal, token restriction, revocation, and expiration affect subsequent requests immediately.
+
+### Principal and middleware isolation
+
+The HsmApiToken handler creates a minimal principal containing stable owner ID, token ID, and authentication-scheme identity. It must not expose the unrestricted stored User as the authorization result.
+
+- UserProcessorMiddleware must skip requests authenticated by HsmApiToken.
+- Versioned management controllers derive from ControllerBase, not BaseController.
+- Management authorization uses dedicated per-resource services and never the legacy CurrentUser cast.
+- Any management endpoint entering the legacy BaseController/User path fails closed.
+- Tests must prove that a read-only IsAdmin token cannot regain IsAdmin rights after authorization.
+
+### Port isolation
+
+The management API is hosted only on site port 44333. An endpoint filter, middleware guard, or equivalent constraint rejects every management route on sensor port 44330 before controller execution. Tests exercise both ports.
+
+### Token-management and rotation rules
+
+Every token-management operation, including create, list, detail, restrict, rotate, and revoke, requires an interactive cookie-authenticated session with anti-forgery protection in the initial implementation. API tokens cannot manage API tokens.
+
+Rotation preserves or reduces the source token's permissions and resource scope. It can never broaden either. Creating a broader token requires a new cookie-authenticated create operation. Tests must cover a read-only IsAdmin token attempting self-rotation and every other token-management endpoint.
+
+### Resource scope and rate limiting
+
+Resource scope defines which HSM objects the token may access, such as a Product, Folder subtree, or selected Sensors. It is object-level authorization, not throttling.
+
+Rate limits and quotas independently control request frequency or volume. Initial rate limiting may be server-wide or keyed by token ID without adding configurable quota fields to the token record.
+
+### Verification ordering and response policy
+
+After parsing and loading by public token ID, compute and compare the HMAC verifier with FixedTimeEquals before evaluating revocation, expiration, owner, or resource state. Failed authentication uses one generic 401 response shape and normalized observable processing.
+
+A valid token denied an operation on an already visible resource receives 403. Detail or mutation access to an object outside token resource scope receives 404. List endpoints filter inaccessible objects.
+
+### Pepper lifecycle
+
+Pepper rotation is issue-forward only. New tokens use the active pepper. Existing tokens cannot be re-keyed because HSM does not store their plaintext secrets. Retired peppers remain configured until every referencing token expires or is re-issued. Fully retiring a pepper is a user-visible mass re-issue operation. Token records retain PepperKeyId.
+
+### Documentation requirements
+
+- Add the architecture decision under docs/decisions/ using the repository template and update docs/decisions/INDEX.md.
+- Add API token, verifier, pepper, permission catalog, and resource scope to aicontext/glossary.md before they become canonical.
+- Document the first operation-by-resource matrix for IsAdmin, ProductManager, and ProductViewer.
+- Keep this initiative standalone until a consistent control-plane parent initiative is merged.
+
+## Risks
+
+- Principal replacement may silently restore unrestricted owner rights.
+- Missing port isolation may expose management routes on the collector-facing port.
+- Flattening per-resource roles may allow cross-Product access.
+- Rotation may become privilege escalation unless it is cookie-only and non-expanding.
+- Long-lived bearer-token disclosure grants access until revocation or expiration.
+- Pepper retirement requires coordinated token re-issue.
+
+## Additional Acceptance Criteria
+
+- UserProcessorMiddleware never replaces an HsmApiToken principal.
+- Management controllers do not inherit BaseController or consume its CurrentUser.
+- Management routes are rejected on port 44330.
+- Every token-management route is cookie-only.
+- Rotation preserves or reduces the source grant.
+- A read-only IsAdmin token cannot call any mutation or token-management route.
+- Authorization is tested per resource for IsAdmin, ProductManager, and ProductViewer.
+- Secret verification precedes token-state evaluation.
+- 401, 403, and 404 follow the policy above.
+- Pepper issue-forward rotation and retirement are documented and tested.
