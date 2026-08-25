@@ -20,7 +20,7 @@ Add a single, self-hosted API-token authentication mechanism for IsAdmin users, 
 
 An authenticated user creates a named token once, copies it to a protected environment or secret store, and uses it as an HTTP bearer credential without repeating the interactive HSM login. HSM must never persist the recoverable token value.
 
-The implementation must support deliberate privilege reduction. A highly privileged user must be able to issue a narrowly restricted token, for example an Administrator creating a read-only token for monitoring. A token can reduce its owner's access but can never increase it.
+The implementation must support deliberate privilege reduction. A highly privileged user must be able to issue a narrowly restricted token, for example an IsAdmin user creating a read-only token for monitoring. A token can reduce its owner's access but can never increase it as a result of token editing, rotation, owner promotion, or resource movement.
 
 ## Core Authorization Invariant
 
@@ -28,10 +28,11 @@ Authorization is evaluated for the concrete operation and target resource:
 
     allowed(operation, resource)
         = ownerCurrentlyAllows(operation, resource)
-        AND tokenPermissions contains operation
-        AND tokenResourceScope contains resource
+        AND tokenGrantAllows(operation, currentAuthorizationBoundary(resource))
 
-ownerCurrentlyAllows uses the current IsAdmin flag or ProductManager/ProductViewer assignment for the target Product or Folder. Owner permissions and resource scope must not be flattened into independent global role sets.
+tokenGrantAllows is evaluated from explicit grant entries that bind an operation to a Product/Folder boundary (or to the explicit global boundary for global operations). Permissions and resource boundaries must not be stored or evaluated as two freely recombinable global sets. This prevents a token that can write Product A and read Product B from acquiring write access to Product B merely because the owner is promoted later.
+
+ownerCurrentlyAllows uses the current IsAdmin flag or ProductManager/ProductViewer assignment for the target Product or Folder. Effective access is recalculated on every request. Owner promotion may satisfy the owner side of the intersection but never creates a token grant that was not explicitly issued.
 
 Consequences:
 
@@ -81,8 +82,8 @@ From the authenticated HSM web UI, the user chooses **API tokens → Create toke
 - Name, required, human-readable, unique per owner if practical.
 - Optional description/purpose.
 - Expiration: recommended presets plus explicit `No expiration` with a warning.
-- Permissions selected from the subset currently available to the owner.
-- Resource boundary selected from resources currently available to the owner.
+- Explicit operation/resource grants selected from combinations currently available to the owner.
+- Product/Folder boundary selected for each resource-scoped operation; global operations use an explicit global boundary.
 
 The server returns the full token exactly once. The UI must state that it cannot be recovered and must be stored like a password.
 
@@ -116,7 +117,7 @@ List and detail screens return metadata only:
 - Token ID and safe display suffix.
 - Name and description.
 - Owner.
-- Granted permissions and resource boundary.
+- Granted operation/resource pairs, rendered as permissions grouped by Product/Folder or global boundary.
 - Created, expires, last used, rotated, and revoked timestamps.
 - Creator/initiator if an administrator created it for another subject in a later workflow.
 - Status: active, expired, revoked, or owner disabled.
@@ -125,9 +126,9 @@ The secret and verifier are never returned.
 
 ### Restriction, rotation, and revocation
 
-- **Restrict:** permissions/resources may only be removed; expiration may be shortened. No new secret is produced.
-- **Expand:** forbidden on an existing token. Create a replacement token.
-- **Rotate:** create a new secret/token record with the same or narrower permissions and resource scope than the source token. Rotation never broadens access. Default behavior revokes the previous token immediately.
+- **Restrict:** operation/resource grants may only be removed; expiration may be shortened. No new secret is produced.
+- **Expand:** forbidden on an existing token. Create a replacement token through an interactive cookie-authenticated flow.
+- **Rotate:** create a new secret/token record with the same or a strict subset of the source operation/resource grants. Rotation never broadens access. In v1 the previous token is revoked immediately; overlap/grace periods are out of scope.
 - **Revoke:** marks the token revoked immediately and idempotently.
 
 ## Cryptographic Design
@@ -189,8 +190,7 @@ PepperKeyId           verifier key identifier
 OwnerUserId           current owning user/subject
 Name                  human-readable token name
 Description           optional purpose
-Permissions           normalized allow-list
-ResourceBoundary      normalized allowed resource identifiers
+Grants                normalized operation + Product/Folder/global-boundary pairs
 CreatedAtUtc
 CreatedBy             audit initiator
 ExpiresAtUtc           nullable only when no-expiration is explicitly selected
@@ -209,7 +209,8 @@ Persistence rules:
 - A failure after persistence but before the one-time response must revoke/delete the unusable record safely; do not attempt to expose it later.
 - Revocation is idempotent.
 - Last-used updates must not create excessive synchronous database writes. Use an established coalescing/background pattern with bounded loss acceptable only for this non-security-critical timestamp.
-- Unknown permission values must fail closed during deserialization/authorization.
+- Unknown operations, boundary kinds, or resource identifiers must fail closed during deserialization/authorization.
+- A storage constraint must prevent duplicate grant pairs for one token.
 - Storage migration and backup/restore compatibility must be documented and tested.
 
 ## Permission Model
@@ -250,22 +251,22 @@ This list is illustrative until the API capability inventory is approved. Requir
 
 | Owner | Token grant | Expected result |
 |---|---|---|
-| Administrator | `products:read`, `sensors:read`, `history:read`, all visible products | Read-only monitoring token; every mutation returns 403. |
-| Administrator | `alerts:read`, one Product | May read alerts only inside that Product; cannot read unrelated sensor history or change alerts. |
-| Manager | Read/write alerts for one permitted Product | Allowed only while the Manager retains both the role permission and Product access. |
-| Client/Viewer | Forged request containing `alerts:write` | Creation fails or strips the impossible grant; runtime mutation is denied in all cases. Prefer failing the creation request with a clear validation error. |
+| IsAdmin | Read grants for `products`, `sensors`, and `history` on selected Product/Folder boundaries | Read-only monitoring token; every mutation returns 403. |
+| IsAdmin | `alerts:read` bound to one Product | May read alerts only inside that Product; cannot read unrelated sensor history or change alerts. |
+| ProductManager on Product A | Read/write alert grants bound to Product A | Allowed only while the owner retains ProductManager authorization for Product A. |
+| ProductViewer on Product A | Forged `alerts:write` grant for Product A | Creation fails with a clear validation error; runtime mutation is denied in all cases. |
 | Any owner later downgraded | Previously broader token | Effective access is reduced immediately without changing the token record. |
 
 ## Resource Scope
 
-Define a normalized boundary model after the capability inventory confirms HSM hierarchy semantics. The initial implementation should prefer stable IDs rather than paths/names.
+In v1, resource-scoped grants bind operations to stable Product or Folder IDs. A Sensor is an authorization target, not an independently selectable scope ID: it inherits the current Product/Folder boundary resolved from the live hierarchy. Global operations use a distinct explicit global boundary.
 
 Requirements:
 
-- A token may select all resources currently visible to the owner or an explicit subset.
-- Resource authorization is evaluated on the target object for every request.
-- Parent/child inheritance must be explicit and tested, including moved Products/Folders.
-- Moving a resource must not accidentally preserve access derived from an old parent.
+- A token may select all Product/Folder boundaries currently available to the owner or an explicit subset, but each selected operation is bound to its boundary in the persisted grant.
+- Resource authorization is evaluated on the target object and its current hierarchy for every request.
+- Folder inheritance must be explicit and tested, including moved Products/Folders/Sensors.
+- Moving a Product, Folder, or Sensor immediately recomputes its current boundary; access derived from the old parent must not survive the move, and access in the new parent exists only when an explicit token grant covers that boundary.
 - Deleted resource IDs fail closed.
 - A token cannot broaden its boundary through a request body, query parameter, or object reference.
 - List endpoints filter results; detail/mutation endpoints return 404 or 403 according to one documented anti-enumeration policy.
@@ -299,7 +300,7 @@ The handler should orchestrate authentication only. Token lifecycle, verificatio
 - A guard rejects management routes on sensor port 44330 before controller execution.
 - Management controllers derive from ControllerBase, not BaseController.
 - API tokens do not authenticate MVC/Razor pages.
-- Every token-management endpoint requires an interactive cookie session and anti-forgery protection.
+- Every token-management endpoint requires an interactive cookie session. State-changing methods require anti-forgery protection; GET list/detail routes must be side-effect-free.
 - API tokens cannot create, list, inspect, restrict, rotate, or revoke tokens.
 - Tests exercise both ports and the principal-replacement path.
 
@@ -357,7 +358,7 @@ All endpoints in this section are cookie-session-only initially. Later administr
 
 At minimum record:
 
-- Token created, with owner, creator, name, permissions, resources, expiration, and token ID.
+- Token created, with owner, creator, name, operation/resource grants, expiration, and token ID.
 - Token restricted, with safe before/after metadata.
 - Token rotated, linking old and new IDs.
 - Token revoked, with initiator and reason.
@@ -404,9 +405,9 @@ Requirements:
 - Create returns secret once; subsequent reads return metadata only.
 - Revoke is immediate and idempotent.
 - Expired token fails.
-- Rotation returns a new secret, preserves or reduces the source grant, and invalidates the old token.
-- Restriction removes permissions/resources immediately.
-- Permission/resource expansion fails in place and through rotation.
+- Rotation returns a new secret, preserves or reduces the source operation/resource grants, and immediately invalidates the old token.
+- Restriction removes operation/resource grants immediately.
+- Grant expansion fails in place and through rotation; owner promotion does not create latent grants.
 - Disabled/deleted owner invalidates token.
 - Persistence survives server restart with the configured pepper.
 
@@ -420,7 +421,9 @@ Requirements:
 - Owner resource removal immediately reduces an existing token.
 - Cross-Product and cross-Folder object access is denied.
 - List responses do not leak unauthorized objects.
-- Forged permission/resource values in request payloads fail closed.
+- Forged operation/boundary pairs in request payloads fail closed.
+- A token with write on Product A and read on Product B never obtains write on Product B after owner promotion.
+- Sensor access follows its current Product/Folder boundary, and moving it cannot retain access from the old boundary.
 
 ### HTTP/security tests
 
@@ -457,7 +460,7 @@ This architecture should be delivered in focused pull requests rather than one l
 2. **Token domain and persistence** — entity, repository/storage, generation, verifier, lifecycle service, tests.
 3. **Authentication scheme and policies** — handler, effective-rights intersection, resource authorization, audit integration, tests.
 4. **Token management UI/API** — create/list/restrict/rotate/revoke, one-time secret handling, CSRF, tests.
-5. **First read-only management endpoints** — prove Administrator read-only downgrade, Manager/Client behavior, and unattended environment-token journey end to end.
+5. **First read-only management endpoints** — prove IsAdmin read-only downgrade, ProductManager/ProductViewer behavior, and the unattended environment-token journey end to end.
 
 Each PR must update the actual behavior documentation and run focused server/security review. Do not expose broad management mutations until the authorization matrix and negative tests are established.
 
@@ -472,24 +475,22 @@ Each PR must update the actual behavior documentation and run focused server/sec
 
 ## Acceptance Criteria
 
-- IsAdmin, ProductManager, and ProductViewer owners can create tokens only for operations and resources allowed by current per-resource access.
-- An Administrator can create a read-only monitoring token, and automated tests prove that every covered mutation is denied with that token.
+- IsAdmin, ProductManager, and ProductViewer owners can create only explicit operation/resource grants allowed by current per-resource access.
+- An IsAdmin user can create a read-only monitoring token, and automated tests prove that every covered mutation is denied with that token.
 - The server never persists or logs the recoverable token value.
 - A copied token authenticates through the HTTP `Authorization: Bearer` header after server restart.
 - Revocation, expiration, owner disablement, role downgrade, resource removal, and token restriction affect subsequent requests immediately.
 - Existing tokens cannot expand in place or through rotation; token management is cookie-only.
 - Cookie and collector authentication remain compatible; management routes are unavailable on port 44330.
-- Principal isolation, dual-port isolation, privilege reduction, cross-resource denial, rotation, pepper retirement, and secret-redaction tests pass.
+- Principal isolation, dual-port isolation, privilege reduction, grant-pair non-recombination, hierarchy-move handling, cross-resource denial, rotation, pepper retirement, and secret-redaction tests pass.
 - Canonical auth/API documentation and the architecture decision are updated from the implemented behavior.
 
 ## Implementation Questions Requiring Review
 
-1. What operation matrix is granted by IsAdmin, ProductManager, and ProductViewer for each resource?
-2. What is the first stable resource scope?
-3. Should No expiration require explicit confirmation or server policy?
-4. Is same-user token-name uniqueness useful?
-5. Does rotation revoke immediately, or allow a short non-expanding overlap?
-6. Which audit storage and retention apply?
-7. How are pepper keys backed up and how is mass re-issue coordinated before retirement?
-8. Should service accounts be a follow-up initiative?
-9. Do any routes require an exception to the 403-visible / 404-out-of-scope policy?
+1. What operation matrix is granted by IsAdmin, ProductManager, and ProductViewer for each API capability?
+2. Should No expiration require explicit confirmation or server policy?
+3. Is same-user token-name uniqueness useful?
+4. Which audit storage and retention apply?
+5. How are pepper keys backed up and how is mass re-issue coordinated before retirement?
+6. Should service accounts be a follow-up initiative?
+7. Do any routes require an exception to the 403-visible / 404-out-of-scope policy?
