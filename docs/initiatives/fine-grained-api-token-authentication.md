@@ -178,11 +178,11 @@ Opaque tokens are selected instead of JWTs because HSM requires:
 - Server-controlled token metadata and last-used tracking.
 - No authorization claims frozen into a long-lived client-visible credential.
 
-Every authenticated request therefore performs a token-record lookup and loads current owner authorization state. Do not add a long-lived validation cache. If caching becomes necessary, it must have explicit invalidation on token/owner/role/resource changes and a security-reviewed maximum stale interval.
+Every authenticated request resolves token and current-owner state from an authoritative store. A write-through in-memory token store following the existing `ConcurrentStorage` pattern is allowed when create/restrict/rotate/revoke, owner deletion, role changes, and resource moves synchronously update or invalidate it. Secondary stale caches without complete invalidation are forbidden; any bounded stale interval requires a separate security decision.
 
 ## Persistence Model
 
-Introduce a compatibility-versioned API token entity in the existing database/access-manager layer. Exact project placement should follow current user/access-key storage patterns.
+Add a versioned `ApiTokenEntity` collection/store under `HSMDatabase.AccessManager`, accessed only through a dedicated token manager/lifecycle service and mirrored by an authoritative write-through in-memory store using existing AccessManager/`ConcurrentStorage` patterns. LevelDB compatibility uses entity versioning and tolerant fail-closed deserialization rather than a relational migration framework.
 
 Required fields:
 
@@ -214,8 +214,9 @@ Persistence rules:
 - Revocation is idempotent.
 - Last-used updates must not create excessive synchronous database writes. Use an established coalescing/background pattern with bounded loss acceptable only for this non-security-critical timestamp.
 - Unknown operations, boundary kinds, or resource identifiers must fail closed during deserialization/authorization.
-- A storage constraint must prevent duplicate grant pairs for one token.
-- Storage migration and backup/restore compatibility must be documented and tested.
+- The lifecycle service canonicalizes grants and rejects duplicate operation/boundary pairs before the atomic LevelDB write; do not assume relational uniqueness constraints.
+- Owner deletion synchronously revokes/removes associated token records when possible. Startup/background maintenance reaps orphan token records left by interrupted deletion; orphan records always fail authentication and do not count toward `MaxTokensPerUser`.
+- Entity-version upgrade, tolerant fail-closed deserialization, and existing LevelDB backup/restore compatibility must be documented and tested.
 
 ## Permission Model
 
@@ -234,11 +235,8 @@ dashboards:write
 notifications:read
 notifications:write
 users:read
-users:manage
 access-keys:read
-access-keys:manage
 server-settings:read
-server-settings:manage
 ```
 
 This list is illustrative until the API capability inventory is approved. Requirements:
@@ -248,7 +246,7 @@ This list is illustrative until the API capability inventory is approved. Requir
 - Token permission selection is an allow-list; absence means denied.
 - `*`, `admin`, controller-name permissions, and implicit write-through-read permissions are forbidden in the initial implementation.
 - Read and write are separate.
-- Destructive, credential, user, backup/restore, and global-settings actions require separate high-risk permissions rather than generic `write`.
+- Destructive, credential, user-role, backup/restore, access-key creation, pepper, and global-settings mutations are non-grantable and cookie-only in v1. Names such as `users:manage`, `access-keys:manage`, and `server-settings:manage` must not exist in the v1 token permission catalog.
 - Permission checks do not replace object/resource authorization.
 
 ### Mandatory privilege-reduction examples
@@ -286,9 +284,9 @@ Responsibilities:
 1. Read only the Authorization header.
 2. Ignore another clearly selected scheme; reject malformed HSM bearer credentials predictably.
 3. Parse prefix, version, ID, and secret with strict limits.
-4. Load token metadata by public ID; on lookup miss use fixed dummy verifier material for the active format.
-5. Compute the real or dummy HMAC and compare with FixedTimeEquals before evaluating token or owner state. Complete the dummy path before returning the same generic failure.
-6. After successful secret verification, check revocation, expiration, owner existence, and pepper-key state.
+4. Load token metadata by public ID and resolve `PepperKeyId` to its configured key. On a missing ID or unknown key ID, select fixed dummy record/key material for the parsed format without exposing which lookup failed.
+5. Compute the real or dummy HMAC and compare with `FixedTimeEquals` before evaluating revocation, expiration, or owner/resource state. Complete the dummy path before returning the same generic failure.
+6. After successful secret verification, check revocation, expiration, and owner existence.
 7. Load current IsAdmin and per-Product/per-Folder roles.
 8. Build a minimal ClaimsPrincipal with owner ID, token ID, and authentication-scheme identity.
 9. Return one generic authentication failure without revealing which validation failed.
@@ -299,6 +297,8 @@ The handler should orchestrate authentication only. Token lifecycle, verificatio
 ### Scheme and port isolation
 
 - Cookie authentication remains the web UI scheme.
+- Every data-management `/api/v1/*` endpoint except `/api/v1/api-tokens` explicitly selects a policy restricted to the `HsmApiToken` scheme and rejects a cookie-only principal. Plain `[Authorize]` with the default cookie scheme is forbidden on these controllers.
+- `/api/v1/api-tokens` is the sole v1 cookie-only route family and never falls back to `HsmApiToken`.
 - Collector access-key validation remains unchanged.
 - The management API is hosted only on the configured Kestrel SitePort listener (default 44333).
 - A new guard rejects management routes on the configured SensorPort listener (default 44330) before controller execution. It must use the same effective listener binding snapshot as Kestrel, never hard-coded numbers or a stale independently captured value; configuration changes apply when listeners are rebound/restarted.
@@ -307,7 +307,7 @@ The handler should orchestrate authentication only. Token lifecycle, verificatio
 - API tokens do not authenticate MVC/Razor pages.
 - Every token-management endpoint requires an interactive cookie session. State-changing methods require anti-forgery protection; GET list/detail routes must be side-effect-free.
 - API tokens cannot create, list, inspect, restrict, rotate, or revoke tokens.
-- Tests exercise both ports and the principal-replacement path.
+- Tests exercise both listeners, the principal-replacement path, cookie rejection on data-management routes, and API-token rejection on lifecycle routes.
 
 ### Authorization services
 
@@ -349,6 +349,7 @@ All endpoints in this section are cookie-session-only initially. Later administr
 
 - HTTPS is mandatory; validate server certificates.
 - Never accept tokens in URLs, query strings, cookies, or request bodies for ordinary authentication.
+- Pepper values and key-management operations are loaded only from the deployment secret facility/environment. They are excluded from `ConfigurationController`, configuration UI/view models, ordinary API responses, config-diff/table-of-changes serialization, and journal payloads.
 - Redact `hsm_pat_...` patterns in application/request logs and exception serialization.
 - Do not include token values in audit events, telemetry, validation errors, tracing baggage, crash reports, UI analytics, shell examples with real values, or OpenAPI examples.
 - Do not put tokens in process command-line arguments.
@@ -391,7 +392,7 @@ Requirements:
 
 - Safe default is disabled until a valid pepper is configured, unless installation tooling generates and persists one securely exactly once.
 - Configuration validation occurs at startup with actionable errors.
-- Pepper values must be treated as secrets by configuration diagnostics.
+- Pepper values must be treated as secrets by configuration diagnostics and must never be exposed or editable through the Configuration UI/API or written to journal/config-diff records.
 - Limits prevent unbounded token records and abuse.
 
 ## Verification
@@ -422,6 +423,7 @@ Requirements:
 - An IsAdmin-owned read-only token cannot call any mutation or token-management endpoint.
 - ProductManager cannot exercise IsAdmin-only operations or access another Product.
 - ProductViewer cannot grant or exercise write permissions.
+- No API token can change `IsAdmin` or user roles, create/manage collector access keys, read/mutate pepper material, or mutate server/global settings in v1.
 - Owner role downgrade immediately reduces an existing token.
 - Owner resource removal immediately reduces an existing token.
 - Cross-Product and cross-Folder object access is denied.
@@ -432,7 +434,7 @@ Requirements:
 
 ### HTTP/security tests
 
-- Header authentication succeeds on the configured SitePort listener (default 44333).
+- Header authentication succeeds on the configured SitePort listener (default 44333); a cookie-only session is rejected by ordinary data-management `/api/v1/*` endpoints.
 - Token in query/body/cookie is rejected; management routes are rejected on the configured SensorPort listener (default 44330).
 - Missing, invalid, revoked, and expired tokens use the same observable status, response shape, and headers. Unknown IDs execute the fixed dummy-verifier path; tests assert constant-time secret comparison and bounded gross timing differences without relying on a flaky exact latency threshold.
 - Failed authentication returns 401, denied operation on a visible resource returns 403, and out-of-scope object access returns 404.
@@ -446,12 +448,12 @@ Requirements:
 - Existing cookie login and authorization behavior remain unchanged.
 - Existing collector access-key requests remain unchanged.
 - MVC/Razor routes do not accept API tokens; UserProcessorMiddleware skips token principals; management controllers do not use BaseController.
-- Database migration and backup/restore behavior are verified.
+- Versioned LevelDB entity upgrade/tolerant deserialization, orphan-token reaping, and backup/restore behavior are verified.
 
 ## Documentation Deliverables
 
 - Keep this standalone initiative aligned with future control-plane work; OAuth/OIDC remains optional future work.
-- Add canonical behavior documentation under `aicontext/features/server/auth/api-tokens/feature.md` when implementation begins.
+- Add canonical behavior documentation under `aicontext/features/server/api-tokens/feature.md` when implementation begins, following the existing server feature hierarchy.
 - Document token creation, one-time display, restriction, rotation, revocation, and emergency response.
 - Document environment-variable use and safer OS secret-store options.
 - Add the operation/resource matrix under `aicontext/features/api/` and add the new terms to `aicontext/glossary.md`.
@@ -464,7 +466,7 @@ This architecture should be delivered in focused pull requests rather than one l
 | Step | Scope | Notes |
 |---|---|---|
 | 1 | ADR, route convention, and permission inventory | Establish the `/api/v1` management-route convention and coexistence with current unversioned/Grafana routes; approve token/operation/boundary semantics and persistence compatibility. |
-| 2 | Token domain and persistence | Entity, grant storage, generation, verifier, lifecycle service, and tests. |
+| 2 | Token domain and persistence | Versioned `HSMDatabase.AccessManager` entity/store, authoritative write-through memory state, grant canonicalization, orphan reaping, generation, verifier, lifecycle service, and tests. |
 | 3 | Authentication scheme and policies | Handler, effective-rights intersection, resource authorization, audit integration, and tests. |
 | 4 | Token management UI/API | Cookie-only create/list/restrict/rotate/revoke, one-time secret handling, CSRF on mutations, and tests. |
 | 5 | First read-only management endpoints | Prove IsAdmin read-only downgrade, ProductManager/ProductViewer behavior, and the unattended environment-token journey end to end. |
@@ -488,9 +490,10 @@ Each PR must update the actual behavior documentation and run focused server/sec
 - The server never persists or logs the recoverable token value.
 - A copied token authenticates through the HTTP `Authorization: Bearer` header after server restart.
 - Revocation, expiration, owner deletion, role downgrade, resource removal, and token restriction affect subsequent requests immediately.
-- Existing tokens cannot expand in place or through rotation; token management is cookie-only.
+- Existing tokens cannot expand in place or through rotation; token management is cookie-only, while all other management `/api/v1` routes are `HsmApiToken`-only.
+- Credential, user-role, access-key, pepper, and global-settings mutations are not grantable to API tokens in v1.
 - Cookie and collector authentication remain compatible; management routes are unavailable on the configured SensorPort listener.
-- Principal isolation, dual-port isolation, privilege reduction, grant-pair non-recombination, hierarchy-move handling, cross-resource denial, rotation, pepper retirement, and secret-redaction tests pass.
+- Principal/scheme isolation, dual-listener isolation, privilege reduction, non-grantable high-risk operations, grant-pair non-recombination, hierarchy-move handling, orphan reaping, cross-resource denial, rotation, pepper secrecy/retirement, and secret-redaction tests pass.
 - Canonical auth/API documentation and the architecture decision are updated from the implemented behavior.
 
 ## Implementation Questions Requiring Review
