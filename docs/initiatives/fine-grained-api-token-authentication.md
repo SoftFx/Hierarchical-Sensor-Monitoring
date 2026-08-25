@@ -407,6 +407,30 @@ Requirements:
 - `MaxTokensPerUser` counts only active, unexpired records. Revoked/expired records remain queryable for `TokenRecordRetention`, then a bounded cleanup job removes them; they never block new issuance.
 - Limits and retention cleanup prevent unbounded token records and abuse.
 
+## Work Breakdown
+
+This architecture should be delivered in focused pull requests rather than one large change:
+
+| Step | Scope | Notes |
+|---|---|---|
+| 1 | ADR, route convention, and permission inventory | Establish the `/api/v1` management-route convention and coexistence with current unversioned/Grafana routes; approve token/operation/boundary semantics and persistence compatibility. |
+| 2 | Token domain and persistence | Versioned `HSMDatabase.AccessManager` entity/store, authoritative write-through memory state, grant canonicalization, orphan reaping, generation, verifier, lifecycle service, and tests. |
+| 3 | Authentication scheme and policies | Handler, fail-closed `/api/v1` area convention, effective-rights intersection, resource authorization, lifecycle journal plus append-only security-event integration, and tests. |
+| 4 | Token management UI/API | Cookie-only create/list/restrict/rotate/revoke, one-time secret handling, CSRF on mutations, and tests. |
+| 5 | First read-only management endpoints | Prove IsAdmin read-only downgrade, ProductManager/ProductViewer behavior, and the unattended environment-token journey end to end. |
+
+Each PR must update the actual behavior documentation and run focused server/security review. Do not expose broad management mutations until the authorization matrix and negative tests are established.
+
+## Risks
+
+- Principal replacement can restore unrestricted owner rights.
+- Missing port isolation can expose management routes on port 44330.
+- Flattening per-resource roles can allow cross-Product access.
+- Rotation can escalate privileges unless cookie-only and non-expanding.
+- Long-lived token disclosure grants access until revocation or expiration.
+- Unattended self-rotation is out of scope in v1. Rotation requires a human cookie session and immediate atomic cutover, so operators must plan secret redeployment and a maintenance window; non-expiring tokens are not a substitute for that procedure.
+- Pepper retirement requires coordinated token re-issue.
+
 ## Verification
 
 ### Cryptographic/token format tests
@@ -474,30 +498,6 @@ Requirements:
 - Document environment-variable use and safer OS secret-store options.
 - Add the operation/resource matrix under `aicontext/features/api/` and add the new terms to `aicontext/glossary.md`.
 - Add an ADR under `docs/decisions/` and update `docs/decisions/INDEX.md`.
-
-## Work Breakdown
-
-This architecture should be delivered in focused pull requests rather than one large change:
-
-| Step | Scope | Notes |
-|---|---|---|
-| 1 | ADR, route convention, and permission inventory | Establish the `/api/v1` management-route convention and coexistence with current unversioned/Grafana routes; approve token/operation/boundary semantics and persistence compatibility. |
-| 2 | Token domain and persistence | Versioned `HSMDatabase.AccessManager` entity/store, authoritative write-through memory state, grant canonicalization, orphan reaping, generation, verifier, lifecycle service, and tests. |
-| 3 | Authentication scheme and policies | Handler, fail-closed `/api/v1` area convention, effective-rights intersection, resource authorization, lifecycle journal plus append-only security-event integration, and tests. |
-| 4 | Token management UI/API | Cookie-only create/list/restrict/rotate/revoke, one-time secret handling, CSRF on mutations, and tests. |
-| 5 | First read-only management endpoints | Prove IsAdmin read-only downgrade, ProductManager/ProductViewer behavior, and the unattended environment-token journey end to end. |
-
-Each PR must update the actual behavior documentation and run focused server/security review. Do not expose broad management mutations until the authorization matrix and negative tests are established.
-
-## Risks
-
-- Principal replacement can restore unrestricted owner rights.
-- Missing port isolation can expose management routes on port 44330.
-- Flattening per-resource roles can allow cross-Product access.
-- Rotation can escalate privileges unless cookie-only and non-expanding.
-- Long-lived token disclosure grants access until revocation or expiration.
-- Unattended self-rotation is out of scope in v1. Rotation requires a human cookie session and immediate atomic cutover, so operators must plan secret redeployment and a maintenance window; non-expiring tokens are not a substitute for that procedure.
-- Pepper retirement requires coordinated token re-issue.
 
 ## Acceptance Criteria
 
