@@ -1,6 +1,6 @@
 # Initiative: Fine-grained API token authentication
 
-> Owner: server | Last reviewed: 2026-08-25 | Status: Draft for implementation review | Canonical: no
+> Owner: server | Last reviewed: 2026-08-25 | Canonical: yes
 
 ## Problem
 
@@ -20,7 +20,7 @@ Add a single, self-hosted API-token authentication mechanism for IsAdmin users, 
 
 An authenticated user creates a named token once, copies it to a protected environment or secret store, and uses it as an HTTP bearer credential without repeating the interactive HSM login. HSM must never persist the recoverable token value.
 
-The implementation must support deliberate privilege reduction. A highly privileged user must be able to issue a narrowly restricted token, for example an IsAdmin user creating a read-only token for monitoring. A token can reduce its owner's access but can never increase it as a result of token editing, rotation, owner promotion, or resource movement.
+The implementation must support deliberate privilege reduction. A highly privileged user must be able to issue a narrowly restricted token, for example an IsAdmin user creating a read-only token for monitoring. A token can reduce its owner's grant set. Owner promotion cannot create an operation/resource grant that was not explicitly issued; it may restore effective access within a previously issued grant after a temporary owner downgrade.
 
 ## Core Authorization Invariant
 
@@ -320,7 +320,7 @@ Controllers map HTTP requests/responses and call these services. No cryptography
 
 - Missing/invalid/revoked/expired token: `401 Unauthorized` with a generic bearer challenge.
 - A valid token denied an operation on an already visible resource receives 403. Detail or mutation access outside token resource scope receives 404. List endpoints filter inaccessible objects.
-- Impossible privilege grant or attempted expansion: `400 Bad Request` or `403 Forbidden`, selected consistently and documented.
+- Malformed grant syntax, unknown operation/boundary kind, or structurally impossible grant shape returns `400 Bad Request`. A well-formed grant that the current owner is not authorized to issue, or an attempted expansion of an existing token, returns `403 Forbidden`.
 - Revoking an already revoked token: idempotent success.
 - Secret is returned only by successful create/rotate responses and is marked `Cache-Control: no-store`.
 - Token-management responses never echo an incoming bearer token.
@@ -456,11 +456,13 @@ Requirements:
 
 This architecture should be delivered in focused pull requests rather than one large change:
 
-1. **ADR and permission inventory** — approve token/permission/resource semantics and persistence compatibility.
-2. **Token domain and persistence** — entity, repository/storage, generation, verifier, lifecycle service, tests.
-3. **Authentication scheme and policies** — handler, effective-rights intersection, resource authorization, audit integration, tests.
-4. **Token management UI/API** — create/list/restrict/rotate/revoke, one-time secret handling, CSRF, tests.
-5. **First read-only management endpoints** — prove IsAdmin read-only downgrade, ProductManager/ProductViewer behavior, and the unattended environment-token journey end to end.
+| Step | Scope | Notes |
+|---|---|---|
+| 1 | ADR and permission inventory | Approve token/operation/boundary semantics and persistence compatibility. |
+| 2 | Token domain and persistence | Entity, grant storage, generation, verifier, lifecycle service, and tests. |
+| 3 | Authentication scheme and policies | Handler, effective-rights intersection, resource authorization, audit integration, and tests. |
+| 4 | Token management UI/API | Cookie-only create/list/restrict/rotate/revoke, one-time secret handling, CSRF on mutations, and tests. |
+| 5 | First read-only management endpoints | Prove IsAdmin read-only downgrade, ProductManager/ProductViewer behavior, and the unattended environment-token journey end to end. |
 
 Each PR must update the actual behavior documentation and run focused server/security review. Do not expose broad management mutations until the authorization matrix and negative tests are established.
 
