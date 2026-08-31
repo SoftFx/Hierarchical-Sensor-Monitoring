@@ -409,6 +409,7 @@ namespace HSMServer.Core.Cache
             var failedLoadSample = new List<Guid>(LogSampleSize);
             var failedSweep = 0;
             var loadRetries = 0;
+            var cappedOut = false;
             var retryRestored = 0;
             var retryRestoredSample = new List<Guid>(LogSampleSize);
 
@@ -450,11 +451,13 @@ namespace HSMServer.Core.Cache
                     // lazy Initialize() fails WHILE this loop runs stamps its attempt clock from
                     // the real clock, and a snapshot taken before that would read as "overdue"
                     // and retry back-to-back against the database that just failed it.
-                    else if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed && loadRetries < MaxHistoryLoadRetriesPerSweep)
+                    else if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed)
                     {
                         // Only Failed is charged: Suppressed did no database work, and Loaded is
                         // an ordinary read pair that must not throttle recovery.
-                        if (sensor.RetryFailedHistoryLoad(DateTime.UtcNow) is HistoryLoadRetryResult.Failed)
+                        if (loadRetries >= MaxHistoryLoadRetriesPerSweep)
+                            cappedOut = true;
+                        else if (sensor.RetryFailedHistoryLoad(DateTime.UtcNow) is HistoryLoadRetryResult.Failed)
                             loadRetries++;
                     }
 
@@ -518,7 +521,9 @@ namespace HSMServer.Core.Cache
             // rather than left for an operator to infer from the constant.
             if (failedLoadCount > 0)
             {
-                var capped = loadRetries >= MaxHistoryLoadRetriesPerSweep
+                // cappedOut, not loadRetries == cap: the budget can be exhausted by the last
+                // failing sensor in the enumeration, with nothing actually deferred.
+                var capped = cappedOut
                     ? $", cap {MaxHistoryLoadRetriesPerSweep} reached — remaining sensors deferred to the next sweep"
                     : string.Empty;
 

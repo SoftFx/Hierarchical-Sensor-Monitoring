@@ -121,6 +121,12 @@ namespace HSMServer.Core.Model
 
             if (canStore)
             {
+                // Every path from here stores — AddValue, or TryAggregateValue folding into the
+                // cached value — so the sensor is no longer running on a hollow retry restore.
+                // Cleared at the write, not tested against HasData on read: a later retention
+                // pass or history clear must not resurrect the degraded state.
+                _historyRestoredByRetry = false;
+
                 bool isNewValue = !AggregateValues || !Storage.TryAggregateValue(validatedValue);
 
                 if (isNewValue)
@@ -128,14 +134,7 @@ namespace HSMServer.Core.Model
                     if (!AggregateValues)
                         Storage.AddValue(validatedValue);
 
-                    _historyRestoredByRetry = false;
-
                     ReceivedNewValue?.Invoke(validatedValue);
-                }
-                else
-                {
-                    // Aggregated into the cached value: the cache is populated either way.
-                    _historyRestoredByRetry = false;
                 }
             }
 
@@ -152,6 +151,9 @@ namespace HSMServer.Core.Model
 
             if (!Storage.TryChangeLastValue(value) || !Policies.TryRevalidate(value))
                 return false;
+
+            // Also a write into the cache; see TryAddValue.
+            _historyRestoredByRetry = false;
 
             ReceivedNewValue?.Invoke(value);
 
@@ -375,7 +377,11 @@ namespace HSMServer.Core.Model
 
                 // Before the log line: an NLog throw must not classify a successful load as failed.
                 _historyLoaded = true;
-                _historyRestoredByRetry = isRetry;
+
+                // Degraded only if the retry left the cache empty. A sensor that kept reporting
+                // through the outage has its LastValue, Status and TTL clocks intact — nothing
+                // about it is restored-but-hollow, and the sweep must not warn about it.
+                _historyRestoredByRetry = isRetry && !Storage.HasData;
                 _logger.Info(isRetry
                     ? $"Sensor {Id} history restored by retry {From}-{To} (cache not rebuilt)"
                     : $"Sensor {Id} initialized {From}-{To}");

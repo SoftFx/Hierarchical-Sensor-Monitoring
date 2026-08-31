@@ -406,6 +406,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             sensor.RetryFailedHistoryLoad(DateTime.UtcNow.AddHours(2));
 
             Assert.True(sensor.IsHistoryLoaded, "retry must latch the history load for a hot sensor");
+            // Not degraded: this sensor never stopped reporting, so nothing about it is hollow
+            // and the sweep must not warn that its cache is empty.
+            Assert.False(sensor.HistoryRestoredByRetry, "a hot sensor was reported as retry-degraded");
             Assert.False(sensor.IsExpired, "stale timeout marker forced IsExpired onto a reporting sensor");
             Assert.False(expiredFired, "retry ran the SensorExpired fan-out from the sweep");
             // Stored content, not just identity: neither the marker nor the pre-marker DB row
