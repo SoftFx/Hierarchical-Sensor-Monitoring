@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Authentication;
 using Xunit;
@@ -26,6 +28,18 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.False(ApiTokenOperations.IsValid("alerts:read "));   // trailing space
             Assert.False(ApiTokenOperations.IsValid("ALERTS:READ"));    // case variant
             Assert.False(ApiTokenOperations.IsValid("alerts:delete"));  // plausible but absent
+        }
+
+        [Fact]
+        public void All_IsASnapshot_MutatingItCannotAlterTheCatalog()
+        {
+            // The capability catalog is process-global: a cast back to a mutable
+            // collection must not let a consumer grant a capability the file forbids.
+            var all = ApiTokenOperations.All;
+
+            Assert.DoesNotContain("users:write", all);
+            Assert.Throws<NotSupportedException>(() => ((ICollection<string>)all).Add("users:write"));
+            Assert.False(ApiTokenOperations.IsValid("users:write"));
         }
     }
 }

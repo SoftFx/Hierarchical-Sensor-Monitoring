@@ -41,6 +41,14 @@ namespace HSMServer.Authentication
 
         List<ApiTokenEntity> GetTokensByOwner(Guid ownerUserId);
 
+        // The single authentication decision for a presented bearer credential: strict
+        // parse, index lookup, stored-or-dummy constant-time verifier compare (and still
+        // false when no record was found — the compare result alone is never the
+        // decision), then revoked/expired/both-generation-stamps and boot health. Use
+        // this from the handler instead of reassembling the checks from GetToken and the
+        // generation accessors: every omitted predicate there is an authentication bypass.
+        bool TryAuthenticate(string presentedToken, out ApiTokenEntity entity);
+
         // Creates a token with the explicit grants (canonicalized; empty means a token that
         // allows nothing). Persists first; publishes to the authentication index only after
         // the write. fullToken carries the secret exactly once and is never stored or logged.
@@ -80,12 +88,12 @@ namespace HSMServer.Authentication
         // authenticating. Callers must not swallow the exception.
         long AdvanceGlobalRevocationGeneration();
 
-        // Drops a record from the live authentication index after its durable row was
-        // deleted (retention cleanup). The caller removes the durable row FIRST and only
-        // calls this when RemoveApiToken returned true — unpublishing after a failed
-        // removal would let the row rejoin the index after restart. False when no live
-        // record existed for the TokenId.
-        bool Unpublish(string tokenId);
+        // Retention removal, atomic across the durable row and the live index (both steps
+        // under the manager's state lock, so a concurrent revoke/rotate cannot rewrite a
+        // row the removal just deleted and resurrect it after restart). False when no
+        // live record existed for the TokenId, or when the durable removal failed — in
+        // that case nothing is unpublished either.
+        bool TryRemoveToken(string tokenId);
 
         // Advances the durable owner generation (persist first), then publishes it to
         // authentication — every token of that owner issued at an older generation stops

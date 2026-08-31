@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HSMServer.Authentication
 {
@@ -63,7 +64,10 @@ namespace HSMServer.Authentication
         public ApiTokenManager(IDatabaseCore databaseCore, ILogger<ApiTokenManager> logger)
         {
             _databaseCore = databaseCore ?? throw new ArgumentNullException(nameof(databaseCore));
-            _logger = logger;
+
+            // A null logger would NRE inside the catch blocks that make Try* return false
+            // — the failure would escape as an exception from a never-throws contract.
+            _logger = logger ?? NullLogger<ApiTokenManager>.Instance;
         }
 
 
@@ -99,10 +103,21 @@ namespace HSMServer.Authentication
         public ApiTokenEntity GetTokenByEntityId(Guid entityId) =>
             _tokenIdByEntityId.TryGetValue(entityId, out var tokenId) ? GetToken(tokenId) : null;
 
-        public List<ApiTokenEntity> GetTokensByOwner(Guid ownerUserId) =>
-            _tokenIdsByOwner.TryGetValue(ownerUserId, out var tokenIds)
-                ? tokenIds.Keys.Select(GetToken).Where(token => token is not null).ToList()
-                : [];
+        public List<ApiTokenEntity> GetTokensByOwner(Guid ownerUserId)
+        {
+            if (!_tokenIdsByOwner.TryGetValue(ownerUserId, out var tokenIds))
+                return [];
+
+            var tokens = new List<ApiTokenEntity>();
+
+            // Direct enumeration of the concurrent set: .Keys would take every internal
+            // lock and materialize a snapshot list just to be walked once.
+            foreach (var entry in tokenIds)
+                if (GetToken(entry.Key) is { } token)
+                    tokens.Add(token);
+
+            return tokens;
+        }
 
         public long GetOwnerRevocationGeneration(Guid ownerUserId) => _ownerGenerations.GetValueOrDefault(ownerUserId);
 
@@ -234,9 +249,13 @@ namespace HSMServer.Authentication
                 else if (!ApiTokenGrants.TryCanonicalize(remainingGrants, out canonicalRemaining))
                     return false;
 
-                // Restriction can only remove pairs; any pair not in the current set is expansion.
+                // Restriction can only remove pairs; any pair not in the current set is
+                // expansion. Set lookup, not List.Contains: with MaxGrants on both sides
+                // the linear scan would be ~1M record comparisons inside _stateLock.
+                var currentGrants = new HashSet<ApiTokenGrantEntity>(current.Grants);
+
                 foreach (var grant in canonicalRemaining)
-                    if (!current.Grants.Contains(grant))
+                    if (!currentGrants.Contains(grant))
                         return false;
 
                 if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
@@ -339,9 +358,14 @@ namespace HSMServer.Authentication
                         // the revoked source record still held in the index.
                         Grants = [.. current.Grants],
                         CreatedAtUtc = now,
-                        CreatedBy = sanitizedRotatedBy,
+                        // The original creator survives rotation for the audit trail; the
+                        // rotating actor is recorded separately. Once retention removes the
+                        // source row, RotatedFromEntityId alone cannot answer "who minted
+                        // this lineage".
+                        CreatedBy = current.CreatedBy,
                         ExpiresAtUtc = newExpiry,
                         RotatedAtUtc = now,
+                        RotatedBy = sanitizedRotatedBy,
                         RotatedFromEntityId = current.EntityId,
                     };
 
@@ -436,26 +460,88 @@ namespace HSMServer.Authentication
         }
 
 
-        // Drops a record from the live index after its durable row was deleted (retention
-        // cleanup). Durable removal is the caller's job and must happen FIRST — the reverse
-        // order would let the record rejoin the index after restart. Pure in-memory removal
-        // also makes the record unauthenticable immediately. False when nothing was removed.
-        public bool Unpublish(string tokenId)
+        // Retention removal, atomic across both states: the durable delete and the index
+        // unpublish happen inside ONE _stateLock hold. Splitting them (deleting the row
+        // outside the lock, then unpublishing) would let a concurrent revoke/rotate —
+        // blind writes that do not check the row still exists — rewrite the just-deleted
+        // row between the two steps and resurrect it after the next restart. False when
+        // no live record existed, or when the durable removal failed (the row may still
+        // exist, so nothing is unpublished).
+        public bool TryRemoveToken(string tokenId)
         {
             if (tokenId is null)
                 return false;
 
             lock (_stateLock)
             {
-                if (!_tokensByTokenId.TryRemove(tokenId, out var entity))
+                if (!_tokensByTokenId.TryGetValue(tokenId, out var entity))
                     return false;
 
+                if (!_databaseCore.RemoveApiToken(tokenId))
+                    return false;
+
+                _tokensByTokenId.TryRemove(tokenId, out _);
                 _tokenIdByEntityId.TryRemove(entity.EntityId, out _);
 
                 if (_tokenIdsByOwner.TryGetValue(entity.OwnerUserId, out var tokenIds))
+                {
                     tokenIds.TryRemove(tokenId, out _);
 
+                    // Safe only because every Publish also holds _stateLock: no publisher
+                    // can refill the bucket between the emptiness check and the removal.
+                    if (tokenIds.IsEmpty)
+                        _tokenIdsByOwner.TryRemove(entity.OwnerUserId, out _);
+                }
+
                 return true;
+            }
+        }
+
+
+        // The single authentication decision, assembled once so a handler cannot get the
+        // order or the set wrong: strict parse (no database access for garbage) → index
+        // lookup by the canonical TokenId text → stored-or-dummy constant-time verifier
+        // compare → and STILL fail when no record was found (the compare result alone is
+        // never the decision) → liveness (revoked/expired/both generation stamps) → boot
+        // health. Decoded buffers are zeroed on every path.
+        public bool TryAuthenticate(string presentedToken, out ApiTokenEntity entity)
+        {
+            entity = null;
+
+            if (!ApiTokenMaterial.TryParse(presentedToken, out var tokenIdBytes, out var secretBytes))
+                return false;
+
+            try
+            {
+                var candidateVerifier = ApiTokenVerifier.ComputeVerifier(
+                    ApiTokenMaterial.CurrentVersionByte, tokenIdBytes, secretBytes);
+
+                var token = GetToken(ApiTokenMaterial.TokenIdOf(presentedToken));
+
+                if (token is null)
+                {
+                    // Equal work for the unknown-id path, then fail regardless: no
+                    // presentable credential can authenticate without a stored record.
+                    _ = ApiTokenVerifier.Verify(candidateVerifier, ApiTokenVerifier.DummyVerifier);
+
+                    return false;
+                }
+
+                if (!ApiTokenVerifier.Verify(candidateVerifier, token.Verifier))
+                    return false;
+
+                if (!IsGenerationStateHealthy || !IsLive(token, DateTime.UtcNow.Ticks,
+                        GlobalRevocationGeneration, GetOwnerRevocationGeneration(token.OwnerUserId)))
+                    return false;
+
+                entity = token;
+
+                return true;
+            }
+            finally
+            {
+                ApiTokenMaterial.Clear(secretBytes);
+                ApiTokenMaterial.Clear(tokenIdBytes);
             }
         }
 
@@ -471,9 +557,16 @@ namespace HSMServer.Authentication
             var globalGeneration = GlobalRevocationGeneration;
             var ownerGeneration = GetOwnerRevocationGeneration(ownerUserId);
 
-            return tokenIds.Keys.Count(tokenId =>
-                _tokensByTokenId.TryGetValue(tokenId, out var token) &&
-                IsQuotaEligible(token, now, globalGeneration, ownerGeneration));
+            var count = 0;
+
+            // Direct enumeration of the concurrent set: .Keys would take every internal
+            // lock and materialize a snapshot list just to be walked once.
+            foreach (var entry in tokenIds)
+                if (_tokensByTokenId.TryGetValue(entry.Key, out var token) &&
+                    IsLive(token, now, globalGeneration, ownerGeneration))
+                    count++;
+
+            return count;
         }
 
 
@@ -482,7 +575,12 @@ namespace HSMServer.Authentication
         }
 
 
-        private static bool IsQuotaEligible(ApiTokenEntity token, long nowTicks, long globalGeneration, long ownerGeneration) =>
+        // The one liveness rule, shared by authentication and quota counting (callers
+        // snapshot the generations once and pass them in): unrevoked, unexpired, issued
+        // at exactly the current generations. TryRestrictToken/TryRevokeToken deliberately
+        // do NOT gate on IsGenerationStateHealthy the way create/rotate do: revoking must
+        // always work, and a narrowing persisted onto an already-dead row grants nothing.
+        private static bool IsLive(ApiTokenEntity token, long nowTicks, long globalGeneration, long ownerGeneration) =>
             token.RevokedAtUtc is null &&
             (token.ExpiresAtUtc is null || token.ExpiresAtUtc.Value > nowTicks) &&
             token.GlobalRevocationGenerationAtIssue == globalGeneration &&
@@ -538,8 +636,10 @@ namespace HSMServer.Authentication
                 {
                     globalGeneration = _databaseCore.GetGlobalRevocationGeneration();
 
-                    foreach (var ownerUserId in _tokenIdsByOwner.Keys)
-                        _ownerGenerations[ownerUserId] = _databaseCore.GetOwnerRevocationGeneration(ownerUserId);
+                    // Direct enumeration of the owner map: .Keys would take every internal
+                    // lock and materialize a snapshot list just to be walked once.
+                    foreach (var owner in _tokenIdsByOwner)
+                        _ownerGenerations[owner.Key] = _databaseCore.GetOwnerRevocationGeneration(owner.Key);
                 }
                 catch (Exception e)
                 {
@@ -551,17 +651,22 @@ namespace HSMServer.Authentication
                 Volatile.Write(ref _globalGeneration, globalGeneration);
 
                 // Regressed state (a record issued at a generation newer than the authoritative
-                // one) can only mean damaged generation storage — fail closed as well.
+                // one) can only mean damaged generation storage — fail closed as well. ALL
+                // offending records are logged, so an operator repairs in one pass instead of
+                // restarting after each first offender.
+                List<Guid> regressed = null;
+
                 foreach (var token in _tokensByTokenId.Values)
-                {
                     if (token.GlobalRevocationGenerationAtIssue > globalGeneration ||
                         token.OwnerRevocationGenerationAtIssue > GetOwnerRevocationGeneration(token.OwnerUserId))
-                    {
-                        _logger.LogError("API token revocation generation state is regressed (token entity {EntityId}); all API tokens will fail authentication until the server is restarted",
-                            token.EntityId);
+                        (regressed ??= []).Add(token.EntityId);
 
-                        return false;
-                    }
+                if (regressed is not null)
+                {
+                    _logger.LogError("API token revocation generation state is regressed (token entities {EntityIds}); all API tokens will fail authentication until the server is restarted",
+                        regressed);
+
+                    return false;
                 }
             }
 
@@ -691,7 +796,9 @@ namespace HSMServer.Authentication
         // limit. Truncation backs off one char when the cut would split a surrogate pair,
         // and re-trims so the result never ends in the space of a replaced control char —
         // both keep the live entity identical to the JSON row it round-trips through
-        // (System.Text.Json substitutes U+FFFD for ill-formed UTF-16).
+        // (System.Text.Json substitutes U+FFFD for ill-formed UTF-16). Input that
+        // sanitizes to nothing (whitespace/control-only) normalizes to null, so "empty"
+        // has exactly one persisted shape.
         private static string Sanitize(string value, int maxLength)
         {
             if (string.IsNullOrEmpty(value))
@@ -724,12 +831,17 @@ namespace HSMServer.Authentication
 
             var sanitized = new string(chars).Trim();
 
+            if (sanitized.Length == 0)
+                return null;
+
             if (sanitized.Length <= maxLength)
                 return sanitized;
 
             var cut = char.IsHighSurrogate(sanitized[maxLength - 1]) ? maxLength - 1 : maxLength;
 
-            return sanitized[..cut].TrimEnd();
+            var truncated = sanitized[..cut].TrimEnd();
+
+            return truncated.Length == 0 ? null : truncated;
         }
     }
 }

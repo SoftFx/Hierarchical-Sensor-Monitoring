@@ -917,6 +917,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // failure contract as TryInsertApiToken.
         public bool TryRotateApiToken(ApiTokenEntity revokedOld, ApiTokenEntity replacement)
         {
+            // Same bare-prefix-key hazard as insert: validate both rows before writing.
+            if (revokedOld?.TokenId is null || replacement?.TokenId is null)
+                throw new ArgumentException("API token rotation requires token ids on both rows.");
+
             lock (_apiTokenLock)
             {
                 var replacementKey = GetApiTokenKey(replacement.TokenId);
@@ -938,6 +942,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // failures: a silently dropped revocation would resurface after restart.
         public void PutApiToken(ApiTokenEntity entity)
         {
+            // Same bare-prefix-key hazard as insert and removal.
+            if (entity?.TokenId is null)
+                throw new ArgumentException("API token update requires a token id.", nameof(entity));
+
             lock (_apiTokenLock)
             {
                 _database.Put(GetApiTokenKey(entity.TokenId), JsonSerializer.SerializeToUtf8Bytes(entity));
@@ -950,8 +958,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
+                // Span overload: no per-row string allocation, and a non-UTF8 row reaches
+                // the JSON parser as bytes instead of silently becoming replacement chars.
                 return _database.TryRead(GetApiTokenKey(tokenId), out byte[] value)
-                    ? JsonSerializer.Deserialize<ApiTokenEntity>(Encoding.UTF8.GetString(value))
+                    ? JsonSerializer.Deserialize<ApiTokenEntity>(value)
                     : null;
             }
             catch (Exception e)
@@ -1005,7 +1015,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 try
                 {
-                    tokens.Add(JsonSerializer.Deserialize<ApiTokenEntity>(Encoding.UTF8.GetString(value)));
+                    // Span overload: the boot scan must not allocate a string per row.
+                    tokens.Add(JsonSerializer.Deserialize<ApiTokenEntity>(value));
                 }
                 catch (Exception e)
                 {

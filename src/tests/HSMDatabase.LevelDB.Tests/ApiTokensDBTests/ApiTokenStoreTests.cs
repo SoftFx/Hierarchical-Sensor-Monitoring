@@ -133,6 +133,23 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
         }
 
         [Fact]
+        public void WritePaths_NullTokenId_IsRejectedOnEveryPath()
+        {
+            var entity = BuildEntity(tokenId: TokenIdA);
+
+            // BuildEntity substitutes a default id; the with-expression keeps it null.
+            var nullIdEntity = entity with { TokenId = null };
+
+            Assert.Throws<ArgumentException>(() => _worker.TryInsertApiToken(nullIdEntity));
+            Assert.Throws<ArgumentException>(() => _worker.PutApiToken(nullIdEntity));
+            Assert.Throws<ArgumentException>(() => _worker.TryRotateApiToken(entity, nullIdEntity));
+            Assert.Throws<ArgumentException>(() => _worker.TryRotateApiToken(nullIdEntity, entity));
+
+            // Nothing was written — in particular no bare "ApiToken_" prefix row.
+            Assert.Empty(_worker.ReadAllApiTokens());
+        }
+
+        [Fact]
         public void TryRotateApiToken_WritesRevokedOldAndReplacementAtomically()
         {
             var old = BuildEntity(tokenId: TokenIdA);

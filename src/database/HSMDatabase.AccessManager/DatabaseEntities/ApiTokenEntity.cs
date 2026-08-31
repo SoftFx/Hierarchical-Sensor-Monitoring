@@ -35,12 +35,15 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public string Description { get; init; }
 
-        // Canonical, deduplicated grant list (see ApiTokenGrants). Records are shared with
-        // the live authentication index — never mutate the list in place; build a new one.
-        public List<ApiTokenGrantEntity> Grants { get; init; }
+        // Canonical grant list (see ApiTokenGrants; duplicate pairs are rejected before
+        // persistence). Read-only at the type level: records are shared with the live
+        // authentication index, so a mutating consumer cannot rewrite a live token's
+        // grants in place. System.Text.Json deserializes this into a List.
+        public IReadOnlyList<ApiTokenGrantEntity> Grants { get; init; }
 
         public long CreatedAtUtc { get; init; }
 
+        // Who minted the credential; survives rotation (the rotating actor is RotatedBy).
         public string CreatedBy { get; init; }
 
         public long? RestrictedAtUtc { get; init; }
@@ -53,6 +56,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public long? LastUsedAtUtc { get; init; }
 
         public long? RotatedAtUtc { get; init; }
+
+        public string RotatedBy { get; init; }
 
         public Guid? RotatedFromEntityId { get; init; }
 

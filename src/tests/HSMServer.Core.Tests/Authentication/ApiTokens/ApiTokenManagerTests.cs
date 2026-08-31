@@ -107,6 +107,85 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void TryAuthenticate_ValidToken_ReturnsTheLiveRecord()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            manager.TryCreateToken(OwnerId, "auth-me", null, BuildGrants("alerts:read"),
+                DateTime.UtcNow.AddHours(1), "creator", out var entity, out var fullToken);
+
+            Assert.True(manager.TryAuthenticate(fullToken, out var authenticated));
+
+            Assert.Equal(entity.TokenId, authenticated.TokenId);
+        }
+
+        [Fact]
+        public void TryAuthenticate_EveryFailClosedReason_ReturnsFalse()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            // Garbage never reaches the database.
+            Assert.False(manager.TryAuthenticate(null, out _));
+            Assert.False(manager.TryAuthenticate("hsm_pat_v1_garbage", out _));
+
+            // Unknown but well-formed id: same shape as a real token, unknown TokenId.
+            var unknown = $"hsm_pat_v1_{new string('A', ApiTokenMaterial.TokenIdLength)}.{new string('A', ApiTokenMaterial.SecretLength)}";
+            Assert.False(manager.TryAuthenticate(unknown, out _));
+
+            manager.TryCreateToken(OwnerId, "auth-checks", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
+
+            // Wrong secret: same canonical shape ('E' has zero trailing bits), different bits.
+            var tampered = fullToken[..^1] + (fullToken[^1] == 'A' ? 'E' : 'A');
+            Assert.NotEqual(fullToken, tampered);
+            Assert.False(manager.TryAuthenticate(tampered, out _));
+
+            // Revoked.
+            manager.TryRevokeToken(entity.EntityId, "u", "gone", out _);
+            Assert.False(manager.TryAuthenticate(fullToken, out _));
+
+            // Generation-invalidated (global and owner emergency revoke).
+            manager.TryCreateToken(OwnerId, "global-killed-auth", null, BuildGrants("alerts:read"), null, "u", out var globalKilled, out var globalToken);
+            manager.AdvanceGlobalRevocationGeneration();
+            Assert.False(manager.TryAuthenticate(globalToken, out _));
+
+            manager.TryCreateToken(OwnerId, "owner-killed-auth", null, BuildGrants("alerts:read"), null, "u", out var ownerKilled, out var ownerToken);
+            manager.AdvanceOwnerRevocationGeneration(OwnerId);
+            Assert.False(manager.TryAuthenticate(ownerToken, out _));
+
+            // Expired: correct secret, row rewritten with a past expiry and reloaded.
+            manager.TryCreateToken(OwnerId, "will-expire", null, BuildGrants("alerts:read"), null, "u", out var toExpire, out var expirableToken);
+
+            _databaseCoreManager.DatabaseCore.PutApiToken(toExpire with { ExpiresAtUtc = DateTime.UtcNow.AddDays(-1).Ticks });
+
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            Assert.False(reopened.TryAuthenticate(expirableToken, out _));
+        }
+
+        [Fact]
+        public void TryAuthenticate_UnhealthyState_RefusesEvenValidCredentials()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            manager.TryCreateToken(OwnerId, "valid-but-unhealthy", null, BuildGrants("alerts:read"), null, "u", out _, out var validToken);
+
+            var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailApiTokenOp = op => op == "GetGlobalRevocationGeneration",
+            };
+
+            using var unhealthy = new ApiTokenManager(failing, NullLogger<ApiTokenManager>.Instance);
+            unhealthy.Initialize().Wait();
+
+            Assert.False(unhealthy.IsGenerationStateHealthy);
+            Assert.False(unhealthy.TryAuthenticate(validToken, out _));
+        }
+
+        [Fact]
         public void TryCreateToken_PersistsFirst_SecretDisclosedOnce()
         {
             using var manager = CreateManager();
@@ -353,6 +432,12 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.NotEqual(oldFullToken, newFullToken);
             Assert.Equal(old.EntityId, replacement.RotatedFromEntityId);
             Assert.NotNull(replacement.RotatedAtUtc);
+
+            // Audit trail: the original creator survives rotation, the rotating actor is
+            // recorded separately — once retention removes the source row, the lineage
+            // must still answer "who minted this" and "who rotated it".
+            Assert.Equal(old.CreatedBy, replacement.CreatedBy);
+            Assert.Equal("rotating-user", replacement.RotatedBy);
 
             // Grants and expiry preserved, not expanded.
             Assert.Equal(old.Grants.Count, replacement.Grants.Count);
@@ -673,6 +758,19 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void TryCreateToken_ControlOnlyFreeText_NormalizesToNull()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            // Input that sanitizes to nothing must have exactly one persisted shape: null.
+            manager.TryCreateToken(OwnerId, "null-shapes", "\t", BuildGrants("alerts:read"), null, "\t", out var entity, out _);
+
+            Assert.Null(entity.Description);
+            Assert.Null(entity.CreatedBy);
+        }
+
+        [Fact]
         public void Initialize_NonCanonicalBoundaryIdRow_LoadsCanonicalGrantsAndRestricts()
         {
             var productId = Guid.NewGuid();
@@ -788,23 +886,52 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
-        public void Unpublish_RemovesTheRecordFromTheLiveIndex()
+        public void TryRemoveToken_RemovesDurableRowAndLiveIndexTogether()
         {
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "to-unpublish", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "to-remove", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
 
-            Assert.True(manager.Unpublish(entity.TokenId));
+            Assert.True(manager.TryRemoveToken(entity.TokenId));
 
             Assert.Null(manager.GetToken(entity.TokenId));
             Assert.Null(manager.GetTokenByEntityId(entity.EntityId));
             Assert.Empty(manager.GetTokensByOwner(OwnerId));
             Assert.Equal(0, manager.CountQuotaEligibleTokens(OwnerId));
 
-            // Idempotent on the live index; the durable row is the caller's concern.
-            Assert.False(manager.Unpublish(entity.TokenId));
-            Assert.False(manager.Unpublish(null));
+            // The durable row is gone too: a fresh index does not resurrect it.
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            Assert.Null(reopened.GetToken(entity.TokenId));
+
+            // Idempotent: no live record, nothing to remove.
+            Assert.False(manager.TryRemoveToken(entity.TokenId));
+            Assert.False(manager.TryRemoveToken(null));
+        }
+
+        [Fact]
+        public void TryRemoveToken_FailedDurableRemoval_UnpublishesNothing()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            manager.TryCreateToken(OwnerId, "keep-on-failure", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+
+            var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailApiTokenOp = op => op == "RemoveApiToken",
+            };
+
+            using var failingManager = new ApiTokenManager(failing, NullLogger<ApiTokenManager>.Instance);
+            failingManager.Initialize().Wait();
+
+            // The durable row may still exist — the live record must stay published.
+            Assert.False(failingManager.TryRemoveToken(entity.TokenId));
+
+            Assert.NotNull(failingManager.GetToken(entity.TokenId));
+            Assert.Single(failingManager.GetTokensByOwner(OwnerId));
         }
 
         [Fact]

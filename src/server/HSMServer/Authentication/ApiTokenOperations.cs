@@ -1,4 +1,6 @@
+using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Authentication
 {
@@ -24,8 +26,10 @@ namespace HSMServer.Authentication
         public const string SystemHealthRead = "system-health:read";
 
 
-        private static readonly HashSet<string> _all =
-        [
+        // Frozen on purpose: immutable at the type level (no consumer can Add a capability
+        // the file says must never exist) and faster on the per-request IsValid path.
+        private static readonly FrozenSet<string> _all = new[]
+        {
             ProductsRead, ProductsWrite,
             SensorsRead, SensorsWrite,
             HistoryRead,
@@ -33,10 +37,12 @@ namespace HSMServer.Authentication
             DashboardsRead, DashboardsWrite,
             NotificationsRead, NotificationsWrite,
             SystemHealthRead,
-        ];
+        }.ToFrozenSet();
 
 
-        public static IReadOnlyCollection<string> All => _all;
+        // A snapshot, never the live set: IReadOnlyCollection over a mutable collection
+        // can be cast back and mutated.
+        public static IReadOnlyCollection<string> All => _all.ToArray();
 
 
         // Exact ordinal match against the catalog; absence means denied.
