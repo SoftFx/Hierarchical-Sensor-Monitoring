@@ -87,11 +87,13 @@ namespace HSMServer.Core.Cache
         // make a large latched set drain at 100 sensors per hour for no benefit. Capped-out
         // sensors are picked up by the next sweep — nothing is stamped on them, so no per-sensor
         // retry budget is consumed by the cap.
-        // What the cap does NOT give is fairness while the database stays broken: with more
-        // latched sensors than the cap can serve in a day, the ones early in the enumeration
-        // still monopolise it and the tail is retried less often. Harmless — retrying a broken
-        // database buys nothing, and on recovery successes go uncharged so the whole set drains
-        // in one sweep — but do not read the budget rule as a round-robin.
+        // The tail is not starved: the sensors served this sweep stamp their retry clock and
+        // back off for hours, while capped-out ones stamp nothing and are due immediately, so
+        // successive sweeps work through the set. What is deliberately NOT bounded is the
+        // post-recovery drain — the first sweep after the database comes back does two
+        // synchronous LevelDB reads per latched sensor inline in this serial loop, which on a
+        // large tree stretches that one maintenance tick. Accepted: rationing cheap successful
+        // reads would leave self-destroy disabled for hours after everything is healthy again.
         private const int MaxHistoryLoadRetriesPerSweep = 100;
 
         private readonly Logger _logger = LogManager.GetLogger(nameof(TreeValuesCache));
@@ -421,11 +423,6 @@ namespace HSMServer.Core.Cache
             var retryRestored = 0;
             var retryRestoredSample = new List<Guid>(LogSampleSize);
 
-            // One decision instant for the whole sweep: read once, not per sensor, so a slow
-            // iteration cannot make early and late sensors disagree about "now" (and the
-            // retry gates below are not re-anchored mid-loop).
-            var utcNow = DateTime.UtcNow;
-
             static void Sample(List<Guid> sample, Guid id)
             {
                 if (sample.Count < LogSampleSize)
@@ -458,11 +455,18 @@ namespace HSMServer.Core.Cache
                     // rate per sensor.
                     // else if: a sensor this iteration just Initialize()d must not be retried in
                     // the same breath. (The wider same-tick hazard — CheckSensorsHistoryAsync's
-                    // eager Initialize() one await earlier — is fenced off by that backoff, which
+                    // eager Initialize() one await earlier — is held off by the backoff, which
                     // measures the first retry from the failed load itself.)
+                    // The clock is read per sensor, not snapshotted for the sweep: a sensor whose
+                    // lazy Initialize() fails WHILE this loop runs stamps its attempt clock from
+                    // the real clock, and a snapshot taken before that would read as "overdue"
+                    // and retry back-to-back against the database that just failed it.
                     else if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed && loadRetries < MaxHistoryLoadRetriesPerSweep)
                     {
-                        if (RetryHistoryLoadChargingBudget(sensor, utcNow))
+                        // Charge only an attempt that reached the database and failed again:
+                        // Suppressed did no database work, and Loaded is an ordinary read pair
+                        // that must not throttle recovery.
+                        if (sensor.RetryFailedHistoryLoad(DateTime.UtcNow) is HistoryLoadRetryResult.Failed)
                             loadRetries++;
                     }
 
@@ -538,15 +542,6 @@ namespace HSMServer.Core.Cache
             if (notRemoved > 0 && !token.IsCancellationRequested)
                 _logger.Warn($"{notRemoved} sensor(s) due for destruction were not removed (removal failed) and will be retried next sweep");
         }
-
-        // Rerun one failed history load and report whether it should be charged against the
-        // sweep's retry budget: only an attempt that reached the database AND failed again is.
-        // A suppressed call (the sensor is inside its backoff) does no database work, and
-        // charging it would let the sensors early in the stable _sensorsById enumeration exhaust
-        // the cap sweep after sweep and permanently starve everything past it. A successful
-        // retry is an ordinary read pair, so recovery drains at whatever rate the sweep sustains.
-        internal static bool RetryHistoryLoadChargingBudget(BaseSensorModel sensor, DateTime utcNow) =>
-            sensor.RetryFailedHistoryLoad(utcNow) && sensor.HistoryLoadFailed;
 
         public async Task RunProductsSelfDestroyAsync(CancellationToken token = default)
         {

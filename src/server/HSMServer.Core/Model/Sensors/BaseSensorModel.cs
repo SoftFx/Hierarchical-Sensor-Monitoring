@@ -21,6 +21,17 @@ namespace HSMServer.Core.Model
     }
 
 
+    // Outcome of a bounded history-load retry (#1344). The sweep charges its per-sweep budget
+    // on Failed alone: Suppressed did no database work, and Loaded is an ordinary read pair
+    // that must not throttle recovery.
+    internal enum HistoryLoadRetryResult
+    {
+        Suppressed,
+        Failed,
+        Loaded,
+    }
+
+
     public abstract class BaseSensorModel : BaseNodeModel
     {
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
@@ -100,9 +111,10 @@ namespace HSMServer.Core.Model
 
         // Bounded rerun of a failed history load (#1344): bypasses Initialize()'s _isInitialized
         // gate (the latch itself is not cleared) at most once per backoff interval, from the
-        // maintenance sweep only — never from the per-value paths. True only when the load
-        // actually ran; false on a suppressed call, so the sweep can budget real attempts.
-        internal abstract bool RetryFailedHistoryLoad(DateTime utcNow);
+        // maintenance sweep only — never from the per-value paths. The three outcomes are
+        // distinct because the sweep budgets on them: only Failed cost a database round trip
+        // that is worth rationing.
+        internal abstract HistoryLoadRetryResult RetryFailedHistoryLoad(DateTime utcNow);
 
         // Mirrors the interval states TimeIsUp can actually fire in (None never fires; a Ticks
         // interval with Ticks <= 0 never fires). Used by ShouldDestroy() and by the sweep's
@@ -117,12 +129,14 @@ namespace HSMServer.Core.Model
 
         public bool ShouldDestroy()
         {
-            // IsHistoryLoaded means "Storage reflects history", not just "a load was attempted" —
-            // a failed load latches _isInitialized but never publishes, so the guard below also
-            // covers permanently failed loads (#1328 review). The decision is unknown, not
-            // "destroy": defer to the next sweep. Deliberately no Initialize() call here — it
-            // would run the policy fan-out and let a predicate emit TTL-expired alerts for a
-            // sensor this very check may delete.
+            // IsHistoryLoaded means "a load completed", not just "a load was attempted" — a
+            // failed load latches _isInitialized but never publishes, so the guard below also
+            // covers permanently failed loads (#1328 review). It does NOT mean Storage mirrors
+            // history: for a retry-restored sensor it holds only the activity floor, which is
+            // all this predicate needs — see HistoryRestoredByRetry before keying anything else
+            // on it. The decision is unknown, not "destroy": defer to the next sweep.
+            // Deliberately no Initialize() call here — it would run the policy fan-out and let
+            // a predicate emit TTL-expired alerts for a sensor this very check may delete.
             var interval = Settings.SelfDestroy.Value;
 
             if (!IsActive(interval) || !IsHistoryLoaded)
@@ -149,6 +163,9 @@ namespace HSMServer.Core.Model
             // still has a cached value it would postpone every quiet sensor's cleanup by the
             // server's downtime. Marker .Time, not .LastUpdateTime: GetTimeoutValue copies
             // LastReceivingTime from the previous value, so LastUpdateTime under-estimates.
+            // One acknowledged exception: a history-load retry whose newest DB row is a marker
+            // records that .Time as the floor, so for that one sensor the over-estimate does
+            // reach this branch through To. Bounded (a single row, once) and conservative.
             var lastActivity = HasData
                 ? Newest(LastUpdate, storageActivity)
                 : Newest(LastTimeout?.Time ?? DateTime.MinValue, storageActivity);

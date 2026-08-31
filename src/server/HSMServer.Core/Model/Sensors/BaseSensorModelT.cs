@@ -70,9 +70,8 @@ namespace HSMServer.Core.Model
         // Retries performed so far; guarded by _lock. Drives the backoff step above.
         private int _loadRetryCount;
 
-        // Set by a successful retry and never cleared: paired with an empty Storage it is what
-        // HistoryRestoredByRetry reports, and once ingestion refills the cache the sensor is no
-        // longer degraded, so the pair goes quiet on its own.
+        // Set by a successful retry, cleared for good once the cache is seen non-empty; see
+        // HistoryRestoredByRetry.
         private volatile bool _historyRestoredByRetry;
 
         // _historyLoaded alone would suffice here (it is written only inside Initialize's try,
@@ -82,7 +81,20 @@ namespace HSMServer.Core.Model
 
         internal override bool HistoryLoadFailed => _isInitialized && !_historyLoaded;
 
-        internal override bool HistoryRestoredByRetry => _historyRestoredByRetry && !Storage.HasData;
+        internal override bool HistoryRestoredByRetry
+        {
+            get
+            {
+                // One-way reset: the sensor stopped being degraded the moment ingestion refilled
+                // the cache, and it must not become degraded again when a later retention pass
+                // or history clear empties that cache. Clearing here rather than testing
+                // !HasData on every read is what makes that permanent.
+                if (_historyRestoredByRetry && Storage.HasData)
+                    _historyRestoredByRetry = false;
+
+                return _historyRestoredByRetry;
+            }
+        }
 
         protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 
         {
@@ -207,18 +219,18 @@ namespace HSMServer.Core.Model
         // per-value paths never retry (#1296). The gate is checked and stamped inside the lock
         // so concurrent sweeps cannot double-fire it.
         //
-        // Returns true only when the load actually ran, false on every suppressed call: the
-        // sweep charges its per-sweep retry budget on the return value, so a sensor waiting out
-        // its backoff cannot consume a slot another sensor's first retry needs.
-        internal override bool RetryFailedHistoryLoad(DateTime utcNow)
+        // The outcome is reported, not just "did something happen": the sweep budgets its
+        // per-sweep cap on Failed alone, so a sensor waiting out its backoff cannot consume a
+        // slot another sensor's first retry needs, and recovery is not throttled either.
+        internal override HistoryLoadRetryResult RetryFailedHistoryLoad(DateTime utcNow)
         {
             if (!HistoryLoadFailed)
-                return false;
+                return HistoryLoadRetryResult.Suppressed;
 
             lock (_lock)
             {
                 if (!HistoryLoadFailed)
-                    return false;
+                    return HistoryLoadRetryResult.Suppressed;
 
                 // Two clocks. The FIRST retry is measured from the failed load itself and only
                 // has to clear one sweep period: a failure the current tick just observed — the
@@ -230,11 +242,25 @@ namespace HSMServer.Core.Model
                 var since = utcNow.Ticks - (retriedBefore ? _lastLoadRetryTicks : _lastLoadAttemptTicks);
                 var delay = retriedBefore ? NextRetryDelay(_loadRetryCount) : HistoryLoadFirstRetryDelay;
 
-                // A backwards clock step makes the delta negative — treat anything below zero as
-                // "delay elapsed" so a clock correction cannot suppress retries for as long as
-                // the step lasts. Accepted side effect: such a step spends one backoff rung.
-                if (since >= 0 && since < delay.Ticks)
-                    return false;
+                // A stamp in the future (negative delta) is not "overdue": it means the clock
+                // that stamped it ran ahead of this caller's — a backwards system clock step,
+                // or a caller passing a snapshot taken before the load failed. Firing here
+                // would hit a possibly still-broken database back-to-back and spend a backoff
+                // rung, so re-anchor to the caller's clock and wait the delay out from there;
+                // re-anchoring is what keeps a large backwards step from suppressing retries
+                // until the wall clock catches up.
+                if (since < 0)
+                {
+                    if (retriedBefore)
+                        _lastLoadRetryTicks = utcNow.Ticks;
+                    else
+                        _lastLoadAttemptTicks = utcNow.Ticks;
+
+                    return HistoryLoadRetryResult.Suppressed;
+                }
+
+                if (since < delay.Ticks)
+                    return HistoryLoadRetryResult.Suppressed;
 
                 _lastLoadRetryTicks = utcNow.Ticks;
 
@@ -252,17 +278,13 @@ namespace HSMServer.Core.Model
                 // already implies it is false, and LoadHistoryUnderLock sets it on completion.
                 LoadHistoryUnderLock(isRetry: true, utcNow);
 
-                return true;
+                return HistoryLoadFailed ? HistoryLoadRetryResult.Failed : HistoryLoadRetryResult.Loaded;
             }
         }
 
         // Delay before the retry that follows retryCount retries: 2h, 4h, 8h, 16h, then the cap.
-        private static TimeSpan NextRetryDelay(int retryCount)
-        {
-            var ticks = HistoryLoadFirstRetryDelay.Ticks * (1L << retryCount);
-
-            return ticks >= HistoryLoadMaxRetryInterval.Ticks ? HistoryLoadMaxRetryInterval : TimeSpan.FromTicks(ticks);
-        }
+        private static TimeSpan NextRetryDelay(int retryCount) =>
+            TimeSpan.FromTicks(Math.Min(HistoryLoadFirstRetryDelay.Ticks * (1L << retryCount), HistoryLoadMaxRetryInterval.Ticks));
 
         // Must be called with _lock held. Publishes the latch (on success OR failure) via its
         // finally block, so a caller below can never observe an unlatched sensor. utcNow is the
@@ -274,35 +296,28 @@ namespace HSMServer.Core.Model
         // isRetry is a parameter, not something inferred from Storage: a live sensor can have a
         // null LastValue (timeout-only traffic, values rejected by validation, a retention purge
         // that emptied the cache mid-tick), so "Storage looks empty" does not mean "no live
-        // ingestion". The modes differ in what they may write:
+        // ingestion". What the two modes may write differs because ingestion is blocked for one
+        // and not the other:
         //
-        // - Cold load (isRetry=false): ingestion is blocked — TryAddValue parks in Initialize()
-        //   on this same lock — so this is the only mode that may rebuild Storage and run the
-        //   policy fan-out.
-        // - Retry (isRetry=true): _isInitialized stays set, so ingestion runs lock-free against
-        //   a ValuesStorage that is not safe for concurrent writes. A replayed DB row would race
-        //   it (torn _lastValue/_to, a duplicated newest point in the cache), and TryValidate
-        //   would reach SensorExpired -> SetExpiredSnapshot -> TryAddValue, emitting
-        //   notifications and DB writes from the maintenance sweep and forcing IsExpired from a
-        //   stale marker onto a possibly-reporting sensor. So a retry writes only the activity
-        //   signal ShouldDestroy() reads, plus Cut below.
+        // - Cold load: TryAddValue parks in Initialize() on this same lock, so this is the only
+        //   mode that may rebuild Storage and run the policy fan-out.
+        // - Retry: _isInitialized stays set, so ingestion runs lock-free against a ValuesStorage
+        //   that is not safe for concurrent writes. Its ONLY writes are SetLastActivity (single
+        //   writer, and To maxes it against the ingestion stamp at read time) and Cut below.
+        //   Not _lastTimeout, which ingestion mutates with a bare read-compare-write: a second
+        //   writer there can lose an update and regress the one signal a marker-only sensor has.
+        //   Not a replayed row (torn _lastValue/_to, a duplicated newest cache point), and not
+        //   TryValidate, which reaches SensorExpired -> SetExpiredSnapshot -> TryAddValue and
+        //   would emit notifications and DB writes from the maintenance sweep.
         //
-        // Restoring that signal is not optional: a successful retry latches _historyLoaded, so a
+        // Restoring the floor is not optional: a successful retry latches _historyLoaded, so a
         // retry that restored nothing would let ShouldDestroy() fall through to CreationDate and
         // delete an established sensor whose newest value is minutes old.
         //
-        // The signal is always SetLastActivity, for a marker row as much as for a value row.
-        // Restoring _lastTimeout instead would put a second writer on a field ingestion mutates
-        // lock-free, and its bare read-compare-write can lose an update: a sensor fed only
-        // timeout markers could have its LastTimeout regress to the DB row and be destroyed
-        // while reporting. _lastActivity has exactly one writer (this method, under _lock) and
-        // feeds ShouldDestroy() through To just as well.
-        //
-        // Limits: the value cache, LastTimeout, IsExpired and the TTL clocks are NOT restored,
-        // and the floor is stamped without validating the row (the cold load skips a
-        // policy-rejected newest row, so a retried sensor can look active where its
-        // cleanly-loaded twin would not — conservative, it destroys later). See
-        // aicontext/features/server/overview.md (#1344).
+        // Residual limits (value cache, LastTimeout, IsExpired and TTL clocks unrestored; the
+        // floor stamped without validating the row) are in
+        // aicontext/features/server/overview.md (#1344). All of them point the same way: a
+        // retried sensor destroys later, never earlier.
         private void LoadHistoryUnderLock(bool isRetry, DateTime utcNow)
         {
             // Every attempt stamps the clock, failed or not: the first retry is measured from
