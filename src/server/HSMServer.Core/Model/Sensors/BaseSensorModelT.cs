@@ -209,11 +209,8 @@ namespace HSMServer.Core.Model
 
         // Rerun the history load after a failure (#1344), from the maintenance sweep only — the
         // per-value paths never retry (#1296). The gate is checked and stamped inside the lock
-        // so concurrent sweeps cannot double-fire it.
-        //
-        // The outcome is reported, not just "did something happen": the sweep budgets its
-        // per-sweep cap on Failed alone, so a sensor waiting out its backoff cannot consume a
-        // slot another sensor's first retry needs, and recovery is not throttled either.
+        // so concurrent sweeps cannot double-fire it. The outcome is reported because the sweep
+        // budgets its per-sweep cap on Failed alone.
         internal override HistoryLoadRetryResult RetryFailedHistoryLoad(DateTime utcNow)
         {
             if (!HistoryLoadFailed)
@@ -224,23 +221,16 @@ namespace HSMServer.Core.Model
                 if (!HistoryLoadFailed)
                     return HistoryLoadRetryResult.Suppressed;
 
-                // Two clocks. The FIRST retry is measured from the failed load itself and only
-                // has to clear one sweep period: a failure the current tick just observed — the
-                // eager Initialize() of CheckSensorsHistoryAsync seconds ago, or this sweep's own
-                // Initialize() — must not be retried back-to-back against a possibly still-broken
-                // database, and must not stamp the backoff at the moment of the first failure.
-                // Later retries are spaced from the previous retry by the growing delay.
+                // Two clocks: the first retry is measured from the failed load itself, later ones
+                // from the previous retry. Rationale: aicontext/features/server/overview.md.
                 var retriedBefore = _loadRetryCount != 0;
                 var since = utcNow.Ticks - (retriedBefore ? _lastLoadRetryTicks : _lastLoadAttemptTicks);
                 var delay = retriedBefore ? NextRetryDelay(_loadRetryCount) : HistoryLoadFirstRetryDelay;
 
-                // A stamp in the future (negative delta) is not "overdue": it means the clock
-                // that stamped it ran ahead of this caller's — a backwards system clock step,
-                // or a caller passing a snapshot taken before the load failed. Firing here
-                // would hit a possibly still-broken database back-to-back and spend a backoff
-                // rung, so re-anchor to the caller's clock and wait the delay out from there;
-                // re-anchoring is what keeps a large backwards step from suppressing retries
-                // until the wall clock catches up.
+                // A stamp in the future is not "overdue" — firing would hit a possibly
+                // still-broken database back-to-back and spend a backoff rung. Re-anchor instead,
+                // so a large backwards clock step cannot suppress retries until the wall clock
+                // catches up either.
                 if (since < 0)
                 {
                     if (retriedBefore)
@@ -362,6 +352,14 @@ namespace HSMServer.Core.Model
                         // LastUpdateTime under-estimates activity — while for a real value it
                         // is what the cold path is judged on, and an aggregated row's
                         // LastReceivingTime can be days newer than its Time.
+                        //
+                        // Knowingly waived here: ShouldDestroy() otherwise keeps a marker's
+                        // observation time out of its cached-value branch, but the floor is
+                        // read through To, which that branch consults — that is the point, the
+                        // floor has to survive an out-of-order incoming value. So for a retried
+                        // sensor the marker's over-estimate is permanent rather than lasting
+                        // until its next real value. Only ever delays destruction; do not
+                        // "fix" it by narrowing one of the two tests that pin both rules.
                         Storage.SetLastActivity(last.IsTimeout ? last.Time : last.LastUpdateTime);
                     }
 
@@ -378,9 +376,12 @@ namespace HSMServer.Core.Model
                 // Before the log line: an NLog throw must not classify a successful load as failed.
                 _historyLoaded = true;
 
-                // Degraded only if the retry left the cache empty. A sensor that kept reporting
-                // through the outage has its LastValue, Status and TTL clocks intact — nothing
-                // about it is restored-but-hollow, and the sweep must not warn about it.
+                // Degraded only if the retry left the cache empty: a sensor that kept reporting
+                // through the outage has its LastValue, Status and TTL clocks intact, and the
+                // sweep must not warn about it. Best-effort by design — ingestion clears the
+                // flag at its own unlocked write, so a value stored between this read and this
+                // assignment leaves one spurious warning that the next stored value clears. The
+                // flag drives a log line, nothing else.
                 _historyRestoredByRetry = isRetry && !Storage.HasData;
                 _logger.Info(isRetry
                     ? $"Sensor {Id} history restored by retry {From}-{To} (cache not rebuilt)"
