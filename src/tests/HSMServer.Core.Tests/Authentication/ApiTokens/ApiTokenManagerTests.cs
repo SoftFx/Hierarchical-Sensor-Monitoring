@@ -535,6 +535,73 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void TryCreateToken_UnhealthyGenerationState_IsRefusedWithNoDurableState()
+        {
+            // Boot fails to prove the generation state authoritative: minting must be
+            // refused outright, or the credential would be silently generation-invalidated
+            // after the operator repairs the rows and restarts.
+            var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailApiTokenOp = op => op == "GetGlobalRevocationGeneration",
+            };
+
+            using var manager = new ApiTokenManager(failing, NullLogger<ApiTokenManager>.Instance);
+            manager.Initialize().Wait();
+
+            Assert.False(manager.IsGenerationStateHealthy);
+
+            Assert.False(manager.TryCreateToken(OwnerId, "doomed", null, BuildGrants("alerts:read"), null, "u", out _, out _));
+            Assert.Empty(manager.GetTokensByOwner(OwnerId));
+
+            // Nothing reached the durable store either: a fresh index sees no tokens.
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            Assert.Empty(reopened.GetTokensByOwner(OwnerId));
+        }
+
+        [Fact]
+        public void TryRotateToken_UnhealthyGenerationState_IsRefused()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            manager.TryCreateToken(OwnerId, "no-rotate-unhealthy", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+
+            var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailApiTokenOp = op => op == "GetGlobalRevocationGeneration",
+            };
+
+            using var failingManager = new ApiTokenManager(failing, NullLogger<ApiTokenManager>.Instance);
+            failingManager.Initialize().Wait();
+
+            Assert.False(failingManager.IsGenerationStateHealthy);
+            Assert.False(failingManager.TryRotateToken(entity.EntityId, null, "u", out _, out _));
+            Assert.Null(failingManager.GetToken(entity.TokenId).RevokedAtUtc);
+        }
+
+        [Fact]
+        public void TryCreateToken_UnreadableOwnerGeneration_ReturnsFalseInsteadOfThrowing()
+        {
+            // A corrupt ApiTokenGeneration_Owner_ row for an owner absent from the cache is
+            // only discovered by the create-time fallback read: it must surface as false,
+            // not as an exception escaping a Try* method.
+            var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailApiTokenOp = op => op == "GetOwnerRevocationGeneration",
+            };
+
+            using var manager = new ApiTokenManager(failing, NullLogger<ApiTokenManager>.Instance);
+            manager.Initialize().Wait();
+
+            // The owner has no records, so the load path read nothing and proved nothing.
+            Assert.True(manager.IsGenerationStateHealthy);
+
+            Assert.False(manager.TryCreateToken(Guid.NewGuid(), "corrupt-owner-generation", null, BuildGrants("alerts:read"), null, "u", out _, out _));
+        }
+
+        [Fact]
         public void TryCreateToken_OwnerAbsentFromGenerationCache_UsesDurableOwnerGeneration()
         {
             // Retention can remove every record of an owner whose generation was advanced:

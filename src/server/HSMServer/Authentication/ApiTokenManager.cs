@@ -121,6 +121,33 @@ namespace HSMServer.Authentication
 
             lock (_stateLock)
             {
+                // A token minted against unproven generation state would work until the
+                // operator repairs the generation rows and restarts — then be silently
+                // generation-invalidated forever. Refuse instead of minting it.
+                if (!IsGenerationStateHealthy)
+                {
+                    _logger.LogWarning("API token creation refused: revocation generation state is not healthy");
+                    return false;
+                }
+
+                // Both stamps are captured before the retry loop and inside a try: an
+                // unreadable generation row must fail the Try* contract with false, not
+                // escape as an exception from the middle of candidate construction.
+                long globalGenerationAtIssue;
+                long ownerGenerationAtIssue;
+
+                try
+                {
+                    globalGenerationAtIssue = GlobalRevocationGeneration;
+                    ownerGenerationAtIssue = GetOrLoadOwnerGeneration(ownerUserId);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "API token revocation generation state is unreadable; no token was created");
+
+                    return false;
+                }
+
                 for (var attempt = 1; attempt <= MaxInsertAttempts; attempt++)
                 {
                     var material = ApiTokenMaterial.Generate();
@@ -133,8 +160,8 @@ namespace HSMServer.Authentication
                         VersionByte = ApiTokenMaterial.CurrentVersionByte,
                         Verifier = ApiTokenVerifier.ComputeVerifier(ApiTokenMaterial.CurrentVersionByte, material.TokenIdBytes, material.SecretBytes),
                         OwnerUserId = ownerUserId,
-                        GlobalRevocationGenerationAtIssue = GlobalRevocationGeneration,
-                        OwnerRevocationGenerationAtIssue = GetOrLoadOwnerGeneration(ownerUserId),
+                        GlobalRevocationGenerationAtIssue = globalGenerationAtIssue,
+                        OwnerRevocationGenerationAtIssue = ownerGenerationAtIssue,
                         Name = sanitizedName,
                         Description = sanitizedDescription,
                         Grants = canonicalGrants,
@@ -221,6 +248,14 @@ namespace HSMServer.Authentication
 
             lock (_stateLock)
             {
+                // Same refusal as create: a replacement minted against unproven generation
+                // state would be silently invalidated after repair and restart.
+                if (!IsGenerationStateHealthy)
+                {
+                    _logger.LogWarning("API token rotation refused: revocation generation state is not healthy");
+                    return false;
+                }
+
                 if (!TryGetTrackedToken(entityId, out var current))
                     return false;
 
@@ -229,6 +264,24 @@ namespace HSMServer.Authentication
 
                 if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
                     return false;
+
+                // Captured under _stateLock, so a concurrent restrict cannot wedge a
+                // just-removed grant into the replacement; inside a try, so an unreadable
+                // generation row fails the Try* contract with false instead of throwing.
+                long globalGenerationAtIssue;
+                long ownerGenerationAtIssue;
+
+                try
+                {
+                    globalGenerationAtIssue = GlobalRevocationGeneration;
+                    ownerGenerationAtIssue = GetOrLoadOwnerGeneration(current.OwnerUserId);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "API token revocation generation state is unreadable; the source token is unchanged");
+
+                    return false;
+                }
 
                 for (var attempt = 1; attempt <= MaxInsertAttempts; attempt++)
                 {
@@ -245,10 +298,8 @@ namespace HSMServer.Authentication
                         VersionByte = ApiTokenMaterial.CurrentVersionByte,
                         Verifier = ApiTokenVerifier.ComputeVerifier(ApiTokenMaterial.CurrentVersionByte, material.TokenIdBytes, material.SecretBytes),
                         OwnerUserId = current.OwnerUserId,
-                        // Captured under _stateLock, so a concurrent restrict cannot wedge a
-                        // just-removed grant into the replacement.
-                        GlobalRevocationGenerationAtIssue = GlobalRevocationGeneration,
-                        OwnerRevocationGenerationAtIssue = GetOrLoadOwnerGeneration(current.OwnerUserId),
+                        GlobalRevocationGenerationAtIssue = globalGenerationAtIssue,
+                        OwnerRevocationGenerationAtIssue = ownerGenerationAtIssue,
                         Name = current.Name,
                         Description = current.Description,
                         Grants = current.Grants,

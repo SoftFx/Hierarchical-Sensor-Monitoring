@@ -35,6 +35,8 @@ namespace HSMServer.Authentication
         // Creates a token with the explicit grants (canonicalized; empty means a token that
         // allows nothing). Persists first; publishes to the authentication index only after
         // the write. fullToken carries the secret exactly once and is never stored or logged.
+        // Returns false — never throws — while generation state is unhealthy or unreadable:
+        // no token is minted against unproven generation values.
         bool TryCreateToken(Guid ownerUserId, string name, string description, List<ApiTokenGrantEntity> grants,
             DateTime? expiresAtUtc, string createdBy, out ApiTokenEntity entity, out string fullToken);
 
@@ -47,7 +49,8 @@ namespace HSMServer.Authentication
         // Rotation issues a completely fresh EntityId/TokenId/secret with the same or a
         // strict subset of grants and an expiry no later than the source, and atomically
         // revokes the source token in the same durable write. Never expands grants and never
-        // turns a finite expiry into an unlimited one.
+        // turns a finite expiry into an unlimited one. Refused, like creation, while
+        // generation state is unhealthy or unreadable.
         bool TryRotateToken(Guid entityId, DateTime? shortenedExpiryUtc, string rotatedBy,
             out ApiTokenEntity entity, out string fullToken);
 

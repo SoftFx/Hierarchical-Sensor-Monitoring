@@ -44,6 +44,7 @@ handler PR and extends this file.
 - Restrict: removes grants and shortens expiry (unlimited → finite allowed); expansion of pairs/boundaries and expiry extension rejected with the token unchanged; a revoked token is rejected as terminal.
 - Rotate: fresh EntityId/TokenId/secret, grants and finite expiry preserved (never expanded, never made unlimited), old revoked atomically, quota slot replaced 1:1.
 - Generations: global advance invalidates every owner's quota immediately; owner advance invalidates only that owner; an owner with a durable generation but no cached value (post-retention) gets it read and cached on create, staying consistent across restart.
+- Minting fails closed: create/rotate return false (never throw) while generation state is unhealthy or when the owner-generation fallback read hits an unreadable row; no durable or live state is left.
 - Fail closed at load: regressed generation state marks the index unhealthy; unloadable records (bad TokenId shape, null grants, foreign version byte) are skipped and never authenticate; a row with a non-canonical boundary id loads canonicalized and still restricts.
 - Concurrency: parallel creates for one owner all publish while enumeration of the owner index never throws; revoke racing restrict/rotate on one entity never loses the revocation (in-memory and after reopen); parallel generation advances return each durable value exactly once and leave the in-memory values equal to the durable counters.
 

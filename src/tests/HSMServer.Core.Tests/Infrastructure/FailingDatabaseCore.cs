@@ -121,7 +121,13 @@ namespace HSMServer.Core.Tests.Infrastructure
             return _inner.AdvanceGlobalRevocationGeneration();
         }
 
-        public long GetOwnerRevocationGeneration(Guid ownerUserId) => _inner.GetOwnerRevocationGeneration(ownerUserId);
+        public long GetOwnerRevocationGeneration(Guid ownerUserId)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(GetOwnerRevocationGeneration)) == true)
+                throw new InvalidOperationException("Simulated DB failure for owner generation read");
+
+            return _inner.GetOwnerRevocationGeneration(ownerUserId);
+        }
 
         public long AdvanceOwnerRevocationGeneration(Guid ownerUserId)
         {
