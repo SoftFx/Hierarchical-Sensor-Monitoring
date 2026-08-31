@@ -39,25 +39,18 @@ namespace HSMServer.Core.Model
 
         private readonly object _lock = new();
 
-        // Bounded retry of failed loads (#1344), capped exponential backoff: 1h, then 2h, 4h,
-        // 8h, 16h, settling at one attempt per sensor per day. What the first delay must exceed
-        // is the duration of the eager CheckSensorsHistoryAsync pass that runs one await before
-        // the sweep, so a failure that pass just observed is never retried back-to-back against
-        // a possibly still-broken database. An hour covers that pass on any tree we expect; on
-        // one where it runs longer, a sensor that failed at the start of the pass can be retried
-        // by the same tick's sweep — benign, since an hour has genuinely elapsed since it failed.
-        // (It happens to equal ClearDatabaseService.Delay, but nothing requires that: a longer
-        // or shorter sweep period only shifts when the first retry lands.) The cost of a whole
-        // hour is that a failure mid-interval waits up to 2h for it. The growth keeps a longer
-        // outage from costing the sensor a full day of disabled self-destroy; the cap keeps a
-        // permanently broken database at the #1296 anti-storm budget.
+        // Bounded retry of failed loads (#1344), capped exponential backoff: 1h, then 2h, 4h, 8h,
+        // 16h, settling at one attempt per sensor per day. The first delay has to outlast the
+        // eager CheckSensorsHistoryAsync pass that runs one await before the sweep, so a failure
+        // that pass just observed is never retried back-to-back against a still-broken database.
+        // Rationale and costs: aicontext/features/server/overview.md.
         private static readonly TimeSpan HistoryLoadFirstRetryDelay = TimeSpan.FromHours(1);
 
         private static readonly TimeSpan HistoryLoadMaxRetryInterval = TimeSpan.FromHours(24);
 
         // Last backoff rung: 1h doubled five times is 32h, already past the cap. The retry
         // counter is clamped here, so the doubling below cannot run away.
-        private const int MaxRetryBackoffShift = 5;
+        private const int MaxRetryBackoffRung = 5;
 
         // Ticks of the last load attempt, successful or not (0 = never); guarded by _lock.
         // The first retry is measured from this stamp — from the failure itself.
@@ -70,8 +63,9 @@ namespace HSMServer.Core.Model
         // Retries performed so far; guarded by _lock. Drives the backoff step above.
         private int _loadRetryCount;
 
-        // Set by a successful retry, cleared for good once the cache is seen non-empty; see
-        // HistoryRestoredByRetry.
+        // Set by a successful retry, cleared by the first value ingestion stores. Cleared at the
+        // write rather than tested against HasData on read, so a later retention pass or history
+        // clear cannot resurrect the degraded state of a sensor that recovered long ago.
         private volatile bool _historyRestoredByRetry;
 
         // _historyLoaded alone would suffice here (it is written only inside Initialize's try,
@@ -81,20 +75,7 @@ namespace HSMServer.Core.Model
 
         internal override bool HistoryLoadFailed => _isInitialized && !_historyLoaded;
 
-        internal override bool HistoryRestoredByRetry
-        {
-            get
-            {
-                // One-way reset: the sensor stopped being degraded the moment ingestion refilled
-                // the cache, and it must not become degraded again when a later retention pass
-                // or history clear empties that cache. Clearing here rather than testing
-                // !HasData on every read is what makes that permanent.
-                if (_historyRestoredByRetry && Storage.HasData)
-                    _historyRestoredByRetry = false;
-
-                return _historyRestoredByRetry;
-            }
-        }
+        internal override bool HistoryRestoredByRetry => _historyRestoredByRetry;
 
         protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 
         {
@@ -122,6 +103,8 @@ namespace HSMServer.Core.Model
 
             if (value?.IsTimeout ?? false)
             {
+                // Not a real value: a marker leaves the cache empty, so the sensor stays
+                // degraded (see _historyRestoredByRetry).
                 Storage.AddValueBase((T)value);
                 ReceivedNewValue?.Invoke(value);
                 return true;
@@ -145,7 +128,14 @@ namespace HSMServer.Core.Model
                     if (!AggregateValues)
                         Storage.AddValue(validatedValue);
 
+                    _historyRestoredByRetry = false;
+
                     ReceivedNewValue?.Invoke(validatedValue);
+                }
+                else
+                {
+                    // Aggregated into the cached value: the cache is populated either way.
+                    _historyRestoredByRetry = false;
                 }
             }
 
@@ -266,7 +256,7 @@ namespace HSMServer.Core.Model
 
                 // Clamped at the last rung: the delay is capped there anyway, and a counter that
                 // stopped growing cannot overflow on a sensor that has been failing for years.
-                if (_loadRetryCount < MaxRetryBackoffShift)
+                if (_loadRetryCount < MaxRetryBackoffRung)
                     _loadRetryCount++;
 
                 // What enables the rerun is LoadHistoryUnderLock itself — it bypasses
@@ -386,7 +376,9 @@ namespace HSMServer.Core.Model
                 // Before the log line: an NLog throw must not classify a successful load as failed.
                 _historyLoaded = true;
                 _historyRestoredByRetry = isRetry;
-                _logger.Info($"Sensor {Id} initialized {From}-{To}");
+                _logger.Info(isRetry
+                    ? $"Sensor {Id} history restored by retry {From}-{To} (cache not rebuilt)"
+                    : $"Sensor {Id} initialized {From}-{To}");
             }
             catch (Exception ex)
             {

@@ -670,14 +670,40 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             sensor.TryAddValue(new IntegerValue { Time = DateTime.UtcNow, Status = SensorStatus.Ok, Value = 7 });
 
-            Assert.False(sensor.HistoryRestoredByRetry, "the sensor is no longer degraded once it reports");
-
-            // A later retention pass or history clear empties the cache again. That must not
+            // Deliberately NOT read between the value and the clear: the flag must be cleared by
+            // the write itself, not by whoever happens to observe it while the cache is full. A
+            // retention pass or a history clear then empties the cache again, and that must not
             // resurrect the warning months after the sensor recovered.
             sensor.Clear(DateTime.MaxValue);
 
             Assert.False(sensor.HasData, "test premise: the clear emptied the cache");
             Assert.False(sensor.HistoryRestoredByRetry, "a routine history clear resurrected the degraded warning");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void HistoryRestoredByRetry_TimeoutMarkerAloneLeavesTheSensorDegraded()
+        {
+            // Control for the test above: a marker leaves the value cache empty, so it is not the
+            // "the sensor reports again" event that ends the degraded state.
+            var freshValue = SensorTestFactory.History(DateTime.UtcNow.AddMinutes(-1), 42);
+
+            var database = new Mock<IDatabaseCore>();
+            database.SetupSequence(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"))
+                .Returns(freshValue);
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(freshValue);
+
+            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: _selfDestroyInterval);
+            var sensor = new IntegerSensorModel(entity, database.Object, null);
+
+            sensor.Initialize();
+            Assert.Equal(HistoryLoadRetryResult.Loaded, sensor.RetryFailedHistoryLoad(DateTime.UtcNow.AddHours(2)));
+
+            var markerTime = DateTime.UtcNow;
+            sensor.TryAddValue(new IntegerValue { Time = markerTime, ReceivingTime = markerTime, Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
+
+            Assert.True(sensor.HistoryRestoredByRetry, "a timeout marker ended the degraded state without refilling the cache");
         }
 
         [Fact]

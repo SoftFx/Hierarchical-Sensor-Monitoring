@@ -103,10 +103,10 @@ namespace HSMServer.Core.Model
         internal abstract bool HistoryLoadFailed { get; }
 
         // True while a sensor is running on a retry-restored load and nothing has refilled its
-        // cache yet: history counts as loaded (self-destroy decides again), but LastValue,
-        // Status, IsExpired and the TTL clocks stay unset until the sensor reports. The sweep
-        // logs these so a successful retry does not simply drop the sensor out of the failed-
-        // load warning and leave the degraded state invisible (#1344).
+        // cache yet: history counts as loaded, but LastValue, Status, IsExpired and the TTL
+        // clocks stay unset until the sensor reports. The sweep logs these, so a successful
+        // retry does not simply drop the sensor out of the failed-load warning and leave the
+        // degraded state invisible (#1344). Latches off for good on the first stored value.
         internal abstract bool HistoryRestoredByRetry { get; }
 
         // Bounded rerun of a failed history load (#1344): bypasses Initialize()'s _isInitialized
@@ -142,35 +142,28 @@ namespace HSMServer.Core.Model
             if (!IsActive(interval) || !IsHistoryLoaded)
                 return false;
 
-            // Storage.To is the newest of the ingestion stamp and the floor a history-load
-            // retry restored; MaxValue only for a sensor that never received a value.
+            // Storage.To is the newest of the ingestion stamp and the floor a history-load retry
+            // restored; MaxValue only for a sensor that never received a value.
             var to = To;
-            var storageActivity = to != DateTime.MaxValue ? to : DateTime.MinValue;
 
-            // With a cached value, the newest of it and the storage signal. LastUpdate alone was
-            // the hazard: on a sensor whose cache is empty — a retention purge, a full history
-            // clear, or a history-load retry, which restores the floor but never the cache —
-            // AddValueBase accepts the next value whatever its timestamp, because the
-            // newest-wins guard needs a _lastValue to compare against. So one out-of-order value
-            // (a reconnecting collector flushing a stale queue) flipped HasData and hid the
-            // freshly restored floor behind its own old LastUpdate.
+            // With a cached value, the newest of it and To. LastUpdate alone was the hazard: on a
+            // sensor whose cache is empty — a retention purge, a history clear, or a retry, which
+            // restores the floor but never the cache — AddValueBase accepts the next value
+            // whatever its timestamp, its newest-wins guard having no _lastValue to compare
+            // against. So one out-of-order value hid the freshly restored floor behind its own
+            // old LastUpdate.
             //
-            // The timeout marker stays confined to the empty-cache case, deliberately. It is
-            // evidence of when the SERVER noticed the silence, not of sensor activity:
-            // GetTimeoutValue stamps Time = UtcNow at observation, which after a maintenance
-            // window is the restart instant, not the expiry instant. As the last remaining
-            // signal that over-estimate is worth taking (#1328); as a floor under a sensor that
-            // still has a cached value it would postpone every quiet sensor's cleanup by the
-            // server's downtime. Marker .Time, not .LastUpdateTime: GetTimeoutValue copies
-            // LastReceivingTime from the previous value, so LastUpdateTime under-estimates.
-            // One acknowledged exception: a history-load retry whose newest DB row is a marker
-            // records that .Time as the floor, so for that one sensor the over-estimate does
-            // reach this branch through To. Bounded (a single row, once) and conservative.
+            // The timeout marker stays confined to the empty-cache branch: it records when the
+            // SERVER noticed the silence (GetTimeoutValue stamps Time = UtcNow), so after a
+            // maintenance window it carries the restart instant. Worth taking as the last
+            // remaining signal (#1328); as a floor under a sensor that still has a cached value
+            // it would postpone every quiet sensor's cleanup by the server's downtime. Marker
+            // .Time, not .LastUpdateTime, which copies the previous value's receive time and
+            // under-estimates. Details and the retry's one exception: aicontext/features/server.
             var lastActivity = HasData
-                ? Newest(LastUpdate, storageActivity)
-                : Newest(LastTimeout?.Time ?? DateTime.MinValue, storageActivity);
+                ? Newest(LastUpdate, to != DateTime.MaxValue ? to : DateTime.MinValue)
+                : Newest(LastTimeout?.Time ?? DateTime.MinValue, to != DateTime.MaxValue ? to : CreationDate);
 
-            // CreationDate is the last resort: no signal at all means the sensor never reported.
             return interval.TimeIsUp(lastActivity != DateTime.MinValue ? lastActivity : CreationDate);
         }
 
