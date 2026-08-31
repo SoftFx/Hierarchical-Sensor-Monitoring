@@ -455,11 +455,16 @@ namespace HSMServer.Core.Cache
                     // sweep period. The else if merely keeps the just-initialized case from
                     // taking the sensor lock for nothing.
                     // The retry cap keeps a mass outage from turning this serial loop into a
-                    // synchronized burst of throwing DB reads (see the constant above).
+                    // synchronized burst of throwing DB reads (see the constant above). The
+                    // budget is charged on the return value, not on the call: a sensor merely
+                    // waiting out its backoff does no DB work, and charging it would let the
+                    // sensors early in the enumeration exhaust the cap sweep after sweep and
+                    // starve everything past it — the enumeration order of _sensorsById is
+                    // stable, so those sensors would never be retried at all.
                     else if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed && loadRetries < MaxHistoryLoadRetriesPerSweep)
                     {
-                        sensor.RetryFailedHistoryLoad(utcNow);
-                        loadRetries++;
+                        if (sensor.RetryFailedHistoryLoad(utcNow))
+                            loadRetries++;
                     }
 
                     if (sensor.ShouldDestroy())
@@ -511,10 +516,10 @@ namespace HSMServer.Core.Cache
 
             // Not "deferred": until the bounded retry succeeds, self-destroy stays off for these
             // sensors. Separate from the Info line so operators can alert on it; the id sample
-            // makes the alert diagnosable without grepping hours-old init logs, and the retried
-            // count distinguishes "retries firing and failing" (database still broken) from
-            // "capped out this sweep" (retried == MaxHistoryLoadRetriesPerSweep, picked up
-            // next sweep).
+            // makes the alert diagnosable without grepping hours-old init logs. The retried
+            // count is attempts that actually reached the database this sweep: below the cap it
+            // reads as "the database is still broken", at the cap as "capped out, the rest are
+            // picked up next sweep"; zero means every failed sensor is waiting out its backoff.
             if (failedLoadCount > 0)
                 _logger.Warn($"Sensors self destroy disabled after failed history load for {failedLoadCount} sensor(s) (bounded retry in progress, {loadRetries} retried this sweep, #1344) — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
 

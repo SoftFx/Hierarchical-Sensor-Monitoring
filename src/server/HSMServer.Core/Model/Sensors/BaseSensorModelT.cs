@@ -39,18 +39,21 @@ namespace HSMServer.Core.Model
 
         private readonly object _lock = new();
 
-        // Bounded retry of failed loads (#1344): later retries are spaced at least this far
-        // apart, so a broken database sees at most one retry attempt per sensor per day,
-        // never a per-value storm (#1296).
-        private static readonly TimeSpan HistoryLoadRetryInterval = TimeSpan.FromHours(24);
-
-        // The first retry after a failure only has to clear one maintenance-sweep period
-        // (ClearDatabaseService runs hourly): the sweep that just saw the failure — including
-        // the eager Initialize() CheckSensorsHistoryAsync ran seconds earlier in the same
-        // maintenance tick — must not hit the database back-to-back, but a transient outage
-        // must not cost the sensor a full day of disabled self-destroy waiting for the 24h
-        // gate.
+        // Bounded retry of failed loads (#1344), capped exponential backoff: the first retry
+        // only has to clear one maintenance-sweep period (ClearDatabaseService runs hourly),
+        // then 2h, 4h, 8h, 16h, settling at one attempt per sensor per day. The first delay
+        // keeps the sweep that just observed the failure — including the eager Initialize()
+        // CheckSensorsHistoryAsync ran seconds earlier in the same maintenance tick — from
+        // hitting the database back-to-back; the growth keeps an outage that outlives the
+        // first hour from costing the sensor a full day of disabled self-destroy; the cap
+        // keeps a permanently broken database at the #1296 anti-storm budget.
         private static readonly TimeSpan HistoryLoadFirstRetryDelay = TimeSpan.FromHours(1);
+
+        private static readonly TimeSpan HistoryLoadMaxRetryInterval = TimeSpan.FromHours(24);
+
+        // Last backoff rung: 1h doubled five times is 32h, already past the cap. The retry
+        // counter is clamped here, so the doubling below cannot run away.
+        private const int MaxRetryBackoffShift = 5;
 
         // Ticks of the last load attempt, successful or not (0 = never); guarded by _lock.
         // The first retry is measured from this stamp — from the failure itself.
@@ -59,6 +62,9 @@ namespace HSMServer.Core.Model
         // Ticks of the last retry attempt (0 = never retried); guarded by _lock. Later
         // retries are measured from this stamp.
         private long _lastLoadRetryTicks;
+
+        // Retries performed so far; guarded by _lock. Drives the backoff step above.
+        private int _loadRetryCount;
 
         // _historyLoaded alone would suffice here (it is written only inside Initialize's try,
         // strictly before the latch); the _isInitialized term documents the publication contract
@@ -189,36 +195,42 @@ namespace HSMServer.Core.Model
         // Rerun the history load after a failure (#1344), from the maintenance sweep only — the
         // per-value paths never retry (#1296). The gate is checked and stamped inside the lock
         // so concurrent sweeps cannot double-fire it.
-        internal override void RetryFailedHistoryLoad(DateTime utcNow)
+        //
+        // Returns true only when the load actually ran, false on every suppressed call: the
+        // sweep charges its per-sweep retry budget on the return value, so a sensor waiting out
+        // its backoff cannot consume a slot another sensor's first retry needs.
+        internal override bool RetryFailedHistoryLoad(DateTime utcNow)
         {
             if (!HistoryLoadFailed)
-                return;
+                return false;
 
             lock (_lock)
             {
                 if (!HistoryLoadFailed)
-                    return;
+                    return false;
 
                 // Two clocks. The FIRST retry is measured from the failed load itself and only
                 // has to clear one sweep period: a failure the current tick just observed — the
                 // eager Initialize() of CheckSensorsHistoryAsync seconds ago, or this sweep's own
                 // Initialize() — must not be retried back-to-back against a possibly still-broken
-                // database, and must not stamp the 24h budget at the moment of the first failure.
-                // Later retries are spaced a full interval from the previous retry.
-                var retriedBefore = _lastLoadRetryTicks != 0L;
+                // database, and must not stamp the backoff at the moment of the first failure.
+                // Later retries are spaced from the previous retry by the growing delay.
+                var retriedBefore = _loadRetryCount != 0;
                 var since = utcNow.Ticks - (retriedBefore ? _lastLoadRetryTicks : _lastLoadAttemptTicks);
-                var delay = retriedBefore ? HistoryLoadRetryInterval : HistoryLoadFirstRetryDelay;
+                var delay = retriedBefore ? NextRetryDelay(_loadRetryCount) : HistoryLoadFirstRetryDelay;
 
-                // Wall clock on purpose (testable — the same utcNow stamps the attempt clocks
-                // inside LoadHistoryUnderLock); a backwards NTP step makes the delta negative —
-                // treat anything below zero as "delay elapsed" so a clock correction cannot
-                // silently suppress retries. Side effect, accepted: such a step also burns the
-                // one-hour first-retry grace (the immediate retry consumes it and re-arms the
-                // sensor at the 24h cadence).
+                // A backwards clock step makes the delta negative — treat anything below zero as
+                // "delay elapsed" so a clock correction cannot suppress retries for as long as
+                // the step lasts. Accepted side effect: such a step spends one backoff rung.
                 if (since >= 0 && since < delay.Ticks)
-                    return;
+                    return false;
 
                 _lastLoadRetryTicks = utcNow.Ticks;
+
+                // Clamped at the last rung: the delay is capped there anyway, and a counter that
+                // stopped growing cannot overflow on a sensor that has been failing for years.
+                if (_loadRetryCount < MaxRetryBackoffShift)
+                    _loadRetryCount++;
 
                 // What enables the rerun is LoadHistoryUnderLock itself — it bypasses
                 // Initialize()'s _isInitialized gate. _isInitialized deliberately stays set:
@@ -228,7 +240,17 @@ namespace HSMServer.Core.Model
                 // about. _historyLoaded needs no assignment here: HistoryLoadFailed being true
                 // already implies it is false, and LoadHistoryUnderLock sets it on completion.
                 LoadHistoryUnderLock(isRetry: true, utcNow);
+
+                return true;
             }
+        }
+
+        // Delay before the retry that follows retryCount retries: 2h, 4h, 8h, 16h, then the cap.
+        private static TimeSpan NextRetryDelay(int retryCount)
+        {
+            var ticks = HistoryLoadFirstRetryDelay.Ticks * (1L << retryCount);
+
+            return ticks >= HistoryLoadMaxRetryInterval.Ticks ? HistoryLoadMaxRetryInterval : TimeSpan.FromTicks(ticks);
         }
 
         // Must be called with _lock held. Publishes the latch (on success OR failure) via its
@@ -253,18 +275,20 @@ namespace HSMServer.Core.Model
         //   ingestion (torn _lastValue/_to, a duplicated newest point in the Plotly cache), and
         //   TryValidate would reach SensorExpired -> SetExpiredSnapshot -> TryAddValue
         //   (notifications and DB writes from the maintenance sweep) plus force IsExpired from
-        //   a stale timeout marker onto a possibly-reporting sensor. The retry is therefore
-        //   write-free except for the two restored activity signals — the timeout marker, or
-        //   Storage.To when the newest DB row is a real value (both newest-wins in
-        //   ValuesStorage, so the worst interleaving with live ingestion is losing the older
-        //   of the two writes; without the To floor a non-marker newest row would restore
-        //   NOTHING, and the latched _historyLoaded would let ShouldDestroy() fall through to
-        //   CreationDate and delete an established sensor whose newest value is minutes old —
-        //   the #1328 regression reopened through the retry path) — and Cut below (a bare
-        //   _from assignment; From stays MinValue after a failed load otherwise). The retry's
-        //   purpose — latching _historyLoaded so self-destroy decisions stop being deferred —
-        //   needs nothing more. Limits: a retried sensor's cache, IsExpired and TTL clocks are
-        //   NOT restored; see aicontext/features/server/overview.md (#1344).
+        //   a stale timeout marker onto a possibly-reporting sensor.
+        //
+        // So the retry writes nothing but the activity signal ShouldDestroy()'s empty-cache
+        // fallback keys on, and Cut below. Restoring it is not optional: _historyLoaded latches
+        // on a successful retry, so a retry that restored nothing would let ShouldDestroy() fall
+        // through to CreationDate and delete an established sensor whose newest value is minutes
+        // old — the #1328 regression, reopened through the retry path. Both signals are
+        // newest-wins and neither touches _lastValue or the value cache:
+        //   - newest DB row is a timeout marker -> AddValueBase, which for a marker updates
+        //     _lastTimeout and returns (the virtual call keeps FileValuesStorage's content
+        //     handling, so both load modes store the marker in the same shape);
+        //   - newest DB row is a real value -> SetLastActivity, the To floor.
+        // Limits: a retried sensor's cache, IsExpired and TTL clocks are NOT restored; see
+        // aicontext/features/server/overview.md (#1344).
         private void LoadHistoryUnderLock(bool isRetry, DateTime utcNow)
         {
             // Every attempt stamps the clock, failed or not: the FIRST retry is measured from
@@ -312,24 +336,21 @@ namespace HSMServer.Core.Model
                     }
                     else if (last.IsTimeout)
                     {
-                        Storage.AddTimeoutMarker((T)last);
+                        // Marker-only write: AddValueBase's timeout branch updates _lastTimeout
+                        // and returns without touching _lastValue or the cache.
+                        Storage.AddValueBase((T)last);
                     }
                     else
                     {
-                        // Activity floor for the non-marker newest row: SetLastActivity is
-                        // newest-wins and touches neither _lastValue nor the cache, so live
-                        // ingestion cannot be raced by it.
                         Storage.SetLastActivity(last.Time);
                     }
 
-                    // Both modes, and kept on the retry path on purpose (review #1346 asked
-                    // whether it buys enough): From feeds decisions, not just display —
-                    // KeepHistory retention fires on TimeIsUp(From), so a From left at
-                    // MinValue forever would make every sweep issue a DB range delete for this
-                    // sensor. Accepted race: this bare _from write can interleave with
-                    // ClearSensorHistory's Cut(to) (no shared lock); the worst case is the
-                    // displayed From reverting past a just-completed clear — display-range
-                    // only, no data effect.
+                    // Both modes: From feeds decisions, not just display — KeepHistory
+                    // retention fires on TimeIsUp(From), and only Cut restores the true
+                    // oldest-row time after a failed load left From at MinValue. Accepted
+                    // race: this bare _from write can interleave with ClearSensorHistory's
+                    // Cut(to) (no shared lock); the worst case is the displayed From reverting
+                    // past a just-completed clear — display-range only, no data effect.
                     if (first != null)
                         Storage.Cut(first.Time);
                 }

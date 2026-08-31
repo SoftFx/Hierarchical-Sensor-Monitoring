@@ -92,9 +92,10 @@ namespace HSMServer.Core.Model
         internal abstract bool HistoryLoadFailed { get; }
 
         // Bounded rerun of a failed history load (#1344): bypasses Initialize()'s _isInitialized
-        // gate (the latch itself is not cleared) at most once per retry interval, from the
-        // maintenance sweep only — never from the per-value paths.
-        internal abstract void RetryFailedHistoryLoad(DateTime utcNow);
+        // gate (the latch itself is not cleared) at most once per backoff interval, from the
+        // maintenance sweep only — never from the per-value paths. True only when the load
+        // actually ran; false on a suppressed call, so the sweep can budget real attempts.
+        internal abstract bool RetryFailedHistoryLoad(DateTime utcNow);
 
         // Mirrors the interval states TimeIsUp can actually fire in (None never fires; a Ticks
         // interval with Ticks <= 0 never fires). Used by ShouldDestroy() and by the sweep's

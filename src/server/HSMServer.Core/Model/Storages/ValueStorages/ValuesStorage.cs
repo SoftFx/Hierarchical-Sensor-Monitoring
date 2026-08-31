@@ -54,6 +54,12 @@ namespace HSMServer.Core.Model
         DateTime _from = DateTime.MinValue;
         DateTime _to   = DateTime.MaxValue;
 
+        // Activity floor restored by a history-load retry (#1344), kept apart from _to so the
+        // "_to is stamped together with _lastValue and a _cache enqueue" pairing of AddValueBase
+        // stays intact: a retried sensor must not look like one that has a cached last value.
+        // MinValue = no floor restored.
+        DateTime _lastActivity = DateTime.MinValue;
+
         private bool IsLastEmptyOrTimeout => LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime;
 
         internal override T LastDbValue => _cache.LastOrDefault();
@@ -65,7 +71,24 @@ namespace HSMServer.Core.Model
         internal override bool HasData => !_cache.IsEmpty;
 
         internal override DateTime From => _from;
-        internal override DateTime To => _to;
+
+        // Newest of the ingestion stamp and the retry-restored floor; MaxValue keeps its
+        // "never received a value" meaning. Maxing at read time (instead of writing _to) is
+        // what makes SetLastActivity safe against lock-free ingestion: neither writer can
+        // lose the other's newer timestamp.
+        internal override DateTime To
+        {
+            get
+            {
+                var to = _to;
+                var floor = _lastActivity;
+
+                if (to == DateTime.MaxValue)
+                    return floor == DateTime.MinValue ? DateTime.MaxValue : floor;
+
+                return to > floor ? to : floor;
+            }
+        }
 
         internal virtual T CalculateStatistics(T value) => value;
 
@@ -78,11 +101,13 @@ namespace HSMServer.Core.Model
         {
             if (value.IsTimeout)
             {
-                // A timeout marker must never fall through to the value branch below: a marker
-                // that loses the newest-wins comparison is stale (a duplicate or out-of-order
-                // marker via TryAddValue), and enqueueing it used to flip HasData and install
-                // a timeout value as _lastValue.
-                AddTimeoutMarker(value);
+                // Newest-wins marker update, and a hard stop: a marker that loses the
+                // comparison is stale (a duplicate or out-of-order marker via TryAddValue) and
+                // must never fall through to the value branch below, which would flip HasData
+                // and install a timeout value as _lastValue.
+                if (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime)
+                    _lastTimeout = value;
+
                 return;
             }
 
@@ -98,31 +123,15 @@ namespace HSMServer.Core.Model
             }
         }
 
-        // Newest-wins update of the timeout-marker signal; true when value is a timeout marker
-        // newer than the recorded one (false for regular values and stale markers). Shared by
-        // AddValueBase above and by the retry path below.
-        internal bool AddTimeoutMarker(T value)
-        {
-            if (value.IsTimeout && (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime))
-            {
-                _lastTimeout = value;
-                return true;
-            }
-
-            return false;
-        }
-
-        // Retry-only write (#1344): restores the Storage.To activity floor ShouldDestroy()'s
-        // empty-cache fallback keys on when the newest DB row is a real value, not a timeout
-        // marker, without touching _lastValue/_cache. Same concurrency discipline as
-        // AddTimeoutMarker: the retry (RetryFailedHistoryLoad) runs while ingestion is
-        // lock-free and ValuesStorage is not safe for concurrent writes, so this is
-        // newest-wins — a concurrent AddValueBase that already stamped a newer _to must not
-        // be overwritten by an older DB row.
+        // Retry-only write (#1344): restores the activity floor ShouldDestroy()'s empty-cache
+        // fallback keys on when the newest DB row is a real value, not a timeout marker.
+        // Touches neither _lastValue nor _cache, and writes its own field rather than _to, so
+        // the worst interleaving with lock-free ingestion is a redundant write of an older
+        // timestamp into _lastActivity — To maxes over both and cannot regress.
         internal void SetLastActivity(DateTime time)
         {
-            if (_to == DateTime.MaxValue || _to < time)
-                _to = time;
+            if (_lastActivity < time)
+                _lastActivity = time;
         }
 
         internal override bool TryChangeLastValue(BaseValue value)

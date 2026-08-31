@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.Formatters;
@@ -223,9 +223,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void RetryFailedHistoryLoad_StillBrokenDb_IsRateLimited()
         {
             // The latch exists to prevent a per-value retry storm (#1296): a still-broken
-            // database must see at most one retry per retry interval, not one per sweep tick.
-            // Two gates: the first retry has to clear one sweep period measured from the
-            // FAILURE, later retries a full 24h measured from the previous retry.
+            // database must see at most one retry per backoff interval, not one per sweep tick.
+            // The first retry clears one sweep period measured from the FAILURE, later retries
+            // the growing delay measured from the previous retry.
             var (sensor, database) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
             database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
                 .Throws(new IOException("database is broken"));
@@ -235,20 +235,83 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var now = DateTime.UtcNow;
 
             // Same tick as the failure — suppressed (one sweep period has not passed).
-            sensor.RetryFailedHistoryLoad(now);
+            Assert.False(sensor.RetryFailedHistoryLoad(now));
             database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Once,
                 "a same-tick retry hit the database back-to-back with the failed load");
 
-            sensor.RetryFailedHistoryLoad(now.AddHours(1));
-            sensor.RetryFailedHistoryLoad(now.AddHours(2));
+            Assert.True(sensor.RetryFailedHistoryLoad(now.AddHours(1)));
+            Assert.False(sensor.RetryFailedHistoryLoad(now.AddHours(2)));
 
             database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Exactly(2),
-                "retry must fire at most once per retry interval");
+                "retry must fire at most once per backoff interval");
             Assert.True(sensor.HistoryLoadFailed, "retry against a broken DB must re-latch as failed");
 
-            sensor.RetryFailedHistoryLoad(now.AddHours(25));
+            Assert.True(sensor.RetryFailedHistoryLoad(now.AddHours(25)));
             database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()), Times.Exactly(3),
                 "retry must fire again once the interval has passed");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void RetryFailedHistoryLoad_StillBrokenDb_BacksOffFromOneHourTowardsTheDailyCap()
+        {
+            // Review finding on #1346: a flat 1h -> 24h step made any outage that outlived its
+            // first hour cost the sensor a full day of disabled self-destroy, even though the
+            // sweep runs hourly. The schedule is 1h, then 2h, 4h, 8h, 16h, then the 24h cap.
+            var (sensor, database) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"));
+
+            sensor.Initialize();
+
+            var failedAt = DateTime.UtcNow;
+            // Each rung: the sweep one hour early is suppressed, the sweep on time fires.
+            var schedule = new[] { 1d, 3d, 7d, 15d, 31d, 55d };
+
+            for (var rung = 0; rung < schedule.Length; rung++)
+            {
+                var due = failedAt.AddHours(schedule[rung]);
+
+                Assert.False(sensor.RetryFailedHistoryLoad(due.AddHours(-1)),
+                    $"retry {rung + 1} fired an hour before its backoff elapsed");
+                Assert.True(sensor.RetryFailedHistoryLoad(due),
+                    $"retry {rung + 1} did not fire once its backoff elapsed");
+            }
+
+            // The last two rungs are 24h apart: the cap holds, so a permanently broken database
+            // still sees at most one attempt per sensor per day (#1296).
+            Assert.Equal(24d, schedule[^1] - schedule[^2]);
+            database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()),
+                Times.Exactly(schedule.Length + 1), "one failed load plus one DB read per rung");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void RetryFailedHistoryLoad_ReportsWhetherTheLoadRan()
+        {
+            // The sweep charges its per-sweep retry cap on this return value. Counting calls
+            // instead would let the sensors early in the (stable) enumeration order exhaust the
+            // cap with suppressed no-ops sweep after sweep and permanently starve every sensor
+            // past it — the mass-outage case the cap exists for.
+            var (healthy, _) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
+            healthy.Initialize();
+
+            Assert.False(healthy.RetryFailedHistoryLoad(DateTime.UtcNow.AddHours(2)),
+                "a sensor whose load succeeded must not consume the sweep's retry budget");
+
+            var (sensor, database) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"));
+            sensor.Initialize();
+
+            var now = DateTime.UtcNow;
+
+            Assert.False(sensor.RetryFailedHistoryLoad(now),
+                "a sensor still inside its backoff must not consume the sweep's retry budget");
+            Assert.True(sensor.RetryFailedHistoryLoad(now.AddHours(1)),
+                "a retry that reached the database must consume the sweep's retry budget");
+            Assert.False(sensor.RetryFailedHistoryLoad(now.AddHours(1)),
+                "the retry that just ran must not be charged twice in the same sweep");
         }
 
         [Fact]
@@ -416,6 +479,41 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.True(sensor.IsHistoryLoaded, "the same-tick retry burned the 24h budget");
             Assert.True(sensor.ShouldDestroy(), "stale history must be destroyable after the retry");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void RetryFailedHistoryLoad_RestoredActivityFloor_SurvivesAnOlderIncomingValue()
+        {
+            // Review finding on #1346: writing the floor straight into _to made it just another
+            // ingestion stamp, and AddValueBase overwrites _to unconditionally while _lastValue
+            // is null — which it is on a retried sensor. So the next out-of-order value (a
+            // backfill, a client with a skewed clock) dragged To back below the newest row the
+            // retry had just certified. The floor lives in its own field and is merged into To
+            // at read time instead, so it cannot be overwritten — only outgrown.
+            var newestRowTime = DateTime.UtcNow.AddMinutes(-30);
+            var newestRow = SensorTestFactory.History(newestRowTime, 42);
+
+            var database = new Mock<IDatabaseCore>();
+            database.SetupSequence(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"))
+                .Returns(newestRow);
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(newestRow);
+
+            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: _selfDestroyInterval);
+            var sensor = new IntegerSensorModel(entity, database.Object, null);
+
+            sensor.Initialize();
+            Assert.True(sensor.HistoryLoadFailed, "test premise: the lazy load failed");
+            Assert.True(sensor.RetryFailedHistoryLoad(DateTime.UtcNow.AddHours(2)));
+            Assert.Equal(newestRowTime, sensor.To);
+            Assert.False(sensor.HasData, "test premise: the retry leaves the value cache empty");
+
+            var staleValueTime = DateTime.UtcNow.AddDays(-3);
+            Assert.True(sensor.TryAddValue(new IntegerValue { Time = staleValueTime, Status = SensorStatus.Ok, Value = 7 }),
+                "test premise: an out-of-order value is accepted while LastValue is null");
+
+            Assert.Equal(newestRowTime, sensor.To);
         }
 
         [Fact]
