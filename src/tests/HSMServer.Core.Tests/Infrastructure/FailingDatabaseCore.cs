@@ -64,6 +64,73 @@ namespace HSMServer.Core.Tests.Infrastructure
         public AccessKeyEntity GetAccessKey(Guid id) => _inner.GetAccessKey(id);
         public List<AccessKeyEntity> GetAccessKeys() => _inner.GetAccessKeys();
 
+        // Optional injection point for API token write failures (operation name keyed),
+        // used to verify persist-first publication: a failed write must leave neither
+        // durable nor live state.
+        internal Func<string, bool> ShouldFailApiTokenOp { get; set; }
+
+        public bool TryInsertApiToken(ApiTokenEntity entity)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(TryInsertApiToken)) == true)
+                throw new InvalidOperationException("Simulated DB failure for API token insert");
+
+            return _inner.TryInsertApiToken(entity);
+        }
+
+        public bool TryRotateApiToken(ApiTokenEntity revokedOld, ApiTokenEntity replacement)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(TryRotateApiToken)) == true)
+                throw new InvalidOperationException("Simulated DB failure for API token rotation");
+
+            return _inner.TryRotateApiToken(revokedOld, replacement);
+        }
+
+        public void PutApiToken(ApiTokenEntity entity)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(PutApiToken)) == true)
+                throw new InvalidOperationException("Simulated DB failure for API token update");
+
+            _inner.PutApiToken(entity);
+        }
+
+        public ApiTokenEntity GetApiToken(string tokenId) => _inner.GetApiToken(tokenId);
+
+        public void RemoveApiToken(string tokenId)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(RemoveApiToken)) == true)
+                throw new InvalidOperationException("Simulated DB failure for API token removal");
+
+            _inner.RemoveApiToken(tokenId);
+        }
+
+        public List<ApiTokenEntity> GetAllApiTokens() => _inner.GetAllApiTokens();
+
+        public long GetGlobalRevocationGeneration()
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(GetGlobalRevocationGeneration)) == true)
+                throw new InvalidOperationException("Simulated DB failure for generation read");
+
+            return _inner.GetGlobalRevocationGeneration();
+        }
+
+        public long AdvanceGlobalRevocationGeneration()
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(AdvanceGlobalRevocationGeneration)) == true)
+                throw new InvalidOperationException("Simulated DB failure for global generation advance");
+
+            return _inner.AdvanceGlobalRevocationGeneration();
+        }
+
+        public long GetOwnerRevocationGeneration(Guid ownerUserId) => _inner.GetOwnerRevocationGeneration(ownerUserId);
+
+        public long AdvanceOwnerRevocationGeneration(Guid ownerUserId)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(AdvanceOwnerRevocationGeneration)) == true)
+                throw new InvalidOperationException("Simulated DB failure for owner generation advance");
+
+            return _inner.AdvanceOwnerRevocationGeneration(ownerUserId);
+        }
+
         public void AddSensor(SensorEntity entity)
         {
             if (_shouldFail(entity))

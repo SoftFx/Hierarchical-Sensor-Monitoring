@@ -857,6 +857,181 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
+        #region Api tokens
+
+        // Key layout: "ApiToken_<tokenId>" rows hold ApiTokenEntity values, revocation
+        // generations live under "ApiTokenGeneration_*". The prefixes differ after the
+        // "ApiToken" stem, so the ReadAllApiTokens scan cannot pick generation rows up.
+        // Unlike the neighboring regions, Api token writes do NOT swallow storage failures:
+        // insert/rotate/generation failures must be observable by the caller so that a failed
+        // write leaves neither durable nor live state.
+
+        private const string ApiTokenPrefix = "ApiToken_";
+        private const string ApiTokenGlobalGenerationKey = "ApiTokenGeneration_Global";
+        private const string ApiTokenOwnerGenerationPrefix = "ApiTokenGeneration_Owner_";
+
+        // Serializes the check-then-write token sequences inside the store boundary so that
+        // an existence check and a write can never interleave from two threads.
+        private readonly object _apiTokenLock = new();
+
+
+        private static byte[] GetApiTokenKey(string tokenId) => Encoding.UTF8.GetBytes(ApiTokenPrefix + tokenId);
+
+
+        // Persist-first creation primitive: the TokenId existence check and the row write run
+        // under _apiTokenLock, never as an unlocked read plus Put. Returns false when the
+        // TokenId already exists — the caller must discard the whole candidate and retry with
+        // a completely new id/secret pair. Throws ServerDatabaseException on write failure,
+        // leaving no durable state behind.
+        public bool TryInsertApiToken(ApiTokenEntity entity)
+        {
+            lock (_apiTokenLock)
+            {
+                if (_database.TryRead(GetApiTokenKey(entity.TokenId), out _))
+                    return false;
+
+                _database.Put(GetApiTokenKey(entity.TokenId), JsonSerializer.SerializeToUtf8Bytes(entity));
+
+                return true;
+            }
+        }
+
+        // Atomic rotation: writes the revoked predecessor and its replacement in a single
+        // LevelDB batch so no reader can observe the pair half-rotated. Same collision and
+        // failure contract as TryInsertApiToken.
+        public bool TryRotateApiToken(ApiTokenEntity revokedOld, ApiTokenEntity replacement)
+        {
+            lock (_apiTokenLock)
+            {
+                if (_database.TryRead(GetApiTokenKey(replacement.TokenId), out _))
+                    return false;
+
+                _database.PutBatch(
+                [
+                    (GetApiTokenKey(revokedOld.TokenId), JsonSerializer.SerializeToUtf8Bytes(revokedOld)),
+                    (GetApiTokenKey(replacement.TokenId), JsonSerializer.SerializeToUtf8Bytes(replacement)),
+                ]);
+
+                return true;
+            }
+        }
+
+        // Full-row update for lifecycle transitions (revoke, restrict). Propagates storage
+        // failures: a silently dropped revocation would resurface after restart.
+        public void PutApiToken(ApiTokenEntity entity)
+        {
+            lock (_apiTokenLock)
+            {
+                _database.Put(GetApiTokenKey(entity.TokenId), JsonSerializer.SerializeToUtf8Bytes(entity));
+            }
+        }
+
+        // Single-record read for the authentication path. A read or deserialize failure logs
+        // and returns null, which the caller must treat as a failed (closed) authentication.
+        public ApiTokenEntity GetApiToken(string tokenId)
+        {
+            try
+            {
+                return _database.TryRead(GetApiTokenKey(tokenId), out byte[] value)
+                    ? JsonSerializer.Deserialize<ApiTokenEntity>(Encoding.UTF8.GetString(value))
+                    : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to read API token by token id");
+            }
+
+            return null;
+        }
+
+        public void RemoveApiToken(string tokenId)
+        {
+            try
+            {
+                lock (_apiTokenLock)
+                {
+                    _database.Delete(GetApiTokenKey(tokenId));
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to remove API token by token id");
+            }
+        }
+
+        // Full scan used to rebuild the in-memory authentication index at startup. Corrupt
+        // records are skipped and logged; a skipped record simply never authenticates.
+        public List<ApiTokenEntity> ReadAllApiTokens()
+        {
+            var tokens = new List<ApiTokenEntity>();
+
+            try
+            {
+                var values = _database.GetAllStartingWith(Encoding.UTF8.GetBytes(ApiTokenPrefix));
+
+                foreach (var value in values)
+                {
+                    try
+                    {
+                        tokens.Add(JsonSerializer.Deserialize<ApiTokenEntity>(Encoding.UTF8.GetString(value)));
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error(e, "Failed to deserialize an ApiTokenEntity, record skipped");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to read API tokens");
+            }
+
+            return tokens;
+        }
+
+        // Durable revocation generations. Missing state reads as 0 (fresh installation
+        // baseline); corrupt state throws so the caller can fail authentication closed.
+        // Advance persists the new generation before it is published to authentication.
+
+        public long GetGlobalRevocationGeneration() => ReadRevocationGeneration(ApiTokenGlobalGenerationKey);
+
+        public long AdvanceGlobalRevocationGeneration()
+        {
+            lock (_apiTokenLock)
+                return WriteRevocationGeneration(ApiTokenGlobalGenerationKey, ReadRevocationGeneration(ApiTokenGlobalGenerationKey) + 1);
+        }
+
+        public long GetOwnerRevocationGeneration(Guid ownerUserId) =>
+            ReadRevocationGeneration(ApiTokenOwnerGenerationPrefix + ownerUserId);
+
+        public long AdvanceOwnerRevocationGeneration(Guid ownerUserId)
+        {
+            var key = ApiTokenOwnerGenerationPrefix + ownerUserId;
+
+            lock (_apiTokenLock)
+                return WriteRevocationGeneration(key, ReadRevocationGeneration(key) + 1);
+        }
+
+        private long ReadRevocationGeneration(string key)
+        {
+            if (!_database.TryRead(Encoding.UTF8.GetBytes(key), out byte[] value))
+                return 0;
+
+            if (!long.TryParse(Encoding.UTF8.GetString(value), out var generation))
+                throw new ServerDatabaseException($"Corrupt revocation generation state under key {key}");
+
+            return generation;
+        }
+
+        private long WriteRevocationGeneration(string key, long generation)
+        {
+            _database.Put(Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(generation.ToString()));
+
+            return generation;
+        }
+
+        #endregion
+
         public void Compact()
         {
             _database.Compact();

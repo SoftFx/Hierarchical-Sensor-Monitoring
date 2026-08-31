@@ -44,6 +44,35 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
+        #region Api tokens
+
+        // Persist-first token creation: false on TokenId collision (retry with a fresh
+        // id/secret pair), throws on write failure leaving no durable state.
+        bool TryInsertApiToken(ApiTokenEntity entity);
+
+        // Atomic old-revoke + replacement-insert in one write batch; same collision/failure
+        // contract as TryInsertApiToken.
+        bool TryRotateApiToken(ApiTokenEntity revokedOld, ApiTokenEntity replacement);
+
+        // Full-row lifecycle update (revoke, restrict); propagates storage failures.
+        void PutApiToken(ApiTokenEntity entity);
+
+        // Single-record read for authentication; null means missing or unreadable (fail closed).
+        ApiTokenEntity GetApiToken(string tokenId);
+
+        // Best-effort retention cleanup removal.
+        void RemoveApiToken(string tokenId);
+
+        // Full scan to rebuild the authentication index at startup; corrupt records skipped.
+        List<ApiTokenEntity> ReadAllApiTokens();
+
+        long GetGlobalRevocationGeneration();
+        long AdvanceGlobalRevocationGeneration();
+        long GetOwnerRevocationGeneration(Guid ownerUserId);
+        long AdvanceOwnerRevocationGeneration(Guid ownerUserId);
+
+        #endregion
+
         #region Sensors
 
         void AddSensorIdToList(string sensorId);

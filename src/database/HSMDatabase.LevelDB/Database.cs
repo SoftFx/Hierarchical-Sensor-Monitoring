@@ -148,6 +148,30 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        // Atomically applies all puts and deletes as a single LevelDB write batch. Used for
+        // multi-row token lifecycle transitions (e.g. rotation) that must not be observed
+        // half-applied. Throws ServerDatabaseException on failure, leaving the batch unapplied.
+        public void PutBatch(IReadOnlyList<(byte[] key, byte[] value)> puts, IReadOnlyList<byte[]> deletes = null)
+        {
+            using var batch = new WriteBatch();
+
+            foreach (var (key, value) in puts)
+                batch.Put(key, value);
+
+            if (deletes is not null)
+                foreach (var key in deletes)
+                    batch.Delete(key);
+
+            try
+            {
+                _database.Write(batch);
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
         public byte[] Get(byte[] key, byte[] prefix)
         {
             Iterator iterator = null;

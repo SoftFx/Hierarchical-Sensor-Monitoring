@@ -500,6 +500,33 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
+        #region Api tokens
+
+        public bool TryInsertApiToken(ApiTokenEntity entity) => _environmentDatabase.TryInsertApiToken(entity);
+
+        public bool TryRotateApiToken(ApiTokenEntity revokedOld, ApiTokenEntity replacement) =>
+            _environmentDatabase.TryRotateApiToken(revokedOld, replacement);
+
+        public void PutApiToken(ApiTokenEntity entity) => _environmentDatabase.PutApiToken(entity);
+
+        public ApiTokenEntity GetApiToken(string tokenId) => _environmentDatabase.GetApiToken(tokenId);
+
+        public void RemoveApiToken(string tokenId) => _environmentDatabase.RemoveApiToken(tokenId);
+
+        public List<ApiTokenEntity> GetAllApiTokens() => _environmentDatabase.ReadAllApiTokens();
+
+        public long GetGlobalRevocationGeneration() => _environmentDatabase.GetGlobalRevocationGeneration();
+
+        public long AdvanceGlobalRevocationGeneration() => _environmentDatabase.AdvanceGlobalRevocationGeneration();
+
+        public long GetOwnerRevocationGeneration(Guid ownerUserId) =>
+            _environmentDatabase.GetOwnerRevocationGeneration(ownerUserId);
+
+        public long AdvanceOwnerRevocationGeneration(Guid ownerUserId) =>
+            _environmentDatabase.AdvanceOwnerRevocationGeneration(ownerUserId);
+
+        #endregion
+
         #region Environment database : User
 
         public void AddUser(UserEntity entity) => _environmentDatabase.AddUser(entity);

@@ -57,7 +57,8 @@ namespace HSMServer.ServiceExtensions
             services.AddAsyncStorage<IUserManager, UserManager>()
                     .AddAsyncStorage<IFolderManager, FolderManager>()
                     .AddAsyncStorage<IChatsManager, ChatsManager>()
-                    .AddAsyncStorage<IDashboardManager, DashboardManager>();
+                    .AddAsyncStorage<IDashboardManager, DashboardManager>()
+                    .AddAsyncStorage<IApiTokenManager, ApiTokenManager>();
 
             services.AddSingleton<DataCollectorWrapper>()
                     .AddSingleton<TreeViewModel>()
