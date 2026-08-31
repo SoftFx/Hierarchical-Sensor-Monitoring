@@ -12,9 +12,6 @@ namespace HSMServer.Authentication
     // serialized records are stable.
     public static class ApiTokenGrants
     {
-        public static bool AreValid(IEnumerable<ApiTokenGrantEntity> grants) => TryCanonicalize(grants, out _);
-
-
         public static bool TryCanonicalize(IEnumerable<ApiTokenGrantEntity> grants, out List<ApiTokenGrantEntity> canonical)
         {
             canonical = null;
@@ -30,7 +27,9 @@ namespace HSMServer.Authentication
                 if (!ApiTokenOperations.IsValid(grant.Operation))
                     return false;
 
-                if (!Enum.IsDefined(typeof(ApiTokenBoundaryKind), grant.BoundaryKind))
+                // Generic overload: allocation-free, and a change of the enum's underlying
+                // type can no longer turn this into a throw instead of a fail-closed false.
+                if (!Enum.IsDefined((ApiTokenBoundaryKind)grant.BoundaryKind))
                     return false;
 
                 var kind = (ApiTokenBoundaryKind)grant.BoundaryKind;

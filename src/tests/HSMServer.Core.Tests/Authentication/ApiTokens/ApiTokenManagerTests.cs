@@ -450,11 +450,35 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.True(entity.Description.Length <= 1024);
             Assert.All(entity.Description, c => Assert.False(char.IsControl(c)));
 
-            // The revocation reason is sanitized the same way: each control character
-            // (here CR and LF) becomes one space, so nothing can forge log lines.
-            manager.TryRevokeToken(entity.EntityId, "u", "forged\r\nsecond line", out var revoked);
+            // Actor fields get the same treatment as free text.
+            Assert.True(manager.TryCreateToken(OwnerId, "actor-sanitize", null, BuildGrants("alerts:read"), null,
+                "attacker\r\nadmin", out var actorEntity, out _));
 
+            Assert.Equal("attacker  admin", actorEntity.CreatedBy);
+
+            // The revocation reason and the revoking actor are sanitized the same way:
+            // each control character becomes one space, so nothing can forge log lines.
+            manager.TryRevokeToken(entity.EntityId, "attacker\x0000", "forged\r\nsecond line", out var revoked);
+
+            Assert.Equal("attacker", revoked.RevokedBy);
             Assert.Equal("forged  second line", revoked.RevocationReason);
+        }
+
+        [Fact]
+        public void TryCreateToken_TruncationNeverSplitsASurrogatePair()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            // 255 chars + a 2-char surrogate pair: cutting at 256 would leave a lone high
+            // surrogate in the live entity while the JSON row holds U+FFFD after a
+            // round-trip — the cut must back off to 255 instead.
+            var surrogateName = $"{new string('n', 255)}\U0001F600";
+
+            Assert.True(manager.TryCreateToken(OwnerId, surrogateName, null, BuildGrants("alerts:read"), null, "u", out var entity, out _));
+
+            Assert.Equal(255, entity.Name.Length);
+            Assert.All(entity.Name, c => Assert.False(char.IsSurrogate(c)));
         }
 
         [Fact]
@@ -532,6 +556,62 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             manager.TryRevokeToken(entity.EntityId, "u", "gone", out _);
 
             Assert.False(manager.TryRestrictToken(entity.EntityId, BuildGrants("alerts:read"), null, "u", out _));
+        }
+
+        [Fact]
+        public void TryRotateToken_PastRequestedOrInheritedExpiry_IsRefused()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            // Requested shortening into the past: the create-time rule, mirrored.
+            manager.TryCreateToken(OwnerId, "requested-past", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+
+            Assert.False(manager.TryRotateToken(entity.EntityId, DateTime.UtcNow.AddDays(-1), "u", out _, out _));
+            Assert.Null(manager.GetToken(entity.TokenId).RevokedAtUtc);
+
+            // An already-expired source: the replacement would inherit a dead expiry, and
+            // its one-time secret would be disclosed for nothing.
+            var expiredEntityId = Guid.NewGuid();
+
+            _databaseCoreManager.DatabaseCore.PutApiToken(new ApiTokenEntity
+            {
+                EntityVersion = 1,
+                EntityId = expiredEntityId,
+                TokenId = new string('Q', ApiTokenMaterial.TokenIdLength),
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "already-expired",
+                Grants = BuildGrants("alerts:read"),
+                CreatedAtUtc = DateTime.UtcNow.AddDays(-10).Ticks,
+                ExpiresAtUtc = DateTime.UtcNow.AddDays(-1).Ticks,
+            });
+
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            Assert.False(reopened.TryRotateToken(expiredEntityId, null, "u", out _, out _));
+        }
+
+        [Fact]
+        public void Unpublish_RemovesTheRecordFromTheLiveIndex()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            manager.TryCreateToken(OwnerId, "to-unpublish", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+
+            Assert.True(manager.Unpublish(entity.TokenId));
+
+            Assert.Null(manager.GetToken(entity.TokenId));
+            Assert.Null(manager.GetTokenByEntityId(entity.EntityId));
+            Assert.Empty(manager.GetTokensByOwner(OwnerId));
+            Assert.Equal(0, manager.CountQuotaEligibleTokens(OwnerId));
+
+            // Idempotent on the live index; the durable row is the caller's concern.
+            Assert.False(manager.Unpublish(entity.TokenId));
+            Assert.False(manager.Unpublish(null));
         }
 
         [Fact]

@@ -29,7 +29,9 @@ namespace HSMServer.Authentication
         private const int MaxInsertAttempts = 3;
         private const int MaxNameLength = 256;
         private const int MaxDescriptionLength = 1024;
-        private const int MaxReasonLength = 256;
+
+        // Revocation reasons and actor fields (createdBy/restrictedBy/rotatedBy/revokedBy).
+        private const int MaxFreeTextLength = 256;
 
         private readonly IDatabaseCore _databaseCore;
         private readonly ILogger<ApiTokenManager> _logger;
@@ -80,7 +82,7 @@ namespace HSMServer.Authentication
 
             _logger.LogInformation(
                 "API token index initialized: {TokenCount} tokens, global generation {Generation}, healthy = {Healthy}",
-                _tokensByTokenId.Count, _globalGeneration, _isGenerationStateHealthy);
+                _tokensByTokenId.Count, GlobalRevocationGeneration, _isGenerationStateHealthy);
 
             return Task.CompletedTask;
         }
@@ -118,6 +120,8 @@ namespace HSMServer.Authentication
 
             if (expiryTicks.HasValue && expiryTicks.Value <= DateTime.UtcNow.Ticks)
                 return false;
+
+            var sanitizedCreatedBy = Sanitize(createdBy, MaxFreeTextLength);
 
             lock (_stateLock)
             {
@@ -166,7 +170,7 @@ namespace HSMServer.Authentication
                         Description = sanitizedDescription,
                         Grants = canonicalGrants,
                         CreatedAtUtc = DateTime.UtcNow.Ticks,
-                        CreatedBy = createdBy,
+                        CreatedBy = sanitizedCreatedBy,
                         ExpiresAtUtc = expiryTicks,
                     };
 
@@ -232,7 +236,7 @@ namespace HSMServer.Authentication
                     Grants = canonicalRemaining,
                     ExpiresAtUtc = newExpiry,
                     RestrictedAtUtc = DateTime.UtcNow.Ticks,
-                    RestrictedBy = restrictedBy,
+                    RestrictedBy = Sanitize(restrictedBy, MaxFreeTextLength),
                 };
 
                 return TryPersistAndPublish(restricted, out entity);
@@ -264,6 +268,14 @@ namespace HSMServer.Authentication
 
                 if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
                     return false;
+
+                // Mirror of the create-time rule, on the resulting value: disclosing a
+                // replacement secret that is already expired (requested or inherited)
+                // would hand the caller a dead credential.
+                if (newExpiry.HasValue && newExpiry.Value <= DateTime.UtcNow.Ticks)
+                    return false;
+
+                var sanitizedRotatedBy = Sanitize(rotatedBy, MaxFreeTextLength);
 
                 // Captured under _stateLock, so a concurrent restrict cannot wedge a
                 // just-removed grant into the replacement; inside a try, so an unreadable
@@ -304,7 +316,7 @@ namespace HSMServer.Authentication
                         Description = current.Description,
                         Grants = current.Grants,
                         CreatedAtUtc = now,
-                        CreatedBy = rotatedBy,
+                        CreatedBy = sanitizedRotatedBy,
                         ExpiresAtUtc = newExpiry,
                         RotatedAtUtc = now,
                         RotatedFromEntityId = current.EntityId,
@@ -312,7 +324,7 @@ namespace HSMServer.Authentication
 
                     // The source token is revoked in the same atomic write that inserts the
                     // replacement; both take effect together or not at all.
-                    var revokedOld = current with { RevokedAtUtc = now, RevokedBy = rotatedBy, RevocationReason = "rotated" };
+                    var revokedOld = current with { RevokedAtUtc = now, RevokedBy = sanitizedRotatedBy, RevocationReason = "rotated" };
 
                     ApiTokenMaterial.Clear(material.SecretBytes);
 
@@ -363,8 +375,8 @@ namespace HSMServer.Authentication
                 var revoked = current with
                 {
                     RevokedAtUtc = DateTime.UtcNow.Ticks,
-                    RevokedBy = revokedBy,
-                    RevocationReason = Sanitize(reason, MaxReasonLength),
+                    RevokedBy = Sanitize(revokedBy, MaxFreeTextLength),
+                    RevocationReason = Sanitize(reason, MaxFreeTextLength),
                 };
 
                 return TryPersistAndPublish(revoked, out entity);
@@ -397,6 +409,30 @@ namespace HSMServer.Authentication
                 _ownerGenerations[ownerUserId] = next;
 
                 return next;
+            }
+        }
+
+
+        // Drops a record from the live index after its durable row was deleted (retention
+        // cleanup). Durable removal is the caller's job and must happen FIRST — the reverse
+        // order would let the record rejoin the index after restart. Pure in-memory removal
+        // also makes the record unauthenticable immediately. False when nothing was removed.
+        public bool Unpublish(string tokenId)
+        {
+            if (tokenId is null)
+                return false;
+
+            lock (_stateLock)
+            {
+                if (!_tokensByTokenId.TryRemove(tokenId, out var entity))
+                    return false;
+
+                _tokenIdByEntityId.TryRemove(entity.EntityId, out _);
+
+                if (_tokenIdsByOwner.TryGetValue(entity.OwnerUserId, out var tokenIds))
+                    tokenIds.TryRemove(tokenId, out _);
+
+                return true;
             }
         }
 
@@ -455,28 +491,32 @@ namespace HSMServer.Authentication
         {
             lock (_stateLock)
             {
+                long globalGeneration;
+
                 try
                 {
-                    _globalGeneration = _databaseCore.GetGlobalRevocationGeneration();
+                    globalGeneration = _databaseCore.GetGlobalRevocationGeneration();
 
                     foreach (var ownerUserId in _tokenIdsByOwner.Keys)
                         _ownerGenerations[ownerUserId] = _databaseCore.GetOwnerRevocationGeneration(ownerUserId);
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError(e, "API token revocation generation state is unreadable; all API tokens will fail authentication until reloaded");
+                    _logger.LogError(e, "API token revocation generation state is unreadable; all API tokens will fail authentication until the server is restarted");
 
                     return;
                 }
+
+                Volatile.Write(ref _globalGeneration, globalGeneration);
 
                 // Regressed state (a record issued at a generation newer than the authoritative
                 // one) can only mean damaged generation storage — fail closed as well.
                 foreach (var token in _tokensByTokenId.Values)
                 {
-                    if (token.GlobalRevocationGenerationAtIssue > _globalGeneration ||
+                    if (token.GlobalRevocationGenerationAtIssue > globalGeneration ||
                         token.OwnerRevocationGenerationAtIssue > GetOwnerRevocationGeneration(token.OwnerUserId))
                     {
-                        _logger.LogError("API token revocation generation state is regressed (token entity {EntityId}); all API tokens will fail authentication until reloaded",
+                        _logger.LogError("API token revocation generation state is regressed (token entity {EntityId}); all API tokens will fail authentication until the server is restarted",
                             token.EntityId);
 
                         return;
@@ -573,7 +613,9 @@ namespace HSMServer.Authentication
 
         // Bounds and neutralizes free text before it is persisted or logged: control
         // characters (log forging, UI rendering) become spaces, then the value is trimmed
-        // and truncated to the per-field limit.
+        // and truncated to the per-field limit. Truncation backs off one char when the cut
+        // would split a surrogate pair — a lone high surrogate in the live entity would
+        // diverge from the U+FFFD the JSON row ends up holding after a round-trip.
         private static string Sanitize(string value, int maxLength)
         {
             if (string.IsNullOrEmpty(value))
@@ -587,7 +629,12 @@ namespace HSMServer.Authentication
 
             var sanitized = new string(chars).Trim();
 
-            return sanitized.Length <= maxLength ? sanitized : sanitized[..maxLength];
+            if (sanitized.Length <= maxLength)
+                return sanitized;
+
+            var cut = char.IsHighSurrogate(sanitized[maxLength - 1]) ? maxLength - 1 : maxLength;
+
+            return sanitized[..cut];
         }
     }
 }

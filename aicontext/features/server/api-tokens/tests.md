@@ -39,13 +39,19 @@ handler PR and extends this file.
 
 - Persist-first: create/rotate/revoke/advance publish only after the durable write; injected write failures (via `FailingDatabaseCore`) leave neither durable nor live state.
 - Create: disclosed full token parses; stored verifier matches the presented secret; restart-safe reload; bad input (empty owner/name, invalid grants, past expiry) rejected; 50 tokens all unique.
-- Create normalizes inputs: `Kind.Unspecified` expiry is read as UTC (no local-zone shift); name/description/reason are control-character-sanitized and length-bounded.
+- Create normalizes inputs: `Kind.Unspecified` expiry is read as UTC (no local-zone shift); name/description/reason/actor fields are control-character-sanitized and length-bounded; truncation never splits a surrogate pair.
 - Revoke: immediate, idempotent, revoked tokens leave the quota count.
 - Restrict: removes grants and shortens expiry (unlimited → finite allowed); expansion of pairs/boundaries and expiry extension rejected with the token unchanged; a revoked token is rejected as terminal.
-- Rotate: fresh EntityId/TokenId/secret, grants and finite expiry preserved (never expanded, never made unlimited), old revoked atomically, quota slot replaced 1:1.
+- Rotate: fresh EntityId/TokenId/secret, grants and finite expiry preserved (never expanded, never made unlimited), old revoked atomically, quota slot replaced 1:1; a past requested or inherited expiry is refused.
 - Generations: global advance invalidates every owner's quota immediately; owner advance invalidates only that owner; an owner with a durable generation but no cached value (post-retention) gets it read and cached on create, staying consistent across restart.
 - Minting fails closed: create/rotate return false (never throw) while generation state is unhealthy or when the owner-generation fallback read hits an unreadable row; no durable or live state is left.
 - Fail closed at load: regressed generation state marks the index unhealthy; unloadable records (bad TokenId shape, null grants, foreign version byte) are skipped and never authenticate; a row with a non-canonical boundary id loads canonicalized and still restricts.
+- `Unpublish` removes a record from all three live maps and is idempotent.
+
+## Operations catalog (`ApiTokenOperationsTests`)
+
+- `All` has no duplicates and every member is accepted by `IsValid` (the management UI renders grant pickers from it).
+- `IsValid` rejects null/empty, whitespace and case variants, and plausible-but-absent operations.
 - Concurrency: parallel creates for one owner all publish while enumeration of the owner index never throws; revoke racing restrict/rotate on one entity never loses the revocation (in-memory and after reopen); parallel generation advances return each durable value exactly once and leave the in-memory values equal to the durable counters.
 
 ## Negative coverage checklist

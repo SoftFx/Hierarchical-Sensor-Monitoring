@@ -49,7 +49,8 @@ namespace HSMServer.Authentication
         // Rotation issues a completely fresh EntityId/TokenId/secret with the same or a
         // strict subset of grants and an expiry no later than the source, and atomically
         // revokes the source token in the same durable write. Never expands grants and never
-        // turns a finite expiry into an unlimited one. Refused, like creation, while
+        // turns a finite expiry into an unlimited one; the resulting expiry must not
+        // already be in the past (requested or inherited). Refused, like creation, while
         // generation state is unhealthy or unreadable.
         bool TryRotateToken(Guid entityId, DateTime? shortenedExpiryUtc, string rotatedBy,
             out ApiTokenEntity entity, out string fullToken);
@@ -60,6 +61,12 @@ namespace HSMServer.Authentication
         // Advances the durable generation (persist first), then publishes it to
         // authentication. Throws on storage failure: no partial state is published.
         long AdvanceGlobalRevocationGeneration();
+
+        // Drops a record from the live authentication index after its durable row was
+        // deleted (retention cleanup). The caller removes the durable row FIRST — the
+        // reverse order would let the record rejoin the index after restart. False when
+        // no live record existed for the TokenId.
+        bool Unpublish(string tokenId);
 
         long AdvanceOwnerRevocationGeneration(Guid ownerUserId);
 

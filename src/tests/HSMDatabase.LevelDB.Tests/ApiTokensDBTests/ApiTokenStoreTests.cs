@@ -15,11 +15,12 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
     {
         private static readonly Guid OwnerId = Guid.NewGuid();
 
-        // 22 canonical Base64URL characters — the real TokenId length — so the keys also
-        // pass the manager-level IsValidTokenId if a literal is ever copied over.
+        // 22 canonical Base64URL characters whose final char has zero trailing bits
+        // ('A'=0, 'Q'=16, 'w'=48), so the keys also pass the manager-level
+        // IsValidTokenId if a literal is ever copied over.
         private static readonly string TokenIdA = new('A', 22);
-        private static readonly string TokenIdB = new('B', 22);
-        private static readonly string TokenIdC = new('C', 22);
+        private static readonly string TokenIdB = new('Q', 22);
+        private static readonly string TokenIdC = new('w', 22);
 
         private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"hsm-api-token-tests-{Guid.NewGuid():N}");
         private readonly EnvironmentDatabaseWorker _worker;
