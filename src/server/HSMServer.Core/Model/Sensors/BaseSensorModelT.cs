@@ -40,16 +40,15 @@ namespace HSMServer.Core.Model
         private readonly object _lock = new();
 
         // Bounded retry of failed loads (#1344), capped exponential backoff: 1h, then 2h, 4h,
-        // 8h, 16h, settling at one attempt per sensor per day. The first delay is one full
-        // maintenance-sweep period (ClearDatabaseService.Delay, currently 1h — keep the two in
-        // step if that is retuned), which is what guarantees the sweep that just observed the
-        // failure — including the eager Initialize() CheckSensorsHistoryAsync ran earlier in the
-        // same maintenance tick, however long that pass takes on a large tree — cannot hit the
-        // database back-to-back. Measuring a full period rather than a fraction of one means the
-        // first retry lands on the first sweep at least an hour after the failure, so a failure
-        // mid-interval waits up to 2h. The growth keeps an outage that outlives that from
-        // costing the sensor a full day of disabled self-destroy; the cap keeps a permanently
-        // broken database at the #1296 anti-storm budget.
+        // 8h, 16h, settling at one attempt per sensor per day. What the first delay must exceed
+        // is the duration of the eager CheckSensorsHistoryAsync pass that runs one await before
+        // the sweep, so a failure that pass just observed is never retried back-to-back against
+        // a possibly still-broken database; an hour clears that with room on any tree size.
+        // (It happens to equal ClearDatabaseService.Delay, but nothing requires that: a longer
+        // or shorter sweep period only shifts when the first retry lands.) The cost of a whole
+        // hour is that a failure mid-interval waits up to 2h for it. The growth keeps a longer
+        // outage from costing the sensor a full day of disabled self-destroy; the cap keeps a
+        // permanently broken database at the #1296 anti-storm budget.
         private static readonly TimeSpan HistoryLoadFirstRetryDelay = TimeSpan.FromHours(1);
 
         private static readonly TimeSpan HistoryLoadMaxRetryInterval = TimeSpan.FromHours(24);
@@ -281,16 +280,20 @@ namespace HSMServer.Core.Model
         //
         // Restoring that signal is not optional: a successful retry latches _historyLoaded, so a
         // retry that restored nothing would let ShouldDestroy() fall through to CreationDate and
-        // delete an established sensor whose newest value is minutes old. Neither write touches
-        // _lastValue or the value cache, and both are newest-wins:
-        //   - timeout marker -> AddValueBase, whose marker branch updates _lastTimeout and
-        //     returns (the virtual call keeps FileValuesStorage's content handling, so both
-        //     modes store the marker in the same shape);
-        //   - real value -> SetLastActivity, the To floor.
-        // Limits: the value cache, IsExpired and the TTL clocks are NOT restored, and the floor
-        // is stamped without validating the row (the cold load skips a policy-rejected newest
-        // row, so a retried sensor can look active where its cleanly-loaded twin would not —
-        // conservative, it destroys later). See aicontext/features/server/overview.md (#1344).
+        // delete an established sensor whose newest value is minutes old.
+        //
+        // The signal is always SetLastActivity, for a marker row as much as for a value row.
+        // Restoring _lastTimeout instead would put a second writer on a field ingestion mutates
+        // lock-free, and its bare read-compare-write can lose an update: a sensor fed only
+        // timeout markers could have its LastTimeout regress to the DB row and be destroyed
+        // while reporting. _lastActivity has exactly one writer (this method, under _lock) and
+        // feeds ShouldDestroy() through To just as well.
+        //
+        // Limits: the value cache, LastTimeout, IsExpired and the TTL clocks are NOT restored,
+        // and the floor is stamped without validating the row (the cold load skips a
+        // policy-rejected newest row, so a retried sensor can look active where its
+        // cleanly-loaded twin would not — conservative, it destroys later). See
+        // aicontext/features/server/overview.md (#1344).
         private void LoadHistoryUnderLock(bool isRetry, DateTime utcNow)
         {
             // Every attempt stamps the clock, failed or not: the first retry is measured from
@@ -336,15 +339,14 @@ namespace HSMServer.Core.Model
                             Storage.AddValue((T)last);
                         }
                     }
-                    else if (last.IsTimeout)
-                    {
-                        // Marker-only write: AddValueBase's timeout branch updates _lastTimeout
-                        // and returns without touching _lastValue or the cache.
-                        Storage.AddValueBase((T)last);
-                    }
                     else
                     {
-                        Storage.SetLastActivity(last.Time);
+                        // Marker .Time, real value .LastUpdateTime: GetTimeoutValue copies
+                        // LastReceivingTime from the previous value, so a marker's
+                        // LastUpdateTime under-estimates activity — while for a real value it
+                        // is what the cold path is judged on, and an aggregated row's
+                        // LastReceivingTime can be days newer than its Time.
+                        Storage.SetLastActivity(last.IsTimeout ? last.Time : last.LastUpdateTime);
                     }
 
                     // Both modes: From feeds decisions, not just display — KeepHistory

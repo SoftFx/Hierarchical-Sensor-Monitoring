@@ -124,9 +124,10 @@ namespace HSMServer.Core.Model
             // The NEWEST of every activity signal we hold, never a priority chain and never a
             // branch that hides one of them: each signal is evidence the sensor was alive at
             // that instant, and evidence is not invalidated by another signal being older.
-            //   - LastUpdate covers the live cache, but an empty cache does not mean "inactive"
-            //     (retention purge, a full history clear, the SetExpiredSnapshot marker — which
-            //     never enters the cache — or a sensor whose history load was retried).
+            //   - LastUpdate covers the live cache (MinValue when there is none), but an empty
+            //     cache does not mean "inactive": retention purge, a full history clear, the
+            //     SetExpiredSnapshot marker — which never enters the cache — or a sensor whose
+            //     history load was retried.
             //   - _lastTimeout is not advanced once a newer real value arrives (a later
             //     re-expiry writes no marker, because SetExpiredSnapshot requires HasData), so
             //     it must not shadow a newer To. Marker .Time, not .LastUpdateTime:
@@ -134,12 +135,15 @@ namespace HSMServer.Core.Model
             //     LastUpdateTime would under-estimate activity.
             //   - To is the newest of the ingestion stamp and the floor a history-load retry
             //     restored; MaxValue only for a sensor that never received a value.
-            // Gating LastUpdate on HasData alone was the hazard: on a sensor whose cache is
-            // empty, AddValueBase accepts the next value whatever its timestamp (the newest-wins
-            // guard needs a _lastValue to compare against), so one out-of-order value — a
-            // reconnecting collector flushing a stale queue — flipped HasData and hid a newer
-            // To behind its own old LastUpdate. CreationDate stays the last resort.
-            var lastActivity = Newest(HasData ? LastUpdate : DateTime.MinValue,
+            // Branching on HasData was the hazard: on a sensor whose cache is empty,
+            // AddValueBase accepts the next value whatever its timestamp (the newest-wins guard
+            // needs a _lastValue to compare against), so one out-of-order value — a reconnecting
+            // collector flushing a stale queue — flipped HasData and hid a newer marker or To
+            // behind its own old LastUpdate. The fold only ever moves the verdict later, so no
+            // sensor is destroyed sooner than before; one TTL-expired sensor lingers up to one
+            // TTL longer, because its marker outlives its last real value by that much.
+            // CreationDate stays the last resort.
+            var lastActivity = Newest(LastUpdate,
                                       Newest(LastTimeout?.Time ?? DateTime.MinValue,
                                              To != DateTime.MaxValue ? To : DateTime.MinValue));
 

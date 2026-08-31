@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.Formatters;
@@ -223,7 +223,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // disable self-destroy until restart. After the DB recovers, the bounded retry must
             // re-evaluate the sensor without a restart. The dead sensor's newest DB row is the
             // SetExpiredSnapshot marker (the usual newest row for a sensor that went quiet), so
-            // the write-free retry restores LastTimeout and ShouldDestroy judges on the marker.
+            // the write-free retry records the marker time as the activity floor and
+            // ShouldDestroy judges on that.
             var staleMarkerTime = DateTime.UtcNow.AddDays(-3);
             var marker = new MemoryPackFormatter().Serialize(
                 new IntegerValue { Time = staleMarkerTime, ReceivingTime = staleMarkerTime, Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
@@ -249,8 +250,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             sensor.RetryFailedHistoryLoad(DateTime.UtcNow.AddHours(2));
 
             Assert.True(sensor.IsHistoryLoaded, "retry did not load history after recovery");
-            Assert.NotNull(sensor.LastTimeout);
-            Assert.Equal(staleMarkerTime, sensor.LastTimeout.Time);
+            Assert.Null(sensor.LastTimeout);
+            Assert.Equal(staleMarkerTime, sensor.To);
             Assert.True(sensor.ShouldDestroy(), "stale history must be destroyable after the retry");
         }
 
@@ -354,11 +355,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void RetryFailedHistoryLoad_HotSensor_DoesNotTouchLiveStorageOrPolicies()
         {
-            // The PR's motivating scenario (#1344): the lazily triggered load fails, the sensor
-            // keeps reporting, the DB recovers, the sweep retries. The retry must only latch
-            // _historyLoaded and restore the marker — no duplicate DB copy of the live value,
-            // no timeout-marker IsExpired forced onto a reporting sensor, no policy fan-out
-            // re-entering TryAddValue, not even the pre-marker value lookup the cold branch does.
+            // The motivating scenario (#1344): the lazily triggered load fails, the sensor keeps
+            // reporting, the DB recovers, the sweep retries. The retry must only latch
+            // _historyLoaded and record the activity floor — no duplicate DB copy of the live
+            // value, no timeout-marker IsExpired forced onto a reporting sensor, no policy
+            // fan-out re-entering TryAddValue, not even the pre-marker value lookup the cold
+            // branch does, and no write to _lastTimeout, which live ingestion owns.
             var staleMarkerTime = DateTime.UtcNow.AddDays(-2);
             var marker = new MemoryPackFormatter().Serialize(
                 new IntegerValue { Time = staleMarkerTime, ReceivingTime = staleMarkerTime, Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
@@ -394,9 +396,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // may appear in a live sensor's Storage.
             Assert.Same(liveValue, sensor.LastValue);
             Assert.Same(liveValue, sensor.LastDbValue);
-            // The marker itself IS restored — write-free except LastTimeout and Cut.
-            Assert.NotNull(sensor.LastTimeout);
-            Assert.Equal(staleMarkerTime, sensor.LastTimeout.Time);
+            // _lastTimeout belongs to ingestion: the retry records the marker's time as the
+            // activity floor instead of racing the value the live path may be writing.
+            Assert.Null(sensor.LastTimeout);
             // Direct discriminator for the guard: the pre-marker lookup is cold-branch-only.
             database.Verify(db => db.GetLatestValue(It.IsAny<Guid>(), staleMarkerTime.Ticks - 1), Times.Never,
                 "retry ran the cold-load pre-marker lookup against a live sensor");
@@ -476,6 +478,61 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.False(sensor.HasData, "retry must not rebuild the live cache");
             Assert.Equal(freshValueTime, sensor.To); // the restored activity floor
             Assert.False(sensor.ShouldDestroy(), "retry destroyed a sensor whose newest value is one minute old");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void RetryFailedHistoryLoad_AggregatedNewestRow_UsesItsLastReceivingTime()
+        {
+            // An AggregateValues sensor folds a run of identical samples into one row whose Time
+            // stays pinned at the first sample while LastReceivingTime advances, and that row is
+            // re-persisted. ShouldDestroy() judges a cached value on LastUpdateTime, so the
+            // restored floor has to use the same field — reading Time would date a week-long
+            // aggregate to its first sample and destroy a sensor that reported an hour ago.
+            var firstSampleTime = DateTime.UtcNow.AddDays(-6);
+            var lastReceivingTime = DateTime.UtcNow.AddMinutes(-10);
+            var aggregatedRow = SensorTestFactory.History(firstSampleTime, 42, lastReceivingTime);
+
+            var database = new Mock<IDatabaseCore>();
+            database.SetupSequence(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"))
+                .Returns(aggregatedRow);
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(aggregatedRow);
+
+            // 1-hour interval: the row's Time is days past it, its LastReceivingTime is not,
+            // so the verdict discriminates which field the floor was taken from.
+            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: _selfDestroyInterval);
+            var sensor = new IntegerSensorModel(entity, database.Object, null);
+
+            sensor.Initialize();
+            Assert.True(sensor.HistoryLoadFailed, "test premise: the lazy load failed");
+
+            Assert.True(sensor.RetryFailedHistoryLoad(DateTime.UtcNow.AddHours(2)));
+
+            Assert.Equal(lastReceivingTime, sensor.To);
+            Assert.False(sensor.ShouldDestroy(),
+                "the floor dated an aggregated row to its first sample and destroyed a live sensor");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void ShouldDestroy_TtlExpiredSensor_IsDeferredByTheMarkerAge()
+        {
+            // Consequence of folding the marker into the decision for cached sensors too: a
+            // TTL-expired sensor lingers up to one TTL past its self-destroy interval, because
+            // GetTimeoutValue stamps the marker at expiry — one TTL after the last real value.
+            // Pinned so the deferral is a contract, not an emergent surprise for an operator
+            // watching sensors outlive their interval.
+            var (sensor, _) = BuildSensor(historyTime: DateTime.UtcNow.AddHours(-2));
+            sensor.Initialize();
+
+            Assert.True(sensor.ShouldDestroy(), "test premise: the 2h-old value is past the 1h interval");
+
+            // The marker the TTL wrote 30 minutes ago: still inside the interval.
+            var markerTime = DateTime.UtcNow.AddMinutes(-30);
+            sensor.TryAddValue(new IntegerValue { Time = markerTime, ReceivingTime = markerTime, Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
+
+            Assert.False(sensor.ShouldDestroy(), "a sensor whose TTL fired 30 minutes ago was destroyed");
         }
 
         [Fact]
