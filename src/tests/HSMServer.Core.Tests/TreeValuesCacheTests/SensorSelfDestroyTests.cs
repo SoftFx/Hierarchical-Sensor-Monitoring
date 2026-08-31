@@ -349,6 +349,39 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Initialization race")]
+        public void RetryFailedHistoryLoad_NewestRowIsFreshRealValue_DoesNotDestroy()
+        {
+            // Review finding on #1346 (blocker): when the newest DB row is a real value — no
+            // TTL configured, or the sensor went quiet without expiring — the retry restores
+            // no timeout marker, and without the Storage.To activity floor the latched
+            // _historyLoaded let ShouldDestroy() fall through to CreationDate, deleting an
+            // established sensor whose newest value is minutes old (the #1328 regression
+            // reopened through the retry path).
+            var freshValueTime = DateTime.UtcNow.AddMinutes(-1);
+            var freshValue = SensorTestFactory.History(freshValueTime, 42);
+
+            var database = new Mock<IDatabaseCore>();
+            database.SetupSequence(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"))
+                .Returns(freshValue);
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(freshValue);
+
+            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: _selfDestroyInterval);
+            var sensor = new IntegerSensorModel(entity, database.Object, null);
+
+            sensor.Initialize();
+            Assert.True(sensor.HistoryLoadFailed, "test premise: the first load failed");
+
+            sensor.RetryFailedHistoryLoad(DateTime.UtcNow.AddHours(2));
+
+            Assert.True(sensor.IsHistoryLoaded, "retry did not latch the history load");
+            Assert.False(sensor.HasData, "retry must not rebuild the live cache");
+            Assert.Equal(freshValueTime, sensor.To); // the restored activity floor
+            Assert.False(sensor.ShouldDestroy(), "retry destroyed a sensor whose newest value is one minute old");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
         public void RetryFailedHistoryLoad_SameTickAsFailedEagerLoad_DoesNotBurnBudget()
         {
             // Review finding on #1346: CheckSensorsHistoryAsync eagerly Initialize()s every
@@ -364,7 +397,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 .Returns(history);
             database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(history);
 
-            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: _selfDestroyInterval);
+            // A fresh CreationDate makes the final assert discriminate: the sensor is young
+            // enough that CreationDate alone never satisfies the interval, so a "destroy"
+            // verdict can only come from the Storage.To floor the retry restores. (The PR
+            // review's variant with the default month-old CreationDate passed via the
+            // CreationDate fallback and certified nothing.)
+            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: _selfDestroyInterval, creationDate: DateTime.UtcNow.AddMinutes(-5));
             var sensor = new IntegerSensorModel(entity, database.Object, null);
 
             sensor.Initialize(); // the eager load fails — T
@@ -378,6 +416,43 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.True(sensor.IsHistoryLoaded, "the same-tick retry burned the 24h budget");
             Assert.True(sensor.ShouldDestroy(), "stale history must be destroyable after the retry");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void TryAddValue_StaleTimeoutMarker_DoesNotEnterValueCache()
+        {
+            // Pins the AddValueBase fall-through fix (review finding on #1346): a timeout
+            // marker that loses the newest-wins comparison is stale (a duplicate or
+            // out-of-order marker) and must be dropped — enqueueing it flipped HasData and
+            // installed a timeout value as LastValue, which ShouldDestroy()'s HasData branch
+            // then judged on.
+            var markerTime = DateTime.UtcNow.AddMinutes(-10);
+            var (sensor, database) = BuildSensor(historyTime: markerTime);
+            var marker = new MemoryPackFormatter().Serialize(
+                new IntegerValue { Time = markerTime, ReceivingTime = markerTime, Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), DateTime.MaxValue.Ticks)).Returns(marker);
+            // No real value before the marker.
+            database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), markerTime.Ticks - 1)).Returns((byte[])null);
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(marker);
+
+            sensor.Initialize();
+            Assert.False(sensor.HasData, "test premise: the marker alone leaves Storage empty");
+
+            // A marker older than the loaded one: loses the newest-wins comparison.
+            var staleMarker = new IntegerValue
+            {
+                Time = markerTime.AddMinutes(-1),
+                ReceivingTime = markerTime.AddMinutes(-1),
+                Status = SensorStatus.Ok,
+                Value = 0,
+                IsTimeout = true,
+            };
+            Assert.True(sensor.TryAddValue(staleMarker), "test premise: the timeout path accepts it");
+
+            Assert.False(sensor.HasData, "a stale timeout marker was enqueued as a regular value");
+            Assert.Null(sensor.LastValue);
+            Assert.Equal(markerTime, sensor.LastTimeout.Time);
         }
 
         [Fact]

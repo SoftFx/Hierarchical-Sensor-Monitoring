@@ -181,7 +181,7 @@ namespace HSMServer.Core.Model
                 if (_isInitialized)
                     return;
 
-                LoadHistoryUnderLock(isRetry: false);
+                LoadHistoryUnderLock(isRetry: false, DateTime.UtcNow);
             }
 
         }
@@ -209,9 +209,12 @@ namespace HSMServer.Core.Model
                 var since = utcNow.Ticks - (retriedBefore ? _lastLoadRetryTicks : _lastLoadAttemptTicks);
                 var delay = retriedBefore ? HistoryLoadRetryInterval : HistoryLoadFirstRetryDelay;
 
-                // Wall clock on purpose (testable); a backwards NTP step makes the delta
-                // negative — treat anything below zero as "delay elapsed" so a clock
-                // correction cannot silently suppress retries.
+                // Wall clock on purpose (testable — the same utcNow stamps the attempt clocks
+                // inside LoadHistoryUnderLock); a backwards NTP step makes the delta negative —
+                // treat anything below zero as "delay elapsed" so a clock correction cannot
+                // silently suppress retries. Side effect, accepted: such a step also burns the
+                // one-hour first-retry grace (the immediate retry consumes it and re-arms the
+                // sensor at the 24h cadence).
                 if (since >= 0 && since < delay.Ticks)
                     return;
 
@@ -224,12 +227,18 @@ namespace HSMServer.Core.Model
                 // re-opening the #1296 hazard the Monitor.IsEntered guard above only warns
                 // about. _historyLoaded needs no assignment here: HistoryLoadFailed being true
                 // already implies it is false, and LoadHistoryUnderLock sets it on completion.
-                LoadHistoryUnderLock(isRetry: true);
+                LoadHistoryUnderLock(isRetry: true, utcNow);
             }
         }
 
         // Must be called with _lock held. Publishes the latch (on success OR failure) via its
         // finally block, so a caller below can never observe an unlatched sensor.
+        //
+        // utcNow is the single clock source for the retry gates: it stamps the attempt clock
+        // below, and RetryFailedHistoryLoad compares its own utcNow against that stamp — mixing
+        // an ambient DateTime.UtcNow here with a caller-supplied utcNow there would make the
+        // first-retry delay compute across two timelines (a back-dated caller clock reads as a
+        // backwards step and fires the retry immediately).
         //
         // isRetry is passed explicitly because it is not inferable from Storage: a live sensor
         // can have a null LastValue (timeout-only traffic, values rejected by validation, or a
@@ -245,18 +254,23 @@ namespace HSMServer.Core.Model
         //   TryValidate would reach SensorExpired -> SetExpiredSnapshot -> TryAddValue
         //   (notifications and DB writes from the maintenance sweep) plus force IsExpired from
         //   a stale timeout marker onto a possibly-reporting sensor. The retry is therefore
-        //   write-free except for the timeout marker (ShouldDestroy's empty-cache fallback keys
-        //   on it; the marker write touches neither _lastValue/_to nor the cache) and Cut
-        //   below (a bare _from assignment; From stays MinValue after a failed load otherwise).
-        //   The retry's purpose — latching _historyLoaded so self-destroy decisions stop being
-        //   deferred — needs nothing more. Limits: a retried sensor's cache, IsExpired and TTL
-        //   clocks are NOT restored; see aicontext/features/server/overview.md (#1344).
-        private void LoadHistoryUnderLock(bool isRetry)
+        //   write-free except for the two restored activity signals — the timeout marker, or
+        //   Storage.To when the newest DB row is a real value (both newest-wins in
+        //   ValuesStorage, so the worst interleaving with live ingestion is losing the older
+        //   of the two writes; without the To floor a non-marker newest row would restore
+        //   NOTHING, and the latched _historyLoaded would let ShouldDestroy() fall through to
+        //   CreationDate and delete an established sensor whose newest value is minutes old —
+        //   the #1328 regression reopened through the retry path) — and Cut below (a bare
+        //   _from assignment; From stays MinValue after a failed load otherwise). The retry's
+        //   purpose — latching _historyLoaded so self-destroy decisions stop being deferred —
+        //   needs nothing more. Limits: a retried sensor's cache, IsExpired and TTL clocks are
+        //   NOT restored; see aicontext/features/server/overview.md (#1344).
+        private void LoadHistoryUnderLock(bool isRetry, DateTime utcNow)
         {
             // Every attempt stamps the clock, failed or not: the FIRST retry is measured from
             // the failure itself, so the sweep that observed the failure cannot fire a
             // back-to-back attempt against a possibly still-broken database.
-            _lastLoadAttemptTicks = DateTime.UtcNow.Ticks;
+            _lastLoadAttemptTicks = utcNow.Ticks;
 
             try
             {
@@ -300,7 +314,22 @@ namespace HSMServer.Core.Model
                     {
                         Storage.AddTimeoutMarker((T)last);
                     }
+                    else
+                    {
+                        // Activity floor for the non-marker newest row: SetLastActivity is
+                        // newest-wins and touches neither _lastValue nor the cache, so live
+                        // ingestion cannot be raced by it.
+                        Storage.SetLastActivity(last.Time);
+                    }
 
+                    // Both modes, and kept on the retry path on purpose (review #1346 asked
+                    // whether it buys enough): From feeds decisions, not just display —
+                    // KeepHistory retention fires on TimeIsUp(From), so a From left at
+                    // MinValue forever would make every sweep issue a DB range delete for this
+                    // sensor. Accepted race: this bare _from write can interleave with
+                    // ClearSensorHistory's Cut(to) (no shared lock); the worst case is the
+                    // displayed From reverting past a just-completed clear — display-range
+                    // only, no data effect.
                     if (first != null)
                         Storage.Cut(first.Time);
                 }
@@ -311,7 +340,12 @@ namespace HSMServer.Core.Model
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Sensor initialization error {Id}");
+                // Distinguish the retry: a failing retry means the database is still broken
+                // after the first-retry grace and the sensor's history stays unloaded — the
+                // actionable case for the sweep's warning line.
+                _logger.Error(ex, isRetry
+                    ? $"Sensor history load retry failed {Id}"
+                    : $"Sensor initialization error {Id}");
             }
             finally
             {

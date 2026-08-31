@@ -76,11 +76,17 @@ namespace HSMServer.Core.Model
 
         internal virtual void AddValueBase(T value)
         {
-            if (value.IsTimeout && (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime))
+            if (value.IsTimeout)
             {
-                _lastTimeout = value;
+                // A timeout marker must never fall through to the value branch below: a marker
+                // that loses the newest-wins comparison is stale (a duplicate or out-of-order
+                // marker via TryAddValue), and enqueueing it used to flip HasData and install
+                // a timeout value as _lastValue.
+                AddTimeoutMarker(value);
+                return;
             }
-            else if (_lastValue is null || value.Time >= _lastValue.Time)
+
+            if (_lastValue is null || value.Time >= _lastValue.Time)
             {
                 _lastValue = value;
                 _to = value.Time;
@@ -92,16 +98,31 @@ namespace HSMServer.Core.Model
             }
         }
 
-        // Retry-only write (#1344): restores the timeout-marker signal ShouldDestroy()'s
-        // empty-cache fallback keys on, without touching _lastValue/_to/_cache. The retry
-        // (RetryFailedHistoryLoad) runs while ingestion is lock-free and ValuesStorage is not
-        // safe for concurrent writes, but this marker write carries none of that hazard: it
-        // applies the same newest-wins guard as AddValueBase, so the worst interleaving with
-        // a concurrent marker from ingestion is losing the older of the two.
-        internal void AddTimeoutMarker(T value)
+        // Newest-wins update of the timeout-marker signal; true when value is a timeout marker
+        // newer than the recorded one (false for regular values and stale markers). Shared by
+        // AddValueBase above and by the retry path below.
+        internal bool AddTimeoutMarker(T value)
         {
             if (value.IsTimeout && (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime))
+            {
                 _lastTimeout = value;
+                return true;
+            }
+
+            return false;
+        }
+
+        // Retry-only write (#1344): restores the Storage.To activity floor ShouldDestroy()'s
+        // empty-cache fallback keys on when the newest DB row is a real value, not a timeout
+        // marker, without touching _lastValue/_cache. Same concurrency discipline as
+        // AddTimeoutMarker: the retry (RetryFailedHistoryLoad) runs while ingestion is
+        // lock-free and ValuesStorage is not safe for concurrent writes, so this is
+        // newest-wins — a concurrent AddValueBase that already stamped a newer _to must not
+        // be overwritten by an older DB row.
+        internal void SetLastActivity(DateTime time)
+        {
+            if (_to == DateTime.MaxValue || _to < time)
+                _to = time;
         }
 
         internal override bool TryChangeLastValue(BaseValue value)

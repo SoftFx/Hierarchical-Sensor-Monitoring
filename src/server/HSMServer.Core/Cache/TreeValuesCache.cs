@@ -78,6 +78,15 @@ namespace HSMServer.Core.Cache
 
         private const int LogSampleSize = 10;
 
+        // Per-sweep cap on history-load retries (#1344): a whole-database outage latches many
+        // sensors at once and makes them all retry-eligible in the same sweep, one hour later.
+        // Each retry is an inline LevelDB read inside this serial loop that throws while the
+        // database is still broken, so without a cap a mass outage turns into a synchronized
+        // burst of throwing reads stretching the maintenance tick. Capped-out sensors are
+        // simply picked up by the next sweep — nothing is stamped on them, so no per-sensor
+        // retry budget is consumed by the cap.
+        private const int MaxHistoryLoadRetriesPerSweep = 100;
+
         private readonly Logger _logger = LogManager.GetLogger(nameof(TreeValuesCache));
 
         private readonly ConfirmationManager _confirmationManager = new();
@@ -401,6 +410,12 @@ namespace HSMServer.Core.Cache
             var failedLoadCount = 0;
             var failedLoadSample = new List<Guid>(LogSampleSize);
             var failedSweep = 0;
+            var loadRetries = 0;
+
+            // One decision instant for the whole sweep: read once, not per sensor, so a slow
+            // iteration cannot make early and late sensors disagree about "now" (and the
+            // retry gates below are not re-anchored mid-loop).
+            var utcNow = DateTime.UtcNow;
 
             static void Sample(List<Guid> sample, Guid id)
             {
@@ -439,8 +454,13 @@ namespace HSMServer.Core.Cache
                     // itself, so no failure observed by the current tick is retried within one
                     // sweep period. The else if merely keeps the just-initialized case from
                     // taking the sensor lock for nothing.
-                    else if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed)
-                        sensor.RetryFailedHistoryLoad(DateTime.UtcNow);
+                    // The retry cap keeps a mass outage from turning this serial loop into a
+                    // synchronized burst of throwing DB reads (see the constant above).
+                    else if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed && loadRetries < MaxHistoryLoadRetriesPerSweep)
+                    {
+                        sensor.RetryFailedHistoryLoad(utcNow);
+                        loadRetries++;
+                    }
 
                     if (sensor.ShouldDestroy())
                     {
@@ -491,9 +511,12 @@ namespace HSMServer.Core.Cache
 
             // Not "deferred": until the bounded retry succeeds, self-destroy stays off for these
             // sensors. Separate from the Info line so operators can alert on it; the id sample
-            // makes the alert diagnosable without grepping hours-old init logs.
+            // makes the alert diagnosable without grepping hours-old init logs, and the retried
+            // count distinguishes "retries firing and failing" (database still broken) from
+            // "capped out this sweep" (retried == MaxHistoryLoadRetriesPerSweep, picked up
+            // next sweep).
             if (failedLoadCount > 0)
-                _logger.Warn($"Sensors self destroy disabled after failed history load for {failedLoadCount} sensor(s) (bounded retry in progress, #1344) — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
+                _logger.Warn($"Sensors self destroy disabled after failed history load for {failedLoadCount} sensor(s) (bounded retry in progress, {loadRetries} retried this sweep, #1344) — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
 
             if (notRemoved > 0 && !token.IsCancellationRequested)
                 _logger.Warn($"{notRemoved} sensor(s) due for destruction were not removed (removal failed) and will be retried next sweep");
