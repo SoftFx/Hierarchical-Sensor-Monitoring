@@ -92,6 +92,18 @@ namespace HSMServer.Core.Model
             }
         }
 
+        // Retry-only write (#1344): restores the timeout-marker signal ShouldDestroy()'s
+        // empty-cache fallback keys on, without touching _lastValue/_to/_cache. The retry
+        // (RetryFailedHistoryLoad) runs while ingestion is lock-free and ValuesStorage is not
+        // safe for concurrent writes, but this marker write carries none of that hazard: it
+        // applies the same newest-wins guard as AddValueBase, so the worst interleaving with
+        // a concurrent marker from ingestion is losing the older of the two.
+        internal void AddTimeoutMarker(T value)
+        {
+            if (value.IsTimeout && (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime))
+                _lastTimeout = value;
+        }
+
         internal override bool TryChangeLastValue(BaseValue value)
         {
             if (_cache.TryDequeue(out _) || _cache.IsEmpty)

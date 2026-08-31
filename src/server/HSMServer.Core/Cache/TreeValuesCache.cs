@@ -428,13 +428,17 @@ namespace HSMServer.Core.Cache
                         sensor.Initialize();
 
                     // #1344: without a retry, one transient LevelDB error during a lazily
-                    // triggered load disables self-destroy for the sensor until restart. Re-arm
-                    // the failed-load latch at most once per sensor per day — the maintenance
-                    // sweep is the safe place for it, the per-value paths never retry (#1296).
-                    // else if: a first-attempt failure in the Initialize() above must not fire
-                    // the retry in the same iteration — that would hit the DB twice back-to-back
-                    // and stamp _lastLoadRetryTicks at the moment of the first failure, burning
-                    // the sensor's 24h budget on an attempt it never really got.
+                    // triggered load disables self-destroy for the sensor until restart. Rerun
+                    // the load at most once per sensor per day — the maintenance sweep is the
+                    // safe place for it, the per-value paths never retry (#1296).
+                    // else if: a sensor this iteration just Initialize()d must not be retried
+                    // in the same breath. The same-tick hazard reaches further than this loop —
+                    // CheckSensorsHistoryAsync's eager Initialize() ran one await earlier in
+                    // this very maintenance tick — and is fenced off where it is observable:
+                    // RetryFailedHistoryLoad's first-retry delay measures from the failed load
+                    // itself, so no failure observed by the current tick is retried within one
+                    // sweep period. The else if merely keeps the just-initialized case from
+                    // taking the sensor lock for nothing.
                     else if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed)
                         sensor.RetryFailedHistoryLoad(DateTime.UtcNow);
 
