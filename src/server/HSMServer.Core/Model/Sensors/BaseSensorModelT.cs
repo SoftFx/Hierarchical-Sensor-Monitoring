@@ -43,7 +43,9 @@ namespace HSMServer.Core.Model
         // 8h, 16h, settling at one attempt per sensor per day. What the first delay must exceed
         // is the duration of the eager CheckSensorsHistoryAsync pass that runs one await before
         // the sweep, so a failure that pass just observed is never retried back-to-back against
-        // a possibly still-broken database; an hour clears that with room on any tree size.
+        // a possibly still-broken database. An hour covers that pass on any tree we expect; on
+        // one where it runs longer, a sensor that failed at the start of the pass can be retried
+        // by the same tick's sweep — benign, since an hour has genuinely elapsed since it failed.
         // (It happens to equal ClearDatabaseService.Delay, but nothing requires that: a longer
         // or shorter sweep period only shifts when the first retry lands.) The cost of a whole
         // hour is that a failure mid-interval waits up to 2h for it. The growth keeps a longer
@@ -68,12 +70,19 @@ namespace HSMServer.Core.Model
         // Retries performed so far; guarded by _lock. Drives the backoff step above.
         private int _loadRetryCount;
 
+        // Set by a successful retry and never cleared: paired with an empty Storage it is what
+        // HistoryRestoredByRetry reports, and once ingestion refills the cache the sensor is no
+        // longer degraded, so the pair goes quiet on its own.
+        private volatile bool _historyRestoredByRetry;
+
         // _historyLoaded alone would suffice here (it is written only inside Initialize's try,
         // strictly before the latch); the _isInitialized term documents the publication contract
         // rather than adding a state combination that can occur.
         internal override bool IsHistoryLoaded => _isInitialized && _historyLoaded;
 
         internal override bool HistoryLoadFailed => _isInitialized && !_historyLoaded;
+
+        internal override bool HistoryRestoredByRetry => _historyRestoredByRetry && !Storage.HasData;
 
         protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 
         {
@@ -361,6 +370,7 @@ namespace HSMServer.Core.Model
 
                 // Before the log line: an NLog throw must not classify a successful load as failed.
                 _historyLoaded = true;
+                _historyRestoredByRetry = isRetry;
                 _logger.Info($"Sensor {Id} initialized {From}-{To}");
             }
             catch (Exception ex)

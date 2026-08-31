@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.Formatters;
+using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
@@ -141,38 +142,24 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Initialization race")]
-        public void ShouldDestroy_CachedValueOlderThanTheMarker_UsesNewest()
+        public void ShouldDestroy_CachedValueAndNewerMarker_JudgesOnTheValue()
         {
-            // The mirror of the case above, on the HasData side: the decision folds every
-            // activity signal with Newest() instead of branching on HasData, because a cached
-            // value is not proof that no newer signal exists. Here the cache holds a day-8
-            // value while the marker says day 1 — a HasData branch judges on day 8 and destroys
-            // a sensor that was demonstrably alive a day ago.
-            var (sensor, _) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-8), interval: _longSelfDestroyInterval);
-            sensor.Initialize();
-
-            sensor.TryAddValue(new IntegerValue { Time = DateTime.UtcNow.AddDays(-1), Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
-
-            Assert.True(sensor.HasData, "test premise: the loaded value is in the cache");
-            Assert.False(sensor.ShouldDestroy(),
-                "the day-8 cached value hid the day-1 marker and destroyed the sensor early");
-        }
-
-        [Fact]
-        [Trait("Category", "Initialization race")]
-        public void ShouldDestroy_EveryActivitySignalIsStale_StillDestroys()
-        {
-            // Control for the two Newest() cases above: folding the signals together must not
-            // turn ShouldDestroy() into "never destroy". Cache, marker and To all sit days
-            // behind the 1-hour interval, and the sensor is still due for destruction.
+            // The marker stays confined to the empty-cache fallback on purpose. It records when
+            // the SERVER noticed the silence, not when the sensor last reported: GetTimeoutValue
+            // stamps Time = UtcNow at observation, so after a maintenance window it carries the
+            // restart instant. Letting it float a sensor that still has a cached value would
+            // postpone every quiet sensor's cleanup by the server's downtime.
             var (sensor, _) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
             sensor.Initialize();
 
-            sensor.TryAddValue(new IntegerValue { Time = DateTime.UtcNow.AddDays(-2), Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
+            // Stand-in for the marker CheckSensorsTimeout writes on the first post-restart pass.
+            var markerTime = DateTime.UtcNow.AddMinutes(-1);
+            sensor.TryAddValue(new IntegerValue { Time = markerTime, ReceivingTime = markerTime, Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
 
-            Assert.True(sensor.HasData);
-            Assert.NotNull(sensor.LastTimeout);
-            Assert.True(sensor.ShouldDestroy(), "a sensor with no recent activity signal must still be destroyed");
+            Assert.True(sensor.HasData, "test premise: the loaded value is in the cache");
+            Assert.Equal(markerTime, sensor.LastTimeout.Time);
+            Assert.True(sensor.ShouldDestroy(),
+                "a marker stamped at server-restart time postponed a sensor quiet for three days");
         }
 
         [Fact]
@@ -516,27 +503,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Initialization race")]
-        public void ShouldDestroy_TtlExpiredSensor_IsDeferredByTheMarkerAge()
-        {
-            // Consequence of folding the marker into the decision for cached sensors too: a
-            // TTL-expired sensor lingers up to one TTL past its self-destroy interval, because
-            // GetTimeoutValue stamps the marker at expiry — one TTL after the last real value.
-            // Pinned so the deferral is a contract, not an emergent surprise for an operator
-            // watching sensors outlive their interval.
-            var (sensor, _) = BuildSensor(historyTime: DateTime.UtcNow.AddHours(-2));
-            sensor.Initialize();
-
-            Assert.True(sensor.ShouldDestroy(), "test premise: the 2h-old value is past the 1h interval");
-
-            // The marker the TTL wrote 30 minutes ago: still inside the interval.
-            var markerTime = DateTime.UtcNow.AddMinutes(-30);
-            sensor.TryAddValue(new IntegerValue { Time = markerTime, ReceivingTime = markerTime, Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
-
-            Assert.False(sensor.ShouldDestroy(), "a sensor whose TTL fired 30 minutes ago was destroyed");
-        }
-
-        [Fact]
-        [Trait("Category", "Initialization race")]
         public void RetryFailedHistoryLoad_SameTickAsFailedEagerLoad_DoesNotBurnBudget()
         {
             // CheckSensorsHistoryAsync eagerly Initialize()s every sensor immediately before
@@ -645,6 +611,76 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.False(sensor.HasData, "a stale timeout marker was enqueued as a regular value");
             Assert.Null(sensor.LastValue);
             Assert.Equal(markerTime, sensor.LastTimeout.Time);
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void RetryHistoryLoadChargingBudget_ChargesOnlyRetriesThatReachedTheDbAndFailed()
+        {
+            // The sweep's per-sweep cap rides on this predicate. Charging suppressed calls lets
+            // the sensors early in the stable enumeration order exhaust the cap sweep after
+            // sweep and permanently starve everything past it; charging successful ones makes a
+            // large latched set drain at MaxHistoryLoadRetriesPerSweep sensors per hour after
+            // the database is already healthy.
+            var (healthy, _) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
+            healthy.Initialize();
+
+            Assert.False(TreeValuesCache.RetryHistoryLoadChargingBudget(healthy, DateTime.UtcNow.AddHours(2)),
+                "a sensor whose load succeeded is not a retry at all");
+
+            var (broken, brokenDb) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
+            brokenDb.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"));
+            broken.Initialize();
+
+            var now = DateTime.UtcNow;
+
+            Assert.False(TreeValuesCache.RetryHistoryLoadChargingBudget(broken, now),
+                "a sensor inside its backoff did no database work and must not be charged");
+            Assert.True(TreeValuesCache.RetryHistoryLoadChargingBudget(broken, now.AddHours(1)),
+                "a retry that hit a still-broken database must be charged");
+
+            // Recovery: the retry runs and succeeds, so the budget is untouched.
+            var (recovering, recoveringDb) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
+            recoveringDb.SetupSequence(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"))
+                .Returns(SensorTestFactory.History(DateTime.UtcNow.AddDays(-3), 42));
+            recovering.Initialize();
+
+            Assert.False(TreeValuesCache.RetryHistoryLoadChargingBudget(recovering, DateTime.UtcNow.AddHours(2)),
+                "a successful retry is cheap and must not consume the budget");
+            Assert.True(recovering.IsHistoryLoaded, "test premise: the retry actually ran");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void HistoryRestoredByRetry_ReportsTheDegradedStateUntilIngestionRefillsTheCache()
+        {
+            // A successful retry drops the sensor out of the sweep's failed-load warning while
+            // its cache, Status, IsExpired and TTL clocks are still unset. The sweep keeps
+            // logging it under a separate line until real ingestion refills the cache.
+            var freshValue = SensorTestFactory.History(DateTime.UtcNow.AddMinutes(-1), 42);
+
+            var database = new Mock<IDatabaseCore>();
+            database.SetupSequence(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
+                .Throws(new IOException("database is broken"))
+                .Returns(freshValue);
+            database.Setup(db => db.GetFirstValue(It.IsAny<Guid>())).Returns(freshValue);
+
+            var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: _selfDestroyInterval);
+            var sensor = new IntegerSensorModel(entity, database.Object, null);
+
+            sensor.Initialize();
+            Assert.False(sensor.HistoryRestoredByRetry, "a failed load is reported as failed, not as restored");
+
+            Assert.True(sensor.RetryFailedHistoryLoad(DateTime.UtcNow.AddHours(2)));
+
+            Assert.False(sensor.HistoryLoadFailed, "test premise: the retry succeeded");
+            Assert.True(sensor.HistoryRestoredByRetry, "a retry-restored sensor with an empty cache went silent");
+
+            sensor.TryAddValue(new IntegerValue { Time = DateTime.UtcNow, Status = SensorStatus.Ok, Value = 7 });
+
+            Assert.False(sensor.HistoryRestoredByRetry, "the sensor is no longer degraded once it reports");
         }
 
         [Fact]

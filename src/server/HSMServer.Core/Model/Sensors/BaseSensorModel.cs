@@ -91,6 +91,13 @@ namespace HSMServer.Core.Model
         // self-destroy is disabled for such sensors, not deferred.
         internal abstract bool HistoryLoadFailed { get; }
 
+        // True while a sensor is running on a retry-restored load and nothing has refilled its
+        // cache yet: history counts as loaded (self-destroy decides again), but LastValue,
+        // Status, IsExpired and the TTL clocks stay unset until the sensor reports. The sweep
+        // logs these so a successful retry does not simply drop the sensor out of the failed-
+        // load warning and leave the degraded state invisible (#1344).
+        internal abstract bool HistoryRestoredByRetry { get; }
+
         // Bounded rerun of a failed history load (#1344): bypasses Initialize()'s _isInitialized
         // gate (the latch itself is not cleared) at most once per backoff interval, from the
         // maintenance sweep only — never from the per-value paths. True only when the load
@@ -121,32 +128,32 @@ namespace HSMServer.Core.Model
             if (!IsActive(interval) || !IsHistoryLoaded)
                 return false;
 
-            // The NEWEST of every activity signal we hold, never a priority chain and never a
-            // branch that hides one of them: each signal is evidence the sensor was alive at
-            // that instant, and evidence is not invalidated by another signal being older.
-            //   - LastUpdate covers the live cache (MinValue when there is none), but an empty
-            //     cache does not mean "inactive": retention purge, a full history clear, the
-            //     SetExpiredSnapshot marker — which never enters the cache — or a sensor whose
-            //     history load was retried.
-            //   - _lastTimeout is not advanced once a newer real value arrives (a later
-            //     re-expiry writes no marker, because SetExpiredSnapshot requires HasData), so
-            //     it must not shadow a newer To. Marker .Time, not .LastUpdateTime:
-            //     GetTimeoutValue copies LastReceivingTime from the previous value, so
-            //     LastUpdateTime would under-estimate activity.
-            //   - To is the newest of the ingestion stamp and the floor a history-load retry
-            //     restored; MaxValue only for a sensor that never received a value.
-            // Branching on HasData was the hazard: on a sensor whose cache is empty,
-            // AddValueBase accepts the next value whatever its timestamp (the newest-wins guard
-            // needs a _lastValue to compare against), so one out-of-order value — a reconnecting
-            // collector flushing a stale queue — flipped HasData and hid a newer marker or To
-            // behind its own old LastUpdate. The fold only ever moves the verdict later, so no
-            // sensor is destroyed sooner than before; one TTL-expired sensor lingers up to one
-            // TTL longer, because its marker outlives its last real value by that much.
-            // CreationDate stays the last resort.
-            var lastActivity = Newest(LastUpdate,
-                                      Newest(LastTimeout?.Time ?? DateTime.MinValue,
-                                             To != DateTime.MaxValue ? To : DateTime.MinValue));
+            // Storage.To is the newest of the ingestion stamp and the floor a history-load
+            // retry restored; MaxValue only for a sensor that never received a value.
+            var to = To;
+            var storageActivity = to != DateTime.MaxValue ? to : DateTime.MinValue;
 
+            // With a cached value, the newest of it and the storage signal. LastUpdate alone was
+            // the hazard: on a sensor whose cache is empty — a retention purge, a full history
+            // clear, or a history-load retry, which restores the floor but never the cache —
+            // AddValueBase accepts the next value whatever its timestamp, because the
+            // newest-wins guard needs a _lastValue to compare against. So one out-of-order value
+            // (a reconnecting collector flushing a stale queue) flipped HasData and hid the
+            // freshly restored floor behind its own old LastUpdate.
+            //
+            // The timeout marker stays confined to the empty-cache case, deliberately. It is
+            // evidence of when the SERVER noticed the silence, not of sensor activity:
+            // GetTimeoutValue stamps Time = UtcNow at observation, which after a maintenance
+            // window is the restart instant, not the expiry instant. As the last remaining
+            // signal that over-estimate is worth taking (#1328); as a floor under a sensor that
+            // still has a cached value it would postpone every quiet sensor's cleanup by the
+            // server's downtime. Marker .Time, not .LastUpdateTime: GetTimeoutValue copies
+            // LastReceivingTime from the previous value, so LastUpdateTime under-estimates.
+            var lastActivity = HasData
+                ? Newest(LastUpdate, storageActivity)
+                : Newest(LastTimeout?.Time ?? DateTime.MinValue, storageActivity);
+
+            // CreationDate is the last resort: no signal at all means the sensor never reported.
             return interval.TimeIsUp(lastActivity != DateTime.MinValue ? lastActivity : CreationDate);
         }
 
