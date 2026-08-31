@@ -153,6 +153,11 @@ namespace HSMDatabase.LevelDB
         // half-applied. Throws ServerDatabaseException on failure, leaving the batch unapplied.
         public void PutBatch(IReadOnlyList<(byte[] key, byte[] value)> puts, IReadOnlyList<byte[]> deletes = null)
         {
+            // Puts are the point of the batch; deletes are optional. Say so instead of the
+            // NullReferenceException the foreach would otherwise throw.
+            if (puts is null)
+                throw new ArgumentNullException(nameof(puts));
+
             using var batch = new WriteBatch();
 
             foreach (var (key, value) in puts)

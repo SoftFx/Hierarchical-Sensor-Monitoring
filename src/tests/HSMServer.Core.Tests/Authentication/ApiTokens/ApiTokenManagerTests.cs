@@ -251,6 +251,26 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void TryRestrictToken_NoOpRequest_SucceedsWithoutRewrite()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            manager.TryCreateToken(OwnerId, "no-op", null, BuildGrants("alerts:read"), DateTime.UtcNow.AddYears(1), "u", out var entity, out _);
+
+            // Same grants (null = keep) and unchanged expiry (null = keep): true, but no
+            // audit stamp and no durable write — nothing changed.
+            Assert.True(manager.TryRestrictToken(entity.EntityId, null, null, "u", out var unchanged));
+
+            Assert.Null(unchanged.RestrictedAtUtc);
+
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            Assert.Null(reopened.GetToken(entity.TokenId).RestrictedAtUtc);
+        }
+
+        [Fact]
         public void TryRotateToken_RevokesOldIssuesFreshPairAndPreservesGrants()
         {
             using var manager = CreateManager();
@@ -549,6 +569,42 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             Assert.Equal(255, entity.Name.Length);
             Assert.All(entity.Name, c => Assert.False(char.IsSurrogate(c)));
+        }
+
+        [Fact]
+        public void TryCreateToken_UnpairedSurrogate_IsReplacedLikeTheJsonRoundTripWould()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            // A lone surrogate would become U+FFFD only in the durable row; replacing it
+            // during sanitization keeps the live entity and the row identical.
+            manager.TryCreateToken(OwnerId, "lone\uD800high", "low\uDC00half", BuildGrants("alerts:read"), null, "u", out var entity, out _);
+
+            Assert.Equal("lone�high", entity.Name);
+            Assert.Equal("low�half", entity.Description);
+
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            Assert.Equal(entity.Name, reopened.GetToken(entity.TokenId).Name);
+            Assert.Equal(entity.Description, reopened.GetToken(entity.TokenId).Description);
+        }
+
+        [Fact]
+        public void TryCreateToken_TruncatedNameNeverEndsInAReplacedControlCharacterSpace()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            // 255 'n', a NUL (becomes a space at index 255), then a tail: the 256-char cut
+            // lands right after the replaced space, and the result must re-trim it.
+            var name = $"{new string('n', 255)}\0tail";
+
+            Assert.True(manager.TryCreateToken(OwnerId, name, null, BuildGrants("alerts:read"), null, "u", out var entity, out _));
+
+            Assert.Equal(255, entity.Name.Length);
+            Assert.Equal(new string('n', 255), entity.Name);
         }
 
         [Fact]

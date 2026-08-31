@@ -236,6 +236,15 @@ namespace HSMServer.Authentication
                 if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
                     return false;
 
+                // A no-op request (same grants, unchanged expiry) succeeds without a durable
+                // write or an audit stamp — nothing changed, so there is nothing to persist.
+                if (newExpiry == current.ExpiresAtUtc && canonicalRemaining.SequenceEqual(current.Grants))
+                {
+                    entity = current;
+
+                    return true;
+                }
+
                 var restricted = current with
                 {
                     Grants = canonicalRemaining,
@@ -653,10 +662,12 @@ namespace HSMServer.Authentication
                 : null;
 
         // Bounds and neutralizes free text before it is persisted or logged: control
-        // characters (log forging, UI rendering) become spaces, then the value is trimmed
-        // and truncated to the per-field limit. Truncation backs off one char when the cut
-        // would split a surrogate pair — a lone high surrogate in the live entity would
-        // diverge from the U+FFFD the JSON row ends up holding after a round-trip.
+        // characters (log forging, UI rendering) become spaces, unpaired surrogates are
+        // replaced with U+FFFD, then the value is trimmed and truncated to the per-field
+        // limit. Truncation backs off one char when the cut would split a surrogate pair,
+        // and re-trims so the result never ends in the space of a replaced control char —
+        // both keep the live entity identical to the JSON row it round-trips through
+        // (System.Text.Json substitutes U+FFFD for ill-formed UTF-16).
         private static string Sanitize(string value, int maxLength)
         {
             if (string.IsNullOrEmpty(value))
@@ -665,8 +676,27 @@ namespace HSMServer.Authentication
             var chars = value.Trim().ToCharArray();
 
             for (var i = 0; i < chars.Length; i++)
-                if (char.IsControl(chars[i]))
+            {
+                var c = chars[i];
+
+                if (char.IsControl(c))
+                {
                     chars[i] = ' ';
+                    continue;
+                }
+
+                // An unpaired surrogate is ill-formed UTF-16: only its replacement survives
+                // the JSON round-trip, so replace it here and keep both sides identical.
+                if (char.IsHighSurrogate(c))
+                {
+                    if (i + 1 >= chars.Length || !char.IsLowSurrogate(chars[i + 1]))
+                        chars[i] = '�';
+                }
+                else if (char.IsLowSurrogate(c) && (i == 0 || !char.IsHighSurrogate(chars[i - 1])))
+                {
+                    chars[i] = '�';
+                }
+            }
 
             var sanitized = new string(chars).Trim();
 
@@ -675,7 +705,7 @@ namespace HSMServer.Authentication
 
             var cut = char.IsHighSurrogate(sanitized[maxLength - 1]) ? maxLength - 1 : maxLength;
 
-            return sanitized[..cut];
+            return sanitized[..cut].TrimEnd();
         }
     }
 }

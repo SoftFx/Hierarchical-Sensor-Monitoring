@@ -22,12 +22,20 @@ namespace HSMServer.Authentication
 
         long GlobalRevocationGeneration { get; }
 
+        // Current durable generation for the owner, missing-as-zero. An owner absent from
+        // the index (no loadable records, e.g. after retention removed them) can hold a
+        // durable value this accessor does not report; create/rotate read and cache the
+        // durable value through a fallback, so newly minted tokens are always stamped
+        // correctly regardless.
         long GetOwnerRevocationGeneration(Guid ownerUserId);
 
-        // Authentication-path lookup by the public TokenId; null when unknown.
+        // Authentication-path lookup by the public TokenId; null when unknown. The
+        // returned record is the live index entry — consumers must not mutate its Grants
+        // or Verifier.
         ApiTokenEntity GetToken(string tokenId);
 
-        // Lifecycle-route lookup by the stable entity id; null when unknown.
+        // Lifecycle-route lookup by the stable entity id; null when unknown. Same
+        // live-entry contract as GetToken.
         ApiTokenEntity GetTokenByEntityId(Guid entityId);
 
         List<ApiTokenEntity> GetTokensByOwner(Guid ownerUserId);
@@ -44,8 +52,9 @@ namespace HSMServer.Authentication
         // expansion attempt and for a dead record — a revoked or generation-invalidated
         // (emergency-revoked) token cannot be restricted. Null remainingGrants keeps the
         // current grants, symmetric with null shortenedExpiryUtc keeping the current
-        // expiry; an explicit empty list strips every grant. Idempotently records
-        // RestrictedAtUtc/RestrictedBy.
+        // expiry; an explicit empty list strips every grant. A no-op request (grants
+        // unchanged, expiry unchanged) succeeds without a rewrite. Changing requests
+        // record RestrictedAtUtc/RestrictedBy.
         bool TryRestrictToken(Guid entityId, List<ApiTokenGrantEntity> remainingGrants, DateTime? shortenedExpiryUtc,
             string restrictedBy, out ApiTokenEntity entity);
 
@@ -63,7 +72,11 @@ namespace HSMServer.Authentication
         bool TryRevokeToken(Guid entityId, string revokedBy, string reason, out ApiTokenEntity entity);
 
         // Advances the durable generation (persist first), then publishes it to
-        // authentication. Throws on storage failure: no partial state is published.
+        // authentication — every token issued at an older generation stops authenticating
+        // immediately. Throws on storage failure: no partial state is published, and a
+        // throw means the emergency revoke DID NOT happen — in-memory and durable values
+        // stay consistent at the old generation and every previously valid token keeps
+        // authenticating. Callers must not swallow the exception.
         long AdvanceGlobalRevocationGeneration();
 
         // Drops a record from the live authentication index after its durable row was
@@ -72,6 +85,11 @@ namespace HSMServer.Authentication
         // no live record existed for the TokenId.
         bool Unpublish(string tokenId);
 
+        // Advances the durable owner generation (persist first), then publishes it to
+        // authentication — every token of that owner issued at an older generation stops
+        // authenticating immediately. Same throw contract as
+        // AdvanceGlobalRevocationGeneration: a throw means the revoke did not happen and
+        // must surface.
         long AdvanceOwnerRevocationGeneration(Guid ownerUserId);
 
         // Tokens counted by MaxTokensPerUser: unexpired, individually active (not revoked),

@@ -862,9 +862,17 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // Key layout: "ApiToken_<tokenId>" rows hold ApiTokenEntity values, revocation
         // generations live under "ApiTokenGeneration_*". The prefixes differ after the
         // "ApiToken" stem, so the ReadAllApiTokens scan cannot pick generation rows up.
-        // Unlike the neighboring regions, Api token writes do NOT swallow storage failures:
-        // insert/rotate/generation failures must be observable by the caller so that a failed
-        // write leaves neither durable nor live state.
+        // Unlike the neighboring regions, the Api token write paths (insert/rotate/put/
+        // generation advances) do NOT swallow storage failures: they must be observable by
+        // the caller so that a failed write leaves neither durable nor live state.
+        // RemoveApiToken is the deliberate exception — best-effort retention cleanup, a
+        // failed removal only delays cleanup.
+        //
+        // Token rows are serialized with the parameterless JsonSerializer overload ON
+        // PURPOSE: the file's shared _options apply DefaultIgnoreCondition =
+        // WhenWritingDefault, which would omit schema-shape fields carrying their type's
+        // default value. A token row must be the exact, explicit image of its record so
+        // the fail-closed load never judges a row on serializer-default artifacts.
 
         private const string ApiTokenPrefix = "ApiToken_";
         private const string ApiTokenGlobalGenerationKey = "ApiTokenGeneration_Global";
@@ -885,12 +893,19 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // leaving no durable state behind.
         public bool TryInsertApiToken(ApiTokenEntity entity)
         {
+            // A null TokenId would write the bare "ApiToken_" prefix key, which the
+            // ReadAllApiTokens scan then picks up — validate before touching the store.
+            if (entity?.TokenId is null)
+                throw new ArgumentException("API token insert requires a token id.", nameof(entity));
+
             lock (_apiTokenLock)
             {
-                if (_database.TryRead(GetApiTokenKey(entity.TokenId), out _))
+                var key = GetApiTokenKey(entity.TokenId);
+
+                if (_database.TryRead(key, out _))
                     return false;
 
-                _database.Put(GetApiTokenKey(entity.TokenId), JsonSerializer.SerializeToUtf8Bytes(entity));
+                _database.Put(key, JsonSerializer.SerializeToUtf8Bytes(entity));
 
                 return true;
             }
@@ -903,13 +918,15 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             lock (_apiTokenLock)
             {
-                if (_database.TryRead(GetApiTokenKey(replacement.TokenId), out _))
+                var replacementKey = GetApiTokenKey(replacement.TokenId);
+
+                if (_database.TryRead(replacementKey, out _))
                     return false;
 
                 _database.PutBatch(
                 [
                     (GetApiTokenKey(revokedOld.TokenId), JsonSerializer.SerializeToUtf8Bytes(revokedOld)),
-                    (GetApiTokenKey(replacement.TokenId), JsonSerializer.SerializeToUtf8Bytes(replacement)),
+                    (replacementKey, JsonSerializer.SerializeToUtf8Bytes(replacement)),
                 ]);
 
                 return true;
@@ -990,8 +1007,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         }
 
         // Durable revocation generations. Missing state reads as 0 (fresh installation
-        // baseline); corrupt state throws so the caller can fail authentication closed.
-        // Advance persists the new generation before it is published to authentication.
+        // baseline); corrupt state — unparsable or negative, the counter is monotonic
+        // from 0 — throws so the caller can fail authentication closed. Advance persists
+        // the new generation before it is published to authentication.
 
         public long GetGlobalRevocationGeneration() => ReadRevocationGeneration(ApiTokenGlobalGenerationKey);
 
@@ -1017,7 +1035,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             if (!_database.TryRead(Encoding.UTF8.GetBytes(key), out byte[] value))
                 return 0;
 
-            if (!long.TryParse(Encoding.UTF8.GetString(value), out var generation))
+            if (!long.TryParse(Encoding.UTF8.GetString(value), out var generation) || generation < 0)
                 throw new ServerDatabaseException($"Corrupt revocation generation state under key {key}");
 
             return generation;

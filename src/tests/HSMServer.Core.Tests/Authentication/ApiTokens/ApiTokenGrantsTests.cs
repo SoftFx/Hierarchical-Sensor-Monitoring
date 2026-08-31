@@ -157,5 +157,28 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
         }
+
+        [Fact]
+        public void TryCanonicalize_AboveMaxGrants_FailsClosed()
+        {
+            var grants = new List<ApiTokenGrantEntity>();
+
+            for (var i = 0; i <= ApiTokenGrants.MaxGrants; i++)
+                grants.Add(new ApiTokenGrantEntity
+                {
+                    Operation = "products:read",
+                    BoundaryKind = (byte)ApiTokenBoundaryKind.Product,
+                    BoundaryId = Guid.NewGuid().ToString(),
+                });
+
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out var canonical));
+            Assert.Null(canonical);
+
+            // Exactly at the bound is still a legitimate token.
+            grants.RemoveAt(grants.Count - 1);
+
+            Assert.True(ApiTokenGrants.TryCanonicalize(grants, out canonical));
+            Assert.Equal(ApiTokenGrants.MaxGrants, canonical.Count);
+        }
     }
 }

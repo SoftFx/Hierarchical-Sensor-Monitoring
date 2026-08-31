@@ -12,6 +12,12 @@ namespace HSMServer.Authentication
     // serialized records are stable.
     public static class ApiTokenGrants
     {
+        // Upper bound on grants per token: canonicalization allocates per grant and the
+        // persisted row is rescanned into memory at every boot, so the grant list must not
+        // be the one unbounded caller-supplied input on this surface.
+        public const int MaxGrants = 1024;
+
+
         public static bool TryCanonicalize(IEnumerable<ApiTokenGrantEntity> grants, out List<ApiTokenGrantEntity> canonical)
         {
             canonical = null;
@@ -22,6 +28,10 @@ namespace HSMServer.Authentication
             foreach (var grant in grants ?? Array.Empty<ApiTokenGrantEntity>())
             {
                 if (grant is null)
+                    return false;
+
+                // Fail closed before allocating further once the bound is exceeded.
+                if (seen.Count >= MaxGrants)
                     return false;
 
                 if (!ApiTokenOperations.IsValid(grant.Operation))

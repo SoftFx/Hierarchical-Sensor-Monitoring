@@ -21,7 +21,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         // 0x01 for the hsm_pat_v1_ token/verifier format.
         public byte VersionByte { get; init; }
 
-        // 32-byte SHA-256 verifier; never the secret or any reversible material.
+        // 32-byte SHA-256 verifier; never the secret or any reversible material. Records
+        // are shared with the live authentication index — never mutate in place.
         public byte[] Verifier { get; init; }
 
         public Guid OwnerUserId { get; init; }
@@ -34,6 +35,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public string Description { get; init; }
 
+        // Canonical, deduplicated grant list (see ApiTokenGrants). Records are shared with
+        // the live authentication index — never mutate the list in place; build a new one.
         public List<ApiTokenGrantEntity> Grants { get; init; }
 
         public long CreatedAtUtc { get; init; }

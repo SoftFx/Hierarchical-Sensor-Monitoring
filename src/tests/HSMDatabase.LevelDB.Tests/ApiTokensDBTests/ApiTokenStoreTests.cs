@@ -226,6 +226,32 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
             }
         }
 
+        [Fact]
+        public void Generations_NegativeState_ThrowsOnRead()
+        {
+            // The counter is monotonic from 0, so a negative value is corruption by
+            // construction and must fail closed like an unparsable one.
+            var path = Path.Combine(Path.GetTempPath(), $"hsm-api-token-negative-tests-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(path);
+
+            try
+            {
+                using (var writer = new LevelDBDatabaseAdapter(path))
+                {
+                    writer.Put(System.Text.Encoding.UTF8.GetBytes("ApiTokenGeneration_Global"),
+                        System.Text.Encoding.UTF8.GetBytes("-1"));
+                }
+
+                using var worker = new EnvironmentDatabaseWorker(path);
+
+                Assert.Throws<ServerDatabaseException>(() => worker.GetGlobalRevocationGeneration());
+            }
+            finally
+            {
+                TryDeleteDirectory(path);
+            }
+        }
+
 
         private static ApiTokenEntity BuildEntity(string tokenId = null, Guid? owner = null) => new()
         {

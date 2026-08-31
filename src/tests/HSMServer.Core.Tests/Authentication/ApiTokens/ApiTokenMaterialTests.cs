@@ -65,6 +65,17 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.Equal(material.SecretBytes, secret);
         }
 
+        [Fact]
+        public void TokenIdOf_ReturnsTheCanonicalIndexKeyOfAParsedToken()
+        {
+            var material = ApiTokenMaterial.Generate();
+
+            var token = ApiTokenMaterial.FormatToken(material.TokenId, material.Secret);
+
+            Assert.True(ApiTokenMaterial.TryParse(token, out _, out _));
+            Assert.Equal(material.TokenId, ApiTokenMaterial.TokenIdOf(token));
+        }
+
         [Theory]
         [InlineData(null)]
         [InlineData("")]

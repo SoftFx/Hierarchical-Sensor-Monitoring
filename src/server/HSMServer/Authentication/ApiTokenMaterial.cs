@@ -41,6 +41,12 @@ namespace HSMServer.Authentication
         public static string FormatToken(string tokenId, string secret) => $"{TokenPrefix}{tokenId}.{secret}";
 
 
+        // The canonical TokenId text of a token that TryParse accepted — the exact string
+        // the authentication index is keyed by. Call only after a successful parse of the
+        // same string; offsets live here so callers never slice by hand.
+        public static string TokenIdOf(string token) => token.Substring(TokenPrefix.Length, TokenIdLength);
+
+
         // Strict parse of a presented bearer credential. Checks the exact total length,
         // the version prefix, the '.' separator, the alphabet, and that every decoded value
         // has exactly one possible encoding (rejecting aliases and padded variants). The
@@ -136,8 +142,10 @@ namespace HSMServer.Authentication
             // Canonical-encoding check without re-encoding: every bit of every character
             // except the last is significant, so the only possible alias is a final
             // character with non-zero trailing bits (22 chars carry 132 bits for a 16-byte
-            // id, 43 carry 258 for a 32-byte secret). Checking the bits directly keeps the
-            // hot path allocation-free and never copies the secret into an uncleared string.
+            // id, 43 carry 258 for a 32-byte secret). Checking the bits directly keeps this
+            // parse path allocation-free and free of secret-bearing transient strings —
+            // unlike Generate(), whose transient encode intermediates are conceded in the
+            // Clear comment below.
             var unusedBits = part.Length * 6 - expectedBytes * 8;
 
             if (unusedBits > 0 && !HasZeroTrailingBits(part[^1], unusedBits))
