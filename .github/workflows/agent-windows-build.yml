@@ -38,7 +38,7 @@ jobs:
       - name: Set up vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
+          vcpkgGitCommitId: 9e593bb18ea69cc5095e012465dcd675a822ed0d
 
       - name: Configure (Release, HTTP transport on)
         # The agent CMake forces HSM_COLLECTOR_HTTP=ON on Windows AND the x64-windows-static triplet +

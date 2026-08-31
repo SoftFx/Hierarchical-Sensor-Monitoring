@@ -126,7 +126,7 @@ jobs:
       - name: Set up vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
+          vcpkgGitCommitId: 9e593bb18ea69cc5095e012465dcd675a822ed0d
 
       - name: Configure (HTTP transport on)
         # vcpkg manifest install runs here (cmake project() triggers it). run-vcpkg defaults
@@ -286,7 +286,7 @@ jobs:
       - name: Set up vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
+          vcpkgGitCommitId: 9e593bb18ea69cc5095e012465dcd675a822ed0d
 
       - name: Install the overlay port from branch source
         shell: bash
