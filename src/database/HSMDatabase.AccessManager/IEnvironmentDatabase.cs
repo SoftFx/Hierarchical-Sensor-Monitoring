@@ -60,10 +60,13 @@ namespace HSMDatabase.AccessManager
         // Single-record read for authentication; null means missing or unreadable (fail closed).
         ApiTokenEntity GetApiToken(string tokenId);
 
-        // Best-effort retention cleanup removal.
-        void RemoveApiToken(string tokenId);
+        // Retention removal. True = the durable row is gone (deleted or already absent);
+        // false = the removal failed and the row may still exist — the caller must NOT
+        // unpublish the live record in that case, or the row rejoins the index after restart.
+        bool RemoveApiToken(string tokenId);
 
-        // Full scan to rebuild the authentication index at startup; corrupt records skipped.
+        // Full scan to rebuild the authentication index at startup. Corrupt records are
+        // skipped; a scan failure throws so the caller can fail the index closed.
         List<ApiTokenEntity> ReadAllApiTokens();
 
         long GetGlobalRevocationGeneration();

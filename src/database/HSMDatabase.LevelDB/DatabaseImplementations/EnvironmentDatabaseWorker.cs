@@ -865,8 +865,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // Unlike the neighboring regions, the Api token write paths (insert/rotate/put/
         // generation advances) do NOT swallow storage failures: they must be observable by
         // the caller so that a failed write leaves neither durable nor live state.
-        // RemoveApiToken is the deliberate exception — best-effort retention cleanup, a
-        // failed removal only delays cleanup.
+        // RemoveApiToken reports its outcome as a bool for the same reason — retention
+        // must not unpublish a live record whose durable row may still exist. The boot
+        // scan (ReadAllApiTokens) propagates scan failures for the fail-closed load.
         //
         // Token rows are serialized with the parameterless JsonSerializer overload ON
         // PURPOSE: the file's shared _options apply DefaultIgnoreCondition =
@@ -961,46 +962,55 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public void RemoveApiToken(string tokenId)
+        // Durable removal for retention. True means the row is gone from the store —
+        // deleted, or already absent (LevelDB deletes are idempotent). False means the
+        // removal failed and the row may still exist: the caller must NOT unpublish the
+        // live record in that case, or the row would rejoin the authentication index
+        // after the next restart.
+        public bool RemoveApiToken(string tokenId)
         {
+            // A null TokenId would target the bare "ApiToken_" prefix key.
+            if (tokenId is null)
+                throw new ArgumentException("API token removal requires a token id.", nameof(tokenId));
+
             try
             {
                 lock (_apiTokenLock)
                 {
                     _database.Delete(GetApiTokenKey(tokenId));
                 }
+
+                return true;
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to remove API token by token id");
+                _logger.Error(e, "Failed to remove API token by token id; the durable row may still exist");
+
+                return false;
             }
         }
 
-        // Full scan used to rebuild the in-memory authentication index at startup. Corrupt
-        // records are skipped and logged; a skipped record simply never authenticates.
+        // Full scan used to rebuild the in-memory authentication index at startup. The
+        // scan itself propagates storage failures: an unreadable token region must fail
+        // the whole index closed (an empty result is a fresh install, not a silent
+        // outage). A corrupt individual record is skipped and logged; a skipped record
+        // simply never authenticates.
         public List<ApiTokenEntity> ReadAllApiTokens()
         {
             var tokens = new List<ApiTokenEntity>();
 
-            try
-            {
-                var values = _database.GetAllStartingWith(Encoding.UTF8.GetBytes(ApiTokenPrefix));
+            var values = _database.GetAllStartingWith(Encoding.UTF8.GetBytes(ApiTokenPrefix));
 
-                foreach (var value in values)
-                {
-                    try
-                    {
-                        tokens.Add(JsonSerializer.Deserialize<ApiTokenEntity>(Encoding.UTF8.GetString(value)));
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.Error(e, "Failed to deserialize an ApiTokenEntity, record skipped");
-                    }
-                }
-            }
-            catch (Exception e)
+            foreach (var value in values)
             {
-                _logger.Error(e, "Failed to read API tokens");
+                try
+                {
+                    tokens.Add(JsonSerializer.Deserialize<ApiTokenEntity>(Encoding.UTF8.GetString(value)));
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(e, "Failed to deserialize an ApiTokenEntity, record skipped");
+                }
             }
 
             return tokens;

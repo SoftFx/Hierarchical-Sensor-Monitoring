@@ -511,7 +511,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public ApiTokenEntity GetApiToken(string tokenId) => _environmentDatabase.GetApiToken(tokenId);
 
-        public void RemoveApiToken(string tokenId) => _environmentDatabase.RemoveApiToken(tokenId);
+        public bool RemoveApiToken(string tokenId) => _environmentDatabase.RemoveApiToken(tokenId);
 
         public List<ApiTokenEntity> GetAllApiTokens() => _environmentDatabase.ReadAllApiTokens();
 

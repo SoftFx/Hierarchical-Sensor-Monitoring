@@ -16,8 +16,9 @@ namespace HSMServer.Authentication
     // converts, Kind.Unspecified is interpreted as UTC.
     public interface IApiTokenManager : IAsyncStorage
     {
-        // False when revocation generation state is missing, corrupt or regressed. Every API
-        // token authentication must fail closed while this is false.
+        // False when the durable state was not fully provable at boot: the token-row scan
+        // failed, or revocation generation state is missing, corrupt or regressed. Every
+        // API token authentication must fail closed while this is false.
         bool IsGenerationStateHealthy { get; }
 
         long GlobalRevocationGeneration { get; }
@@ -80,9 +81,10 @@ namespace HSMServer.Authentication
         long AdvanceGlobalRevocationGeneration();
 
         // Drops a record from the live authentication index after its durable row was
-        // deleted (retention cleanup). The caller removes the durable row FIRST — the
-        // reverse order would let the record rejoin the index after restart. False when
-        // no live record existed for the TokenId.
+        // deleted (retention cleanup). The caller removes the durable row FIRST and only
+        // calls this when RemoveApiToken returned true — unpublishing after a failed
+        // removal would let the row rejoin the index after restart. False when no live
+        // record existed for the TokenId.
         bool Unpublish(string tokenId);
 
         // Advances the durable owner generation (persist first), then publishes it to

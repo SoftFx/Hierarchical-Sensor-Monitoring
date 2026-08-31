@@ -74,11 +74,17 @@ namespace HSMServer.Authentication
 
         public Task Initialize()
         {
-            // Fail closed until generation state is proven authoritative.
+            // Fail closed until the whole durable state — token rows and generation rows —
+            // is proven readable and consistent. A swallowed scan failure would present an
+            // empty index as a fresh install: every existing token would silently stop
+            // authenticating while health reports true.
             _isGenerationStateHealthy = false;
 
-            LoadTokens();
-            LoadGenerations();
+            var tokensLoaded = LoadTokens();
+            var generationsLoaded = LoadGenerations();
+
+            if (tokensLoaded && generationsLoaded)
+                _isGenerationStateHealthy = true;
 
             _logger.LogInformation(
                 "API token index initialized: {TokenCount} tokens, global generation {Generation}, healthy = {Healthy}",
@@ -482,11 +488,27 @@ namespace HSMServer.Authentication
             token.GlobalRevocationGenerationAtIssue == globalGeneration &&
             token.OwnerRevocationGenerationAtIssue == ownerGeneration;
 
-        private void LoadTokens()
+        // True when the token rows were scanned successfully (individual corrupt records
+        // are skipped, but the scan itself must succeed). False fails the whole index
+        // closed: an unreadable token region is not a fresh install.
+        private bool LoadTokens()
         {
+            List<ApiTokenEntity> candidates;
+
+            try
+            {
+                candidates = _databaseCore.GetAllApiTokens();
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "API token rows are unreadable; all API tokens will fail authentication until the server is restarted");
+
+                return false;
+            }
+
             lock (_stateLock)
             {
-                foreach (var candidate in _databaseCore.GetAllApiTokens())
+                foreach (var candidate in candidates)
                 {
                     if (!IsLoadable(candidate) || !ApiTokenGrants.TryCanonicalize(candidate.Grants, out var canonicalGrants))
                     {
@@ -502,9 +524,11 @@ namespace HSMServer.Authentication
                     Publish(candidate with { Grants = canonicalGrants });
                 }
             }
+
+            return true;
         }
 
-        private void LoadGenerations()
+        private bool LoadGenerations()
         {
             lock (_stateLock)
             {
@@ -521,7 +545,7 @@ namespace HSMServer.Authentication
                 {
                     _logger.LogError(e, "API token revocation generation state is unreadable; all API tokens will fail authentication until the server is restarted");
 
-                    return;
+                    return false;
                 }
 
                 Volatile.Write(ref _globalGeneration, globalGeneration);
@@ -536,12 +560,12 @@ namespace HSMServer.Authentication
                         _logger.LogError("API token revocation generation state is regressed (token entity {EntityId}); all API tokens will fail authentication until the server is restarted",
                             token.EntityId);
 
-                        return;
+                        return false;
                     }
                 }
-
-                _isGenerationStateHealthy = true;
             }
+
+            return true;
         }
 
         private static bool IsLoadable(ApiTokenEntity entity) =>

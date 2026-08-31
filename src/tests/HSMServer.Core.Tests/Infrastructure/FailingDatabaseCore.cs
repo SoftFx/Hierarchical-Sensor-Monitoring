@@ -95,15 +95,22 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public ApiTokenEntity GetApiToken(string tokenId) => _inner.GetApiToken(tokenId);
 
-        public void RemoveApiToken(string tokenId)
+        // Mirrors the real contract: a failed removal reports false instead of throwing.
+        public bool RemoveApiToken(string tokenId)
         {
             if (ShouldFailApiTokenOp?.Invoke(nameof(RemoveApiToken)) == true)
-                throw new InvalidOperationException("Simulated DB failure for API token removal");
+                return false;
 
-            _inner.RemoveApiToken(tokenId);
+            return _inner.RemoveApiToken(tokenId);
         }
 
-        public List<ApiTokenEntity> GetAllApiTokens() => _inner.GetAllApiTokens();
+        public List<ApiTokenEntity> GetAllApiTokens()
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(GetAllApiTokens)) == true)
+                throw new InvalidOperationException("Simulated DB failure for the API token scan");
+
+            return _inner.GetAllApiTokens();
+        }
 
         public long GetGlobalRevocationGeneration()
         {

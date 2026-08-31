@@ -42,6 +42,71 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void Initialize_UnreadableTokenScan_FailsClosedInsteadOfReportingAnEmptyHealthyIndex()
+        {
+            // A failed boot scan must not present an empty index as a fresh install:
+            // every existing token would silently stop authenticating while health
+            // reports true. The store propagates scan failures; the manager gates
+            // health on them like it does on unreadable generations.
+            _databaseCoreManager.DatabaseCore.PutApiToken(new ApiTokenEntity
+            {
+                EntityVersion = 1,
+                EntityId = Guid.NewGuid(),
+                TokenId = new string('A', ApiTokenMaterial.TokenIdLength),
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "existing-before-scan-failure",
+                Grants = BuildGrants("alerts:read"),
+                CreatedAtUtc = DateTime.UtcNow.Ticks,
+            });
+
+            var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailApiTokenOp = op => op == "GetAllApiTokens",
+            };
+
+            using var manager = new ApiTokenManager(failing, NullLogger<ApiTokenManager>.Instance);
+
+            manager.Initialize().Wait();
+
+            Assert.False(manager.IsGenerationStateHealthy);
+        }
+
+        [Fact]
+        public void RemoveApiToken_FailedRemoval_ReportsFalseSoRetentionSkipsUnpublish()
+        {
+            // The retention flow is remove-durable-first, then Unpublish. A removal
+            // failure must report false so the caller never unpublishes a record whose
+            // durable row may still exist (it would rejoin the index after restart).
+            var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailApiTokenOp = op => op == "RemoveApiToken",
+            };
+
+            Assert.False(failing.RemoveApiToken(new string('A', ApiTokenMaterial.TokenIdLength)));
+
+            // The underlying store reports true once the row is gone, so the happy path
+            // of the retention flow still unpublishes.
+            var tokenId = new string('Q', ApiTokenMaterial.TokenIdLength);
+
+            _databaseCoreManager.DatabaseCore.PutApiToken(new ApiTokenEntity
+            {
+                EntityVersion = 1,
+                EntityId = Guid.NewGuid(),
+                TokenId = tokenId,
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "removable",
+                Grants = BuildGrants("alerts:read"),
+                CreatedAtUtc = DateTime.UtcNow.Ticks,
+            });
+
+            Assert.True(_databaseCoreManager.DatabaseCore.RemoveApiToken(tokenId));
+        }
+
+        [Fact]
         public void TryCreateToken_PersistsFirst_SecretDisclosedOnce()
         {
             using var manager = CreateManager();

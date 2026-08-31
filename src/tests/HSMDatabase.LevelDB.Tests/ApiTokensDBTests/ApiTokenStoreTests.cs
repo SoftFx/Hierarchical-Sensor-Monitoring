@@ -113,16 +113,23 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
         }
 
         [Fact]
-        public void RemoveApiToken_DeletesRow()
+        public void RemoveApiToken_DeletesRowAndReportsOutcome()
         {
             var entity = BuildEntity(tokenId: TokenIdA);
 
             Assert.True(_worker.TryInsertApiToken(entity));
 
-            _worker.RemoveApiToken(entity.TokenId);
+            // True = the row is gone, so retention may unpublish the live record.
+            Assert.True(_worker.RemoveApiToken(entity.TokenId));
 
             Assert.Null(_worker.GetApiToken(entity.TokenId));
             Assert.Empty(_worker.ReadAllApiTokens());
+
+            // Idempotent: an already-absent row is still "gone" — true again.
+            Assert.True(_worker.RemoveApiToken(entity.TokenId));
+
+            // A null id would target the bare "ApiToken_" prefix key.
+            Assert.Throws<ArgumentException>(() => _worker.RemoveApiToken(null));
         }
 
         [Fact]

@@ -33,7 +33,7 @@ handler PR and extends this file.
 
 - `TryInsertApiToken` persists a readable-back row; same TokenId twice → false with the original row intact.
 - Atomic rotation batch writes revoked-old + replacement together; replacement TokenId collision → false with both rows untouched.
-- Prefix scan returns only token rows (never generation rows); removal deletes the row.
+- Prefix scan returns only token rows (never generation rows); a scan failure propagates so boot fails the index closed (an empty result means fresh install, not outage); removal deletes the row and reports the outcome (`true` = row gone incl. already absent, `null` id throws).
 - Generations: missing state reads 0; advances are monotonic and durable across reopen; corrupt state (unparsable or negative) throws.
 
 ## Manager (`ApiTokenManagerTests`, DatabaseCore level)
@@ -46,8 +46,8 @@ handler PR and extends this file.
 - Rotate: fresh EntityId/TokenId/secret, grants and finite expiry preserved (never expanded, never made unlimited), old revoked atomically, quota slot replaced 1:1; a past requested or inherited expiry is refused; rotation after a global or owner emergency revoke is refused — no live replacement is minted from a generation-invalidated source (checked in-memory and after reopen).
 - Generations: global advance invalidates every owner's quota immediately; owner advance invalidates only that owner; an owner with a durable generation but no cached value (post-retention) gets it read and cached on create, staying consistent across restart.
 - Minting fails closed: create/rotate return false (never throw) while generation state is unhealthy or when the owner-generation fallback read hits an unreadable row; no durable or live state is left.
-- Fail closed at load: regressed generation state marks the index unhealthy; unloadable records (bad TokenId shape, null grants, foreign version byte) are skipped and never authenticate; a row with a non-canonical boundary id loads canonicalized and still restricts.
-- `Unpublish` removes a record from all three live maps and is idempotent.
+- Fail closed at load: an unreadable token-row scan marks the index unhealthy (empty scan ≠ fresh install); regressed generation state marks the index unhealthy; unloadable records (bad TokenId shape, null grants, foreign version byte) are skipped and never authenticate; a row with a non-canonical boundary id loads canonicalized and still restricts.
+- `Unpublish` removes a record from all three live maps and is idempotent; a failed durable removal reports false so retention skips the unpublish (no resurrection after restart).
 
 ## Operations catalog (`ApiTokenOperationsTests`)
 
