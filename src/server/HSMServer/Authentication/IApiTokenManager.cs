@@ -8,6 +8,12 @@ namespace HSMServer.Authentication
     // Authoritative in-memory index over durable API token records. Dedicated on purpose:
     // token creation must never go through the generic ConcurrentStorage.TryAdd, which
     // publishes to memory before persistence.
+    //
+    // Thread safety: the implementation is a singleton used from request threads. Mutation
+    // methods serialize their whole read -> persist -> publish sequence, so concurrent
+    // lifecycle calls cannot lose a revocation; read methods are lock-free and safe to call
+    // concurrently with mutations. All DateTime parameters are UTC by contract: Kind.Local
+    // converts, Kind.Unspecified is interpreted as UTC.
     public interface IApiTokenManager : IAsyncStorage
     {
         // False when revocation generation state is missing, corrupt or regressed. Every API
@@ -33,7 +39,8 @@ namespace HSMServer.Authentication
             DateTime? expiresAtUtc, string createdBy, out ApiTokenEntity entity, out string fullToken);
 
         // Restriction only removes grant pairs and/or shortens expiry; returns false on any
-        // expansion attempt. Idempotently records RestrictedAtUtc/RestrictedBy.
+        // expansion attempt and for a revoked token (revocation is terminal). Idempotently
+        // records RestrictedAtUtc/RestrictedBy.
         bool TryRestrictToken(Guid entityId, List<ApiTokenGrantEntity> remainingGrants, DateTime? shortenedExpiryUtc,
             string restrictedBy, out ApiTokenEntity entity);
 

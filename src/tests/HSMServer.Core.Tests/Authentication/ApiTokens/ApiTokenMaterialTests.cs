@@ -53,15 +53,14 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
-        public void FormatToken_TryParse_RoundTripsBytesAndVersion()
+        public void FormatToken_TryParse_RoundTripsBytes()
         {
             var material = ApiTokenMaterial.Generate();
 
             var token = ApiTokenMaterial.FormatToken(material.TokenId, material.Secret);
 
-            Assert.True(ApiTokenMaterial.TryParse(token, out var versionByte, out var tokenId, out var secret));
+            Assert.True(ApiTokenMaterial.TryParse(token, out var tokenId, out var secret));
 
-            Assert.Equal(ApiTokenMaterial.CurrentVersionByte, versionByte);
             Assert.Equal(material.TokenIdBytes, tokenId);
             Assert.Equal(material.SecretBytes, secret);
         }
@@ -71,7 +70,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         [InlineData("")]
         public void TryParse_EmptyInput_IsRejected(string token)
         {
-            Assert.False(ApiTokenMaterial.TryParse(token, out _, out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(token, out _, out _));
         }
 
         [Fact]
@@ -79,16 +78,16 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         {
             var token = $"hsm_pat_v2_{TokenIdA}.{SecretA}";
 
-            Assert.False(ApiTokenMaterial.TryParse(token, out _, out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(token, out _, out _));
         }
 
         [Fact]
         public void TryParse_MissingOrDuplicatedSeparator_IsRejected()
         {
-            Assert.False(ApiTokenMaterial.TryParse($"hsm_pat_v1_{TokenIdA}", out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse($"hsm_pat_v1_{TokenIdA}.", out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse($"hsm_pat_v1_.{SecretA}", out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse($"hsm_pat_v1_{TokenIdA}..{SecretA}", out _, out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse($"hsm_pat_v1_{TokenIdA}", out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse($"hsm_pat_v1_{TokenIdA}.", out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse($"hsm_pat_v1_.{SecretA}", out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse($"hsm_pat_v1_{TokenIdA}..{SecretA}", out _, out _));
         }
 
         [Fact]
@@ -99,10 +98,10 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var shortSecret = new string('A', ApiTokenMaterial.SecretLength - 1);
             var longSecret = new string('A', ApiTokenMaterial.SecretLength + 1);
 
-            Assert.False(ApiTokenMaterial.TryParse(Token(shortId, SecretA), out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse(Token(longId, SecretA), out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, shortSecret), out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, longSecret), out _, out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(shortId, SecretA), out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(longId, SecretA), out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, shortSecret), out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, longSecret), out _, out _));
         }
 
         [Fact]
@@ -115,11 +114,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var slashSecret = $"{new string('A', ApiTokenMaterial.SecretLength - 1)}/";
             var spacedSecret = $"{new string('A', ApiTokenMaterial.SecretLength - 1)} ";
 
-            Assert.False(ApiTokenMaterial.TryParse(Token(paddedId, SecretA), out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, paddedSecret), out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse(Token(plusId, SecretA), out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, slashSecret), out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, spacedSecret), out _, out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(paddedId, SecretA), out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, paddedSecret), out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(plusId, SecretA), out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, slashSecret), out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, spacedSecret), out _, out _));
         }
 
         [Fact]
@@ -132,9 +131,20 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var idAlias = $"{new string('A', ApiTokenMaterial.TokenIdLength - 1)}B";
             var secretAlias = $"{new string('A', ApiTokenMaterial.SecretLength - 1)}B";
 
-            Assert.True(ApiTokenMaterial.TryParse(Token(TokenIdA, SecretA), out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse(Token(idAlias, SecretA), out _, out _, out _));
-            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, secretAlias), out _, out _, out _));
+            Assert.True(ApiTokenMaterial.TryParse(Token(TokenIdA, SecretA), out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(idAlias, SecretA), out _, out _));
+            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, secretAlias), out _, out _));
+        }
+
+        [Fact]
+        public void TryParse_RejectedInput_LeavesAllOutsNull()
+        {
+            // Well-formed id with a non-canonical secret: the documented failure contract
+            // is "all out parameters null", including the already-decoded id.
+            Assert.False(ApiTokenMaterial.TryParse(Token(TokenIdA, $"{new string('A', ApiTokenMaterial.SecretLength - 1)}B"), out var tokenId, out var secret));
+
+            Assert.Null(tokenId);
+            Assert.Null(secret);
         }
 
         [Fact]

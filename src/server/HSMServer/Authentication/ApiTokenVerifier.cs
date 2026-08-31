@@ -23,9 +23,12 @@ namespace HSMServer.Authentication
         // Fixed dummy verifier compared against when the presented TokenId is unknown: the
         // unknown path performs the same hash-and-compare work as the found path and cannot
         // be distinguished from it. Pure function of constants, so it is stable across
-        // restarts and deployments.
-        public static readonly byte[] DummyVerifier = ComputeVerifier(
+        // restarts and deployments. Exposed as a span: a writable array would let any code
+        // in the assembly mutate the fixed comparison constant.
+        private static readonly byte[] _dummyVerifier = ComputeVerifier(
             ApiTokenMaterial.CurrentVersionByte, new byte[ApiTokenMaterial.TokenIdBytesLength], new byte[ApiTokenMaterial.SecretBytesLength]);
+
+        public static ReadOnlySpan<byte> DummyVerifier => _dummyVerifier;
 
 
         public static byte[] ComputeVerifier(byte versionByte, ReadOnlySpan<byte> tokenId, ReadOnlySpan<byte> secret)
@@ -57,9 +60,9 @@ namespace HSMServer.Authentication
 
         // Constant-time comparison of a computed candidate against the stored-or-dummy
         // verifier. Callers must select DummyVerifier for unknown records BEFORE comparing.
-        public static bool Verify(byte[] candidate, byte[] storedOrDummyVerifier) =>
-            candidate is { Length: 32 } &&
-            storedOrDummyVerifier is { Length: 32 } &&
+        public static bool Verify(byte[] candidate, ReadOnlySpan<byte> storedOrDummyVerifier) =>
+            candidate is { Length: SHA256.HashSizeInBytes } &&
+            storedOrDummyVerifier.Length == SHA256.HashSizeInBytes &&
             CryptographicOperations.FixedTimeEquals(candidate, storedOrDummyVerifier);
     }
 }

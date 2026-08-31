@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Tests.DatabaseTests;
@@ -52,8 +55,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.True(created);
             Assert.NotNull(entity);
             Assert.StartsWith("hsm_pat_v1_", fullToken);
-            Assert.True(ApiTokenMaterial.TryParse(fullToken, out var versionByte, out var tokenIdBytes, out _));
-            Assert.Equal(ApiTokenMaterial.CurrentVersionByte, versionByte);
+            Assert.True(ApiTokenMaterial.TryParse(fullToken, out var tokenIdBytes, out _));
 
             // The stored verifier matches the presented secret, but no stored field equals
             // the secret itself.
@@ -412,6 +414,290 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.False(failingManager.TryRotateToken(entity.EntityId, null, "u", out _, out _));
             Assert.Null(failingManager.GetToken(entity.TokenId).RevokedAtUtc);
             Assert.Equal(1, failingManager.CountQuotaEligibleTokens(OwnerId));
+        }
+
+
+        [Fact]
+        public void TryCreateToken_UnspecifiedKindExpiry_IsInterpretedAsUtc()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            // An offset-less form/JSON value has Kind.Unspecified: it must be read as the
+            // UTC time it names, never converted from the server's local zone.
+            var expiry = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(7).Date.AddHours(12), DateTimeKind.Unspecified);
+
+            Assert.True(manager.TryCreateToken(OwnerId, "utc-by-contract", null, BuildGrants("alerts:read"), expiry, "u", out var entity, out _));
+
+            Assert.Equal(expiry.Ticks, entity.ExpiresAtUtc.Value);
+        }
+
+        [Fact]
+        public void TryCreateToken_SanitizesAndBoundsFreeText()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            var longName = new string('n', 512);
+            var longDescription = $"first line{Environment.NewLine}second\x0000line {new string('d', 2048)}";
+
+            Assert.True(manager.TryCreateToken(OwnerId, longName, longDescription, BuildGrants("alerts:read"), null, "u", out var entity, out _));
+
+            Assert.Equal(256, entity.Name.Length);
+            Assert.Equal(new string('n', 256), entity.Name);
+
+            // Control characters are neutralized and the description is bounded.
+            Assert.True(entity.Description.Length <= 1024);
+            Assert.All(entity.Description, c => Assert.False(char.IsControl(c)));
+
+            // The revocation reason is sanitized the same way: each control character
+            // (here CR and LF) becomes one space, so nothing can forge log lines.
+            manager.TryRevokeToken(entity.EntityId, "u", "forged\r\nsecond line", out var revoked);
+
+            Assert.Equal("forged  second line", revoked.RevocationReason);
+        }
+
+        [Fact]
+        public void Initialize_NonCanonicalBoundaryIdRow_LoadsCanonicalGrantsAndRestricts()
+        {
+            var productId = Guid.NewGuid();
+            var tokenId = new string('A', ApiTokenMaterial.TokenIdLength);
+
+            _databaseCoreManager.DatabaseCore.PutApiToken(new ApiTokenEntity
+            {
+                EntityVersion = 1,
+                EntityId = Guid.NewGuid(),
+                TokenId = tokenId,
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "non-canonical-row",
+                Grants =
+                [
+                    new ApiTokenGrantEntity
+                    {
+                        Operation = ApiTokenOperations.ProductsRead,
+                        BoundaryKind = (byte)ApiTokenBoundaryKind.Product,
+                        BoundaryId = productId.ToString("B"), // parses, but not the "D" form
+                    },
+                ],
+                CreatedAtUtc = DateTime.UtcNow.Ticks,
+            });
+
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            var loaded = manager.GetToken(tokenId);
+
+            Assert.NotNull(loaded);
+            Assert.Equal(productId.ToString(), loaded.Grants[0].BoundaryId);
+
+            // Without load-time canonicalization this removal is rejected: the canonical
+            // "D"-form pair never matches the stored non-canonical grant.
+            Assert.True(manager.TryRestrictToken(loaded.EntityId, [], null, "u", out var restricted));
+            Assert.Empty(restricted.Grants);
+        }
+
+        [Fact]
+        public void Initialize_NullGrantsRow_IsSkipped()
+        {
+            var entityId = Guid.NewGuid();
+
+            _databaseCoreManager.DatabaseCore.PutApiToken(new ApiTokenEntity
+            {
+                EntityVersion = 1,
+                EntityId = entityId,
+                TokenId = new string('C', ApiTokenMaterial.TokenIdLength),
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "null-grants-row",
+                Grants = null,
+                CreatedAtUtc = DateTime.UtcNow.Ticks,
+            });
+
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            Assert.Null(manager.GetTokenByEntityId(entityId));
+        }
+
+        [Fact]
+        public void TryRestrictToken_RevokedToken_IsRejected()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            manager.TryCreateToken(OwnerId, "dead", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryRevokeToken(entity.EntityId, "u", "gone", out _);
+
+            Assert.False(manager.TryRestrictToken(entity.EntityId, BuildGrants("alerts:read"), null, "u", out _));
+        }
+
+        [Fact]
+        public void TryCreateToken_OwnerAbsentFromGenerationCache_UsesDurableOwnerGeneration()
+        {
+            // Retention can remove every record of an owner whose generation was advanced:
+            // the durable counter then outlives the in-memory index, and a new token must
+            // be stamped with it, not with the missing-as-zero default.
+            var orphanOwner = Guid.NewGuid();
+
+            _databaseCoreManager.DatabaseCore.AdvanceOwnerRevocationGeneration(orphanOwner);
+            _databaseCoreManager.DatabaseCore.AdvanceOwnerRevocationGeneration(orphanOwner);
+            Assert.Equal(3, _databaseCoreManager.DatabaseCore.AdvanceOwnerRevocationGeneration(orphanOwner));
+
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            // No loadable records for this owner, so the load path never cached a value.
+            Assert.Equal(0, manager.GetOwnerRevocationGeneration(orphanOwner));
+
+            Assert.True(manager.TryCreateToken(orphanOwner, "post-cleanup", null, BuildGrants("alerts:read"), null, "u", out var entity, out _));
+            Assert.Equal(3, entity.OwnerRevocationGenerationAtIssue);
+
+            // Consistent in-process: the fallback is cached, so the token counts.
+            Assert.Equal(1, manager.CountQuotaEligibleTokens(orphanOwner));
+
+            // And consistent across restart: the durable generation still matches the stamp.
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            Assert.True(reopened.IsGenerationStateHealthy);
+            Assert.Equal(1, reopened.CountQuotaEligibleTokens(orphanOwner));
+        }
+
+        [Fact]
+        public void ConcurrentCreateAndEnumerate_OneOwner_AllTokensPublishedSafely()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            const int tokens = 32;
+
+            var creating = Enumerable.Range(0, tokens)
+                .Select(i => Task.Run(() => manager.TryCreateToken(OwnerId, $"parallel-{i}", null, BuildGrants("alerts:read"), null, "u", out _, out _)))
+                .ToArray();
+
+            // Enumeration runs against the same owner index the creates publish into.
+            var enumerating = Task.Run(() =>
+            {
+                for (var i = 0; i < 10_000; i++)
+                    _ = manager.GetTokensByOwner(OwnerId).Count;
+            });
+
+            Task.WaitAll([.. creating, enumerating]);
+
+            Assert.All(creating, task => Assert.True(task.Result));
+            Assert.Equal(tokens, manager.GetTokensByOwner(OwnerId).Count);
+            Assert.Equal(tokens, manager.CountQuotaEligibleTokens(OwnerId));
+        }
+
+        [Fact]
+        public void ConcurrentRevokeVersusRestrict_RevocationIsNeverLost()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            var tokenIds = new List<string>();
+
+            for (var round = 0; round < 20; round++)
+            {
+                manager.TryCreateToken(OwnerId, $"race-restrict-{round}", null, BuildGrants("alerts:read", "alerts:write"), null, "u", out var entity, out _);
+                tokenIds.Add(entity.TokenId);
+
+                using var start = new Barrier(2);
+
+                var revoking = Task.Run(() =>
+                {
+                    start.SignalAndWait();
+                    return manager.TryRevokeToken(entity.EntityId, "u", "race", out _);
+                });
+                var restricting = Task.Run(() =>
+                {
+                    start.SignalAndWait();
+                    return manager.TryRestrictToken(entity.EntityId, BuildGrants("alerts:read"), null, "u", out _);
+                });
+
+                Task.WaitAll(revoking, restricting);
+
+                // Whoever wins, the revocation must survive the concurrent restrict.
+                Assert.True(revoking.Result);
+                Assert.NotNull(manager.GetToken(entity.TokenId).RevokedAtUtc);
+            }
+
+            // Durable as well: a fresh index sees every raced token revoked.
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            foreach (var tokenId in tokenIds)
+                Assert.NotNull(reopened.GetToken(tokenId).RevokedAtUtc);
+        }
+
+        [Fact]
+        public void ConcurrentRevokeVersusRotate_SourceTokenAlwaysRevoked()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            var tokenIds = new List<string>();
+
+            for (var round = 0; round < 20; round++)
+            {
+                manager.TryCreateToken(OwnerId, $"race-rotate-{round}", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+                tokenIds.Add(entity.TokenId);
+
+                using var start = new Barrier(2);
+
+                var revoking = Task.Run(() =>
+                {
+                    start.SignalAndWait();
+                    return manager.TryRevokeToken(entity.EntityId, "u", "race", out _);
+                });
+                var rotating = Task.Run(() =>
+                {
+                    start.SignalAndWait();
+                    return manager.TryRotateToken(entity.EntityId, null, "u", out _, out _);
+                });
+
+                Task.WaitAll(revoking, rotating);
+
+                Assert.True(revoking.Result);
+                Assert.NotNull(manager.GetToken(entity.TokenId).RevokedAtUtc);
+            }
+
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            foreach (var tokenId in tokenIds)
+                Assert.NotNull(reopened.GetToken(tokenId).RevokedAtUtc);
+        }
+
+        [Fact]
+        public void ConcurrentAdvanceGenerations_InMemoryMatchesDurableAndNeverRegresses()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            const int advances = 32;
+            var owner = Guid.NewGuid();
+
+            var globalResults = Enumerable.Range(0, advances)
+                .Select(_ => Task.Run(manager.AdvanceGlobalRevocationGeneration))
+                .ToArray();
+            var ownerResults = Enumerable.Range(0, advances)
+                .Select(_ => Task.Run(() => manager.AdvanceOwnerRevocationGeneration(owner)))
+                .ToArray();
+
+            var allGlobal = Task.WhenAll(globalResults).Result;
+            var allOwner = Task.WhenAll(ownerResults).Result;
+
+            // Every advance is durable exactly once and returned exactly once.
+            Assert.Equal(Enumerable.Range(1, advances).Select(i => (long)i), allGlobal.OrderBy(_ => _));
+            Assert.Equal(Enumerable.Range(1, advances).Select(i => (long)i), allOwner.OrderBy(_ => _));
+
+            // The in-memory values equal the durable counters, not a stale one.
+            Assert.Equal(_databaseCoreManager.DatabaseCore.GetGlobalRevocationGeneration(), manager.GlobalRevocationGeneration);
+            Assert.Equal(_databaseCoreManager.DatabaseCore.GetOwnerRevocationGeneration(owner), manager.GetOwnerRevocationGeneration(owner));
         }
 
 

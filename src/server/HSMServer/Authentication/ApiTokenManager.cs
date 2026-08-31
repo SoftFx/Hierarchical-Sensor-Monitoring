@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
@@ -17,26 +18,44 @@ namespace HSMServer.Authentication
     // Creation and rotation never go through the generic ConcurrentStorage.TryAdd — the
     // database worker serializes the TokenId existence check with the write, and a collision
     // retries with a completely new id/secret pair.
+    //
+    // Thread safety: the manager is a singleton reached from request threads. Every
+    // lifecycle mutation and every generation advance runs its whole read -> persist ->
+    // publish sequence under _stateLock, so a restrict/rotate derived from a
+    // pre-revocation snapshot can never durably overwrite a revocation. Readers take no
+    // lock and walk lock-free snapshot-safe structures only.
     public sealed class ApiTokenManager : IApiTokenManager
     {
         private const int MaxInsertAttempts = 3;
+        private const int MaxNameLength = 256;
+        private const int MaxDescriptionLength = 1024;
         private const int MaxReasonLength = 256;
 
         private readonly IDatabaseCore _databaseCore;
         private readonly ILogger<ApiTokenManager> _logger;
 
-        // Guards consistent snapshot reads of the authoritative generations while a token
-        // candidate captures its at-issue values.
-        private readonly object _generationLock = new();
+        // Serializes the whole read -> persist -> publish sequence of lifecycle mutations
+        // and generation advances. One lock instead of per-entity striping: these are
+        // low-frequency administrative operations, and a single gate also makes the
+        // generation snapshot reads of create/rotate consistent with advances.
+        private readonly object _stateLock = new();
 
         private readonly ConcurrentDictionary<string, ApiTokenEntity> _tokensByTokenId = new(StringComparer.Ordinal);
         private readonly ConcurrentDictionary<Guid, string> _tokenIdByEntityId = new();
-        private readonly ConcurrentDictionary<Guid, HashSet<string>> _tokenIdsByOwner = new();
+
+        // Owner side of the index. The values are concurrent sets rather than HashSet:
+        // readers enumerate them on request threads while a mutation publishes concurrently.
+        private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, byte>> _tokenIdsByOwner = new();
         private readonly ConcurrentDictionary<Guid, long> _ownerGenerations = new();
 
         // Volatile by convention: read on every authentication, flipped only during load or
         // advance. False means every API token authentication must fail closed.
         private volatile bool _isGenerationStateHealthy;
+
+        // Written under _stateLock, read lock-free on the authentication and quota paths:
+        // Volatile.Read/Write give the visibility and the atomic 64-bit read that a plain
+        // long field cannot guarantee on every runtime (volatile long is not legal C#).
+        private long _globalGeneration;
 
 
         public ApiTokenManager(IDatabaseCore databaseCore, ILogger<ApiTokenManager> logger)
@@ -48,9 +67,7 @@ namespace HSMServer.Authentication
 
         public bool IsGenerationStateHealthy => _isGenerationStateHealthy;
 
-        public long GlobalRevocationGeneration => _globalGeneration;
-
-        private long _globalGeneration;
+        public long GlobalRevocationGeneration => Volatile.Read(ref _globalGeneration);
 
 
         public Task Initialize()
@@ -76,7 +93,7 @@ namespace HSMServer.Authentication
 
         public List<ApiTokenEntity> GetTokensByOwner(Guid ownerUserId) =>
             _tokenIdsByOwner.TryGetValue(ownerUserId, out var tokenIds)
-                ? tokenIds.Select(GetToken).Where(token => token is not null).ToList()
+                ? tokenIds.Keys.Select(GetToken).Where(token => token is not null).ToList()
                 : [];
 
         public long GetOwnerRevocationGeneration(Guid ownerUserId) => _ownerGenerations.GetValueOrDefault(ownerUserId);
@@ -88,24 +105,27 @@ namespace HSMServer.Authentication
             entity = null;
             fullToken = null;
 
-            if (ownerUserId == Guid.Empty || string.IsNullOrWhiteSpace(name))
+            var sanitizedName = Sanitize(name, MaxNameLength);
+            var sanitizedDescription = Sanitize(description, MaxDescriptionLength);
+
+            if (ownerUserId == Guid.Empty || string.IsNullOrEmpty(sanitizedName))
                 return false;
 
             if (!ApiTokenGrants.TryCanonicalize(grants, out var canonicalGrants))
                 return false;
 
-            if (expiresAtUtc.HasValue && expiresAtUtc.Value.ToUniversalTime() <= DateTime.UtcNow)
+            var expiryTicks = NormalizeUtcTicks(expiresAtUtc);
+
+            if (expiryTicks.HasValue && expiryTicks.Value <= DateTime.UtcNow.Ticks)
                 return false;
 
-            for (var attempt = 1; attempt <= MaxInsertAttempts; attempt++)
+            lock (_stateLock)
             {
-                var material = ApiTokenMaterial.Generate();
-
-                ApiTokenEntity candidate;
-
-                lock (_generationLock)
+                for (var attempt = 1; attempt <= MaxInsertAttempts; attempt++)
                 {
-                    candidate = new ApiTokenEntity
+                    var material = ApiTokenMaterial.Generate();
+
+                    var candidate = new ApiTokenEntity
                     {
                         EntityVersion = 1,
                         EntityId = Guid.NewGuid(),
@@ -113,38 +133,38 @@ namespace HSMServer.Authentication
                         VersionByte = ApiTokenMaterial.CurrentVersionByte,
                         Verifier = ApiTokenVerifier.ComputeVerifier(ApiTokenMaterial.CurrentVersionByte, material.TokenIdBytes, material.SecretBytes),
                         OwnerUserId = ownerUserId,
-                        GlobalRevocationGenerationAtIssue = _globalGeneration,
-                        OwnerRevocationGenerationAtIssue = GetOwnerRevocationGeneration(ownerUserId),
-                        Name = name.Trim(),
-                        Description = description?.Trim(),
+                        GlobalRevocationGenerationAtIssue = GlobalRevocationGeneration,
+                        OwnerRevocationGenerationAtIssue = GetOrLoadOwnerGeneration(ownerUserId),
+                        Name = sanitizedName,
+                        Description = sanitizedDescription,
                         Grants = canonicalGrants,
                         CreatedAtUtc = DateTime.UtcNow.Ticks,
                         CreatedBy = createdBy,
-                        ExpiresAtUtc = expiresAtUtc?.ToUniversalTime().Ticks,
+                        ExpiresAtUtc = expiryTicks,
                     };
-                }
 
-                ApiTokenMaterial.Clear(material.SecretBytes);
+                    ApiTokenMaterial.Clear(material.SecretBytes);
 
-                try
-                {
-                    // Collision returns false: discard the whole candidate, new id/secret pair.
-                    if (!_databaseCore.TryInsertApiToken(candidate))
-                        continue;
+                    try
+                    {
+                        // Collision returns false: discard the whole candidate, new id/secret pair.
+                        if (!_databaseCore.TryInsertApiToken(candidate))
+                            continue;
 
-                    // Published only after the durable write succeeded.
-                    Publish(candidate);
+                        // Published only after the durable write succeeded.
+                        Publish(candidate);
 
-                    entity = candidate;
-                    fullToken = ApiTokenMaterial.FormatToken(material.TokenId, material.Secret);
+                        entity = candidate;
+                        fullToken = ApiTokenMaterial.FormatToken(material.TokenId, material.Secret);
 
-                    return true;
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "API token persistence failed during create; no token was created");
+                        return true;
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.LogError(e, "API token persistence failed during create; no token was created");
 
-                    return false;
+                        return false;
+                    }
                 }
             }
 
@@ -159,29 +179,37 @@ namespace HSMServer.Authentication
         {
             entity = null;
 
-            if (!TryGetTrackedToken(entityId, out var current))
-                return false;
-
-            if (!ApiTokenGrants.TryCanonicalize(remainingGrants, out var canonicalRemaining))
-                return false;
-
-            // Restriction can only remove pairs; any pair not in the current set is expansion.
-            foreach (var grant in canonicalRemaining)
-                if (!current.Grants.Contains(grant))
+            lock (_stateLock)
+            {
+                if (!TryGetTrackedToken(entityId, out var current))
                     return false;
 
-            if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
-                return false;
+                // A revoked token is terminal; "restrict succeeded" on a dead record would be
+                // a misleading result for the management layer.
+                if (current.RevokedAtUtc is not null)
+                    return false;
 
-            var restricted = current with
-            {
-                Grants = canonicalRemaining,
-                ExpiresAtUtc = newExpiry,
-                RestrictedAtUtc = DateTime.UtcNow.Ticks,
-                RestrictedBy = restrictedBy,
-            };
+                if (!ApiTokenGrants.TryCanonicalize(remainingGrants, out var canonicalRemaining))
+                    return false;
 
-            return TryPersistAndPublish(restricted, out entity);
+                // Restriction can only remove pairs; any pair not in the current set is expansion.
+                foreach (var grant in canonicalRemaining)
+                    if (!current.Grants.Contains(grant))
+                        return false;
+
+                if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
+                    return false;
+
+                var restricted = current with
+                {
+                    Grants = canonicalRemaining,
+                    ExpiresAtUtc = newExpiry,
+                    RestrictedAtUtc = DateTime.UtcNow.Ticks,
+                    RestrictedBy = restrictedBy,
+                };
+
+                return TryPersistAndPublish(restricted, out entity);
+            }
         }
 
 
@@ -191,27 +219,25 @@ namespace HSMServer.Authentication
             entity = null;
             fullToken = null;
 
-            if (!TryGetTrackedToken(entityId, out var current))
-                return false;
-
-            if (current.RevokedAtUtc is not null)
-                return false;
-
-            if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
-                return false;
-
-            var now = DateTime.UtcNow.Ticks;
-
-            for (var attempt = 1; attempt <= MaxInsertAttempts; attempt++)
+            lock (_stateLock)
             {
-                var material = ApiTokenMaterial.Generate();
+                if (!TryGetTrackedToken(entityId, out var current))
+                    return false;
 
-                ApiTokenEntity replacement;
-                ApiTokenEntity revokedOld;
+                if (current.RevokedAtUtc is not null)
+                    return false;
 
-                lock (_generationLock)
+                if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
+                    return false;
+
+                for (var attempt = 1; attempt <= MaxInsertAttempts; attempt++)
                 {
-                    replacement = new ApiTokenEntity
+                    var material = ApiTokenMaterial.Generate();
+
+                    // Stamped per attempt so a collision retry never persists a pre-retry timestamp.
+                    var now = DateTime.UtcNow.Ticks;
+
+                    var replacement = new ApiTokenEntity
                     {
                         EntityVersion = 1,
                         EntityId = Guid.NewGuid(),
@@ -219,8 +245,10 @@ namespace HSMServer.Authentication
                         VersionByte = ApiTokenMaterial.CurrentVersionByte,
                         Verifier = ApiTokenVerifier.ComputeVerifier(ApiTokenMaterial.CurrentVersionByte, material.TokenIdBytes, material.SecretBytes),
                         OwnerUserId = current.OwnerUserId,
-                        GlobalRevocationGenerationAtIssue = _globalGeneration,
-                        OwnerRevocationGenerationAtIssue = GetOwnerRevocationGeneration(current.OwnerUserId),
+                        // Captured under _stateLock, so a concurrent restrict cannot wedge a
+                        // just-removed grant into the replacement.
+                        GlobalRevocationGenerationAtIssue = GlobalRevocationGeneration,
+                        OwnerRevocationGenerationAtIssue = GetOrLoadOwnerGeneration(current.OwnerUserId),
                         Name = current.Name,
                         Description = current.Description,
                         Grants = current.Grants,
@@ -233,29 +261,29 @@ namespace HSMServer.Authentication
 
                     // The source token is revoked in the same atomic write that inserts the
                     // replacement; both take effect together or not at all.
-                    revokedOld = current with { RevokedAtUtc = now, RevokedBy = rotatedBy, RevocationReason = "rotated" };
-                }
+                    var revokedOld = current with { RevokedAtUtc = now, RevokedBy = rotatedBy, RevocationReason = "rotated" };
 
-                ApiTokenMaterial.Clear(material.SecretBytes);
+                    ApiTokenMaterial.Clear(material.SecretBytes);
 
-                try
-                {
-                    if (!_databaseCore.TryRotateApiToken(revokedOld, replacement))
-                        continue;
+                    try
+                    {
+                        if (!_databaseCore.TryRotateApiToken(revokedOld, replacement))
+                            continue;
 
-                    Publish(revokedOld);
-                    Publish(replacement);
+                        Publish(revokedOld);
+                        Publish(replacement);
 
-                    entity = replacement;
-                    fullToken = ApiTokenMaterial.FormatToken(material.TokenId, material.Secret);
+                        entity = replacement;
+                        fullToken = ApiTokenMaterial.FormatToken(material.TokenId, material.Secret);
 
-                    return true;
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "API token persistence failed during rotation; the source token is unchanged");
+                        return true;
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.LogError(e, "API token persistence failed during rotation; the source token is unchanged");
 
-                    return false;
+                        return false;
+                    }
                 }
             }
 
@@ -269,44 +297,56 @@ namespace HSMServer.Authentication
         {
             entity = null;
 
-            if (!TryGetTrackedToken(entityId, out var current))
-                return false;
-
-            // Idempotent: revoking an already revoked token succeeds without a rewrite.
-            if (current.RevokedAtUtc is not null)
+            lock (_stateLock)
             {
-                entity = current;
-                return true;
+                if (!TryGetTrackedToken(entityId, out var current))
+                    return false;
+
+                // Idempotent: revoking an already revoked token succeeds without a rewrite.
+                if (current.RevokedAtUtc is not null)
+                {
+                    entity = current;
+                    return true;
+                }
+
+                var revoked = current with
+                {
+                    RevokedAtUtc = DateTime.UtcNow.Ticks,
+                    RevokedBy = revokedBy,
+                    RevocationReason = Sanitize(reason, MaxReasonLength),
+                };
+
+                return TryPersistAndPublish(revoked, out entity);
             }
-
-            var revoked = current with
-            {
-                RevokedAtUtc = DateTime.UtcNow.Ticks,
-                RevokedBy = revokedBy,
-                RevocationReason = Sanitize(reason),
-            };
-
-            return TryPersistAndPublish(revoked, out entity);
         }
 
 
         public long AdvanceGlobalRevocationGeneration()
         {
             // Durable advance first; the in-memory value publishes only after it persisted.
-            var next = _databaseCore.AdvanceGlobalRevocationGeneration();
+            // Both steps under _stateLock: the worker serializes its read+write, so the
+            // durable counter is monotonic, and serialized publication can never regress
+            // the in-memory value below the durable one.
+            lock (_stateLock)
+            {
+                var next = _databaseCore.AdvanceGlobalRevocationGeneration();
 
-            _globalGeneration = next;
+                Volatile.Write(ref _globalGeneration, next);
 
-            return next;
+                return next;
+            }
         }
 
         public long AdvanceOwnerRevocationGeneration(Guid ownerUserId)
         {
-            var next = _databaseCore.AdvanceOwnerRevocationGeneration(ownerUserId);
+            lock (_stateLock)
+            {
+                var next = _databaseCore.AdvanceOwnerRevocationGeneration(ownerUserId);
 
-            _ownerGenerations[ownerUserId] = next;
+                _ownerGenerations[ownerUserId] = next;
 
-            return next;
+                return next;
+            }
         }
 
 
@@ -315,12 +355,15 @@ namespace HSMServer.Authentication
             if (!_tokenIdsByOwner.TryGetValue(ownerUserId, out var tokenIds))
                 return 0;
 
+            // One snapshot of both generations for the whole count, so every token is
+            // judged against the same pair of values.
             var now = DateTime.UtcNow.Ticks;
+            var globalGeneration = GlobalRevocationGeneration;
             var ownerGeneration = GetOwnerRevocationGeneration(ownerUserId);
 
-            return tokenIds.Count(tokenId =>
+            return tokenIds.Keys.Count(tokenId =>
                 _tokensByTokenId.TryGetValue(tokenId, out var token) &&
-                IsQuotaEligible(token, now, ownerGeneration));
+                IsQuotaEligible(token, now, globalGeneration, ownerGeneration));
         }
 
 
@@ -329,69 +372,78 @@ namespace HSMServer.Authentication
         }
 
 
-        private bool IsQuotaEligible(ApiTokenEntity token, long nowTicks, long ownerGeneration) =>
+        private static bool IsQuotaEligible(ApiTokenEntity token, long nowTicks, long globalGeneration, long ownerGeneration) =>
             token.RevokedAtUtc is null &&
             (token.ExpiresAtUtc is null || token.ExpiresAtUtc.Value > nowTicks) &&
-            token.GlobalRevocationGenerationAtIssue == _globalGeneration &&
+            token.GlobalRevocationGenerationAtIssue == globalGeneration &&
             token.OwnerRevocationGenerationAtIssue == ownerGeneration;
 
         private void LoadTokens()
         {
-            foreach (var candidate in _databaseCore.GetAllApiTokens())
+            lock (_stateLock)
             {
-                if (!IsLoadable(candidate))
+                foreach (var candidate in _databaseCore.GetAllApiTokens())
                 {
-                    // Fail closed: an unloadable record is simply never published to the
-                    // authentication index and can never authenticate.
-                    _logger.LogWarning("Skipping unloadable API token record (entity {EntityId}, version {Version})",
-                        candidate?.EntityId, candidate?.EntityVersion);
-                    continue;
-                }
+                    if (!IsLoadable(candidate) || !ApiTokenGrants.TryCanonicalize(candidate.Grants, out var canonicalGrants))
+                    {
+                        // Fail closed: an unloadable record is simply never published to the
+                        // authentication index and can never authenticate.
+                        _logger.LogWarning("Skipping unloadable API token record (entity {EntityId}, version {Version})",
+                            candidate?.EntityId, candidate?.EntityVersion);
+                        continue;
+                    }
 
-                Publish(candidate);
+                    // Publish the canonical grant list, not the raw row: a record written
+                    // with a non-canonical boundary id must still restrict cleanly.
+                    Publish(candidate with { Grants = canonicalGrants });
+                }
             }
         }
 
         private void LoadGenerations()
         {
-            try
+            lock (_stateLock)
             {
-                _globalGeneration = _databaseCore.GetGlobalRevocationGeneration();
-
-                foreach (var ownerUserId in _tokenIdsByOwner.Keys)
-                    _ownerGenerations[ownerUserId] = _databaseCore.GetOwnerRevocationGeneration(ownerUserId);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "API token revocation generation state is unreadable; all API tokens will fail authentication until reloaded");
-
-                return;
-            }
-
-            // Regressed state (a record issued at a generation newer than the authoritative
-            // one) can only mean damaged generation storage — fail closed as well.
-            foreach (var token in _tokensByTokenId.Values)
-            {
-                if (token.GlobalRevocationGenerationAtIssue > _globalGeneration ||
-                    token.OwnerRevocationGenerationAtIssue > GetOwnerRevocationGeneration(token.OwnerUserId))
+                try
                 {
-                    _logger.LogError("API token revocation generation state is regressed (token entity {EntityId}); all API tokens will fail authentication until reloaded",
-                        token.EntityId);
+                    _globalGeneration = _databaseCore.GetGlobalRevocationGeneration();
+
+                    foreach (var ownerUserId in _tokenIdsByOwner.Keys)
+                        _ownerGenerations[ownerUserId] = _databaseCore.GetOwnerRevocationGeneration(ownerUserId);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "API token revocation generation state is unreadable; all API tokens will fail authentication until reloaded");
 
                     return;
                 }
-            }
 
-            _isGenerationStateHealthy = true;
+                // Regressed state (a record issued at a generation newer than the authoritative
+                // one) can only mean damaged generation storage — fail closed as well.
+                foreach (var token in _tokensByTokenId.Values)
+                {
+                    if (token.GlobalRevocationGenerationAtIssue > _globalGeneration ||
+                        token.OwnerRevocationGenerationAtIssue > GetOwnerRevocationGeneration(token.OwnerUserId))
+                    {
+                        _logger.LogError("API token revocation generation state is regressed (token entity {EntityId}); all API tokens will fail authentication until reloaded",
+                            token.EntityId);
+
+                        return;
+                    }
+                }
+
+                _isGenerationStateHealthy = true;
+            }
         }
 
         private static bool IsLoadable(ApiTokenEntity entity) =>
             entity is not null &&
             entity.EntityVersion == 1 &&
+            entity.VersionByte == ApiTokenMaterial.CurrentVersionByte &&
             ApiTokenMaterial.IsValidTokenId(entity.TokenId) &&
             entity.Verifier is { Length: 32 } &&
             entity.OwnerUserId != Guid.Empty &&
-            ApiTokenGrants.AreValid(entity.Grants);
+            entity.Grants is not null;
 
         private bool TryGetTrackedToken(Guid entityId, out ApiTokenEntity entity)
         {
@@ -400,6 +452,8 @@ namespace HSMServer.Authentication
             return entity is not null;
         }
 
+        // Callers must hold _stateLock: the read-modify-write sequences this completes are
+        // only atomic when the whole sequence runs under the lock.
         private bool TryPersistAndPublish(ApiTokenEntity entity, out ApiTokenEntity published)
         {
             published = null;
@@ -425,8 +479,16 @@ namespace HSMServer.Authentication
         {
             _tokensByTokenId[entity.TokenId] = entity;
             _tokenIdByEntityId[entity.EntityId] = entity.TokenId;
-            _tokenIdsByOwner.GetOrAdd(entity.OwnerUserId, _ => new HashSet<string>()).Add(entity.TokenId);
+            _tokenIdsByOwner.GetOrAdd(entity.OwnerUserId, static _ => new ConcurrentDictionary<string, byte>())
+                .TryAdd(entity.TokenId, 0);
         }
+
+        // Owners absent from the cache — no loadable records, e.g. because retention
+        // removed them after an emergency revoke — still have a durable generation that
+        // must be stamped on new tokens, not the missing-as-zero default. Read it once and
+        // cache it. Only called under _stateLock, so a concurrent advance cannot interleave.
+        private long GetOrLoadOwnerGeneration(Guid ownerUserId) =>
+            _ownerGenerations.GetOrAdd(ownerUserId, static (id, database) => database.GetOwnerRevocationGeneration(id), _databaseCore);
 
         // Expiry can only be shortened: from an unlimited token to any finite value, or from
         // a finite value to an earlier one. Passing null keeps the current expiry.
@@ -437,7 +499,7 @@ namespace HSMServer.Authentication
             if (!requestedUtc.HasValue)
                 return true;
 
-            var requestedTicks = requestedUtc.Value.ToUniversalTime().Ticks;
+            var requestedTicks = NormalizeUtcTicks(requestedUtc).Value;
 
             if (currentExpiryTicks.HasValue && requestedTicks > currentExpiryTicks.Value)
                 return false;
@@ -447,14 +509,34 @@ namespace HSMServer.Authentication
             return true;
         }
 
-        private static string Sanitize(string reason)
+        // DateTime inputs are UTC by contract (the parameter names say so). Kind.Local
+        // values convert; Kind.Unspecified — an offset-less form or JSON value — is
+        // interpreted as UTC rather than converted from the server's local zone, so a
+        // stored expiry never shifts silently with the deployment timezone.
+        private static long? NormalizeUtcTicks(DateTime? valueUtc) =>
+            valueUtc.HasValue
+                ? (valueUtc.Value.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(valueUtc.Value, DateTimeKind.Utc)
+                    : valueUtc.Value.ToUniversalTime()).Ticks
+                : null;
+
+        // Bounds and neutralizes free text before it is persisted or logged: control
+        // characters (log forging, UI rendering) become spaces, then the value is trimmed
+        // and truncated to the per-field limit.
+        private static string Sanitize(string value, int maxLength)
         {
-            if (string.IsNullOrEmpty(reason))
+            if (string.IsNullOrEmpty(value))
                 return null;
 
-            var trimmed = reason.Trim();
+            var chars = value.Trim().ToCharArray();
 
-            return trimmed.Length <= MaxReasonLength ? trimmed : trimmed[..MaxReasonLength];
+            for (var i = 0; i < chars.Length; i++)
+                if (char.IsControl(chars[i]))
+                    chars[i] = ' ';
+
+            var sanitized = new string(chars).Trim();
+
+            return sanitized.Length <= maxLength ? sanitized : sanitized[..maxLength];
         }
     }
 }

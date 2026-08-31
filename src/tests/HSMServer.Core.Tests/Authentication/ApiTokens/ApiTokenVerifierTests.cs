@@ -79,11 +79,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         [Fact]
         public void Verify_WrongLengths_False()
         {
-            var stored = new byte[32];
+            var stored = new byte[SHA256.HashSizeInBytes];
 
             Assert.False(ApiTokenVerifier.Verify(null, stored));
             Assert.False(ApiTokenVerifier.Verify(new byte[31], stored));
-            Assert.False(ApiTokenVerifier.Verify(new byte[32], null));
+            Assert.False(ApiTokenVerifier.Verify(new byte[32], default));
             Assert.False(ApiTokenVerifier.Verify(new byte[32], new byte[16]));
         }
 
@@ -95,7 +95,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var real = ApiTokenVerifier.ComputeVerifier(
                 ApiTokenMaterial.CurrentVersionByte, material.TokenIdBytes, material.SecretBytes);
 
-            Assert.Equal(32, ApiTokenVerifier.DummyVerifier.Length);
+            Assert.Equal(SHA256.HashSizeInBytes, ApiTokenVerifier.DummyVerifier.Length);
             Assert.False(ApiTokenVerifier.Verify(real, ApiTokenVerifier.DummyVerifier));
 
             // Stable across calls: recomputing the dummy from the same constants matches.
@@ -104,7 +104,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new byte[ApiTokenMaterial.TokenIdBytesLength],
                 new byte[ApiTokenMaterial.SecretBytesLength]);
 
-            Assert.Equal(recomputed, ApiTokenVerifier.DummyVerifier);
+            Assert.Equal(recomputed, ApiTokenVerifier.DummyVerifier.ToArray());
         }
     }
 }

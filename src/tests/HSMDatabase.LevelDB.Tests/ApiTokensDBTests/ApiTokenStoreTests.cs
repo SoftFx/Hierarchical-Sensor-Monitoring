@@ -15,6 +15,12 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
     {
         private static readonly Guid OwnerId = Guid.NewGuid();
 
+        // 22 canonical Base64URL characters — the real TokenId length — so the keys also
+        // pass the manager-level IsValidTokenId if a literal is ever copied over.
+        private static readonly string TokenIdA = new('A', 22);
+        private static readonly string TokenIdB = new('B', 22);
+        private static readonly string TokenIdC = new('C', 22);
+
         private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"hsm-api-token-tests-{Guid.NewGuid():N}");
         private readonly EnvironmentDatabaseWorker _worker;
 
@@ -73,8 +79,8 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
         [Fact]
         public void TryInsertApiToken_SameTokenIdTwice_ReturnsFalseAndKeepsOriginal()
         {
-            var first = BuildEntity(tokenId: "AAAAAAAAAAAAAAAAAAAAAAAA");
-            var second = BuildEntity(tokenId: "AAAAAAAAAAAAAAAAAAAAAAAA", owner: Guid.NewGuid());
+            var first = BuildEntity(tokenId: TokenIdA);
+            var second = BuildEntity(tokenId: TokenIdA, owner: Guid.NewGuid());
 
             Assert.True(_worker.TryInsertApiToken(first));
             Assert.False(_worker.TryInsertApiToken(second));
@@ -88,14 +94,14 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
         [Fact]
         public void GetApiToken_UnknownTokenId_ReturnsNull()
         {
-            Assert.Null(_worker.GetApiToken("BBBBBBBBBBBBBBBBBBBBBBBB"));
+            Assert.Null(_worker.GetApiToken(TokenIdB));
         }
 
         [Fact]
         public void ReadAllApiTokens_ReturnsOnlyTokenRows()
         {
-            _worker.TryInsertApiToken(BuildEntity(tokenId: "AAAAAAAAAAAAAAAAAAAAAAAA"));
-            _worker.TryInsertApiToken(BuildEntity(tokenId: "CCCCCCCCCCCCCCCCCCCCCCCC"));
+            _worker.TryInsertApiToken(BuildEntity(tokenId: TokenIdA));
+            _worker.TryInsertApiToken(BuildEntity(tokenId: TokenIdC));
             _worker.AdvanceGlobalRevocationGeneration();
             _worker.AdvanceOwnerRevocationGeneration(OwnerId);
 
@@ -108,7 +114,7 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
         [Fact]
         public void RemoveApiToken_DeletesRow()
         {
-            var entity = BuildEntity(tokenId: "AAAAAAAAAAAAAAAAAAAAAAAA");
+            var entity = BuildEntity(tokenId: TokenIdA);
 
             Assert.True(_worker.TryInsertApiToken(entity));
 
@@ -121,10 +127,10 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
         [Fact]
         public void TryRotateApiToken_WritesRevokedOldAndReplacementAtomically()
         {
-            var old = BuildEntity(tokenId: "AAAAAAAAAAAAAAAAAAAAAAAA");
+            var old = BuildEntity(tokenId: TokenIdA);
             Assert.True(_worker.TryInsertApiToken(old));
 
-            var replacement = BuildEntity(tokenId: "CCCCCCCCCCCCCCCCCCCCCCCC", owner: old.OwnerUserId);
+            var replacement = BuildEntity(tokenId: TokenIdC, owner: old.OwnerUserId);
             var revokedOld = old with { RevokedAtUtc = DateTime.UtcNow.Ticks, RevocationReason = "rotated" };
 
             Assert.True(_worker.TryRotateApiToken(revokedOld, replacement));
@@ -142,8 +148,8 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
         [Fact]
         public void TryRotateApiToken_ReplacementTokenIdCollision_ReturnsFalseAndKeepsRows()
         {
-            var first = BuildEntity(tokenId: "AAAAAAAAAAAAAAAAAAAAAAAA");
-            var second = BuildEntity(tokenId: "CCCCCCCCCCCCCCCCCCCCCCCC");
+            var first = BuildEntity(tokenId: TokenIdA);
+            var second = BuildEntity(tokenId: TokenIdC);
             Assert.True(_worker.TryInsertApiToken(first));
             Assert.True(_worker.TryInsertApiToken(second));
 
@@ -224,7 +230,7 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
         {
             EntityVersion = 1,
             EntityId = Guid.NewGuid(),
-            TokenId = tokenId ?? "AAAAAAAAAAAAAAAAAAAAAAAA",
+            TokenId = tokenId ?? TokenIdA,
             VersionByte = 0x01,
             Verifier = new byte[32],
             OwnerUserId = owner ?? OwnerId,

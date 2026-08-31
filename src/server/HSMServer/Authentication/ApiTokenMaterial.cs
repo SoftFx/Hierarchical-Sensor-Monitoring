@@ -43,10 +43,12 @@ namespace HSMServer.Authentication
 
         // Strict parse of a presented bearer credential. Checks the exact total length,
         // the version prefix, the '.' separator, the alphabet, and that every decoded value
-        // re-encodes to exactly the presented text (rejecting aliases and padded variants).
-        public static bool TryParse(string token, out byte versionByte, out byte[] tokenId, out byte[] secret)
+        // has exactly one possible encoding (rejecting aliases and padded variants). The
+        // accepted prefix is only hsm_pat_v1_, so the version byte is always
+        // CurrentVersionByte — there is nothing per-token to extract; callers that need it
+        // read the constant. On failure every out parameter is null.
+        public static bool TryParse(string token, out byte[] tokenId, out byte[] secret)
         {
-            versionByte = 0;
             tokenId = null;
             secret = null;
 
@@ -62,13 +64,15 @@ namespace HSMServer.Authentication
             if (token[TokenPrefix.Length + TokenIdLength] != '.')
                 return false;
 
-            if (!TryDecodeCanonical(token.AsSpan(TokenPrefix.Length, TokenIdLength), TokenIdBytesLength, out tokenId))
+            if (!TryDecodeCanonical(token.AsSpan(TokenPrefix.Length, TokenIdLength), TokenIdBytesLength, out var decodedTokenId))
                 return false;
 
-            if (!TryDecodeCanonical(token.AsSpan(TokenPrefix.Length + TokenIdLength + 1, SecretLength), SecretBytesLength, out secret))
+            if (!TryDecodeCanonical(token.AsSpan(TokenPrefix.Length + TokenIdLength + 1, SecretLength), SecretBytesLength, out var decodedSecret))
                 return false;
 
-            versionByte = CurrentVersionByte;
+            tokenId = decodedTokenId;
+            secret = decodedSecret;
+
             return true;
         }
 
@@ -129,11 +133,67 @@ namespace HSMServer.Authentication
             if (!Convert.TryFromBase64Chars(base64, decoded, out var written) || written != expectedBytes)
                 return false;
 
+            // Canonical-encoding check without re-encoding: every bit of every character
+            // except the last is significant, so the only possible alias is a final
+            // character with non-zero trailing bits (22 chars carry 132 bits for a 16-byte
+            // id, 43 carry 258 for a 32-byte secret). Checking the bits directly keeps the
+            // hot path allocation-free and never copies the secret into an uncleared string.
+            var unusedBits = part.Length * 6 - expectedBytes * 8;
+
+            if (unusedBits > 0 && !HasZeroTrailingBits(part[^1], unusedBits))
+                return false;
+
             bytes = decoded.ToArray();
 
-            // Canonical-encoding check: the decoded bytes must re-encode to exactly the
-            // presented text, rejecting encodings with non-zero trailing bits or aliases.
-            return EncodeCanonicalBase64Url(bytes).AsSpan().SequenceEqual(part);
+            return true;
+        }
+
+        // True when the final character's low `unusedBits` bits are all zero, which is the
+        // exact condition for the encoding to be the canonical one.
+        private static bool HasZeroTrailingBits(char last, int unusedBits)
+        {
+            // Unreachable after the alphabet check above; kept so the helper stands alone.
+            if (!TryGetBase64UrlValue(last, out var value))
+                return false;
+
+            return (value & ((1 << unusedBits) - 1)) == 0;
+        }
+
+        private static bool TryGetBase64UrlValue(char c, out int value)
+        {
+            if (c >= 'A' && c <= 'Z')
+            {
+                value = c - 'A';
+                return true;
+            }
+
+            if (c >= 'a' && c <= 'z')
+            {
+                value = c - 'a' + 26;
+                return true;
+            }
+
+            if (c >= '0' && c <= '9')
+            {
+                value = c - '0' + 52;
+                return true;
+            }
+
+            if (c == Base64UrlMinus)
+            {
+                value = 62;
+                return true;
+            }
+
+            if (c == Base64UrlUnderscore)
+            {
+                value = 63;
+                return true;
+            }
+
+            value = 0;
+
+            return false;
         }
 
         private static bool IsBase64UrlChar(char c) =>
