@@ -141,6 +141,42 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Initialization race")]
+        public void ShouldDestroy_CachedValueOlderThanTheMarker_UsesNewest()
+        {
+            // The mirror of the case above, on the HasData side: the decision folds every
+            // activity signal with Newest() instead of branching on HasData, because a cached
+            // value is not proof that no newer signal exists. Here the cache holds a day-8
+            // value while the marker says day 1 — a HasData branch judges on day 8 and destroys
+            // a sensor that was demonstrably alive a day ago.
+            var (sensor, _) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-8), interval: _longSelfDestroyInterval);
+            sensor.Initialize();
+
+            sensor.TryAddValue(new IntegerValue { Time = DateTime.UtcNow.AddDays(-1), Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
+
+            Assert.True(sensor.HasData, "test premise: the loaded value is in the cache");
+            Assert.False(sensor.ShouldDestroy(),
+                "the day-8 cached value hid the day-1 marker and destroyed the sensor early");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
+        public void ShouldDestroy_EveryActivitySignalIsStale_StillDestroys()
+        {
+            // Control for the two Newest() cases above: folding the signals together must not
+            // turn ShouldDestroy() into "never destroy". Cache, marker and To all sit days
+            // behind the 1-hour interval, and the sensor is still due for destruction.
+            var (sensor, _) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
+            sensor.Initialize();
+
+            sensor.TryAddValue(new IntegerValue { Time = DateTime.UtcNow.AddDays(-2), Status = SensorStatus.Ok, Value = 0, IsTimeout = true });
+
+            Assert.True(sensor.HasData);
+            Assert.NotNull(sensor.LastTimeout);
+            Assert.True(sensor.ShouldDestroy(), "a sensor with no recent activity signal must still be destroyed");
+        }
+
+        [Fact]
+        [Trait("Category", "Initialization race")]
         public void ShouldDestroy_SelfDestroyNotConfigured_ReturnsFalse()
         {
             // No SelfDestroy in settings: the value resolves to a non-null TimeIntervalModel.None
@@ -255,9 +291,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void RetryFailedHistoryLoad_StillBrokenDb_BacksOffFromOneHourTowardsTheDailyCap()
         {
-            // Review finding on #1346: a flat 1h -> 24h step made any outage that outlived its
-            // first hour cost the sensor a full day of disabled self-destroy, even though the
-            // sweep runs hourly. The schedule is 1h, then 2h, 4h, 8h, 16h, then the 24h cap.
+            // The backoff must degrade gradually: a flat 1h -> 24h step costs a sensor a full
+            // day of disabled self-destroy for any outage that outlives its first hour, even
+            // though the sweep runs hourly. Schedule: 1h, then 2h, 4h, 8h, 16h, then the 24h cap.
             var (sensor, database) = BuildSensor(historyTime: DateTime.UtcNow.AddDays(-3));
             database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
                 .Throws(new IOException("database is broken"));
@@ -414,12 +450,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void RetryFailedHistoryLoad_NewestRowIsFreshRealValue_DoesNotDestroy()
         {
-            // Review finding on #1346 (blocker): when the newest DB row is a real value — no
-            // TTL configured, or the sensor went quiet without expiring — the retry restores
-            // no timeout marker, and without the Storage.To activity floor the latched
-            // _historyLoaded let ShouldDestroy() fall through to CreationDate, deleting an
-            // established sensor whose newest value is minutes old (the #1328 regression
-            // reopened through the retry path).
+            // When the newest DB row is a real value — no TTL configured, or the sensor went
+            // quiet without expiring — the retry restores no timeout marker. Without the
+            // Storage.To activity floor the latched _historyLoaded lets ShouldDestroy() fall
+            // through to CreationDate and delete an established sensor whose newest value is
+            // minutes old: the #1328 regression, reopened through the retry path.
             var freshValueTime = DateTime.UtcNow.AddMinutes(-1);
             var freshValue = SensorTestFactory.History(freshValueTime, 42);
 
@@ -447,11 +482,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void RetryFailedHistoryLoad_SameTickAsFailedEagerLoad_DoesNotBurnBudget()
         {
-            // Review finding on #1346: CheckSensorsHistoryAsync eagerly Initialize()s every
-            // sensor immediately before RunSensorsSelfDestroyAsync in the same
-            // ClearDatabaseService tick. A load failing there must not be retried seconds later
-            // against the still-broken DB — that back-to-back attempt burned the sensor's 24h
-            // budget and turned a 90-second outage into a day of disabled self-destroy.
+            // CheckSensorsHistoryAsync eagerly Initialize()s every sensor immediately before
+            // RunSensorsSelfDestroyAsync in the same ClearDatabaseService tick. A load failing
+            // there must not be retried seconds later against the still-broken DB: that
+            // back-to-back attempt burns the sensor's retry budget and turns a 90-second outage
+            // into hours of disabled self-destroy.
             var history = SensorTestFactory.History(DateTime.UtcNow.AddDays(-3), 42);
 
             var database = new Mock<IDatabaseCore>();
@@ -462,9 +497,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             // A fresh CreationDate makes the final assert discriminate: the sensor is young
             // enough that CreationDate alone never satisfies the interval, so a "destroy"
-            // verdict can only come from the Storage.To floor the retry restores. (The PR
-            // review's variant with the default month-old CreationDate passed via the
-            // CreationDate fallback and certified nothing.)
+            // verdict can only come from the Storage.To floor the retry restores.
             var entity = SensorTestFactory.BuildEntity(selfDestroyInterval: _selfDestroyInterval, creationDate: DateTime.UtcNow.AddMinutes(-5));
             var sensor = new IntegerSensorModel(entity, database.Object, null);
 
@@ -485,12 +518,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization race")]
         public void RetryFailedHistoryLoad_RestoredActivityFloor_SurvivesAnOlderIncomingValue()
         {
-            // Review finding on #1346: writing the floor straight into _to made it just another
-            // ingestion stamp, and AddValueBase overwrites _to unconditionally while _lastValue
-            // is null — which it is on a retried sensor. So the next out-of-order value (a
-            // backfill, a client with a skewed clock) dragged To back below the newest row the
-            // retry had just certified. The floor lives in its own field and is merged into To
-            // at read time instead, so it cannot be overwritten — only outgrown.
+            // A retried sensor has an empty cache, so AddValueBase's newest-wins guard has no
+            // _lastValue to compare against and accepts the next value whatever its timestamp —
+            // a reconnecting collector flushing a stale queue, a client with a skewed clock.
+            // Two things must survive that: To must not be dragged back below the newest row the
+            // retry certified (the floor is a field of its own, merged into To at read time, so
+            // it can be outgrown but never overwritten), and ShouldDestroy() must not switch to
+            // the stale value's LastUpdate now that HasData flipped true.
             var newestRowTime = DateTime.UtcNow.AddMinutes(-30);
             var newestRow = SensorTestFactory.History(newestRowTime, 42);
 
@@ -512,8 +546,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var staleValueTime = DateTime.UtcNow.AddDays(-3);
             Assert.True(sensor.TryAddValue(new IntegerValue { Time = staleValueTime, Status = SensorStatus.Ok, Value = 7 }),
                 "test premise: an out-of-order value is accepted while LastValue is null");
+            Assert.True(sensor.HasData, "test premise: the stale value flipped HasData");
 
             Assert.Equal(newestRowTime, sensor.To);
+            Assert.False(sensor.ShouldDestroy(),
+                "one out-of-order value hid the restored activity floor and destroyed the sensor");
         }
 
         [Fact]

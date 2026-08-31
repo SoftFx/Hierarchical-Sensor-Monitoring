@@ -39,14 +39,17 @@ namespace HSMServer.Core.Model
 
         private readonly object _lock = new();
 
-        // Bounded retry of failed loads (#1344), capped exponential backoff: the first retry
-        // only has to clear one maintenance-sweep period (ClearDatabaseService runs hourly),
-        // then 2h, 4h, 8h, 16h, settling at one attempt per sensor per day. The first delay
-        // keeps the sweep that just observed the failure — including the eager Initialize()
-        // CheckSensorsHistoryAsync ran seconds earlier in the same maintenance tick — from
-        // hitting the database back-to-back; the growth keeps an outage that outlives the
-        // first hour from costing the sensor a full day of disabled self-destroy; the cap
-        // keeps a permanently broken database at the #1296 anti-storm budget.
+        // Bounded retry of failed loads (#1344), capped exponential backoff: 1h, then 2h, 4h,
+        // 8h, 16h, settling at one attempt per sensor per day. The first delay is one full
+        // maintenance-sweep period (ClearDatabaseService.Delay, currently 1h — keep the two in
+        // step if that is retuned), which is what guarantees the sweep that just observed the
+        // failure — including the eager Initialize() CheckSensorsHistoryAsync ran earlier in the
+        // same maintenance tick, however long that pass takes on a large tree — cannot hit the
+        // database back-to-back. Measuring a full period rather than a fraction of one means the
+        // first retry lands on the first sweep at least an hour after the failure, so a failure
+        // mid-interval waits up to 2h. The growth keeps an outage that outlives that from
+        // costing the sensor a full day of disabled self-destroy; the cap keeps a permanently
+        // broken database at the #1296 anti-storm budget.
         private static readonly TimeSpan HistoryLoadFirstRetryDelay = TimeSpan.FromHours(1);
 
         private static readonly TimeSpan HistoryLoadMaxRetryInterval = TimeSpan.FromHours(24);
@@ -254,44 +257,43 @@ namespace HSMServer.Core.Model
         }
 
         // Must be called with _lock held. Publishes the latch (on success OR failure) via its
-        // finally block, so a caller below can never observe an unlatched sensor.
+        // finally block, so a caller below can never observe an unlatched sensor. utcNow is the
+        // single clock source for the retry gates: it stamps the attempt clock below and
+        // RetryFailedHistoryLoad compares against that stamp, so both must come from one
+        // timeline — an ambient DateTime.UtcNow here would read a back-dated caller clock as a
+        // backwards step and fire the retry immediately.
         //
-        // utcNow is the single clock source for the retry gates: it stamps the attempt clock
-        // below, and RetryFailedHistoryLoad compares its own utcNow against that stamp — mixing
-        // an ambient DateTime.UtcNow here with a caller-supplied utcNow there would make the
-        // first-retry delay compute across two timelines (a back-dated caller clock reads as a
-        // backwards step and fires the retry immediately).
+        // isRetry is a parameter, not something inferred from Storage: a live sensor can have a
+        // null LastValue (timeout-only traffic, values rejected by validation, a retention purge
+        // that emptied the cache mid-tick), so "Storage looks empty" does not mean "no live
+        // ingestion". The modes differ in what they may write:
         //
-        // isRetry is passed explicitly because it is not inferable from Storage: a live sensor
-        // can have a null LastValue (timeout-only traffic, values rejected by validation, or a
-        // retention purge / Clear(to) that emptied the cache mid-tick), so "Storage looks empty"
-        // does not mean "no live ingestion". The two modes differ in what they may write:
+        // - Cold load (isRetry=false): ingestion is blocked — TryAddValue parks in Initialize()
+        //   on this same lock — so this is the only mode that may rebuild Storage and run the
+        //   policy fan-out.
+        // - Retry (isRetry=true): _isInitialized stays set, so ingestion runs lock-free against
+        //   a ValuesStorage that is not safe for concurrent writes. A replayed DB row would race
+        //   it (torn _lastValue/_to, a duplicated newest point in the cache), and TryValidate
+        //   would reach SensorExpired -> SetExpiredSnapshot -> TryAddValue, emitting
+        //   notifications and DB writes from the maintenance sweep and forcing IsExpired from a
+        //   stale marker onto a possibly-reporting sensor. So a retry writes only the activity
+        //   signal ShouldDestroy() reads, plus Cut below.
         //
-        // - Cold load (Initialize, isRetry=false): ingestion is still blocked — TryAddValue
-        //   parks in Initialize() on this same lock — so this is the only mode allowed to
-        //   rebuild Storage and run the policy fan-out.
-        // - Retry (isRetry=true): _isInitialized stays set, so ingestion runs lock-free and
-        //   ValuesStorage is not safe for concurrent writes; a DB row replayed here races live
-        //   ingestion (torn _lastValue/_to, a duplicated newest point in the Plotly cache), and
-        //   TryValidate would reach SensorExpired -> SetExpiredSnapshot -> TryAddValue
-        //   (notifications and DB writes from the maintenance sweep) plus force IsExpired from
-        //   a stale timeout marker onto a possibly-reporting sensor.
-        //
-        // So the retry writes nothing but the activity signal ShouldDestroy()'s empty-cache
-        // fallback keys on, and Cut below. Restoring it is not optional: _historyLoaded latches
-        // on a successful retry, so a retry that restored nothing would let ShouldDestroy() fall
-        // through to CreationDate and delete an established sensor whose newest value is minutes
-        // old — the #1328 regression, reopened through the retry path. Both signals are
-        // newest-wins and neither touches _lastValue or the value cache:
-        //   - newest DB row is a timeout marker -> AddValueBase, which for a marker updates
-        //     _lastTimeout and returns (the virtual call keeps FileValuesStorage's content
-        //     handling, so both load modes store the marker in the same shape);
-        //   - newest DB row is a real value -> SetLastActivity, the To floor.
-        // Limits: a retried sensor's cache, IsExpired and TTL clocks are NOT restored; see
-        // aicontext/features/server/overview.md (#1344).
+        // Restoring that signal is not optional: a successful retry latches _historyLoaded, so a
+        // retry that restored nothing would let ShouldDestroy() fall through to CreationDate and
+        // delete an established sensor whose newest value is minutes old. Neither write touches
+        // _lastValue or the value cache, and both are newest-wins:
+        //   - timeout marker -> AddValueBase, whose marker branch updates _lastTimeout and
+        //     returns (the virtual call keeps FileValuesStorage's content handling, so both
+        //     modes store the marker in the same shape);
+        //   - real value -> SetLastActivity, the To floor.
+        // Limits: the value cache, IsExpired and the TTL clocks are NOT restored, and the floor
+        // is stamped without validating the row (the cold load skips a policy-rejected newest
+        // row, so a retried sensor can look active where its cleanly-loaded twin would not —
+        // conservative, it destroys later). See aicontext/features/server/overview.md (#1344).
         private void LoadHistoryUnderLock(bool isRetry, DateTime utcNow)
         {
-            // Every attempt stamps the clock, failed or not: the FIRST retry is measured from
+            // Every attempt stamps the clock, failed or not: the first retry is measured from
             // the failure itself, so the sweep that observed the failure cannot fire a
             // back-to-back attempt against a possibly still-broken database.
             _lastLoadAttemptTicks = utcNow.Ticks;

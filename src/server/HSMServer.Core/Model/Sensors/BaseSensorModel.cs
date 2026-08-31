@@ -121,21 +121,29 @@ namespace HSMServer.Core.Model
             if (!IsActive(interval) || !IsHistoryLoaded)
                 return false;
 
-            // An empty Storage cache (retention purge, a full history clear, or the newest row
-            // being the SetExpiredSnapshot timeout marker, which never enters the cache) still
-            // leaves evidence of recent activity. Take the NEWEST of the two signals, not a
-            // priority chain: _lastTimeout is never updated after a newer real value arrives
-            // (and a later re-expiry writes no marker because SetExpiredSnapshot requires
-            // HasData), while Storage.To is — so a stale marker must not shadow a newer To.
-            // To is MaxValue only for a sensor that never received a value. Marker .Time, not
-            // .LastUpdateTime: GetTimeoutValue copies LastReceivingTime from the previous value,
-            // so LastUpdateTime would under-estimate activity. CreationDate is the last resort.
-            var lastActivity = HasData
-                ? LastUpdate
-                : Newest(LastTimeout?.Time ?? DateTime.MinValue,
-                         To != DateTime.MaxValue ? To : CreationDate);
+            // The NEWEST of every activity signal we hold, never a priority chain and never a
+            // branch that hides one of them: each signal is evidence the sensor was alive at
+            // that instant, and evidence is not invalidated by another signal being older.
+            //   - LastUpdate covers the live cache, but an empty cache does not mean "inactive"
+            //     (retention purge, a full history clear, the SetExpiredSnapshot marker — which
+            //     never enters the cache — or a sensor whose history load was retried).
+            //   - _lastTimeout is not advanced once a newer real value arrives (a later
+            //     re-expiry writes no marker, because SetExpiredSnapshot requires HasData), so
+            //     it must not shadow a newer To. Marker .Time, not .LastUpdateTime:
+            //     GetTimeoutValue copies LastReceivingTime from the previous value, so
+            //     LastUpdateTime would under-estimate activity.
+            //   - To is the newest of the ingestion stamp and the floor a history-load retry
+            //     restored; MaxValue only for a sensor that never received a value.
+            // Gating LastUpdate on HasData alone was the hazard: on a sensor whose cache is
+            // empty, AddValueBase accepts the next value whatever its timestamp (the newest-wins
+            // guard needs a _lastValue to compare against), so one out-of-order value — a
+            // reconnecting collector flushing a stale queue — flipped HasData and hid a newer
+            // To behind its own old LastUpdate. CreationDate stays the last resort.
+            var lastActivity = Newest(HasData ? LastUpdate : DateTime.MinValue,
+                                      Newest(LastTimeout?.Time ?? DateTime.MinValue,
+                                             To != DateTime.MaxValue ? To : DateTime.MinValue));
 
-            return interval.TimeIsUp(lastActivity);
+            return interval.TimeIsUp(lastActivity != DateTime.MinValue ? lastActivity : CreationDate);
         }
 
         public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);

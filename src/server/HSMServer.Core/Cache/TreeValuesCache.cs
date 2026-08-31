@@ -78,12 +78,14 @@ namespace HSMServer.Core.Cache
 
         private const int LogSampleSize = 10;
 
-        // Per-sweep cap on history-load retries (#1344): a whole-database outage latches many
-        // sensors at once and makes them all retry-eligible in the same sweep, one hour later.
-        // Each retry is an inline LevelDB read inside this serial loop that throws while the
-        // database is still broken, so without a cap a mass outage turns into a synchronized
-        // burst of throwing reads stretching the maintenance tick. Capped-out sensors are
-        // simply picked up by the next sweep — nothing is stamped on them, so no per-sensor
+        // Per-sweep cap on FAILING history-load retries (#1344): a whole-database outage latches
+        // many sensors at once and makes them all retry-eligible in the same sweep. Each retry
+        // is an inline LevelDB read inside this serial loop that throws while the database is
+        // still broken, so without a cap a mass outage turns into a synchronized burst of
+        // throwing reads stretching the maintenance tick. Only failures are charged: a retry
+        // after recovery is an ordinary read pair costing milliseconds, and capping those would
+        // make a large latched set drain at 100 sensors per hour for no benefit. Capped-out
+        // sensors are picked up by the next sweep — nothing is stamped on them, so no per-sensor
         // retry budget is consumed by the cap.
         private const int MaxHistoryLoadRetriesPerSweep = 100;
 
@@ -443,27 +445,22 @@ namespace HSMServer.Core.Cache
                         sensor.Initialize();
 
                     // #1344: without a retry, one transient LevelDB error during a lazily
-                    // triggered load disables self-destroy for the sensor until restart. Rerun
-                    // the load at most once per sensor per day — the maintenance sweep is the
-                    // safe place for it, the per-value paths never retry (#1296).
-                    // else if: a sensor this iteration just Initialize()d must not be retried
-                    // in the same breath. The same-tick hazard reaches further than this loop —
-                    // CheckSensorsHistoryAsync's eager Initialize() ran one await earlier in
-                    // this very maintenance tick — and is fenced off where it is observable:
-                    // RetryFailedHistoryLoad's first-retry delay measures from the failed load
-                    // itself, so no failure observed by the current tick is retried within one
-                    // sweep period. The else if merely keeps the just-initialized case from
-                    // taking the sensor lock for nothing.
-                    // The retry cap keeps a mass outage from turning this serial loop into a
-                    // synchronized burst of throwing DB reads (see the constant above). The
-                    // budget is charged on the return value, not on the call: a sensor merely
-                    // waiting out its backoff does no DB work, and charging it would let the
-                    // sensors early in the enumeration exhaust the cap sweep after sweep and
-                    // starve everything past it — the enumeration order of _sensorsById is
-                    // stable, so those sensors would never be retried at all.
+                    // triggered load disables self-destroy for the sensor until restart. The
+                    // maintenance sweep is the safe place to rerun it; the per-value paths
+                    // never retry (#1296), and RetryFailedHistoryLoad's own backoff bounds the
+                    // rate per sensor.
+                    // else if: a sensor this iteration just Initialize()d must not be retried in
+                    // the same breath. (The wider same-tick hazard — CheckSensorsHistoryAsync's
+                    // eager Initialize() one await earlier — is fenced off by that backoff, which
+                    // measures the first retry from the failed load itself.)
+                    // Budget: only a retry that reached the database AND failed is charged. A
+                    // suppressed call does no DB work, and charging it would let the sensors
+                    // early in the stable _sensorsById enumeration exhaust the cap sweep after
+                    // sweep and permanently starve everything past it; a successful retry is
+                    // cheap, so recovery drains at whatever rate the sweep sustains.
                     else if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed && loadRetries < MaxHistoryLoadRetriesPerSweep)
                     {
-                        if (sensor.RetryFailedHistoryLoad(utcNow))
+                        if (sensor.RetryFailedHistoryLoad(utcNow) && sensor.HistoryLoadFailed)
                             loadRetries++;
                     }
 
@@ -516,10 +513,10 @@ namespace HSMServer.Core.Cache
 
             // Not "deferred": until the bounded retry succeeds, self-destroy stays off for these
             // sensors. Separate from the Info line so operators can alert on it; the id sample
-            // makes the alert diagnosable without grepping hours-old init logs. The retried
-            // count is attempts that actually reached the database this sweep: below the cap it
-            // reads as "the database is still broken", at the cap as "capped out, the rest are
-            // picked up next sweep"; zero means every failed sensor is waiting out its backoff.
+            // makes the alert diagnosable without grepping hours-old init logs. The retried count
+            // is attempts that reached the database and failed again: below the cap it reads as
+            // "the database is still broken", at the cap as "capped out, the rest are picked up
+            // next sweep"; zero means every failed sensor is waiting out its backoff.
             if (failedLoadCount > 0)
                 _logger.Warn($"Sensors self destroy disabled after failed history load for {failedLoadCount} sensor(s) (bounded retry in progress, {loadRetries} retried this sweep, #1344) — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
 
