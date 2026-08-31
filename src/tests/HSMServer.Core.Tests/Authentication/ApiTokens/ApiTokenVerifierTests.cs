@@ -88,7 +88,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
-        public void DummyVerifier_IsStableAndNeverMatchesRealVerifiers()
+        public void DummyVerifier_NeverMatchesRealOrZeroCredentialVerifiers()
         {
             var material = ApiTokenMaterial.Generate();
 
@@ -98,13 +98,21 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.Equal(SHA256.HashSizeInBytes, ApiTokenVerifier.DummyVerifier.Length);
             Assert.False(ApiTokenVerifier.Verify(real, ApiTokenVerifier.DummyVerifier));
 
-            // Stable across calls: recomputing the dummy from the same constants matches.
-            var recomputed = ApiTokenVerifier.ComputeVerifier(
-                ApiTokenMaterial.CurrentVersionByte,
-                new byte[ApiTokenMaterial.TokenIdBytesLength],
-                new byte[ApiTokenMaterial.SecretBytesLength]);
+            // Regression pin: an all-zero id+secret pair has a valid canonical encoding
+            // ("hsm_pat_v1_" + 22 'A' + '.' + 43 'A'), so a dummy computed from the
+            // format constants would be the verifier of that presentable credential and
+            // the unknown-id path would authenticate it. The dummy must not be derivable
+            // from any presentable token.
+            Assert.True(ApiTokenMaterial.TryParse(
+                $"hsm_pat_v1_{new string('A', ApiTokenMaterial.TokenIdLength)}.{new string('A', ApiTokenMaterial.SecretLength)}",
+                out var zeroId, out var zeroSecret));
 
-            Assert.Equal(recomputed, ApiTokenVerifier.DummyVerifier.ToArray());
+            var zeroCredentialVerifier = ApiTokenVerifier.ComputeVerifier(
+                ApiTokenMaterial.CurrentVersionByte, zeroId, zeroSecret);
+
+            Assert.All(zeroId, b => Assert.Equal(0, b));
+            Assert.All(zeroSecret, b => Assert.Equal(0, b));
+            Assert.False(ApiTokenVerifier.Verify(zeroCredentialVerifier, ApiTokenVerifier.DummyVerifier));
         }
     }
 }

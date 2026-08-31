@@ -217,6 +217,40 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void TryRestrictToken_NullGrants_KeepCurrentGrants()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            manager.TryCreateToken(OwnerId, "keep-grants", null, BuildGrants("alerts:read", "alerts:write"),
+                DateTime.UtcNow.AddYears(1), "u", out var entity, out _);
+
+            var shorterExpiry = DateTime.UtcNow.AddDays(1);
+
+            // Null means "not changing the grants" — symmetric with null expiry — and must
+            // never strip the token's authorization while shortening the expiry.
+            Assert.True(manager.TryRestrictToken(entity.EntityId, null, shorterExpiry, "u", out var restricted));
+
+            Assert.Equal(2, restricted.Grants.Count);
+            Assert.Equal(shorterExpiry.ToUniversalTime().Ticks, restricted.ExpiresAtUtc.Value);
+        }
+
+        [Fact]
+        public void TryRestrictToken_AfterEmergencyRevoke_IsRejected()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            manager.TryCreateToken(OwnerId, "generation-dead", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+
+            // Emergency revoke advances the generation; the record keeps RevokedAtUtc == null.
+            manager.AdvanceOwnerRevocationGeneration(OwnerId);
+
+            Assert.False(manager.TryRestrictToken(entity.EntityId, BuildGrants("alerts:read"), null, "u", out _));
+            Assert.Null(manager.GetToken(entity.TokenId).RestrictedAtUtc);
+        }
+
+        [Fact]
         public void TryRotateToken_RevokesOldIssuesFreshPairAndPreservesGrants()
         {
             using var manager = CreateManager();
@@ -262,6 +296,42 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // Rotating without a requested expiry keeps the finite value (never unlimited).
             Assert.True(manager.TryRotateToken(entity.EntityId, null, "u", out var replacement, out _));
             Assert.Equal(expiry.ToUniversalTime().Ticks, replacement.ExpiresAtUtc.Value);
+        }
+
+        [Fact]
+        public void TryRotateToken_AfterEmergencyRevoke_IsRefused()
+        {
+            // An emergency revoke kills records by advancing a generation, leaving
+            // RevokedAtUtc null. Rotating such a record must not mint a live replacement
+            // stamped with the current generation — that would silently undo the revoke.
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            manager.TryCreateToken(OwnerId, "global-killed", null, BuildGrants("alerts:read"), null, "u", out var globalKilled, out _);
+
+            manager.AdvanceGlobalRevocationGeneration();
+
+            Assert.False(manager.TryRotateToken(globalKilled.EntityId, null, "u", out _, out _));
+            Assert.Null(manager.GetToken(globalKilled.TokenId).RevokedAtUtc);
+            Assert.Single(manager.GetTokensByOwner(OwnerId));
+            Assert.Equal(0, manager.CountQuotaEligibleTokens(OwnerId));
+
+            // The owner-scoped emergency revoke is refused the same way.
+            manager.TryCreateToken(OwnerId, "owner-killed", null, BuildGrants("alerts:read"), null, "u", out var ownerKilled, out _);
+
+            manager.AdvanceOwnerRevocationGeneration(OwnerId);
+
+            Assert.False(manager.TryRotateToken(ownerKilled.EntityId, null, "u", out _, out _));
+            Assert.Null(manager.GetToken(ownerKilled.TokenId).RevokedAtUtc);
+            Assert.Equal(2, manager.GetTokensByOwner(OwnerId).Count);
+            Assert.Equal(0, manager.CountQuotaEligibleTokens(OwnerId));
+
+            // Durable as well: a fresh index sees no replacement rows.
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            Assert.Equal(2, reopened.GetTokensByOwner(OwnerId).Count);
+            Assert.All(reopened.GetTokensByOwner(OwnerId), token => Assert.Null(token.RotatedAtUtc));
         }
 
         [Fact]
@@ -531,7 +601,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             {
                 EntityVersion = 1,
                 EntityId = entityId,
-                TokenId = new string('C', ApiTokenMaterial.TokenIdLength),
+                // Canonical shape ('A' has zero trailing bits): the TokenId check must
+                // pass so the row is rejected by the null grants alone.
+                TokenId = new string('A', ApiTokenMaterial.TokenIdLength),
                 VersionByte = ApiTokenMaterial.CurrentVersionByte,
                 Verifier = new byte[32],
                 OwnerUserId = OwnerId,

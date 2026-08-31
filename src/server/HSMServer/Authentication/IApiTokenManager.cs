@@ -41,17 +41,21 @@ namespace HSMServer.Authentication
             DateTime? expiresAtUtc, string createdBy, out ApiTokenEntity entity, out string fullToken);
 
         // Restriction only removes grant pairs and/or shortens expiry; returns false on any
-        // expansion attempt and for a revoked token (revocation is terminal). Idempotently
-        // records RestrictedAtUtc/RestrictedBy.
+        // expansion attempt and for a dead record — a revoked or generation-invalidated
+        // (emergency-revoked) token cannot be restricted. Null remainingGrants keeps the
+        // current grants, symmetric with null shortenedExpiryUtc keeping the current
+        // expiry; an explicit empty list strips every grant. Idempotently records
+        // RestrictedAtUtc/RestrictedBy.
         bool TryRestrictToken(Guid entityId, List<ApiTokenGrantEntity> remainingGrants, DateTime? shortenedExpiryUtc,
             string restrictedBy, out ApiTokenEntity entity);
 
-        // Rotation issues a completely fresh EntityId/TokenId/secret with the same or a
-        // strict subset of grants and an expiry no later than the source, and atomically
-        // revokes the source token in the same durable write. Never expands grants and never
+        // Rotation issues a completely fresh EntityId/TokenId/secret with the same grants
+        // (narrowing a token is what restriction is for) and an expiry no later than the
+        // source, and atomically revokes the source token in the same durable write. Never
         // turns a finite expiry into an unlimited one; the resulting expiry must not
         // already be in the past (requested or inherited). Refused, like creation, while
-        // generation state is unhealthy or unreadable.
+        // generation state is unhealthy or unreadable, and for a dead source token —
+        // revoked, or invalidated by an emergency revoke generation.
         bool TryRotateToken(Guid entityId, DateTime? shortenedExpiryUtc, string rotatedBy,
             out ApiTokenEntity entity, out string fullToken);
 

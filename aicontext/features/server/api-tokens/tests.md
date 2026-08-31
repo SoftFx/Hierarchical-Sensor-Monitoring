@@ -20,7 +20,7 @@ handler PR and extends this file.
 - `ComputeVerifier` matches an independently re-computed `SHA-256("HSM-API-TOKEN" || 0x00 || version || id[16] || secret[32])` — pins domain separation, ordering, and lengths.
 - Changed version/id/secret produce different verifiers; wrong input lengths throw.
 - `Verify` is constant-time compare: correct passes, tampered fails, wrong lengths fail.
-- `DummyVerifier` is stable and never equals a real generated verifier.
+- `DummyVerifier` is CSPRNG-drawn and never equals a real generated verifier, nor the verifier of the all-zero id+secret credential (which parses canonically as 22 'A' + 43 'A') — the dummy must not be derivable from any presentable token.
 
 ## Grants (`ApiTokenGrantsTests`)
 
@@ -41,8 +41,8 @@ handler PR and extends this file.
 - Create: disclosed full token parses; stored verifier matches the presented secret; restart-safe reload; bad input (empty owner/name, invalid grants, past expiry) rejected; 50 tokens all unique.
 - Create normalizes inputs: `Kind.Unspecified` expiry is read as UTC (no local-zone shift); name/description/reason/actor fields are control-character-sanitized and length-bounded; truncation never splits a surrogate pair.
 - Revoke: immediate, idempotent, revoked tokens leave the quota count.
-- Restrict: removes grants and shortens expiry (unlimited → finite allowed); expansion of pairs/boundaries and expiry extension rejected with the token unchanged; a revoked token is rejected as terminal.
-- Rotate: fresh EntityId/TokenId/secret, grants and finite expiry preserved (never expanded, never made unlimited), old revoked atomically, quota slot replaced 1:1; a past requested or inherited expiry is refused.
+- Restrict: removes grants and shortens expiry (unlimited → finite allowed); null grants keep the current grants (empty list strips all); expansion of pairs/boundaries and expiry extension rejected with the token unchanged; a revoked or generation-invalidated (emergency-revoked) token is rejected as terminal.
+- Rotate: fresh EntityId/TokenId/secret, grants and finite expiry preserved (never expanded, never made unlimited), old revoked atomically, quota slot replaced 1:1; a past requested or inherited expiry is refused; rotation after a global or owner emergency revoke is refused — no live replacement is minted from a generation-invalidated source (checked in-memory and after reopen).
 - Generations: global advance invalidates every owner's quota immediately; owner advance invalidates only that owner; an owner with a durable generation but no cached value (post-retention) gets it read and cached on create, staying consistent across restart.
 - Minting fails closed: create/rotate return false (never throw) while generation state is unhealthy or when the owner-generation fallback read hits an unreadable row; no durable or live state is left.
 - Fail closed at load: regressed generation state marks the index unhealthy; unloadable records (bad TokenId shape, null grants, foreign version byte) are skipped and never authenticate; a row with a non-canonical boundary id loads canonicalized and still restricts.
@@ -60,6 +60,7 @@ handler PR and extends this file.
 - [x] Collision never overwrites; retry uses a completely new pair
 - [x] Write failure leaves neither durable nor live state
 - [x] Grant expansion impossible in place (restriction and rotation)
+- [x] Emergency-revoked (generation-invalidated) tokens cannot be rotated or restricted
 - [x] Unknown operations/boundaries/ids fail closed (validation and load)
 - [x] Corrupt/regressed generation state fails the whole index closed
 - [x] Concurrent lifecycle mutations cannot lose or resurrect a revocation

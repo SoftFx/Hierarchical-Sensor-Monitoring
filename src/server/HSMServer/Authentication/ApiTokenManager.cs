@@ -137,20 +137,8 @@ namespace HSMServer.Authentication
                 // Both stamps are captured before the retry loop and inside a try: an
                 // unreadable generation row must fail the Try* contract with false, not
                 // escape as an exception from the middle of candidate construction.
-                long globalGenerationAtIssue;
-                long ownerGenerationAtIssue;
-
-                try
-                {
-                    globalGenerationAtIssue = GlobalRevocationGeneration;
-                    ownerGenerationAtIssue = GetOrLoadOwnerGeneration(ownerUserId);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "API token revocation generation state is unreadable; no token was created");
-
+                if (!TryCaptureGenerations(ownerUserId, out var globalGenerationAtIssue, out var ownerGenerationAtIssue))
                     return false;
-                }
 
                 for (var attempt = 1; attempt <= MaxInsertAttempts; attempt++)
                 {
@@ -220,7 +208,24 @@ namespace HSMServer.Authentication
                 if (current.RevokedAtUtc is not null)
                     return false;
 
-                if (!ApiTokenGrants.TryCanonicalize(remainingGrants, out var canonicalRemaining))
+                // A generation-invalidated record (emergency revoke advances the generation
+                // without touching the row) is exactly as dead even though RevokedAtUtc
+                // stays null on it.
+                if (!TryCaptureGenerations(current.OwnerUserId, out var globalGeneration, out var ownerGeneration))
+                    return false;
+
+                if (!IsIssuedAtCurrentGenerations(current, globalGeneration, ownerGeneration))
+                    return false;
+
+                // Null keeps the current grants — symmetric with shortenedExpiryUtc == null
+                // keeping the current expiry — while an explicit empty list strips every
+                // grant. The copy also keeps the restricted record from sharing the grant
+                // list instance with its predecessor.
+                List<ApiTokenGrantEntity> canonicalRemaining;
+
+                if (remainingGrants is null)
+                    canonicalRemaining = [.. current.Grants];
+                else if (!ApiTokenGrants.TryCanonicalize(remainingGrants, out canonicalRemaining))
                     return false;
 
                 // Restriction can only remove pairs; any pair not in the current set is expansion.
@@ -266,6 +271,25 @@ namespace HSMServer.Authentication
                 if (current.RevokedAtUtc is not null)
                     return false;
 
+                // Captured under _stateLock, so a concurrent restrict cannot wedge a
+                // just-removed grant into the replacement; inside a try, so an unreadable
+                // generation row fails the Try* contract with false instead of throwing.
+                if (!TryCaptureGenerations(current.OwnerUserId, out var globalGenerationAtIssue, out var ownerGenerationAtIssue))
+                    return false;
+
+                // A generation-invalidated source (an emergency revoke advanced the
+                // generation without touching the row) is as dead as a revoked one.
+                // Without this check the replacement would be stamped with the current
+                // generations — a live credential re-disclosing the killed token's
+                // grants and silently undoing the emergency revoke.
+                if (!IsIssuedAtCurrentGenerations(current, globalGenerationAtIssue, ownerGenerationAtIssue))
+                {
+                    _logger.LogWarning("API token rotation refused: token entity {EntityId} is invalidated by a revocation generation",
+                        current.EntityId);
+
+                    return false;
+                }
+
                 if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
                     return false;
 
@@ -276,24 +300,6 @@ namespace HSMServer.Authentication
                     return false;
 
                 var sanitizedRotatedBy = Sanitize(rotatedBy, MaxFreeTextLength);
-
-                // Captured under _stateLock, so a concurrent restrict cannot wedge a
-                // just-removed grant into the replacement; inside a try, so an unreadable
-                // generation row fails the Try* contract with false instead of throwing.
-                long globalGenerationAtIssue;
-                long ownerGenerationAtIssue;
-
-                try
-                {
-                    globalGenerationAtIssue = GlobalRevocationGeneration;
-                    ownerGenerationAtIssue = GetOrLoadOwnerGeneration(current.OwnerUserId);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "API token revocation generation state is unreadable; the source token is unchanged");
-
-                    return false;
-                }
 
                 for (var attempt = 1; attempt <= MaxInsertAttempts; attempt++)
                 {
@@ -314,7 +320,9 @@ namespace HSMServer.Authentication
                         OwnerRevocationGenerationAtIssue = ownerGenerationAtIssue,
                         Name = current.Name,
                         Description = current.Description,
-                        Grants = current.Grants,
+                        // Own list instance: the replacement must not share grants with
+                        // the revoked source record still held in the index.
+                        Grants = [.. current.Grants],
                         CreatedAtUtc = now,
                         CreatedBy = sanitizedRotatedBy,
                         ExpiresAtUtc = newExpiry,
@@ -542,6 +550,39 @@ namespace HSMServer.Authentication
 
             return entity is not null;
         }
+
+
+        // Callers must hold _stateLock: the capture must be atomic with the mutation that
+        // stamps or checks the values. Fails the Try* contract with false when a
+        // generation row is unreadable — the failure must not escape as an exception.
+        private bool TryCaptureGenerations(Guid ownerUserId, out long globalGeneration, out long ownerGeneration)
+        {
+            globalGeneration = 0;
+            ownerGeneration = 0;
+
+            try
+            {
+                globalGeneration = GlobalRevocationGeneration;
+                ownerGeneration = GetOrLoadOwnerGeneration(ownerUserId);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "API token revocation generation state is unreadable; no token state was changed");
+
+                return false;
+            }
+
+            return true;
+        }
+
+
+        // A record issued at exactly the current generations. Emergency revoke advances a
+        // generation instead of writing RevokedAtUtc on every row, so a generation-invalidated
+        // record is as dead as a revoked one — lifecycle operations must refuse it.
+        private static bool IsIssuedAtCurrentGenerations(ApiTokenEntity token, long globalGeneration, long ownerGeneration) =>
+            token.GlobalRevocationGenerationAtIssue == globalGeneration &&
+            token.OwnerRevocationGenerationAtIssue == ownerGeneration;
+
 
         // Callers must hold _stateLock: the read-modify-write sequences this completes are
         // only atomic when the whole sequence runs under the lock.
