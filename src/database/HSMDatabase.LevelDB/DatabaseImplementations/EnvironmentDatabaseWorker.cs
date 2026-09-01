@@ -4,6 +4,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -853,6 +854,227 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
 
             return null;
+        }
+
+        #endregion
+
+        #region Api tokens
+
+        // Key layout: "ApiToken_<tokenId>" rows hold ApiTokenEntity values, revocation
+        // generations live under "ApiTokenGeneration_*". The prefixes differ after the
+        // "ApiToken" stem, so the ReadAllApiTokens scan cannot pick generation rows up.
+        // Unlike the neighboring regions, the Api token write paths (insert/rotate/put/
+        // generation advances) do NOT swallow storage failures: they must be observable by
+        // the caller so that a failed write leaves neither durable nor live state.
+        // RemoveApiToken reports its outcome as a bool for the same reason — retention
+        // must not unpublish a live record whose durable row may still exist. The boot
+        // scan (ReadAllApiTokens) propagates scan failures for the fail-closed load.
+        //
+        // Token rows are serialized with the parameterless JsonSerializer overload ON
+        // PURPOSE: the file's shared _options apply DefaultIgnoreCondition =
+        // WhenWritingDefault, which would omit schema-shape fields carrying their type's
+        // default value. A token row must be the exact, explicit image of its record so
+        // the fail-closed load never judges a row on serializer-default artifacts.
+
+        private const string ApiTokenPrefix = "ApiToken_";
+        private const string ApiTokenGlobalGenerationKey = "ApiTokenGeneration_Global";
+        private const string ApiTokenOwnerGenerationPrefix = "ApiTokenGeneration_Owner_";
+
+        // Serializes the check-then-write token sequences inside the store boundary so that
+        // an existence check and a write can never interleave from two threads.
+        private readonly object _apiTokenLock = new();
+
+
+        private static byte[] GetApiTokenKey(string tokenId) => Encoding.UTF8.GetBytes(ApiTokenPrefix + tokenId);
+
+
+        // Persist-first creation primitive: the TokenId existence check and the row write run
+        // under _apiTokenLock, never as an unlocked read plus Put. Returns false when the
+        // TokenId already exists — the caller must discard the whole candidate and retry with
+        // a completely new id/secret pair. Throws ServerDatabaseException on write failure,
+        // leaving no durable state behind.
+        public bool TryInsertApiToken(ApiTokenEntity entity)
+        {
+            // A null TokenId would write the bare "ApiToken_" prefix key, which the
+            // ReadAllApiTokens scan then picks up — validate before touching the store.
+            if (entity?.TokenId is null)
+                throw new ArgumentException("API token insert requires a token id.", nameof(entity));
+
+            lock (_apiTokenLock)
+            {
+                var key = GetApiTokenKey(entity.TokenId);
+
+                if (_database.TryRead(key, out _))
+                    return false;
+
+                _database.Put(key, JsonSerializer.SerializeToUtf8Bytes(entity));
+
+                return true;
+            }
+        }
+
+        // Atomic rotation: writes the revoked predecessor and its replacement in a single
+        // LevelDB batch so no reader can observe the pair half-rotated. Same collision and
+        // failure contract as TryInsertApiToken.
+        public bool TryRotateApiToken(ApiTokenEntity revokedOld, ApiTokenEntity replacement)
+        {
+            // Same bare-prefix-key hazard as insert: validate both rows before writing.
+            if (revokedOld?.TokenId is null || replacement?.TokenId is null)
+                throw new ArgumentException("API token rotation requires token ids on both rows.");
+
+            lock (_apiTokenLock)
+            {
+                var replacementKey = GetApiTokenKey(replacement.TokenId);
+
+                if (_database.TryRead(replacementKey, out _))
+                    return false;
+
+                _database.PutBatch(
+                [
+                    (GetApiTokenKey(revokedOld.TokenId), JsonSerializer.SerializeToUtf8Bytes(revokedOld)),
+                    (replacementKey, JsonSerializer.SerializeToUtf8Bytes(replacement)),
+                ]);
+
+                return true;
+            }
+        }
+
+        // Full-row update for lifecycle transitions (revoke, restrict). Propagates storage
+        // failures: a silently dropped revocation would resurface after restart.
+        public void PutApiToken(ApiTokenEntity entity)
+        {
+            // Same bare-prefix-key hazard as insert and removal.
+            if (entity?.TokenId is null)
+                throw new ArgumentException("API token update requires a token id.", nameof(entity));
+
+            lock (_apiTokenLock)
+            {
+                _database.Put(GetApiTokenKey(entity.TokenId), JsonSerializer.SerializeToUtf8Bytes(entity));
+            }
+        }
+
+        // Single-record read for the authentication path. A read or deserialize failure logs
+        // and returns null, which the caller must treat as a failed (closed) authentication.
+        public ApiTokenEntity GetApiToken(string tokenId)
+        {
+            try
+            {
+                // Span overload: no per-row string allocation, and a non-UTF8 row reaches
+                // the JSON parser as bytes instead of silently becoming replacement chars.
+                return _database.TryRead(GetApiTokenKey(tokenId), out byte[] value)
+                    ? JsonSerializer.Deserialize<ApiTokenEntity>(value)
+                    : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to read API token by token id");
+            }
+
+            return null;
+        }
+
+        // Durable removal for retention. True means the row is gone from the store —
+        // deleted, or already absent (LevelDB deletes are idempotent). False means the
+        // removal failed and the row may still exist: the caller must NOT unpublish the
+        // live record in that case, or the row would rejoin the authentication index
+        // after the next restart.
+        public bool RemoveApiToken(string tokenId)
+        {
+            // A null TokenId would target the bare "ApiToken_" prefix key.
+            if (tokenId is null)
+                throw new ArgumentException("API token removal requires a token id.", nameof(tokenId));
+
+            try
+            {
+                lock (_apiTokenLock)
+                {
+                    _database.Delete(GetApiTokenKey(tokenId));
+                }
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to remove API token by token id; the durable row may still exist");
+
+                return false;
+            }
+        }
+
+        // Full scan used to rebuild the in-memory authentication index at startup. The
+        // scan itself propagates storage failures: an unreadable token region must fail
+        // the whole index closed (an empty result is a fresh install, not a silent
+        // outage). A corrupt individual record is skipped and logged; a skipped record
+        // simply never authenticates. Returns the key's token id next to each record so
+        // the loader can reject a row whose key does not match its payload TokenId —
+        // such a row must never be republished, or a revocation written under the payload
+        // id is silently undone on every restart.
+        public List<(string KeyTokenId, ApiTokenEntity Entity)> ReadAllApiTokens()
+        {
+            var tokens = new List<(string KeyTokenId, ApiTokenEntity Entity)>();
+
+            var pairs = _database.GetAllKeyValuePairsStartingWith(Encoding.UTF8.GetBytes(ApiTokenPrefix));
+
+            foreach (var (key, value) in pairs)
+            {
+                try
+                {
+                    // Span overload: the boot scan must not allocate a string per row.
+                    tokens.Add((Encoding.UTF8.GetString(key)[ApiTokenPrefix.Length..],
+                        JsonSerializer.Deserialize<ApiTokenEntity>(value)));
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(e, "Failed to deserialize an ApiTokenEntity, record skipped");
+                }
+            }
+
+            return tokens;
+        }
+
+        // Durable revocation generations. Missing state reads as 0 (fresh installation
+        // baseline); corrupt state — unparsable or negative, the counter is monotonic
+        // from 0 — throws so the caller can fail authentication closed. Advance persists
+        // the new generation before it is published to authentication.
+
+        public long GetGlobalRevocationGeneration() => ReadRevocationGeneration(ApiTokenGlobalGenerationKey);
+
+        public long AdvanceGlobalRevocationGeneration()
+        {
+            lock (_apiTokenLock)
+                return WriteRevocationGeneration(ApiTokenGlobalGenerationKey, ReadRevocationGeneration(ApiTokenGlobalGenerationKey) + 1);
+        }
+
+        public long GetOwnerRevocationGeneration(Guid ownerUserId) =>
+            ReadRevocationGeneration(ApiTokenOwnerGenerationPrefix + ownerUserId);
+
+        public long AdvanceOwnerRevocationGeneration(Guid ownerUserId)
+        {
+            var key = ApiTokenOwnerGenerationPrefix + ownerUserId;
+
+            lock (_apiTokenLock)
+                return WriteRevocationGeneration(key, ReadRevocationGeneration(key) + 1);
+        }
+
+        private long ReadRevocationGeneration(string key)
+        {
+            if (!_database.TryRead(Encoding.UTF8.GetBytes(key), out byte[] value))
+                return 0;
+
+            // Invariant culture on both sides: a CurrentCulture change on the host must
+            // never be able to turn durable generation state into the corruption path.
+            if (!long.TryParse(Encoding.UTF8.GetString(value), NumberStyles.Integer, CultureInfo.InvariantCulture, out var generation) ||
+                generation < 0)
+                throw new ServerDatabaseException($"Corrupt revocation generation state under key {key}");
+
+            return generation;
+        }
+
+        private long WriteRevocationGeneration(string key, long generation)
+        {
+            _database.Put(Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(generation.ToString(CultureInfo.InvariantCulture)));
+
+            return generation;
         }
 
         #endregion

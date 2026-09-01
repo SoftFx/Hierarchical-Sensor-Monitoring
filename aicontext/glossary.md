@@ -68,6 +68,11 @@ docs, PR descriptions, review comments, and user-facing documentation.
 |---|---|---|
 | DTO | Public data transfer object, often in `HSMSensorDataObjects`. | Serialization compatibility matters. |
 | Access key | Credential/key used by collectors or clients to connect/send data. | Treat as sensitive. |
+| API token | Personal opaque bearer credential (`hsm_pat_v1_<token-id>.<secret>`) for non-interactive management clients; only a SHA-256 verifier is persisted. | Distinct from collector access keys; creation/lifecycle is cookie-only. See `aicontext/features/server/api-tokens/`. |
+| TokenId / EntityId | API-token identity: TokenId is the public 128-bit authentication lookup key (opaque, not a secret, but never disclosed by management responses); EntityId is the stable GUID used by lifecycle routes. | Lifecycle and list responses expose EntityId only — the TokenId matters solely inside the presented credential. |
+| Token verifier | Domain-separated `SHA-256("HSM-API-TOKEN" ‖ 0x00 ‖ version ‖ tokenId ‖ secret)` stored instead of the secret. | Compared constant-time against stored-or-dummy on every authentication. |
+| Token grant | Explicit operation + boundary (Global/Product/Folder) pair; pairs are never recombinable. | Unknown operations/boundaries fail closed; no wildcards in v1. |
+| Revocation generation | Monotonic global/per-owner counter; a token authenticates only while its at-issue generations equal current values. | Emergency revoke-all/revoke-user advances it; missing-as-zero is the fresh baseline, corrupt/regressed fails closed. |
 | C++ wrapper | Native wrapper surface under `src/wrapper`. | Keep parity with collector public APIs. |
 | Ping module | External module under `src/module/HSMPingModule`. | Integration surface and deployment assumptions matter. |
 

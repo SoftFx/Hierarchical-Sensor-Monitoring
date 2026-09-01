@@ -148,6 +148,37 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        // Atomically applies all puts and deletes as a single LevelDB write batch. Used for
+        // multi-row token lifecycle transitions (e.g. rotation) that must not be observed
+        // half-applied. Throws ServerDatabaseException on failure, leaving the batch unapplied.
+        public void PutBatch(IReadOnlyList<(byte[] key, byte[] value)> puts, IReadOnlyList<byte[]> deletes = null)
+        {
+            // Puts are the point of the batch; deletes are optional. Say so instead of the
+            // NullReferenceException the foreach would otherwise throw.
+            if (puts is null)
+                throw new ArgumentNullException(nameof(puts));
+
+            using var batch = new WriteBatch();
+
+            // Population inside the try as well: a bad key/value must surface as the
+            // ServerDatabaseException the rest of the adapter guarantees, not a raw one.
+            try
+            {
+                foreach (var (key, value) in puts)
+                    batch.Put(key, value);
+
+                if (deletes is not null)
+                    foreach (var key in deletes)
+                        batch.Delete(key);
+
+                _database.Write(batch);
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
         public byte[] Get(byte[] key, byte[] prefix)
         {
             Iterator iterator = null;
@@ -400,6 +431,33 @@ namespace HSMDatabase.LevelDB
                     values.Add(iterator.Value());
 
                 return values;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+            finally
+            {
+                iterator?.Dispose();
+            }
+        }
+
+        // Key-bearing sibling of GetAllStartingWith: the caller must be able to check a
+        // row's payload against the key it was stored under (a mismatch means damaged
+        // storage — the row must be rejected, not silently republished under its payload).
+        public List<(byte[] Key, byte[] Value)> GetAllKeyValuePairsStartingWith(byte[] startWithKey)
+        {
+            Iterator iterator = null;
+            var pairs = new List<(byte[] Key, byte[] Value)>(1 << 4);
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
+                    pairs.Add((iterator.Key(), iterator.Value()));
+
+                return pairs;
             }
             catch (Exception e)
             {

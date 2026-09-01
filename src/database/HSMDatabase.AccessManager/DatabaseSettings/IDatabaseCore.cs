@@ -66,6 +66,38 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
+        #region Api tokens
+
+        // Persist-first token creation: false on TokenId collision, throws on write failure.
+        bool TryInsertApiToken(ApiTokenEntity entity);
+
+        // Atomic old-revoke + replacement-insert in one write batch.
+        bool TryRotateApiToken(ApiTokenEntity revokedOld, ApiTokenEntity replacement);
+
+        // Full-row lifecycle update (revoke, restrict); propagates storage failures.
+        void PutApiToken(ApiTokenEntity entity);
+
+        // Authentication-path read; null means missing or unreadable (fail closed).
+        ApiTokenEntity GetApiToken(string tokenId);
+
+        // Retention removal. True = the durable row is gone (deleted or already absent);
+        // false = the removal failed and the row may still exist — the caller must NOT
+        // unpublish the live record in that case, or the row rejoins the index after restart.
+        bool RemoveApiToken(string tokenId);
+
+        // Full scan to rebuild the authentication index at startup. Corrupt records are
+        // skipped; a scan failure throws so the caller can fail the index closed. Each
+        // record comes with the token id of the key it was stored under, so the loader
+        // can reject a row whose key disagrees with its payload TokenId.
+        List<(string KeyTokenId, ApiTokenEntity Entity)> GetAllApiTokens();
+
+        long GetGlobalRevocationGeneration();
+        long AdvanceGlobalRevocationGeneration();
+        long GetOwnerRevocationGeneration(Guid ownerUserId);
+        long AdvanceOwnerRevocationGeneration(Guid ownerUserId);
+
+        #endregion
+
         #region Sensors
 
         void AddSensor(SensorEntity entity);

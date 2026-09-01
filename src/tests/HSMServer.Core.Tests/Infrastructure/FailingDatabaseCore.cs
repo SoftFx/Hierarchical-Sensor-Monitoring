@@ -64,6 +64,90 @@ namespace HSMServer.Core.Tests.Infrastructure
         public AccessKeyEntity GetAccessKey(Guid id) => _inner.GetAccessKey(id);
         public List<AccessKeyEntity> GetAccessKeys() => _inner.GetAccessKeys();
 
+        // Optional injection point for API token write failures (operation name keyed),
+        // used to verify persist-first publication: a failed write must leave neither
+        // durable nor live state.
+        internal Func<string, bool> ShouldFailApiTokenOp { get; set; }
+
+        public bool TryInsertApiToken(ApiTokenEntity entity)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(TryInsertApiToken)) == true)
+                throw new InvalidOperationException("Simulated DB failure for API token insert");
+
+            return _inner.TryInsertApiToken(entity);
+        }
+
+        public bool TryRotateApiToken(ApiTokenEntity revokedOld, ApiTokenEntity replacement)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(TryRotateApiToken)) == true)
+                throw new InvalidOperationException("Simulated DB failure for API token rotation");
+
+            return _inner.TryRotateApiToken(revokedOld, replacement);
+        }
+
+        public void PutApiToken(ApiTokenEntity entity)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(PutApiToken)) == true)
+                throw new InvalidOperationException("Simulated DB failure for API token update");
+
+            _inner.PutApiToken(entity);
+        }
+
+        public ApiTokenEntity GetApiToken(string tokenId) => _inner.GetApiToken(tokenId);
+
+        // Mirrors the real contract: a failed removal reports false instead of throwing.
+        public bool RemoveApiToken(string tokenId)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(RemoveApiToken)) == true)
+                return false;
+
+            return _inner.RemoveApiToken(tokenId);
+        }
+
+        // Optional full override of the token scan result, for tests that need damaged
+        // storage shapes (e.g. a row whose key disagrees with its payload TokenId).
+        internal Func<List<(string KeyTokenId, ApiTokenEntity Entity)>> OverrideApiTokenScan { get; set; }
+
+        public List<(string KeyTokenId, ApiTokenEntity Entity)> GetAllApiTokens()
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(GetAllApiTokens)) == true)
+                throw new InvalidOperationException("Simulated DB failure for the API token scan");
+
+            return OverrideApiTokenScan?.Invoke() ?? _inner.GetAllApiTokens();
+        }
+
+        public long GetGlobalRevocationGeneration()
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(GetGlobalRevocationGeneration)) == true)
+                throw new InvalidOperationException("Simulated DB failure for generation read");
+
+            return _inner.GetGlobalRevocationGeneration();
+        }
+
+        public long AdvanceGlobalRevocationGeneration()
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(AdvanceGlobalRevocationGeneration)) == true)
+                throw new InvalidOperationException("Simulated DB failure for global generation advance");
+
+            return _inner.AdvanceGlobalRevocationGeneration();
+        }
+
+        public long GetOwnerRevocationGeneration(Guid ownerUserId)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(GetOwnerRevocationGeneration)) == true)
+                throw new InvalidOperationException("Simulated DB failure for owner generation read");
+
+            return _inner.GetOwnerRevocationGeneration(ownerUserId);
+        }
+
+        public long AdvanceOwnerRevocationGeneration(Guid ownerUserId)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(AdvanceOwnerRevocationGeneration)) == true)
+                throw new InvalidOperationException("Simulated DB failure for owner generation advance");
+
+            return _inner.AdvanceOwnerRevocationGeneration(ownerUserId);
+        }
+
         public void AddSensor(SensorEntity entity)
         {
             if (_shouldFail(entity))
