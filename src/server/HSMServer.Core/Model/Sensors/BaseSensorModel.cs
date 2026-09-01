@@ -21,6 +21,17 @@ namespace HSMServer.Core.Model
     }
 
 
+    // Outcome of a bounded history-load retry (#1344). The sweep charges its per-sweep budget
+    // on Failed alone: Suppressed did no database work, and Loaded is an ordinary read pair
+    // that must not throttle recovery.
+    internal enum HistoryLoadRetryResult
+    {
+        Suppressed,
+        Failed,
+        Loaded,
+    }
+
+
     public abstract class BaseSensorModel : BaseNodeModel
     {
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
@@ -81,14 +92,29 @@ namespace HSMServer.Core.Model
 
 
         // False until Initialize() has published a SUCCESSFUL history load (#1296, #1328). Not a
-        // retry gate: the internal latch stays latched on failure — use for deferring decisions,
-        // not for deciding whether to attempt a load.
+        // retry gate: the internal latch stays latched on failure (until the bounded
+        // RetryFailedHistoryLoad re-arm, #1344) — use for deferring decisions, not for deciding
+        // whether to attempt a load.
         internal abstract bool IsHistoryLoaded { get; }
 
-        // True when a load was attempted but failed: IsHistoryLoaded is false for the lifetime of
-        // the process (the latch is not retried), so for such sensors self-destroy is disabled
-        // until restart, not deferred.
+        // True when a load was attempted but failed: the latch stays latched on failure until
+        // RetryFailedHistoryLoad reruns the load (bounded, #1344), so between retries
+        // self-destroy is disabled for such sensors, not deferred.
         internal abstract bool HistoryLoadFailed { get; }
+
+        // True while a sensor is running on a retry-restored load and nothing has refilled its
+        // cache yet: history counts as loaded, but LastValue, Status, IsExpired and the TTL
+        // clocks stay unset until the sensor reports. The sweep logs these, so a successful
+        // retry does not simply drop the sensor out of the failed-load warning and leave the
+        // degraded state invisible (#1344). Latches off for good on the first stored value.
+        internal abstract bool HistoryRestoredByRetry { get; }
+
+        // Bounded rerun of a failed history load (#1344): bypasses Initialize()'s _isInitialized
+        // gate (the latch itself is not cleared) at most once per backoff interval, from the
+        // maintenance sweep only — never from the per-value paths. The three outcomes are
+        // distinct because the sweep budgets on them: only Failed cost a database round trip
+        // that is worth rationing.
+        internal abstract HistoryLoadRetryResult RetryFailedHistoryLoad(DateTime utcNow);
 
         // Mirrors the interval states TimeIsUp can actually fire in (None never fires; a Ticks
         // interval with Ticks <= 0 never fires). Used by ShouldDestroy() and by the sweep's
@@ -103,32 +129,42 @@ namespace HSMServer.Core.Model
 
         public bool ShouldDestroy()
         {
-            // IsHistoryLoaded means "Storage reflects history", not just "a load was attempted" —
-            // a failed load latches _isInitialized but never publishes, so the guard below also
-            // covers permanently failed loads (#1328 review). The decision is unknown, not
-            // "destroy": defer to the next sweep. Deliberately no Initialize() call here — it
-            // would run the policy fan-out and let a predicate emit TTL-expired alerts for a
-            // sensor this very check may delete.
+            // IsHistoryLoaded means "a load completed", not just "a load was attempted" — a
+            // failed load latches _isInitialized but never publishes, so the guard below also
+            // covers permanently failed loads (#1328 review). It does NOT mean Storage mirrors
+            // history: for a retry-restored sensor it holds only the activity floor, which is
+            // all this predicate needs — see HistoryRestoredByRetry before keying anything else
+            // on it. The decision is unknown, not "destroy": defer to the next sweep.
+            // Deliberately no Initialize() call here — it would run the policy fan-out and let
+            // a predicate emit TTL-expired alerts for a sensor this very check may delete.
             var interval = Settings.SelfDestroy.Value;
 
             if (!IsActive(interval) || !IsHistoryLoaded)
                 return false;
 
-            // An empty Storage cache (retention purge, a full history clear, or the newest row
-            // being the SetExpiredSnapshot timeout marker, which never enters the cache) still
-            // leaves evidence of recent activity. Take the NEWEST of the two signals, not a
-            // priority chain: _lastTimeout is never updated after a newer real value arrives
-            // (and a later re-expiry writes no marker because SetExpiredSnapshot requires
-            // HasData), while Storage.To is — so a stale marker must not shadow a newer To.
-            // To is MaxValue only for a sensor that never received a value. Marker .Time, not
-            // .LastUpdateTime: GetTimeoutValue copies LastReceivingTime from the previous value,
-            // so LastUpdateTime would under-estimate activity. CreationDate is the last resort.
-            var lastActivity = HasData
-                ? LastUpdate
-                : Newest(LastTimeout?.Time ?? DateTime.MinValue,
-                         To != DateTime.MaxValue ? To : CreationDate);
+            // Storage.To is the newest of the ingestion stamp and the floor a history-load retry
+            // restored; MaxValue only for a sensor that never received a value.
+            var to = To;
 
-            return interval.TimeIsUp(lastActivity);
+            // With a cached value, the newest of it and To. LastUpdate alone was the hazard: on a
+            // sensor whose cache is empty — a retention purge, a history clear, or a retry, which
+            // restores the floor but never the cache — AddValueBase accepts the next value
+            // whatever its timestamp, its newest-wins guard having no _lastValue to compare
+            // against. So one out-of-order value hid the freshly restored floor behind its own
+            // old LastUpdate.
+            //
+            // The timeout marker stays confined to the empty-cache branch: it records when the
+            // SERVER noticed the silence (GetTimeoutValue stamps Time = UtcNow), so after a
+            // maintenance window it carries the restart instant. Worth taking as the last
+            // remaining signal (#1328); as a floor under a sensor that still has a cached value
+            // it would postpone every quiet sensor's cleanup by the server's downtime. Marker
+            // .Time, not .LastUpdateTime, which copies the previous value's receive time and
+            // under-estimates. Details and the retry's one exception: aicontext/features/server.
+            var lastActivity = HasData
+                ? Newest(LastUpdate, to != DateTime.MaxValue ? to : DateTime.MinValue)
+                : Newest(LastTimeout?.Time ?? DateTime.MinValue, to != DateTime.MaxValue ? to : CreationDate);
+
+            return interval.TimeIsUp(lastActivity != DateTime.MinValue ? lastActivity : CreationDate);
         }
 
         public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);

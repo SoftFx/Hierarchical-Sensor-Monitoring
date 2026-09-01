@@ -78,6 +78,13 @@ namespace HSMServer.Core.Cache
 
         private const int LogSampleSize = 10;
 
+        // Per-sweep cap on FAILING history-load retries (#1344): a whole-database outage latches
+        // many sensors at once, and each retry is an inline LevelDB read in this serial loop
+        // that throws while the database is still broken. Capped-out sensors stamp nothing, so
+        // they stay due and the next sweep picks them up. Successful retries are deliberately
+        // uncapped. Rationale: aicontext/features/server/overview.md.
+        private const int MaxHistoryLoadRetriesPerSweep = 100;
+
         private readonly Logger _logger = LogManager.GetLogger(nameof(TreeValuesCache));
 
         private readonly ConfirmationManager _confirmationManager = new();
@@ -401,6 +408,10 @@ namespace HSMServer.Core.Cache
             var failedLoadCount = 0;
             var failedLoadSample = new List<Guid>(LogSampleSize);
             var failedSweep = 0;
+            var loadRetries = 0;
+            var cappedOut = false;
+            var retryRestored = 0;
+            var retryRestoredSample = new List<Guid>(LogSampleSize);
 
             static void Sample(List<Guid> sample, Guid id)
             {
@@ -421,11 +432,34 @@ namespace HSMServer.Core.Cache
                     // Self-sufficiency: CheckSensorsHistoryAsync only reaches sensors present in
                     // a CachedValue, and sensors lost to a product-name or sensor-path collision
                     // are not. Initialize them here (the load was never attempted — the failed-
-                    // load latch case stays deferred until restart). The Initialize()-inside-
-                    // ShouldDestroy() objection does not apply: this is the maintenance sweep,
-                    // where policy evaluation belongs.
+                    // load latch case is handled by the bounded retry below). The Initialize()-
+                    // inside-ShouldDestroy() objection does not apply: this is the maintenance
+                    // sweep, where policy evaluation belongs.
                     if (sensor.SelfDestroyIsActive && !sensor.IsHistoryLoaded && !sensor.HistoryLoadFailed)
                         sensor.Initialize();
+
+                    // #1344: without a retry, one transient LevelDB error during a lazily
+                    // triggered load disables self-destroy for the sensor until restart. The
+                    // maintenance sweep is the safe place to rerun it; the per-value paths
+                    // never retry (#1296), and RetryFailedHistoryLoad's own backoff bounds the
+                    // rate per sensor.
+                    // else if: a sensor this iteration just Initialize()d must not be retried in
+                    // the same breath. (The wider same-tick hazard — CheckSensorsHistoryAsync's
+                    // eager Initialize() one await earlier — is held off by the backoff, which
+                    // measures the first retry from the failed load itself.)
+                    // The clock is read per sensor, not snapshotted for the sweep: a sensor whose
+                    // lazy Initialize() fails WHILE this loop runs stamps its attempt clock from
+                    // the real clock, and a snapshot taken before that would read as "overdue"
+                    // and retry back-to-back against the database that just failed it.
+                    else if (sensor.SelfDestroyIsActive && sensor.HistoryLoadFailed)
+                    {
+                        // Only Failed is charged: Suppressed did no database work, and Loaded is
+                        // an ordinary read pair that must not throttle recovery.
+                        if (loadRetries >= MaxHistoryLoadRetriesPerSweep)
+                            cappedOut = true;
+                        else if (sensor.RetryFailedHistoryLoad(DateTime.UtcNow) is HistoryLoadRetryResult.Failed)
+                            loadRetries++;
+                    }
 
                     if (sensor.ShouldDestroy())
                     {
@@ -456,6 +490,11 @@ namespace HSMServer.Core.Cache
                             deferred++;
                             Sample(deferredSample, sensor.Id);
                         }
+                        else if (sensor.HistoryRestoredByRetry)
+                        {
+                            retryRestored++;
+                            Sample(retryRestoredSample, sensor.Id);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -474,11 +513,30 @@ namespace HSMServer.Core.Cache
             if (deferred > 0)
                 _logger.Warn($"Sensors self destroy deferred for {deferred} self-destroy-enabled sensor(s) — never initialized — {string.Join(", ", deferredSample)}{(deferred > deferredSample.Count ? ", ..." : string.Empty)}");
 
-            // Not "deferred": the latch is never retried, so for these sensors self-destroy is
-            // off until restart. Separate from the Info line so operators can alert on it; the
-            // id sample makes the alert diagnosable without grepping hours-old init logs.
+            // Not "deferred": until the bounded retry succeeds, self-destroy stays off for these
+            // sensors. Separate from the Info line so operators can alert on it; the id sample
+            // makes the alert diagnosable without grepping hours-old init logs. The retried count
+            // is attempts that reached the database and failed again; zero means every failed
+            // sensor is waiting out its backoff. Whether the cap bound this sweep is spelled out
+            // rather than left for an operator to infer from the constant.
             if (failedLoadCount > 0)
-                _logger.Warn($"Sensors self destroy disabled until restart for {failedLoadCount} sensor(s): history load failed (retry tracked in #1344) — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
+            {
+                // cappedOut, not loadRetries == cap: the budget can be exhausted by the last
+                // failing sensor in the enumeration, with nothing actually deferred.
+                var capped = cappedOut
+                    ? $", cap {MaxHistoryLoadRetriesPerSweep} reached — remaining sensors deferred to the next sweep"
+                    : string.Empty;
+
+                _logger.Warn($"Sensors self destroy disabled after failed history load for {failedLoadCount} sensor(s) (bounded retry in progress, {loadRetries} retried this sweep{capped}, #1344) — {string.Join(", ", failedLoadSample)}{(failedLoadCount > failedLoadSample.Count ? ", ..." : string.Empty)}");
+            }
+
+            // A successful retry restores only the activity floor, so such a sensor decides
+            // self-destroy again while LastValue, Status, IsExpired and its TTL clocks stay
+            // unset until it reports. Without this line it would simply vanish from the
+            // failed-load warning above and stay silently degraded — for a quiet sensor with a
+            // long self-destroy interval, potentially for weeks.
+            if (retryRestored > 0)
+                _logger.Warn($"History restored by retry but cache still empty for {retryRestored} sensor(s) (#1344) — {string.Join(", ", retryRestoredSample)}{(retryRestored > retryRestoredSample.Count ? ", ..." : string.Empty)}");
 
             if (notRemoved > 0 && !token.IsCancellationRequested)
                 _logger.Warn($"{notRemoved} sensor(s) due for destruction were not removed (removal failed) and will be retried next sweep");

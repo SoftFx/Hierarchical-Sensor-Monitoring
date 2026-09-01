@@ -54,6 +54,12 @@ namespace HSMServer.Core.Model
         DateTime _from = DateTime.MinValue;
         DateTime _to   = DateTime.MaxValue;
 
+        // Activity floor restored by a history-load retry (#1344), kept apart from _to so the
+        // "_to is stamped together with _lastValue and a _cache enqueue" pairing of AddValueBase
+        // stays intact: a retried sensor must not look like one that has a cached last value.
+        // MinValue = no floor restored.
+        DateTime _lastActivity = DateTime.MinValue;
+
         private bool IsLastEmptyOrTimeout => LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime;
 
         internal override T LastDbValue => _cache.LastOrDefault();
@@ -65,7 +71,24 @@ namespace HSMServer.Core.Model
         internal override bool HasData => !_cache.IsEmpty;
 
         internal override DateTime From => _from;
-        internal override DateTime To => _to;
+
+        // Newest of the ingestion stamp and the retry-restored floor; MaxValue keeps its
+        // "never received a value" meaning. Maxing at read time (instead of writing _to) is
+        // what makes SetLastActivity safe against lock-free ingestion: neither writer can
+        // lose the other's newer timestamp.
+        internal override DateTime To
+        {
+            get
+            {
+                var to = _to;
+                var floor = _lastActivity;
+
+                if (to == DateTime.MaxValue)
+                    return floor == DateTime.MinValue ? DateTime.MaxValue : floor;
+
+                return to > floor ? to : floor;
+            }
+        }
 
         internal virtual T CalculateStatistics(T value) => value;
 
@@ -76,11 +99,19 @@ namespace HSMServer.Core.Model
 
         internal virtual void AddValueBase(T value)
         {
-            if (value.IsTimeout && (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime))
+            if (value.IsTimeout)
             {
-                _lastTimeout = value;
+                // Newest-wins marker update, and a hard stop: a marker that loses the
+                // comparison is stale (a duplicate or out-of-order marker via TryAddValue) and
+                // must never fall through to the value branch below, which would flip HasData
+                // and install a timeout value as _lastValue.
+                if (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime)
+                    _lastTimeout = value;
+
+                return;
             }
-            else if (_lastValue is null || value.Time >= _lastValue.Time)
+
+            if (_lastValue is null || value.Time >= _lastValue.Time)
             {
                 _lastValue = value;
                 _to = value.Time;
@@ -90,6 +121,17 @@ namespace HSMServer.Core.Model
                 if (_cache.Count > CacheSize)
                     _cache.TryDequeue(out _);
             }
+        }
+
+        // Retry-only write (#1344): restores the activity floor ShouldDestroy()'s empty-cache
+        // fallback keys on when the newest DB row is a real value, not a timeout marker.
+        // Touches neither _lastValue nor _cache, and writes its own field rather than _to, so
+        // the worst interleaving with lock-free ingestion is a redundant write of an older
+        // timestamp into _lastActivity — To maxes over both and cannot regress.
+        internal void SetLastActivity(DateTime time)
+        {
+            if (_lastActivity < time)
+                _lastActivity = time;
         }
 
         internal override bool TryChangeLastValue(BaseValue value)

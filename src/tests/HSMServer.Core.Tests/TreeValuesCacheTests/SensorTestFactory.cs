@@ -14,9 +14,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     /// </summary>
     internal static class SensorTestFactory
     {
-        internal static byte[] History(DateTime time, int value) =>
+        internal static byte[] History(DateTime time, int value, DateTime? lastReceivingTime = null) =>
             new MemoryPackFormatter().Serialize(
-                new IntegerValue { Time = time, Status = SensorStatus.Ok, Value = value });
+                new IntegerValue { Time = time, LastReceivingTime = lastReceivingTime, Status = SensorStatus.Ok, Value = value });
 
         internal static SensorEntity BuildEntity(bool isSingleton = false, TimeSpan? selfDestroyInterval = null, DateTime? creationDate = null) =>
             new()
