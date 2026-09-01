@@ -159,6 +159,35 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void TryCanonicalize_ServerWideOperationAtAResourceBoundary_FailsClosed()
+        {
+            // system-health:read only means something server-wide: a Product- or
+            // Folder-scoped pair could never match in the authorization evaluator, so it
+            // is rejected in the layer that already owns fail-closed validation.
+            var grants = new List<ApiTokenGrantEntity>
+            {
+                new() { Operation = "system-health:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Product, BoundaryId = Guid.NewGuid().ToString() },
+            };
+
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
+
+            // The Global form is the legitimate one.
+            Assert.True(ApiTokenGrants.TryCanonicalize(
+                [new ApiTokenGrantEntity { Operation = "system-health:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Global }], out _));
+        }
+
+        [Fact]
+        public void TryCanonicalize_EmptyGuidBoundary_FailsClosed()
+        {
+            var grants = new List<ApiTokenGrantEntity>
+            {
+                new() { Operation = "alerts:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Product, BoundaryId = Guid.Empty.ToString() },
+            };
+
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
+        }
+
+        [Fact]
         public void TryCanonicalize_AboveMaxGrants_FailsClosed()
         {
             var grants = new List<ApiTokenGrantEntity>();

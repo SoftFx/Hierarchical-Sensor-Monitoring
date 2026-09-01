@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -97,24 +98,24 @@ namespace HSMServer.Authentication
             return Task.CompletedTask;
         }
 
-        public ApiTokenEntity GetToken(string tokenId) =>
-            tokenId is not null && _tokensByTokenId.TryGetValue(tokenId, out var entity) ? entity : null;
+        public ApiTokenInfo GetToken(string tokenId) =>
+            ToInfo(GetEntity(tokenId));
 
-        public ApiTokenEntity GetTokenByEntityId(Guid entityId) =>
+        public ApiTokenInfo GetTokenByEntityId(Guid entityId) =>
             _tokenIdByEntityId.TryGetValue(entityId, out var tokenId) ? GetToken(tokenId) : null;
 
-        public List<ApiTokenEntity> GetTokensByOwner(Guid ownerUserId)
+        public List<ApiTokenInfo> GetTokensByOwner(Guid ownerUserId)
         {
             if (!_tokenIdsByOwner.TryGetValue(ownerUserId, out var tokenIds))
                 return [];
 
-            var tokens = new List<ApiTokenEntity>();
+            var tokens = new List<ApiTokenInfo>();
 
             // Direct enumeration of the concurrent set: .Keys would take every internal
             // lock and materialize a snapshot list just to be walked once.
             foreach (var entry in tokenIds)
-                if (GetToken(entry.Key) is { } token)
-                    tokens.Add(token);
+                if (GetEntity(entry.Key) is { } token)
+                    tokens.Add(ToInfo(token));
 
             return tokens;
         }
@@ -123,13 +124,23 @@ namespace HSMServer.Authentication
 
 
         public bool TryCreateToken(Guid ownerUserId, string name, string description, List<ApiTokenGrantEntity> grants,
-            DateTime? expiresAtUtc, string createdBy, out ApiTokenEntity entity, out string fullToken)
+            DateTime? expiresAtUtc, string createdBy, out ApiTokenInfo entity, out string fullToken)
         {
             entity = null;
             fullToken = null;
 
             var sanitizedName = Sanitize(name, MaxNameLength);
             var sanitizedDescription = Sanitize(description, MaxDescriptionLength);
+
+            // Over-length name/description is rejected, not silently shortened — an
+            // operator's token must not be named something other than what they typed.
+            // (Actor fields and revocation reasons still truncate: a revocation must
+            // never be blocked by an over-long reason.)
+            if (name is not null && name.Trim().Length > MaxNameLength)
+                return false;
+
+            if (description is not null && description.Trim().Length > MaxDescriptionLength)
+                return false;
 
             if (ownerUserId == Guid.Empty || string.IsNullOrEmpty(sanitizedName))
                 return false;
@@ -194,7 +205,7 @@ namespace HSMServer.Authentication
                         // Published only after the durable write succeeded.
                         Publish(candidate);
 
-                        entity = candidate;
+                        entity = ToInfo(candidate);
                         fullToken = ApiTokenMaterial.FormatToken(material.TokenId, material.Secret);
 
                         return true;
@@ -215,7 +226,7 @@ namespace HSMServer.Authentication
 
 
         public bool TryRestrictToken(Guid entityId, List<ApiTokenGrantEntity> remainingGrants, DateTime? shortenedExpiryUtc,
-            string restrictedBy, out ApiTokenEntity entity)
+            string restrictedBy, out ApiTokenInfo entity)
         {
             entity = null;
 
@@ -265,7 +276,7 @@ namespace HSMServer.Authentication
                 // write or an audit stamp — nothing changed, so there is nothing to persist.
                 if (newExpiry == current.ExpiresAtUtc && canonicalRemaining.SequenceEqual(current.Grants))
                 {
-                    entity = current;
+                    entity = ToInfo(current);
 
                     return true;
                 }
@@ -284,7 +295,7 @@ namespace HSMServer.Authentication
 
 
         public bool TryRotateToken(Guid entityId, DateTime? shortenedExpiryUtc, string rotatedBy,
-            out ApiTokenEntity entity, out string fullToken)
+            out ApiTokenInfo entity, out string fullToken)
         {
             entity = null;
             fullToken = null;
@@ -383,7 +394,7 @@ namespace HSMServer.Authentication
                         Publish(revokedOld);
                         Publish(replacement);
 
-                        entity = replacement;
+                        entity = ToInfo(replacement);
                         fullToken = ApiTokenMaterial.FormatToken(material.TokenId, material.Secret);
 
                         return true;
@@ -403,7 +414,7 @@ namespace HSMServer.Authentication
         }
 
 
-        public bool TryRevokeToken(Guid entityId, string revokedBy, string reason, out ApiTokenEntity entity)
+        public bool TryRevokeToken(Guid entityId, string revokedBy, string reason, out ApiTokenInfo entity)
         {
             entity = null;
 
@@ -415,7 +426,7 @@ namespace HSMServer.Authentication
                 // Idempotent: revoking an already revoked token succeeds without a rewrite.
                 if (current.RevokedAtUtc is not null)
                 {
-                    entity = current;
+                    entity = ToInfo(current);
                     return true;
                 }
 
@@ -464,9 +475,10 @@ namespace HSMServer.Authentication
         // unpublish happen inside ONE _stateLock hold. Splitting them (deleting the row
         // outside the lock, then unpublishing) would let a concurrent revoke/rotate —
         // blind writes that do not check the row still exists — rewrite the just-deleted
-        // row between the two steps and resurrect it after the next restart. False when
-        // no live record existed, or when the durable removal failed (the row may still
-        // exist, so nothing is unpublished).
+        // row between the two steps and resurrect it after the next restart. A TokenId
+        // absent from the live index still gets its durable row deleted: rows rejected
+        // at load (future EntityVersion, foreign VersionByte, ...) are exactly the
+        // orphans retention exists to clear. False when no durable row was removed.
         public bool TryRemoveToken(string tokenId)
         {
             if (tokenId is null)
@@ -475,7 +487,7 @@ namespace HSMServer.Authentication
             lock (_stateLock)
             {
                 if (!_tokensByTokenId.TryGetValue(tokenId, out var entity))
-                    return false;
+                    return _databaseCore.RemoveApiToken(tokenId);
 
                 if (!_databaseCore.RemoveApiToken(tokenId))
                     return false;
@@ -483,15 +495,12 @@ namespace HSMServer.Authentication
                 _tokensByTokenId.TryRemove(tokenId, out _);
                 _tokenIdByEntityId.TryRemove(entity.EntityId, out _);
 
+                // The emptied owner bucket stays on purpose: removing it would let a
+                // lock-free reader that already captured the reference enumerate a
+                // detached dictionary while a create republishes into a fresh one — a
+                // quota undercount window the moment MaxTokensPerUser lands.
                 if (_tokenIdsByOwner.TryGetValue(entity.OwnerUserId, out var tokenIds))
-                {
                     tokenIds.TryRemove(tokenId, out _);
-
-                    // Safe only because every Publish also holds _stateLock: no publisher
-                    // can refill the bucket between the emptiness check and the removal.
-                    if (tokenIds.IsEmpty)
-                        _tokenIdsByOwner.TryRemove(entity.OwnerUserId, out _);
-                }
 
                 return true;
             }
@@ -504,19 +513,21 @@ namespace HSMServer.Authentication
         // compare → and STILL fail when no record was found (the compare result alone is
         // never the decision) → liveness (revoked/expired/both generation stamps) → boot
         // health. Decoded buffers are zeroed on every path.
-        public bool TryAuthenticate(string presentedToken, out ApiTokenEntity entity)
+        public bool TryAuthenticate(string presentedToken, out ApiTokenInfo entity)
         {
             entity = null;
 
             if (!ApiTokenMaterial.TryParse(presentedToken, out var tokenIdBytes, out var secretBytes))
                 return false;
 
+            byte[] candidateVerifier = null;
+
             try
             {
-                var candidateVerifier = ApiTokenVerifier.ComputeVerifier(
+                candidateVerifier = ApiTokenVerifier.ComputeVerifier(
                     ApiTokenMaterial.CurrentVersionByte, tokenIdBytes, secretBytes);
 
-                var token = GetToken(ApiTokenMaterial.TokenIdOf(presentedToken));
+                var token = GetEntity(ApiTokenMaterial.TokenIdOf(presentedToken));
 
                 if (token is null)
                 {
@@ -534,12 +545,17 @@ namespace HSMServer.Authentication
                         GlobalRevocationGeneration, GetOwnerRevocationGeneration(token.OwnerUserId)))
                     return false;
 
-                entity = token;
+                entity = ToInfo(token);
 
                 return true;
             }
             finally
             {
+                // Consistent with the file's zeroing discipline, even though this is a
+                // hash of the secret rather than the secret itself.
+                if (candidateVerifier is not null)
+                    Array.Clear(candidateVerifier, 0, candidateVerifier.Length);
+
                 ApiTokenMaterial.Clear(secretBytes);
                 ApiTokenMaterial.Clear(tokenIdBytes);
             }
@@ -617,6 +633,18 @@ namespace HSMServer.Authentication
                         continue;
                     }
 
+                    // A duplicate EntityId would shadow the earlier record in
+                    // _tokenIdByEntityId: a revoke-by-entity-id would then report success
+                    // while the shadowed token keeps authenticating. Requires hand-edited
+                    // or partially-restored storage — skip the later row, fail closed.
+                    if (_tokenIdByEntityId.ContainsKey(candidate.EntityId))
+                    {
+                        _logger.LogWarning("Skipping API token record with a duplicate entity id {EntityId} (token id {TokenId})",
+                            candidate.EntityId, candidate.TokenId);
+
+                        continue;
+                    }
+
                     // Publish the canonical grant list, not the raw row: a record written
                     // with a non-canonical boundary id must still restrict cleanly.
                     Publish(candidate with { Grants = canonicalGrants });
@@ -678,16 +706,56 @@ namespace HSMServer.Authentication
             entity.EntityVersion == 1 &&
             entity.VersionByte == ApiTokenMaterial.CurrentVersionByte &&
             ApiTokenMaterial.IsValidTokenId(entity.TokenId) &&
-            entity.Verifier is { Length: 32 } &&
+            entity.Verifier is { Length: SHA256.HashSizeInBytes } &&
+            entity.EntityId != Guid.Empty &&
             entity.OwnerUserId != Guid.Empty &&
             entity.Grants is not null;
 
         private bool TryGetTrackedToken(Guid entityId, out ApiTokenEntity entity)
         {
-            entity = GetTokenByEntityId(entityId);
+            entity = GetEntityByEntityId(entityId);
 
             return entity is not null;
         }
+
+        // Internal entity lookups stay entity-typed (lifecycle logic needs the full
+        // record); everything public goes through the verifier-free projection.
+        private ApiTokenEntity GetEntity(string tokenId) =>
+            tokenId is not null && _tokensByTokenId.TryGetValue(tokenId, out var entity) ? entity : null;
+
+        private ApiTokenEntity GetEntityByEntityId(Guid entityId) =>
+            _tokenIdByEntityId.TryGetValue(entityId, out var tokenId) ? GetEntity(tokenId) : null;
+
+        // The single place a durable record becomes a public result: everything the
+        // entity carries except the stored verifier.
+        private static ApiTokenInfo ToInfo(ApiTokenEntity entity) =>
+            entity is null
+                ? null
+                : new()
+                {
+                    EntityVersion = entity.EntityVersion,
+                    EntityId = entity.EntityId,
+                    TokenId = entity.TokenId,
+                    VersionByte = entity.VersionByte,
+                    OwnerUserId = entity.OwnerUserId,
+                    GlobalRevocationGenerationAtIssue = entity.GlobalRevocationGenerationAtIssue,
+                    OwnerRevocationGenerationAtIssue = entity.OwnerRevocationGenerationAtIssue,
+                    Name = entity.Name,
+                    Description = entity.Description,
+                    Grants = entity.Grants,
+                    CreatedAtUtc = entity.CreatedAtUtc,
+                    CreatedBy = entity.CreatedBy,
+                    RestrictedAtUtc = entity.RestrictedAtUtc,
+                    RestrictedBy = entity.RestrictedBy,
+                    ExpiresAtUtc = entity.ExpiresAtUtc,
+                    LastUsedAtUtc = entity.LastUsedAtUtc,
+                    RotatedAtUtc = entity.RotatedAtUtc,
+                    RotatedBy = entity.RotatedBy,
+                    RotatedFromEntityId = entity.RotatedFromEntityId,
+                    RevokedAtUtc = entity.RevokedAtUtc,
+                    RevokedBy = entity.RevokedBy,
+                    RevocationReason = entity.RevocationReason,
+                };
 
 
         // Callers must hold _stateLock: the capture must be atomic with the mutation that
@@ -724,7 +792,7 @@ namespace HSMServer.Authentication
 
         // Callers must hold _stateLock: the read-modify-write sequences this completes are
         // only atomic when the whole sequence runs under the lock.
-        private bool TryPersistAndPublish(ApiTokenEntity entity, out ApiTokenEntity published)
+        private bool TryPersistAndPublish(ApiTokenEntity entity, out ApiTokenInfo published)
         {
             published = null;
 
@@ -740,7 +808,7 @@ namespace HSMServer.Authentication
             }
 
             Publish(entity);
-            published = entity;
+            published = ToInfo(entity);
 
             return true;
         }

@@ -54,12 +54,19 @@ namespace HSMServer.Authentication
                 else
                 {
                     // Resource-scoped boundaries are concrete stable ids, canonicalized to the
-                    // Guid "D" form; no wildcards survive validation.
-                    if (grant.BoundaryId is null || !Guid.TryParse(grant.BoundaryId, out var id))
+                    // Guid "D" form; no wildcards survive validation, and the empty guid is
+                    // not a resource.
+                    if (grant.BoundaryId is null || !Guid.TryParse(grant.BoundaryId, out var id) || id == Guid.Empty)
                         return false;
 
                     boundaryId = id.ToString();
                 }
+
+                // Operations that only mean something at certain boundaries (e.g. a
+                // server-wide system-health read) never reach storage paired with a
+                // boundary they cannot match.
+                if (!ApiTokenOperations.IsValidBoundary(grant.Operation, kind))
+                    return false;
 
                 var canonicalGrant = new ApiTokenGrantEntity
                 {

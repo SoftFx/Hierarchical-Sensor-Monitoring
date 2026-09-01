@@ -160,15 +160,17 @@ namespace HSMDatabase.LevelDB
 
             using var batch = new WriteBatch();
 
-            foreach (var (key, value) in puts)
-                batch.Put(key, value);
-
-            if (deletes is not null)
-                foreach (var key in deletes)
-                    batch.Delete(key);
-
+            // Population inside the try as well: a bad key/value must surface as the
+            // ServerDatabaseException the rest of the adapter guarantees, not a raw one.
             try
             {
+                foreach (var (key, value) in puts)
+                    batch.Put(key, value);
+
+                if (deletes is not null)
+                    foreach (var key in deletes)
+                        batch.Delete(key);
+
                 _database.Write(batch);
             }
             catch (Exception e)

@@ -123,7 +123,7 @@ namespace HSMServer.Authentication
 
             // Translate to the standard alphabet and pad to a multiple of four so the
             // standard decoder can run; then require the exact expected byte length.
-            var base64Length = checked(part.Length + (4 - part.Length % 4) % 4);
+            var base64Length = part.Length + (4 - part.Length % 4) % 4;
             Span<char> base64 = stackalloc char[base64Length];
 
             for (var i = 0; i < part.Length; i++)

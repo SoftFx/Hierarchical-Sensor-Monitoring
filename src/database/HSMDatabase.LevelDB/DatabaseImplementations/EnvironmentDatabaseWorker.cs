@@ -4,6 +4,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -1056,7 +1057,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             if (!_database.TryRead(Encoding.UTF8.GetBytes(key), out byte[] value))
                 return 0;
 
-            if (!long.TryParse(Encoding.UTF8.GetString(value), out var generation) || generation < 0)
+            // Invariant culture on both sides: a CurrentCulture change on the host must
+            // never be able to turn durable generation state into the corruption path.
+            if (!long.TryParse(Encoding.UTF8.GetString(value), NumberStyles.Integer, CultureInfo.InvariantCulture, out var generation) ||
+                generation < 0)
                 throw new ServerDatabaseException($"Corrupt revocation generation state under key {key}");
 
             return generation;
@@ -1064,7 +1068,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         private long WriteRevocationGeneration(string key, long generation)
         {
-            _database.Put(Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(generation.ToString()));
+            _database.Put(Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(generation.ToString(CultureInfo.InvariantCulture)));
 
             return generation;
         }

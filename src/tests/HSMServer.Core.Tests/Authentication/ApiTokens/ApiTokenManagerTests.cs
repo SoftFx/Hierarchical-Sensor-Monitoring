@@ -157,7 +157,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // Expired: correct secret, row rewritten with a past expiry and reloaded.
             manager.TryCreateToken(OwnerId, "will-expire", null, BuildGrants("alerts:read"), null, "u", out var toExpire, out var expirableToken);
 
-            _databaseCoreManager.DatabaseCore.PutApiToken(toExpire with { ExpiresAtUtc = DateTime.UtcNow.AddDays(-1).Ticks });
+            _databaseCoreManager.DatabaseCore.PutApiToken(
+                _databaseCoreManager.DatabaseCore.GetApiToken(toExpire.TokenId) with { ExpiresAtUtc = DateTime.UtcNow.AddDays(-1).Ticks });
 
             using var reopened = CreateManager();
             reopened.Initialize().Wait();
@@ -202,12 +203,13 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.True(ApiTokenMaterial.TryParse(fullToken, out var tokenIdBytes, out _));
 
             // The stored verifier matches the presented secret, but no stored field equals
-            // the secret itself.
+            // the secret itself. Read from the store: the manager's public results are
+            // verifier-free projections.
             var expectedVerifier = ApiTokenVerifier.ComputeVerifier(
                 ApiTokenMaterial.CurrentVersionByte, tokenIdBytes,
                 Convert.FromBase64String(Base64UrlToBase64(SecretPart(fullToken))));
 
-            Assert.Equal(expectedVerifier, entity.Verifier);
+            Assert.Equal(expectedVerifier, _databaseCoreManager.DatabaseCore.GetApiToken(entity.TokenId).Verifier);
             Assert.Equal(entity.TokenId, manager.GetToken(entity.TokenId).TokenId);
             Assert.Equal(entity.EntityId, manager.GetTokenByEntityId(entity.EntityId).EntityId);
             Assert.Single(manager.GetTokensByOwner(OwnerId), token => token.EntityId == entity.EntityId);
@@ -216,7 +218,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         [Fact]
         public void TryCreateToken_SurvivesManagerRestart()
         {
-            ApiTokenEntity entity;
+            ApiTokenInfo entity;
 
             using (var manager = CreateManager())
             {
@@ -234,7 +236,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.NotNull(reloaded);
             Assert.Equal(entity.EntityId, reloaded.EntityId);
             Assert.Equal(entity.Grants.Count, reloaded.Grants.Count);
-            Assert.Equal(entity.Verifier, reloaded.Verifier);
+
+            // The persisted verifier survived the restart untouched.
+            Assert.Equal(32, _databaseCoreManager.DatabaseCore.GetApiToken(entity.TokenId).Verifier.Length);
         }
 
         [Fact]
@@ -678,16 +682,18 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            var longName = new string('n', 512);
-            var longDescription = $"first line{Environment.NewLine}second\x0000line {new string('d', 2048)}";
+            // Over-length name/description is REJECTED, not silently shortened: an
+            // operator's token must not be named something other than what they typed.
+            Assert.False(manager.TryCreateToken(OwnerId, new string('n', 512), null, BuildGrants("alerts:read"), null, "u", out _, out _));
+            Assert.False(manager.TryCreateToken(OwnerId, "ok-name",
+                $"first line{Environment.NewLine}second\x0000line {new string('d', 2048)}",
+                BuildGrants("alerts:read"), null, "u", out _, out _));
 
-            Assert.True(manager.TryCreateToken(OwnerId, longName, longDescription, BuildGrants("alerts:read"), null, "u", out var entity, out _));
+            // Within the bounds, control characters are neutralized.
+            var boundedDescription = $"first line{Environment.NewLine}second\x0000line";
 
-            Assert.Equal(256, entity.Name.Length);
-            Assert.Equal(new string('n', 256), entity.Name);
+            Assert.True(manager.TryCreateToken(OwnerId, "bounded", boundedDescription, BuildGrants("alerts:read"), null, "u", out var entity, out _));
 
-            // Control characters are neutralized and the description is bounded.
-            Assert.True(entity.Description.Length <= 1024);
             Assert.All(entity.Description, c => Assert.False(char.IsControl(c)));
 
             // Actor fields get the same treatment as free text.
@@ -705,20 +711,27 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
-        public void TryCreateToken_TruncationNeverSplitsASurrogatePair()
+        public void ActorFieldTruncation_NeverSplitsASurrogatePairAndNeverEndsInAReplacedSpace()
         {
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            // 255 chars + a 2-char surrogate pair: cutting at 256 would leave a lone high
-            // surrogate in the live entity while the JSON row holds U+FFFD after a
-            // round-trip — the cut must back off to 255 instead.
-            var surrogateName = $"{new string('n', 255)}\U0001F600";
+            // Name/description over-length is rejected outright, so bounded truncation
+            // applies to the actor fields: 255 'n' + a 2-char surrogate pair cuts at the
+            // pair's high half — the cut must back off to 255 and leave no lone surrogate.
+            manager.TryCreateToken(OwnerId, "surrogate-cut", null, BuildGrants("alerts:read"), null,
+                $"{new string('n', 255)}\U0001F600", out var surrogateEntity, out _);
 
-            Assert.True(manager.TryCreateToken(OwnerId, surrogateName, null, BuildGrants("alerts:read"), null, "u", out var entity, out _));
+            Assert.Equal(255, surrogateEntity.CreatedBy.Length);
+            Assert.All(surrogateEntity.CreatedBy, c => Assert.False(char.IsSurrogate(c)));
 
-            Assert.Equal(255, entity.Name.Length);
-            Assert.All(entity.Name, c => Assert.False(char.IsSurrogate(c)));
+            // 255 'n', a NUL (becomes a space at index 255), then a tail: the 256-char cut
+            // lands right after the replaced space, and the result must re-trim it.
+            manager.TryCreateToken(OwnerId, "space-cut", null, BuildGrants("alerts:read"), null,
+                $"{new string('n', 255)}\0tail", out var spaceEntity, out _);
+
+            Assert.Equal(255, spaceEntity.CreatedBy.Length);
+            Assert.Equal(new string('n', 255), spaceEntity.CreatedBy);
         }
 
         [Fact]
@@ -739,22 +752,6 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             Assert.Equal(entity.Name, reopened.GetToken(entity.TokenId).Name);
             Assert.Equal(entity.Description, reopened.GetToken(entity.TokenId).Description);
-        }
-
-        [Fact]
-        public void TryCreateToken_TruncatedNameNeverEndsInAReplacedControlCharacterSpace()
-        {
-            using var manager = CreateManager();
-            manager.Initialize().Wait();
-
-            // 255 'n', a NUL (becomes a space at index 255), then a tail: the 256-char cut
-            // lands right after the replaced space, and the result must re-trim it.
-            var name = $"{new string('n', 255)}\0tail";
-
-            Assert.True(manager.TryCreateToken(OwnerId, name, null, BuildGrants("alerts:read"), null, "u", out var entity, out _));
-
-            Assert.Equal(255, entity.Name.Length);
-            Assert.Equal(new string('n', 255), entity.Name);
         }
 
         [Fact]
@@ -906,8 +903,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             Assert.Null(reopened.GetToken(entity.TokenId));
 
-            // Idempotent: no live record, nothing to remove.
-            Assert.False(manager.TryRemoveToken(entity.TokenId));
+            // Idempotent: the durable row is gone either way — true means "gone", and an
+            // absent row is as gone as a deleted one. Only a null id reports false.
+            Assert.True(manager.TryRemoveToken(entity.TokenId));
             Assert.False(manager.TryRemoveToken(null));
         }
 
@@ -932,6 +930,79 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             Assert.NotNull(failingManager.GetToken(entity.TokenId));
             Assert.Single(failingManager.GetTokensByOwner(OwnerId));
+        }
+
+        [Fact]
+        public void TryRemoveToken_OrphanRowRejectedAtLoad_IsStillRemovedDurably()
+        {
+            // Rows rejected by IsLoadable never enter the live index — without the
+            // durable-delete fallback they would be un-collectable forever, rescanned and
+            // re-warned at every boot. Retention must be able to clear them.
+            var orphanTokenId = new string('Q', ApiTokenMaterial.TokenIdLength);
+
+            _databaseCoreManager.DatabaseCore.PutApiToken(new ApiTokenEntity
+            {
+                EntityVersion = 2, // future version: rejected at load
+                EntityId = Guid.NewGuid(),
+                TokenId = orphanTokenId,
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "future-version-orphan",
+                Grants = BuildGrants("alerts:read"),
+                CreatedAtUtc = DateTime.UtcNow.Ticks,
+            });
+
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            Assert.Null(manager.GetToken(orphanTokenId));
+
+            Assert.True(manager.TryRemoveToken(orphanTokenId));
+
+            // Gone durably: the next boot does not rescan it.
+            using var reopened = CreateManager();
+            reopened.Initialize().Wait();
+
+            Assert.Null(_databaseCoreManager.DatabaseCore.GetApiToken(orphanTokenId));
+        }
+
+        [Fact]
+        public void Initialize_DuplicateEntityIdRows_OnlyTheFirstIsPublished()
+        {
+            // Two rows sharing an EntityId would shadow each other in the entity-id map:
+            // a revoke-by-entity-id would report success while the shadowed token keeps
+            // authenticating. The later row must be skipped fail-closed.
+            var sharedEntityId = Guid.NewGuid();
+            var firstTokenId = new string('A', ApiTokenMaterial.TokenIdLength);
+            var secondTokenId = new string('Q', ApiTokenMaterial.TokenIdLength);
+
+            for (var i = 0; i < 2; i++)
+            {
+                _databaseCoreManager.DatabaseCore.PutApiToken(new ApiTokenEntity
+                {
+                    EntityVersion = 1,
+                    EntityId = sharedEntityId,
+                    TokenId = i == 0 ? firstTokenId : secondTokenId,
+                    VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                    Verifier = new byte[32],
+                    OwnerUserId = OwnerId,
+                    Name = $"duplicate-{i}",
+                    Grants = BuildGrants("alerts:read"),
+                    CreatedAtUtc = DateTime.UtcNow.Ticks,
+                });
+            }
+
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            // Exactly one of the two is live, and no revoke-by-entity-id can leave a
+            // shadowed authenticating record behind.
+            var liveCount = new[] { firstTokenId, secondTokenId }.Count(id => manager.GetToken(id) is not null);
+
+            Assert.Equal(1, liveCount);
+            Assert.Single(manager.GetTokensByOwner(OwnerId));
+            Assert.NotNull(manager.GetTokenByEntityId(sharedEntityId));
         }
 
         [Fact]

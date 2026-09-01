@@ -30,16 +30,14 @@ namespace HSMServer.Authentication
         // correctly regardless.
         long GetOwnerRevocationGeneration(Guid ownerUserId);
 
-        // Authentication-path lookup by the public TokenId; null when unknown. The
-        // returned record is the live index entry — consumers must not mutate its Grants
-        // or Verifier.
-        ApiTokenEntity GetToken(string tokenId);
+        // Lookup by the public TokenId; null when unknown. Results are verifier-free
+        // projections (ApiTokenInfo): the stored verifier never crosses this interface.
+        ApiTokenInfo GetToken(string tokenId);
 
-        // Lifecycle-route lookup by the stable entity id; null when unknown. Same
-        // live-entry contract as GetToken.
-        ApiTokenEntity GetTokenByEntityId(Guid entityId);
+        // Lifecycle-route lookup by the stable entity id; null when unknown.
+        ApiTokenInfo GetTokenByEntityId(Guid entityId);
 
-        List<ApiTokenEntity> GetTokensByOwner(Guid ownerUserId);
+        List<ApiTokenInfo> GetTokensByOwner(Guid ownerUserId);
 
         // The single authentication decision for a presented bearer credential: strict
         // parse, index lookup, stored-or-dummy constant-time verifier compare (and still
@@ -47,7 +45,7 @@ namespace HSMServer.Authentication
         // decision), then revoked/expired/both-generation-stamps and boot health. Use
         // this from the handler instead of reassembling the checks from GetToken and the
         // generation accessors: every omitted predicate there is an authentication bypass.
-        bool TryAuthenticate(string presentedToken, out ApiTokenEntity entity);
+        bool TryAuthenticate(string presentedToken, out ApiTokenInfo entity);
 
         // Creates a token with the explicit grants (canonicalized; empty means a token that
         // allows nothing). Persists first; publishes to the authentication index only after
@@ -55,7 +53,7 @@ namespace HSMServer.Authentication
         // Returns false — never throws — while generation state is unhealthy or unreadable:
         // no token is minted against unproven generation values.
         bool TryCreateToken(Guid ownerUserId, string name, string description, List<ApiTokenGrantEntity> grants,
-            DateTime? expiresAtUtc, string createdBy, out ApiTokenEntity entity, out string fullToken);
+            DateTime? expiresAtUtc, string createdBy, out ApiTokenInfo entity, out string fullToken);
 
         // Restriction only removes grant pairs and/or shortens expiry; returns false on any
         // expansion attempt and for a dead record — a revoked or generation-invalidated
@@ -65,7 +63,7 @@ namespace HSMServer.Authentication
         // unchanged, expiry unchanged) succeeds without a rewrite. Changing requests
         // record RestrictedAtUtc/RestrictedBy.
         bool TryRestrictToken(Guid entityId, List<ApiTokenGrantEntity> remainingGrants, DateTime? shortenedExpiryUtc,
-            string restrictedBy, out ApiTokenEntity entity);
+            string restrictedBy, out ApiTokenInfo entity);
 
         // Rotation issues a completely fresh EntityId/TokenId/secret with the same grants
         // (narrowing a token is what restriction is for) and an expiry no later than the
@@ -75,10 +73,10 @@ namespace HSMServer.Authentication
         // generation state is unhealthy or unreadable, and for a dead source token —
         // revoked, or invalidated by an emergency revoke generation.
         bool TryRotateToken(Guid entityId, DateTime? shortenedExpiryUtc, string rotatedBy,
-            out ApiTokenEntity entity, out string fullToken);
+            out ApiTokenInfo entity, out string fullToken);
 
         // Revocation is immediate and idempotent.
-        bool TryRevokeToken(Guid entityId, string revokedBy, string reason, out ApiTokenEntity entity);
+        bool TryRevokeToken(Guid entityId, string revokedBy, string reason, out ApiTokenInfo entity);
 
         // Advances the durable generation (persist first), then publishes it to
         // authentication — every token issued at an older generation stops authenticating
@@ -90,9 +88,10 @@ namespace HSMServer.Authentication
 
         // Retention removal, atomic across the durable row and the live index (both steps
         // under the manager's state lock, so a concurrent revoke/rotate cannot rewrite a
-        // row the removal just deleted and resurrect it after restart). False when no
-        // live record existed for the TokenId, or when the durable removal failed — in
-        // that case nothing is unpublished either.
+        // row the removal just deleted and resurrect it after restart). A TokenId absent
+        // from the live index still gets its durable row deleted — rows rejected at load
+        // (future EntityVersion, foreign VersionByte, ...) are exactly the orphans
+        // retention exists to clear. False when no durable row was removed.
         bool TryRemoveToken(string tokenId);
 
         // Advances the durable owner generation (persist first), then publishes it to

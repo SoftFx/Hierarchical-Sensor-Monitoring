@@ -1,6 +1,8 @@
 using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Authentication
 {
@@ -26,10 +28,8 @@ namespace HSMServer.Authentication
         public const string SystemHealthRead = "system-health:read";
 
 
-        // Frozen on purpose: immutable at the type level (no consumer can Add a capability
-        // the file says must never exist) and faster on the per-request IsValid path.
-        private static readonly FrozenSet<string> _all = new[]
-        {
+        private static readonly string[] _allItems =
+        [
             ProductsRead, ProductsWrite,
             SensorsRead, SensorsWrite,
             HistoryRead,
@@ -37,16 +37,38 @@ namespace HSMServer.Authentication
             DashboardsRead, DashboardsWrite,
             NotificationsRead, NotificationsWrite,
             SystemHealthRead,
-        }.ToFrozenSet();
+        ];
+
+        // Frozen on purpose: immutable at the type level (no consumer can Add a capability
+        // the file says must never exist) and faster on the per-request IsValid path.
+        private static readonly FrozenSet<string> _all = _allItems.ToFrozenSet();
+
+        // Cached snapshot in catalog order: IReadOnlyCollection over a mutable collection
+        // can be cast back and mutated, and a per-read ToArray() allocates for nothing.
+        private static readonly ImmutableArray<string> _allSnapshot = _allItems.ToImmutableArray();
 
 
-        // A snapshot, never the live set: IReadOnlyCollection over a mutable collection
-        // can be cast back and mutated.
-        public static IReadOnlyCollection<string> All => _all.ToArray();
+        public static IReadOnlyCollection<string> All => _allSnapshot;
+
+        // Boundary kinds an operation may be granted at. An operation that only means
+        // something server-wide (system-health:read) must never reach storage bound to a
+        // Product or Folder id — a pair the authorization evaluator could only answer with
+        // "never matches" is rejected in the layer that already owns fail-closed
+        // validation. Operations absent from the map grant at any boundary.
+        private static readonly FrozenDictionary<string, ApiTokenBoundaryKind[]> _allowedBoundaries =
+            new Dictionary<string, ApiTokenBoundaryKind[]>
+            {
+                [SystemHealthRead] = [ApiTokenBoundaryKind.Global],
+            }.ToFrozenDictionary();
 
 
-        // Exact ordinal match against the catalog; absence means denied.
         public static bool IsValid(string operation) =>
             !string.IsNullOrEmpty(operation) && _all.Contains(operation);
+
+
+        // True when the operation may be granted at the given boundary kind. This is the
+        // canonical place to tighten operation/boundary semantics as the catalog grows.
+        public static bool IsValidBoundary(string operation, ApiTokenBoundaryKind kind) =>
+            !_allowedBoundaries.TryGetValue(operation, out var allowed) || allowed.Contains(kind);
     }
 }
