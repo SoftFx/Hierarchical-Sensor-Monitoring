@@ -57,7 +57,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 Verifier = new byte[32],
                 OwnerUserId = OwnerId,
                 Name = "existing-before-scan-failure",
-                Grants = BuildGrants("alerts:read"),
+                Grants = [.. BuildGrants("alerts:read")],
                 CreatedAtUtc = DateTime.UtcNow.Ticks,
             });
 
@@ -99,7 +99,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 Verifier = new byte[32],
                 OwnerUserId = OwnerId,
                 Name = "removable",
-                Grants = BuildGrants("alerts:read"),
+                Grants = [.. BuildGrants("alerts:read")],
                 CreatedAtUtc = DateTime.UtcNow.Ticks,
             });
 
@@ -235,7 +235,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             Assert.NotNull(reloaded);
             Assert.Equal(entity.EntityId, reloaded.EntityId);
-            Assert.Equal(entity.Grants.Count, reloaded.Grants.Count);
+            Assert.Equal(entity.Grants.Length, reloaded.Grants.Length);
 
             // The persisted verifier survived the restart untouched.
             Assert.Equal(32, _databaseCoreManager.DatabaseCore.GetApiToken(entity.TokenId).Verifier.Length);
@@ -345,7 +345,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // The token is unchanged after the failed attempts.
             var unchanged = manager.GetToken(entity.TokenId);
 
-            Assert.Equal(2, unchanged.Grants.Count);
+            Assert.Equal(2, unchanged.Grants.Length);
             Assert.Equal(expiry.ToUniversalTime().Ticks, unchanged.ExpiresAtUtc.Value);
             Assert.Null(unchanged.RestrictedAtUtc);
         }
@@ -379,7 +379,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // never strip the token's authorization while shortening the expiry.
             Assert.True(manager.TryRestrictToken(entity.EntityId, null, shorterExpiry, "u", out var restricted));
 
-            Assert.Equal(2, restricted.Grants.Count);
+            Assert.Equal(2, restricted.Grants.Length);
             Assert.Equal(shorterExpiry.ToUniversalTime().Ticks, restricted.ExpiresAtUtc.Value);
         }
 
@@ -444,7 +444,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.Equal("rotating-user", replacement.RotatedBy);
 
             // Grants and expiry preserved, not expanded.
-            Assert.Equal(old.Grants.Count, replacement.Grants.Count);
+            Assert.Equal(old.Grants.Length, replacement.Grants.Length);
             Assert.Equal(old.ExpiresAtUtc, replacement.ExpiresAtUtc);
 
             // Old token is revoked immediately, new one authenticates on lookup.
@@ -560,7 +560,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 GlobalRevocationGenerationAtIssue = 5,
                 OwnerRevocationGenerationAtIssue = 0,
                 Name = "from-the-future",
-                Grants = BuildGrants("alerts:read"),
+                Grants = [.. BuildGrants("alerts:read")],
                 CreatedAtUtc = DateTime.UtcNow.Ticks,
             });
 
@@ -585,7 +585,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 Verifier = new byte[32],
                 OwnerUserId = OwnerId,
                 Name = "corrupt",
-                Grants = BuildGrants("alerts:read"),
+                Grants = [.. BuildGrants("alerts:read")],
                 CreatedAtUtc = DateTime.UtcNow.Ticks,
             });
 
@@ -809,29 +809,38 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
-        public void Initialize_NullGrantsRow_IsSkipped()
+        public void NullGrantsJsonRow_CannotBecomeALoadableRecord()
         {
-            var entityId = Guid.NewGuid();
+            // The entity type no longer admits a null/default grant array through
+            // persistence (System.Text.Json refuses to serialize a default
+            // ImmutableArray), so a grants-less row can only exist as hand-written
+            // JSON. Fail-closed either way: the deserializer rejects it, or it lands
+            // as a default array that IsLoadable refuses to publish.
+            var rowJson = $$"""
+                {
+                  "EntityVersion": 1,
+                  "EntityId": "{{Guid.NewGuid()}}",
+                  "TokenId": "{{new string('A', ApiTokenMaterial.TokenIdLength)}}",
+                  "VersionByte": 1,
+                  "Verifier": "{{new string('A', 43)}}",
+                  "OwnerUserId": "{{OwnerId}}",
+                  "Name": "null-grants-row",
+                  "Grants": null
+                }
+                """;
 
-            _databaseCoreManager.DatabaseCore.PutApiToken(new ApiTokenEntity
+            ApiTokenEntity entity = null;
+
+            try
             {
-                EntityVersion = 1,
-                EntityId = entityId,
-                // Canonical shape ('A' has zero trailing bits): the TokenId check must
-                // pass so the row is rejected by the null grants alone.
-                TokenId = new string('A', ApiTokenMaterial.TokenIdLength),
-                VersionByte = ApiTokenMaterial.CurrentVersionByte,
-                Verifier = new byte[32],
-                OwnerUserId = OwnerId,
-                Name = "null-grants-row",
-                Grants = null,
-                CreatedAtUtc = DateTime.UtcNow.Ticks,
-            });
+                entity = System.Text.Json.JsonSerializer.Deserialize<ApiTokenEntity>(rowJson);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Rejected at the deserializer — already fail closed.
+            }
 
-            using var manager = CreateManager();
-            manager.Initialize().Wait();
-
-            Assert.Null(manager.GetTokenByEntityId(entityId));
+            Assert.True(entity is null || entity.Grants.IsDefault);
         }
 
         [Fact]
@@ -871,7 +880,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 Verifier = new byte[32],
                 OwnerUserId = OwnerId,
                 Name = "already-expired",
-                Grants = BuildGrants("alerts:read"),
+                Grants = [.. BuildGrants("alerts:read")],
                 CreatedAtUtc = DateTime.UtcNow.AddDays(-10).Ticks,
                 ExpiresAtUtc = DateTime.UtcNow.AddDays(-1).Ticks,
             });
@@ -949,7 +958,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 Verifier = new byte[32],
                 OwnerUserId = OwnerId,
                 Name = "future-version-orphan",
-                Grants = BuildGrants("alerts:read"),
+                Grants = [.. BuildGrants("alerts:read")],
                 CreatedAtUtc = DateTime.UtcNow.Ticks,
             });
 
@@ -988,7 +997,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                     Verifier = new byte[32],
                     OwnerUserId = OwnerId,
                     Name = $"duplicate-{i}",
-                    Grants = BuildGrants("alerts:read"),
+                    Grants = [.. BuildGrants("alerts:read")],
                     CreatedAtUtc = DateTime.UtcNow.Ticks,
                 });
             }

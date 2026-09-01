@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using Xunit;
@@ -24,7 +25,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var result = ApiTokenGrants.TryCanonicalize(grants, out var canonical);
 
             Assert.True(result);
-            Assert.Equal(2, canonical.Count);
+            Assert.Equal(2, canonical.Length);
 
             // Deterministic order: operation, then boundary kind (Global=0 < Product=1).
             Assert.Equal((int)ApiTokenBoundaryKind.Global, canonical[0].BoundaryKind);
@@ -49,7 +50,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.True(ApiTokenGrants.TryCanonicalize(first, out var canonicalFirst));
             Assert.True(ApiTokenGrants.TryCanonicalize(second, out var canonicalSecond));
 
-            Assert.Equal(canonicalFirst, canonicalSecond);
+            Assert.Equal(canonicalFirst.ToArray(), canonicalSecond.ToArray());
         }
 
         [Fact]
@@ -147,7 +148,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             };
 
             Assert.True(ApiTokenGrants.TryCanonicalize(grants, out var canonical));
-            Assert.Equal(3, canonical.Count);
+            Assert.Equal(3, canonical.Length);
         }
 
         [Fact]
@@ -201,13 +202,13 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 });
 
             Assert.False(ApiTokenGrants.TryCanonicalize(grants, out var canonical));
-            Assert.Null(canonical);
+            Assert.True(canonical.IsDefault);
 
             // Exactly at the bound is still a legitimate token.
             grants.RemoveAt(grants.Count - 1);
 
             Assert.True(ApiTokenGrants.TryCanonicalize(grants, out canonical));
-            Assert.Equal(ApiTokenGrants.MaxGrants, canonical.Count);
+            Assert.Equal(ApiTokenGrants.MaxGrants, canonical.Length);
         }
     }
 }

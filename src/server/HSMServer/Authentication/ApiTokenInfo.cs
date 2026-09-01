@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Authentication
@@ -31,7 +32,9 @@ namespace HSMServer.Authentication
 
         public string Description { get; init; }
 
-        public IReadOnlyList<ApiTokenGrantEntity> Grants { get; init; }
+        // ImmutableArray on purpose: a projection must not alias a mutable list a
+        // consumer could edit in place (and through it the live index entry).
+        public ImmutableArray<ApiTokenGrantEntity> Grants { get; init; }
 
         public long CreatedAtUtc { get; init; }
 

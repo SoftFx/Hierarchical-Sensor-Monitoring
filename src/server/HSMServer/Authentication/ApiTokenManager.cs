@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
@@ -253,7 +254,7 @@ namespace HSMServer.Authentication
                 // keeping the current expiry — while an explicit empty list strips every
                 // grant. The copy also keeps the restricted record from sharing the grant
                 // list instance with its predecessor.
-                List<ApiTokenGrantEntity> canonicalRemaining;
+                ImmutableArray<ApiTokenGrantEntity> canonicalRemaining;
 
                 if (remainingGrants is null)
                     canonicalRemaining = [.. current.Grants];
@@ -709,7 +710,7 @@ namespace HSMServer.Authentication
             entity.Verifier is { Length: SHA256.HashSizeInBytes } &&
             entity.EntityId != Guid.Empty &&
             entity.OwnerUserId != Guid.Empty &&
-            entity.Grants is not null;
+            !entity.Grants.IsDefault;
 
         private bool TryGetTrackedToken(Guid entityId, out ApiTokenEntity entity)
         {

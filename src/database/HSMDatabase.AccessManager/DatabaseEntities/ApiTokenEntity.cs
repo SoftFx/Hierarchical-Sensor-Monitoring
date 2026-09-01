@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
@@ -36,10 +37,12 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string Description { get; init; }
 
         // Canonical grant list (see ApiTokenGrants; duplicate pairs are rejected before
-        // persistence). Read-only at the type level: records are shared with the live
-        // authentication index, so a mutating consumer cannot rewrite a live token's
-        // grants in place. System.Text.Json deserializes this into a List.
-        public IReadOnlyList<ApiTokenGrantEntity> Grants { get; init; }
+        // persistence). ImmutableArray, not IReadOnlyList over a List: the interface is
+        // not a defensive boundary — a cast back to List<T> would let a consumer rewrite
+        // a live token's grants in place, bypassing restrict-only-narrows with no durable
+        // write. Records are shared with the live authentication index; sharing an
+        // ImmutableArray is safe by construction (elements are init-only records).
+        public ImmutableArray<ApiTokenGrantEntity> Grants { get; init; }
 
         public long CreatedAtUtc { get; init; }
 

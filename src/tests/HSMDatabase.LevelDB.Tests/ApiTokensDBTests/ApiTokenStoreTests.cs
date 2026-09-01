@@ -70,7 +70,7 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
             Assert.Equal(entity.Verifier, readBack.Verifier);
             Assert.Equal(entity.OwnerUserId, readBack.OwnerUserId);
             Assert.Equal(entity.Name, readBack.Name);
-            Assert.Equal(entity.Grants.Count, readBack.Grants.Count);
+            Assert.Equal(entity.Grants.Length, readBack.Grants.Length);
             Assert.Equal(entity.Grants[0].Operation, readBack.Grants[0].Operation);
             Assert.Equal(entity.Grants[0].BoundaryKind, readBack.Grants[0].BoundaryKind);
             Assert.Equal(entity.Grants[0].BoundaryId, readBack.Grants[0].BoundaryId);

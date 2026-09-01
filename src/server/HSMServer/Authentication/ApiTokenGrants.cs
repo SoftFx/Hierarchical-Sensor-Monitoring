@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Authentication
@@ -9,7 +10,8 @@ namespace HSMServer.Authentication
     // values; Global carries no boundary id while Product/Folder carry a canonical Guid id;
     // duplicate operation+boundary pairs are rejected. Anything unknown fails closed.
     // Canonical grants are returned in a deterministic order (operation, then boundary) so
-    // serialized records are stable.
+    // serialized records are stable, and as an ImmutableArray so no consumer can mutate a
+    // live token's grant set in place.
     public static class ApiTokenGrants
     {
         // Upper bound on grants per token: canonicalization allocates per grant and the
@@ -18,9 +20,9 @@ namespace HSMServer.Authentication
         public const int MaxGrants = 1024;
 
 
-        public static bool TryCanonicalize(IEnumerable<ApiTokenGrantEntity> grants, out List<ApiTokenGrantEntity> canonical)
+        public static bool TryCanonicalize(IEnumerable<ApiTokenGrantEntity> grants, out ImmutableArray<ApiTokenGrantEntity> canonical)
         {
-            canonical = null;
+            canonical = default;
 
             var result = new List<ApiTokenGrantEntity>();
             var seen = new HashSet<ApiTokenGrantEntity>();
@@ -84,7 +86,7 @@ namespace HSMServer.Authentication
 
             result.Sort(CompareGrants);
 
-            canonical = result;
+            canonical = result.ToImmutableArray();
 
             return true;
         }
