@@ -18,7 +18,13 @@ namespace HSMServer.Authentication
     {
         // False when the durable state was not fully provable at boot: the token-row scan
         // failed, or revocation generation state is missing, corrupt or regressed. Every
-        // API token authentication must fail closed while this is false.
+        // API token authentication must fail closed while this is false. Per-token
+        // lifecycle results are also not trustworthy while this is false — after a failed
+        // boot scan the in-memory index is empty, so TryRevokeToken reports false for
+        // every token even though the durable rows survive and would authenticate again
+        // once the storage problem clears. The management layer distinguishes the cases
+        // on this flag: false + unhealthy = "do not trust per-token results, use the
+        // emergency revoke"; false + healthy = "no such token".
         bool IsGenerationStateHealthy { get; }
 
         long GlobalRevocationGeneration { get; }
@@ -75,7 +81,13 @@ namespace HSMServer.Authentication
         bool TryRotateToken(Guid entityId, DateTime? shortenedExpiryUtc, string rotatedBy,
             out ApiTokenInfo entity, out string fullToken);
 
-        // Revocation is immediate and idempotent.
+        // Revocation is immediate and idempotent — for any token visible in the index.
+        // False means "not live in the index": either genuinely unknown, or the index is
+        // untrustworthy (IsGenerationStateHealthy false after a failed boot scan — the
+        // durable row still exists). In the latter case the operator's lever is the
+        // emergency revoke (AdvanceGlobalRevocationGeneration /
+        // AdvanceOwnerRevocationGeneration), which bypasses the index entirely and
+        // invalidates the token durably.
         bool TryRevokeToken(Guid entityId, string revokedBy, string reason, out ApiTokenInfo entity);
 
         // Advances the durable generation (persist first), then publishes it to

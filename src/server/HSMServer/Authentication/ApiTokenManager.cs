@@ -595,8 +595,13 @@ namespace HSMServer.Authentication
         // The one liveness rule, shared by authentication and quota counting (callers
         // snapshot the generations once and pass them in): unrevoked, unexpired, issued
         // at exactly the current generations. TryRestrictToken/TryRevokeToken deliberately
-        // do NOT gate on IsGenerationStateHealthy the way create/rotate do: revoking must
-        // always work, and a narrowing persisted onto an already-dead row grants nothing.
+        // do NOT gate on IsGenerationStateHealthy the way create/rotate do: a narrowing
+        // persisted onto an already-dead row grants nothing, and revoking must work
+        // whenever the record is VISIBLE in the index. It is reachable per token only
+        // then: after a failed boot scan the index is empty, every per-token revoke
+        // reports false while the durable rows survive — the operator's lever in that
+        // state is the emergency revoke (a generation advance), which bypasses the index
+        // and acts durably.
         private static bool IsLive(ApiTokenEntity token, long nowTicks, long globalGeneration, long ownerGeneration) =>
             token.RevokedAtUtc is null &&
             (token.ExpiresAtUtc is null || token.ExpiresAtUtc.Value > nowTicks) &&

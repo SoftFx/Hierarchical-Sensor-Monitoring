@@ -74,6 +74,55 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void TryRevokeToken_AfterFailedBootScan_ReportsFalse_EmergencyRevokeIsTheLever()
+        {
+            // The index is empty after a failed scan but the durable rows survive: the
+            // per-token revoke cannot reach them and reports false. The operator lever in
+            // that state is the emergency revoke, which bypasses the index and acts
+            // durably — this pins that contract so the management layer can key its
+            // "unhealthy, use emergency revoke" messaging on the health flag.
+            var entityId = Guid.NewGuid();
+            var tokenId = new string('A', ApiTokenMaterial.TokenIdLength);
+
+            _databaseCoreManager.DatabaseCore.PutApiToken(new ApiTokenEntity
+            {
+                EntityVersion = 1,
+                EntityId = entityId,
+                TokenId = tokenId,
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "compromised-but-unreachable",
+                Grants = [.. BuildGrants("alerts:read")],
+                CreatedAtUtc = DateTime.UtcNow.Ticks,
+            });
+
+            var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailApiTokenOp = op => op == "GetAllApiTokens",
+            };
+
+            using var manager = new ApiTokenManager(failing, NullLogger<ApiTokenManager>.Instance);
+
+            manager.Initialize().Wait();
+
+            Assert.False(manager.IsGenerationStateHealthy);
+            Assert.False(manager.TryRevokeToken(entityId, "u", "compromised", out _));
+
+            // The durable row is untouched by the per-token attempt...
+            Assert.NotNull(_databaseCoreManager.DatabaseCore.GetApiToken(tokenId));
+
+            // ...but the emergency revoke still kills it durably, bypassing the index.
+            manager.AdvanceGlobalRevocationGeneration();
+
+            using var repaired = CreateManager();
+            repaired.Initialize().Wait();
+
+            // Generation-invalidated: can never authenticate even though RevokedAtUtc is null.
+            Assert.Equal(1, repaired.GlobalRevocationGeneration);
+        }
+
+        [Fact]
         public void RemoveApiToken_FailedRemoval_ReportsFalseSoRetentionSkipsUnpublish()
         {
             // The retention flow is remove-durable-first, then Unpublish. A removal
