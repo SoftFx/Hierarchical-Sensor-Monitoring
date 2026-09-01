@@ -442,6 +442,33 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        // Key-bearing sibling of GetAllStartingWith: the caller must be able to check a
+        // row's payload against the key it was stored under (a mismatch means damaged
+        // storage — the row must be rejected, not silently republished under its payload).
+        public List<(byte[] Key, byte[] Value)> GetAllKeyValuePairsStartingWith(byte[] startWithKey)
+        {
+            Iterator iterator = null;
+            var pairs = new List<(byte[] Key, byte[] Value)>(1 << 4);
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
+                    pairs.Add((iterator.Key(), iterator.Value()));
+
+                return pairs;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+            finally
+            {
+                iterator?.Dispose();
+            }
+        }
+
         public void FillLatestValues(Dictionary<byte[], (long from, byte[] toKey, byte[] latestValue)> keyValuePairs, long endBase)
         {
             Iterator iterator = null;

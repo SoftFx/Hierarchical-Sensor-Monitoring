@@ -20,9 +20,13 @@ namespace HSMServer.Authentication
         public const int MaxGrants = 1024;
 
 
-        public static bool TryCanonicalize(IEnumerable<ApiTokenGrantEntity> grants, out ImmutableArray<ApiTokenGrantEntity> canonical)
+        // `problem` names the first offending grant and why it failed, so a load-time skip
+        // can log something an operator can act on ("operation 'x' is not in the catalog")
+        // instead of a bare entity id. Null on success.
+        public static bool TryCanonicalize(IEnumerable<ApiTokenGrantEntity> grants, out ImmutableArray<ApiTokenGrantEntity> canonical, out string problem)
         {
             canonical = default;
+            problem = null;
 
             var result = new List<ApiTokenGrantEntity>();
             var seen = new HashSet<ApiTokenGrantEntity>();
@@ -30,19 +34,31 @@ namespace HSMServer.Authentication
             foreach (var grant in grants ?? Array.Empty<ApiTokenGrantEntity>())
             {
                 if (grant is null)
+                {
+                    problem = "null grant entry";
                     return false;
+                }
 
                 // Fail closed before allocating further once the bound is exceeded.
                 if (seen.Count >= MaxGrants)
+                {
+                    problem = $"more than {MaxGrants} grants";
                     return false;
+                }
 
                 if (!ApiTokenOperations.IsValid(grant.Operation))
+                {
+                    problem = $"operation '{grant.Operation ?? "<null>"}' is not in the catalog";
                     return false;
+                }
 
                 // Generic overload: allocation-free, and a change of the enum's underlying
                 // type can no longer turn this into a throw instead of a fail-closed false.
                 if (!Enum.IsDefined((ApiTokenBoundaryKind)grant.BoundaryKind))
+                {
+                    problem = $"operation '{grant.Operation}' has unknown boundary kind {grant.BoundaryKind}";
                     return false;
+                }
 
                 var kind = (ApiTokenBoundaryKind)grant.BoundaryKind;
                 string boundaryId = null;
@@ -51,7 +67,10 @@ namespace HSMServer.Authentication
                 {
                     // The global boundary is explicit and id-less; an id here is malformed.
                     if (!string.IsNullOrEmpty(grant.BoundaryId))
+                    {
+                        problem = $"operation '{grant.Operation}' at Global carries a boundary id";
                         return false;
+                    }
                 }
                 else
                 {
@@ -59,7 +78,10 @@ namespace HSMServer.Authentication
                     // Guid "D" form; no wildcards survive validation, and the empty guid is
                     // not a resource.
                     if (grant.BoundaryId is null || !Guid.TryParse(grant.BoundaryId, out var id) || id == Guid.Empty)
+                    {
+                        problem = $"operation '{grant.Operation}' has an invalid {kind} boundary id '{grant.BoundaryId ?? "<null>"}'";
                         return false;
+                    }
 
                     boundaryId = id.ToString();
                 }
@@ -68,7 +90,10 @@ namespace HSMServer.Authentication
                 // server-wide system-health read) never reach storage paired with a
                 // boundary they cannot match.
                 if (!ApiTokenOperations.IsValidBoundary(grant.Operation, kind))
+                {
+                    problem = $"operation '{grant.Operation}' is not grantable at boundary {kind}";
                     return false;
+                }
 
                 var canonicalGrant = new ApiTokenGrantEntity
                 {
@@ -79,7 +104,10 @@ namespace HSMServer.Authentication
 
                 // Records compare by value, so this rejects duplicate operation+boundary pairs.
                 if (!seen.Add(canonicalGrant))
+                {
+                    problem = $"duplicate grant '{grant.Operation}' at {kind} boundary '{boundaryId}'";
                     return false;
+                }
 
                 result.Add(canonicalGrant);
             }

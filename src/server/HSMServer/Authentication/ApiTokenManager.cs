@@ -146,7 +146,7 @@ namespace HSMServer.Authentication
             if (ownerUserId == Guid.Empty || string.IsNullOrEmpty(sanitizedName))
                 return false;
 
-            if (!ApiTokenGrants.TryCanonicalize(grants, out var canonicalGrants))
+            if (!ApiTokenGrants.TryCanonicalize(grants, out var canonicalGrants, out _))
                 return false;
 
             var expiryTicks = NormalizeUtcTicks(expiresAtUtc);
@@ -258,7 +258,7 @@ namespace HSMServer.Authentication
 
                 if (remainingGrants is null)
                     canonicalRemaining = [.. current.Grants];
-                else if (!ApiTokenGrants.TryCanonicalize(remainingGrants, out canonicalRemaining))
+                else if (!ApiTokenGrants.TryCanonicalize(remainingGrants, out canonicalRemaining, out _))
                     return false;
 
                 // Restriction can only remove pairs; any pair not in the current set is
@@ -613,7 +613,7 @@ namespace HSMServer.Authentication
         // closed: an unreadable token region is not a fresh install.
         private bool LoadTokens()
         {
-            List<ApiTokenEntity> candidates;
+            List<(string KeyTokenId, ApiTokenEntity Entity)> candidates;
 
             try
             {
@@ -628,14 +628,33 @@ namespace HSMServer.Authentication
 
             lock (_stateLock)
             {
-                foreach (var candidate in candidates)
+                foreach (var (keyTokenId, candidate) in candidates)
                 {
-                    if (!IsLoadable(candidate) || !ApiTokenGrants.TryCanonicalize(candidate.Grants, out var canonicalGrants))
+                    // A row stored under a key that disagrees with its payload TokenId is
+                    // damaged storage: publishing it under the payload id would let every
+                    // lifecycle write target ApiToken_<payload> while the stale
+                    // ApiToken_<key> row is rescanned and re-published at each restart,
+                    // silently undoing the revocation once per restart. Reject and name
+                    // the offending key so retention can clear it.
+                    if (candidate is not null && keyTokenId != candidate.TokenId)
+                    {
+                        _logger.LogWarning(
+                            "Skipping API token row whose key {KeyTokenId} does not match its payload token id {PayloadTokenId} (entity {EntityId}); remove the row to clear this",
+                            keyTokenId, candidate.TokenId, candidate.EntityId);
+
+                        continue;
+                    }
+
+                    string grantProblem = null;
+
+                    if (!IsLoadable(candidate) || !ApiTokenGrants.TryCanonicalize(candidate.Grants, out var canonicalGrants, out grantProblem))
                     {
                         // Fail closed: an unloadable record is simply never published to the
-                        // authentication index and can never authenticate.
-                        _logger.LogWarning("Skipping unloadable API token record (entity {EntityId}, version {Version})",
-                            candidate?.EntityId, candidate?.EntityVersion);
+                        // authentication index and can never authenticate. The grant problem
+                        // is named explicitly — "operation X is not in the catalog" is what
+                        // an operator can act on; a bare entity id is not.
+                        _logger.LogWarning("Skipping unloadable API token record (entity {EntityId}, version {Version}): {Problem}",
+                            candidate?.EntityId, candidate?.EntityVersion, grantProblem ?? "loadable-shape check failed");
                         continue;
                     }
 
@@ -741,7 +760,6 @@ namespace HSMServer.Authentication
                 {
                     EntityVersion = entity.EntityVersion,
                     EntityId = entity.EntityId,
-                    TokenId = entity.TokenId,
                     VersionByte = entity.VersionByte,
                     OwnerUserId = entity.OwnerUserId,
                     GlobalRevocationGenerationAtIssue = entity.GlobalRevocationGenerationAtIssue,

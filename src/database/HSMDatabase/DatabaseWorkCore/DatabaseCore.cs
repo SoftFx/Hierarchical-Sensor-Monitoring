@@ -513,7 +513,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public bool RemoveApiToken(string tokenId) => _environmentDatabase.RemoveApiToken(tokenId);
 
-        public List<ApiTokenEntity> GetAllApiTokens() => _environmentDatabase.ReadAllApiTokens();
+        public List<(string KeyTokenId, ApiTokenEntity Entity)> GetAllApiTokens() => _environmentDatabase.ReadAllApiTokens();
 
         public long GetGlobalRevocationGeneration() => _environmentDatabase.GetGlobalRevocationGeneration();
 

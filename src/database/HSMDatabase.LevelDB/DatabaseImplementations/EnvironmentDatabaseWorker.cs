@@ -1005,19 +1005,23 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // scan itself propagates storage failures: an unreadable token region must fail
         // the whole index closed (an empty result is a fresh install, not a silent
         // outage). A corrupt individual record is skipped and logged; a skipped record
-        // simply never authenticates.
-        public List<ApiTokenEntity> ReadAllApiTokens()
+        // simply never authenticates. Returns the key's token id next to each record so
+        // the loader can reject a row whose key does not match its payload TokenId —
+        // such a row must never be republished, or a revocation written under the payload
+        // id is silently undone on every restart.
+        public List<(string KeyTokenId, ApiTokenEntity Entity)> ReadAllApiTokens()
         {
-            var tokens = new List<ApiTokenEntity>();
+            var tokens = new List<(string KeyTokenId, ApiTokenEntity Entity)>();
 
-            var values = _database.GetAllStartingWith(Encoding.UTF8.GetBytes(ApiTokenPrefix));
+            var pairs = _database.GetAllKeyValuePairsStartingWith(Encoding.UTF8.GetBytes(ApiTokenPrefix));
 
-            foreach (var value in values)
+            foreach (var (key, value) in pairs)
             {
                 try
                 {
                     // Span overload: the boot scan must not allocate a string per row.
-                    tokens.Add(JsonSerializer.Deserialize<ApiTokenEntity>(value));
+                    tokens.Add((Encoding.UTF8.GetString(key)[ApiTokenPrefix.Length..],
+                        JsonSerializer.Deserialize<ApiTokenEntity>(value)));
                 }
                 catch (Exception e)
                 {

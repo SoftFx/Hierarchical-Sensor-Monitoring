@@ -166,7 +166,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             Assert.True(manager.TryAuthenticate(fullToken, out var authenticated));
 
-            Assert.Equal(entity.TokenId, authenticated.TokenId);
+            Assert.Equal(entity.EntityId, authenticated.EntityId);
         }
 
         [Fact]
@@ -207,7 +207,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             manager.TryCreateToken(OwnerId, "will-expire", null, BuildGrants("alerts:read"), null, "u", out var toExpire, out var expirableToken);
 
             _databaseCoreManager.DatabaseCore.PutApiToken(
-                _databaseCoreManager.DatabaseCore.GetApiToken(toExpire.TokenId) with { ExpiresAtUtc = DateTime.UtcNow.AddDays(-1).Ticks });
+                _databaseCoreManager.DatabaseCore.GetApiToken(ApiTokenMaterial.TokenIdOf(expirableToken)) with { ExpiresAtUtc = DateTime.UtcNow.AddDays(-1).Ticks });
 
             using var reopened = CreateManager();
             reopened.Initialize().Wait();
@@ -258,8 +258,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 ApiTokenMaterial.CurrentVersionByte, tokenIdBytes,
                 Convert.FromBase64String(Base64UrlToBase64(SecretPart(fullToken))));
 
-            Assert.Equal(expectedVerifier, _databaseCoreManager.DatabaseCore.GetApiToken(entity.TokenId).Verifier);
-            Assert.Equal(entity.TokenId, manager.GetToken(entity.TokenId).TokenId);
+            Assert.Equal(expectedVerifier, _databaseCoreManager.DatabaseCore.GetApiToken(ApiTokenMaterial.TokenIdOf(fullToken)).Verifier);
+            Assert.Equal(entity.EntityId, manager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).EntityId);
             Assert.Equal(entity.EntityId, manager.GetTokenByEntityId(entity.EntityId).EntityId);
             Assert.Single(manager.GetTokensByOwner(OwnerId), token => token.EntityId == entity.EntityId);
         }
@@ -268,26 +268,27 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         public void TryCreateToken_SurvivesManagerRestart()
         {
             ApiTokenInfo entity;
+            string fullToken;
 
             using (var manager = CreateManager())
             {
                 manager.Initialize().Wait();
 
                 manager.TryCreateToken(OwnerId, "restart-proof", null, BuildGrants("products:read"),
-                    null, "test-user", out entity, out _);
+                    null, "test-user", out entity, out fullToken);
             }
 
             using var reopened = CreateManager();
             reopened.Initialize().Wait();
 
-            var reloaded = reopened.GetToken(entity.TokenId);
+            var reloaded = reopened.GetToken(ApiTokenMaterial.TokenIdOf(fullToken));
 
             Assert.NotNull(reloaded);
             Assert.Equal(entity.EntityId, reloaded.EntityId);
             Assert.Equal(entity.Grants.Length, reloaded.Grants.Length);
 
             // The persisted verifier survived the restart untouched.
-            Assert.Equal(32, _databaseCoreManager.DatabaseCore.GetApiToken(entity.TokenId).Verifier.Length);
+            Assert.Equal(32, _databaseCoreManager.DatabaseCore.GetApiToken(ApiTokenMaterial.TokenIdOf(fullToken)).Verifier.Length);
         }
 
         [Fact]
@@ -314,8 +315,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             for (var i = 0; i < 50; i++)
             {
-                Assert.True(manager.TryCreateToken(OwnerId, $"token-{i}", null, BuildGrants("alerts:read"), null, "u", out var entity, out _));
-                tokenIds.Add(entity.TokenId);
+                Assert.True(manager.TryCreateToken(OwnerId, $"token-{i}", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken));
+                tokenIds.Add(ApiTokenMaterial.TokenIdOf(fullToken));
             }
 
             Assert.Equal(50, tokenIds.Count);
@@ -328,7 +329,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "to-revoke", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "to-revoke", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
 
             Assert.True(manager.TryRevokeToken(entity.EntityId, "test-user", "rotation cleanup", out var revoked));
             Assert.NotNull(revoked.RevokedAtUtc);
@@ -349,7 +350,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             manager.Initialize().Wait();
 
             manager.TryCreateToken(OwnerId, "to-restrict", null, BuildGrants("alerts:read", "alerts:write"),
-                DateTime.UtcNow.AddYears(1), "u", out var entity, out _);
+                DateTime.UtcNow.AddYears(1), "u", out var entity, out var fullToken);
 
             var shorterExpiry = DateTime.UtcNow.AddDays(1);
 
@@ -364,7 +365,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var reopened = CreateManager();
             reopened.Initialize().Wait();
 
-            var reloaded = reopened.GetToken(entity.TokenId);
+            var reloaded = reopened.GetToken(ApiTokenMaterial.TokenIdOf(fullToken));
 
             Assert.Single(reloaded.Grants);
             Assert.NotNull(reloaded.RestrictedAtUtc);
@@ -378,7 +379,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             var expiry = DateTime.UtcNow.AddDays(10);
 
-            manager.TryCreateToken(OwnerId, "no-expand", null, BuildGrants("alerts:read", "alerts:write"), expiry, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "no-expand", null, BuildGrants("alerts:read", "alerts:write"), expiry, "u", out var entity, out var fullToken);
 
             // A pair the token never had.
             Assert.False(manager.TryRestrictToken(entity.EntityId, BuildGrants("sensors:read"), null, "u", out _));
@@ -392,7 +393,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.False(manager.TryRestrictToken(entity.EntityId, BuildGrants("alerts:read"), expiry.AddDays(1), "u", out _));
 
             // The token is unchanged after the failed attempts.
-            var unchanged = manager.GetToken(entity.TokenId);
+            var unchanged = manager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken));
 
             Assert.Equal(2, unchanged.Grants.Length);
             Assert.Equal(expiry.ToUniversalTime().Ticks, unchanged.ExpiresAtUtc.Value);
@@ -405,7 +406,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "unlimited", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "unlimited", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
 
             var finite = DateTime.UtcNow.AddMonths(6);
 
@@ -420,7 +421,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             manager.Initialize().Wait();
 
             manager.TryCreateToken(OwnerId, "keep-grants", null, BuildGrants("alerts:read", "alerts:write"),
-                DateTime.UtcNow.AddYears(1), "u", out var entity, out _);
+                DateTime.UtcNow.AddYears(1), "u", out var entity, out var fullToken);
 
             var shorterExpiry = DateTime.UtcNow.AddDays(1);
 
@@ -438,13 +439,13 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "generation-dead", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "generation-dead", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
 
             // Emergency revoke advances the generation; the record keeps RevokedAtUtc == null.
             manager.AdvanceOwnerRevocationGeneration(OwnerId);
 
             Assert.False(manager.TryRestrictToken(entity.EntityId, BuildGrants("alerts:read"), null, "u", out _));
-            Assert.Null(manager.GetToken(entity.TokenId).RestrictedAtUtc);
+            Assert.Null(manager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).RestrictedAtUtc);
         }
 
         [Fact]
@@ -453,7 +454,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "no-op", null, BuildGrants("alerts:read"), DateTime.UtcNow.AddYears(1), "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "no-op", null, BuildGrants("alerts:read"), DateTime.UtcNow.AddYears(1), "u", out var entity, out var fullToken);
 
             // Same grants (null = keep) and unchanged expiry (null = keep): true, but no
             // audit stamp and no durable write — nothing changed.
@@ -464,7 +465,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var reopened = CreateManager();
             reopened.Initialize().Wait();
 
-            Assert.Null(reopened.GetToken(entity.TokenId).RestrictedAtUtc);
+            Assert.Null(reopened.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).RestrictedAtUtc);
         }
 
         [Fact]
@@ -481,7 +482,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             // Completely fresh identifiers: no value from the old token is reused.
             Assert.NotEqual(old.EntityId, replacement.EntityId);
-            Assert.NotEqual(old.TokenId, replacement.TokenId);
+            Assert.NotEqual(ApiTokenMaterial.TokenIdOf(oldFullToken), ApiTokenMaterial.TokenIdOf(newFullToken));
             Assert.NotEqual(oldFullToken, newFullToken);
             Assert.Equal(old.EntityId, replacement.RotatedFromEntityId);
             Assert.NotNull(replacement.RotatedAtUtc);
@@ -497,8 +498,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.Equal(old.ExpiresAtUtc, replacement.ExpiresAtUtc);
 
             // Old token is revoked immediately, new one authenticates on lookup.
-            Assert.NotNull(manager.GetToken(old.TokenId).RevokedAtUtc);
-            Assert.Null(manager.GetToken(replacement.TokenId).RevokedAtUtc);
+            Assert.NotNull(manager.GetToken(ApiTokenMaterial.TokenIdOf(oldFullToken)).RevokedAtUtc);
+            Assert.Null(manager.GetToken(ApiTokenMaterial.TokenIdOf(newFullToken)).RevokedAtUtc);
 
             // The replacement takes the source slot: still one quota-eligible token.
             Assert.Equal(1, manager.CountQuotaEligibleTokens(OwnerId));
@@ -512,7 +513,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             var expiry = DateTime.UtcNow.AddDays(10);
 
-            manager.TryCreateToken(OwnerId, "finite", null, BuildGrants("alerts:read"), expiry, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "finite", null, BuildGrants("alerts:read"), expiry, "u", out var entity, out var fullToken);
 
             Assert.False(manager.TryRotateToken(entity.EntityId, expiry.AddDays(5), "u", out _, out _));
 
@@ -530,22 +531,22 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "global-killed", null, BuildGrants("alerts:read"), null, "u", out var globalKilled, out _);
+            manager.TryCreateToken(OwnerId, "global-killed", null, BuildGrants("alerts:read"), null, "u", out var globalKilled, out var globalKilledToken);
 
             manager.AdvanceGlobalRevocationGeneration();
 
             Assert.False(manager.TryRotateToken(globalKilled.EntityId, null, "u", out _, out _));
-            Assert.Null(manager.GetToken(globalKilled.TokenId).RevokedAtUtc);
+            Assert.Null(manager.GetToken(ApiTokenMaterial.TokenIdOf(globalKilledToken)).RevokedAtUtc);
             Assert.Single(manager.GetTokensByOwner(OwnerId));
             Assert.Equal(0, manager.CountQuotaEligibleTokens(OwnerId));
 
             // The owner-scoped emergency revoke is refused the same way.
-            manager.TryCreateToken(OwnerId, "owner-killed", null, BuildGrants("alerts:read"), null, "u", out var ownerKilled, out _);
+            manager.TryCreateToken(OwnerId, "owner-killed", null, BuildGrants("alerts:read"), null, "u", out var ownerKilled, out var ownerKilledToken);
 
             manager.AdvanceOwnerRevocationGeneration(OwnerId);
 
             Assert.False(manager.TryRotateToken(ownerKilled.EntityId, null, "u", out _, out _));
-            Assert.Null(manager.GetToken(ownerKilled.TokenId).RevokedAtUtc);
+            Assert.Null(manager.GetToken(ApiTokenMaterial.TokenIdOf(ownerKilledToken)).RevokedAtUtc);
             Assert.Equal(2, manager.GetTokensByOwner(OwnerId).Count);
             Assert.Equal(0, manager.CountQuotaEligibleTokens(OwnerId));
 
@@ -674,7 +675,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "stays-active", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "stays-active", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
 
             var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
             {
@@ -685,7 +686,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             failingManager.Initialize().Wait();
 
             Assert.False(failingManager.TryRevokeToken(entity.EntityId, "u", null, out _));
-            Assert.Null(failingManager.GetToken(entity.TokenId).RevokedAtUtc);
+            Assert.Null(failingManager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).RevokedAtUtc);
         }
 
         [Fact]
@@ -694,7 +695,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "no-rotation", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "no-rotation", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
 
             var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
             {
@@ -705,7 +706,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             failingManager.Initialize().Wait();
 
             Assert.False(failingManager.TryRotateToken(entity.EntityId, null, "u", out _, out _));
-            Assert.Null(failingManager.GetToken(entity.TokenId).RevokedAtUtc);
+            Assert.Null(failingManager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).RevokedAtUtc);
             Assert.Equal(1, failingManager.CountQuotaEligibleTokens(OwnerId));
         }
 
@@ -720,7 +721,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // UTC time it names, never converted from the server's local zone.
             var expiry = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(7).Date.AddHours(12), DateTimeKind.Unspecified);
 
-            Assert.True(manager.TryCreateToken(OwnerId, "utc-by-contract", null, BuildGrants("alerts:read"), expiry, "u", out var entity, out _));
+            Assert.True(manager.TryCreateToken(OwnerId, "utc-by-contract", null, BuildGrants("alerts:read"), expiry, "u", out var entity, out var fullToken));
 
             Assert.Equal(expiry.Ticks, entity.ExpiresAtUtc.Value);
         }
@@ -741,7 +742,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // Within the bounds, control characters are neutralized.
             var boundedDescription = $"first line{Environment.NewLine}second\x0000line";
 
-            Assert.True(manager.TryCreateToken(OwnerId, "bounded", boundedDescription, BuildGrants("alerts:read"), null, "u", out var entity, out _));
+            Assert.True(manager.TryCreateToken(OwnerId, "bounded", boundedDescription, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken));
 
             Assert.All(entity.Description, c => Assert.False(char.IsControl(c)));
 
@@ -791,7 +792,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             // A lone surrogate would become U+FFFD only in the durable row; replacing it
             // during sanitization keeps the live entity and the row identical.
-            manager.TryCreateToken(OwnerId, "lone\uD800high", "low\uDC00half", BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "lone\uD800high", "low\uDC00half", BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
 
             Assert.Equal("lone�high", entity.Name);
             Assert.Equal("low�half", entity.Description);
@@ -799,8 +800,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var reopened = CreateManager();
             reopened.Initialize().Wait();
 
-            Assert.Equal(entity.Name, reopened.GetToken(entity.TokenId).Name);
-            Assert.Equal(entity.Description, reopened.GetToken(entity.TokenId).Description);
+            Assert.Equal(entity.Name, reopened.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).Name);
+            Assert.Equal(entity.Description, reopened.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).Description);
         }
 
         [Fact]
@@ -810,7 +811,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             manager.Initialize().Wait();
 
             // Input that sanitizes to nothing must have exactly one persisted shape: null.
-            manager.TryCreateToken(OwnerId, "null-shapes", "\t", BuildGrants("alerts:read"), null, "\t", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "null-shapes", "\t", BuildGrants("alerts:read"), null, "\t", out var entity, out var fullToken);
 
             Assert.Null(entity.Description);
             Assert.Null(entity.CreatedBy);
@@ -898,7 +899,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "dead", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "dead", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
             manager.TryRevokeToken(entity.EntityId, "u", "gone", out _);
 
             Assert.False(manager.TryRestrictToken(entity.EntityId, BuildGrants("alerts:read"), null, "u", out _));
@@ -911,10 +912,10 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             manager.Initialize().Wait();
 
             // Requested shortening into the past: the create-time rule, mirrored.
-            manager.TryCreateToken(OwnerId, "requested-past", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "requested-past", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
 
             Assert.False(manager.TryRotateToken(entity.EntityId, DateTime.UtcNow.AddDays(-1), "u", out _, out _));
-            Assert.Null(manager.GetToken(entity.TokenId).RevokedAtUtc);
+            Assert.Null(manager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).RevokedAtUtc);
 
             // An already-expired source: the replacement would inherit a dead expiry, and
             // its one-time secret would be disclosed for nothing.
@@ -946,11 +947,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "to-remove", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "to-remove", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
 
-            Assert.True(manager.TryRemoveToken(entity.TokenId));
+            Assert.True(manager.TryRemoveToken(ApiTokenMaterial.TokenIdOf(fullToken)));
 
-            Assert.Null(manager.GetToken(entity.TokenId));
+            Assert.Null(manager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)));
             Assert.Null(manager.GetTokenByEntityId(entity.EntityId));
             Assert.Empty(manager.GetTokensByOwner(OwnerId));
             Assert.Equal(0, manager.CountQuotaEligibleTokens(OwnerId));
@@ -959,11 +960,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var reopened = CreateManager();
             reopened.Initialize().Wait();
 
-            Assert.Null(reopened.GetToken(entity.TokenId));
+            Assert.Null(reopened.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)));
 
             // Idempotent: the durable row is gone either way — true means "gone", and an
             // absent row is as gone as a deleted one. Only a null id reports false.
-            Assert.True(manager.TryRemoveToken(entity.TokenId));
+            Assert.True(manager.TryRemoveToken(ApiTokenMaterial.TokenIdOf(fullToken)));
             Assert.False(manager.TryRemoveToken(null));
         }
 
@@ -973,7 +974,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "keep-on-failure", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "keep-on-failure", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
 
             var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
             {
@@ -984,9 +985,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             failingManager.Initialize().Wait();
 
             // The durable row may still exist — the live record must stay published.
-            Assert.False(failingManager.TryRemoveToken(entity.TokenId));
+            Assert.False(failingManager.TryRemoveToken(ApiTokenMaterial.TokenIdOf(fullToken)));
 
-            Assert.NotNull(failingManager.GetToken(entity.TokenId));
+            Assert.NotNull(failingManager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)));
             Assert.Single(failingManager.GetTokensByOwner(OwnerId));
         }
 
@@ -1023,6 +1024,43 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             reopened.Initialize().Wait();
 
             Assert.Null(_databaseCoreManager.DatabaseCore.GetApiToken(orphanTokenId));
+        }
+
+        [Fact]
+        public void Initialize_RowWhoseKeyDisagreesWithItsTokenId_IsSkippedNotRepublished()
+        {
+            // A row stored under ApiToken_K whose payload says TokenId = T would be
+            // published under T; every lifecycle write then targets ApiToken_T while the
+            // stale ApiToken_K row is rescanned and re-published at each restart,
+            // silently undoing the revocation once per restart. The loader must reject
+            // the row (and log the offending key so retention can clear it).
+            var row = new ApiTokenEntity
+            {
+                EntityVersion = 1,
+                EntityId = Guid.NewGuid(),
+                TokenId = new string('Q', ApiTokenMaterial.TokenIdLength),
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "key-payload-mismatch",
+                Grants = [.. BuildGrants("alerts:read")],
+                CreatedAtUtc = DateTime.UtcNow.Ticks,
+            };
+
+            var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                OverrideApiTokenScan = () => [(new string('A', ApiTokenMaterial.TokenIdLength), row)],
+            };
+
+            using var manager = new ApiTokenManager(failing, NullLogger<ApiTokenManager>.Instance);
+
+            manager.Initialize().Wait();
+
+            // A rejected row is a skip, not an outage: the rest of the index stays healthy.
+            Assert.True(manager.IsGenerationStateHealthy);
+            Assert.Null(manager.GetToken(row.TokenId));
+            Assert.Null(manager.GetTokenByEntityId(row.EntityId));
+            Assert.Empty(manager.GetTokensByOwner(OwnerId));
         }
 
         [Fact]
@@ -1095,7 +1133,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             using var manager = CreateManager();
             manager.Initialize().Wait();
 
-            manager.TryCreateToken(OwnerId, "no-rotate-unhealthy", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
+            manager.TryCreateToken(OwnerId, "no-rotate-unhealthy", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
 
             var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
             {
@@ -1107,7 +1145,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             Assert.False(failingManager.IsGenerationStateHealthy);
             Assert.False(failingManager.TryRotateToken(entity.EntityId, null, "u", out _, out _));
-            Assert.Null(failingManager.GetToken(entity.TokenId).RevokedAtUtc);
+            Assert.Null(failingManager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).RevokedAtUtc);
         }
 
         [Fact]
@@ -1148,7 +1186,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // No loadable records for this owner, so the load path never cached a value.
             Assert.Equal(0, manager.GetOwnerRevocationGeneration(orphanOwner));
 
-            Assert.True(manager.TryCreateToken(orphanOwner, "post-cleanup", null, BuildGrants("alerts:read"), null, "u", out var entity, out _));
+            Assert.True(manager.TryCreateToken(orphanOwner, "post-cleanup", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken));
             Assert.Equal(3, entity.OwnerRevocationGenerationAtIssue);
 
             // Consistent in-process: the fallback is cached, so the token counts.
@@ -1198,8 +1236,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             for (var round = 0; round < 20; round++)
             {
-                manager.TryCreateToken(OwnerId, $"race-restrict-{round}", null, BuildGrants("alerts:read", "alerts:write"), null, "u", out var entity, out _);
-                tokenIds.Add(entity.TokenId);
+                manager.TryCreateToken(OwnerId, $"race-restrict-{round}", null, BuildGrants("alerts:read", "alerts:write"), null, "u", out var entity, out var fullToken);
+                tokenIds.Add(ApiTokenMaterial.TokenIdOf(fullToken));
 
                 using var start = new Barrier(2);
 
@@ -1218,7 +1256,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
                 // Whoever wins, the revocation must survive the concurrent restrict.
                 Assert.True(revoking.Result);
-                Assert.NotNull(manager.GetToken(entity.TokenId).RevokedAtUtc);
+                Assert.NotNull(manager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).RevokedAtUtc);
             }
 
             // Durable as well: a fresh index sees every raced token revoked.
@@ -1239,8 +1277,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             for (var round = 0; round < 20; round++)
             {
-                manager.TryCreateToken(OwnerId, $"race-rotate-{round}", null, BuildGrants("alerts:read"), null, "u", out var entity, out _);
-                tokenIds.Add(entity.TokenId);
+                manager.TryCreateToken(OwnerId, $"race-rotate-{round}", null, BuildGrants("alerts:read"), null, "u", out var entity, out var fullToken);
+                tokenIds.Add(ApiTokenMaterial.TokenIdOf(fullToken));
 
                 using var start = new Barrier(2);
 
@@ -1258,7 +1296,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 Task.WaitAll(revoking, rotating);
 
                 Assert.True(revoking.Result);
-                Assert.NotNull(manager.GetToken(entity.TokenId).RevokedAtUtc);
+                Assert.NotNull(manager.GetToken(ApiTokenMaterial.TokenIdOf(fullToken)).RevokedAtUtc);
             }
 
             using var reopened = CreateManager();

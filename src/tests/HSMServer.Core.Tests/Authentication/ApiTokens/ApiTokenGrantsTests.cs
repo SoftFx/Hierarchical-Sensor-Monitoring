@@ -22,7 +22,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new() { Operation = "alerts:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Global },
             };
 
-            var result = ApiTokenGrants.TryCanonicalize(grants, out var canonical);
+            var result = ApiTokenGrants.TryCanonicalize(grants, out var canonical, out _);
 
             Assert.True(result);
             Assert.Equal(2, canonical.Length);
@@ -47,8 +47,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var second = new List<ApiTokenGrantEntity>(first);
             second.Reverse();
 
-            Assert.True(ApiTokenGrants.TryCanonicalize(first, out var canonicalFirst));
-            Assert.True(ApiTokenGrants.TryCanonicalize(second, out var canonicalSecond));
+            Assert.True(ApiTokenGrants.TryCanonicalize(first, out var canonicalFirst, out _));
+            Assert.True(ApiTokenGrants.TryCanonicalize(second, out var canonicalSecond, out _));
 
             Assert.Equal(canonicalFirst.ToArray(), canonicalSecond.ToArray());
         }
@@ -56,10 +56,10 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         [Fact]
         public void TryCanonicalize_EmptyOrNullList_IsValidEmptyGrantSet()
         {
-            Assert.True(ApiTokenGrants.TryCanonicalize([], out var fromEmpty));
+            Assert.True(ApiTokenGrants.TryCanonicalize([], out var fromEmpty, out _));
             Assert.Empty(fromEmpty);
 
-            Assert.True(ApiTokenGrants.TryCanonicalize(null, out var fromNull));
+            Assert.True(ApiTokenGrants.TryCanonicalize(null, out var fromNull, out _));
             Assert.Empty(fromNull);
         }
 
@@ -83,7 +83,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new() { Operation = operation, BoundaryKind = (byte)ApiTokenBoundaryKind.Global },
             };
 
-            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _, out _));
         }
 
         [Fact]
@@ -94,7 +94,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new() { Operation = "alerts:read", BoundaryKind = 7, BoundaryId = Guid.NewGuid().ToString() },
             };
 
-            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _, out _));
         }
 
         [Fact]
@@ -105,7 +105,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new() { Operation = "alerts:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Global, BoundaryId = Guid.NewGuid().ToString() },
             };
 
-            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _, out _));
         }
 
         [Theory]
@@ -120,7 +120,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new() { Operation = "alerts:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Product, BoundaryId = boundaryId },
             };
 
-            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _, out _));
         }
 
         [Fact]
@@ -134,7 +134,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new() { Operation = "alerts:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Product, BoundaryId = boundaryId },
             };
 
-            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _, out _));
         }
 
         [Fact]
@@ -147,7 +147,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new() { Operation = "alerts:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Folder, BoundaryId = Guid.NewGuid().ToString() },
             };
 
-            Assert.True(ApiTokenGrants.TryCanonicalize(grants, out var canonical));
+            Assert.True(ApiTokenGrants.TryCanonicalize(grants, out var canonical, out _));
             Assert.Equal(3, canonical.Length);
         }
 
@@ -156,7 +156,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         {
             var grants = new List<ApiTokenGrantEntity> { null };
 
-            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _, out _));
         }
 
         [Fact]
@@ -170,11 +170,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new() { Operation = "system-health:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Product, BoundaryId = Guid.NewGuid().ToString() },
             };
 
-            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _, out _));
 
             // The Global form is the legitimate one.
             Assert.True(ApiTokenGrants.TryCanonicalize(
-                [new ApiTokenGrantEntity { Operation = "system-health:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Global }], out _));
+                [new ApiTokenGrantEntity { Operation = "system-health:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Global }], out _, out _));
         }
 
         [Fact]
@@ -185,7 +185,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 new() { Operation = "alerts:read", BoundaryKind = (byte)ApiTokenBoundaryKind.Product, BoundaryId = Guid.Empty.ToString() },
             };
 
-            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _));
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out _, out _));
         }
 
         [Fact]
@@ -201,13 +201,13 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                     BoundaryId = Guid.NewGuid().ToString(),
                 });
 
-            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out var canonical));
+            Assert.False(ApiTokenGrants.TryCanonicalize(grants, out var canonical, out _));
             Assert.True(canonical.IsDefault);
 
             // Exactly at the bound is still a legitimate token.
             grants.RemoveAt(grants.Count - 1);
 
-            Assert.True(ApiTokenGrants.TryCanonicalize(grants, out canonical));
+            Assert.True(ApiTokenGrants.TryCanonicalize(grants, out canonical, out _));
             Assert.Equal(ApiTokenGrants.MaxGrants, canonical.Length);
         }
     }

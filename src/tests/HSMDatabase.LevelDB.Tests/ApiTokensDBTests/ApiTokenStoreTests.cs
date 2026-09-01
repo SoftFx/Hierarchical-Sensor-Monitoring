@@ -110,6 +110,10 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
 
             // The prefix scan must not pick up generation rows under "ApiTokenGeneration_*".
             Assert.Equal(2, all.Count);
+
+            // The key's token id travels with each row so the loader can detect a
+            // key/payload mismatch.
+            Assert.All(all, row => Assert.Equal(row.Entity.TokenId, row.KeyTokenId));
         }
 
         [Fact]

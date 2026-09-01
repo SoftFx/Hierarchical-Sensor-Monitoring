@@ -104,12 +104,16 @@ namespace HSMServer.Core.Tests.Infrastructure
             return _inner.RemoveApiToken(tokenId);
         }
 
-        public List<ApiTokenEntity> GetAllApiTokens()
+        // Optional full override of the token scan result, for tests that need damaged
+        // storage shapes (e.g. a row whose key disagrees with its payload TokenId).
+        internal Func<List<(string KeyTokenId, ApiTokenEntity Entity)>> OverrideApiTokenScan { get; set; }
+
+        public List<(string KeyTokenId, ApiTokenEntity Entity)> GetAllApiTokens()
         {
             if (ShouldFailApiTokenOp?.Invoke(nameof(GetAllApiTokens)) == true)
                 throw new InvalidOperationException("Simulated DB failure for the API token scan");
 
-            return _inner.GetAllApiTokens();
+            return OverrideApiTokenScan?.Invoke() ?? _inner.GetAllApiTokens();
         }
 
         public long GetGlobalRevocationGeneration()

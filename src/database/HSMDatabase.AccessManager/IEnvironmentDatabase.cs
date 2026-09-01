@@ -66,8 +66,10 @@ namespace HSMDatabase.AccessManager
         bool RemoveApiToken(string tokenId);
 
         // Full scan to rebuild the authentication index at startup. Corrupt records are
-        // skipped; a scan failure throws so the caller can fail the index closed.
-        List<ApiTokenEntity> ReadAllApiTokens();
+        // skipped; a scan failure throws so the caller can fail the index closed. Each
+        // record comes with the token id of the key it was stored under, so the loader
+        // can reject a row whose key disagrees with its payload TokenId.
+        List<(string KeyTokenId, ApiTokenEntity Entity)> ReadAllApiTokens();
 
         long GetGlobalRevocationGeneration();
         long AdvanceGlobalRevocationGeneration();

@@ -16,10 +16,10 @@ namespace HSMServer.Authentication
 
         public Guid EntityId { get; init; }
 
-        // Exactly 22 canonical unpadded Base64URL characters; shown for diagnostics,
-        // never required to authenticate (the credential carries it by construction).
-        public string TokenId { get; init; }
-
+        // Deliberately no TokenId: it is the public half of the credential and the
+        // authentication lookup key — lifecycle and list responses expose EntityId only
+        // (the glossary invariant). A caller that holds the credential can derive it with
+        // ApiTokenMaterial.TokenIdOf; nobody else needs it.
         public byte VersionByte { get; init; }
 
         public Guid OwnerUserId { get; init; }
