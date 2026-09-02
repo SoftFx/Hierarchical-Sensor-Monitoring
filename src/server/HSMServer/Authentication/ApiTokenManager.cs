@@ -36,6 +36,10 @@ namespace HSMServer.Authentication
         // Revocation reasons and actor fields (createdBy/restrictedBy/rotatedBy/revokedBy).
         private const int MaxFreeTextLength = 256;
 
+        // How often pending last-used timestamps reach the durable row. With a failed
+        // flush the pending entry survives and retries on the next tick.
+        private static readonly TimeSpan LastUsedFlushInterval = TimeSpan.FromSeconds(30);
+
         private readonly IDatabaseCore _databaseCore;
         private readonly ILogger<ApiTokenManager> _logger;
 
@@ -52,6 +56,12 @@ namespace HSMServer.Authentication
         // readers enumerate them on request threads while a mutation publishes concurrently.
         private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, byte>> _tokenIdsByOwner = new();
         private readonly ConcurrentDictionary<Guid, long> _ownerGenerations = new();
+
+        // Last-used coalescing: the latest observed use per token id, flushed durably by a
+        // background timer. LastUsedAtUtc is operational metadata; the bounded staleness of
+        // this write is the documented trade for keeping it off the request path.
+        private readonly ConcurrentDictionary<string, long> _pendingLastUsed = new(StringComparer.Ordinal);
+        private readonly Timer _lastUsedFlushTimer;
 
         // Volatile by convention: read on every authentication, flipped only during load or
         // advance. False means every API token authentication must fail closed.
@@ -70,6 +80,9 @@ namespace HSMServer.Authentication
             // A null logger would NRE inside the catch blocks that make Try* return false
             // — the failure would escape as an exception from a never-throws contract.
             _logger = logger ?? NullLogger<ApiTokenManager>.Instance;
+
+            _lastUsedFlushTimer = new Timer(_ => FlushPendingLastUsed(), null,
+                LastUsedFlushInterval, LastUsedFlushInterval);
         }
 
 
@@ -563,6 +576,83 @@ namespace HSMServer.Authentication
         }
 
 
+        public void MarkUsed(string tokenId)
+        {
+            // Only ids live in the index: a MarkUsed for anything else (including a token
+            // removed between authentication and this call) is a no-op, and the dictionary
+            // value keeps the LATEST observed use so the flush writes one monotonic value.
+            if (tokenId is not null && _tokensByTokenId.ContainsKey(tokenId))
+                _pendingLastUsed[tokenId] = DateTime.UtcNow.Ticks;
+        }
+
+        public bool IsTokenLive(string tokenId)
+        {
+            if (tokenId is null)
+                return false;
+
+            var token = GetEntity(tokenId);
+
+            if (token is null)
+                return false;
+
+            // Same predicate family as TryAuthenticate's post-verifier checks: boot
+            // health gates everything, and the record must be live against a single
+            // snapshot of both generations.
+            return IsGenerationStateHealthy && IsLive(token, DateTime.UtcNow.Ticks,
+                GlobalRevocationGeneration, GetOwnerRevocationGeneration(token.OwnerUserId));
+        }
+
+        // Durable half of last-used coalescing, on the flush timer. Each token's
+        // read-modify-write runs under _stateLock so it serializes with lifecycle
+        // mutations: a flushed timestamp can never overwrite a revocation written
+        // concurrently. Records are never mutated in place — the update is a copy,
+        // persisted first and then republished, like every other mutation here. A failed
+        // write keeps the pending entry for the next tick.
+        private void FlushPendingLastUsed()
+        {
+            foreach (var (tokenId, usedAtTicks) in _pendingLastUsed)
+            {
+                var pending = KeyValuePair.Create(tokenId, usedAtTicks);
+
+                try
+                {
+                    lock (_stateLock)
+                    {
+                        if (!_tokensByTokenId.TryGetValue(tokenId, out var token))
+                        {
+                            // Retention or a rebuild removed it — nothing to update.
+                            _pendingLastUsed.TryRemove(pending);
+                            continue;
+                        }
+
+                        // Monotonic: a stale pending entry (e.g. held across a flush
+                        // failure) must never move LastUsedAtUtc backwards.
+                        var newLastUsed = Math.Max(token.LastUsedAtUtc ?? 0, usedAtTicks);
+                        if (newLastUsed == token.LastUsedAtUtc)
+                        {
+                            _pendingLastUsed.TryRemove(pending);
+                            continue;
+                        }
+
+                        var updated = token with { LastUsedAtUtc = newLastUsed };
+
+                        _databaseCore.PutApiToken(updated);
+                        Publish(updated);
+
+                        // Exact-pair removal: a value MarkUsed stored after this pass
+                        // started is fresher and stays for the next tick.
+                        _pendingLastUsed.TryRemove(pending);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Operational metadata only: log, keep the entry, retry next tick.
+                    _logger.LogWarning(ex, "Failed to flush last-used timestamp for an API token");
+                }
+            }
+        }
+
+
         public int CountQuotaEligibleTokens(Guid ownerUserId)
         {
             if (!_tokenIdsByOwner.TryGetValue(ownerUserId, out var tokenIds))
@@ -589,6 +679,11 @@ namespace HSMServer.Authentication
 
         public void Dispose()
         {
+            _lastUsedFlushTimer.Dispose();
+
+            // Best-effort final flush so a clean shutdown does not drop the whole
+            // pending window; entries that fail here are lost, like any flush failure.
+            FlushPendingLastUsed();
         }
 
 

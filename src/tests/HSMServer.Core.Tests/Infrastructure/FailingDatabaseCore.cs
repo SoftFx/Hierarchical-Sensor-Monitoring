@@ -148,6 +148,17 @@ namespace HSMServer.Core.Tests.Infrastructure
             return _inner.AdvanceOwnerRevocationGeneration(ownerUserId);
         }
 
+        public void PutApiTokenSecurityEvent(ApiTokenSecurityEventEntity entity)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(PutApiTokenSecurityEvent)) == true)
+                throw new InvalidOperationException("Simulated DB failure for a security event write");
+
+            _inner.PutApiTokenSecurityEvent(entity);
+        }
+
+        public List<ApiTokenSecurityEventEntity> ReadApiTokenSecurityEvents() =>
+            _inner.ReadApiTokenSecurityEvents();
+
         public void AddSensor(SensorEntity entity)
         {
             if (_shouldFail(entity))

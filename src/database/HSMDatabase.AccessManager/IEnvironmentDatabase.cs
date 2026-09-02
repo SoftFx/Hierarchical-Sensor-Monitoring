@@ -76,6 +76,14 @@ namespace HSMDatabase.AccessManager
         long GetOwnerRevocationGeneration(Guid ownerUserId);
         long AdvanceOwnerRevocationGeneration(Guid ownerUserId);
 
+        // Append-only per-request security events (authentication success/failure,
+        // authorization denial). Key embeds the timestamp so the scan is chronological;
+        // the random EventId suffix makes the key collision-free.
+        void PutApiTokenSecurityEvent(ApiTokenSecurityEventEntity entity);
+
+        // Chronological scan of all security events (retention/query surface).
+        List<ApiTokenSecurityEventEntity> ReadApiTokenSecurityEvents();
+
         #endregion
 
         #region Sensors

@@ -1056,6 +1056,46 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 return WriteRevocationGeneration(key, ReadRevocationGeneration(key) + 1);
         }
 
+        // Per-request security events, append-only. Key layout:
+        // "ApiTokenSecurityEvent_<ticks:d19>_<eventId>" — the zero-padded ticks keep the
+        // prefix scan chronological across the whole table, the event id keeps it
+        // collision-free. Unlike the token rows these writes are fire-and-forget from a
+        // bounded background queue (the sink decides volume and loss), so a failure logs
+        // and surfaces to the sink's writer rather than the request path.
+        private const string ApiTokenSecurityEventPrefix = "ApiTokenSecurityEvent_";
+
+
+        public void PutApiTokenSecurityEvent(ApiTokenSecurityEventEntity entity)
+        {
+            if (entity is null)
+                throw new ArgumentNullException(nameof(entity));
+
+            var key = ApiTokenSecurityEventPrefix + entity.TimestampUtc.ToString("d19", CultureInfo.InvariantCulture) + "_" + entity.EventId;
+
+            _database.Put(Encoding.UTF8.GetBytes(key), JsonSerializer.SerializeToUtf8Bytes(entity));
+        }
+
+        public List<ApiTokenSecurityEventEntity> ReadApiTokenSecurityEvents()
+        {
+            var events = new List<ApiTokenSecurityEventEntity>();
+
+            var pairs = _database.GetAllKeyValuePairsStartingWith(Encoding.UTF8.GetBytes(ApiTokenSecurityEventPrefix));
+
+            foreach (var (_, value) in pairs)
+            {
+                try
+                {
+                    events.Add(JsonSerializer.Deserialize<ApiTokenSecurityEventEntity>(value));
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(e, "Failed to deserialize an ApiTokenSecurityEventEntity, record skipped");
+                }
+            }
+
+            return events;
+        }
+
         private long ReadRevocationGeneration(string key)
         {
             if (!_database.TryRead(Encoding.UTF8.GetBytes(key), out byte[] value))

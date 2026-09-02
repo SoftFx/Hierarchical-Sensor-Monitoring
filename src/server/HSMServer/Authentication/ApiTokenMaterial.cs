@@ -87,6 +87,37 @@ namespace HSMServer.Authentication
         public static bool IsValidTokenId(string tokenId) =>
             tokenId is { Length: TokenIdLength } && TryDecodeCanonical(tokenId, TokenIdBytesLength, out _);
 
+        // Cheap shape check for a presented bearer credential: exact total length, the
+        // version prefix and the '.' separator, with no decoding or allocation. Alphabet and
+        // canonical-encoding validation stay in TryParse — this only separates "clearly not
+        // our credential" from "our credential, malformed" before any manager work.
+        public static bool IsValidCredentialShape(string credential) =>
+            credential.Length == TokenPrefix.Length + TokenIdLength + 1 + SecretLength &&
+            credential.StartsWith(TokenPrefix, StringComparison.Ordinal) &&
+            credential[TokenPrefix.Length + TokenIdLength] == '.';
+
+        // The one place that unpacks a raw Authorization header value into a bearer
+        // credential: scheme "Bearer" (case-insensitive) followed by a non-empty
+        // parameter. False for any other scheme or a missing parameter — the handler
+        // treats that as "not this scheme's credential" and the legacy guard as
+        // "pass through", so the shared shape cannot drift between them.
+        public static bool TryReadBearerCredential(string headerValue, out string credential)
+        {
+            credential = null;
+
+            if (string.IsNullOrEmpty(headerValue))
+                return false;
+
+            var separator = headerValue.IndexOf(' ');
+
+            if (separator <= 0 || !headerValue[..separator].Equals("Bearer", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            credential = headerValue[(separator + 1)..].Trim();
+
+            return credential.Length > 0;
+        }
+
 
         // Best-effort cleanup of decoded secret bytes. The textual form lives in immutable
         // strings and cannot be cleared; buffers used for hashing are cleared eagerly.
@@ -94,6 +125,62 @@ namespace HSMServer.Authentication
         {
             if (bytes is not null)
                 CryptographicOperations.ZeroMemory(bytes);
+        }
+
+        // Replaces every hsm_pat_v1_<id>.<secret> occurrence in free text (an exception
+        // message, an error payload) with its TokenId alone. The id is the public lookup
+        // key and safe to name; the secret is the credential and never survives redaction.
+        // Forward-only scan: the replacement itself contains the prefix, so re-scanning
+        // from the start would loop forever.
+        public static string Redact(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return text;
+
+            var builder = new System.Text.StringBuilder(text.Length);
+            var consumed = 0;
+
+            while (consumed < text.Length)
+            {
+                var index = text.IndexOf(TokenPrefix, consumed, StringComparison.Ordinal);
+
+                if (index < 0)
+                {
+                    builder.Append(text.AsSpan(consumed));
+                    break;
+                }
+
+                builder.Append(text.AsSpan(consumed, index - consumed));
+
+                var idStart = index + TokenPrefix.Length;
+                var hasId = idStart + TokenIdLength < text.Length &&
+                    text[idStart + TokenIdLength] == '.';
+
+                if (hasId)
+                {
+                    // "hsm_pat_v1_<id>.«redacted»" — id kept, secret dropped (also when
+                    // truncated mid-secret).
+                    builder.Append(TokenPrefix)
+                           .Append(text.AsSpan(idStart, TokenIdLength))
+                           .Append(".«redacted»");
+
+                    var secretStart = idStart + TokenIdLength + 1;
+                    consumed = secretStart + Math.Min(SecretLength, text.Length - secretStart);
+                }
+                else
+                {
+                    // A lone/truncated prefix: consume also the credential-alphabet run
+                    // that follows — a truncated id/secret fragment must not survive.
+                    builder.Append("«redacted»");
+
+                    consumed = idStart;
+
+                    while (consumed < text.Length && IsBase64UrlChar(text[consumed]))
+                        consumed++;
+                }
+            }
+
+            return builder.ToString();
         }
 
 

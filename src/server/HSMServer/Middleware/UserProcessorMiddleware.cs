@@ -16,6 +16,13 @@ namespace HSMServer.Middleware
 
             if (port == _sitePort)
             {
+                // An API-token principal is exactly what the HsmApiToken handler produced:
+                // one identity with owner/token claims and no login name. It must pass
+                // through untouched — replacing it with a stored user here would restore
+                // unrestricted owner rights behind the token's grants.
+                if (context.User?.Identity?.AuthenticationType == HsmApiTokenDefaults.AuthenticationScheme)
+                    return _next.Invoke(context);
+
                 var currentUser = context.User;
                 var correspondingUser = _userManager[currentUser?.Identity?.Name];
                 context.User = correspondingUser;
