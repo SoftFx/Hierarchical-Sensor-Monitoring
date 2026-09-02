@@ -53,6 +53,19 @@ namespace HSMServer.Authentication
         // generation accessors: every omitted predicate there is an authentication bypass.
         bool TryAuthenticate(string presentedToken, out ApiTokenInfo entity);
 
+        // Records a successful authentication for last-used tracking. Coalesced: the
+        // durable LastUsedAtUtc write happens on a background flush (bounded staleness is
+        // the documented trade for this non-security-critical timestamp), so this never
+        // blocks or fails the request. Unknown ids are ignored.
+        void MarkUsed(string tokenId);
+
+        // The liveness half of TryAuthenticate for callers that already hold a TokenId (an
+        // evaluator re-checking a principal mid-request): the same IsLive rule — unrevoked,
+        // unexpired, current global and owner generations, healthy boot state — assembled
+        // here so no consumer can reassemble it wrong. Like TryAuthenticate, this is the
+        // only sanctioned way to judge a record's liveness from its id.
+        bool IsTokenLive(string tokenId);
+
         // Creates a token with the explicit grants (canonicalized; empty means a token that
         // allows nothing). Persists first; publishes to the authentication index only after
         // the write. fullToken carries the secret exactly once and is never stored or logged.

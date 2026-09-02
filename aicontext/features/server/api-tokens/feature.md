@@ -1,7 +1,7 @@
 # Feature: API tokens (authentication foundation)
 
-> Owner: server | Last reviewed: 2026-08-31 | Canonical: yes
-> Scope: durable personal API tokens (hsm_pat_v1_*) — material, verifier, grants, store, and the authoritative in-memory index with token lifecycle semantics.
+> Owner: server | Last reviewed: 2026-09-01 | Canonical: yes
+> Scope: durable personal API tokens (hsm_pat_v1_*) — material, verifier, grants, store, the authoritative in-memory index with token lifecycle semantics, and the ASP.NET authentication/authorization surface that consumes them (`HsmApiToken` scheme, `/api/v1` area convention, effective-rights evaluator, security-event sink).
 
 ---
 
@@ -9,7 +9,7 @@
 
 Personal API tokens are opaque bearer credentials for non-interactive management clients (AI agents, scheduled scripts, resident services). A user creates a token through the (cookie-authenticated, not yet built) management flow; the server generates the entire credential, persists only an irreversible verifier, and discloses the full token exactly once.
 
-Status: this feature currently delivers the **persistence and domain foundation** (initiative `docs/initiatives/fine-grained-api-token-authentication.md`, issue #1356): token material, strict parsing, the domain-separated SHA-256 verifier, grant canonicalization, the LevelDB store, revocation generations, and the authoritative in-memory index with create/restrict/rotate/revoke semantics. The ASP.NET authentication scheme (`HsmApiToken`), `/api/v1` routes, cookie-only management endpoints, and the `ApiTokens.*` configuration section land in the follow-up PRs of the same sequence; until they land, nothing consumes `IApiTokenManager` at runtime except its boot-time `Initialize()`.
+Status: steps 1–2 of the initiative (`docs/initiatives/fine-grained-api-token-authentication.md`, issue #1356) delivered the persistence and domain foundation; **step 3** adds the HTTP surface that consumes it: the `HsmApiToken` authentication handler (bearer-only input, `IApiTokenManager.TryAuthenticate` as the single fail-closed decision, owner-existence check, minimal single-identity principal, generic non-redirecting 401), scheme isolation (cookie stays default and is pinned into the `DefaultPolicy`; the management policy authenticates through `HsmApiToken` only and requires exactly one token identity), the fail-closed `/api/v1` area convention (SitePort-only, endpoint allow-listing via `[ManagementApi]` + policy, 404 by default), the legacy-route bearer guard, `UserProcessorMiddleware` principal-replacement skip, the effective-rights/resource evaluator (`ownerCurrentlyAllows AND tokenGrantAllows` recomputed per request, with the 403/404 anti-enumeration split), last-used coalescing, and the append-only per-request security-event sink. Not yet landed: `/api/v1` resource controllers (#1351/#1352), the cookie-only management endpoints and `ApiTokens.*` configuration section (step 4), retention cleanup (step 5).
 
 ## Invariants
 
@@ -33,6 +33,18 @@ Status: this feature currently delivers the **persistence and domain foundation*
 - Retention removal is `TryRemoveToken`: the durable delete and the in-memory unpublish happen under one state-lock hold, so a concurrent revoke/rotate cannot rewrite a row the removal just deleted and resurrect it after restart. A TokenId absent from the live index still gets its durable row deleted — rows rejected at load are exactly the orphans retention exists to clear. A failed durable removal (`RemoveApiToken` false — the row may still exist) unpublishes nothing. There is deliberately no unpublish-only escape hatch around this ordering.
 - The full token string is returned by create/rotate exactly once and is never logged or persisted.
 
+### HTTP surface (step 3)
+
+- **Scheme isolation.** Cookie remains `DefaultAuthenticateScheme`/`DefaultChallengeScheme`, and the `DefaultPolicy` behind bare `[Authorize]` is explicitly pinned to the cookie scheme — an API-token identity can never satisfy a legacy MVC/Razor authorization. `HsmApiToken` is never a default or forwarded scheme; it runs only from the management policy (`HsmApiTokenDefaults.ManagementPolicy`), which authenticates through `HsmApiToken` only (a cookie session alone produces no principal and challenges as a plain 401, never a login redirect) and requires exactly one authenticated identity of the HsmApiToken scheme carrying the owner/token claims — mixed or multiple identities fail closed as a denial.
+- **Handler contract.** `HsmApiTokenHandler` reads only the `Authorization: Bearer` header; tokens in URLs, query, cookies, or bodies are never credentials. A non-`Bearer` header, a bearer without the `hsm_pat_` prefix, an absent header, or duplicated `Authorization` values (the joined string is not a parseable credential) is `NoResult` (another scheme's business, no token lookup); a credential claiming the prefix but failing the cheap shape check fails before any index lookup; otherwise the single decision is `IApiTokenManager.TryAuthenticate` plus the owner-existence check. Every rejection is one indistinguishable generic failure; its security event carries a TokenId only when the id is canonical (`IsValidTokenId`) — the cheap shape check passes attacker-chosen alphabets, and no unauthenticated input is persisted into the append-only store as an identifier. The principal carries exactly two claims (owner user id, public token id) — `Identity.Name` is never set to a login. On success the handler calls `MarkUsed` (coalesced, never blocks the request).
+- **`/api/v1` area convention (fail-closed).** `ManagementApiGuardMiddleware` (after `UseRouting`, before authentication) serves the area only on the SitePort listener — `HsmListenerBindings` is the one immutable registry that both drives `Listen` and answers `IsSitePort`, so the guard cannot disagree with the listeners and config changes apply only on restart. Within the area an endpoint is reachable only when it matched a route, carries `[ManagementApi]`, and requires its family's authorization: the management policy outside the reserved cookie-only `/api/v1/api-tokens` family, a cookie `[Authorize]` (the default policy — without a named policy and without explicit schemes, so a scheme-bearing attribute cannot union the token scheme into the cookie policy) inside it — never anonymous (there is no fallback policy, so absence of `[Authorize]` is as anonymous as `[AllowAnonymous]`, and the guard 404s both). A failed authorization inside the reserved family answers a plain non-redirecting 401 too (`MyCookieAuthenticationEvents.RedirectToLogin` override for the area) — the whole `/api/v1` area never sees the cookie LoginPath redirect. Anything else under `/api/v1` is a plain **404 before controller execution** — a newly added route without the metadata is unreachable by default, and 404 (not 403) on SensorPort never confirms a management route exists.
+- **Legacy-route bearer guard.** `LegacyBearerGuardMiddleware` rejects an `hsm_pat_` bearer sent to any non-`/api/v1` path with a generic non-redirecting 401 before MVC/Razor execution, performing **no** token lookup — the credential material is none of the legacy pipeline's business, and a `BaseController` cast can never turn it into a 500. The guard matches the version-independent `hsm_pat_` family prefix (a future `hsm_pat_v2_` credential cannot slip past it into the legacy pipeline) and inspects each duplicated `Authorization` value on its own — a `", "`-joined multi-value header would otherwise parse as its first value's scheme and hide the credential.
+- **Principal-replacement skip.** `UserProcessorMiddleware` (which replaces `HttpContext.User` with the stored HSM user by `Identity.Name` on SitePort) passes a token principal through untouched — replacing it would restore unrestricted owner rights behind the token's grants. The short-circuit checks **any** identity of the HsmApiToken scheme, not just the primary one, so it does not depend on how a merged principal ordered the identities.
+- **Effective-rights evaluator.** `ApiTokenAuthorizationService.Authorize` recomputes both sides of `allowed(operation, resource) = ownerCurrentlyAllows AND tokenGrantAllows(currentBoundary(resource))` from the authoritative stores on **every** call: owner downgrade/deletion, role removal, resource moves, and token revocation take effect immediately — the caller re-checks token liveness through `IApiTokenManager.IsTokenLive` (the manager's sanctioned IsLive predicate), so a token revoked between authentication and authorization fails closed within the same request. Sensors resolve through their product's current boundary; **token-side** folder grants follow the folder's current membership, while the **owner side** mirrors the app's own checks exactly (`IsProductAvailable`/`IsManager` semantics, no folder fallback): HSM materialises folder roles into per-product `ProductsRoles` entries at grant time and at move time, so a per-product narrowing (`RemoveUserRole`/`EditUserRole`) always wins over the folder role — the token can never exceed what the owner's own session can do. A Global grant never acts as a wildcard over scoped resources ("all boundaries" expands to concrete ids at creation and is never persisted). Decision mapping: target absent, invisible to the owner, or outside every grant of the token → `NotFound` (anti-enumeration); boundary covered and visible but operation not granted or owner cannot perform it → `Forbidden`. Writes need the Manager role at the boundary (or IsAdmin) — derived from the catalog's naming discipline via `ApiTokenOperations.IsWrite`; global operations are admin-only. `IsVisible` (the list-filtering predicate) re-resolves the caller per item; the first listing consumer should resolve the caller once per request (one owner+grants snapshot for the whole list — also the per-request consistency guarantee) rather than per item.
+- **Last-used coalescing.** `MarkUsed(tokenId)` records the latest observed use in memory; a background flush (30 s) writes the durable `LastUsedAtUtc` under the manager's state lock — copy, persist, publish, never mutate in place — so a flushed timestamp can never clobber a concurrent revocation, values are monotonic, and a failed write retries on the next tick. Bounded staleness is the documented trade for keeping this off the request path.
+- **Security-event sink.** `ApiTokenSecurityEventSink` records authentication success/failure and authorization denial into the append-only `ApiTokenSecurityEvent_<ticks>_<eventId>` LevelDB table — separate from the entity-keyed lifecycle journal by design. The request path only enqueues (bounded channel, 1024, `FullMode.Wait` so a full queue makes `TryWrite` return false rather than silently evicting a queued event); one background writer drains to storage. Volume control: successes are sampled 1-of-16; failures and denials are always recorded. A full queue or a failed write drops the event (counted in `DroppedCount`; the first drop and every 1024th are logged) — a security event must never block or fail the request. Authorization denials preserve the decision: out-of-reach/invisible targets are `AuthorizationNotFound` (the enumeration-probe signal), scope denials are `AuthorizationDenied`. Event payloads carry only safe identifiers (public TokenId, owner id, operation, safe target id, request correlation id, remote endpoint) — never a secret or verifier. The handler fills correlation/source from the HTTP context; denial events gain them when the first `/api/v1` controllers pass their context through.
+- **Credential redaction.** `ApiTokenMaterial.Redact` replaces every `hsm_pat_v1_<id>.<secret>` occurrence in free text with the public id plus a redaction marker (a lone/truncated prefix is consumed together with its credential-alphabet tail). Redaction is applied at the **NLog sink**: every target in `nlog.config` wraps message, exception and URL text in the `${hsm-redacted}` layout renderer (`HSMServer.Logging.TokenRedactionLayoutRenderer`, a thin wrapper over `Redact`) — the credential is password-class material and never reaches a log, whatever carried it: the per-request catch logger's record, an inner exception (a wrapped exception's `ToString()` would render it), or the outer ASP.NET Core exception handlers (`UseExceptionHandler`/`UseDeveloperExceptionPage` log the raw exception themselves, outside any call site that could rewrite it).
+
 ## Primary Workflows
 
 | # | Workflow | Initiator |
@@ -41,25 +53,39 @@ Status: this feature currently delivers the **persistence and domain foundation*
 | 2 | Create token: generate pair → canonicalize grants → persist-first insert → one-time disclosure | management service (cookie flow, later PR) |
 | 3 | Restrict / rotate / revoke token with non-expansion guarantees | management service (later PR) |
 | 4 | Emergency revoke-all / revoke-user: advance durable generation → publish | IsAdmin cookie flow (later PR) |
+| 5 | Authenticate a management request: area guard → bearer handler → principal → last-used + sampled security event | `/api/v1` client with `Authorization: Bearer hsm_pat_…` |
+| 6 | Authorize an operation on a target: effective-rights intersection, denial security event | `/api/v1` controller (per action) |
 
 ## API / Public Contracts
 
 | Contract | Location | Notes |
 |---|---|---|
-| `IApiTokenManager` | `src/server/HSMServer/Authentication/IApiTokenManager.cs` | Lifecycle + index surface; no HTTP consumers yet |
-| `ApiTokenEntity` / `ApiTokenGrantEntity` / `ApiTokenBoundaryKind` | `src/database/HSMDatabase.AccessManager/DatabaseEntities/` | LevelDB row shape; `EntityVersion` gates future upgrades |
-| `IDatabaseCore` Api tokens region | `src/database/HSMDatabase.AccessManager/DatabaseSettings/IDatabaseCore.cs` | Store facade; token writes propagate failures (unlike neighboring regions) |
+| `IApiTokenManager` | `src/server/HSMServer/Authentication/IApiTokenManager.cs` | Lifecycle + index + `TryAuthenticate`/`MarkUsed` surface |
+| `ApiTokenEntity` / `ApiTokenGrantEntity` / `ApiTokenBoundaryKind` / `ApiTokenSecurityEventEntity` | `src/database/HSMDatabase.AccessManager/DatabaseEntities/` | LevelDB row shape; `EntityVersion` gates future upgrades |
+| `IDatabaseCore` Api tokens region | `src/database/HSMDatabase.AccessManager/DatabaseSettings/IDatabaseCore.cs` | Store facade; token writes propagate failures (unlike neighboring regions); security events append-only |
 | `ApiTokenMaterial` / `ApiTokenVerifier` | `src/server/HSMServer/Authentication/` | Pure crypto: generation, strict parse, pinned verifier, dummy verifier |
-| `ApiTokenOperations` / `ApiTokenGrants` | `src/server/HSMServer/Authentication/` | v1 permission catalog (illustrative until capability-inventory approval) and grant canonicalization |
+| `ApiTokenOperations` / `ApiTokenGrants` | `src/server/HSMServer/Authentication/` | v1 permission catalog (illustrative until capability-inventory approval), `IsWrite` privilege rule, grant canonicalization |
+| `HsmApiTokenDefaults` / `HsmApiTokenClaims` | `src/server/HSMServer/Authentication/` | Scheme/policy/area names and the two principal claims |
+| `IApiTokenAuthorizationService` / `ApiTokenResource` / `ApiTokenAuthorization` | `src/server/HSMServer/Authentication/` | Effective-rights intersection with the 403/404 split; targets: Global/Product/Folder/Sensor |
+| `IApiTokenSecurityEventSink` | `src/server/HSMServer/Authentication/` | Append-only per-request security events |
+| `HsmListenerBindings` | `src/server/HSMServer/ServerConfiguration/` | Immutable SitePort/SensorPort registry shared by Kestrel `Listen` and the area guard |
 
 ## Key Files
 
 | File | Purpose |
 |---|---|
-| `src/database/HSMDatabase.LevelDB/DatabaseImplementations/EnvironmentDatabaseWorker.cs` (Api tokens region) | Durable rows (`ApiToken_<tokenId>`), generations, persist-first insert, atomic rotate batch |
+| `src/database/HSMDatabase.LevelDB/DatabaseImplementations/EnvironmentDatabaseWorker.cs` (Api tokens region) | Durable rows (`ApiToken_<tokenId>`), generations, persist-first insert, atomic rotate batch, security-event table |
 | `src/database/HSMDatabase.LevelDB/Database.cs` (`PutBatch`) | Single-batch multi-row write primitive |
-| `src/server/HSMServer/Authentication/ApiTokenManager.cs` | Authoritative index, lifecycle semantics, generation health, quota counting |
-| `src/server/HSMServer/Extensions/ApplicationServiceExtensions.cs` | `AddAsyncStorage<IApiTokenManager, ApiTokenManager>` registration (boot-time `Initialize`) |
+| `src/server/HSMServer/Authentication/ApiTokenManager.cs` | Authoritative index, lifecycle semantics, generation health, quota counting, last-used coalescing flush |
+| `src/server/HSMServer/Authentication/HsmApiTokenHandler.cs` | Bearer authentication: single decision, minimal principal, generic 401 |
+| `src/server/HSMServer/Authentication/HsmApiTokenServiceCollectionExtensions.cs` | `AddHsmApiTokenScheme` / `AddHsmApiTokenAuthorization` (cookie-pinned DefaultPolicy + management policy) |
+| `src/server/HSMServer/Authentication/ApiTokenAuthorizationService.cs` | Effective-rights/resource evaluator + denial security events |
+| `src/server/HSMServer/Authentication/ApiTokenSecurityEventSink.cs` | Bounded-queue append-only sink with success sampling |
+| `src/server/HSMServer/Authentication/ManagementApiAttribute.cs` | `/api/v1` area marker consumed by the area guard |
+| `src/server/HSMServer/Middleware/ManagementApiGuardMiddleware.cs` | `/api/v1` listener + metadata fail-closed allow-listing |
+| `src/server/HSMServer/Middleware/LegacyBearerGuardMiddleware.cs` | Non-redirecting 401 for hsm_pat bearers outside `/api/v1` |
+| `src/server/HSMServer/Middleware/UserProcessorMiddleware.cs` | Token-principal skip (never replaces a token principal) |
+| `src/server/HSMServer/Extensions/ApplicationServiceExtensions.cs` | Registrations, `HsmListenerBindings`, middleware order (guards after `UseRouting`, before auth) |
 
 ## Data Flow
 
@@ -67,26 +93,33 @@ Status: this feature currently delivers the **persistence and domain foundation*
 create:  Generate() ──► canonicalize grants ──► TryInsertApiToken (worker lock: exists? ──► Put)
                                         │ collision ──► new pair, retry (≤3)
                                         └ persisted ──► publish to _tokensByTokenId/_tokenIdByEntityId/_tokenIdsByOwner
-auth (later PR): TryAuthenticate(presentedToken) — parse ──► index lookup ──► stored-or-dummy verifier compare (unknown id still fails) ──► IsLive: revoked/expired/both generation stamps ──► boot health
+
+request: Authorization: Bearer hsm_pat_v1_…
+           └─ /api/v1 path? ──► ManagementApiGuardMiddleware: SitePort? endpoint has [ManagementApi]+policy, not anonymous? ──► else 404
+           └─ other path?   ──► LegacyBearerGuardMiddleware: hsm_pat_ bearer ──► generic 401, no lookup
+           └─ ManagementPolicy ──► HsmApiTokenHandler: Bearer? shape? ──► TryAuthenticate (parse ──► stored-or-dummy verifier ──► IsLive ──► boot health) ──► owner exists? ──► single-identity principal ──► MarkUsed (coalesced) + sampled security event
+           └─ controller ──► ApiTokenAuthorizationService.Authorize(op, resource): resolve current boundary ──► owner sees? token reaches boundary? (else 404) ──► op granted? owner can perform? (else 403) ──► allowed; denials ──► security-event sink (always)
 ```
 
 ## Storage / Persistence
 
 - LevelDB `EnvironmentData`, rows keyed `ApiToken_<TokenId>` (UTF-8); JSON serialized, records with `init`-only properties, UTC-tick dates.
+- Security events: `ApiTokenSecurityEvent_<ticks:d19>_<eventId>` — zero-padded ticks keep the prefix scan chronological, the event id keeps it collision-free; append-only (no update path).
 - Generation state: `ApiTokenGeneration_Global` and `ApiTokenGeneration_Owner_<ownerUserId>` hold plain long values in the invariant culture; unparsable or negative values are corrupt (the counter is monotonic from 0) and fail the index closed.
 - Restoring an old environment backup rolls back token rows and generation rows together, so an emergency revoke performed after the backup point is undone consistently — and therefore invisibly. After any environment restore, re-run the emergency revoke.
 - The `ApiToken_` / `ApiTokenGeneration_` prefixes differ at the separator position (`'_'` vs `'G'`), so the full scan (`ReadAllApiTokens`) never picks up generation rows.
 - Retention cleanup (bounded removal of revoked/expired/orphan records after `TokenRecordRetention`) is not yet implemented; it is part of the follow-up configuration PR. **Sequencing constraint for the epic: the management UI/API (step 4) must not ship before retention (step 5).** Step 4 is what makes rotation routine, and until retention lands every rotation permanently adds a durable row and a live index entry — revoked and rotated-away records are never evicted, the boot scan materializes every row, and owner lists / quota counts are O(all tokens that owner ever minted). A deployment rotating weekly across ~200 tokens accumulates ~21k dead index entries in two years.
-- Last-used tracking: the field exists on the entity; the coalesced write path lands with the authentication handler PR.
+- Security-event retention: the append-only table currently has no cleanup; it lands with the token-record retention PR (bounded batches, independent from lifecycle audit retention). The sequencing constraint above explicitly covers this table and invalid-attempt throttling: from the first routable `/api/v1` endpoint on, any party that reaches SitePort can drive unbounded LevelDB growth with invalid bearers (failures/denials are unsampled and unthrottled, and the only read API materializes the whole table), so retention and invalid-attempt rate limiting must land with or before the first routable endpoint — not after it in sequence order.
+- The `ApiTokens.*` configuration section (Enabled kill switch, limits) is step 4; until it lands, no runtime path creates tokens, so nothing can authenticate yet outside tests.
 
 ## UI / Operator Visibility
 
-Not operator-visible yet. The cookie-only management UI/API (create with one-time disclosure, list, restrict, rotate, revoke, emergency revoke) is a later PR in the sequence.
+Not operator-visible yet. The cookie-only management UI/API (create with one-time disclosure, list, restrict, rotate, revoke, emergency revoke) is a later PR in the sequence. Security events are queryable through `IDatabaseCore.ReadApiTokenSecurityEvents` (ops surface later).
 
 ## Dependencies
 
-- Depends on: `HSMDatabase` LevelDB stack (`IDatabaseCore`), `IAsyncStorage` boot initialization.
-- Used by: (planned) `HsmApiToken` authentication handler, `/api/v1` management controllers, alert templates/schedules REST API (#1351/#1352).
+- Depends on: `HSMDatabase` LevelDB stack (`IDatabaseCore`), `IAsyncStorage` boot initialization, `IUserManager`/`IFolderManager`/`ITreeValuesCache` (boundary resolution and owner rights).
+- Used by: (planned) `/api/v1` management controllers, alert templates/schedules REST API (#1351/#1352).
 
 ## Tests
 

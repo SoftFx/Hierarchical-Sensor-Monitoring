@@ -60,6 +60,11 @@ namespace HSMServer.ServiceExtensions
                     .AddAsyncStorage<IDashboardManager, DashboardManager>()
                     .AddAsyncStorage<IApiTokenManager, ApiTokenManager>();
 
+            // Management-API authorization foundation (#1356 step 3): append-only
+            // per-request security events and the effective-rights/resource evaluator.
+            services.AddSingleton<IApiTokenSecurityEventSink, ApiTokenSecurityEventSink>();
+            services.AddSingleton<IApiTokenAuthorizationService, ApiTokenAuthorizationService>();
+
             services.AddSingleton<DataCollectorWrapper>()
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<TelemetryCollector>()
@@ -124,12 +129,19 @@ namespace HSMServer.ServiceExtensions
 
         public static ConfigureWebHostBuilder ConfigureWebHost(this ConfigureWebHostBuilder webHostBuilder, ServerConfig config)
         {
+            // One immutable registry both drives the actual Listen calls and answers
+            // IsSitePort for the /api/v1 area guard: the guard can never disagree with
+            // what is listening, and a config change takes effect only on restart.
+            var listeners = new HsmListenerBindings(config.Kestrel.SitePort, config.Kestrel.SensorPort);
+
+            webHostBuilder.ConfigureServices(services => services.AddSingleton(listeners));
+
             webHostBuilder.ConfigureKestrel(options =>
             {
                 var kestrelListenAction = KestrelListenOptions(config.ServerCertificate);
 
-                options.Listen(IPAddress.Any, config.Kestrel.SensorPort, kestrelListenAction);
-                options.Listen(IPAddress.Any, config.Kestrel.SitePort, kestrelListenAction);
+                options.Listen(IPAddress.Any, listeners.SensorPort, kestrelListenAction);
+                options.Listen(IPAddress.Any, listeners.SitePort, kestrelListenAction);
 
                 options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
                 options.Limits.MinRequestBodyDataRate = null; //???
@@ -156,6 +168,13 @@ namespace HSMServer.ServiceExtensions
             applicationBuilder.UseStaticFiles();
 
             applicationBuilder.UseRouting();
+
+            // Management-area isolation (#1356 step 3), before authentication: the area
+            // guard allow-lists /api/v1 per endpoint (marker + policy) and SitePort-only
+            // before any controller runs, and the bearer guard keeps an hsm_pat_ credential
+            // off every legacy route with a plain non-redirecting 401.
+            applicationBuilder.UseMiddleware<ManagementApiGuardMiddleware>();
+            applicationBuilder.UseMiddleware<LegacyBearerGuardMiddleware>();
 
             applicationBuilder.UseAuthentication();
             applicationBuilder.UseAuthorization();

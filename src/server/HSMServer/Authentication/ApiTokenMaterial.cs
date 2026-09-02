@@ -13,6 +13,13 @@ namespace HSMServer.Authentication
     {
         public const string TokenPrefix = "hsm_pat_v1_";
 
+        // Version-independent family prefix of every HSM API-token credential. Guards that
+        // only ask "is this an HSM credential at all" (LegacyBearerGuardMiddleware) match
+        // the family, so a future hsm_pat_v2_ credential cannot slip past them into the
+        // legacy pipeline; the strict versioned prefix above stays the single source for
+        // parsing and shape checks.
+        public const string TokenFamilyPrefix = "hsm_pat_";
+
         // hsm_pat_v1_ maps only to versionByte 0x01 and must match the persisted record.
         public const byte CurrentVersionByte = 0x01;
 
@@ -87,6 +94,38 @@ namespace HSMServer.Authentication
         public static bool IsValidTokenId(string tokenId) =>
             tokenId is { Length: TokenIdLength } && TryDecodeCanonical(tokenId, TokenIdBytesLength, out _);
 
+        // Cheap shape check for a presented bearer credential: exact total length, the
+        // version prefix and the '.' separator, with no decoding or allocation. Alphabet and
+        // canonical-encoding validation stay in TryParse — this only separates "clearly not
+        // our credential" from "our credential, malformed" before any manager work.
+        public static bool IsValidCredentialShape(string credential) =>
+            credential is not null &&
+            credential.Length == TokenPrefix.Length + TokenIdLength + 1 + SecretLength &&
+            credential.StartsWith(TokenPrefix, StringComparison.Ordinal) &&
+            credential[TokenPrefix.Length + TokenIdLength] == '.';
+
+        // The one place that unpacks a raw Authorization header value into a bearer
+        // credential: scheme "Bearer" (case-insensitive) followed by a non-empty
+        // parameter. False for any other scheme or a missing parameter — the handler
+        // treats that as "not this scheme's credential" and the legacy guard as
+        // "pass through", so the shared shape cannot drift between them.
+        public static bool TryReadBearerCredential(string headerValue, out string credential)
+        {
+            credential = null;
+
+            if (string.IsNullOrEmpty(headerValue))
+                return false;
+
+            var separator = headerValue.IndexOf(' ');
+
+            if (separator <= 0 || !headerValue[..separator].Equals("Bearer", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            credential = headerValue[(separator + 1)..].Trim();
+
+            return credential.Length > 0;
+        }
+
 
         // Best-effort cleanup of decoded secret bytes. The textual form lives in immutable
         // strings and cannot be cleared; buffers used for hashing are cleared eagerly.
@@ -94,6 +133,67 @@ namespace HSMServer.Authentication
         {
             if (bytes is not null)
                 CryptographicOperations.ZeroMemory(bytes);
+        }
+
+        // Replaces every hsm_pat_v1_<id>.<secret> occurrence in free text (an exception
+        // message, an error payload) with its TokenId alone. The id is the public lookup
+        // key and safe to name; the secret is the credential and never survives redaction.
+        // Forward-only scan: the replacement itself contains the prefix, so re-scanning
+        // from the start would loop forever.
+        public static string Redact(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return text;
+
+            var builder = new System.Text.StringBuilder(text.Length);
+            var consumed = 0;
+
+            while (consumed < text.Length)
+            {
+                var index = text.IndexOf(TokenPrefix, consumed, StringComparison.Ordinal);
+
+                if (index < 0)
+                {
+                    builder.Append(text.AsSpan(consumed));
+                    break;
+                }
+
+                builder.Append(text.AsSpan(consumed, index - consumed));
+
+                var idStart = index + TokenPrefix.Length;
+                var hasId = idStart + TokenIdLength < text.Length &&
+                    text[idStart + TokenIdLength] == '.';
+
+                if (hasId)
+                {
+                    // "hsm_pat_v1_<id>.«redacted»" — id kept, secret dropped (also when
+                    // truncated mid-secret).
+                    builder.Append(TokenPrefix)
+                           .Append(text.AsSpan(idStart, TokenIdLength))
+                           .Append(".«redacted»");
+
+                    var secretStart = idStart + TokenIdLength + 1;
+                    consumed = secretStart + Math.Min(SecretLength, text.Length - secretStart);
+                }
+                else
+                {
+                    // A lone/truncated prefix: consume the credential-ish tail that
+                    // follows — a truncated id/secret fragment must not survive. The tail
+                    // charset includes the separator/encoding forms a secret can appear
+                    // in ('.', '%' for percent-encoded separators such as %2E in URLs,
+                    // '=' '+' '/' for standard-base64 spellings); the run stops only at
+                    // characters no credential spelling contains. Over-redacting one
+                    // word is safe; leaking a fragment is not.
+                    builder.Append("«redacted»");
+
+                    consumed = idStart;
+
+                    while (consumed < text.Length && IsCredentialTailChar(text[consumed]))
+                        consumed++;
+                }
+            }
+
+            return builder.ToString();
         }
 
 
@@ -206,5 +306,10 @@ namespace HSMServer.Authentication
 
         private static bool IsBase64UrlChar(char c) =>
             (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == Base64UrlMinus || c == Base64UrlUnderscore;
+
+        // Characters a credential fragment can be spelled with in free text, beyond the
+        // Base64URL alphabet (see the Redact else-branch).
+        private static bool IsCredentialTailChar(char c) =>
+            IsBase64UrlChar(c) || c == '.' || c == '%' || c == '=' || c == Base64Plus || c == Base64Slash;
     }
 }

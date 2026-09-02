@@ -525,6 +525,12 @@ namespace HSMDatabase.DatabaseWorkCore
         public long AdvanceOwnerRevocationGeneration(Guid ownerUserId) =>
             _environmentDatabase.AdvanceOwnerRevocationGeneration(ownerUserId);
 
+        public void PutApiTokenSecurityEvent(ApiTokenSecurityEventEntity entity) =>
+            _environmentDatabase.PutApiTokenSecurityEvent(entity);
+
+        public List<ApiTokenSecurityEventEntity> ReadApiTokenSecurityEvents() =>
+            _environmentDatabase.ReadApiTokenSecurityEvents();
+
         #endregion
 
         #region Environment database : User

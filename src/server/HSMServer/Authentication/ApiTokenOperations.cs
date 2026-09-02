@@ -65,6 +65,14 @@ namespace HSMServer.Authentication
         public static bool IsValid(string operation) =>
             !string.IsNullOrEmpty(operation) && _all.Contains(operation);
 
+        // The catalog's naming discipline is "<resource>:read" / "<resource>:write" with
+        // read and write always separate, so the required owner role derives from the
+        // name: writes need the Manager role at the boundary (or IsAdmin), reads any
+        // assigned role. Canonical place for the rule so operation additions cannot
+        // silently change the privilege requirement.
+        public static bool IsWrite(string operation) =>
+            operation is not null && operation.EndsWith(":write", System.StringComparison.Ordinal);
+
 
         // True when the operation may be granted at the given boundary kind. This is the
         // canonical place to tighten operation/boundary semantics as the catalog grows.

@@ -73,6 +73,9 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Token verifier | Domain-separated `SHA-256("HSM-API-TOKEN" ‖ 0x00 ‖ version ‖ tokenId ‖ secret)` stored instead of the secret. | Compared constant-time against stored-or-dummy on every authentication. |
 | Token grant | Explicit operation + boundary (Global/Product/Folder) pair; pairs are never recombinable. | Unknown operations/boundaries fail closed; no wildcards in v1. |
 | Revocation generation | Monotonic global/per-owner counter; a token authenticates only while its at-issue generations equal current values. | Emergency revoke-all/revoke-user advances it; missing-as-zero is the fresh baseline, corrupt/regressed fails closed. |
+| HsmApiToken scheme | The dedicated ASP.NET authentication scheme for API-token bearers; never the default scheme, runs only from the management policy. | Cookie stays default and is pinned into the `DefaultPolicy`; a cookie-only principal never satisfies a management endpoint. |
+| Management area (`/api/v1`) | The versioned management-API route family, SitePort-only and fail-closed: endpoints need `[ManagementApi]` plus their policy, everything else in the area is 404 by default. | `/api/v1/api-tokens` is the sole cookie-only family inside the area. |
+| Authorization boundary | The Product/Folder/Global anchor a token grant binds to; resolved from the live hierarchy per request (a sensor inherits its product's CURRENT folder). | Folder boundaries cover current+future contents; Global grants are never wildcards over scoped targets. |
 | C++ wrapper | Native wrapper surface under `src/wrapper`. | Keep parity with collector public APIs. |
 | Ping module | External module under `src/module/HSMPingModule`. | Integration surface and deployment assumptions matter. |
 

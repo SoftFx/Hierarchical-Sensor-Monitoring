@@ -69,6 +69,11 @@ namespace HSMServer.Core.Tests.Infrastructure
         // durable nor live state.
         internal Func<string, bool> ShouldFailApiTokenOp { get; set; }
 
+        // Optional blocking hook (operation name keyed), invoked on the calling thread
+        // before the inner call — used to stall the security-event writer so a test can
+        // fill the sink's bounded queue deterministically.
+        internal Action<string> BlockApiTokenOp { get; set; }
+
         public bool TryInsertApiToken(ApiTokenEntity entity)
         {
             if (ShouldFailApiTokenOp?.Invoke(nameof(TryInsertApiToken)) == true)
@@ -147,6 +152,19 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             return _inner.AdvanceOwnerRevocationGeneration(ownerUserId);
         }
+
+        public void PutApiTokenSecurityEvent(ApiTokenSecurityEventEntity entity)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(PutApiTokenSecurityEvent)) == true)
+                throw new InvalidOperationException("Simulated DB failure for a security event write");
+
+            BlockApiTokenOp?.Invoke(nameof(PutApiTokenSecurityEvent));
+
+            _inner.PutApiTokenSecurityEvent(entity);
+        }
+
+        public List<ApiTokenSecurityEventEntity> ReadApiTokenSecurityEvents() =>
+            _inner.ReadApiTokenSecurityEvents();
 
         public void AddSensor(SensorEntity entity)
         {

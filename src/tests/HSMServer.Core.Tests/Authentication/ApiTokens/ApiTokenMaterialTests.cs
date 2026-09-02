@@ -170,6 +170,69 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.False(ApiTokenMaterial.IsValidTokenId(null));
         }
 
+        [Fact]
+        public void Redact_KeepsPublicId_DropsTheSecret()
+        {
+            var material = ApiTokenMaterial.Generate();
+
+            var redacted = ApiTokenMaterial.Redact($"login failed with {ApiTokenMaterial.TokenPrefix}{material.TokenId}.{material.Secret} twice");
+
+            Assert.DoesNotContain(material.Secret, redacted);
+            Assert.Contains(material.TokenId, redacted);
+            Assert.EndsWith(" twice", redacted);
+        }
+
+        [Fact]
+        public void Redact_HandlesTruncatedAndRepeatedCredentials()
+        {
+            // A truncated credential loses at least its prefix; several credentials in one
+            // message are all redacted — the replacement itself contains the prefix, so
+            // this pins the forward-only scan against an infinite loop.
+            var first = ApiTokenMaterial.Generate();
+            var second = ApiTokenMaterial.Generate();
+
+            var redacted = ApiTokenMaterial.Redact(
+                $"{ApiTokenMaterial.TokenPrefix}{first.TokenId}.{first.Secret} and bare {ApiTokenMaterial.TokenPrefix}trunc and {ApiTokenMaterial.TokenPrefix}{second.TokenId}.{second.Secret}");
+
+            Assert.DoesNotContain(first.Secret, redacted);
+            Assert.DoesNotContain(second.Secret, redacted);
+            Assert.DoesNotContain("trunc", redacted);
+            Assert.Contains(first.TokenId, redacted);
+            Assert.Contains(second.TokenId, redacted);
+        }
+
+        [Fact]
+        public void Redact_LeavesOrdinaryTextUnchanged()
+        {
+            const string text = "normal exception text with numbers 123 and paths /api/v1";
+
+            Assert.Equal(text, ApiTokenMaterial.Redact(text));
+            Assert.Null(ApiTokenMaterial.Redact(null));
+        }
+
+        [Fact]
+        public void Redact_ConsumesEncodedSeparatorAndShortIdTails()
+        {
+            // A credential whose separator is not a literal '.' at offset 22 — a
+            // percent-encoded %2E in a logged URL, or a hand-typed short id — must lose
+            // its secret too: the else-branch consumes the whole credential-ish tail,
+            // not only the Base64URL run.
+            var material = ApiTokenMaterial.Generate();
+
+            var percentEncoded = ApiTokenMaterial.Redact(
+                $"url ?t={ApiTokenMaterial.TokenPrefix}{material.TokenId}%2E{material.Secret}&x=1");
+
+            Assert.DoesNotContain(material.Secret, percentEncoded);
+            Assert.DoesNotContain(material.TokenId, percentEncoded);
+            Assert.EndsWith("&x=1", percentEncoded);
+
+            var shortId = ApiTokenMaterial.Redact(
+                $"{ApiTokenMaterial.TokenPrefix}short.{material.Secret}");
+
+            Assert.DoesNotContain(material.Secret, shortId);
+            Assert.DoesNotContain("short", shortId);
+        }
+
 
         private static bool IsBase64UrlChar(char c) =>
             (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';

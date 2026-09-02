@@ -96,6 +96,12 @@ namespace HSMServer.Core.DataLayer
         long GetOwnerRevocationGeneration(Guid ownerUserId);
         long AdvanceOwnerRevocationGeneration(Guid ownerUserId);
 
+        // Append-only per-request security events of the API-token channel.
+        void PutApiTokenSecurityEvent(ApiTokenSecurityEventEntity entity);
+
+        // Chronological scan of all security events (retention/query surface).
+        List<ApiTokenSecurityEventEntity> ReadApiTokenSecurityEvents();
+
         #endregion
 
         #region Sensors

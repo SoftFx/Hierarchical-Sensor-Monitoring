@@ -63,7 +63,10 @@ builder.Services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDef
                 });
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-                .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme);
+                .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddHsmApiTokenScheme();
+
+builder.Services.AddHsmApiTokenAuthorization();
 
 builder.Services.AddHsts(options =>
 {
