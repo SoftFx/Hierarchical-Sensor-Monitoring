@@ -91,6 +91,23 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public async Task LegacyGuard_DuplicatedAuthorizationValues_StillCatchHsmBearer()
+        {
+            // StringValues.ToString() joins duplicated headers with ", ": parsing the
+            // joined string would read the scheme of the FIRST value and miss the bearer.
+            // The guard inspects each header value on its own.
+            var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
+            var context = BuildContext("/Home/Index", SitePort);
+            context.Request.Headers.Append("Authorization", "Basic dXNlcjpwYXNz");
+            context.Request.Headers.Append("Authorization", $"Bearer {credential}");
+
+            await new LegacyBearerGuardMiddleware(NextThatMarks).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+            Assert.False(context.Items.ContainsKey("reached"));
+        }
+
+        [Fact]
         public async Task AreaGuard_ManagementEndpointOnSitePort_Passes()
         {
             var endpoint = Endpoint(new ManagementApiAttribute(),
@@ -173,6 +190,35 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
+        }
+
+        [Fact]
+        public async Task AreaGuard_ReservedCookieOnlyRouteWithoutAuthorize_Is404()
+        {
+            // Absence of [Authorize] is not [AllowAnonymous] — but with no fallback policy
+            // it is just as anonymous. The reserved family must carry a cookie [Authorize]
+            // to be reachable: these are the routes that mint and revoke tokens.
+            var endpoint = Endpoint(new ManagementApiAttribute());
+            var context = BuildContext("/api/v1/api-tokens", SitePort, endpoint);
+
+            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+            Assert.False(context.Items.ContainsKey("reached"));
+        }
+
+        [Fact]
+        public async Task AreaGuard_ReservedCookieOnlyRouteWithManagementPolicy_Is404()
+        {
+            // The reserved family is cookie-only: the management (token) policy does not
+            // make an endpoint under /api/v1/api-tokens reachable.
+            var endpoint = Endpoint(new ManagementApiAttribute(),
+                new AuthorizeAttribute(HsmApiTokenDefaults.ManagementPolicy));
+            var context = BuildContext("/api/v1/api-tokens", SitePort, endpoint);
+
+            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
         }
 
         [Fact]

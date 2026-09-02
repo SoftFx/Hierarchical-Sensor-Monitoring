@@ -58,6 +58,30 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.Same(stored, context.User);
         }
 
+        [Fact]
+        public async Task TokenIdentityNotFirst_IsStillPassedThrough()
+        {
+            // The short-circuit must not depend on the token identity being the primary
+            // one: a merged principal that happens to order a cookie identity first still
+            // carries the token identity, and replacing the principal would restore the
+            // owner's unrestricted rights behind the token's grants.
+            var userManager = new Mock<IUserManager>(MockBehavior.Strict);
+            userManager.Setup(u => u[It.IsAny<string>()])
+                .Throws(new InvalidOperationException("token principals must not be user-resolved"));
+
+            var principal = new ClaimsPrincipal(new[]
+            {
+                (ClaimsIdentity)CookiePrincipal("alice").Identity,
+                (ClaimsIdentity)TokenPrincipal().Identity,
+            });
+            var context = SitePortContext(principal, userManager.Object);
+
+            await new UserProcessorMiddleware(NextThatMarks, userManager.Object, Config()).InvokeAsync(context);
+
+            Assert.Same(principal, context.User);
+            Assert.True((bool)context.Items["reached"]);
+        }
+
 
         private static IServerConfig Config()
         {

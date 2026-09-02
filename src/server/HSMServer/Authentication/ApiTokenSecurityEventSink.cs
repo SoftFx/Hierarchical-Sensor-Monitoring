@@ -32,7 +32,11 @@ namespace HSMServer.Authentication
             Channel.CreateBounded<ApiTokenSecurityEventEntity>(new BoundedChannelOptions(QueueCapacity)
             {
                 SingleReader = true,
-                FullMode = BoundedChannelFullMode.DropNewest,
+                // Wait (not DropNewest/DropOldest): TryWrite is still non-blocking and
+                // returns false when the queue is full instead of silently evicting a
+                // queued event, so the counted-and-logged overflow path in Record is the
+                // one that actually runs — drops are never silent.
+                FullMode = BoundedChannelFullMode.Wait,
             });
 
         private readonly Task _writer;
@@ -50,7 +54,7 @@ namespace HSMServer.Authentication
         }
 
 
-        public long DroppedCount => _dropped;
+        public long DroppedCount => Volatile.Read(ref _dropped);
 
 
         public void Record(ApiTokenSecurityEvent @event)

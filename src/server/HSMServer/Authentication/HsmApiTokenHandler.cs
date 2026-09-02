@@ -45,6 +45,12 @@ namespace HSMServer.Authentication
             if (!Request.Headers.TryGetValue(HeaderNames.Authorization, out var headerValues))
                 return Task.FromResult(AuthenticateResult.NoResult());
 
+            // Duplicated Authorization values are not a parseable credential: joined by
+            // ", " they would masquerade as another scheme, so the bearer inside would be
+            // invisible. Treat the ambiguous shape as no credential — no lookup happens.
+            if (headerValues.Count != 1)
+                return Task.FromResult(AuthenticateResult.NoResult());
+
             var header = headerValues.ToString();
             if (string.IsNullOrEmpty(header))
                 return Task.FromResult(AuthenticateResult.NoResult());

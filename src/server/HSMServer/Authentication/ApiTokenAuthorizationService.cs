@@ -102,8 +102,10 @@ namespace HSMServer.Authentication
             TokenReachesBoundary(token, boundary);
 
         // Denials reach the append-only security-event sink with the safe identifiers the
-        // design names: token id, subject id, required permission, safe target id. Allowed
-        // decisions are not per-request events.
+        // design names: token id, subject id, required permission, safe target id — and
+        // with the decision preserved: 404 denials (invisible/out-of-reach targets, the
+        // enumeration-probe signal) are AuthorizationNotFound, 403 scope denials are
+        // AuthorizationDenied. Allowed decisions are not per-request events.
         private void Record(ClaimsPrincipal principal, string operation, ApiTokenResource resource,
             ApiTokenAuthorization decision)
         {
@@ -111,8 +113,12 @@ namespace HSMServer.Authentication
             var ownerText = principal?.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
             Guid? ownerId = Guid.TryParse(ownerText, out var parsed) ? parsed : null;
 
+            var kind = decision == ApiTokenAuthorization.NotFound
+                ? ApiTokenSecurityEventKind.AuthorizationNotFound
+                : ApiTokenSecurityEventKind.AuthorizationDenied;
+
             _securityEvents.Record(new ApiTokenSecurityEvent(
-                ApiTokenSecurityEventKind.AuthorizationDenied,
+                kind,
                 tokenId, ownerId, operation,
                 TargetId: $"{resource.Kind}:{resource.Id}"));
         }

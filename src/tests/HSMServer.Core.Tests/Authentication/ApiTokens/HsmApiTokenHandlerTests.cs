@@ -132,6 +132,23 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             _managerMock.Verify(m => m.TryAuthenticate(It.IsAny<string>(), out It.Ref<ApiTokenInfo>.IsAny), Times.Never);
         }
 
+        [Fact]
+        public async Task DuplicatedAuthorizationValues_AreNotThisSchemesCredential()
+        {
+            // Duplicated Authorization headers joined with ", " would parse as the FIRST
+            // value's scheme ("Basic") and hide the bearer. The ambiguous shape is treated
+            // as no credential — and never reaches the manager.
+            var (provider, context) = Build(null);
+            context.Request.Headers.Append("Authorization", "Basic dXNlcjpwYXNz");
+            context.Request.Headers.Append("Authorization", $"Bearer {ValidCredential()}");
+
+            var result = await provider.GetRequiredService<IAuthenticationService>()
+                .AuthenticateAsync(context, Scheme);
+
+            Assert.True(result.None);
+            _managerMock.Verify(m => m.TryAuthenticate(It.IsAny<string>(), out It.Ref<ApiTokenInfo>.IsAny), Times.Never);
+        }
+
         [Theory]
         [InlineData("hsm_pat_v1_short.secret")]                                                       // too short overall
         [InlineData("hsm_pat_v1_" + "AAAAAAAAAAAAAAAAAAAAAA")]                                       // no dot/secret

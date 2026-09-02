@@ -112,6 +112,40 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void DenialSecurityEvents_CarryThe403Vs404Decision()
+        {
+            // The stored trail must keep the anti-enumeration split: a 404 denial (target
+            // invisible — the enumeration-probe signal) is AuthorizationNotFound, a 403
+            // scope denial is AuthorizationDenied. Callers never see the difference; the
+            // audit trail does.
+            var events = new System.Collections.Generic.List<ApiTokenSecurityEvent>();
+            var sink = new Mock<IApiTokenSecurityEventSink>();
+            sink.Setup(s => s.Record(It.IsAny<ApiTokenSecurityEvent>()))
+                .Callback<ApiTokenSecurityEvent>(events.Add);
+
+            var service = new ApiTokenAuthorizationService(_users.Object, _tokens.Object,
+                _folders.Object, _cache.Object, sink.Object);
+
+            // ProductB is invisible to the owner (manages A only) -> NotFound.
+            _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductManager));
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Product, ProductB));
+            var notFound = service.Authorize(Principal(), ApiTokenOperations.AlertsRead,
+                ApiTokenResource.Product(ProductB));
+
+            // ProductA is covered, but only alerts:read is granted -> Forbidden.
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Product, ProductA));
+            var forbidden = service.Authorize(Principal(), ApiTokenOperations.AlertsWrite,
+                ApiTokenResource.Product(ProductA));
+
+            Assert.Equal(ApiTokenAuthorization.NotFound, notFound);
+            Assert.Equal(ApiTokenAuthorization.Forbidden, forbidden);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationNotFound,
+                Assert.Single(events, e => e.Kind == ApiTokenSecurityEventKind.AuthorizationNotFound).Kind);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied,
+                Assert.Single(events, e => e.Kind == ApiTokenSecurityEventKind.AuthorizationDenied).Kind);
+        }
+
+        [Fact]
         public void ProductManagerOwner_WriteGrantOnOwnProduct_Allowed()
         {
             _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductManager));

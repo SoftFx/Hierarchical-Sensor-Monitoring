@@ -13,6 +13,13 @@ namespace HSMServer.Authentication
     {
         public const string TokenPrefix = "hsm_pat_v1_";
 
+        // Version-independent family prefix of every HSM API-token credential. Guards that
+        // only ask "is this an HSM credential at all" (LegacyBearerGuardMiddleware) match
+        // the family, so a future hsm_pat_v2_ credential cannot slip past them into the
+        // legacy pipeline; the strict versioned prefix above stays the single source for
+        // parsing and shape checks.
+        public const string TokenFamilyPrefix = "hsm_pat_";
+
         // hsm_pat_v1_ maps only to versionByte 0x01 and must match the persisted record.
         public const byte CurrentVersionByte = 0x01;
 
@@ -92,6 +99,7 @@ namespace HSMServer.Authentication
         // canonical-encoding validation stay in TryParse — this only separates "clearly not
         // our credential" from "our credential, malformed" before any manager work.
         public static bool IsValidCredentialShape(string credential) =>
+            credential is not null &&
             credential.Length == TokenPrefix.Length + TokenIdLength + 1 + SecretLength &&
             credential.StartsWith(TokenPrefix, StringComparison.Ordinal) &&
             credential[TokenPrefix.Length + TokenIdLength] == '.';

@@ -41,5 +41,25 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.Throws<NotSupportedException>(() => ((ICollection<string>)all).Add("users:write"));
             Assert.False(ApiTokenOperations.IsValid("users:write"));
         }
+
+        [Fact]
+        public void All_MembersFollowReadWriteNaming_IsWriteMatchesTheSuffix()
+        {
+            // The owner-privilege rule (writes need the Manager role at the boundary) is
+            // derived from the "<resource>:read"/"<resource>:write" naming discipline. A
+            // member added outside it (e.g. "alerts:acknowledge") would fail OPEN as a
+            // read and become executable by a Viewer-role owner — this test fails the
+            // addition instead of downgrading the privilege check.
+            Assert.All(ApiTokenOperations.All, operation =>
+                Assert.True(
+                    operation.EndsWith(":read", StringComparison.Ordinal) ||
+                    operation.EndsWith(":write", StringComparison.Ordinal),
+                    $"'{operation}' must end with :read or :write — IsWrite derives the required owner role from the suffix"));
+
+            Assert.All(ApiTokenOperations.All, operation =>
+                Assert.Equal(
+                    operation.EndsWith(":write", StringComparison.Ordinal),
+                    ApiTokenOperations.IsWrite(operation)));
+        }
     }
 }

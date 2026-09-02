@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading.Tasks;
-using HSMServer.Authentication;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Http;
 using NLog;
@@ -23,21 +22,19 @@ namespace HSMServer.Middleware
             catch (Exception ex)
             {
                 // An hsm_pat_ credential can surface inside an exception message (a
-                // framework binding error echoing a header value). Redact before logging:
-                // the credential is a password-class secret and must never reach a log.
-                // Only messages that actually carry the prefix are wrapped, so ordinary
-                // exceptions keep their exact type and text.
-                var logged = ex.Message.Contains(ApiTokenMaterial.TokenPrefix, StringComparison.Ordinal)
-                    ? new Exception(ApiTokenMaterial.Redact(ex.Message), ex)
-                    : ex;
-
+                // framework binding error echoing a header value). Redaction happens at
+                // the NLog sink (nlog.config wraps message and exception text in
+                // ${hsm-redacted}): the credential can reach a log target not only through
+                // this record but through inner exceptions and through the outer exception
+                // handlers' own logging, so no call-site rewriting can cover it all. This
+                // middleware only logs the failure and rethrows.
                 if (context.Response.HasStarted)
                 {
-                    _logger.Error(logged, "Exception occurred, but response was already started");
+                    _logger.Error(ex, "Exception occurred, but response was already started");
                 }
                 else
                 {
-                    _logger.Error(logged, $"Error in {context.Request.Method} {context.Request.Host} {context.Request.Path} {context.Request.Protocol} => {context.Response.StatusCode}", logged);
+                    _logger.Error(ex, $"Error in {context.Request.Method} {context.Request.Host} {context.Request.Path} {context.Request.Protocol} => {context.Response.StatusCode}");
                 }
 
                 throw;

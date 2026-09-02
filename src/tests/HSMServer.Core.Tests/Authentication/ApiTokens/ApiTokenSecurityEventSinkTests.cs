@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Tests.DatabaseTests;
@@ -95,18 +96,52 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 ShouldFailApiTokenOp = op => op == nameof(FailingDatabaseCore.PutApiTokenSecurityEvent),
             };
 
-            using (var sink = new ApiTokenSecurityEventSink(failing, NullLogger<ApiTokenSecurityEventSink>.Instance))
+            ApiTokenSecurityEventSink sink;
+            using (sink = new ApiTokenSecurityEventSink(failing, NullLogger<ApiTokenSecurityEventSink>.Instance))
             {
                 sink.Record(new ApiTokenSecurityEvent(ApiTokenSecurityEventKind.AuthFailed, TokenId, OwnerId));
             }
 
             // The durable row is absent and the drop is counted — a security event can
             // never block or fail the request path that produced it.
-            using var drained = CreateSink();
-            drained.Dispose();
-
+            Assert.Equal(1, sink.DroppedCount);
             Assert.DoesNotContain(_databaseCoreManager.DatabaseCore.ReadApiTokenSecurityEvents(),
                 e => e.Kind == (byte)ApiTokenSecurityEventKind.AuthFailed && e.TokenId == TokenId && e.OwnerUserId == OwnerId);
+        }
+
+        [Fact]
+        public void QueueFull_DropsAndCounts_NeverBlocksTheCaller()
+        {
+            // The sink's private queue bound (ApiTokenSecurityEventSink.QueueCapacity).
+            const int queueCapacity = 1024;
+
+            var writerStalled = new ManualResetEventSlim(false);
+            var releaseWriter = new ManualResetEventSlim(false);
+
+            var blocking = new FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                // The first stored event parks the single background writer inside the
+                // database call; the queue then fills behind it deterministically.
+                BlockApiTokenOp = _ => { writerStalled.Set(); releaseWriter.Wait(); },
+            };
+
+            var overflowTokenId = TokenId + "Q";
+
+            using (var sink = new ApiTokenSecurityEventSink(blocking, NullLogger<ApiTokenSecurityEventSink>.Instance))
+            {
+                sink.Record(new ApiTokenSecurityEvent(ApiTokenSecurityEventKind.AuthFailed, overflowTokenId, OwnerId));
+
+                Assert.True(writerStalled.Wait(TimeSpan.FromSeconds(10)), "the writer must reach the database call");
+
+                // Fill the bounded queue exactly, then push past it: every excess Record
+                // returns immediately (never blocks the caller) and counts as a drop.
+                for (var i = 0; i < queueCapacity + 3; i++)
+                    sink.Record(new ApiTokenSecurityEvent(ApiTokenSecurityEventKind.AuthFailed, overflowTokenId, OwnerId));
+
+                Assert.Equal(3, sink.DroppedCount);
+
+                releaseWriter.Set();
+            } // Dispose drains the queue that still fits.
         }
 
 

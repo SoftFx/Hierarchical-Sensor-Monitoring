@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -29,11 +30,15 @@ namespace HSMServer.Middleware
         }
 
         // Header work only: the shared bearer unpacking plus a prefix check, with no
-        // interaction with the token store on any path this guard takes.
+        // interaction with the token store on any path this guard takes. Each duplicated
+        // Authorization value is inspected on its own (a joined ", "-string would parse as
+        // its first value's scheme and hide the credential), and the version-independent
+        // family prefix is matched, so a future hsm_pat_v2_ credential cannot slip past
+        // this guard into the legacy pipeline either.
         private static bool ContainsHsmBearer(IHeaderDictionary headers) =>
-            headers.TryGetValue(HeaderNames.Authorization, out var value) &&
-            ApiTokenMaterial.TryReadBearerCredential(value.ToString(), out var credential) &&
-            credential.StartsWith(ApiTokenMaterial.TokenPrefix, StringComparison.Ordinal);
+            headers.TryGetValue(HeaderNames.Authorization, out var values) &&
+            values.Any(value => ApiTokenMaterial.TryReadBearerCredential(value, out var credential) &&
+                                credential.StartsWith(ApiTokenMaterial.TokenFamilyPrefix, StringComparison.Ordinal));
 
         internal static bool IsManagementAreaPath(PathString path) =>
             path.StartsWithSegments(HsmApiTokenDefaults.ManagementAreaPath, StringComparison.OrdinalIgnoreCase);

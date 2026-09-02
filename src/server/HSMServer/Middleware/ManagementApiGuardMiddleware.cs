@@ -13,9 +13,10 @@ namespace HSMServer.Middleware
     //     SensorPort, whatever the routing table shares between the listeners);
     //   - a route matched (there is an endpoint);
     //   - the endpoint carries [ManagementApi];
-    //   - the endpoint is not anonymous;
-    //   - outside the reserved cookie-only /api/v1/api-tokens family, the endpoint
-    //     explicitly requires the HsmApiToken management policy.
+    //   - the endpoint requires its family's authorization — the HsmApiToken management
+    //     policy outside the reserved cookie-only /api/v1/api-tokens family, a cookie
+    //     [Authorize] (the default policy) inside it — so it is never anonymous (there
+    //     is no fallback policy behind the guard).
     // Anything else under /api/v1 is a plain 404 BEFORE controller execution — including a
     // route someone adds without the metadata, which is exactly the default this guard
     // exists to enforce. 404 rather than 403 so SensorPort responses do not confirm that a
@@ -50,8 +51,15 @@ namespace HSMServer.Middleware
             if (metadata.GetMetadata<IAllowAnonymous>() is not null)
                 return NotFound(context);
 
-            if (!IsReservedCookieOnlyFamily(context.Request.Path) &&
-                !RequiresManagementPolicy(metadata))
+            // The endpoint must require its family's authorization. Absence of
+            // [Authorize] is not [AllowAnonymous] — with no fallback policy it would be
+            // anonymous — so a bare [ManagementApi] endpoint is unreachable, in the
+            // reserved family exactly as everywhere else in the area.
+            var requiresAuthorization = IsReservedCookieOnlyFamily(context.Request.Path)
+                ? RequiresDefaultPolicy(metadata)
+                : RequiresManagementPolicy(metadata);
+
+            if (!requiresAuthorization)
                 return NotFound(context);
 
             return next(context);
@@ -62,6 +70,11 @@ namespace HSMServer.Middleware
 
         private static bool RequiresManagementPolicy(EndpointMetadataCollection metadata) =>
             metadata.OfType<AuthorizeAttribute>().Any(a => a.Policy == HsmApiTokenDefaults.ManagementPolicy);
+
+        // The reserved family authorizes through the cookie-pinned DefaultPolicy: a bare
+        // [Authorize] (optionally with roles/schemes, but without a named policy).
+        private static bool RequiresDefaultPolicy(EndpointMetadataCollection metadata) =>
+            metadata.OfType<AuthorizeAttribute>().Any(a => string.IsNullOrEmpty(a.Policy));
 
         private static Task NotFound(HttpContext context)
         {
