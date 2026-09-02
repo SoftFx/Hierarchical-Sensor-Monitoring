@@ -52,7 +52,7 @@ namespace HSMServer.Authentication
 
         public ApiTokenAuthorization Authorize(ClaimsPrincipal principal, string operation, ApiTokenResource resource)
         {
-            if (!TryResolveCaller(principal, out var owner, out var token))
+            if (!TryResolveCaller(principal, out var owner, out var grants))
             {
                 Record(principal, operation, resource, ApiTokenAuthorization.NotFound);
                 return ApiTokenAuthorization.NotFound;
@@ -72,7 +72,7 @@ namespace HSMServer.Authentication
                 return ApiTokenAuthorization.NotFound;
             }
 
-            if (!TokenReachesBoundary(token, boundary))
+            if (!TokenReachesBoundary(grants, boundary))
             {
                 Record(principal, operation, resource, ApiTokenAuthorization.NotFound);
                 return ApiTokenAuthorization.NotFound;
@@ -80,7 +80,7 @@ namespace HSMServer.Authentication
 
             // 403: the target is known and in reach, but this operation is not granted or
             // the owner currently cannot perform it.
-            if (!TokenGrantsOperation(token, operation, boundary))
+            if (!TokenGrantsOperation(grants, operation, boundary))
             {
                 Record(principal, operation, resource, ApiTokenAuthorization.Forbidden);
                 return ApiTokenAuthorization.Forbidden;
@@ -96,10 +96,10 @@ namespace HSMServer.Authentication
         }
 
         public bool IsVisible(ClaimsPrincipal principal, ApiTokenResource resource) =>
-            TryResolveCaller(principal, out var owner, out var token) &&
+            TryResolveCaller(principal, out var owner, out var grants) &&
             TryResolveBoundary(resource, out var boundary) &&
             OwnerCanSee(owner, boundary) &&
-            TokenReachesBoundary(token, boundary);
+            TokenReachesBoundary(grants, boundary);
 
         // Denials reach the append-only security-event sink with the safe identifiers the
         // design names: token id, subject id, required permission, safe target id — and
@@ -190,9 +190,11 @@ namespace HSMServer.Authentication
                 case ApiTokenResourceKind.Sensor:
                 {
                     // A parentless sensor cannot resolve a product boundary: fail closed
-                    // rather than trusting the node itself.
+                    // rather than trusting the node itself. Note Root would CAST a
+                    // parentless sensor to ProductModel and throw — go through Parent so
+                    // the defensive path actually returns false.
                     var sensor = _cache.GetSensor(resource.Id);
-                    var product = sensor?.Root;
+                    var product = sensor?.Parent?.Root;
 
                     if (product is null)
                         return false;
@@ -215,21 +217,27 @@ namespace HSMServer.Authentication
             }
         }
 
-        // Owner visibility: any assignment at the boundary (or IsAdmin). Folder roles
-        // cover the products currently inside the folder, mirroring folder-grant
-        // semantics.
+        // Owner visibility: any assignment at the boundary (or IsAdmin). For a Product this
+        // mirrors the app's own rule (User.IsProductAvailable = IsAdmin ||
+        // IsUserProduct) with NO folder fallback: HSM materialises folder roles into
+        // per-product ProductsRoles entries at grant time and at move time
+        // (FoldersController/FolderManager), and per-product narrowing
+        // (ProductController.RemoveUserRole/EditUserRole) edits ProductsRoles only — a
+        // folder fallback here would resurrect rights the owner was explicitly revoked
+        // from, making the token side exceed the owner's current rights.
         private static bool OwnerCanSee(User owner, AuthorizationBoundary boundary) =>
             owner.IsAdmin || boundary.Kind switch
             {
                 ApiTokenResourceKind.Global => false, // global operations are admin-only
-                ApiTokenResourceKind.Product => owner.IsUserProduct(boundary.Id) ||
-                    (boundary.FolderId is { } folder && owner.IsFolderAvailable(folder)),
+                ApiTokenResourceKind.Product => owner.IsUserProduct(boundary.Id),
                 ApiTokenResourceKind.Folder => owner.IsFolderAvailable(boundary.Id),
                 _ => false,
             };
 
         // Owner capability for the operation: writes need the Manager role at the
-        // boundary; reads need exactly the visibility checked above.
+        // boundary; reads need exactly the visibility checked above. No folder fallback
+        // for products, for the same materialisation reason as OwnerCanSee — the owner
+        // side never exceeds what the app's own IsManager check grants.
         private static bool OwnerCanPerform(User owner, string operation, AuthorizationBoundary boundary)
         {
             if (owner.IsAdmin)
@@ -240,9 +248,7 @@ namespace HSMServer.Authentication
 
             return boundary.Kind switch
             {
-                ApiTokenResourceKind.Product =>
-                    owner.IsManager(boundary.Id) ||
-                    (boundary.FolderId is { } folder && owner.IsFolderManager(folder)),
+                ApiTokenResourceKind.Product => owner.IsManager(boundary.Id),
                 ApiTokenResourceKind.Folder => owner.IsFolderManager(boundary.Id),
                 _ => false, // writes at the global boundary are admin-only
             };

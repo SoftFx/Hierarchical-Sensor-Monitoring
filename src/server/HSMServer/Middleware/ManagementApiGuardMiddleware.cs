@@ -72,9 +72,12 @@ namespace HSMServer.Middleware
             metadata.OfType<AuthorizeAttribute>().Any(a => a.Policy == HsmApiTokenDefaults.ManagementPolicy);
 
         // The reserved family authorizes through the cookie-pinned DefaultPolicy: a bare
-        // [Authorize] (optionally with roles/schemes, but without a named policy).
+        // [Authorize] with no named policy and no explicit schemes — a scheme-bearing
+        // attribute would union the HsmApiToken scheme into the cookie policy and let a
+        // token principal into the family this guard keeps cookie-only.
         private static bool RequiresDefaultPolicy(EndpointMetadataCollection metadata) =>
-            metadata.OfType<AuthorizeAttribute>().Any(a => string.IsNullOrEmpty(a.Policy));
+            metadata.OfType<AuthorizeAttribute>().Any(a =>
+                string.IsNullOrEmpty(a.Policy) && string.IsNullOrEmpty(a.AuthenticationSchemes));
 
         private static Task NotFound(HttpContext context)
         {

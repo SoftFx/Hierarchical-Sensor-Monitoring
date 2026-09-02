@@ -14,7 +14,7 @@ authentication/authorization surface (step 3).
 - Rejected before any lookup: null/empty, wrong version prefix, missing/duplicated separator, wrong part lengths, padding, `+`/`/`/space characters.
 - Non-canonical aliases (last char with non-zero trailing bits) rejected for both id and secret.
 - `IsValidTokenId` checks shape + canonical encoding.
-- `Redact` keeps the public id and drops the secret (also truncated and repeated credentials — pinning the forward-only scan against an infinite loop); ordinary text passes unchanged.
+- `Redact` keeps the public id and drops the secret (also truncated and repeated credentials — pinning the forward-only scan against an infinite loop); a separator that is not a literal `'.'` at offset 22 (percent-encoded `%2E`, a short id) still loses the whole tail; ordinary text passes unchanged.
 
 ## Verifier (`ApiTokenVerifierTests`)
 
@@ -63,6 +63,7 @@ authentication/authorization surface (step 3).
 - No/foreign credentials (missing header, Basic, bare Bearer, non-hsm bearer) are `NoResult` with no manager lookup — another scheme's business.
 - Duplicated `Authorization` values are `NoResult` with no manager lookup (the `", "`-joined string would parse as the first value's scheme and hide the bearer).
 - A credential claiming the `hsm_pat_` prefix but failing the shape check (short, no separator, foreign alphabet, wrong secret length) fails closed with no manager lookup.
+- Failure events carry a TokenId only when it is canonical: a shape-valid credential with an attacker-chosen id alphabet records the failure with a null TokenId; a canonical-shaped failure records the public id.
 - Manager rejection and deleted-owner both fail closed; challenge is a generic 401 with `WWW-Authenticate: Bearer` and no redirect.
 - Success marks the token used exactly once; every failure path never marks it.
 
@@ -75,7 +76,11 @@ authentication/authorization surface (step 3).
 ## Route guards (`ApiTokenRouteGuardsTests`)
 
 - Legacy bearer guard: an hsm_pat bearer outside `/api/v1` gets a plain non-redirecting 401 and never reaches the pipeline behind it — including when the credential hides in duplicated `Authorization` values (each value is inspected on its own); every other credential shape passes through; an hsm_pat bearer inside `/api/v1` passes to the area guard.
-- Area guard: a fully marked endpoint passes on SitePort; the same endpoint is 404 on SensorPort; no matched endpoint, a missing `[ManagementApi]` marker, an anonymous endpoint, and a marker without the management policy are all 404 (unavailable by default); the reserved cookie-only `/api/v1/api-tokens` family passes with a cookie `[Authorize]` — but a reserved route with no `[Authorize]` at all (anonymous: no fallback policy exists) or with the management policy instead is 404, and still SitePort-only; paths outside the area pass through untouched.
+- Area guard: a fully marked endpoint passes on SitePort; the same endpoint is 404 on SensorPort; no matched endpoint, a missing `[ManagementApi]` marker, an anonymous endpoint, and a marker without the management policy are all 404 (unavailable by default); the reserved cookie-only `/api/v1/api-tokens` family passes with a cookie `[Authorize]` — but a reserved route with no `[Authorize]` at all (anonymous: no fallback policy exists), with the management policy, or with a scheme-bearing bare-policy `[Authorize]` is 404, and still SitePort-only; paths outside the area pass through untouched.
+
+## Cookie login redirect (`MyCookieAuthenticationEventsApiTokenTests`)
+
+- Inside `/api/v1` a failed cookie authorization is a plain non-redirecting 401 (the reserved family keeps the area's no-login-redirect contract); outside the area the LoginPath 302 redirect is preserved for browser flows.
 
 ## UserProcessor middleware (`UserProcessorMiddlewareApiTokenTests`)
 
@@ -89,8 +94,9 @@ The design's privilege-reduction matrix, recomputed per call:
 - Viewer owner with a (forged) write grant → 403; owner downgrade manager→viewer flips write to 403 while read stays allowed — no token change.
 - Deleted owner or a token record missing at authorization time → 404; a token whose liveness re-check fails (revoked between authentication and authorization) → 404.
 - Folder grant covers the product currently in the folder; a product moved out → 404; a Global grant is never a wildcard over scoped targets.
-- Global operations are admin-only; a sensor resolves through its product's current boundary; a deleted product → 404.
-- `IsVisible` (list filtering) requires owner sight plus any grant at the boundary; folder-manager role enables product write.
+- The owner side has NO folder fallback (HSM materialises folder roles into per-product entries; per-product narrowing wins): folder Manager + per-product Viewer downgrade → write 403, read allowed; per-product role removal under a folder role → 404.
+- Global operations are admin-only; a sensor resolves through its product's current boundary (a parentless sensor fails closed to 404, not a cast exception); a deleted product → 404.
+- `IsVisible` (list filtering) requires owner sight plus any grant at the boundary; a materialised folder-manager role enables product write.
 - Denial security events preserve the decision: 404 denials are recorded as `AuthorizationNotFound`, 403 denials as `AuthorizationDenied` — the enumeration-probe signal stays visible in the stored trail.
 
 ## Pipeline order (`ManagementPipelineOrderTests`)

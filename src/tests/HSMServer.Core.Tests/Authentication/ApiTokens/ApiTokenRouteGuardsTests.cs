@@ -222,6 +222,22 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public async Task AreaGuard_ReservedCookieOnlyRouteWithSchemeBearingAuthorize_Is404()
+        {
+            // [Authorize(AuthenticationSchemes = HsmApiToken)] has an empty Policy, but
+            // AuthorizationPolicy.Combine unions its schemes into the cookie-pinned
+            // DefaultPolicy — a token principal would enter the cookie-only family. The
+            // guard admits only scheme-less bare [Authorize].
+            var endpoint = Endpoint(new ManagementApiAttribute(),
+                new AuthorizeAttribute { AuthenticationSchemes = HsmApiTokenDefaults.AuthenticationScheme });
+            var context = BuildContext("/api/v1/api-tokens", SitePort, endpoint);
+
+            await new ManagementApiGuardMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+        }
+
+        [Fact]
         public async Task AreaGuard_ReservedCookieOnlyTokenRoutesOnSensorPort_Are404()
         {
             var endpoint = Endpoint(new ManagementApiAttribute(), new AuthorizeAttribute());

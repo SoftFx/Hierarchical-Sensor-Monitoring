@@ -252,15 +252,57 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         [Fact]
         public void FolderGrant_CoversProductCurrentlyInFolder()
         {
-            // Folder boundary is explicit membership semantics: covers the products that
-            // are in the folder NOW.
+            // Folder boundary is explicit membership semantics on the TOKEN side: covers
+            // the products that are in the folder NOW. The owner side rides the
+            // per-product role the app materialises for a folder role grant
+            // (FoldersController), exactly as for an interactive session.
             _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductManager);
+            _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductManager));
             _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Folder, FolderF));
 
             var decision = CreateService().Authorize(Principal(), ApiTokenOperations.AlertsRead,
                 ApiTokenResource.Product(ProductA));
 
             Assert.Equal(ApiTokenAuthorization.Allowed, decision);
+        }
+
+        [Fact]
+        public void PerProductNarrowing_BeatsTheFolderRole()
+        {
+            // The owner has Manager on the folder, but was explicitly downgraded on
+            // ProductA to Viewer (ProductController.EditUserRole edits ProductsRoles
+            // only). An interactive session loses the write — the token must lose it in
+            // the same breath: no folder fallback on the owner side.
+            _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductManager);
+            _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductViewer));
+            _info = BuildInfo(
+                Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Folder, FolderF),
+                Grant(ApiTokenOperations.AlertsWrite, ApiTokenBoundaryKind.Folder, FolderF));
+
+            var writeDecision = CreateService().Authorize(Principal(), ApiTokenOperations.AlertsWrite,
+                ApiTokenResource.Product(ProductA));
+
+            // Read stays allowed for a Viewer product role.
+            var readDecision = CreateService().Authorize(Principal(), ApiTokenOperations.AlertsRead,
+                ApiTokenResource.Product(ProductA));
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, writeDecision);
+            Assert.Equal(ApiTokenAuthorization.Allowed, readDecision);
+        }
+
+        [Fact]
+        public void PerProductRoleRemoval_BeatsTheFolderRole()
+        {
+            // The stronger narrowing: the per-product entry is removed outright
+            // (RemoveUserRole). The product is invisible to the owner's own session —
+            // the token must not see it either, folder role notwithstanding.
+            _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductManager);
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Folder, FolderF));
+
+            var decision = CreateService().Authorize(Principal(), ApiTokenOperations.AlertsRead,
+                ApiTokenResource.Product(ProductA));
+
+            Assert.Equal(ApiTokenAuthorization.NotFound, decision);
         }
 
         [Fact]
@@ -353,17 +395,36 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
-        public void FolderManagerRoleOnContainingFolder_EnablesProductWrite()
+        public void FolderManagerRole_MaterialisedOnProduct_EnablesProductWrite()
         {
-            // Folder roles carry over the products inside the folder, mirroring the
-            // folder-grant semantics on the token side.
+            // A folder Manager role materialises as a per-product Manager entry for every
+            // product inside the folder (grant time and move time) — the app's own
+            // IsManager rule, which the evaluator mirrors without a folder fallback.
             _owner.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductManager);
+            _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductManager));
             _info = BuildInfo(Grant(ApiTokenOperations.AlertsWrite, ApiTokenBoundaryKind.Folder, FolderF));
 
             var decision = CreateService().Authorize(Principal(), ApiTokenOperations.AlertsWrite,
                 ApiTokenResource.Product(ProductA));
 
             Assert.Equal(ApiTokenAuthorization.Allowed, decision);
+        }
+
+        [Fact]
+        public void ParentlessSensor_FailsClosedNotFound()
+        {
+            // Root CASTS a parentless sensor to ProductModel (it would throw); the
+            // defensive path must answer the documented 404 instead.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(Grant(ApiTokenOperations.SensorsRead, ApiTokenBoundaryKind.Product, ProductA));
+
+            var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity(type: (byte)SensorType.Integer));
+            _cache.Setup(c => c.GetSensor(SensorId)).Returns(sensor);
+
+            var decision = CreateService().Authorize(Principal(), ApiTokenOperations.SensorsRead,
+                ApiTokenResource.Sensor(SensorId));
+
+            Assert.Equal(ApiTokenAuthorization.NotFound, decision);
         }
 
 

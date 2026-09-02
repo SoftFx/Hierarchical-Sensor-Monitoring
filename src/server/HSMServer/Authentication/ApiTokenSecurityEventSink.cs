@@ -97,7 +97,15 @@ namespace HSMServer.Authentication
 
             try
             {
-                _writer.Wait(DrainTimeout);
+                // A drain timeout is a bounded, counted, logged loss — never a silent one
+                // (the sink's invariant: drops are always counted and logged).
+                if (!_writer.Wait(DrainTimeout) && _queue.Reader.CanCount && _queue.Reader.Count > 0)
+                {
+                    var remaining = _queue.Reader.Count;
+
+                    Interlocked.Add(ref _dropped, remaining);
+                    _logger.LogWarning("API token security-event drain timed out: {Remaining} events dropped", remaining);
+                }
             }
             catch (AggregateException)
             {

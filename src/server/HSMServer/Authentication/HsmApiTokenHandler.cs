@@ -119,7 +119,14 @@ namespace HSMServer.Authentication
 
         private void RecordFailure(string tokenId, Guid? ownerId) =>
             _securityEvents.Record(new ApiTokenSecurityEvent(
-                ApiTokenSecurityEventKind.AuthFailed, tokenId, ownerId,
+                ApiTokenSecurityEventKind.AuthFailed,
+                // Persist an id only when it really is one. The cheap shape check does not
+                // validate the alphabet, and the security-event store must never receive
+                // attacker-chosen bytes as a TokenId (the entity's safe-identifier
+                // invariant) — an unauthenticated caller must not get a write channel
+                // into the audit trail.
+                ApiTokenMaterial.IsValidTokenId(tokenId) ? tokenId : null,
+                ownerId,
                 CorrelationId: Context.TraceIdentifier,
                 Source: DescribeSource()));
 

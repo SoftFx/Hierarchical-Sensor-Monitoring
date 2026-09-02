@@ -176,6 +176,36 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public async Task NonCanonicalId_FailureEventCarriesNoTokenId()
+        {
+            // The cheap shape check (length/prefix/dot) passes while the id alphabet is
+            // attacker-chosen. The failure event still records the attempt — but with a
+            // null TokenId: an unauthenticated caller must not get a write channel of
+            // arbitrary bytes into the append-only security store.
+            var credential = ApiTokenMaterial.TokenPrefix + new string('!', ApiTokenMaterial.TokenIdLength) +
+                "." + new string('B', ApiTokenMaterial.SecretLength);
+
+            var result = await AuthenticateAsync($"Bearer {credential}");
+
+            Assert.False(result.Succeeded);
+            Assert.False(result.None);
+            _securityEvents.Verify(s => s.Record(It.Is<ApiTokenSecurityEvent>(e =>
+                e.Kind == ApiTokenSecurityEventKind.AuthFailed && e.TokenId == null)), Times.Once);
+        }
+
+        [Fact]
+        public async Task CanonicalId_AuthenticationFailure_RecordsThePublicTokenId()
+        {
+            var credential = ValidCredential();
+            SetupManagerAccepts(credential, info: null);
+
+            await AuthenticateAsync($"Bearer {credential}");
+
+            _securityEvents.Verify(s => s.Record(It.Is<ApiTokenSecurityEvent>(e =>
+                e.Kind == ApiTokenSecurityEventKind.AuthFailed && e.TokenId == TokenId)), Times.Once);
+        }
+
+        [Fact]
         public async Task DeletedOwner_FailsClosed()
         {
             var credential = ValidCredential();

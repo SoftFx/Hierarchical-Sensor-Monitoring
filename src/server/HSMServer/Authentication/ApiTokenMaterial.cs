@@ -177,13 +177,18 @@ namespace HSMServer.Authentication
                 }
                 else
                 {
-                    // A lone/truncated prefix: consume also the credential-alphabet run
-                    // that follows — a truncated id/secret fragment must not survive.
+                    // A lone/truncated prefix: consume the credential-ish tail that
+                    // follows — a truncated id/secret fragment must not survive. The tail
+                    // charset includes the separator/encoding forms a secret can appear
+                    // in ('.', '%' for percent-encoded separators such as %2E in URLs,
+                    // '=' '+' '/' for standard-base64 spellings); the run stops only at
+                    // characters no credential spelling contains. Over-redacting one
+                    // word is safe; leaking a fragment is not.
                     builder.Append("«redacted»");
 
                     consumed = idStart;
 
-                    while (consumed < text.Length && IsBase64UrlChar(text[consumed]))
+                    while (consumed < text.Length && IsCredentialTailChar(text[consumed]))
                         consumed++;
                 }
             }
@@ -301,5 +306,10 @@ namespace HSMServer.Authentication
 
         private static bool IsBase64UrlChar(char c) =>
             (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == Base64UrlMinus || c == Base64UrlUnderscore;
+
+        // Characters a credential fragment can be spelled with in free text, beyond the
+        // Base64URL alphabet (see the Redact else-branch).
+        private static bool IsCredentialTailChar(char c) =>
+            IsBase64UrlChar(c) || c == '.' || c == '%' || c == '=' || c == Base64Plus || c == Base64Slash;
     }
 }

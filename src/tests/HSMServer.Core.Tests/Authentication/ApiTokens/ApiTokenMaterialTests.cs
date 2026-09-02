@@ -210,6 +210,29 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.Null(ApiTokenMaterial.Redact(null));
         }
 
+        [Fact]
+        public void Redact_ConsumesEncodedSeparatorAndShortIdTails()
+        {
+            // A credential whose separator is not a literal '.' at offset 22 — a
+            // percent-encoded %2E in a logged URL, or a hand-typed short id — must lose
+            // its secret too: the else-branch consumes the whole credential-ish tail,
+            // not only the Base64URL run.
+            var material = ApiTokenMaterial.Generate();
+
+            var percentEncoded = ApiTokenMaterial.Redact(
+                $"url ?t={ApiTokenMaterial.TokenPrefix}{material.TokenId}%2E{material.Secret}&x=1");
+
+            Assert.DoesNotContain(material.Secret, percentEncoded);
+            Assert.DoesNotContain(material.TokenId, percentEncoded);
+            Assert.EndsWith("&x=1", percentEncoded);
+
+            var shortId = ApiTokenMaterial.Redact(
+                $"{ApiTokenMaterial.TokenPrefix}short.{material.Secret}");
+
+            Assert.DoesNotContain(material.Secret, shortId);
+            Assert.DoesNotContain("short", shortId);
+        }
+
 
         private static bool IsBase64UrlChar(char c) =>
             (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
