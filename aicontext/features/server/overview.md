@@ -101,6 +101,7 @@ TypeScript 5.3 + Webpack 5:
 - `notifications/` - Telegram/email delivery, retries, failure handling.
 - `dashboards/` - server-owned dashboard behavior and data shaping.
 - `auth/` - authentication, access keys, users, permissions.
+- `management-api/` - the `/api/v1` REST resource controllers for non-interactive (bearer-token) clients; alert templates CRUD first (#1351).
 - `background-services/` - hosted services, queue workers, startup/shutdown.
 
 Create folders from `../_TEMPLATE_feature.md` as work lands.
