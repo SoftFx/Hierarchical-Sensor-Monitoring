@@ -65,12 +65,19 @@ namespace HSMServer.Controllers
                 return failure;
 
             page = Math.Max(page, 1);
-            pageSize = Math.Clamp(pageSize <= 0 ? DefaultPageSize : pageSize, 1, MaxPageSize);
+            pageSize = Math.Min(pageSize <= 0 ? DefaultPageSize : pageSize, MaxPageSize);
 
             var all = (_schedules.GetAllSchedules() ?? [])
                 .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(s => s.Id)
                 .ToList();
+
+            var totalPages = all.Count == 0 ? 0 : (int)Math.Ceiling(all.Count / (double)pageSize);
+
+            // Clamp the page into [1, totalPages]: unchecked (page - 1) * pageSize
+            // would overflow int for huge page numbers, and a NEGATIVE Skip count
+            // silently returns the FIRST page labeled as page N.
+            page = Math.Min(page, Math.Max(totalPages, 1));
 
             return Ok(new ApiPageDto<AlertScheduleDto>
             {
@@ -78,7 +85,7 @@ namespace HSMServer.Controllers
                 Page = page,
                 PageSize = pageSize,
                 TotalCount = all.Count,
-                TotalPages = all.Count == 0 ? 0 : (int)Math.Ceiling(all.Count / (double)pageSize),
+                TotalPages = totalPages,
             });
         }
 
@@ -99,7 +106,7 @@ namespace HSMServer.Controllers
         // The caller may read schedules when ANY of the token's alerts:read grants sits
         // at a boundary the owner can currently see. Candidate boundaries come from the
         // token's own grants (public projection), so no grant logic is duplicated — the
-        // decision per candidate is the evaluator's IsVisible.
+        // decision per candidate is the evaluator's IsVisible under the same operation.
         private IActionResult AuthorizeSchedulesRead()
         {
             var tokenId = User.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
@@ -115,7 +122,7 @@ namespace HSMServer.Controllers
                     if (!TryGrantResource(grant, out var resource))
                         continue;
 
-                    if (_authorization.IsVisible(User, resource))
+                    if (_authorization.IsVisible(User, ApiTokenOperations.AlertsRead, resource))
                         return null;
                 }
             }
@@ -154,12 +161,15 @@ namespace HSMServer.Controllers
 
         private AlertScheduleDto ToDto(Core.Model.Policies.AlertSchedule schedule)
         {
-            // Sensor references filtered to the caller's sight, resolved exactly the way
-            // the evaluator resolves sensors: through the sensor's product's current
-            // boundary. Parentless sensors fail closed (dropped from the list).
+            // Sensor references filtered to the caller's sight under the SAME operation
+            // the resource demands (alerts:read) — mere reach is not enough: a token
+            // granted only, say, dashboards:read at a product must not learn its sensor
+            // paths from an alerts response. Resolved exactly the way the evaluator
+            // resolves sensors: through the sensor's product's current boundary.
+            // Parentless sensors fail closed (dropped from the list).
             var visiblePaths = (_cache.GetSensorsByAlertSchedule(schedule.Id) ?? [])
                 .Where(sensor => sensor.Parent?.Root is { } product &&
-                    _authorization.IsVisible(User, new ApiTokenResource(ApiTokenResourceKind.Product, product.Id)))
+                    _authorization.IsVisible(User, ApiTokenOperations.AlertsRead, new ApiTokenResource(ApiTokenResourceKind.Product, product.Id)))
                 .Select(sensor => sensor.FullPath)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToList();

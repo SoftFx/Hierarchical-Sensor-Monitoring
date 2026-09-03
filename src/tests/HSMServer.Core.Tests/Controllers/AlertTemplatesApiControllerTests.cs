@@ -230,7 +230,7 @@ namespace HSMServer.Core.Tests.Controllers
                 })
                 .Verifiable();
 
-            var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates()).Value as AlertTemplatePageDto;
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates()).Value as ApiPageDto<AlertTemplateDto>;
 
             Assert.Equal(ApiTokenOperations.AlertsRead, askedOperation);
             Assert.Empty(page.Items);
@@ -295,7 +295,7 @@ namespace HSMServer.Core.Tests.Controllers
                 _store[Guid.NewGuid()] = new AlertTemplateModel { Name = $"t{index}" };
 
             var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates(page: 429_496_747, pageSize: 2))
-                .Value as AlertTemplatePageDto;
+                .Value as ApiPageDto<AlertTemplateDto>;
 
             Assert.NotNull(page);
             Assert.Equal(2, page.Page); // clamped to totalPages

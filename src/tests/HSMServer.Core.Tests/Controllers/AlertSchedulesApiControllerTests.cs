@@ -44,7 +44,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             _cache.Setup(c => c.GetSensorsByAlertSchedule(It.IsAny<Guid>())).Returns(new List<Core.Model.BaseSensorModel>());
 
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
         }
 
@@ -161,8 +161,8 @@ namespace HSMServer.Core.Tests.Controllers
                 Grant(ApiTokenOperations.ProductsRead, ApiTokenBoundaryKind.Folder, boundaryId.ToString()),
                 Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Folder, boundaryId.ToString()));
 
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
-                .Returns((ClaimsPrincipal _, ApiTokenResource resource) =>
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) =>
                     resource.Kind == ApiTokenResourceKind.Folder && resource.Id == boundaryId);
 
             _store.Add(BuildSchedule("round-the-clock"));
@@ -172,7 +172,7 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.NotNull(page);
             Assert.Single(page.Items);
             // Only the alerts:read candidate boundary is probed.
-            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()), Times.Once);
+            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Once);
         }
 
         [Fact]
@@ -182,7 +182,7 @@ namespace HSMServer.Core.Tests.Controllers
             // lost the folder) — the intersection decides.
             var controller = CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Folder, Guid.NewGuid().ToString()));
 
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>())).Returns(false);
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>())).Returns(false);
 
             Assert.Equal(403, StatusCodeOf(controller.GetSchedules()));
         }
@@ -192,8 +192,8 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var controller = CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global));
 
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
-                .Returns((ClaimsPrincipal _, ApiTokenResource resource) => resource.Kind == ApiTokenResourceKind.Global);
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) => resource.Kind == ApiTokenResourceKind.Global);
 
             _store.Add(BuildSchedule("global"));
 
@@ -206,7 +206,7 @@ namespace HSMServer.Core.Tests.Controllers
             var controller = CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Folder, "not-a-guid"));
 
             Assert.Equal(403, StatusCodeOf(controller.GetSchedules()));
-            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()), Times.Never);
+            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
         }
 
 
@@ -238,6 +238,21 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(3, page.TotalCount);
         }
 
+        [Fact]
+        public void GetSchedules_HugePageNumber_ClampsToLastPage()
+        {
+            // (page - 1) * pageSize must never overflow int: a wrapped NEGATIVE Skip
+            // count would silently return the FIRST page labeled as page N.
+            _store.AddRange(Enumerable.Range(0, 3).Select(i => BuildSchedule($"s{i}")));
+
+            var page = Assert.IsType<OkObjectResult>(CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global)).GetSchedules(page: 429_496_747, pageSize: 2))
+                .Value as ApiPageDto<AlertScheduleDto>;
+
+            Assert.NotNull(page);
+            Assert.Equal(2, page.Page); // clamped to totalPages
+            Assert.Equal(["s2"], page.Items.Select(s => s.Name).ToArray());
+        }
+
 
         [Fact]
         public void GetSchedule_MapsDto_AndFiltersSensorsByVisibility()
@@ -256,8 +271,8 @@ namespace HSMServer.Core.Tests.Controllers
 
             // The gate checks the Global boundary; the sensor filter checks each
             // sensor's product — only one of the two products is visible.
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
-                .Returns((ClaimsPrincipal _, ApiTokenResource resource) =>
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) =>
                     resource.Kind == ApiTokenResourceKind.Global ||
                     (resource.Kind == ApiTokenResourceKind.Product && resource.Id == visibleProduct.Id));
 
