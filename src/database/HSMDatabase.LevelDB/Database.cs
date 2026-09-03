@@ -123,6 +123,79 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        // Bounded prefix-range delete: removes up to `limit` keys that start with
+        // `prefix` and sort strictly before `exclusiveUpperBound`, in one atomic write
+        // batch, and returns how many were removed. The bound keeps a single pass cheap
+        // on a large table (retention sweeps in batches); `limit` <= 0 is a no-op
+        // returning 0, so callers can pass configuration straight through.
+        public int DeleteStartingWithBefore(byte[] prefix, byte[] exclusiveUpperBound, int limit)
+        {
+            if (limit <= 0)
+                return 0;
+
+            Iterator iterator = null;
+            var removed = 0;
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                using var batch = new WriteBatch();
+
+                // One Key() per row: each call materializes a fresh byte[] copy of the
+                // key, and this loop runs at retention-sweep scale.
+                iterator.Seek(prefix);
+
+                while (removed < limit && iterator.IsValid)
+                {
+                    var key = iterator.Key();
+
+                    // The bound starts with the prefix, so the bytewise check subsumes the
+                    // StartsWith guard after Seek(prefix); it stays as a belt-and-braces
+                    // invariant on the range.
+                    if (!key.StartsWith(prefix) || CompareBytewise(key, exclusiveUpperBound) >= 0)
+                        break;
+
+                    batch.Delete(key);
+                    removed++;
+
+                    iterator.Next();
+                }
+
+                if (removed > 0)
+                    _database.Write(batch);
+
+                return removed;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+            finally
+            {
+                iterator?.Dispose();
+            }
+        }
+
+        // LevelDB orders keys bytewise; the ByteArrayExtensions order helpers compare
+        // LENGTH first (their callers only ever compare same-length keys), so a
+        // prefix-plus-suffix key would never order below its shorter prefix bound. This
+        // is the bytewise comparison the iterator actually guarantees.
+        private static int CompareBytewise(byte[] left, byte[] right)
+        {
+            var shared = Math.Min(left.Length, right.Length);
+
+            for (var i = 0; i < shared; i++)
+            {
+                var comparison = left[i].CompareTo(right[i]);
+
+                if (comparison != 0)
+                    return comparison;
+            }
+
+            return left.Length.CompareTo(right.Length);
+        }
+
         public bool TryRead(byte[] key, out byte[] value)
         {
             try

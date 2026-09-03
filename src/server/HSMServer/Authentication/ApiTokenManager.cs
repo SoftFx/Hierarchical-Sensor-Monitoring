@@ -63,6 +63,14 @@ namespace HSMServer.Authentication
         private readonly ConcurrentDictionary<string, long> _pendingLastUsed = new(StringComparer.Ordinal);
         private readonly Timer _lastUsedFlushTimer;
 
+        // Durable rows rejected at boot (key/payload mismatch, unloadable shape) — the
+        // orphans retention exists to clear. Keyed by the STORAGE key (for a key/payload
+        // mismatch that is the key's id, not the payload's); populated at load, pruned by
+        // TryRemoveToken. Bounded: a damaged store with more distinct orphans than the
+        // cap keeps the overflow only in the log, and the next boot re-observes them.
+        private readonly ConcurrentDictionary<string, byte> _orphanTokenIds = new(StringComparer.Ordinal);
+        private const int OrphanRegistryCapacity = 10_000;
+
         // Volatile by convention: read on every authentication, flipped only during load or
         // advance. False means every API token authentication must fail closed.
         private volatile bool _isGenerationStateHealthy;
@@ -87,6 +95,13 @@ namespace HSMServer.Authentication
 
 
         public bool IsGenerationStateHealthy => _isGenerationStateHealthy;
+
+        // Durable rows this boot rejected at load (the storage key they sit under), for
+        // the retention sweep to clear. Snapshot copy: retention runs on a background
+        // pass and must not enumerate the live registry. An empty registry means "no
+        // orphans observed at the last load", never "no orphans exist" — rows damaged
+        // after boot are only re-observed on the next restart.
+        public IReadOnlyCollection<string> GetOrphanTokenIds() => _orphanTokenIds.Keys.ToArray();
 
         public long GlobalRevocationGeneration => Volatile.Read(ref _globalGeneration);
 
@@ -501,12 +516,20 @@ namespace HSMServer.Authentication
             lock (_stateLock)
             {
                 if (!_tokensByTokenId.TryGetValue(tokenId, out var entity))
-                    return _databaseCore.RemoveApiToken(tokenId);
+                {
+                    var orphanRemoved = _databaseCore.RemoveApiToken(tokenId);
+
+                    if (orphanRemoved)
+                        _orphanTokenIds.TryRemove(tokenId, out _);
+
+                    return orphanRemoved;
+                }
 
                 if (!_databaseCore.RemoveApiToken(tokenId))
                     return false;
 
                 _tokensByTokenId.TryRemove(tokenId, out _);
+                _orphanTokenIds.TryRemove(tokenId, out _);
                 _tokenIdByEntityId.TryRemove(entity.EntityId, out _);
 
                 // The emptied owner bucket stays on purpose: removing it would let a
@@ -737,6 +760,8 @@ namespace HSMServer.Authentication
                             "Skipping API token row whose key {KeyTokenId} does not match its payload token id {PayloadTokenId} (entity {EntityId}); remove the row to clear this",
                             keyTokenId, candidate.TokenId, candidate.EntityId);
 
+                        RememberOrphan(keyTokenId);
+
                         continue;
                     }
 
@@ -750,6 +775,9 @@ namespace HSMServer.Authentication
                         // an operator can act on; a bare entity id is not.
                         _logger.LogWarning("Skipping unloadable API token record (entity {EntityId}, version {Version}): {Problem}",
                             candidate?.EntityId, candidate?.EntityVersion, grantProblem ?? "loadable-shape check failed");
+
+                        RememberOrphan(keyTokenId);
+
                         continue;
                     }
 
@@ -757,6 +785,12 @@ namespace HSMServer.Authentication
                     // _tokenIdByEntityId: a revoke-by-entity-id would then report success
                     // while the shadowed token keeps authenticating. Requires hand-edited
                     // or partially-restored storage — skip the later row, fail closed.
+                    // Deliberately NOT registered as an orphan (unlike the branches
+                    // above): which of the two rows is the legitimate one is unknowable
+                    // here, and this row may be the newer restore — auto-deleting a
+                    // credential row the manager never owned is riskier than leaking it.
+                    // An operator clears it by hand; if the loaded twin is ever removed,
+                    // a restart re-scans and loads this one.
                     if (_tokenIdByEntityId.ContainsKey(candidate.EntityId))
                     {
                         _logger.LogWarning("Skipping API token record with a duplicate entity id {EntityId} (token id {TokenId})",
@@ -930,6 +964,22 @@ namespace HSMServer.Authentication
             published = ToInfo(entity);
 
             return true;
+        }
+
+        // Registry bound for _orphanTokenIds: the cap keeps a damaged store from growing
+        // the registry without limit; overflow is only logged (and re-observed on the
+        // next boot, so nothing is lost permanently).
+        private void RememberOrphan(string keyTokenId)
+        {
+            if (_orphanTokenIds.Count >= OrphanRegistryCapacity && !_orphanTokenIds.ContainsKey(keyTokenId))
+            {
+                _logger.LogWarning("API token orphan registry is full ({Capacity}); row {KeyTokenId} is logged but not tracked for retention this boot",
+                    OrphanRegistryCapacity, keyTokenId);
+
+                return;
+            }
+
+            _orphanTokenIds.TryAdd(keyTokenId, 0);
         }
 
         private void Publish(ApiTokenEntity entity)

@@ -102,6 +102,12 @@ namespace HSMServer.Core.DataLayer
         // Chronological scan of all security events (retention/query surface).
         List<ApiTokenSecurityEventEntity> ReadApiTokenSecurityEvents();
 
+        // Retention primitive: removes up to `limit` events strictly older than the
+        // cutoff ticks (chronological key order makes this a bounded prefix-range
+        // delete) and returns the number removed. Bounded so one sweep stays cheap on a
+        // large table; the caller repeats until it returns less than the limit.
+        int RemoveApiTokenSecurityEventsBefore(long ticksCutoffUtc, int limit);
+
         #endregion
 
         #region Sensors

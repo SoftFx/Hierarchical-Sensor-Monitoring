@@ -25,6 +25,12 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         private readonly Mock<IUserManager> _usersMock = new();
         private readonly Mock<IApiTokenSecurityEventSink> _securityEvents = new();
 
+        // Real limiter, effectively unlimited by default so existing tests are about the
+        // handler contract, not the budget; the limiter has its own test file. Tests that
+        // need the budget to persist ACROSS authentications share one instance here.
+        private int _invalidAttemptLimit = int.MaxValue;
+        private ApiTokenInvalidAttemptLimiter _limiterOverride;
+
         private readonly User _owner = new("owner") { Id = OwnerId };
 
 
@@ -52,9 +58,18 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
 
-        private async Task<AuthenticateResult> AuthenticateAsync(string authorizationHeader)
+        private async Task<AuthenticateResult> AuthenticateAsync(string authorizationHeader,
+            string remoteIp = null, int? remotePort = null)
         {
             var (provider, context) = Build(authorizationHeader);
+
+            if (remoteIp is not null)
+            {
+                context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(remoteIp);
+
+                if (remotePort is not null)
+                    context.Connection.RemotePort = remotePort.Value;
+            }
 
             return await provider.GetRequiredService<IAuthenticationService>()
                 .AuthenticateAsync(context, Scheme);
@@ -77,6 +92,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             services.AddSingleton(_managerMock.Object);
             services.AddSingleton(_usersMock.Object);
             services.AddSingleton(_securityEvents.Object);
+            services.AddSingleton(_limiterOverride ?? new ApiTokenInvalidAttemptLimiter(
+                new ServerConfiguration.ApiTokensConfig { InvalidAttemptRateLimit = _invalidAttemptLimit },
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<ApiTokenInvalidAttemptLimiter>.Instance));
             services.AddAuthentication()
                 .AddScheme<AuthenticationSchemeOptions, HsmApiTokenHandler>(Scheme, _ => { });
 
@@ -203,6 +221,50 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             _securityEvents.Verify(s => s.Record(It.Is<ApiTokenSecurityEvent>(e =>
                 e.Kind == ApiTokenSecurityEventKind.AuthFailed && e.TokenId == TokenId)), Times.Once);
+        }
+
+        [Fact]
+        public async Task FailuresOverThePerSourceBudget_EventIsDropped_AuthenticationUnchanged()
+        {
+            // Both attempts come from the same (null-remote-endpoint) source: with a
+            // budget of 1 only the first failure event is recorded — the second is
+            // dropped by the limiter, and the authentication RESULT is identical.
+            _limiterOverride = new ApiTokenInvalidAttemptLimiter(
+                new ServerConfiguration.ApiTokensConfig { InvalidAttemptRateLimit = 1 },
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<ApiTokenInvalidAttemptLimiter>.Instance);
+            var credential = ValidCredential();
+            SetupManagerAccepts(credential, info: null);
+
+            var first = await AuthenticateAsync($"Bearer {credential}");
+            var second = await AuthenticateAsync($"Bearer {credential}");
+
+            Assert.False(first.Succeeded);
+            Assert.False(second.Succeeded);
+            _securityEvents.Verify(s => s.Record(It.Is<ApiTokenSecurityEvent>(e =>
+                e.Kind == ApiTokenSecurityEventKind.AuthFailed)), Times.Once);
+        }
+
+        [Fact]
+        public async Task FailuresFromOneIp_EphemeralPortsShareOneBudget()
+        {
+            // The budget identity is the remote IP: the port is the client's ephemeral
+            // port (fresh per TCP connection), so bucketing on ip:port would hand every
+            // connection a brand-new budget. The full ip:port stays in the payload.
+            _limiterOverride = new ApiTokenInvalidAttemptLimiter(
+                new ServerConfiguration.ApiTokensConfig { InvalidAttemptRateLimit = 1 },
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<ApiTokenInvalidAttemptLimiter>.Instance);
+            var credential = ValidCredential();
+            SetupManagerAccepts(credential, info: null);
+
+            var first = await AuthenticateAsync($"Bearer {credential}", remoteIp: "10.0.0.5", remotePort: 11111);
+            var second = await AuthenticateAsync($"Bearer {credential}", remoteIp: "10.0.0.5", remotePort: 22222);
+
+            Assert.False(first.Succeeded);
+            Assert.False(second.Succeeded);
+            _securityEvents.Verify(s => s.Record(It.Is<ApiTokenSecurityEvent>(e =>
+                e.Kind == ApiTokenSecurityEventKind.AuthFailed)), Times.Once);
+            _securityEvents.Verify(s => s.Record(It.Is<ApiTokenSecurityEvent>(e =>
+                e.Source == "10.0.0.5:11111")), Times.Once);
         }
 
         [Fact]

@@ -65,6 +65,13 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton<IApiTokenSecurityEventSink, ApiTokenSecurityEventSink>();
             services.AddSingleton<IApiTokenAuthorizationService, ApiTokenAuthorizationService>();
 
+            // Retention + abuse bounds (#1356, prerequisite of the step-4 management
+            // endpoints): bounded cleanup of dead token rows/orphans/security events and
+            // the per-source budget for failed-authentication events.
+            services.AddSingleton(config.ApiTokens);
+            services.AddSingleton<ApiTokenInvalidAttemptLimiter>();
+            services.AddSingleton<ApiTokenRetentionCleaner>();
+
             services.AddSingleton<DataCollectorWrapper>()
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<TelemetryCollector>()
@@ -83,6 +90,7 @@ namespace HSMServer.ServiceExtensions
                     .AddHostedService<DataCollectorService>()
                     .AddHostedService<NotificationsBackgroundService>()
                     .AddHostedService<BackgroundServices.DatabaseServices.RestoreTempCleanupService>()
+                    .AddHostedService<BackgroundServices.DatabaseServices.ApiTokenRetentionService>()
                     .AddHostedService(provider => provider.GetService<BackupDatabaseService>());
 
             services.AddSwaggerGen(o =>

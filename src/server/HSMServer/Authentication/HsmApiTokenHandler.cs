@@ -26,15 +26,18 @@ namespace HSMServer.Authentication
         private readonly IApiTokenManager _tokens;
         private readonly IUserManager _users;
         private readonly IApiTokenSecurityEventSink _securityEvents;
+        private readonly ApiTokenInvalidAttemptLimiter _invalidAttempts;
 
 
         public HsmApiTokenHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger,
-            UrlEncoder encoder, IApiTokenManager tokens, IUserManager users, IApiTokenSecurityEventSink securityEvents)
+            UrlEncoder encoder, IApiTokenManager tokens, IUserManager users, IApiTokenSecurityEventSink securityEvents,
+            ApiTokenInvalidAttemptLimiter invalidAttempts)
             : base(options, logger, encoder)
         {
             _tokens = tokens;
             _users = users;
             _securityEvents = securityEvents;
+            _invalidAttempts = invalidAttempts;
         }
 
 
@@ -117,7 +120,16 @@ namespace HSMServer.Authentication
         }
 
 
-        private void RecordFailure(string tokenId, Guid? ownerId) =>
+        private void RecordFailure(string tokenId, Guid? ownerId)
+        {
+            // Rate-limited per source (initiative: failures are "rate-limited/coalesced"):
+            // beyond the budget the event is dropped (counted and logged by the limiter)
+            // — the authentication decision above is unchanged either way.
+            var source = DescribeSource();
+
+            if (!_invalidAttempts.TryAcquire(DescribeSourceBucket()))
+                return;
+
             _securityEvents.Record(new ApiTokenSecurityEvent(
                 ApiTokenSecurityEventKind.AuthFailed,
                 // Persist an id only when it really is one. The cheap shape check does not
@@ -128,11 +140,21 @@ namespace HSMServer.Authentication
                 ApiTokenMaterial.IsValidTokenId(tokenId) ? tokenId : null,
                 ownerId,
                 CorrelationId: Context.TraceIdentifier,
-                Source: DescribeSource()));
+                Source: source));
+        }
 
         // Remote endpoint only, in the ip:port form HSM already treats as safe source
         // context; never headers (which are attacker-controlled free text).
         private string DescribeSource() =>
             Context.Connection.RemoteIpAddress is { } ip ? $"{ip}:{Context.Connection.RemotePort}" : null;
+
+        // Budget identity for the invalid-attempt limiter: the remote IP only. The port
+        // is the client's EPHEMERAL port — a fresh value per TCP connection — so bucketing
+        // on ip:port would hand every connection a brand-new budget (the bound becomes
+        // MaxTrackedSources x limit from one host) and let one host fill the per-window
+        // source registry with connection-scoped buckets, suppressing other sources'
+        // events for the rest of the minute. The full ip:port stays in the event payload.
+        private string DescribeSourceBucket() =>
+            Context.Connection.RemoteIpAddress?.ToString();
     }
 }
