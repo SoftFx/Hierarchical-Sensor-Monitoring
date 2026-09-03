@@ -10,9 +10,11 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Folders;
+using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -44,6 +46,13 @@ namespace HSMServer.Controllers
         public const int DefaultPageSize = 50;
         public const int MaxPageSize = 200;
 
+        // Size guard rails the web UI gets from its widgets; the API states them
+        // explicitly. Generous enough that no legitimate template hits them, tight
+        // enough that a write token cannot bloat LevelDB or the per-sensor apply.
+        public const int MaxNameLength = 200;
+        public const int MaxPaths = 100;
+        public const int MaxPolicies = 100;
+
         private readonly ITreeValuesCache _cache;
         private readonly IFolderManager _folders;
         private readonly IChatsManager _chats;
@@ -68,13 +77,33 @@ namespace HSMServer.Controllers
             page = Math.Max(page, 1);
             pageSize = Math.Clamp(pageSize <= 0 ? DefaultPageSize : pageSize, 1, MaxPageSize);
 
-            // Out-of-reach templates are simply not listed, never 403-per-item — the
-            // evaluator's sanctioned list predicate.
+            // The list returns full entity bodies, so reach alone is not enough: an
+            // item is listed only under the SAME operation its item endpoint would
+            // demand (alerts:read) — a token granted only, say, history:read at the
+            // folder gets a 403 on GET {id}, so the list must not disclose the item
+            // either. Never 403-per-item: ungranted folders are simply not listed.
+            // The decision is memoized per DISTINCT folder (templates cluster into a
+            // handful of folders, and the evaluator recomputes user + token + grants
+            // on every call); IsVisible records nothing, unlike per-item Authorize.
+            var decisionByFolder = new Dictionary<Guid, bool>();
+
+            bool IsListable(Guid folderId) =>
+                decisionByFolder.TryGetValue(folderId, out var listable)
+                    ? listable
+                    : decisionByFolder[folderId] = _authorization.IsVisible(User, ApiTokenOperations.AlertsRead, FolderResource(folderId));
+
             var visible = (_cache.GetAlertTemplateModels() ?? [])
-                .Where(t => _authorization.IsVisible(User, FolderResource(t.FolderId)))
+                .Where(t => IsListable(t.FolderId))
                 .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(t => t.Id)
                 .ToList();
+
+            var totalPages = visible.Count == 0 ? 0 : (int)Math.Ceiling(visible.Count / (double)pageSize);
+
+            // Clamp the page into [1, totalPages]: unchecked (page - 1) * pageSize
+            // would overflow int for huge page numbers, and a NEGATIVE Skip count
+            // silently returns the FIRST page labeled as page N.
+            page = Math.Min(page, Math.Max(totalPages, 1));
 
             return Ok(new AlertTemplatePageDto
             {
@@ -82,7 +111,7 @@ namespace HSMServer.Controllers
                 Page = page,
                 PageSize = pageSize,
                 TotalCount = visible.Count,
-                TotalPages = visible.Count == 0 ? 0 : (int)Math.Ceiling(visible.Count / (double)pageSize),
+                TotalPages = totalPages,
             });
         }
 
@@ -102,6 +131,12 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateTemplate([FromBody] AlertTemplateDto dto, CancellationToken ct)
         {
+            // An all-zero folder id references no folder, so a 400 leaks nothing — and
+            // it keeps the folderId structural check reachable instead of shadowed by
+            // the evaluator's 404 for Guid.Empty.
+            if (dto.FolderId == Guid.Empty)
+                return FolderIdRequired();
+
             // The authorization target is the requested folder; no validation error is
             // reported before this decision (404-first).
             var failure = AuthorizeFolder(ApiTokenOperations.AlertsWrite, dto.FolderId);
@@ -115,10 +150,13 @@ namespace HSMServer.Controllers
             if (!TryBuildValidatedTemplate(dto, id: Guid.NewGuid(), isCreate: true, out var model, out var errors))
                 return ValidationProblem(new ValidationProblemDetails(errors));
 
-            var (success, error) = await _cache.AddAlertTemplateAsync(model, ct);
+            var write = await TryWriteAsync(token => _cache.AddAlertTemplateAsync(model, token), ct);
 
-            if (!success)
-                return ConflictProblem(error);
+            if (write is null)
+                return ClientClosedRequest();
+
+            if (!write.Value.Success)
+                return ConflictProblem(write.Value.Error);
 
             return CreatedAtAction(nameof(GetTemplate), new { id = model.Id }, AlertTemplateDtoMapper.ToDto(model));
         }
@@ -135,19 +173,36 @@ namespace HSMServer.Controllers
             // the target folder: moving a template needs write on BOTH folders — the
             // current one (the move destroys the old folder's per-sensor policies) and
             // the new one (the template injects policies into its sensors).
-            var failure = AuthorizeFolder(ApiTokenOperations.AlertsWrite, existing.FolderId) ??
-                (dto.FolderId != existing.FolderId ? AuthorizeFolder(ApiTokenOperations.AlertsWrite, dto.FolderId) : null);
+            var failure = AuthorizeFolder(ApiTokenOperations.AlertsWrite, existing.FolderId);
 
             if (failure is not null)
                 return failure;
 
+            // AFTER authorization (a body-shape 400 must not reveal that the template
+            // exists to a caller outside its reach): an absent folderId is a 400, not a
+            // 404 — Guid.Empty would otherwise fail boundary resolution in the
+            // move-check below and shadow the structural check.
+            if (dto.FolderId == Guid.Empty)
+                return FolderIdRequired();
+
+            if (dto.FolderId != existing.FolderId)
+            {
+                failure = AuthorizeFolder(ApiTokenOperations.AlertsWrite, dto.FolderId);
+
+                if (failure is not null)
+                    return failure;
+            }
+
             if (!TryBuildValidatedTemplate(dto, id, isCreate: false, out var model, out var errors))
                 return ValidationProblem(new ValidationProblemDetails(errors));
 
-            var (success, error) = await _cache.AddAlertTemplateAsync(model, ct);
+            var write = await TryWriteAsync(token => _cache.AddAlertTemplateAsync(model, token), ct);
 
-            if (!success)
-                return ConflictProblem(error);
+            if (write is null)
+                return ClientClosedRequest();
+
+            if (!write.Value.Success)
+                return ConflictProblem(write.Value.Error);
 
             // Echo the STORED template, not the request: the write normalizes ids and
             // chat names, and the caller must see the canonical result.
@@ -169,9 +224,12 @@ namespace HSMServer.Controllers
             if (failure is not null)
                 return failure;
 
-            var (success, error) = await _cache.RemoveAlertTemplateAsync(id, ct);
+            var write = await TryWriteAsync(token => _cache.RemoveAlertTemplateAsync(id, token), ct);
 
-            return success ? NoContent() : ConflictProblem(error);
+            if (write is null)
+                return ClientClosedRequest();
+
+            return write.Value.Success ? NoContent() : ConflictProblem(write.Value.Error);
         }
 
 
@@ -199,6 +257,32 @@ namespace HSMServer.Controllers
         private ObjectResult ConflictProblem(string error) =>
             Problem(statusCode: 409, detail: error);
 
+        private IActionResult FolderIdRequired() =>
+            ValidationProblem(new ValidationProblemDetails(
+                new Dictionary<string, string[]> { ["folderId"] = ["The folder id is required."] }));
+
+        private static StatusCodeResult ClientClosedRequest() =>
+            new(StatusCodes.Status499ClientClosedRequest);
+
+        // The cache rethrows OperationCanceledException from its reconciliation loops.
+        // With the client already gone the status is moot, but the exception must not
+        // escape the action — the global handler renders Razor HTML. null result =>
+        // 499. Note the write is NOT transactional at the cancellation point: a
+        // cancelled reconcile can leave the template persisted with only some sensors
+        // reconciled (pre-existing cache behavior, same for the web UI).
+        private static async Task<(bool Success, string Error)?> TryWriteAsync(
+            Func<CancellationToken, Task<(bool Success, string Error)>> write, CancellationToken ct)
+        {
+            try
+            {
+                return await write(ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
+
         // Structural validation, then entity reconstruction (inside a try — the domain
         // throws on legal-looking but unsupported input), then the semantic checks
         // ported from the web UI controller. Any accumulated error fails the request.
@@ -209,13 +293,17 @@ namespace HSMServer.Controllers
 
             AddStructuralErrors(dto, id, isCreate, errorMap);
 
+            // One pass over the chat manager serves both the mapper (canonical display
+            // names) and the semantic chat-availability rule.
+            var chatsById = ChatIndex();
+
             model = null;
 
             if (errorMap.Count == 0)
             {
                 try
                 {
-                    model = new AlertTemplateModel(AlertTemplateDtoMapper.ToEntity(dto, id, CanonicalChatNames()));
+                    model = new AlertTemplateModel(AlertTemplateDtoMapper.ToEntity(dto, id, CanonicalChatNames(chatsById)));
                 }
                 catch (Exception e)
                 {
@@ -228,7 +316,7 @@ namespace HSMServer.Controllers
             }
 
             if (model is not null)
-                AddSemanticErrors(dto, model, id, errorMap);
+                AddSemanticErrors(dto, model, id, errorMap, chatsById);
 
             errors = errorMap.ToDictionary(p => p.Key, p => p.Value.ToArray());
 
@@ -240,9 +328,16 @@ namespace HSMServer.Controllers
         {
             if (string.IsNullOrWhiteSpace(dto.Name))
                 Add(errors, "name", "The name is required.");
+            else if (dto.Name.Length > MaxNameLength)
+                Add(errors, "name", $"The name must be at most {MaxNameLength} characters.");
 
             if (dto.Paths is null || dto.Paths.All(string.IsNullOrWhiteSpace))
                 Add(errors, "paths", "At least one path template is required.");
+            else if (dto.Paths.Count > MaxPaths)
+                Add(errors, "paths", $"At most {MaxPaths} path templates are allowed.");
+
+            if ((dto.Policies?.Count ?? 0) + (dto.TtlPolicies?.Count ?? 0) > MaxPolicies)
+                Add(errors, "policies", $"At most {MaxPolicies} policies (regular and TTL combined) are allowed.");
 
             if (dto.FolderId == Guid.Empty)
                 Add(errors, "folderId", "The folder id is required.");
@@ -256,8 +351,35 @@ namespace HSMServer.Controllers
             if (!isCreate && dto.Id != Guid.Empty && dto.Id != id)
                 Add(errors, "id", "The body id must match the route id.");
 
-            foreach (var policy in (dto.Policies ?? []).Concat(dto.TtlPolicies ?? []))
+            // Null list elements are rejected HERE, before the domain reconstruction:
+            // System.Text.Json materialises "policies": [null] happily, and a null
+            // dereference inside the mapper would otherwise escape the action as a
+            // 500 (the structural pass runs outside the reconstruction try).
+            foreach (var policy in dto.Policies ?? [])
+            {
+                if (policy is null)
+                {
+                    Add(errors, "policies", "A policy entry must not be null.");
+                    continue;
+                }
+
                 AddPolicyStructureErrors(policy, errors);
+            }
+
+            foreach (var policy in dto.TtlPolicies ?? [])
+            {
+                if (policy is null)
+                {
+                    Add(errors, "ttlPolicies", "A TTL policy entry must not be null.");
+                    continue;
+                }
+
+                AddPolicyStructureErrors(policy, errors);
+            }
+
+            foreach (var interval in dto.Ttls ?? [])
+                if (interval is null)
+                    Add(errors, "ttls", "An interval entry must not be null.");
         }
 
         // Every enum byte is validated BEFORE the domain casts it: the entity
@@ -308,7 +430,7 @@ namespace HSMServer.Controllers
         // dropdown: a chat is offerable when it is global or bound to the template's
         // folder. Runs only after authorization and structural validation passed.
         private void AddSemanticErrors(AlertTemplateDto dto, AlertTemplateModel model, Guid id,
-            Dictionary<string, List<string>> errors)
+            Dictionary<string, List<string>> errors, Dictionary<string, Chat> chatsById)
         {
             // Global and case-sensitive, exactly like the web UI.
             if (_cache.GetAlertTemplateModels()?.Any(x => x.Name == model.Name && x.Id != id) == true)
@@ -317,53 +439,19 @@ namespace HSMServer.Controllers
             if (!model.TryApplyPathTemplates(out var pathError))
                 Add(errors, "paths", $"Invalid path template: {pathError}");
 
-            foreach (var mismatchError in GetPathTypeMismatchErrors(model))
+            foreach (var mismatchError in AlertTemplatePathValidation.GetPathTypeMismatchErrors(_cache, model))
                 Add(errors, "paths", mismatchError);
 
-            AddChatAvailabilityErrors(dto, errors);
-        }
-
-        // #1210: a path template matching sensors of a type incompatible with the
-        // template's concrete type is rejected — anything flagged here would be
-        // silently skipped at apply time (AlertTemplateModel.IsMatch). AnyType
-        // templates match every type and skip the check. A path matching nothing is
-        // allowed (the template may precede its sensors).
-        private List<string> GetPathTypeMismatchErrors(AlertTemplateModel model)
-        {
-            var errors = new List<string>();
-            var templateType = model.GetSensorType();
-
-            if (!templateType.HasValue)
-                return errors;
-
-            var templateTypeName = templateType.Value.ToString().Replace("Sensor", string.Empty);
-
-            foreach (var path in model.Paths.Where(p => !string.IsNullOrWhiteSpace(p)))
-            {
-                var mismatched = _cache.GetSensors(path, null, model.FolderId)
-                    .FirstOrDefault(s => s.Type != templateType.Value);
-
-                if (mismatched != null)
-                {
-                    var mismatchedTypeName = mismatched.Type.ToString().Replace("Sensor", string.Empty);
-                    errors.Add($"Path \"{path}\" matches {mismatchedTypeName} sensors, but this template is configured for {templateTypeName} sensors. Use a separate Alert Template for another sensor type.");
-                }
-            }
-
-            return errors;
+            AddChatAvailabilityErrors(dto, errors, chatsById);
         }
 
         // Destination chat ids of every policy (regular and TTL) must resolve to a chat
         // that is global (bound to no folder) or bound to the template's folder — the
         // same predicate the web UI's chat dropdown applies. Runs on the DTO side: the
         // mapper preserves chat keys 1:1, and the semantic phase still owns the rule.
-        private void AddChatAvailabilityErrors(AlertTemplateDto dto, Dictionary<string, List<string>> errors)
+        private void AddChatAvailabilityErrors(AlertTemplateDto dto, Dictionary<string, List<string>> errors,
+            Dictionary<string, Chat> chatsById)
         {
-            var chatsById = new Dictionary<string, Chat>();
-
-            foreach (var chat in _chats.GetValues() ?? [])
-                chatsById[chat.Id.ToString()] = chat;
-
             var boundChats = _folders.TryGetValue(dto.FolderId, out var folder) && folder.TryGetChats(out var chats)
                 ? chats
                 : null;
@@ -387,12 +475,22 @@ namespace HSMServer.Controllers
             }
         }
 
-        private Dictionary<string, string> CanonicalChatNames()
+        private Dictionary<string, Chat> ChatIndex()
+        {
+            var chatsById = new Dictionary<string, Chat>();
+
+            foreach (var chat in _chats.GetValues() ?? [])
+                chatsById[chat.Id.ToString()] = chat;
+
+            return chatsById;
+        }
+
+        private static Dictionary<string, string> CanonicalChatNames(Dictionary<string, Chat> chatsById)
         {
             var names = new Dictionary<string, string>();
 
-            foreach (var chat in _chats.GetValues() ?? [])
-                names[chat.Id.ToString()] = chat.Name;
+            foreach (var (chatId, chat) in chatsById)
+                names[chatId] = chat.Name;
 
             return names;
         }

@@ -381,17 +381,37 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
-        public void IsVisible_ForListFiltering_RequiresOwnerSightAndAnyBoundaryGrant()
+        public void IsVisible_ForListFiltering_RequiresOwnerSightAndOperationGrant()
         {
+            _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductViewer));
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Product, ProductA));
+
+            var service = CreateService();
+
+            // Listed under the granted operation.
+            Assert.True(service.IsVisible(Principal(), ApiTokenOperations.AlertsRead, ApiTokenResource.Product(ProductA)));
+            // A different operation at the same boundary: reach alone must not make an
+            // item visible — the item endpoint would 403, so the list must not show it.
+            Assert.False(service.IsVisible(Principal(), ApiTokenOperations.HistoryRead, ApiTokenResource.Product(ProductA)));
+            // B is outside every grant.
+            Assert.False(service.IsVisible(Principal(), ApiTokenOperations.AlertsRead, ApiTokenResource.Product(ProductB)));
+        }
+
+        [Fact]
+        public void IsVisible_WriteOperation_AlsoRequiresOwnerCapability()
+        {
+            // IsVisible mirrors Authorize's full conjunction (minus event recording):
+            // for a write operation the owner must be a Manager at the boundary.
             _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductViewer));
             _info = BuildInfo(Grant(ApiTokenOperations.AlertsWrite, ApiTokenBoundaryKind.Product, ProductA));
 
             var service = CreateService();
 
-            // A write-only grant still puts the product inside the token's reach.
-            Assert.True(service.IsVisible(Principal(), ApiTokenResource.Product(ProductA)));
-            // B is outside every grant.
-            Assert.False(service.IsVisible(Principal(), ApiTokenResource.Product(ProductB)));
+            Assert.False(service.IsVisible(Principal(), ApiTokenOperations.AlertsWrite, ApiTokenResource.Product(ProductA)));
+
+            _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductManager));
+
+            Assert.True(service.IsVisible(Principal(), ApiTokenOperations.AlertsWrite, ApiTokenResource.Product(ProductA)));
         }
 
         [Fact]

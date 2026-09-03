@@ -96,7 +96,7 @@ The design's privilege-reduction matrix, recomputed per call:
 - Folder grant covers the product currently in the folder; a product moved out → 404; a Global grant is never a wildcard over scoped targets.
 - The owner side has NO folder fallback (HSM materialises folder roles into per-product entries; per-product narrowing wins): folder Manager + per-product Viewer downgrade → write 403, read allowed; per-product role removal under a folder role → 404.
 - Global operations are admin-only; a sensor resolves through its product's current boundary (a parentless sensor fails closed to 404, not a cast exception); a deleted product → 404.
-- `IsVisible` (list filtering) requires owner sight plus any grant at the boundary; a materialised folder-manager role enables product write.
+- `IsVisible` (list filtering) requires owner sight plus a grant **for the asked operation** at the boundary (mere reach does not disclose an item the item endpoint would 403); for a write operation it also requires the owner's capability (Manager role); a materialised folder-manager role enables product write.
 - Denial security events preserve the decision: 404 denials are recorded as `AuthorizationNotFound`, 403 denials as `AuthorizationDenied` — the enumeration-probe signal stays visible in the stored trail.
 
 ## Pipeline order (`ManagementPipelineOrderTests`)

@@ -75,10 +75,11 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 Conditions = [.. (policy.Conditions ?? []).Select(ToEntity)],
 
                 // Display names are echoes: the manager's current name is authoritative,
-                // so a stale name in the payload never survives a write.
-                Destination = ToEntity(policy.Destination, canonicalChatNames),
+                // so a stale name in the payload never survives a write. An explicit
+                // JSON null means "omitted" — the wire default — never a null deref.
+                Destination = ToEntity(policy.Destination ?? new(), canonicalChatNames),
 
-                Schedule = ToEntity(policy.Schedule),
+                Schedule = ToEntity(policy.Schedule ?? new()),
 
                 SensorStatus = policy.SensorStatus,
                 IsDisabled = policy.IsDisabled,

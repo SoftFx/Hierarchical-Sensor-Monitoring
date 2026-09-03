@@ -67,7 +67,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
 
             _chats.Setup(c => c.GetValues()).Returns(new List<Chat>());
@@ -197,14 +197,57 @@ namespace HSMServer.Core.Tests.Controllers
             _store[Guid.NewGuid()] = new AlertTemplateModel { Name = "beta", FolderId = folderB };
             _store[Guid.NewGuid()] = new AlertTemplateModel { Name = "alpha", FolderId = folderA };
 
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
-                .Returns((ClaimsPrincipal _, ApiTokenResource resource) => resource.Id != folderB);
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) => resource.Id != folderB);
 
             var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates()).Value as AlertTemplatePageDto;
 
             Assert.NotNull(page);
             Assert.Equal(2, page.TotalCount);
             Assert.Equal(["alpha", "zeta"], page.Items.Select(t => t.Name).ToArray());
+        }
+
+        [Fact]
+        public void GetTemplates_ListsUnderTheReadOperation_NotJustReach()
+        {
+            // A list returns full bodies: an item may appear only under the SAME
+            // operation its item endpoint would demand (alerts:read). A token whose
+            // grants reach the folder without alerts:read (the old any-operation
+            // predicate) must see an empty page.
+            var folder = Guid.NewGuid();
+            _store[Guid.NewGuid()] = new AlertTemplateModel { Name = "secret", FolderId = folder };
+
+            string askedOperation = null;
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, string operation, ApiTokenResource _) =>
+                {
+                    askedOperation = operation;
+                    return false; // the evaluator denies alerts:read
+                })
+                .Verifiable();
+
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates()).Value as AlertTemplatePageDto;
+
+            Assert.Equal(ApiTokenOperations.AlertsRead, askedOperation);
+            Assert.Empty(page.Items);
+            Assert.Equal(0, page.TotalCount);
+            _authorization.Verify();
+        }
+
+        [Fact]
+        public void GetTemplates_MemoizesDecision_PerDistinctFolder()
+        {
+            var folderA = Guid.NewGuid();
+            var folderB = Guid.NewGuid();
+
+            foreach (var index in Enumerable.Range(0, 6))
+                _store[Guid.NewGuid()] = new AlertTemplateModel { Name = $"t{index}", FolderId = index % 2 == 0 ? folderA : folderB };
+
+            CreateController().GetTemplates();
+
+            // Six templates, two distinct folders: the evaluator runs twice, not six
+            // times (it re-resolves user + token + grants on every call).
+            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Exactly(2));
         }
 
         [Fact]
@@ -237,6 +280,22 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(1, clamped.Page);
             Assert.Equal(AlertTemplatesApiController.MaxPageSize, clamped.PageSize);
             Assert.Equal(3, clamped.TotalCount);
+        }
+
+        [Fact]
+        public void GetTemplates_HugePageNumber_ClampsToLastPage()
+        {
+            // (page - 1) * pageSize must never overflow int: a wrapped NEGATIVE Skip
+            // count would silently return the FIRST page labeled as page N.
+            foreach (var index in Enumerable.Range(0, 3))
+                _store[Guid.NewGuid()] = new AlertTemplateModel { Name = $"t{index}" };
+
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates(page: 429_496_747, pageSize: 2))
+                .Value as AlertTemplatePageDto;
+
+            Assert.NotNull(page);
+            Assert.Equal(2, page.Page); // clamped to totalPages
+            Assert.Equal(["t2"], page.Items.Select(t => t.Name).ToArray());
         }
 
 
@@ -338,6 +397,97 @@ namespace HSMServer.Core.Tests.Controllers
             var dto = BuildDto() with { Paths = ["   "] };
 
             Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+        }
+
+        [Fact]
+        public async Task Create_MissingFolderId_Is400_Not404()
+        {
+            // An all-zero folder id references no folder: a 400, not the evaluator's
+            // 404 — and never a write into a "folder 0" template.
+            var dto = BuildDto() with { FolderId = Guid.Empty };
+
+            var result = await CreateController().CreateTemplate(dto, CancellationToken.None);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            Assert.Empty(_store);
+            _authorization.Verify(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData("policies")]
+        [InlineData("ttlPolicies")]
+        [InlineData("ttls")]
+        public async Task Create_NullListElements_Are400(string listName)
+        {
+            // System.Text.Json materialises "policies": [null] as a real null element;
+            // it must be rejected structurally, never dereferenced into a 500.
+            var dto = BuildDto();
+
+            switch (listName)
+            {
+                case "policies":
+                    dto.Policies.Add(null);
+                    break;
+                case "ttlPolicies":
+                    dto.TtlPolicies.Add(null);
+                    break;
+                default:
+                    dto.Ttls.Add(null);
+                    break;
+            }
+
+            var result = await CreateController().CreateTemplate(dto, CancellationToken.None);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_NullDestinationAndSchedule_MeanOmitted()
+        {
+            // "destination": null / "schedule": null are wire-omissions, not a domain
+            // parse failure: the mapper substitutes the defaults instead of throwing a
+            // misleading "condition is not supported" 400.
+            var dto = BuildDto();
+            dto.Policies[0] = dto.Policies[0] with { Destination = null, Schedule = null };
+
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Empty(_store.Values.Single().Policies[0].Destination.Chats);
+        }
+
+        [Fact]
+        public async Task Create_ExcessiveSizes_Are400()
+        {
+            // The web UI is bounded by its widgets; the API states its bounds.
+            var tooManyPaths = BuildDto() with { Paths = [.. Enumerable.Range(0, AlertTemplatesApiController.MaxPaths + 1).Select(i => $"*/p{i}")] };
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(tooManyPaths, CancellationToken.None)));
+
+            var tooManyPolicies = BuildDto() with
+            {
+                Policies = [.. Enumerable.Range(0, AlertTemplatesApiController.MaxPolicies + 1)
+                    .Select(_ => new AlertPolicyDto { SensorStatus = (byte)SensorStatus.Ok })],
+                TtlPolicies = [],
+                Ttls = [],
+            };
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(tooManyPolicies, CancellationToken.None)));
+
+            var longName = BuildDto(name: new string('n', AlertTemplatesApiController.MaxNameLength + 1));
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(longName, CancellationToken.None)));
+
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_ClientDisconnectsDuringWrite_Is499_NotA500()
+        {
+            var ct = new CancellationToken(canceled: true);
+
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new OperationCanceledException(ct));
+
+            var result = await CreateController().CreateTemplate(BuildDto(), ct);
+
+            Assert.Equal(499, StatusCodeOf(result));
         }
 
         [Theory]
@@ -590,6 +740,29 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(200, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, dto, CancellationToken.None)));
             Assert.Equal(folderB, _store[stored.Id].FolderId);
+        }
+
+        [Fact]
+        public async Task Update_MissingFolderId_Is400_ButOnlyAfterAuthorization()
+        {
+            var stored = new AlertTemplateModel { Name = "folderless", FolderId = Guid.NewGuid() };
+            _store[stored.Id] = stored;
+
+            // A body-shape 400 must not leak existence to a caller outside the
+            // folder's reach: the evaluator decides FIRST (403 here), even though the
+            // body omits folderId.
+            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), ApiTokenOperations.AlertsWrite,
+                    It.Is<ApiTokenResource>(r => r.Id == stored.FolderId)))
+                .Returns(ApiTokenAuthorization.Forbidden);
+
+            Assert.Equal(403, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, BuildDto() with { FolderId = Guid.Empty }, CancellationToken.None)));
+
+            // An authorized caller gets the 400 instead.
+            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Allowed);
+
+            Assert.Equal(400, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, BuildDto() with { FolderId = Guid.Empty }, CancellationToken.None)));
+            Assert.Equal(stored.FolderId, _store[stored.Id].FolderId); // untouched
         }
 
         [Fact]
