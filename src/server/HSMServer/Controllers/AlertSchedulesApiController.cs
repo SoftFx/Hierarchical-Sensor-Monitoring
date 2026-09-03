@@ -1,16 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
-using System.Security.Claims;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Schedule;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Controllers
 {
@@ -22,12 +19,12 @@ namespace HSMServer.Controllers
     //
     // Authorization differs from folder-scoped resources: schedules are GLOBAL, and
     // the web UI shows them to every logged-in user. The token-side equivalent of
-    // "this principal may work with alerts" is an alerts:read grant at ANY boundary
-    // the owner can currently see — the intersection itself is still decided by the
-    // evaluator's sanctioned list predicate (owner visibility, token liveness and
-    // grant reach all inside). Nothing about schedule existence is per-caller
-    // scoped, so an entitled caller gets a plain 404 for an unknown id while an
-    // unentitled one gets 403 for every id.
+    // "this principal may work with alerts" is delegated to the evaluator's
+    // caller-wide gate (HasOperationAtAnyVisibleBoundary): an alerts:read grant at
+    // ANY boundary the owner can currently see, with liveness, boundary resolution
+    // and the denial audit record all inside the evaluator. Nothing about schedule
+    // existence is per-caller scoped, so an entitled caller gets a plain 404 for an
+    // unknown id while an unentitled one gets 403 for every id.
     [ApiController]
     [ManagementApi]
     [Authorize(Policy = HsmApiTokenDefaults.ManagementPolicy)]
@@ -40,29 +37,22 @@ namespace HSMServer.Controllers
 
         private readonly IAlertScheduleProvider _schedules;
         private readonly ITreeValuesCache _cache;
-        private readonly IApiTokenManager _tokens;
         private readonly IApiTokenAuthorizationService _authorization;
-        private readonly ILogger<AlertSchedulesApiController> _logger;
 
         public AlertSchedulesApiController(IAlertScheduleProvider schedules, ITreeValuesCache cache,
-            IApiTokenManager tokens, IApiTokenAuthorizationService authorization,
-            ILogger<AlertSchedulesApiController> logger)
+            IApiTokenAuthorizationService authorization)
         {
             _schedules = schedules;
             _cache = cache;
-            _tokens = tokens;
             _authorization = authorization;
-            _logger = logger;
         }
 
 
         [HttpGet]
         public IActionResult GetSchedules(int page = 1, int pageSize = DefaultPageSize)
         {
-            var failure = AuthorizeSchedulesRead();
-
-            if (failure is not null)
-                return failure;
+            if (!AuthorizeSchedulesRead())
+                return Denied();
 
             page = Math.Max(page, 1);
             pageSize = Math.Min(pageSize <= 0 ? DefaultPageSize : pageSize, MaxPageSize);
@@ -79,9 +69,21 @@ namespace HSMServer.Controllers
             // silently returns the FIRST page labeled as page N.
             page = Math.Min(page, Math.Max(totalPages, 1));
 
+            var pageItems = all.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+            // The page's sensor references are resolved in ONE pass over the sensor
+            // cache (the per-id lookup scans every sensor, so per-item calls would be
+            // a full scan per schedule), and the visibility decision is memoized per
+            // DISTINCT product — the same per-request memoization the templates list
+            // applies per folder.
+            var sensorsBySchedule = _cache.GetSensorsByAlertSchedules([.. pageItems.Select(s => s.Id)]) ?? [];
+            var isProductVisible = NewProductVisibilityFilter();
+
             return Ok(new ApiPageDto<AlertScheduleDto>
             {
-                Items = [.. all.Skip((page - 1) * pageSize).Take(pageSize).Select(ToDto)],
+                Items = [.. pageItems.Select(s => ToDto(s,
+                    sensorsBySchedule.TryGetValue(s.Id, out var sensors) ? sensors : null,
+                    isProductVisible))],
                 Page = page,
                 PageSize = pageSize,
                 TotalCount = all.Count,
@@ -92,74 +94,44 @@ namespace HSMServer.Controllers
         [HttpGet("{id:guid}")]
         public IActionResult GetSchedule(Guid id)
         {
-            var failure = AuthorizeSchedulesRead();
-
-            if (failure is not null)
-                return failure;
+            if (!AuthorizeSchedulesRead())
+                return Denied();
 
             var schedule = _schedules.GetSchedule(id);
 
-            return schedule is null ? NotFound() : Ok(ToDto(schedule));
+            if (schedule is null)
+                return NotFound();
+
+            return Ok(ToDto(schedule, _cache.GetSensorsByAlertSchedule(id), NewProductVisibilityFilter()));
         }
 
 
-        // The caller may read schedules when ANY of the token's alerts:read grants sits
-        // at a boundary the owner can currently see. Candidate boundaries come from the
-        // token's own grants (public projection), so no grant logic is duplicated — the
-        // decision per candidate is the evaluator's IsVisible under the same operation.
-        private IActionResult AuthorizeSchedulesRead()
-        {
-            var tokenId = User.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
-            var token = tokenId is null ? null : _tokens.GetToken(tokenId);
+        // The caller-wide gate lives in the evaluator: it enumerates the token's own
+        // alerts:read grants and applies the full list predicate per candidate
+        // boundary, recording one AuthorizationDenied (the 403 kind — never the
+        // enumeration-probe kind) when nothing qualifies.
+        private bool AuthorizeSchedulesRead() =>
+            _authorization.HasOperationAtAnyVisibleBoundary(User, ApiTokenOperations.AlertsRead);
 
-            if (token is not null)
-            {
-                foreach (var grant in token.Grants)
-                {
-                    if (grant.Operation != ApiTokenOperations.AlertsRead)
-                        continue;
-
-                    if (!TryGrantResource(grant, out var resource))
-                        continue;
-
-                    if (_authorization.IsVisible(User, ApiTokenOperations.AlertsRead, resource))
-                        return null;
-                }
-            }
-
-            // One denial audit record per request: the evaluator records security events
-            // only through Authorize, and the global boundary is the closest scope for a
-            // global resource. The 403 itself is returned regardless of that decision —
-            // schedule existence is not a per-caller secret.
-            _ = _authorization.Authorize(User, ApiTokenOperations.AlertsRead, new ApiTokenResource(ApiTokenResourceKind.Global));
-
-            return Problem(statusCode: 403,
+        private IActionResult Denied() =>
+            Problem(statusCode: 403,
                 detail: "The token does not grant 'alerts:read' at any boundary accessible to its owner.");
-        }
 
-        private static bool TryGrantResource(ApiTokenGrantEntity grant, out ApiTokenResource resource)
+        // Sensors of a schedule cluster into a handful of products, and the evaluator
+        // re-resolves caller + grants on every call — memoize per distinct product id
+        // within one request.
+        private Func<Guid, bool> NewProductVisibilityFilter()
         {
-            switch ((ApiTokenBoundaryKind)grant.BoundaryKind)
-            {
-                case ApiTokenBoundaryKind.Global when string.IsNullOrEmpty(grant.BoundaryId):
-                    resource = new(ApiTokenResourceKind.Global);
-                    return true;
+            var visibilityByProduct = new Dictionary<Guid, bool>();
 
-                case ApiTokenBoundaryKind.Product when Guid.TryParse(grant.BoundaryId, out var productId):
-                    resource = new(ApiTokenResourceKind.Product, productId);
-                    return true;
-
-                case ApiTokenBoundaryKind.Folder when Guid.TryParse(grant.BoundaryId, out var folderId):
-                    resource = new(ApiTokenResourceKind.Folder, folderId);
-                    return true;
-
-                default:
-                    resource = null;
-                    return false;
-            }
+            return productId => visibilityByProduct.TryGetValue(productId, out var visible)
+                ? visible
+                : visibilityByProduct[productId] = _authorization.IsVisible(User,
+                    ApiTokenOperations.AlertsRead, ApiTokenResource.Product(productId));
         }
 
-        private AlertScheduleDto ToDto(Core.Model.Policies.AlertSchedule schedule)
+        private AlertScheduleDto ToDto(Core.Model.Policies.AlertSchedule schedule,
+            List<Core.Model.BaseSensorModel> sensors, Func<Guid, bool> isProductVisible)
         {
             // Sensor references filtered to the caller's sight under the SAME operation
             // the resource demands (alerts:read) — mere reach is not enough: a token
@@ -167,9 +139,8 @@ namespace HSMServer.Controllers
             // paths from an alerts response. Resolved exactly the way the evaluator
             // resolves sensors: through the sensor's product's current boundary.
             // Parentless sensors fail closed (dropped from the list).
-            var visiblePaths = (_cache.GetSensorsByAlertSchedule(schedule.Id) ?? [])
-                .Where(sensor => sensor.Parent?.Root is { } product &&
-                    _authorization.IsVisible(User, ApiTokenOperations.AlertsRead, new ApiTokenResource(ApiTokenResourceKind.Product, product.Id)))
+            var visiblePaths = (sensors ?? [])
+                .Where(sensor => sensor.Parent?.Root is { } product && isProductVisible(product.Id))
                 .Select(sensor => sensor.FullPath)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToList();

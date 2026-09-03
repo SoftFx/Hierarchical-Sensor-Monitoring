@@ -30,6 +30,15 @@ namespace HSMServer.Authentication
         // would 403, and list filtering is not a probe signal. Out-of-reach or
         // ungranted targets are simply not listed, never 403-per-item.
         bool IsVisible(ClaimsPrincipal principal, string operation, ApiTokenResource resource);
+
+        // Caller-wide gate for GLOBAL resources (alert schedules): the caller may act
+        // when ANY of the token's grants for the operation sits at a boundary that
+        // currently passes the list predicate above. Candidate boundaries are
+        // enumerated from the token's own grants INSIDE the evaluator — callers never
+        // touch grant records. A denial is recorded ONCE, as AuthorizationDenied: the
+        // gate is caller-wide and answers 403, so it must not feed the
+        // enumeration-probe signal (AuthorizationNotFound) that per-target 404s carry.
+        bool HasOperationAtAnyVisibleBoundary(ClaimsPrincipal principal, string operation);
     }
 
 
@@ -100,6 +109,39 @@ namespace HSMServer.Authentication
 
         public bool IsVisible(ClaimsPrincipal principal, string operation, ApiTokenResource resource) =>
             TryResolveCaller(principal, out var owner, out var grants) &&
+            IsVisibleCore(owner, grants, operation, resource);
+
+        public bool HasOperationAtAnyVisibleBoundary(ClaimsPrincipal principal, string operation)
+        {
+            // The caller is resolved once; the per-candidate decision is the plain list
+            // predicate, so a Global grant still requires an admin owner and a scoped
+            // grant still requires the boundary to resolve and the owner to see it.
+            var allowed = TryResolveCaller(principal, out var owner, out var grants) &&
+                GrantsOperationAtAnyVisibleBoundary(owner, grants, operation);
+
+            if (!allowed)
+                Record(principal, operation, ApiTokenResource.GlobalScope, ApiTokenAuthorization.Forbidden);
+
+            return allowed;
+        }
+
+        private bool GrantsOperationAtAnyVisibleBoundary(User owner,
+            ImmutableArray<ApiTokenGrantEntity> grants, string operation)
+        {
+            foreach (var grant in grants)
+            {
+                if (grant.Operation != operation || !TryGrantResource(grant, out var resource))
+                    continue;
+
+                if (IsVisibleCore(owner, grants, operation, resource))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool IsVisibleCore(User owner, ImmutableArray<ApiTokenGrantEntity> grants,
+            string operation, ApiTokenResource resource) =>
             TryResolveBoundary(resource, out var boundary) &&
             OwnerCanSee(owner, boundary) &&
             TokenGrantsOperation(grants, operation, boundary) &&
@@ -306,6 +348,34 @@ namespace HSMServer.Authentication
             }
 
             return false;
+        }
+
+        // A grant's own boundary as an authorization target — the inverse of the
+        // matching above, used to enumerate the candidate boundaries of the
+        // caller-wide gate. Malformed pairs (unknown kind, unparsable id, Global with
+        // an id) are rejected by ApiTokenGrants.TryCanonicalize at persistence and at
+        // load, so they cannot reach a live token; skipping them here is defense in
+        // depth that fails closed.
+        private static bool TryGrantResource(ApiTokenGrantEntity grant, out ApiTokenResource resource)
+        {
+            switch ((ApiTokenBoundaryKind)grant.BoundaryKind)
+            {
+                case ApiTokenBoundaryKind.Global when string.IsNullOrEmpty(grant.BoundaryId):
+                    resource = ApiTokenResource.GlobalScope;
+                    return true;
+
+                case ApiTokenBoundaryKind.Product when Guid.TryParse(grant.BoundaryId, out var productId):
+                    resource = ApiTokenResource.Product(productId);
+                    return true;
+
+                case ApiTokenBoundaryKind.Folder when Guid.TryParse(grant.BoundaryId, out var folderId):
+                    resource = ApiTokenResource.Folder(folderId);
+                    return true;
+
+                default:
+                    resource = null;
+                    return false;
+            }
         }
     }
 }

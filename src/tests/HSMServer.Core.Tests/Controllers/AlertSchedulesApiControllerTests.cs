@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
 using HSMCommon.Model;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model.Policies;
@@ -17,20 +15,21 @@ using HSMServer.Model.ManagementApi.AlertSchedules;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
 namespace HSMServer.Core.Tests.Controllers
 {
-    // Read-only REST surface for alert schedules (#1352): the /api/v1 area conventions,
-    // the any-boundary alerts:read gate (schedules are global, the web UI shows them to
-    // every logged-in user), per-sensor visibility filtering, and pagination.
+    // Read-only REST surface for alert schedules (#1352): the /api/v1 area
+    // conventions, the caller-wide alerts:read gate (delegated to the evaluator —
+    // its decision matrix and denial-event kind live in
+    // ApiTokenAuthorizationServiceTests), per-sensor visibility filtering, and
+    // pagination. The list path resolves the page's sensor references in ONE bulk
+    // cache call and memoizes the visibility decision per distinct product.
     public class AlertSchedulesApiControllerTests
     {
         private readonly Mock<IAlertScheduleProvider> _schedules = new();
         private readonly Mock<ITreeValuesCache> _cache = new();
-        private readonly Mock<IApiTokenManager> _tokens = new();
         private readonly Mock<IApiTokenAuthorizationService> _authorization = new();
 
         private readonly List<AlertSchedule> _store = [];
@@ -43,7 +42,12 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns((Guid id) => _store.FirstOrDefault(s => s.Id == id));
 
             _cache.Setup(c => c.GetSensorsByAlertSchedule(It.IsAny<Guid>())).Returns(new List<Core.Model.BaseSensorModel>());
+            _cache.Setup(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()))
+                .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>>());
 
+            // Entitled by default; deny scenarios override the gate.
+            _authorization.Setup(a => a.HasOperationAtAnyVisibleBoundary(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
+                .Returns(true);
             _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
         }
@@ -56,34 +60,14 @@ namespace HSMServer.Core.Tests.Controllers
                 new Claim(HsmApiTokenClaims.TokenId, new string('A', ApiTokenMaterial.TokenIdLength)),
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
-        private AlertSchedulesApiController CreateController(params ApiTokenGrantEntity[] grants)
-        {
-            var tokenId = new string('A', ApiTokenMaterial.TokenIdLength);
-
-            _tokens.Setup(t => t.GetToken(tokenId)).Returns(new ApiTokenInfo
-            {
-                EntityId = Guid.NewGuid(),
-                OwnerUserId = Guid.NewGuid(),
-                Name = "token",
-                Grants = grants.ToImmutableArray(),
-            });
-
-            return new AlertSchedulesApiController(_schedules.Object, _cache.Object, _tokens.Object,
-                _authorization.Object, NullLogger<AlertSchedulesApiController>.Instance)
+        private AlertSchedulesApiController CreateController() =>
+            new(_schedules.Object, _cache.Object, _authorization.Object)
             {
                 ControllerContext = new ControllerContext
                 {
                     HttpContext = new DefaultHttpContext { User = BuildPrincipal() },
                 },
             };
-        }
-
-        private static ApiTokenGrantEntity Grant(string operation, ApiTokenBoundaryKind kind, string boundaryId = null) => new()
-        {
-            Operation = operation,
-            BoundaryKind = (byte)kind,
-            BoundaryId = boundaryId,
-        };
 
         private static AlertSchedule BuildSchedule(string name) => new()
         {
@@ -132,81 +116,32 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public void NoAlertsReadGrantAnywhere_Is403_WithOneAuditRecord()
+        public void DeniedGate_List_Is403_ProviderAndCacheNeverQueried()
         {
-            var controller = CreateController(Grant(ApiTokenOperations.ProductsRead, ApiTokenBoundaryKind.Folder, Guid.NewGuid().ToString()));
+            _authorization.Setup(a => a.HasOperationAtAnyVisibleBoundary(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
+                .Returns(false);
 
-            Assert.Equal(403, StatusCodeOf(controller.GetSchedules()));
+            Assert.Equal(403, StatusCodeOf(CreateController().GetSchedules()));
+
+            // The caller learns nothing: neither schedules nor their sensor references
+            // are resolved for a denied gate.
             _schedules.Verify(s => s.GetAllSchedules(), Times.Never);
-            _authorization.Verify(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Once);
+            _cache.Verify(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()), Times.Never);
         }
 
         [Fact]
-        public void UnresolvableToken_Is403()
+        public void DeniedGate_GetById_Is403_ForAnyId()
         {
-            // A token absent from the index (revoked/removed between authentication and
-            // this call) has no grants to check — fail closed.
-            _tokens.Setup(t => t.GetToken(It.IsAny<string>())).Returns((ApiTokenInfo)null);
+            // The gate is caller-wide, so an unentitled caller learns nothing about
+            // schedule existence: the provider is never queried.
+            var schedule = BuildSchedule("secret-name");
+            _store.Add(schedule);
 
-            var controller = CreateController();
+            _authorization.Setup(a => a.HasOperationAtAnyVisibleBoundary(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
+                .Returns(false);
 
-            Assert.Equal(403, StatusCodeOf(controller.GetSchedules()));
-        }
-
-        [Fact]
-        public void AlertsReadAtVisibleBoundary_IsAllowed()
-        {
-            var boundaryId = Guid.NewGuid();
-            var controller = CreateController(
-                Grant(ApiTokenOperations.ProductsRead, ApiTokenBoundaryKind.Folder, boundaryId.ToString()),
-                Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Folder, boundaryId.ToString()));
-
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
-                .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) =>
-                    resource.Kind == ApiTokenResourceKind.Folder && resource.Id == boundaryId);
-
-            _store.Add(BuildSchedule("round-the-clock"));
-
-            var page = Assert.IsType<OkObjectResult>(controller.GetSchedules()).Value as ApiPageDto<AlertScheduleDto>;
-
-            Assert.NotNull(page);
-            Assert.Single(page.Items);
-            // Only the alerts:read candidate boundary is probed.
-            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Once);
-        }
-
-        [Fact]
-        public void AlertsReadAtInvisibleBoundary_Is403()
-        {
-            // The grant exists, but the owner currently cannot see that boundary (e.g.
-            // lost the folder) — the intersection decides.
-            var controller = CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Folder, Guid.NewGuid().ToString()));
-
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>())).Returns(false);
-
-            Assert.Equal(403, StatusCodeOf(controller.GetSchedules()));
-        }
-
-        [Fact]
-        public void AlertsReadGlobalGrantForAdmin_IsAllowed()
-        {
-            var controller = CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global));
-
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
-                .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) => resource.Kind == ApiTokenResourceKind.Global);
-
-            _store.Add(BuildSchedule("global"));
-
-            Assert.Equal(200, StatusCodeOf(controller.GetSchedules()));
-        }
-
-        [Fact]
-        public void MalformedBoundaryId_IsSkipped()
-        {
-            var controller = CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Folder, "not-a-guid"));
-
-            Assert.Equal(403, StatusCodeOf(controller.GetSchedules()));
-            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
+            Assert.Equal(403, StatusCodeOf(CreateController().GetSchedule(schedule.Id)));
+            _schedules.Verify(s => s.GetSchedule(It.IsAny<Guid>()), Times.Never);
         }
 
 
@@ -215,7 +150,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             _store.AddRange(Enumerable.Range(0, 5).Select(i => BuildSchedule($"s{i}")));
 
-            var page = Assert.IsType<OkObjectResult>(CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global)).GetSchedules(page: 2, pageSize: 2))
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetSchedules(page: 2, pageSize: 2))
                 .Value as ApiPageDto<AlertScheduleDto>;
 
             Assert.NotNull(page);
@@ -229,7 +164,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             _store.AddRange(Enumerable.Range(0, 3).Select(i => BuildSchedule($"s{i}")));
 
-            var page = Assert.IsType<OkObjectResult>(CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global)).GetSchedules(page: 0, pageSize: 9_999))
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetSchedules(page: 0, pageSize: 9_999))
                 .Value as ApiPageDto<AlertScheduleDto>;
 
             Assert.NotNull(page);
@@ -245,12 +180,83 @@ namespace HSMServer.Core.Tests.Controllers
             // count would silently return the FIRST page labeled as page N.
             _store.AddRange(Enumerable.Range(0, 3).Select(i => BuildSchedule($"s{i}")));
 
-            var page = Assert.IsType<OkObjectResult>(CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global)).GetSchedules(page: 429_496_747, pageSize: 2))
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetSchedules(page: 429_496_747, pageSize: 2))
                 .Value as ApiPageDto<AlertScheduleDto>;
 
             Assert.NotNull(page);
             Assert.Equal(2, page.Page); // clamped to totalPages
             Assert.Equal(["s2"], page.Items.Select(s => s.Name).ToArray());
+        }
+
+        [Fact]
+        public void GetSchedules_ResolvesPageSensors_InOneBulkCall()
+        {
+            // The per-id lookup scans every sensor in the cache; a page must pay ONE
+            // pass for all its schedules, never a scan per item.
+            _store.AddRange(Enumerable.Range(0, 5).Select(i => BuildSchedule($"s{i}")));
+
+            Assert.IsType<OkObjectResult>(CreateController().GetSchedules(page: 2, pageSize: 2));
+
+            _cache.Verify(c => c.GetSensorsByAlertSchedules(
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 2)), Times.Once);
+            _cache.Verify(c => c.GetSensorsByAlertSchedule(It.IsAny<Guid>()), Times.Never);
+        }
+
+        [Fact]
+        public void GetSchedules_FiltersSensorPaths_ByProductVisibility()
+        {
+            // The list carries the same sensor-reference leak surface as GET {id} —
+            // the filter must hold on the list path too.
+            var schedule = BuildSchedule("night-shift");
+            _store.Add(schedule);
+
+            var visibleProduct = BuildProduct(Guid.NewGuid());
+            var hiddenProduct = BuildProduct(Guid.NewGuid());
+
+            var visibleSensor = BuildSensor(visibleProduct);
+            var hiddenSensor = BuildSensor(hiddenProduct);
+
+            _cache.Setup(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()))
+                .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>>
+                {
+                    [schedule.Id] = [visibleSensor, hiddenSensor],
+                });
+
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) =>
+                    resource.Kind == ApiTokenResourceKind.Product && resource.Id == visibleProduct.Id);
+
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetSchedules()).Value as ApiPageDto<AlertScheduleDto>;
+
+            Assert.NotNull(page);
+            var item = Assert.Single(page.Items);
+            Assert.Single(item.Sensors);
+            Assert.Equal(visibleSensor.FullPath, item.Sensors[0]);
+        }
+
+        [Fact]
+        public void GetSchedules_MemoizesVisibility_PerDistinctProduct()
+        {
+            // Sensors cluster into few products; the evaluator re-resolves caller +
+            // grants on every call, so the decision is computed once per DISTINCT
+            // product on the page — twice here, not once per sensor.
+            var schedule = BuildSchedule("night-shift");
+            _store.Add(schedule);
+
+            var visibleProduct = BuildProduct(Guid.NewGuid());
+            var sensors = new List<Core.Model.BaseSensorModel>
+            {
+                BuildSensor(visibleProduct),
+                BuildSensor(visibleProduct),
+                BuildSensor(BuildProduct(Guid.NewGuid())),
+            };
+
+            _cache.Setup(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()))
+                .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>> { [schedule.Id] = sensors });
+
+            Assert.IsType<OkObjectResult>(CreateController().GetSchedules());
+
+            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Exactly(2));
         }
 
 
@@ -269,15 +275,13 @@ namespace HSMServer.Core.Tests.Controllers
             _cache.Setup(c => c.GetSensorsByAlertSchedule(schedule.Id))
                 .Returns(new List<Core.Model.BaseSensorModel> { visibleSensor, hiddenSensor });
 
-            // The gate checks the Global boundary; the sensor filter checks each
-            // sensor's product — only one of the two products is visible.
+            // The sensor filter checks each sensor's product — only one of the two
+            // products is visible.
             _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
                 .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) =>
-                    resource.Kind == ApiTokenResourceKind.Global ||
-                    (resource.Kind == ApiTokenResourceKind.Product && resource.Id == visibleProduct.Id));
+                    resource.Kind == ApiTokenResourceKind.Product && resource.Id == visibleProduct.Id);
 
-            var dto = Assert.IsType<OkObjectResult>(
-                CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global)).GetSchedule(schedule.Id))
+            var dto = Assert.IsType<OkObjectResult>(CreateController().GetSchedule(schedule.Id))
                 .Value as AlertScheduleDto;
 
             Assert.NotNull(dto);
@@ -292,23 +296,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public void GetSchedule_Absent_Is404_ForAnEntitledCaller()
         {
-            var controller = CreateController(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global));
-
-            Assert.IsType<NotFoundResult>(controller.GetSchedule(Guid.NewGuid()));
-        }
-
-        [Fact]
-        public void GetSchedule_UnentitledCaller_Is403_ForAnyId()
-        {
-            // The gate is caller-wide, so an unentitled caller learns nothing about
-            // schedule existence: the provider is never queried.
-            var schedule = BuildSchedule("secret-name");
-            _store.Add(schedule);
-
-            var controller = CreateController(Grant(ApiTokenOperations.ProductsRead, ApiTokenBoundaryKind.Folder, Guid.NewGuid().ToString()));
-
-            Assert.Equal(403, StatusCodeOf(controller.GetSchedule(schedule.Id)));
-            _schedules.Verify(s => s.GetSchedule(It.IsAny<Guid>()), Times.Never);
+            Assert.IsType<NotFoundResult>(CreateController().GetSchedule(Guid.NewGuid()));
         }
     }
 }

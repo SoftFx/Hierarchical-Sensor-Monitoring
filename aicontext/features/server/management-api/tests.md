@@ -2,7 +2,7 @@
 
 > Owner: server | Last reviewed: 2026-09-03 | Canonical: yes
 
-Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`) and alert schedules (`AlertSchedulesApiControllerTests`).
+Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`), alert schedules (`AlertSchedulesApiControllerTests` + the caller-wide gate matrix in `ApiTokenAuthorizationServiceTests`).
 
 ## Conventions (area admission)
 
@@ -19,12 +19,21 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 - **Delete**: 204 with the template gone (follow-up GET 404); cache failure → 409 with the detail.
 - **Lifecycle** (issue acceptance criterion): create (201) → get (200, equal) → update rename + extra path (200) → get reflects it → delete (204) → get 404.
 
-## Alert schedules (`AlertSchedulesApiControllerTests`, controller level)
+## Alert schedules
+
+**Gate decision matrix** (`ApiTokenAuthorizationServiceTests`, evaluator level — `HasOperationAtAnyVisibleBoundary`):
+
+- A grant at a visible boundary → true, and allowed decisions record NO event; a grant at an INVISIBLE boundary (owner lost it) → false — the intersection decides; a Global grant → true only for an admin owner; no matching grant anywhere → false.
+- An unresolvable token (absent from the index) → false, fail closed.
+- The denial event is pinned to `AuthorizationDenied` — the 403 scope-denial kind, exactly ONE record; the gate must never feed the `AuthorizationNotFound` enumeration-probe signal.
+- Non-matching operation grants are never probed (a `products:read` grant's boundary is never even resolved — `TryGetProduct` never called); a malformed boundary id (unreachable through canonicalization) is skipped fail-closed, not thrown.
+
+**Controller** (`AlertSchedulesApiControllerTests`, controller level — the gate is mocked):
 
 - Conventions reflection pin (same attribute set, route `api/v1/alertSchedules`, `ControllerBase`).
-- **Caller-wide gate**: no `alerts:read` grant anywhere → 403 with the provider never queried and exactly ONE audit `Authorize` record; an unresolvable token (absent from the index) → 403; a grant at a visible boundary → 200; a grant at an INVISIBLE boundary (owner lost it) → 403 — the intersection decides; a Global grant visible to an admin → 200; non-`alerts` grants are never probed (only the matching boundary is passed to `IsVisible`); a malformed boundary id is skipped without an evaluator call.
-- **List**: pagination math and clamps (same envelope and constants as templates); ordering name-then-id.
-- **Get by id**: DTO maps the durable fields (id/name/timezone/schedule YAML); sensor references carry only the sensors whose PRODUCT boundary is visible to the caller (hidden product's sensor dropped, paths of the visible one kept); absent id → 404 for an entitled caller; unentitled caller → 403 for ANY id, including existing ones (no existence leak).
+- Denied gate → 403 with the provider and the sensor cache never queried (list), and 403 for ANY id on get-by-id — no existence leak for an unentitled caller.
+- **List**: pagination math and clamps (same envelope and constants as templates); ordering name-then-id; the page's sensor references resolved in ONE bulk cache call (`GetSensorsByAlertSchedules`, never the per-id lookup on the list path); sensor paths filtered per product visibility — same leak surface as get-by-id, pinned on the list path too; the visibility decision memoized per DISTINCT product (3 sensors over 2 products → exactly 2 `IsVisible` calls).
+- **Get by id**: DTO maps the durable fields (id/name/timezone/schedule YAML); sensor references carry only the sensors whose PRODUCT boundary is visible to the caller (hidden product's sensor dropped, paths of the visible one kept); absent id → 404 for an entitled caller.
 
 ## Negative coverage checklist
 
