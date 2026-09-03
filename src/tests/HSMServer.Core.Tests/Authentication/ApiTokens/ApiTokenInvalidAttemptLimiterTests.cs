@@ -90,6 +90,12 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // The 1025th distinct source in one window is dropped — the map cannot grow
             // without bound under a spoofed-source flood.
             Assert.False(limiter.TryAcquire("192.168.0.1:9"));
+
+            // The bound denies only UNTRACKED newcomers: a source already in the window
+            // keeps the rest of its own budget — a full registry never consumes another
+            // source's budget either.
+            Assert.True(limiter.TryAcquire("10.0.0.1:1"));
+
             Assert.Equal(1, limiter.DroppedCount);
         }
 
@@ -100,6 +106,15 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 () => Build(limit: 0));
 
             Assert.Contains(nameof(ApiTokensConfig.InvalidAttemptRateLimit), ex.Message);
+        }
+
+        [Fact]
+        public void Constructor_NullConfig_Throws()
+        {
+            // A null section is a wiring bug, not a default config (same stance as the
+            // retention cleaner for the same section).
+            Assert.Throws<ArgumentNullException>(
+                () => new ApiTokenInvalidAttemptLimiter(null, NullLogger<ApiTokenInvalidAttemptLimiter>.Instance));
         }
     }
 }

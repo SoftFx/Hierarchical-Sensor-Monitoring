@@ -125,17 +125,18 @@ The design's privilege-reduction matrix, recomputed per call:
 
 - Within the per-source per-minute budget every attempt is recorded; over it, attempts are dropped and counted (`DroppedCount`).
 - One source's exhausted budget never consumes another source's (nothing global is denied); a null/absent remote endpoint shares a single `?` bucket and cannot bypass the bound.
-- Window rollover resets every source's budget (deterministic-clock seam); the source registry is bounded — the 1025th distinct source in one window is dropped.
-- Constructor throws with the config key named for `InvalidAttemptRateLimit < 1`.
-- Handler level: with a budget of 1, two failures from one source record exactly one event, and the authentication RESULT is unchanged either way.
+- Window rollover resets every source's budget (deterministic-clock seam); the source registry is bounded — the 1025th distinct source in one window is dropped, and a source already tracked in the window keeps the rest of its budget even when the registry is full.
+- Constructor throws with the config key named for `InvalidAttemptRateLimit < 1`; a null config section throws (a wiring bug, not a default).
+- Handler level: with a budget of 1, two failures from one source record exactly one event, and the authentication RESULT is unchanged either way; two failures from the same IP over different (ephemeral) ports share one budget — the port never widens the bound — while the recorded payload still carries the full `ip:port`.
 
 ## Retention (`ApiTokenRetentionCleanerTests`, DatabaseCore level; `ApiTokenStoreTests`, worker level)
 
-- Dead rows (revoked or expired) at or before `utcNow - TokenRecordRetention` are removed from durable storage AND the live index, atomically per row; halfway through the window nothing is eligible; a live row is never eligible.
-- Orphan rows wait one window from the cleaner's first observation (a damaged row has no trustworthy clock), then are removed and pruned from the manager's orphan registry; the registry lists rejected rows by their STORAGE key and `TryRemoveToken` prunes it (`ApiTokenManagerTests`).
-- Security events strictly older than `utcNow - SecurityEventRetention` are removed oldest-first in bounded batches; an event exactly at the cutoff survives; a non-positive limit is a no-op (worker-level `RemoveApiTokenSecurityEventsBefore`, including the bytewise-order pin — a key longer than its prefix bound must still order below it).
-- A storage failure in one pass (scan or removal) is isolated: `RunOnce` returns zeros and never throws; the next pass retries.
-- `ApiTokensConfig.Validate` rejects negative retention windows with the config key named (cleaner constructor).
+- Dead rows (revoked or expired) at or before `utcNow - TokenRecordRetention` are removed from durable storage AND the live index, atomically per row; halfway through the window nothing is eligible; a live row is never eligible. The inclusive cutoff is pinned bit-exactly: the durable `RevokedAtUtc` is read back and `RunOnce(death + retention)` removes while one tick before keeps.
+- Orphan rows wait one window from the cleaner's first observation (a damaged row has no trustworthy clock), then are removed and pruned from the manager's orphan registry; the registry lists rejected rows by their STORAGE key and `TryRemoveToken` prunes it (`ApiTokenManagerTests`); a duplicate-EntityId row is deliberately not registered as an orphan (auto-deleting an ambiguous credential row is riskier than leaking it).
+- Security events strictly older than `utcNow - SecurityEventRetention` are removed oldest-first in bounded batches; an event exactly at the cutoff survives; a non-positive limit is a no-op (worker-level `RemoveApiTokenSecurityEventsBefore`, including the bytewise-order pin — a key longer than its prefix bound must still order below it). A backlog larger than one batch drains in repeated batches within a single pass (repeat while the batch comes back full), and a pass is capped at 50 batches — one sweep stays bounded.
+- A storage failure in one pass (scan or removal) is isolated: `RunOnce` returns zeros and never throws; the next pass retries. The orphan-pass failure isolation is exercised with the removal actually attempted (zero retention makes the first-observation gate elapse immediately, so the throwing `TryRemoveToken` is reached).
+- `ApiTokensConfig.Validate` rejects negative and over-bound retention windows with the config key named (cleaner constructor); the upper bound keeps `utcNow - retention` from underflowing `DateTime` outside the per-pass try blocks.
+- Tests share one LevelDB class fixture: the clock anchor is relative to the run (a hardcoded date would rot past the default retention), token-row tests pin the event window off so leftover event rows can never contaminate exact counts, and event-asserting tests drain the event table first.
 
 ## Negative coverage checklist
 

@@ -10,10 +10,13 @@ namespace HSMServer.Authentication
     // Volume bound for failed-authentication security events (initiative: "Token
     // authentication failed, rate-limited/coalesced"). Per remote source, per aligned
     // one-minute window: up to ApiTokens.InvalidAttemptRateLimit failures are recorded,
-    // the rest are dropped. Only the EVENT is throttled — authentication itself is never
-    // delayed or rejected here, valid users are unaffected, and one abusive source does
-    // not consume another source's budget (nothing global is denied; the bound exists so
-    // an unauthenticated party cannot drive unbounded growth of the append-only table).
+    // the rest are dropped. The source identity is the CALLER's choice — the handler
+    // passes the remote IP (the port is ephemeral and must not widen the bound); a
+    // null/empty source shares one "?" bucket. Only the EVENT is throttled —
+    // authentication itself is never delayed or rejected here, valid users are
+    // unaffected, and one abusive source does not consume another source's budget
+    // (nothing global is denied; the bound exists so an unauthenticated party cannot
+    // drive unbounded growth of the append-only table).
     public sealed class ApiTokenInvalidAttemptLimiter
     {
         // Registry bound per window: active sources cannot exceed this, so a spoofed-
@@ -30,7 +33,12 @@ namespace HSMServer.Authentication
         private long _windowId;
         private Dictionary<string, int> _windowCounts = new(StringComparer.Ordinal);
 
-        private long _dropped;
+        // Two drop causes, counted and logged separately: an over-budget drop is one
+        // noisy source (benign, the bound doing its job), a registry-full drop means
+        // untracked sources are being denied outright this window — an operator needs
+        // to tell those apart, so they cannot share one counter and log cadence.
+        private long _droppedOverBudget;
+        private long _droppedRegistryFull;
 
 
         public ApiTokenInvalidAttemptLimiter(ApiTokensConfig config, ILogger<ApiTokenInvalidAttemptLimiter> logger)
@@ -42,7 +50,9 @@ namespace HSMServer.Authentication
         internal ApiTokenInvalidAttemptLimiter(ApiTokensConfig config, ILogger<ApiTokenInvalidAttemptLimiter> logger,
             Func<DateTime> utcNow)
         {
-            config ??= new ApiTokensConfig();
+            // Null means a wiring bug, not a default config: silently substituting one
+            // would hide it (the cleaner takes the same stance for the same section).
+            ArgumentNullException.ThrowIfNull(config);
 
             // One validation site (names the offending config key); the limiter only
             // reads InvalidAttemptRateLimit but the same section drives the cleaner.
@@ -55,7 +65,7 @@ namespace HSMServer.Authentication
 
         // Events dropped before reaching the security-event sink (over the per-source
         // limit, or an untracked new source beyond the registry bound).
-        public long DroppedCount => Volatile.Read(ref _dropped);
+        public long DroppedCount => Volatile.Read(ref _droppedOverBudget) + Volatile.Read(ref _droppedRegistryFull);
 
         // True when this failed attempt may be recorded. Null/empty source (no remote
         // endpoint observed) shares a single "?" bucket — it must not bypass the bound.
@@ -78,7 +88,7 @@ namespace HSMServer.Authentication
                 {
                     if (_windowCounts.Count >= MaxTrackedSources)
                     {
-                        var dropped = Interlocked.Increment(ref _dropped);
+                        var dropped = Interlocked.Increment(ref _droppedRegistryFull);
 
                         if (dropped == 1 || dropped % MaxTrackedSources == 0)
                             _logger.LogWarning(
@@ -97,7 +107,7 @@ namespace HSMServer.Authentication
 
             if (countAfter > _limit)
             {
-                var dropped = Interlocked.Increment(ref _dropped);
+                var dropped = Interlocked.Increment(ref _droppedOverBudget);
 
                 if (dropped == 1 || dropped % (_limit * (long)MaxTrackedSources) == 0)
                     _logger.LogWarning(

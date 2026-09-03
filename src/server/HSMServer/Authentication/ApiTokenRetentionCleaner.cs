@@ -17,15 +17,22 @@ namespace HSMServer.Authentication
     //      first-observation timestamp because a damaged row carries no trustworthy
     //      clock of its own (a restart re-observes and thus re-waits the window);
     //   3. security events strictly older than SecurityEventRetention, through the
-    //      database's bounded prefix-range delete.
+    //      database's bounded prefix-range delete, repeated within the pass until the
+    //      eligible backlog drains (capped, like every pass).
     // Every step is idempotent and bounded per run; a failure in one step logs and skips
     // to the next (the next pass retries), so a cleanup failure never wedges the sweep.
     public sealed class ApiTokenRetentionCleaner
     {
-        // Bounded batches per pass. Hourly passes drain any realistic backlog; the bound
-        // keeps one pass cheap on a very large table.
+        // Bounded batches per pass. The token-row passes scan-and-remove up to
+        // TokenRowBatchLimit rows per pass; the security-event pass repeats its bounded
+        // delete until a batch comes back short, capped at MaxSecurityEventBatchesPerPass
+        // per pass — a full batch means more eligible rows remain, and a fixed one-batch
+        // drain (1000 rows/hour) would be slower than plausible ingest, let alone abuse.
+        // The caps keep one pass cheap on a very large table while any real backlog
+        // drains over consecutive hourly passes.
         public const int TokenRowBatchLimit = 100;
         public const int SecurityEventBatchLimit = 1000;
+        public const int MaxSecurityEventBatchesPerPass = 50;
 
         private readonly IDatabaseCore _databaseCore;
         private readonly IApiTokenManager _tokens;
@@ -34,7 +41,9 @@ namespace HSMServer.Authentication
 
         // Orphan key -> first UTC moment this cleaner observed it (the manager registry
         // only lists keys; the observation clock lives here, with the retention policy).
-        // Bounded by the manager's registry bound plus one pass.
+        // Bounded by the manager's registry bound plus one pass. Plain Dictionary on
+        // purpose: RunOnce has a single-threaded contract (see there), so the map needs
+        // no synchronization.
         private readonly Dictionary<string, DateTime> _orphanFirstSeen = new(StringComparer.Ordinal);
 
         public ApiTokenRetentionCleaner(IDatabaseCore databaseCore, IApiTokenManager tokens,
@@ -48,6 +57,9 @@ namespace HSMServer.Authentication
             _config.Validate();
         }
 
+        // One retention pass. Single-threaded contract: the orphan first-observation
+        // map is a plain Dictionary, so exactly one caller (the retention background
+        // service) may run passes at a time.
         public (int TokenRowsRemoved, int OrphanRowsRemoved, int SecurityEventsRemoved) RunOnce(DateTime utcNow)
         {
             var tokenCutoff = utcNow - _config.TokenRecordRetention;
@@ -165,16 +177,29 @@ namespace HSMServer.Authentication
 
         private int RemoveSecurityEvents(DateTime eventCutoff)
         {
+            var removed = 0;
+
             try
             {
-                return _databaseCore.RemoveApiTokenSecurityEventsBefore(eventCutoff.Ticks, SecurityEventBatchLimit);
+                // The database delete is bounded per batch (one atomic write batch stays
+                // cheap); a FULL batch means more eligible rows remain, so repeat until a
+                // short batch or the per-pass cap — the interface's documented contract.
+                for (var batch = 0; batch < MaxSecurityEventBatchesPerPass; batch++)
+                {
+                    var removedInBatch = _databaseCore.RemoveApiTokenSecurityEventsBefore(eventCutoff.Ticks, SecurityEventBatchLimit);
+
+                    removed += removedInBatch;
+
+                    if (removedInBatch < SecurityEventBatchLimit)
+                        break;
+                }
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "API token retention could not remove security events this pass");
-
-                return 0;
             }
+
+            return removed;
         }
     }
 }

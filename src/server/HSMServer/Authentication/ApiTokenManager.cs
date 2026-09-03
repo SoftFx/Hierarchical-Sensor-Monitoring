@@ -785,6 +785,12 @@ namespace HSMServer.Authentication
                     // _tokenIdByEntityId: a revoke-by-entity-id would then report success
                     // while the shadowed token keeps authenticating. Requires hand-edited
                     // or partially-restored storage — skip the later row, fail closed.
+                    // Deliberately NOT registered as an orphan (unlike the branches
+                    // above): which of the two rows is the legitimate one is unknowable
+                    // here, and this row may be the newer restore — auto-deleting a
+                    // credential row the manager never owned is riskier than leaking it.
+                    // An operator clears it by hand; if the loaded twin is ever removed,
+                    // a restart re-scans and loads this one.
                     if (_tokenIdByEntityId.ContainsKey(candidate.EntityId))
                     {
                         _logger.LogWarning("Skipping API token record with a duplicate entity id {EntityId} (token id {TokenId})",

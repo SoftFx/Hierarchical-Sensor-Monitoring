@@ -127,7 +127,7 @@ namespace HSMServer.Authentication
             // — the authentication decision above is unchanged either way.
             var source = DescribeSource();
 
-            if (!_invalidAttempts.TryAcquire(source))
+            if (!_invalidAttempts.TryAcquire(DescribeSourceBucket()))
                 return;
 
             _securityEvents.Record(new ApiTokenSecurityEvent(
@@ -147,5 +147,14 @@ namespace HSMServer.Authentication
         // context; never headers (which are attacker-controlled free text).
         private string DescribeSource() =>
             Context.Connection.RemoteIpAddress is { } ip ? $"{ip}:{Context.Connection.RemotePort}" : null;
+
+        // Budget identity for the invalid-attempt limiter: the remote IP only. The port
+        // is the client's EPHEMERAL port — a fresh value per TCP connection — so bucketing
+        // on ip:port would hand every connection a brand-new budget (the bound becomes
+        // MaxTrackedSources x limit from one host) and let one host fill the per-window
+        // source registry with connection-scoped buckets, suppressing other sources'
+        // events for the rest of the minute. The full ip:port stays in the event payload.
+        private string DescribeSourceBucket() =>
+            Context.Connection.RemoteIpAddress?.ToString();
     }
 }

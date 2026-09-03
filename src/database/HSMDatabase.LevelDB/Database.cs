@@ -142,12 +142,24 @@ namespace HSMDatabase.LevelDB
 
                 using var batch = new WriteBatch();
 
-                for (iterator.Seek(prefix);
-                     removed < limit && iterator.IsValid && iterator.Key().StartsWith(prefix) && CompareBytewise(iterator.Key(), exclusiveUpperBound) < 0;
-                     iterator.Next())
+                // One Key() per row: each call materializes a fresh byte[] copy of the
+                // key, and this loop runs at retention-sweep scale.
+                iterator.Seek(prefix);
+
+                while (removed < limit && iterator.IsValid)
                 {
-                    batch.Delete(iterator.Key());
+                    var key = iterator.Key();
+
+                    // The bound starts with the prefix, so the bytewise check subsumes the
+                    // StartsWith guard after Seek(prefix); it stays as a belt-and-braces
+                    // invariant on the range.
+                    if (!key.StartsWith(prefix) || CompareBytewise(key, exclusiveUpperBound) >= 0)
+                        break;
+
+                    batch.Delete(key);
                     removed++;
+
+                    iterator.Next();
                 }
 
                 if (removed > 0)

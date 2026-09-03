@@ -22,7 +22,16 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
         // Fixed clock for the security-event cutoffs (exact-cutoff events must survive);
         // the token-row scenarios use times relative to the real creation moment.
-        private static readonly DateTime Now = new(2026, 9, 2, 10, 0, 0, DateTimeKind.Utc);
+        // RELATIVE on purpose: a hardcoded calendar date rots — once the real clock passes
+        // it plus the default 30-day retention, leftover events become eligible in tests
+        // that pinned nothing, and the suite starts failing on a date.
+        private static readonly DateTime Now = DateTime.UtcNow.Date.AddHours(10);
+
+        // Pinned event retention for the token-row tests (below the config's upper
+        // bound): long enough that no leftover event row from another test in this
+        // shared LevelDB fixture is ever eligible, so their exact-tuple asserts cannot
+        // pick up foreign rows.
+        private static readonly TimeSpan EventsPinnedOff = TimeSpan.FromDays(365 * 9);
 
 
         public ApiTokenRetentionCleanerTests(Fixture fixture, DatabaseRegisterFixture registerFixture)
@@ -44,7 +53,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             manager.Initialize().Wait();
 
             var retention = TimeSpan.FromMinutes(10);
-            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = retention },
+            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = retention, SecurityEventRetention = EventsPinnedOff },
                 _databaseCoreManager.DatabaseCore, manager);
 
             var realNow = DateTime.UtcNow;
@@ -103,7 +112,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             manager.Initialize().Wait();
 
             var firstSeen = DateTime.UtcNow;
-            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = TimeSpan.FromMinutes(10) },
+            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = TimeSpan.FromMinutes(10), SecurityEventRetention = EventsPinnedOff },
                 _databaseCoreManager.DatabaseCore, manager);
 
             // A damaged row has no trustworthy clock, so the window runs from first
@@ -125,6 +134,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var cleaner = CreateCleaner(
                 new ApiTokensConfig { SecurityEventRetention = TimeSpan.FromDays(1) },
                 _databaseCoreManager.DatabaseCore, CreateManager());
+
+            // Tests in this class share one LevelDB fixture and event rows survive across
+            // tests: start from a clean event table so the exact counts below are
+            // order-independent.
+            DrainSecurityEvents();
 
             var cutoff = Now - TimeSpan.FromDays(1);
 
@@ -154,16 +168,23 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             manager.Initialize().Wait();
 
             var retention = TimeSpan.FromMinutes(10);
-            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = retention },
+            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = retention, SecurityEventRetention = EventsPinnedOff },
                 _databaseCoreManager.DatabaseCore, manager);
 
             Assert.True(manager.TryCreateToken(OwnerId, "boundary", null, [], expiresAtUtc: null, "test", out var token, out _));
             Assert.True(manager.TryRevokeToken(token.EntityId, "test", "boundary test", out _));
-            var revokedAt = DateTime.UtcNow;
+
+            // Bit-exact death stamp read back from the durable row: a DateTime.UtcNow
+            // captured AFTER the revoke is strictly newer than the stored stamp, so it
+            // would never pin the inclusive boundary this test exists for.
+            var revokedAt = new DateTime(
+                _databaseCoreManager.DatabaseCore.GetAllApiTokens()
+                    .Single(r => r.Entity.EntityId == token.EntityId).Entity.RevokedAtUtc.Value,
+                DateTimeKind.Utc);
 
             // One tick before the window elapses: the cutoff is still older than the
             // revoke stamp — kept.
-            Assert.Equal((0, 0, 0), cleaner.RunOnce(revokedAt + retention - TimeSpan.FromSeconds(1)));
+            Assert.Equal((0, 0, 0), cleaner.RunOnce(revokedAt + retention - TimeSpan.FromTicks(1)));
 
             // Exactly at the window: cutoff == RevokedAtUtc — removed (inclusive).
             Assert.Equal((1, 0, 0), cleaner.RunOnce(revokedAt + retention));
@@ -177,18 +198,21 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 ShouldFailApiTokenOp = op => op == nameof(FailingDatabaseCore.GetAllApiTokens),
             };
 
-            // The orphan pass THROWS (a storage failure under TryRemoveToken): it must be
-            // isolated like the other passes, and the security-event pass behind it must
-            // still run and remove an eligible event.
+            // The orphan pass THROWS (a storage failure under TryRemoveToken, with
+            // TokenRecordRetention = 0 so the first-observation gate is already elapsed
+            // and the removal is actually attempted): it must be isolated like the other
+            // passes, and the security-event pass behind it must still run and remove an
+            // eligible event.
             var manager = new Mock<IApiTokenManager>();
             manager.Setup(m => m.GetOrphanTokenIds()).Returns(new[] { new string('A', ApiTokenMaterial.TokenIdLength) });
             manager.Setup(m => m.TryRemoveToken(It.IsAny<string>()))
                 .Throws(new InvalidOperationException("simulated orphan removal failure"));
 
+            DrainSecurityEvents();
             PutSecurityEvent(Now.AddDays(-2));
 
             var cleaner = new ApiTokenRetentionCleaner(failing, manager.Object,
-                new ApiTokensConfig { SecurityEventRetention = TimeSpan.FromDays(1) },
+                new ApiTokensConfig { TokenRecordRetention = TimeSpan.Zero, SecurityEventRetention = TimeSpan.FromDays(1) },
                 NullLogger<ApiTokenRetentionCleaner>.Instance);
 
             var result = cleaner.RunOnce(Now);
@@ -197,10 +221,57 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
-        public void Constructor_InvalidRetention_ThrowsWithTheConfigName()
+        public void SecurityEventBacklog_DrainsInRepeatedBatches_WithinOnePass()
+        {
+            // The single database delete is batch-bounded; a FULL batch means more
+            // eligible rows remain, so the pass repeats until a short batch (the
+            // interface's documented contract) — a backlog larger than one batch still
+            // drains in one pass.
+            var db = new Mock<HSMServer.Core.DataLayer.IDatabaseCore>();
+            db.SetupSequence(d => d.RemoveApiTokenSecurityEventsBefore(It.IsAny<long>(), It.IsAny<int>()))
+                .Returns(ApiTokenRetentionCleaner.SecurityEventBatchLimit)
+                .Returns(ApiTokenRetentionCleaner.SecurityEventBatchLimit)
+                .Returns(17);
+
+            var cleaner = new ApiTokenRetentionCleaner(db.Object, new Mock<IApiTokenManager>().Object,
+                new ApiTokensConfig { SecurityEventRetention = TimeSpan.FromDays(1) },
+                NullLogger<ApiTokenRetentionCleaner>.Instance);
+
+            var result = cleaner.RunOnce(Now);
+
+            Assert.Equal(2 * ApiTokenRetentionCleaner.SecurityEventBatchLimit + 17, result.SecurityEventsRemoved);
+            db.Verify(d => d.RemoveApiTokenSecurityEventsBefore(It.IsAny<long>(), It.IsAny<int>()), Times.Exactly(3));
+        }
+
+        [Fact]
+        public void SecurityEventBacklog_IsCappedPerPass_TheRestDrainsNextPass()
+        {
+            // Every batch comes back full (an effectively unbounded backlog): one pass
+            // still stops at the per-pass cap instead of sweeping forever.
+            var db = new Mock<HSMServer.Core.DataLayer.IDatabaseCore>();
+            db.Setup(d => d.RemoveApiTokenSecurityEventsBefore(It.IsAny<long>(), It.IsAny<int>()))
+                .Returns(ApiTokenRetentionCleaner.SecurityEventBatchLimit);
+
+            var cleaner = new ApiTokenRetentionCleaner(db.Object, new Mock<IApiTokenManager>().Object,
+                new ApiTokensConfig { SecurityEventRetention = TimeSpan.FromDays(1) },
+                NullLogger<ApiTokenRetentionCleaner>.Instance);
+
+            var result = cleaner.RunOnce(Now);
+
+            Assert.Equal(
+                ApiTokenRetentionCleaner.MaxSecurityEventBatchesPerPass * (long)ApiTokenRetentionCleaner.SecurityEventBatchLimit,
+                result.SecurityEventsRemoved);
+            db.Verify(d => d.RemoveApiTokenSecurityEventsBefore(It.IsAny<long>(), It.IsAny<int>()),
+                Times.Exactly(ApiTokenRetentionCleaner.MaxSecurityEventBatchesPerPass));
+        }
+
+        [Theory]
+        [InlineData(-1)]    // negative window
+        [InlineData(4000)]  // above the upper bound: utcNow - retention must not underflow DateTime
+        public void Constructor_InvalidRetention_ThrowsWithTheConfigName(int retentionDays)
         {
             var ex = Assert.Throws<InvalidOperationException>(() => CreateCleaner(
-                new ApiTokensConfig { TokenRecordRetention = TimeSpan.FromMinutes(-1) },
+                new ApiTokensConfig { TokenRecordRetention = TimeSpan.FromDays(retentionDays) },
                 _databaseCoreManager.DatabaseCore, CreateManager()));
 
             Assert.Contains(nameof(ApiTokensConfig.TokenRecordRetention), ex.Message);
@@ -213,6 +284,13 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 Kind = (byte)ApiTokenSecurityEventKind.AuthFailed,
                 TimestampUtc = timestampUtc.Ticks,
             });
+
+        // Tests in this class share one LevelDB fixture (the class fixture deletes the
+        // folder once), and event rows survive across tests: drain the event table before
+        // any test that asserts exact event counts. long.MaxValue sorts above every real
+        // event key bytewise (current-era tick strings start with '6' < '9').
+        private void DrainSecurityEvents() =>
+            _databaseCoreManager.DatabaseCore.RemoveApiTokenSecurityEventsBefore(long.MaxValue, int.MaxValue);
 
 
         public class Fixture : DatabaseFixture

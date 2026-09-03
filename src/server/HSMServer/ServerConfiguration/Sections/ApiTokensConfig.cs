@@ -10,6 +10,12 @@ namespace HSMServer.ServerConfiguration
     // falls back to these values, not the other way round.
     public sealed class ApiTokensConfig
     {
+        // Upper bound for both retention windows: the retention sweep computes
+        // utcNow - retention, and a window large enough to underflow DateTime would throw
+        // from RunOnce outside every per-pass try block — validated here instead, with
+        // the key named. Ten years is far beyond any operational audit window.
+        private static readonly TimeSpan MaxRetention = TimeSpan.FromDays(3650);
+
         // Dead token records (revoked with RevokedAtUtc, expired with ExpiresAtUtc, and
         // rows rejected at load as orphans) remain durable and queryable for this window
         // after their death; a bounded background pass then removes them. Zero removes
@@ -31,13 +37,13 @@ namespace HSMServer.ServerConfiguration
 
         public void Validate()
         {
-            if (TokenRecordRetention < TimeSpan.Zero)
+            if (TokenRecordRetention < TimeSpan.Zero || TokenRecordRetention > MaxRetention)
                 throw new InvalidOperationException(
-                    $"ApiTokens.{nameof(TokenRecordRetention)} must not be negative (was {TokenRecordRetention}).");
+                    $"ApiTokens.{nameof(TokenRecordRetention)} must be between 0 and {MaxRetention.TotalDays:0} days (was {TokenRecordRetention}).");
 
-            if (SecurityEventRetention < TimeSpan.Zero)
+            if (SecurityEventRetention < TimeSpan.Zero || SecurityEventRetention > MaxRetention)
                 throw new InvalidOperationException(
-                    $"ApiTokens.{nameof(SecurityEventRetention)} must not be negative (was {SecurityEventRetention}).");
+                    $"ApiTokens.{nameof(SecurityEventRetention)} must be between 0 and {MaxRetention.TotalDays:0} days (was {SecurityEventRetention}).");
 
             if (InvalidAttemptRateLimit < 1)
                 throw new InvalidOperationException(
