@@ -1,20 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Schedule;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -47,8 +46,9 @@ namespace HSMServer.Controllers
         public const int MaxPageSize = 200;
 
         // Size guard rails the web UI gets from its widgets; the API states them
-        // explicitly. Generous enough that no legitimate template hits them, tight
-        // enough that a write token cannot bloat LevelDB or the per-sensor apply.
+        // explicitly. They bound the collection COUNTS and the name length only —
+        // individual strings (paths, message templates, target values) stay bounded
+        // by the request body limit alone (see Known Issues in feature.md).
         public const int MaxNameLength = 200;
         public const int MaxPaths = 100;
         public const int MaxPolicies = 100;
@@ -56,16 +56,18 @@ namespace HSMServer.Controllers
         private readonly ITreeValuesCache _cache;
         private readonly IFolderManager _folders;
         private readonly IChatsManager _chats;
+        private readonly IAlertScheduleProvider _schedules;
         private readonly IApiTokenAuthorizationService _authorization;
         private readonly ILogger<AlertTemplatesApiController> _logger;
 
         public AlertTemplatesApiController(ITreeValuesCache cache, IFolderManager folders,
-            IChatsManager chats, IApiTokenAuthorizationService authorization,
+            IChatsManager chats, IAlertScheduleProvider schedules, IApiTokenAuthorizationService authorization,
             ILogger<AlertTemplatesApiController> logger)
         {
             _cache = cache;
             _folders = folders;
             _chats = chats;
+            _schedules = schedules;
             _authorization = authorization;
             _logger = logger;
         }
@@ -75,7 +77,7 @@ namespace HSMServer.Controllers
         public IActionResult GetTemplates(int page = 1, int pageSize = DefaultPageSize)
         {
             page = Math.Max(page, 1);
-            pageSize = Math.Clamp(pageSize <= 0 ? DefaultPageSize : pageSize, 1, MaxPageSize);
+            pageSize = Math.Min(pageSize <= 0 ? DefaultPageSize : pageSize, MaxPageSize);
 
             // The list returns full entity bodies, so reach alone is not enough: an
             // item is listed only under the SAME operation its item endpoint would
@@ -129,7 +131,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateTemplate([FromBody] AlertTemplateDto dto, CancellationToken ct)
+        public async Task<IActionResult> CreateTemplate([FromBody] AlertTemplateDto dto)
         {
             // An all-zero folder id references no folder, so a 400 leaks nothing — and
             // it keeps the folderId structural check reachable instead of shadowed by
@@ -150,19 +152,20 @@ namespace HSMServer.Controllers
             if (!TryBuildValidatedTemplate(dto, id: Guid.NewGuid(), isCreate: true, out var model, out var errors))
                 return ValidationProblem(new ValidationProblemDetails(errors));
 
-            var write = await TryWriteAsync(token => _cache.AddAlertTemplateAsync(model, token), ct);
+            // Deliberately NOT tied to RequestAborted (see DeleteTemplate for the worst
+            // case): the cache persists before reconciling, so a client-triggered
+            // cancellation mid-reconcile would leave half-applied state. The web UI
+            // passes no token either — the write completes once accepted.
+            var (success, error) = await _cache.AddAlertTemplateAsync(model);
 
-            if (write is null)
-                return ClientClosedRequest();
-
-            if (!write.Value.Success)
-                return ConflictProblem(write.Value.Error);
+            if (!success)
+                return ConflictProblem(error);
 
             return CreatedAtAction(nameof(GetTemplate), new { id = model.Id }, AlertTemplateDtoMapper.ToDto(model));
         }
 
         [HttpPut("{id:guid}")]
-        public async Task<IActionResult> UpdateTemplate(Guid id, [FromBody] AlertTemplateDto dto, CancellationToken ct)
+        public async Task<IActionResult> UpdateTemplate(Guid id, [FromBody] AlertTemplateDto dto)
         {
             var existing = _cache.GetAlertTemplate(id);
 
@@ -196,13 +199,10 @@ namespace HSMServer.Controllers
             if (!TryBuildValidatedTemplate(dto, id, isCreate: false, out var model, out var errors))
                 return ValidationProblem(new ValidationProblemDetails(errors));
 
-            var write = await TryWriteAsync(token => _cache.AddAlertTemplateAsync(model, token), ct);
+            var (success, error) = await _cache.AddAlertTemplateAsync(model);
 
-            if (write is null)
-                return ClientClosedRequest();
-
-            if (!write.Value.Success)
-                return ConflictProblem(write.Value.Error);
+            if (!success)
+                return ConflictProblem(error);
 
             // Echo the STORED template, not the request: the write normalizes ids and
             // chat names, and the caller must see the canonical result.
@@ -212,7 +212,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        public async Task<IActionResult> DeleteTemplate(Guid id, CancellationToken ct)
+        public async Task<IActionResult> DeleteTemplate(Guid id)
         {
             var template = _cache.GetAlertTemplate(id);
 
@@ -224,12 +224,15 @@ namespace HSMServer.Controllers
             if (failure is not null)
                 return failure;
 
-            var write = await TryWriteAsync(token => _cache.RemoveAlertTemplateAsync(id, token), ct);
+            // Deliberately NOT tied to RequestAborted: RemoveAlertTemplateAsync strips
+            // the template-derived policies from every matching sensor BEFORE it removes
+            // the template itself, so a client-triggered cancellation mid-loop would
+            // leave the template alive while some sensors have already lost their alert
+            // policies — silent alert loss with nobody left to report it to (the client
+            // is gone by definition). The delete completes once accepted.
+            var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
 
-            if (write is null)
-                return ClientClosedRequest();
-
-            return write.Value.Success ? NoContent() : ConflictProblem(write.Value.Error);
+            return success ? NoContent() : ConflictProblem(error);
         }
 
 
@@ -261,28 +264,6 @@ namespace HSMServer.Controllers
             ValidationProblem(new ValidationProblemDetails(
                 new Dictionary<string, string[]> { ["folderId"] = ["The folder id is required."] }));
 
-        private static StatusCodeResult ClientClosedRequest() =>
-            new(StatusCodes.Status499ClientClosedRequest);
-
-        // The cache rethrows OperationCanceledException from its reconciliation loops.
-        // With the client already gone the status is moot, but the exception must not
-        // escape the action — the global handler renders Razor HTML. null result =>
-        // 499. Note the write is NOT transactional at the cancellation point: a
-        // cancelled reconcile can leave the template persisted with only some sensors
-        // reconciled (pre-existing cache behavior, same for the web UI).
-        private static async Task<(bool Success, string Error)?> TryWriteAsync(
-            Func<CancellationToken, Task<(bool Success, string Error)>> write, CancellationToken ct)
-        {
-            try
-            {
-                return await write(ct);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                return null;
-            }
-        }
-
         // Structural validation, then entity reconstruction (inside a try — the domain
         // throws on legal-looking but unsupported input), then the semantic checks
         // ported from the web UI controller. Any accumulated error fails the request.
@@ -293,17 +274,18 @@ namespace HSMServer.Controllers
 
             AddStructuralErrors(dto, id, isCreate, errorMap);
 
-            // One pass over the chat manager serves both the mapper (canonical display
-            // names) and the semantic chat-availability rule.
-            var chatsById = ChatIndex();
-
             model = null;
 
             if (errorMap.Count == 0)
             {
+                // One pass over the chat manager serves both the mapper (canonical
+                // display names) and the semantic chat-availability rule; built only
+                // when something will actually be reconstructed.
+                var chatsById = ChatIndex();
+
                 try
                 {
-                    model = new AlertTemplateModel(AlertTemplateDtoMapper.ToEntity(dto, id, CanonicalChatNames(chatsById)));
+                    model = new AlertTemplateModel(AlertTemplateDtoMapper.ToEntity(dto, id, chatsById));
                 }
                 catch (Exception e)
                 {
@@ -313,10 +295,10 @@ namespace HSMServer.Controllers
                     _logger.LogWarning(e, "API alert-template payload could not be reconstructed");
                     Add(errorMap, "policies", "The template could not be parsed: a condition is not supported for this sensor type.");
                 }
-            }
 
-            if (model is not null)
-                AddSemanticErrors(dto, model, id, errorMap, chatsById);
+                if (model is not null)
+                    AddSemanticErrors(dto, model, id, errorMap, chatsById);
+            }
 
             errors = errorMap.ToDictionary(p => p.Key, p => p.Value.ToArray());
 
@@ -339,9 +321,6 @@ namespace HSMServer.Controllers
             if ((dto.Policies?.Count ?? 0) + (dto.TtlPolicies?.Count ?? 0) > MaxPolicies)
                 Add(errors, "policies", $"At most {MaxPolicies} policies (regular and TTL combined) are allowed.");
 
-            if (dto.FolderId == Guid.Empty)
-                Add(errors, "folderId", "The folder id is required.");
-
             if (dto.SensorType != AlertTemplateModel.AnyType && !Enum.IsDefined<SensorType>((SensorType)dto.SensorType))
                 Add(errors, "sensorType", $"Unknown sensor type {dto.SensorType}.");
 
@@ -354,75 +333,113 @@ namespace HSMServer.Controllers
             // Null list elements are rejected HERE, before the domain reconstruction:
             // System.Text.Json materialises "policies": [null] happily, and a null
             // dereference inside the mapper would otherwise escape the action as a
-            // 500 (the structural pass runs outside the reconstruction try).
-            foreach (var policy in dto.Policies ?? [])
+            // 500 (the structural pass runs outside the reconstruction try). Keys are
+            // item-indexed (policies[2].conditions[0].operation) so a client can
+            // LOCATE the offending entry — the shape [ApiController] itself produces
+            // for binding failures.
+
+            // Duplicate non-empty policy ids are rejected: at apply time the id becomes
+            // the sensor policy's TemplateAlertId — the matching key — so two policies
+            // sharing one id silently collapse into one (GroupBy(First()) in the cache).
+            var seenPolicyIds = new HashSet<Guid>();
+
+            foreach (var (policy, index) in (dto.Policies ?? []).Select((p, i) => (p, i)))
             {
                 if (policy is null)
                 {
-                    Add(errors, "policies", "A policy entry must not be null.");
+                    Add(errors, $"policies[{index}]", "A policy entry must not be null.");
                     continue;
                 }
 
-                AddPolicyStructureErrors(policy, errors);
+                if (policy.Id != Guid.Empty && !seenPolicyIds.Add(policy.Id))
+                    Add(errors, $"policies[{index}].id", "Duplicate policy id — ids must be unique across policies and ttlPolicies.");
+
+                AddPolicyStructureErrors(policy, $"policies[{index}]", errors);
             }
 
-            foreach (var policy in dto.TtlPolicies ?? [])
+            foreach (var (policy, index) in (dto.TtlPolicies ?? []).Select((p, i) => (p, i)))
             {
                 if (policy is null)
                 {
-                    Add(errors, "ttlPolicies", "A TTL policy entry must not be null.");
+                    Add(errors, $"ttlPolicies[{index}]", "A TTL policy entry must not be null.");
                     continue;
                 }
 
-                AddPolicyStructureErrors(policy, errors);
+                if (policy.Id != Guid.Empty && !seenPolicyIds.Add(policy.Id))
+                    Add(errors, $"ttlPolicies[{index}].id", "Duplicate policy id — ids must be unique across policies and ttlPolicies.");
+
+                AddPolicyStructureErrors(policy, $"ttlPolicies[{index}]", errors);
             }
 
-            foreach (var interval in dto.Ttls ?? [])
+            // The interval enum is SPARSE (FromFolder=-100 … Year): an undefined value
+            // persists fine but TimeIntervalModel.GetShiftedTime throws
+            // NotImplementedException for it — inside the timeout-scan loop, outside
+            // this controller's try. The web UI cannot produce it (dropdown); the API
+            // must not accept it. When the ticks are authoritative (Ticks/FromFolder),
+            // they must also keep now + ticks inside the DateTime range — AddTicks
+            // throws outside it, in the same loop.
+            foreach (var (interval, index) in (dto.Ttls ?? []).Select((t, i) => (t, i)))
+            {
                 if (interval is null)
-                    Add(errors, "ttls", "An interval entry must not be null.");
+                {
+                    Add(errors, $"ttls[{index}]", "An interval entry must not be null.");
+                    continue;
+                }
+
+                if (!Enum.IsDefined<TimeInterval>((TimeInterval)interval.Interval))
+                    Add(errors, $"ttls[{index}]", $"Unknown interval {interval.Interval}.");
+
+                if ((TimeInterval)interval.Interval is TimeInterval.Ticks or TimeInterval.FromFolder &&
+                    (interval.Ticks <= 0 || interval.Ticks > DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks))
+                    Add(errors, $"ttls[{index}]", "Interval ticks must be positive and keep the shifted time inside the DateTime range.");
+            }
         }
 
         // Every enum byte is validated BEFORE the domain casts it: the entity
         // reconstruction casts without checks and unknown values either throw or
-        // silently coerce (SensorStatus -> Error).
-        private static void AddPolicyStructureErrors(AlertPolicyDto policy, Dictionary<string, List<string>> errors)
+        // silently coerce (SensorStatus -> Error). Errors carry the item path
+        // (e.g. "policies[2].conditions[0].operation") so a client can locate them.
+        private static void AddPolicyStructureErrors(AlertPolicyDto policy, string prefix,
+            Dictionary<string, List<string>> errors)
         {
-            foreach (var condition in policy.Conditions ?? [])
+            foreach (var (condition, conditionIndex) in (policy.Conditions ?? []).Select((c, i) => (c, i)))
             {
+                var conditionPrefix = $"{prefix}.conditions[{conditionIndex}]";
+
                 if (condition?.Target is null)
                 {
-                    Add(errors, "conditions", "Every condition must carry a target.");
+                    Add(errors, $"{conditionPrefix}.target", "Every condition must carry a target.");
                     continue;
                 }
 
                 if (!Enum.IsDefined<PolicyOperation>((PolicyOperation)condition.Operation))
-                    Add(errors, "conditions", $"Unknown condition operation {condition.Operation}.");
+                    Add(errors, $"{conditionPrefix}.operation", $"Unknown condition operation {condition.Operation}.");
 
                 if (!Enum.IsDefined<PolicyProperty>((PolicyProperty)condition.Property))
-                    Add(errors, "conditions", $"Unknown condition property {condition.Property}.");
+                    Add(errors, $"{conditionPrefix}.property", $"Unknown condition property {condition.Property}.");
 
                 if (!Enum.IsDefined<PolicyCombination>((PolicyCombination)condition.Combination))
-                    Add(errors, "conditions", $"Unknown condition combination {condition.Combination}.");
+                    Add(errors, $"{conditionPrefix}.combination", $"Unknown condition combination {condition.Combination}.");
 
                 if (!Enum.IsDefined<TargetType>((TargetType)condition.Target.Type))
-                    Add(errors, "conditions", $"Unknown condition target type {condition.Target.Type}.");
+                    Add(errors, $"{conditionPrefix}.target.type", $"Unknown condition target type {condition.Target.Type}.");
             }
 
             if (!Enum.IsDefined<SensorStatus>((SensorStatus)policy.SensorStatus))
-                Add(errors, "sensorStatus", $"Unknown sensor status {policy.SensorStatus}.");
+                Add(errors, $"{prefix}.sensorStatus", $"Unknown sensor status {policy.SensorStatus}.");
 
             if (!Enum.IsDefined<AlertRepeatMode>((AlertRepeatMode)(policy.Schedule?.RepeateMode ?? 0)))
-                Add(errors, "schedule", $"Unknown repeat mode {policy.Schedule?.RepeateMode}.");
+                Add(errors, $"{prefix}.schedule", $"Unknown repeat mode {policy.Schedule?.RepeateMode}.");
 
             var timeTicks = policy.Schedule?.TimeTicks ?? 0;
 
             if (timeTicks < 0 || timeTicks > DateTime.MaxValue.Ticks)
-                Add(errors, "schedule", "schedule.timeTicks is outside the supported range.");
+                Add(errors, $"{prefix}.schedule", "schedule.timeTicks is outside the supported range.");
 
             if (policy.Destination?.Chats is { Count: > 0 } chats)
                 foreach (var chatKey in chats.Keys)
                     if (!Guid.TryParse(chatKey, out _))
-                        Add(errors, "destination", $"The chat id '{chatKey}' is not a valid Guid.");
+                        Add(errors, $"{prefix}.destination", $"The chat id '{chatKey}' is not a valid Guid.");
         }
 
         // Semantic checks ported from the cookie controller (same order, same error
@@ -441,6 +458,17 @@ namespace HSMServer.Controllers
 
             foreach (var mismatchError in AlertTemplatePathValidation.GetPathTypeMismatchErrors(_cache, model))
                 Add(errors, "paths", mismatchError);
+
+            // A scheduleId the provider does not know is a dangling reference the web
+            // UI cannot create (its dropdown offers existing schedules only); at
+            // evaluation IsWorkingTime logs an error and silently treats the policy as
+            // always-in-working-time.
+            foreach (var scheduleId in (dto.Policies ?? []).Concat(dto.TtlPolicies ?? [])
+                         .Where(p => p?.ScheduleId is not null)
+                         .Select(p => p.ScheduleId.Value)
+                         .Distinct())
+                if (_schedules.GetSchedule(scheduleId) is null)
+                    Add(errors, "scheduleId", $"Unknown schedule '{scheduleId}'.");
 
             AddChatAvailabilityErrors(dto, errors, chatsById);
         }
@@ -483,16 +511,6 @@ namespace HSMServer.Controllers
                 chatsById[chat.Id.ToString()] = chat;
 
             return chatsById;
-        }
-
-        private static Dictionary<string, string> CanonicalChatNames(Dictionary<string, Chat> chatsById)
-        {
-            var names = new Dictionary<string, string>();
-
-            foreach (var (chatId, chat) in chatsById)
-                names[chatId] = chat.Name;
-
-            return names;
         }
 
         private static void Add(Dictionary<string, List<string>> errors, string key, string message)

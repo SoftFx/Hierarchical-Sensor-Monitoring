@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
+using HSMServer.Notifications.Chats;
 
 namespace HSMServer.Model.ManagementApi.AlertTemplates
 {
@@ -31,7 +32,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         }
 
         internal static AlertTemplateEntity ToEntity(AlertTemplateDto dto, Guid id,
-            IReadOnlyDictionary<string, string> canonicalChatNames)
+            IReadOnlyDictionary<string, Chat> chatsById)
         {
             return new AlertTemplateEntity
             {
@@ -40,9 +41,9 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 SensorType = dto.SensorType,
                 FolderId = dto.FolderId,
                 Paths = dto.Paths?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [],
-                TTLPolicies = [.. (dto.TtlPolicies ?? []).Select(p => ToEntity(p, canonicalChatNames))],
+                TTLPolicies = [.. (dto.TtlPolicies ?? []).Select(p => ToEntity(p, chatsById))],
                 TTLs = [.. (dto.Ttls ?? []).Select(ToEntity)],
-                Policies = [.. (dto.Policies ?? []).Select(p => ToEntity(p, canonicalChatNames))],
+                Policies = [.. (dto.Policies ?? []).Select(p => ToEntity(p, chatsById))],
                 // Legacy single-value fields stay unset on purpose: the plural lists are
                 // authoritative and the entity constructor migrates them forward anyway.
             };
@@ -64,7 +65,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
             TemplateAlertId = ToNullableGuid(policy.TemplateAlertId),
         };
 
-        private static PolicyEntity ToEntity(AlertPolicyDto policy, IReadOnlyDictionary<string, string> canonicalChatNames)
+        private static PolicyEntity ToEntity(AlertPolicyDto policy, IReadOnlyDictionary<string, Chat> chatsById)
         {
             return new PolicyEntity
             {
@@ -77,7 +78,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
                 // Display names are echoes: the manager's current name is authoritative,
                 // so a stale name in the payload never survives a write. An explicit
                 // JSON null means "omitted" — the wire default — never a null deref.
-                Destination = ToEntity(policy.Destination ?? new(), canonicalChatNames),
+                Destination = ToEntity(policy.Destination ?? new(), chatsById),
 
                 Schedule = ToEntity(policy.Schedule ?? new()),
 
@@ -118,12 +119,12 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         };
 
         private static PolicyDestinationEntity ToEntity(PolicyDestinationDto destination,
-            IReadOnlyDictionary<string, string> canonicalChatNames)
+            IReadOnlyDictionary<string, Chat> chatsById)
         {
             var chats = new Dictionary<string, string>();
 
             foreach (var (chatId, _) in destination.Chats ?? new Dictionary<string, string>())
-                chats[chatId] = canonicalChatNames.GetValueOrDefault(chatId);
+                chats[chatId] = chatsById.GetValueOrDefault(chatId)?.Name;
 
             return new PolicyDestinationEntity
             {

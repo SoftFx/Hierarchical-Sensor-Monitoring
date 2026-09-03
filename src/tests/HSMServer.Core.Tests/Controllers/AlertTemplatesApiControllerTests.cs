@@ -12,6 +12,7 @@ using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Schedule;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
 using HSMServer.Folders;
@@ -38,6 +39,7 @@ namespace HSMServer.Core.Tests.Controllers
         private readonly Mock<ITreeValuesCache> _cache = new();
         private readonly Mock<IFolderManager> _folders = new();
         private readonly Mock<IChatsManager> _chats = new();
+        private readonly Mock<IAlertScheduleProvider> _schedules = new();
         private readonly Mock<IApiTokenAuthorizationService> _authorization = new();
 
         // Dictionary-backed stand-in reproducing the cache's upsert-by-id semantics, so
@@ -71,6 +73,7 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns(true);
 
             _chats.Setup(c => c.GetValues()).Returns(new List<Chat>());
+            _schedules.Setup(s => s.GetSchedule(It.IsAny<Guid>())).Returns((AlertSchedule)null);
         }
 
 
@@ -82,7 +85,7 @@ namespace HSMServer.Core.Tests.Controllers
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
         private AlertTemplatesApiController CreateController() =>
-            new(_cache.Object, _folders.Object, _chats.Object, _authorization.Object,
+            new(_cache.Object, _folders.Object, _chats.Object, _schedules.Object, _authorization.Object,
                 NullLogger<AlertTemplatesApiController>.Instance)
             {
                 ControllerContext = new ControllerContext
@@ -115,7 +118,7 @@ namespace HSMServer.Core.Tests.Controllers
                 },
             ],
             TtlPolicies = [new AlertPolicyDto { SensorStatus = (byte)SensorStatus.Ok }],
-            Ttls = [new TimeIntervalDto { Interval = 60, Ticks = TimeSpan.FromMinutes(1).Ticks }],
+            Ttls = [new TimeIntervalDto { Interval = (long)TimeInterval.Ticks, Ticks = TimeSpan.FromMinutes(1).Ticks }],
         };
 
         private static BaseSensorModel BuildSensor(SensorType type) =>
@@ -319,7 +322,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             // A well-formed model via the same reconstruction path the writes use.
             var source = BuildDto(name: "shaped") with { Paths = ["*/cpu", "*/mem"] };
-            var model = new AlertTemplateModel(AlertTemplateDtoMapper.ToEntity(source, Guid.NewGuid(), new Dictionary<string, string>()));
+            var model = new AlertTemplateModel(AlertTemplateDtoMapper.ToEntity(source, Guid.NewGuid(), new Dictionary<string, Chat>()));
 
             _store[model.Id] = model;
 
@@ -350,7 +353,7 @@ namespace HSMServer.Core.Tests.Controllers
             var clientId = Guid.NewGuid();
             var dto = BuildDto() with { Id = clientId };
 
-            var result = Assert.IsType<CreatedAtActionResult>(await CreateController().CreateTemplate(dto, CancellationToken.None));
+            var result = Assert.IsType<CreatedAtActionResult>(await CreateController().CreateTemplate(dto));
 
             Assert.Equal(nameof(AlertTemplatesApiController.GetTemplate), result.ActionName);
             var serverId = Assert.IsType<Guid>(result.RouteValues["id"]);
@@ -371,7 +374,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var dto = BuildDto() with { Name = "" };
 
-            Assert.IsType<NotFoundResult>(await CreateController().CreateTemplate(dto, CancellationToken.None));
+            Assert.IsType<NotFoundResult>(await CreateController().CreateTemplate(dto));
             _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
@@ -385,7 +388,7 @@ namespace HSMServer.Core.Tests.Controllers
             // is applied after the fact.
             var dto = BuildDto() with { Name = name };
 
-            var result = await CreateController().CreateTemplate(dto, CancellationToken.None);
+            var result = await CreateController().CreateTemplate(dto);
 
             Assert.Equal(400, StatusCodeOf(result));
             Assert.Empty(_store);
@@ -396,7 +399,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var dto = BuildDto() with { Paths = ["   "] };
 
-            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto)));
         }
 
         [Fact]
@@ -406,7 +409,7 @@ namespace HSMServer.Core.Tests.Controllers
             // 404 — and never a write into a "folder 0" template.
             var dto = BuildDto() with { FolderId = Guid.Empty };
 
-            var result = await CreateController().CreateTemplate(dto, CancellationToken.None);
+            var result = await CreateController().CreateTemplate(dto);
 
             Assert.Equal(400, StatusCodeOf(result));
             Assert.Empty(_store);
@@ -436,7 +439,7 @@ namespace HSMServer.Core.Tests.Controllers
                     break;
             }
 
-            var result = await CreateController().CreateTemplate(dto, CancellationToken.None);
+            var result = await CreateController().CreateTemplate(dto);
 
             Assert.Equal(400, StatusCodeOf(result));
             Assert.Empty(_store);
@@ -451,7 +454,7 @@ namespace HSMServer.Core.Tests.Controllers
             var dto = BuildDto();
             dto.Policies[0] = dto.Policies[0] with { Destination = null, Schedule = null };
 
-            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
             Assert.Empty(_store.Values.Single().Policies[0].Destination.Chats);
         }
 
@@ -460,7 +463,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             // The web UI is bounded by its widgets; the API states its bounds.
             var tooManyPaths = BuildDto() with { Paths = [.. Enumerable.Range(0, AlertTemplatesApiController.MaxPaths + 1).Select(i => $"*/p{i}")] };
-            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(tooManyPaths, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(tooManyPaths)));
 
             var tooManyPolicies = BuildDto() with
             {
@@ -469,25 +472,99 @@ namespace HSMServer.Core.Tests.Controllers
                 TtlPolicies = [],
                 Ttls = [],
             };
-            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(tooManyPolicies, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(tooManyPolicies)));
 
             var longName = BuildDto(name: new string('n', AlertTemplatesApiController.MaxNameLength + 1));
-            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(longName, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(longName)));
 
             Assert.Empty(_store);
         }
 
         [Fact]
-        public async Task Create_ClientDisconnectsDuringWrite_Is499_NotA500()
+        public async Task Create_WriteIsNotClientCancellable_TheReconcileAlwaysCompletes()
         {
-            var ct = new CancellationToken(canceled: true);
-
+            // RequestAborted is deliberately NOT forwarded into the cache: Add persists
+            // before reconciling and Remove strips per-sensor policies BEFORE deleting
+            // the template — a client-triggered cancellation mid-loop would leave
+            // half-applied state (a cancelled delete silently disarms alerts).
             _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new OperationCanceledException(ct));
+                .Callback((AlertTemplateModel model, CancellationToken token) => Assert.False(token.CanBeCanceled))
+                .Returns((AlertTemplateModel model, CancellationToken _) =>
+                {
+                    _store[model.Id] = model;
+                    return Task.FromResult((true, (string)null));
+                });
 
-            var result = await CreateController().CreateTemplate(BuildDto(), ct);
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(BuildDto())));
+        }
 
-            Assert.Equal(499, StatusCodeOf(result));
+        [Fact]
+        public async Task Create_UndefinedTtlInterval_Is400()
+        {
+            // TimeInterval is a sparse long enum; an undefined value persists fine but
+            // throws NotImplementedException inside the timeout-scan loop (outside the
+            // controller's try) — it must never be accepted. 60 was exactly the value
+            // the original test fixture used.
+            var dto = BuildDto() with { Ttls = [new TimeIntervalDto { Interval = 60, Ticks = 60 }] };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_TtlTicksOutsideDateTimeRange_Is400()
+        {
+            // When ticks are authoritative, time.AddTicks(ticks) must stay inside the
+            // DateTime range — an overflow throws in the same evaluation loop.
+            var huge = BuildDto() with { Ttls = [new TimeIntervalDto { Interval = (long)TimeInterval.Ticks, Ticks = long.MaxValue }] };
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(huge)));
+
+            var negative = BuildDto() with { Ttls = [new TimeIntervalDto { Interval = (long)TimeInterval.Ticks, Ticks = -1 }] };
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(negative)));
+
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_DuplicatePolicyIds_Are400()
+        {
+            // The id becomes the per-sensor policy's TemplateAlertId — the matching key:
+            // two policies sharing one id silently collapse into one at apply time.
+            var sharedId = Guid.NewGuid();
+            var dto = BuildDto() with
+            {
+                Policies =
+                [
+                    new AlertPolicyDto { Id = sharedId, SensorStatus = (byte)SensorStatus.Ok },
+                    new AlertPolicyDto { Id = sharedId, SensorStatus = (byte)SensorStatus.Ok },
+                ],
+                TtlPolicies = [new AlertPolicyDto { Id = sharedId, SensorStatus = (byte)SensorStatus.Ok }],
+                Ttls = [new TimeIntervalDto { Interval = (long)TimeInterval.Ticks, Ticks = TimeSpan.FromMinutes(1).Ticks }],
+            };
+
+            var result = await CreateController().CreateTemplate(dto);
+
+            Assert.Equal(400, StatusCodeOf(result));
+            Assert.Empty(_store);
+        }
+
+        [Fact]
+        public async Task Create_UnknownScheduleId_Is400()
+        {
+            // The web UI's dropdown offers existing schedules only; a dangling id is
+            // silently treated as always-in-working-time at evaluation.
+            var scheduleId = Guid.NewGuid();
+            var dto = BuildDto();
+            dto.Policies[0] = dto.Policies[0] with { ScheduleId = scheduleId };
+
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto)));
+
+            // The same id resolves once the schedule exists.
+            _schedules.Setup(s => s.GetSchedule(scheduleId)).Returns(new AlertSchedule { Id = scheduleId });
+
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
         }
 
         [Theory]
@@ -497,7 +574,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var dto = BuildDto(sensorType: sensorType);
 
-            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto)));
         }
 
         [Fact]
@@ -507,7 +584,7 @@ namespace HSMServer.Core.Tests.Controllers
             // BooleanPolicy), so the AnyType payload carries no value policies here.
             var dto = BuildDto(sensorType: AlertTemplateModel.AnyType) with { Policies = [] };
 
-            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
         }
 
         [Fact]
@@ -517,7 +594,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var dto = BuildDto(name: "taken");
 
-            var result = await CreateController().CreateTemplate(dto, CancellationToken.None);
+            var result = await CreateController().CreateTemplate(dto);
 
             Assert.Equal(400, StatusCodeOf(result));
             Assert.Single(_store);
@@ -531,7 +608,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var dto = BuildDto(sensorType: (byte)SensorType.Integer);
 
-            var result = await CreateController().CreateTemplate(dto, CancellationToken.None);
+            var result = await CreateController().CreateTemplate(dto);
 
             Assert.Equal(400, StatusCodeOf(result));
             _cache.Verify(c => c.GetSensors(It.IsAny<string>(), null, It.IsAny<Guid?>()), Times.Once);
@@ -545,7 +622,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var dto = BuildDto(sensorType: AlertTemplateModel.AnyType) with { Policies = [] };
 
-            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
             _cache.Verify(c => c.GetSensors(It.IsAny<string>(), It.IsAny<SensorType?>(), It.IsAny<Guid?>()), Times.Never);
         }
 
@@ -559,7 +636,7 @@ namespace HSMServer.Core.Tests.Controllers
                 Destination = new PolicyDestinationDto { Chats = new Dictionary<string, string> { [chatId.ToString()] = "ops" } },
             };
 
-            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto)));
         }
 
         [Fact]
@@ -574,7 +651,7 @@ namespace HSMServer.Core.Tests.Controllers
                 Destination = new PolicyDestinationDto { Chats = new Dictionary<string, string> { [chatId.ToString()] = "ops" } },
             };
 
-            var result = await CreateController().CreateTemplate(dto, CancellationToken.None);
+            var result = await CreateController().CreateTemplate(dto);
 
             Assert.Equal(400, StatusCodeOf(result));
             Assert.Empty(_store);
@@ -592,7 +669,7 @@ namespace HSMServer.Core.Tests.Controllers
                 Destination = new PolicyDestinationDto { Chats = new Dictionary<string, string> { [chatId.ToString()] = "stale-name" } },
             };
 
-            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
 
             // The display name is canonicalized to the manager's current name on write.
             Assert.Equal("global", _store.Values.Single().Policies[0].Destination.Chats[chatId]);
@@ -612,7 +689,7 @@ namespace HSMServer.Core.Tests.Controllers
                 Destination = new PolicyDestinationDto { Chats = new Dictionary<string, string> { [chatId.ToString()] = "folder-chat" } },
             };
 
-            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
         }
 
         [Fact]
@@ -621,7 +698,7 @@ namespace HSMServer.Core.Tests.Controllers
             var dto = BuildDto();
             dto.Policies[0] = dto.Policies[0] with { Id = Guid.Empty };
 
-            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(201, StatusCodeOf(await CreateController().CreateTemplate(dto)));
             Assert.NotEqual(Guid.Empty, _store.Values.Single().Policies[0].Id);
         }
 
@@ -641,7 +718,7 @@ namespace HSMServer.Core.Tests.Controllers
                 }],
             };
 
-            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto)));
         }
 
         [Fact]
@@ -650,7 +727,7 @@ namespace HSMServer.Core.Tests.Controllers
             var dto = BuildDto();
             dto.TtlPolicies.Add(new AlertPolicyDto { SensorStatus = (byte)SensorStatus.Ok });
 
-            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto)));
         }
 
         [Fact]
@@ -662,7 +739,7 @@ namespace HSMServer.Core.Tests.Controllers
                 Schedule = new PolicyScheduleDto { TimeTicks = long.MinValue, InstantSend = true },
             };
 
-            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().CreateTemplate(dto)));
         }
 
         [Fact]
@@ -671,7 +748,7 @@ namespace HSMServer.Core.Tests.Controllers
             _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult((false, "No products found in the selected folder.")));
 
-            var result = await CreateController().CreateTemplate(BuildDto(), CancellationToken.None);
+            var result = await CreateController().CreateTemplate(BuildDto());
 
             Assert.Equal(409, StatusCodeOf(result));
             Assert.Contains("No products found", Assert.IsType<ProblemDetails>(Assert.IsType<ObjectResult>(result).Value).Detail);
@@ -685,7 +762,7 @@ namespace HSMServer.Core.Tests.Controllers
             _store[stored.Id] = stored;
 
             var dto = BuildDto(name: "renamed");
-            var putResult = Assert.IsType<OkObjectResult>(await CreateController().UpdateTemplate(stored.Id, dto, CancellationToken.None));
+            var putResult = Assert.IsType<OkObjectResult>(await CreateController().UpdateTemplate(stored.Id, dto));
             var echoed = Assert.IsType<AlertTemplateDto>(putResult.Value);
 
             var getResult = Assert.IsType<OkObjectResult>(CreateController().GetTemplate(stored.Id));
@@ -706,7 +783,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public async Task Update_Absent_Is404_WithoutEvaluatorCall()
         {
-            Assert.IsType<NotFoundResult>(await CreateController().UpdateTemplate(Guid.NewGuid(), BuildDto(), CancellationToken.None));
+            Assert.IsType<NotFoundResult>(await CreateController().UpdateTemplate(Guid.NewGuid(), BuildDto()));
 
             _authorization.Verify(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
         }
@@ -730,7 +807,7 @@ namespace HSMServer.Core.Tests.Controllers
                     It.Is<ApiTokenResource>(r => r.Id == folderB)))
                 .Returns(ApiTokenAuthorization.Forbidden);
 
-            Assert.Equal(403, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, dto, CancellationToken.None)));
+            Assert.Equal(403, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, dto)));
             Assert.Equal(folderA, _store[stored.Id].FolderId); // unchanged
 
             // Both sides allowed: the move happens.
@@ -738,7 +815,7 @@ namespace HSMServer.Core.Tests.Controllers
                     It.Is<ApiTokenResource>(r => r.Id == folderB)))
                 .Returns(ApiTokenAuthorization.Allowed);
 
-            Assert.Equal(200, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, dto, CancellationToken.None)));
+            Assert.Equal(200, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, dto)));
             Assert.Equal(folderB, _store[stored.Id].FolderId);
         }
 
@@ -755,13 +832,13 @@ namespace HSMServer.Core.Tests.Controllers
                     It.Is<ApiTokenResource>(r => r.Id == stored.FolderId)))
                 .Returns(ApiTokenAuthorization.Forbidden);
 
-            Assert.Equal(403, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, BuildDto() with { FolderId = Guid.Empty }, CancellationToken.None)));
+            Assert.Equal(403, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, BuildDto() with { FolderId = Guid.Empty })));
 
             // An authorized caller gets the 400 instead.
             _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
 
-            Assert.Equal(400, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, BuildDto() with { FolderId = Guid.Empty }, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, BuildDto() with { FolderId = Guid.Empty })));
             Assert.Equal(stored.FolderId, _store[stored.Id].FolderId); // untouched
         }
 
@@ -773,7 +850,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var dto = BuildDto() with { Id = Guid.NewGuid() };
 
-            Assert.Equal(400, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, dto, CancellationToken.None)));
+            Assert.Equal(400, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, dto)));
         }
 
         [Fact]
@@ -784,7 +861,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var dto = BuildDto(name: "stable-name");
 
-            Assert.Equal(200, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, dto, CancellationToken.None)));
+            Assert.Equal(200, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, dto)));
         }
 
 
@@ -796,7 +873,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var controller = CreateController();
 
-            Assert.IsType<NoContentResult>(await controller.DeleteTemplate(stored.Id, CancellationToken.None));
+            Assert.IsType<NoContentResult>(await controller.DeleteTemplate(stored.Id));
             Assert.IsType<NotFoundResult>(controller.GetTemplate(stored.Id));
         }
 
@@ -809,7 +886,7 @@ namespace HSMServer.Core.Tests.Controllers
             _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult((false, "Failed to remove template from products: X")));
 
-            var result = await CreateController().DeleteTemplate(stored.Id, CancellationToken.None);
+            var result = await CreateController().DeleteTemplate(stored.Id);
 
             Assert.Equal(409, StatusCodeOf(result));
         }
@@ -821,7 +898,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             // Create.
             var dto = BuildDto(name: "lifecycle");
-            var created = Assert.IsType<CreatedAtActionResult>(await controller.CreateTemplate(dto, CancellationToken.None));
+            var created = Assert.IsType<CreatedAtActionResult>(await controller.CreateTemplate(dto));
             var id = Assert.IsType<Guid>(created.RouteValues["id"]);
 
             // Get.
@@ -830,14 +907,14 @@ namespace HSMServer.Core.Tests.Controllers
 
             // Update: rename + one more path.
             var updated = BuildDto(name: "lifecycle-2") with { Paths = ["*/cpu", "*/mem"] };
-            Assert.Equal(200, StatusCodeOf(await controller.UpdateTemplate(id, updated, CancellationToken.None)));
+            Assert.Equal(200, StatusCodeOf(await controller.UpdateTemplate(id, updated)));
 
             var afterUpdate = Assert.IsType<AlertTemplateDto>(Assert.IsType<OkObjectResult>(controller.GetTemplate(id)).Value);
             Assert.Equal("lifecycle-2", afterUpdate.Name);
             Assert.Equal(["*/cpu", "*/mem"], afterUpdate.Paths);
 
             // Delete.
-            Assert.IsType<NoContentResult>(await controller.DeleteTemplate(id, CancellationToken.None));
+            Assert.IsType<NoContentResult>(await controller.DeleteTemplate(id));
             Assert.IsType<NotFoundResult>(controller.GetTemplate(id));
         }
     }
