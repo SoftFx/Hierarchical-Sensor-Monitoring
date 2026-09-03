@@ -72,6 +72,17 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         private ApiTokenAuthorizationService CreateService() =>
             new(_users.Object, _tokens.Object, _folders.Object, _cache.Object, new Moq.Mock<IApiTokenSecurityEventSink>().Object);
 
+        private (ApiTokenAuthorizationService Service, System.Collections.Generic.List<ApiTokenSecurityEvent> Events) CreateAuditedService()
+        {
+            var events = new System.Collections.Generic.List<ApiTokenSecurityEvent>();
+            var sink = new Mock<IApiTokenSecurityEventSink>();
+            sink.Setup(s => s.Record(It.IsAny<ApiTokenSecurityEvent>()))
+                .Callback<ApiTokenSecurityEvent>(events.Add);
+
+            return (new ApiTokenAuthorizationService(_users.Object, _tokens.Object,
+                _folders.Object, _cache.Object, sink.Object), events);
+        }
+
 
         [Fact]
         public void AdminOwner_ReadGrantOnProduct_Allowed()
@@ -412,6 +423,138 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductManager));
 
             Assert.True(service.IsVisible(Principal(), ApiTokenOperations.AlertsWrite, ApiTokenResource.Product(ProductA)));
+        }
+
+
+        // The caller-wide gate for global resources (alert schedules): candidates are
+        // the token's OWN grants for the operation, decided by the plain list
+        // predicate. A denial must record the 403 scope-denial kind — the gate is
+        // caller-wide and discloses nothing about any concrete target, so feeding the
+        // AuthorizationNotFound enumeration-probe signal from here would drown it.
+        [Fact]
+        public void HasOperationAtAnyVisibleBoundary_GrantAtVisibleBoundary_True_NoEvent()
+        {
+            _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductViewer));
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Product, ProductA));
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.True(service.HasOperationAtAnyVisibleBoundary(Principal(), ApiTokenOperations.AlertsRead));
+            Assert.Empty(events); // allowed decisions are not per-request events
+        }
+
+        [Fact]
+        public void HasOperationAtAnyVisibleBoundary_NoMatchingGrant_False_RecordsDeniedOnce()
+        {
+            _owner.IsAdmin = true;
+            _info = BuildInfo(Grant(ApiTokenOperations.ProductsRead, ApiTokenBoundaryKind.Folder, FolderF));
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.False(service.HasOperationAtAnyVisibleBoundary(Principal(), ApiTokenOperations.AlertsRead));
+
+            var @event = Assert.Single(events);
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, @event.Kind);
+            Assert.Equal(ApiTokenOperations.AlertsRead, @event.Operation);
+        }
+
+        [Fact]
+        public void HasOperationAtAnyVisibleBoundary_GrantAtInvisibleBoundary_False()
+        {
+            // The owner manages A only; the alerts:read grant sits on B — the
+            // intersection decides, not the grant alone.
+            _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductViewer));
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Product, ProductB));
+
+            Assert.False(CreateService().HasOperationAtAnyVisibleBoundary(Principal(), ApiTokenOperations.AlertsRead));
+        }
+
+        [Fact]
+        public void HasOperationAtAnyVisibleBoundary_GlobalGrant_RequiresAdminOwner()
+        {
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global, null));
+            var service = CreateService();
+
+            _owner.IsAdmin = false;
+            Assert.False(service.HasOperationAtAnyVisibleBoundary(Principal(), ApiTokenOperations.AlertsRead));
+
+            _owner.IsAdmin = true;
+            Assert.True(service.HasOperationAtAnyVisibleBoundary(Principal(), ApiTokenOperations.AlertsRead));
+        }
+
+        [Fact]
+        public void HasOperationAtAnyVisibleBoundary_UnresolvableToken_False_RecordsDeniedOnce()
+        {
+            // Revoked/removed between authentication and authorization: no grants to
+            // check — fail closed, and the denial is still the 403 kind, never a
+            // probe signal.
+            _owner.IsAdmin = true;
+            _info = null;
+
+            var (service, events) = CreateAuditedService();
+
+            Assert.False(service.HasOperationAtAnyVisibleBoundary(Principal(), ApiTokenOperations.AlertsRead));
+            Assert.Equal(ApiTokenSecurityEventKind.AuthorizationDenied, Assert.Single(events).Kind);
+        }
+
+        [Fact]
+        public void HasOperationAtAnyVisibleBoundary_NonMatchingOperationGrants_NeverProbed()
+        {
+            // Candidates come only from the operation's own grants: a products:read
+            // grant's boundary is never even resolved.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(Grant(ApiTokenOperations.ProductsRead, ApiTokenBoundaryKind.Product, ProductA));
+
+            Assert.False(CreateService().HasOperationAtAnyVisibleBoundary(Principal(), ApiTokenOperations.AlertsRead));
+
+            _cache.Verify(c => c.TryGetProduct(It.IsAny<Guid>(), out It.Ref<HSMServer.Core.Model.ProductModel>.IsAny), Times.Never);
+        }
+
+        [Fact]
+        public void HasOperationAtAnyVisibleBoundary_MalformedBoundaryId_SkippedFailClosed()
+        {
+            // Canonicalization (ApiTokenGrants.TryCanonicalize) rejects a non-Guid
+            // boundary id at persistence and at load, so it cannot reach a live token;
+            // the gate still skips it fail-closed rather than throwing.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(new ApiTokenGrantEntity
+            {
+                Operation = ApiTokenOperations.AlertsRead,
+                BoundaryKind = (byte)ApiTokenBoundaryKind.Folder,
+                BoundaryId = "not-a-guid",
+            });
+
+            Assert.False(CreateService().HasOperationAtAnyVisibleBoundary(Principal(), ApiTokenOperations.AlertsRead));
+        }
+
+        [Fact]
+        public void HasOperationAtGlobalScope_AdminOwnerWithMatchingGlobalGrant_True()
+        {
+            _owner.IsAdmin = true;
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global, null));
+
+            Assert.True(CreateService().HasOperationAtGlobalScope(Principal(), ApiTokenOperations.AlertsRead));
+        }
+
+        [Fact]
+        public void HasOperationAtGlobalScope_NonAdminOwner_OtherOperation_ScopedGrant_False()
+        {
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global, null));
+            var service = CreateService();
+
+            // The owner side: global scope is admin-only.
+            _owner.IsAdmin = false;
+            Assert.False(service.HasOperationAtGlobalScope(Principal(), ApiTokenOperations.AlertsRead));
+
+            // The token side: a grant for ANOTHER operation must not wildcard into
+            // this one's responses.
+            _owner.IsAdmin = true;
+            Assert.False(service.HasOperationAtGlobalScope(Principal(), ApiTokenOperations.ProductsRead));
+
+            // A scoped grant is not a global one — the short-circuit must not fire
+            // for it (the per-product predicate remains the decider).
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Product, ProductA));
+            Assert.False(service.HasOperationAtGlobalScope(Principal(), ApiTokenOperations.AlertsRead));
         }
 
         [Fact]

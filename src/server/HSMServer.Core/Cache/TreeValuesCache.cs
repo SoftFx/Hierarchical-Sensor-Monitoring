@@ -2985,5 +2985,45 @@ namespace HSMServer.Core.Cache
             return result;
         }
 
+        public Dictionary<Guid, List<BaseSensorModel>> GetSensorsByAlertSchedules(IReadOnlyCollection<Guid> ids)
+        {
+            var result = new Dictionary<Guid, List<BaseSensorModel>>(ids.Count);
+
+            foreach (var id in ids)
+                result[id] = [];
+
+            if (result.Count == 0)
+                return result;
+
+            // One pass over the sensor table for the whole id set: the singular form
+            // scans every sensor per call, so a page of schedules would pay a full
+            // scan per item. A sensor referencing the same schedule from both a TTL
+            // and a regular policy is added once (the set deduplicates), matching the
+            // singular form's add-and-continue.
+            var matched = new HashSet<Guid>();
+
+            foreach (var sensor in _sensorsById.Values)
+            {
+                matched.Clear();
+
+                foreach (var ttl in sensor.Policies.TTLPolicies)
+                {
+                    if (ttl.ScheduleId is { } ttlId && result.ContainsKey(ttlId))
+                        matched.Add(ttlId);
+                }
+
+                foreach (var policy in sensor.Policies)
+                {
+                    if (policy.ScheduleId is { } policyId && result.ContainsKey(policyId))
+                        matched.Add(policyId);
+                }
+
+                foreach (var id in matched)
+                    result[id].Add(sensor);
+            }
+
+            return result;
+        }
+
     }
 }

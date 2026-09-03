@@ -17,6 +17,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
 using HSMServer.Folders;
 using HSMServer.Model.Folders;
+using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
@@ -203,7 +204,7 @@ namespace HSMServer.Core.Tests.Controllers
             _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
                 .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) => resource.Id != folderB);
 
-            var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates()).Value as AlertTemplatePageDto;
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates()).Value as ApiPageDto<AlertTemplateDto>;
 
             Assert.NotNull(page);
             Assert.Equal(2, page.TotalCount);
@@ -229,7 +230,7 @@ namespace HSMServer.Core.Tests.Controllers
                 })
                 .Verifiable();
 
-            var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates()).Value as AlertTemplatePageDto;
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates()).Value as ApiPageDto<AlertTemplateDto>;
 
             Assert.Equal(ApiTokenOperations.AlertsRead, askedOperation);
             Assert.Empty(page.Items);
@@ -260,7 +261,7 @@ namespace HSMServer.Core.Tests.Controllers
                 _store[Guid.NewGuid()] = new AlertTemplateModel { Name = $"t{index}" };
 
             var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates(page: 2, pageSize: 2))
-                .Value as AlertTemplatePageDto;
+                .Value as ApiPageDto<AlertTemplateDto>;
 
             Assert.NotNull(page);
             Assert.Equal(5, page.TotalCount);
@@ -277,7 +278,7 @@ namespace HSMServer.Core.Tests.Controllers
                 _store[Guid.NewGuid()] = new AlertTemplateModel { Name = $"t{index}" };
 
             var clamped = Assert.IsType<OkObjectResult>(CreateController().GetTemplates(page: 0, pageSize: 9_999))
-                .Value as AlertTemplatePageDto;
+                .Value as ApiPageDto<AlertTemplateDto>;
 
             Assert.NotNull(clamped);
             Assert.Equal(1, clamped.Page);
@@ -294,7 +295,7 @@ namespace HSMServer.Core.Tests.Controllers
                 _store[Guid.NewGuid()] = new AlertTemplateModel { Name = $"t{index}" };
 
             var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates(page: 429_496_747, pageSize: 2))
-                .Value as AlertTemplatePageDto;
+                .Value as ApiPageDto<AlertTemplateDto>;
 
             Assert.NotNull(page);
             Assert.Equal(2, page.Page); // clamped to totalPages

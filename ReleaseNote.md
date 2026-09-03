@@ -2,6 +2,7 @@
 
 ## Management API
 * Added REST CRUD for alert templates at `/api/v1/alertTemplates` (list with pagination, get, create, update, delete) for non-interactive clients — authenticated with a personal API token (`hsm_pat_` bearer) and authorized per folder through the token's `alerts:read`/`alerts:write` grants intersected with the owner's current rights. SitePort only; JSON errors.
+* Added read-only REST access to alert schedules at `/api/v1/alertSchedules` (list with pagination, get by id); requires an `alerts:read` grant at any boundary accessible to the token's owner, and sensor references are filtered to the caller's visible products.
 
 ## Chats
 * Added per-chat sensor usage count badge so operators can see how many sensors feed each chat at a glance.

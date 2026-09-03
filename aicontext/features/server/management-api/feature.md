@@ -1,13 +1,13 @@
 # Feature: Management REST API (resource controllers)
 
 > Owner: server | Last reviewed: 2026-09-03 | Canonical: yes
-> Scope: the `/api/v1` REST resource controllers for non-interactive management clients (bearer-token authenticated); the conventions every controller in the area follows. First — and so far only — controller: alert templates CRUD (#1351).
+> Scope: the `/api/v1` REST resource controllers for non-interactive management clients (bearer-token authenticated); the conventions every controller in the area follows. Controllers: alert templates CRUD (#1351), alert schedules read-only (#1352).
 
 ---
 
 ## Overview
 
-Epic #1347 gives non-interactive clients (AI agents, scripts, resident services) a machine-friendly REST management API under `/api/v1`. Authentication (the `HsmApiToken` bearer scheme), the fail-closed area guard, the security-event sink and the effective-rights evaluator are owned by the api-tokens feature; this feature owns the resource controllers built on top of them. Alert templates are the first resource (#1351, full CRUD); alert schedules follow (#1352, read-only); OpenAPI publication and the formal JSON error contract are #1353.
+Epic #1347 gives non-interactive clients (AI agents, scripts, resident services) a machine-friendly REST management API under `/api/v1`. Authentication (the `HsmApiToken` bearer scheme), the fail-closed area guard, the security-event sink and the effective-rights evaluator are owned by the api-tokens feature; this feature owns the resource controllers built on top of them. Alert templates (#1351, full CRUD) and alert schedules (#1352, read-only) are landed; OpenAPI publication and the formal JSON error contract are #1353.
 
 ## Invariants
 
@@ -19,6 +19,7 @@ Epic #1347 gives non-interactive clients (AI agents, scripts, resident services)
 - **Validation parity with the web UI** (same order, same error strings): global case-sensitive name uniqueness excluding self, at-least-one-path, path/type mismatch check (#1210; AnyType templates skip it), chat availability (a destination chat must be global or bound to the template's folder — the UI dropdown rule), schedule references must resolve (`scheduleId` is validated against the schedule provider — the UI dropdown cannot produce a dangling id, and at evaluation an unknown id is silently treated as always-in-working-time). Plus API-side structural validation the UI gets for free from its widgets: enum membership of every byte field (Operation/Property/Combination/TargetType/RepeateMode/SensorStatus/SensorType) BEFORE the domain casts — and of the **sparse long `TimeInterval` enum** for `ttls[].interval` (an undefined value persists but throws `NotImplementedException` in the timeout-scan loop, outside the controller's try; ticks-authoritative intervals also keep `now + ticks` inside the DateTime range — `AddTicks` throws in the same loop), parallel-list length equality for TTL policies/intervals, schedule tick range, chat keys parseable as Guids, **null list elements rejected** (`"policies": [null]` is a 400 — System.Text.Json materialises it, and the structural pass runs outside the reconstruction try, so a null dereference there would be a 500), **duplicate non-empty policy ids rejected** (the id becomes the per-sensor `TemplateAlertId` — the apply-time matching key — so duplicates silently collapse two policies into one), and explicit size bounds the widgets impose implicitly (name ≤ 200 chars, ≤ 100 paths, ≤ 100 policies regular+TTL combined — collection counts and name only; individual strings stay bounded by the request body limit, see Known Issues). `"destination": null` / `"schedule": null` mean "omitted" (the mapper substitutes the defaults), not a domain parse failure. A missing/empty `folderId` is a 400 (never routed through the evaluator's 404 — an all-zero Guid references no folder and leaks nothing); on PUT that 400 is issued only AFTER authorization, so a body-shape error cannot reveal that a template exists to a caller outside its reach. Domain reconstruction runs inside a try — `Policy.Apply` throws for condition properties a sensor type does not support, and that is a 400, never a 500.
 - **Write-side normalizations (observable in the echoed DTO)**: server-generated template id; `Guid.Empty` policy ids regenerated (empty ids would collide in per-sensor policy collections at apply time); destination chat display names overwritten with the manager's current names.
 - **Writes are never client-cancellable**: `RequestAborted` is deliberately NOT forwarded into the cache. `AddAlertTemplateAsync` persists the template BEFORE reconciling sensors, and `RemoveAlertTemplateAsync` strips per-sensor template policies BEFORE removing the template — a client-triggered cancellation mid-reconcile would leave half-applied state, and a cancelled DELETE would silently leave the template alive with some sensors already disarmed (nobody to report to — the client is gone). The web UI passes no token either: a write completes once accepted.
+- **Global read-only resources (alert schedules, #1352)**: schedules are not folder-scoped, and the web UI shows them to every logged-in user. The gate is therefore caller-wide, not per-resource, and lives **inside the evaluator** (`HasOperationAtAnyVisibleBoundary`): the caller may read schedules when ANY of the token's `alerts:read` grants sits at a boundary that currently passes the evaluator's list predicate — candidate boundaries are enumerated from the token's own grants inside the evaluator (no grant logic in the controller), with caller resolution, token liveness and owner visibility/capability all inside the same conjunction. An unentitled caller gets 403 for every id (the provider is never queried — schedule existence is not per-caller scoped, so nothing leaks), an entitled one a plain 404 for an unknown id. One denial audit record per denied request is written by the gate itself, as `AuthorizationDenied` — the plain 403 scope-denial kind, deliberately NOT the `AuthorizationNotFound` enumeration-probe signal, because the caller-wide gate discloses nothing about any concrete target. Sensor references in the DTO (full paths, the UI list page shows them as a tooltip) are filtered per sensor through the evaluator at the sensor's **product** boundary under the same `alerts:read` operation — mere reach is not enough, a token granted only e.g. `dashboards:read` at a product must not learn its sensor paths from an alerts response — so a folder-scoped token never learns paths outside its alerts:read grants; parentless sensors fail closed (dropped). A Global `alerts:read` grant under an admin owner (the token-side "everywhere" shape — it can pass the gate through the Global boundary) short-circuits the per-product filter once per request (`HasOperationAtGlobalScope`): the per-product predicate deliberately never treats a Global grant as a wildcard, so without the short-circuit the broadest token would get every schedule with an empty `sensors` list. On the list path the decision is memoized per **distinct** product within one request (sensors cluster into few products; the evaluator re-resolves caller + grants on every call), and the page's sensor references are resolved in ONE bulk cache pass (`GetSensorsByAlertSchedules` — the per-id lookup scans every sensor, so per-item calls would be a full scan per schedule; the cookie UI list uses the same bulk method).
 
 ## Primary Workflows
 
@@ -29,6 +30,8 @@ Epic #1347 gives non-interactive clients (AI agents, scripts, resident services)
 | 3 | Create template (server id, 201 + Location) | API client |
 | 4 | Update template (upsert semantics, optional folder move) | API client |
 | 5 | Delete template (204; 409 when per-sensor policy removal fails) | API client |
+| 6 | List schedules (paginated; caller-wide alerts:read gate; sensors filtered per visibility) | API client |
+| 7 | Get one schedule by id (same gate) | API client |
 
 ## API / Public Contracts
 
@@ -39,17 +42,25 @@ Epic #1347 gives non-interactive clients (AI agents, scripts, resident services)
 | `POST /api/v1/alertTemplates` | `AlertTemplatesApiController.CreateTemplate` | 201 + Location + canonical DTO; client id ignored |
 | `PUT /api/v1/alertTemplates/{id}` | `AlertTemplatesApiController.UpdateTemplate` | 200 + canonical stored DTO; body id must match route; folder move gated on both folders |
 | `DELETE /api/v1/alertTemplates/{id}` | `AlertTemplatesApiController.DeleteTemplate` | 204 / 404 / 403 / 409 |
+| `GET /api/v1/alertSchedules?page&pageSize` | `AlertSchedulesApiController.GetSchedules` | Read-only; 200 page; same envelope and clamps as templates; order name-then-id |
+| `GET /api/v1/alertSchedules/{id}` | `AlertSchedulesApiController.GetSchedule` | 200 DTO / 404 (entitled caller) / 403 (no accessible `alerts:read` grant) |
 | `AlertTemplateDto` (+ nested policy/condition/destination/schedule/interval DTOs) | `Model/ManagementApi/AlertTemplates/AlertTemplateDto.cs` | Mirrors the durable entity one field per field, Guid ids as strings. Deliberately omits dead entity fields: `Destination.Kind` (legacy, never read/written), `PolicyEntity.TTL` on TTL policies (written, never read — the interval is authoritative in `ttls[i]`), legacy single `Path`/`TTLPolicy`/`TTL`. Byte fields are the domain enum values (PolicyOperation/PolicyProperty/PolicyCombination/TargetType/SensorStatus/AlertRepeatMode/SensorType; 100 = AnyType). camelCase JSON via MVC defaults. |
+| `AlertScheduleDto` | `Model/ManagementApi/AlertSchedules/AlertScheduleDto.cs` | `{id, name, timezone, schedule(YAML), sensors: [paths]}` — the durable fields the UI editor shows plus visibility-filtered sensor references |
+| `ApiPageDto<T>` | `Model/ManagementApi/ApiPageDto.cs` | Shared list envelope: `{items, page, pageSize, totalCount, totalPages}` |
 
 ## Key Files
 
 | File | Purpose |
 |---|---|
-| `src/server/HSMServer/Controllers/AlertTemplatesApiController.cs` | The first `/api/v1` resource controller; the conventions reference for #1352 |
+| `src/server/HSMServer/Controllers/AlertTemplatesApiController.cs` | The first `/api/v1` resource controller; the conventions reference |
+| `src/server/HSMServer/Controllers/AlertSchedulesApiController.cs` | Read-only schedules controller; the caller-wide global-resource gate |
 | `src/server/HSMServer/Model/ManagementApi/AlertTemplates/AlertTemplateDto.cs` | Wire DTOs |
 | `src/server/HSMServer/Model/ManagementApi/AlertTemplates/AlertTemplateDtoMapper.cs` | DTO ↔ entity mapping + write-side normalizations |
 | `src/server/HSMServer/Model/DataAlertTemplates/AlertTemplatePathValidation.cs` | #1210 path/type mismatch rule shared by the cookie UI controller and this API controller so the two surfaces cannot drift |
+| `src/server/HSMServer/Model/ManagementApi/AlertSchedules/AlertScheduleDto.cs` | Schedule wire DTO |
+| `src/server/HSMServer/Model/ManagementApi/AlertSchedules/AlertScheduleDtoMapper.cs` | Credential-free mapping of the durable schedule fields |
 | `src/tests/HSMServer.Core.Tests/Controllers/AlertTemplatesApiControllerTests.cs` | Conventions pin, authorization mapping, validation, round-trip |
+| `src/tests/HSMServer.Core.Tests/Controllers/AlertSchedulesApiControllerTests.cs` | Schedules gate, sensor filtering, pagination |
 
 ## Data Flow
 
@@ -59,11 +70,15 @@ bearer token ──► ManagementApiGuard (SitePort, [ManagementApi]+policy, els
              ──► controller action
                   ──► IApiTokenAuthorizationService.Authorize(User, op, Folder(template or dto folder))
                   │     Allowed → proceed; Forbidden → 403 Problem; NotFound → 404
-                  ──► structural validation (enums, list parity, ids) ── 400 ValidationProblem
-                  ──► entity reconstruction (try) ── 400 on unsupported domain input
-                  ──► semantic validation (name/path/mismatch/chats) ── 400
-                  ──► TreeValuesCache.Add/RemoveAlertTemplateAsync ── 409 on (false, error)
-                  └─► 201+Location / 200 + stored DTO / 204
+                  ├── alertSchedules (global, read-only): HasOperationAtAnyVisibleBoundary(User, alerts:read)
+                  │     true → proceed (list: one bulk sensor pass + visibility memoized per
+                  │             distinct product); false → 403 Problem + one AuthorizationDenied
+                  │             audit record (never the enumeration-probe kind)
+                  ├── structural validation (enums, list parity, ids) ── 400 ValidationProblem
+                  ├── entity reconstruction (try) ── 400 on unsupported domain input
+                  ├── semantic validation (name/path/mismatch/chats) ── 400
+                  ├── TreeValuesCache.Add/RemoveAlertTemplateAsync ── 409 on (false, error)
+                  └── 201+Location / 200 + stored DTO / 204
 ```
 
 ## Storage / Persistence
@@ -76,8 +91,8 @@ No UI. The cookie web UI (`AlertTemplatesController`) remains the human surface;
 
 ## Dependencies
 
-- Depends on: api-tokens feature (scheme, area guard, evaluator, security events), alert templates domain (`TreeValuesCache`, `AlertTemplateModel`).
-- Used by: non-interactive management clients; #1352 (schedules read-only) copies these conventions; #1353 documents the area with OpenAPI.
+- Depends on: api-tokens feature (scheme, area guard, evaluator, security events), alert templates domain (`TreeValuesCache`, `AlertTemplateModel`), alert schedules domain (`IAlertScheduleProvider`).
+- Used by: non-interactive management clients; #1353 documents the area with OpenAPI.
 
 ## Tests
 
@@ -95,6 +110,8 @@ No UI. The cookie web UI (`AlertTemplatesController`) remains the human surface;
 - **PUT racing a DELETE resurrects the template**: the existence check and the upsert `AddAlertTemplateAsync` are not atomic; a PUT concurrent with a successful DELETE re-creates the template under the route id. Same upsert semantics the web UI relies on.
 - **Concurrent POSTs with the same name both persist**: the name-uniqueness check reads `GetAlertTemplateModels()` and the cache Add does not enforce uniqueness, so two racing creates can both land. Same race the web UI has; uniqueness is advisory, not a constraint.
 - **Per-item string sizes are unbounded**: the guard rails bound collection counts and the name only; path strings, message templates, icons, condition target values and per-policy condition counts are limited by the request body limit alone. A multi-megabyte template would be copied onto every matching sensor and re-serialized on every sensor write. Tighter per-item bounds are a deliberate open decision (the web UI has none either).
+- **`sensors` in the schedules LIST response is unbounded** (deliberate, parity with the UI list tooltip): a schedule referenced by tens of thousands of sensors emits every visible full path, for up to `MaxPageSize` schedules in one response. The per-product visibility memoization bounds the CPU cost, not the response size; a count-plus-item-fetch split is a possible follow-up if machine clients prove it necessary.
+- **A future schedule WRITE must not reuse the caller-wide gate**: `HasOperationAtAnyVisibleBoundary` is the read-side equivalent of "the UI shows schedules to every logged-in user" — writes at the global boundary are admin-only in the evaluator (`OwnerCanPerform`), and the write endpoint (#1352 follow-up) must go through the regular `Authorize(User, op, Global)` path instead.
 - List re-resolves the caller per **distinct** folder within a request (memoized); templates sharing a folder cannot straddle a mid-request grant/role change, but two folders in one page still can. A snapshot API in the evaluator is a possible follow-up.
 - The ported `TryApplyPathTemplates` semantic check is effectively unreachable through string input (the converter builds the pattern lazily; a malformed pattern surfaces at match time, not registration) — kept for parity with the web UI.
 - No OpenAPI document for the area yet (#1353); error bodies follow `[ApiController]` ProblemDetails defaults, to be formalized there.

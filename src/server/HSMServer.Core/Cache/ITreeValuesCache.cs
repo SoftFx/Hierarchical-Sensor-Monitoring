@@ -121,5 +121,10 @@ namespace HSMServer.Core.Cache
         Task RunProductsSelfDestroyAsync(CancellationToken token = default);
 
         List<BaseSensorModel> GetSensorsByAlertSchedule(Guid id);
+
+        // Batch form of GetSensorsByAlertSchedule for page-sized id sets: one pass
+        // over the sensor table instead of one full scan per id. Schedules absent
+        // from the result map simply have no sensors.
+        Dictionary<Guid, List<BaseSensorModel>> GetSensorsByAlertSchedules(IReadOnlyCollection<Guid> ids);
     }
 }

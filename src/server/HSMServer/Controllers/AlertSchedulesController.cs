@@ -126,9 +126,13 @@ namespace HSMServer.Controllers
 
             var list = _scheduleProvider.GetAllSchedules().Select(x => new AlertScheduleViewModel(x)).ToList();
 
+            // One pass over the sensor table for the whole list; the per-id lookup
+            // scans every sensor, so per-item calls were a full scan per schedule.
+            var sensorsBySchedule = _cache.GetSensorsByAlertSchedules(list.Select(x => x.Id).ToList());
+
             foreach (var item in list)
             {
-                item.Sensors = _cache.GetSensorsByAlertSchedule(item.Id);
+                item.Sensors = sensorsBySchedule.TryGetValue(item.Id, out var sensors) ? sensors : [];
             }
 
             return list;

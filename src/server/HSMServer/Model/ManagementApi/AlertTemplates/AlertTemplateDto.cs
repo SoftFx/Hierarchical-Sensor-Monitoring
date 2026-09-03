@@ -125,18 +125,4 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         public long Ticks { get; init; }
     }
-
-    // List envelope: 1-based page, server-clamped size, stable ordering (name, then id).
-    public sealed record AlertTemplatePageDto
-    {
-        public List<AlertTemplateDto> Items { get; init; } = [];
-
-        public int Page { get; init; }
-
-        public int PageSize { get; init; }
-
-        public int TotalCount { get; init; }
-
-        public int TotalPages { get; init; }
-    }
 }
