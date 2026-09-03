@@ -24,6 +24,7 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 **Gate decision matrix** (`ApiTokenAuthorizationServiceTests`, evaluator level — `HasOperationAtAnyVisibleBoundary`):
 
 - A grant at a visible boundary → true, and allowed decisions record NO event; a grant at an INVISIBLE boundary (owner lost it) → false — the intersection decides; a Global grant → true only for an admin owner; no matching grant anywhere → false.
+- `HasOperationAtGlobalScope` (the schedules sensor-filter short-circuit): admin owner + matching Global grant → true; non-admin owner, a grant for ANOTHER operation, or a scoped grant → false.
 - An unresolvable token (absent from the index) → false, fail closed.
 - The denial event is pinned to `AuthorizationDenied` — the 403 scope-denial kind, exactly ONE record; the gate must never feed the `AuthorizationNotFound` enumeration-probe signal.
 - Non-matching operation grants are never probed (a `products:read` grant's boundary is never even resolved — `TryGetProduct` never called); a malformed boundary id (unreachable through canonicalization) is skipped fail-closed, not thrown.
@@ -32,7 +33,7 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 
 - Conventions reflection pin (same attribute set, route `api/v1/alertSchedules`, `ControllerBase`).
 - Denied gate → 403 with the provider and the sensor cache never queried (list), and 403 for ANY id on get-by-id — no existence leak for an unentitled caller.
-- **List**: pagination math and clamps (same envelope and constants as templates); ordering name-then-id; the page's sensor references resolved in ONE bulk cache call (`GetSensorsByAlertSchedules`, never the per-id lookup on the list path); sensor paths filtered per product visibility — same leak surface as get-by-id, pinned on the list path too; the visibility decision memoized per DISTINCT product (3 sensors over 2 products → exactly 2 `IsVisible` calls).
+- **List**: pagination math and clamps (same envelope and constants as templates); ordering name-then-id; the page's sensor references resolved in ONE bulk cache call (`GetSensorsByAlertSchedules`, never the per-id lookup on the list path); sensor paths filtered per product visibility — same leak surface as get-by-id, pinned on the list path too; the visibility decision memoized per DISTINCT product (3 sensors over 2 products → exactly 2 `IsVisible` calls); the Global-grant short-circuit (admin + `alerts:read@Global` → sensors of ALL products, per-product predicate never consulted).
 - **Get by id**: DTO maps the durable fields (id/name/timezone/schedule YAML); sensor references carry only the sensors whose PRODUCT boundary is visible to the caller (hidden product's sensor dropped, paths of the visible one kept); absent id → 404 for an entitled caller.
 
 ## Negative coverage checklist

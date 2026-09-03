@@ -39,6 +39,15 @@ namespace HSMServer.Authentication
         // gate is caller-wide and answers 403, so it must not feed the
         // enumeration-probe signal (AuthorizationNotFound) that per-target 404s carry.
         bool HasOperationAtAnyVisibleBoundary(ClaimsPrincipal principal, string operation);
+
+        // Whether the operation is granted to a LIVE caller at the GLOBAL boundary
+        // under an admin owner — the token-side "everywhere" shape. Scoped-resource
+        // decisions deliberately do NOT treat it as a wildcard (a Global grant never
+        // covers Product/Folder targets); the one sanctioned use is a short-circuit
+        // for callers that already passed the caller-wide gate above, so a filter
+        // over scoped items does not hand the broadest token an empty-everywhere
+        // result. Records nothing, like IsVisible.
+        bool HasOperationAtGlobalScope(ClaimsPrincipal principal, string operation);
     }
 
 
@@ -124,6 +133,10 @@ namespace HSMServer.Authentication
 
             return allowed;
         }
+
+        public bool HasOperationAtGlobalScope(ClaimsPrincipal principal, string operation) =>
+            TryResolveCaller(principal, out var owner, out var grants) &&
+            IsVisibleCore(owner, grants, operation, ApiTokenResource.GlobalScope);
 
         private bool GrantsOperationAtAnyVisibleBoundary(User owner,
             ImmutableArray<ApiTokenGrantEntity> grants, string operation)

@@ -259,6 +259,42 @@ namespace HSMServer.Core.Tests.Controllers
             _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Exactly(2));
         }
 
+        [Fact]
+        public void GetSchedules_GlobalGrant_SeesSensorsOfAllProducts()
+        {
+            // The gate can pass through the Global boundary (admin owner +
+            // alerts:read@Global); the per-product predicate deliberately ignores a
+            // Global grant, so without a short-circuit the broadest token would get
+            // every schedule with an EMPTY sensors list.
+            var schedule = BuildSchedule("night-shift");
+            _store.Add(schedule);
+
+            var sensorA = BuildSensor(BuildProduct(Guid.NewGuid()));
+            var sensorB = BuildSensor(BuildProduct(Guid.NewGuid()));
+
+            _cache.Setup(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()))
+                .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>>
+                {
+                    [schedule.Id] = [sensorA, sensorB],
+                });
+
+            // The evaluator answers the Global-scope probe true and every Product
+            // probe false — only the short-circuit can produce a non-empty list.
+            _authorization.Setup(a => a.HasOperationAtGlobalScope(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
+                .Returns(true);
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+                .Returns(false);
+
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetSchedules()).Value as ApiPageDto<AlertScheduleDto>;
+
+            Assert.NotNull(page);
+            var item = Assert.Single(page.Items);
+            Assert.Equal([sensorA.FullPath, sensorB.FullPath], item.Sensors.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray());
+
+            // The per-product predicate is never consulted when the global shape holds.
+            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
+        }
+
 
         [Fact]
         public void GetSchedule_MapsDto_AndFiltersSensorsByVisibility()

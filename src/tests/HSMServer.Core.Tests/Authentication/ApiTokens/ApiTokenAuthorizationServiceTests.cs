@@ -528,6 +528,36 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void HasOperationAtGlobalScope_AdminOwnerWithMatchingGlobalGrant_True()
+        {
+            _owner.IsAdmin = true;
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global, null));
+
+            Assert.True(CreateService().HasOperationAtGlobalScope(Principal(), ApiTokenOperations.AlertsRead));
+        }
+
+        [Fact]
+        public void HasOperationAtGlobalScope_NonAdminOwner_OtherOperation_ScopedGrant_False()
+        {
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global, null));
+            var service = CreateService();
+
+            // The owner side: global scope is admin-only.
+            _owner.IsAdmin = false;
+            Assert.False(service.HasOperationAtGlobalScope(Principal(), ApiTokenOperations.AlertsRead));
+
+            // The token side: a grant for ANOTHER operation must not wildcard into
+            // this one's responses.
+            _owner.IsAdmin = true;
+            Assert.False(service.HasOperationAtGlobalScope(Principal(), ApiTokenOperations.ProductsRead));
+
+            // A scoped grant is not a global one — the short-circuit must not fire
+            // for it (the per-product predicate remains the decider).
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Product, ProductA));
+            Assert.False(service.HasOperationAtGlobalScope(Principal(), ApiTokenOperations.AlertsRead));
+        }
+
+        [Fact]
         public void FolderManagerRole_MaterialisedOnProduct_EnablesProductWrite()
         {
             // A folder Manager role materialises as a per-product Manager entry for every

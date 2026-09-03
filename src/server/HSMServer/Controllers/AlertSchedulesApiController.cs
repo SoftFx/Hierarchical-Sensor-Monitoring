@@ -122,12 +122,22 @@ namespace HSMServer.Controllers
         // within one request.
         private Func<Guid, bool> NewProductVisibilityFilter()
         {
+            // A Global alerts:read grant under an admin owner is the token-side
+            // "everywhere" shape — the shape that can pass the caller-wide gate
+            // through the Global boundary. The per-product predicate deliberately
+            // does NOT treat it as a wildcard (a Global grant never covers scoped
+            // resources), so it is resolved once here as a short-circuit: without
+            // it, the broadest token would get every schedule with an empty
+            // sensors list on each.
+            var globallyVisible = _authorization.HasOperationAtGlobalScope(User, ApiTokenOperations.AlertsRead);
+
             var visibilityByProduct = new Dictionary<Guid, bool>();
 
-            return productId => visibilityByProduct.TryGetValue(productId, out var visible)
-                ? visible
-                : visibilityByProduct[productId] = _authorization.IsVisible(User,
-                    ApiTokenOperations.AlertsRead, ApiTokenResource.Product(productId));
+            return productId => globallyVisible ||
+                (visibilityByProduct.TryGetValue(productId, out var visible)
+                    ? visible
+                    : visibilityByProduct[productId] = _authorization.IsVisible(User,
+                        ApiTokenOperations.AlertsRead, ApiTokenResource.Product(productId)));
         }
 
         private AlertScheduleDto ToDto(Core.Model.Policies.AlertSchedule schedule,
