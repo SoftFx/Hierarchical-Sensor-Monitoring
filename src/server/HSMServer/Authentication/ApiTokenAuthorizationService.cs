@@ -23,10 +23,13 @@ namespace HSMServer.Authentication
         // 403/404 split (see ApiTokenAuthorization).
         ApiTokenAuthorization Authorize(ClaimsPrincipal principal, string operation, ApiTokenResource resource);
 
-        // List-filtering predicate: the owner can see the target AND the token's grants
-        // reach its current boundary (any operation). Out-of-reach targets are simply not
-        // listed, never 403-per-item.
-        bool IsVisible(ClaimsPrincipal principal, ApiTokenResource resource);
+        // List-filtering predicate: the target is listable under the given operation —
+        // the same conjunction Authorize applies (owner sight, operation grant at the
+        // current boundary, owner capability) minus the security-event recording: a
+        // list that returns full bodies must not disclose items whose item endpoint
+        // would 403, and list filtering is not a probe signal. Out-of-reach or
+        // ungranted targets are simply not listed, never 403-per-item.
+        bool IsVisible(ClaimsPrincipal principal, string operation, ApiTokenResource resource);
     }
 
 
@@ -95,11 +98,12 @@ namespace HSMServer.Authentication
             return ApiTokenAuthorization.Allowed;
         }
 
-        public bool IsVisible(ClaimsPrincipal principal, ApiTokenResource resource) =>
+        public bool IsVisible(ClaimsPrincipal principal, string operation, ApiTokenResource resource) =>
             TryResolveCaller(principal, out var owner, out var grants) &&
             TryResolveBoundary(resource, out var boundary) &&
             OwnerCanSee(owner, boundary) &&
-            TokenReachesBoundary(grants, boundary);
+            TokenGrantsOperation(grants, operation, boundary) &&
+            OwnerCanPerform(owner, operation, boundary);
 
         // Denials reach the append-only security-event sink with the safe identifiers the
         // design names: token id, subject id, required permission, safe target id — and

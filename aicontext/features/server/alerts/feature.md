@@ -51,6 +51,7 @@ As of issue #1159 the editor exposes a single "Add" entry point: Inactivity Peri
 | `AddAlertAction(entityId, isMain, isTtl, folderId?)` | `HomeController.cs:764` | Sensor-only as of #1142. |
 | `UpdateProductInfo(ProductInfoViewModel)` | `HomeController.cs:921` | Drops alert parsing as of #1142. |
 | `EditAlerts(EditAlertsViewModel)` | `HomeController.cs` | Multi-edit TTL; unchanged. |
+| `REST CRUD /api/v1/alertTemplates` | `AlertTemplatesApiController.cs` | Bearer-token surface (#1351): full template CRUD at folder scope (`alerts:read`/`alerts:write`), same validation rules as the cookie UI; entity-shaped credential-free DTOs. See `management-api/feature.md`. |
 
 ## Key Files
 
@@ -61,7 +62,8 @@ As of issue #1159 the editor exposes a single "Add" entry point: Inactivity Peri
 | `src/server/HSMServer/Views/Home/Alerts/_AlertsFormCollection.cshtml` | Shared form-collection JS for `DataAlerts[...]` routing; inlined into `_MetaInfo.cshtml` and `AlertTemplate.cshtml`. |
 | `src/server/HSMServer/Views/Tree/_MultiEditModal.cshtml` | Multi-edit TTL modal. |
 | `src/server/HSMServer/Controllers/HomeController.cs` | Alert mutation endpoints + `UpdateProductInfo`. |
-| `src/server/HSMServer/Controllers/AlertTemplatesController.cs` | Global alert template CRUD. |
+| `src/server/HSMServer/Controllers/AlertTemplatesController.cs` | Global alert template CRUD (cookie UI). |
+| `src/server/HSMServer/Controllers/AlertTemplatesApiController.cs` | Global alert template CRUD over REST (`/api/v1`, bearer token). |
 | `src/server/HSMServer/Controllers/AlertsController.cs` | Alert import/export only. |
 | `src/server/HSMServer.Core/Cache/TreeValuesCache.cs` | Template application (`AddAlertTemplateAsync`); product-owned policy cleanup at startup. |
 | `src/server/HSMServer.Core/Model/AlertTemplateModel.cs` | Template model: path wildcard, folder, sensor type, policies. |
