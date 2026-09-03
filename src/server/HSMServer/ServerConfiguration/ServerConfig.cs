@@ -56,6 +56,8 @@ namespace HSMServer.ServerConfiguration
 
         public AgentConfig Agent { get; }
 
+        public ApiTokensConfig ApiTokens { get; }
+
 
         static ServerConfig()
         {
@@ -89,6 +91,11 @@ namespace HSMServer.ServerConfiguration
             Kestrel = Register<KestrelConfig>(nameof(Kestrel));
             MonitoringOptions = Register<MonitoringOptions>(nameof(MonitoringOptions));
             Agent = Register<AgentConfig>(nameof(Agent));
+            ApiTokens = Register<ApiTokensConfig>(nameof(ApiTokens));
+
+            // Startup validation with actionable errors (initiative, section
+            // "Configuration"). Throws before the server starts serving.
+            ApiTokens.Validate();
 
             ResaveSettings();
         }

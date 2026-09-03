@@ -166,6 +166,14 @@ namespace HSMServer.Core.Tests.Infrastructure
         public List<ApiTokenSecurityEventEntity> ReadApiTokenSecurityEvents() =>
             _inner.ReadApiTokenSecurityEvents();
 
+        public int RemoveApiTokenSecurityEventsBefore(long ticksCutoffUtc, int limit)
+        {
+            if (ShouldFailApiTokenOp?.Invoke(nameof(RemoveApiTokenSecurityEventsBefore)) == true)
+                throw new InvalidOperationException("Simulated DB failure for a security event retention removal");
+
+            return _inner.RemoveApiTokenSecurityEventsBefore(ticksCutoffUtc, limit);
+        }
+
         public void AddSensor(SensorEntity entity)
         {
             if (_shouldFail(entity))

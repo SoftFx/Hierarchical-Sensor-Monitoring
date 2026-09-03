@@ -1064,6 +1064,42 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void Initialize_RejectedRows_AreRegisteredAsOrphans_ForRetention()
+        {
+            // Rows rejected at load are the orphans the retention sweep exists to clear:
+            // the registry names the STORAGE key (for a key/payload mismatch that is the
+            // key's id, not the payload's), and TryRemoveToken prunes the entry once the
+            // row is gone.
+            var row = new ApiTokenEntity
+            {
+                EntityVersion = 1,
+                EntityId = Guid.NewGuid(),
+                TokenId = new string('Q', ApiTokenMaterial.TokenIdLength),
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "key-payload-mismatch",
+                Grants = [.. BuildGrants("alerts:read")],
+                CreatedAtUtc = DateTime.UtcNow.Ticks,
+            };
+
+            var orphanKey = new string('A', ApiTokenMaterial.TokenIdLength);
+
+            var failing = new HSMServer.Core.Tests.Infrastructure.FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                OverrideApiTokenScan = () => [(orphanKey, row)],
+            };
+
+            using var manager = new ApiTokenManager(failing, NullLogger<ApiTokenManager>.Instance);
+
+            manager.Initialize().Wait();
+
+            Assert.Equal(new[] { orphanKey }, manager.GetOrphanTokenIds());
+            Assert.True(manager.TryRemoveToken(orphanKey));
+            Assert.Empty(manager.GetOrphanTokenIds());
+        }
+
+        [Fact]
         public void Initialize_DuplicateEntityIdRows_OnlyTheFirstIsPublished()
         {
             // Two rows sharing an EntityId would shadow each other in the entity-id map:

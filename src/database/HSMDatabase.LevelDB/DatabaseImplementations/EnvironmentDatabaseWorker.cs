@@ -1096,6 +1096,22 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return events;
         }
 
+        // Retention primitive for the security-event table: removes up to `limit` events
+        // whose timestamp is STRICTLY older than `ticksCutoffUtc` (the zero-padded d19
+        // ticks make the key order chronological, so "older than the cutoff ticks" is a
+        // prefix range ending just before prefix + cutoff-ticks; events AT the cutoff
+        // tick survive). Returns the number of rows removed so the caller can log and
+        // decide whether another bounded batch is due.
+        public int RemoveApiTokenSecurityEventsBefore(long ticksCutoffUtc, int limit)
+        {
+            var exclusiveUpperBound = ApiTokenSecurityEventPrefix + ticksCutoffUtc.ToString("d19", CultureInfo.InvariantCulture);
+
+            return _database.DeleteStartingWithBefore(
+                Encoding.UTF8.GetBytes(ApiTokenSecurityEventPrefix),
+                Encoding.UTF8.GetBytes(exclusiveUpperBound),
+                limit);
+        }
+
         private long ReadRevocationGeneration(string key)
         {
             if (!_database.TryRead(Encoding.UTF8.GetBytes(key), out byte[] value))

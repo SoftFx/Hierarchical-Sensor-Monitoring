@@ -123,6 +123,67 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        // Bounded prefix-range delete: removes up to `limit` keys that start with
+        // `prefix` and sort strictly before `exclusiveUpperBound`, in one atomic write
+        // batch, and returns how many were removed. The bound keeps a single pass cheap
+        // on a large table (retention sweeps in batches); `limit` <= 0 is a no-op
+        // returning 0, so callers can pass configuration straight through.
+        public int DeleteStartingWithBefore(byte[] prefix, byte[] exclusiveUpperBound, int limit)
+        {
+            if (limit <= 0)
+                return 0;
+
+            Iterator iterator = null;
+            var removed = 0;
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                using var batch = new WriteBatch();
+
+                for (iterator.Seek(prefix);
+                     removed < limit && iterator.IsValid && iterator.Key().StartsWith(prefix) && CompareBytewise(iterator.Key(), exclusiveUpperBound) < 0;
+                     iterator.Next())
+                {
+                    batch.Delete(iterator.Key());
+                    removed++;
+                }
+
+                if (removed > 0)
+                    _database.Write(batch);
+
+                return removed;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+            finally
+            {
+                iterator?.Dispose();
+            }
+        }
+
+        // LevelDB orders keys bytewise; the ByteArrayExtensions order helpers compare
+        // LENGTH first (their callers only ever compare same-length keys), so a
+        // prefix-plus-suffix key would never order below its shorter prefix bound. This
+        // is the bytewise comparison the iterator actually guarantees.
+        private static int CompareBytewise(byte[] left, byte[] right)
+        {
+            var shared = Math.Min(left.Length, right.Length);
+
+            for (var i = 0; i < shared; i++)
+            {
+                var comparison = left[i].CompareTo(right[i]);
+
+                if (comparison != 0)
+                    return comparison;
+            }
+
+            return left.Length.CompareTo(right.Length);
+        }
+
         public bool TryRead(byte[] key, out byte[] value)
         {
             try

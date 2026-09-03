@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.LevelDB;
 using HSMDatabase.LevelDB.DatabaseImplementations;
@@ -279,6 +280,68 @@ namespace HSMDatabase.LevelDB.Tests.ApiTokensDBTests
                 TryDeleteDirectory(path);
             }
         }
+
+
+        [Fact]
+        public void RemoveApiTokenSecurityEventsBefore_RemovesStrictlyOlder_KeepsAtCutoffAndNewer()
+        {
+            var baseTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var cutoff = baseTime.AddDays(-1);
+
+            _worker.PutApiTokenSecurityEvent(BuildSecurityEvent(baseTime.AddDays(-3)));
+            _worker.PutApiTokenSecurityEvent(BuildSecurityEvent(cutoff));
+            _worker.PutApiTokenSecurityEvent(BuildSecurityEvent(baseTime));
+
+            var removed = _worker.RemoveApiTokenSecurityEventsBefore(cutoff.Ticks, limit: 100);
+
+            Assert.Equal(1, removed);
+
+            var remaining = _worker.ReadApiTokenSecurityEvents().Select(e => e.TimestampUtc).ToList();
+
+            Assert.DoesNotContain(baseTime.AddDays(-3).Ticks, remaining);
+            Assert.Contains(cutoff.Ticks, remaining);
+            Assert.Contains(baseTime.Ticks, remaining);
+        }
+
+        [Fact]
+        public void RemoveApiTokenSecurityEventsBefore_IsBoundedByTheLimit()
+        {
+            var baseTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var cutoff = baseTime;
+
+            for (var i = 0; i < 5; i++)
+                _worker.PutApiTokenSecurityEvent(BuildSecurityEvent(baseTime.AddDays(-i - 1)));
+
+            var removed = _worker.RemoveApiTokenSecurityEventsBefore(cutoff.Ticks, limit: 2);
+
+            Assert.Equal(2, removed);
+            Assert.Equal(3, _worker.ReadApiTokenSecurityEvents().Count);
+
+            // The next bounded batch drains the rest — chronological order means the
+            // OLDEST go first, so what survives after two passes is the newest remainder.
+            Assert.Equal(3, _worker.RemoveApiTokenSecurityEventsBefore(cutoff.Ticks, limit: 100));
+            Assert.Empty(_worker.ReadApiTokenSecurityEvents());
+        }
+
+        [Fact]
+        public void RemoveApiTokenSecurityEventsBefore_NoMatchOrNonPositiveLimit_IsANoOp()
+        {
+            var baseTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            _worker.PutApiTokenSecurityEvent(BuildSecurityEvent(baseTime));
+
+            Assert.Equal(0, _worker.RemoveApiTokenSecurityEventsBefore(baseTime.AddDays(-1).Ticks, limit: 100));
+            Assert.Equal(0, _worker.RemoveApiTokenSecurityEventsBefore(baseTime.AddDays(1).Ticks, limit: 0));
+
+            Assert.Single(_worker.ReadApiTokenSecurityEvents());
+        }
+
+
+        private static ApiTokenSecurityEventEntity BuildSecurityEvent(DateTime timestampUtc) => new()
+        {
+            Kind = 2,
+            TimestampUtc = timestampUtc.Ticks,
+        };
 
 
         private static ApiTokenEntity BuildEntity(string tokenId = null, Guid? owner = null) => new()

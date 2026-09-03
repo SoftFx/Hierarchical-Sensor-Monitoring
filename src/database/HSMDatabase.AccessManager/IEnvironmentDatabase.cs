@@ -84,6 +84,10 @@ namespace HSMDatabase.AccessManager
         // Chronological scan of all security events (retention/query surface).
         List<ApiTokenSecurityEventEntity> ReadApiTokenSecurityEvents();
 
+        // Bounded retention removal: up to `limit` events strictly older than the cutoff
+        // ticks (chronological key order), returns the number removed.
+        int RemoveApiTokenSecurityEventsBefore(long ticksCutoffUtc, int limit);
+
         #endregion
 
         #region Sensors

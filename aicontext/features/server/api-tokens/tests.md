@@ -121,6 +121,22 @@ The design's privilege-reduction matrix, recomputed per call:
 - Events are chronological and collision-free (distinct event ids); a failed write drops and counts (`DroppedCount` asserted) — never throws on the request path.
 - A full queue drops and counts: with the background writer stalled inside the database call, capacity+3 records leave exactly 3 counted drops and never block the caller (`FullMode.Wait` makes `TryWrite` return false instead of silently evicting).
 
+## Invalid-attempt limiter (`ApiTokenInvalidAttemptLimiterTests`)
+
+- Within the per-source per-minute budget every attempt is recorded; over it, attempts are dropped and counted (`DroppedCount`).
+- One source's exhausted budget never consumes another source's (nothing global is denied); a null/absent remote endpoint shares a single `?` bucket and cannot bypass the bound.
+- Window rollover resets every source's budget (deterministic-clock seam); the source registry is bounded — the 1025th distinct source in one window is dropped.
+- Constructor throws with the config key named for `InvalidAttemptRateLimit < 1`.
+- Handler level: with a budget of 1, two failures from one source record exactly one event, and the authentication RESULT is unchanged either way.
+
+## Retention (`ApiTokenRetentionCleanerTests`, DatabaseCore level; `ApiTokenStoreTests`, worker level)
+
+- Dead rows (revoked or expired) at or before `utcNow - TokenRecordRetention` are removed from durable storage AND the live index, atomically per row; halfway through the window nothing is eligible; a live row is never eligible.
+- Orphan rows wait one window from the cleaner's first observation (a damaged row has no trustworthy clock), then are removed and pruned from the manager's orphan registry; the registry lists rejected rows by their STORAGE key and `TryRemoveToken` prunes it (`ApiTokenManagerTests`).
+- Security events strictly older than `utcNow - SecurityEventRetention` are removed oldest-first in bounded batches; an event exactly at the cutoff survives; a non-positive limit is a no-op (worker-level `RemoveApiTokenSecurityEventsBefore`, including the bytewise-order pin — a key longer than its prefix bound must still order below it).
+- A storage failure in one pass (scan or removal) is isolated: `RunOnce` returns zeros and never throws; the next pass retries.
+- `ApiTokensConfig.Validate` rejects negative retention windows with the config key named (cleaner constructor).
+
 ## Negative coverage checklist
 
 - [x] Malformed/oversized credentials rejected before database access

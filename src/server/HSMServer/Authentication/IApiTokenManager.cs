@@ -27,6 +27,11 @@ namespace HSMServer.Authentication
         // emergency revoke"; false + healthy = "no such token".
         bool IsGenerationStateHealthy { get; }
 
+        // Durable rows this boot rejected at load (key/payload mismatch, unloadable
+        // shape), by the storage key they sit under — the orphans the retention sweep
+        // exists to clear. Snapshot copy; empty means "none observed at the last load".
+        IReadOnlyCollection<string> GetOrphanTokenIds();
+
         long GlobalRevocationGeneration { get; }
 
         // Current durable generation for the owner, missing-as-zero. An owner absent from

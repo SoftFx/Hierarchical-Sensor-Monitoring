@@ -14,6 +14,8 @@
 
         AgentConfig Agent { get; }
 
+        ApiTokensConfig ApiTokens { get; }
+
 
         void ResaveSettings();
     }

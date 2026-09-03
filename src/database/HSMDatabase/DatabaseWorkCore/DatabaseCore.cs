@@ -531,6 +531,9 @@ namespace HSMDatabase.DatabaseWorkCore
         public List<ApiTokenSecurityEventEntity> ReadApiTokenSecurityEvents() =>
             _environmentDatabase.ReadApiTokenSecurityEvents();
 
+        public int RemoveApiTokenSecurityEventsBefore(long ticksCutoffUtc, int limit) =>
+            _environmentDatabase.RemoveApiTokenSecurityEventsBefore(ticksCutoffUtc, limit);
+
         #endregion
 
         #region Environment database : User
