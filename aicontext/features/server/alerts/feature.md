@@ -52,6 +52,7 @@ As of issue #1159 the editor exposes a single "Add" entry point: Inactivity Peri
 | `UpdateProductInfo(ProductInfoViewModel)` | `HomeController.cs:921` | Drops alert parsing as of #1142. |
 | `EditAlerts(EditAlertsViewModel)` | `HomeController.cs` | Multi-edit TTL; unchanged. |
 | `REST CRUD /api/v1/alertTemplates` | `AlertTemplatesApiController.cs` | Bearer-token surface (#1351): full template CRUD at folder scope (`alerts:read`/`alerts:write`), same validation rules as the cookie UI; entity-shaped credential-free DTOs. See `management-api/feature.md`. |
+| `REST read-only /api/v1/alertSchedules` | `AlertSchedulesApiController.cs` | Bearer-token surface (#1352): list/get; caller-wide `alerts:read`-anywhere gate (schedules are global), sensor references filtered per-caller visibility. |
 
 ## Key Files
 

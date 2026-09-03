@@ -11,6 +11,7 @@ using HSMServer.Core.Schedule;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
+using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
@@ -107,7 +108,7 @@ namespace HSMServer.Controllers
             // silently returns the FIRST page labeled as page N.
             page = Math.Min(page, Math.Max(totalPages, 1));
 
-            return Ok(new AlertTemplatePageDto
+            return Ok(new ApiPageDto<AlertTemplateDto>
             {
                 Items = [.. visible.Skip((page - 1) * pageSize).Take(pageSize).Select(AlertTemplateDtoMapper.ToDto)],
                 Page = page,

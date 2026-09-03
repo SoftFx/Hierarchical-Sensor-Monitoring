@@ -2,7 +2,7 @@
 
 > Owner: server | Last reviewed: 2026-09-03 | Canonical: yes
 
-Coverage for the `/api/v1` resource controllers. Alert templates (`AlertTemplatesApiControllerTests`) is the reference matrix; #1352 should mirror it.
+Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`) and alert schedules (`AlertSchedulesApiControllerTests`).
 
 ## Conventions (area admission)
 
@@ -19,6 +19,13 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 - **Delete**: 204 with the template gone (follow-up GET 404); cache failure → 409 with the detail.
 - **Lifecycle** (issue acceptance criterion): create (201) → get (200, equal) → update rename + extra path (200) → get reflects it → delete (204) → get 404.
 
+## Alert schedules (`AlertSchedulesApiControllerTests`, controller level)
+
+- Conventions reflection pin (same attribute set, route `api/v1/alertSchedules`, `ControllerBase`).
+- **Caller-wide gate**: no `alerts:read` grant anywhere → 403 with the provider never queried and exactly ONE audit `Authorize` record; an unresolvable token (absent from the index) → 403; a grant at a visible boundary → 200; a grant at an INVISIBLE boundary (owner lost it) → 403 — the intersection decides; a Global grant visible to an admin → 200; non-`alerts` grants are never probed (only the matching boundary is passed to `IsVisible`); a malformed boundary id is skipped without an evaluator call.
+- **List**: pagination math and clamps (same envelope and constants as templates); ordering name-then-id.
+- **Get by id**: DTO maps the durable fields (id/name/timezone/schedule YAML); sensor references carry only the sensors whose PRODUCT boundary is visible to the caller (hidden product's sensor dropped, paths of the visible one kept); absent id → 404 for an entitled caller; unentitled caller → 403 for ANY id, including existing ones (no existence leak).
+
 ## Negative coverage checklist
 
 - [x] Unknown/invisible/out-of-reach targets 404, indistinguishable (anti-enumeration)
@@ -33,3 +40,4 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 - [x] The cache write is never tied to RequestAborted (partial reconcile/partial disarm impossible)
 - [x] List discloses nothing beyond what the operation allows (list predicate == item-endpoint operation, not mere reach)
 - [x] Authorization precedes validation (no information leak through error ordering)
+- [x] Global resource: unentitled caller learns nothing (403 for every id, provider never queried); sensor paths filtered per-caller visibility
