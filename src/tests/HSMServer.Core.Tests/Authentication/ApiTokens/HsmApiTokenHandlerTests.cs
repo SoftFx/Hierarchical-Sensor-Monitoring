@@ -312,6 +312,31 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public async Task Forbid_BodyIsTheUniformJsonErrorContract()
+        {
+            // The management policy carries requirements beyond authentication
+            // (HsmApiTokenOnlyRequirement), so Forbid — not Challenge — answers when an
+            // authenticated principal fails them; the base implementation's bare
+            // empty-body 403 is the one shape the contract promises never happens
+            // (review round 2 on #1366). Defense-in-depth today.
+            var (provider, context) = Build(null);
+
+            await provider.GetRequiredService<IAuthenticationService>()
+                .ForbidAsync(context, Scheme, new AuthenticationProperties());
+
+            Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+
+            context.Response.Body.Position = 0;
+            using var body = await System.Text.Json.JsonDocument.ParseAsync(context.Response.Body);
+
+            var root = body.RootElement;
+
+            Assert.Equal(HSMServer.Model.ManagementApi.ManagementApiErrors.ForbiddenCode, root.GetProperty("error").GetString());
+            Assert.False(string.IsNullOrEmpty(root.GetProperty("message").GetString()));
+            Assert.Equal(System.Text.Json.JsonValueKind.Null, root.GetProperty("details").ValueKind);
+        }
+
+        [Fact]
         public async Task Success_MarksTokenUsed()
         {
             var credential = ValidCredential();

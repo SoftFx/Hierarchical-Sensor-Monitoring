@@ -67,7 +67,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
         /// <summary>Send schedule of a fired alert; null means defaults.</summary>
         public PolicyScheduleDto Schedule { get; init; } = new();
 
-        /// <summary>Status the sensor gets while the policy is triggered: 0=OffTime, 1=Ok, 2=Warning, 3=Error.</summary>
+        /// <summary>Status the sensor gets while the policy is triggered (HSMCommon SensorStatus): 0=Ok, 1=Error, 255=OffTime.</summary>
         public byte SensorStatus { get; init; }
 
         /// <summary>Disabled policies stay stored but never fire.</summary>

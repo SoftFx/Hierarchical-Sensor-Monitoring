@@ -75,6 +75,23 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void SwaggerGate_IsRegisteredBeforeTheSwaggerMiddleware()
+        {
+            // The port gate is correct only ABOVE UseSwagger/UseSwaggerUI; below them
+            // the doc is served before the gate runs, silently republishing the
+            // management map on the sensor port while the gate's own unit tests stay
+            // green (review round 2 on #1366).
+            var body = ExtractConfigureMiddlewareBody(ReadPipelineSource());
+
+            AssertInOrder(body,
+            [
+                "SwaggerSitePortOnlyMiddleware",
+                "UseSwagger",
+                "UseSwaggerUI",
+            ]);
+        }
+
+        [Fact]
         public void BindingFailureFactory_IsWiredIntoApiBehaviorOptions()
         {
             // The other registration the contract's unit tests cannot see: the

@@ -1,4 +1,5 @@
 using System.Reflection;
+using HSMSensorDataObjects;
 using HSMServer.Authentication;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -28,7 +29,9 @@ namespace HSMServer.Filters
 
             operation.Parameters.Add(new OpenApiParameter
             {
-                Name = "Key",
+                // nameof: the compile-time tie to the DTO property the header carries —
+                // renaming BaseRequest.Key must not silently desync the spec.
+                Name = nameof(BaseRequest.Key),
                 In = ParameterLocation.Header,
                 Required = true,
                 Schema = new OpenApiSchema

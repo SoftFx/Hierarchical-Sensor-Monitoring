@@ -274,6 +274,23 @@ namespace HSMServer.Core.Tests.Middleware
         }
 
         [Fact]
+        public static async Task ExceptionMiddleware_Cancellation_RethrowsUntouched()
+        {
+            // An aborted request is not a 500: writing to a dead connection would throw
+            // again and REPLACE the original cancellation in the outer handler's
+            // logging. The middleware must not touch the response at all.
+            var context = BuildContext("/api/v1/alertTemplates");
+
+            static Task Cancel(HttpContext _) => throw new OperationCanceledException();
+
+            await Assert.ThrowsAsync<OperationCanceledException>(() =>
+                new ApiExceptionJsonMiddleware(Cancel).InvokeAsync(context));
+
+            Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+            Assert.Equal(0, context.Response.Body.Length);
+        }
+
+        [Fact]
         public static async Task ExceptionMiddleware_StartedResponse_Rethrows()
         {
             // Nothing can rewrite a response already on the wire — propagate and let

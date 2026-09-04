@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using HSMServer.Authentication;
 using HSMServer.Controllers;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Filters;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -136,7 +139,10 @@ namespace HSMServer.Core.Tests.Swagger
             var documented = new HashSet<string>();
 
             foreach (var controller in controllers)
-                foreach (var action in controller.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                // No DeclaredOnly: HTTP actions inherited from a base management
+                // controller must be documented like any other — the same inherit:true
+                // view the discovery above and the runtime guard use.
+                foreach (var action in controller.GetMethods(BindingFlags.Public | BindingFlags.Instance)
                              .Where(IsHttpAction))
                 {
                     documented.Add($"{controller.Name}.{action.Name}");
@@ -164,5 +170,80 @@ namespace HSMServer.Core.Tests.Swagger
         // operations and must not trip the conventions map.
         private static bool IsHttpAction(MethodInfo method) =>
             method.GetCustomAttributes().OfType<HttpMethodAttribute>().Any();
+
+
+        // The enum value tables published in the DTO XML remarks are the agent-facing
+        // source of truth (the fields stay bytes so their validation runs AFTER
+        // authorization — see feature.md). This suite parses the remarks out of the
+        // source and pins them against the domain enums the controller validates with:
+        // a renamed/added/removed member — or a wrong table, like the sensorStatus
+        // inversion this test was written after (review round 2 on #1366) — fails here
+        // instead of corrupting agent payloads silently.
+        [Fact]
+        public void DocumentedEnumTables_MatchTheDomainEnums()
+        {
+            var source = ReadRepoFile("src/server/HSMServer/Model/ManagementApi/AlertTemplates/AlertTemplateDto.cs");
+
+            AssertTable(source, "public byte SensorType { get; init; }",
+                typeof(HSMCommon.Model.SensorType),
+                extras: [(100L, nameof(HSMServer.Core.Model.AlertTemplateModel.AnyType))]);
+
+            AssertTable(source, "public byte SensorStatus { get; init; }",
+                typeof(HSMCommon.Model.SensorStatus));
+
+            AssertTable(source, "public byte Combination { get; init; }", typeof(PolicyCombination));
+            AssertTable(source, "public byte Operation { get; init; }", typeof(PolicyOperation));
+            AssertTable(source, "public byte Property { get; init; }", typeof(PolicyProperty));
+            AssertTable(source, "public byte Type { get; init; }", typeof(TargetType));
+            AssertTable(source, "public byte RepeateMode { get; init; }",
+                typeof(HSMServer.Core.Model.Policies.AlertRepeatMode));
+
+            // The sparse TimeInterval table lives in the RECORD summary (it documents
+            // the whole shape: which intervals are ticks-authoritative).
+            AssertTable(source, "public sealed record TimeIntervalDto", typeof(HSMServer.Core.Model.TimeInterval));
+        }
+
+        private static void AssertTable(string source, string memberDeclaration, Type enumType,
+            params (long Value, string Name)[] extras)
+        {
+            var index = source.IndexOf(memberDeclaration, StringComparison.Ordinal);
+            Assert.True(index >= 0, $"{memberDeclaration} not found in the DTO source");
+
+            var before = source[..index];
+            var summaryEnd = before.LastIndexOf("</summary>", StringComparison.Ordinal);
+            Assert.True(summaryEnd >= 0, $"no <summary> found above {memberDeclaration}");
+
+            var summaryStart = before.LastIndexOf("<summary>", summaryEnd, StringComparison.Ordinal);
+            var summary = before[summaryStart..summaryEnd];
+
+            var documented = System.Text.RegularExpressions.Regex.Matches(summary, @"(-?\d+)=([A-Za-z]+)")
+                .Select(m => (Value: long.Parse(m.Groups[1].Value), Name: m.Groups[2].Value))
+                .ToDictionary(pair => pair.Value, pair => pair.Name);
+
+            var actual = Enum.GetValues(enumType)
+                .Cast<object>()
+                .Select(value => (Value: Convert.ToInt64(value), Name: value.ToString()))
+                .Concat(extras)
+                .ToDictionary(pair => pair.Value, pair => pair.Name);
+
+            Assert.Equal(actual, documented);
+        }
+
+        private static string ReadRepoFile(string relativeSource)
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+            while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "src")))
+                directory = directory.Parent;
+
+            var source = directory is null
+                ? null
+                : Path.Combine(directory.FullName, relativeSource.Replace('/', Path.DirectorySeparatorChar));
+
+            Assert.True(source is not null && File.Exists(source),
+                $"Cannot locate {relativeSource} (resolved: {source ?? "<none>"}, started from {AppContext.BaseDirectory})");
+
+            return File.ReadAllText(source);
+        }
     }
 }

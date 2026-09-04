@@ -503,7 +503,7 @@
             <summary>Send schedule of a fired alert; null means defaults.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.SensorStatus">
-            <summary>Status the sensor gets while the policy is triggered: 0=OffTime, 1=Ok, 2=Warning, 3=Error.</summary>
+            <summary>Status the sensor gets while the policy is triggered (HSMCommon SensorStatus): 0=Ok, 1=Error, 255=OffTime.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.IsDisabled">
             <summary>Disabled policies stay stored but never fire.</summary>

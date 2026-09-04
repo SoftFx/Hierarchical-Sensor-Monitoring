@@ -19,7 +19,14 @@ namespace HSMServer.Middleware
             {
                 await next(context);
             }
-            catch (Exception) when (IsApiPath(context.Request.Path) && !context.Response.HasStarted)
+            // Cancellation is not a server error: an aborted request surfaces as
+            // OperationCanceledException from the framework's body/abort plumbing, and
+            // writing a 500 to a dead connection would only throw again and REPLACE the
+            // original exception in the outer handler's logging. Let cancellations flow
+            // to the global handlers untouched.
+            catch (Exception exception) when (exception is not OperationCanceledException &&
+                                              IsApiPath(context.Request.Path) &&
+                                              !context.Response.HasStarted)
             {
                 // Deliberately no exception text on the wire: the message carries no
                 // internals, and the trace id is the key that locates the record
