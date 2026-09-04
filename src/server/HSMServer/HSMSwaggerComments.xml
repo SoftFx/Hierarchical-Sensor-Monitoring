@@ -280,9 +280,14 @@
         <member name="T:HSMServer.Filters.DataRequestHeaderSwaggerFilter">
             <summary>
             Swagger filter for adding required string 'Key' in API requests header.
-            Scoped (#1353) to the sensor-data actions the header actually belongs to: the
-            single swagger doc also carries the management API, which authenticates through
-            the Authorization bearer header and must not advertise a Key header.
+            Historically global; since #1353 the single exclusion is the management API —
+            its operations authenticate through the Authorization bearer header and must
+            not advertise a Key header. The rule is deliberately negative (skip
+            [ManagementApi] controllers, add otherwise): several non-management families
+            whose request types do NOT derive from BaseRequest also authenticate through
+            the Key header (the Grafana JSON datasource above all — TryGetKey reads
+            Request.Headers["Key"] exclusively), so a positive "parameter derives from
+            BaseRequest" match would silently strip their credential from the spec.
             </summary>
         </member>
         <member name="T:HSMServer.Filters.ManagementApiSecuritySwaggerFilter">
@@ -459,7 +464,7 @@
         <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.SensorType">
             <summary>
             SensorType enum value, or 100 (AnyType) to match every sensor type:
-            0=Boolean, 1=Int, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File,
+            0=Boolean, 1=Integer, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File,
             7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType.
             </summary>
         </member>

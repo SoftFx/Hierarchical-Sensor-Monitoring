@@ -84,11 +84,12 @@ builder.Services.AddMvc()
 
 // #1353 (epic #1347): binding failures of the /api/v1 management controllers answer
 // with the area's uniform JSON error contract instead of ValidationProblemDetails.
-// Scoped to [ManagementApi] controllers inside the factory — the sensor-data API
-// (SensorsController) keeps the framework default.
+// Non-management ApiControllers (sensor-data, Grafana) DELEGATE to the captured
+// framework default, so their wire shape (problem+json, type, traceId) is untouched.
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
-    options.InvalidModelStateResponseFactory = ManagementApiErrors.BindingFailureResponse;
+    options.InvalidModelStateResponseFactory =
+        ManagementApiErrors.WrapBindingFailureFactory(options.InvalidModelStateResponseFactory);
 });
 
 builder.Services.AddFluentValidationAutoValidation()

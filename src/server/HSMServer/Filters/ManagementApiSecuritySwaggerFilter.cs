@@ -21,8 +21,11 @@ namespace HSMServer.Filters
 
         public void Apply(OpenApiOperation operation, OperationFilterContext context)
         {
+            // inherit: true — endpoint metadata (what the runtime guard reads) includes
+            // attributes inherited from a base controller; this filter must not
+            // silently diverge from it.
             if (context.MethodInfo?.DeclaringType is not { } controller ||
-                !controller.IsDefined(typeof(ManagementApiAttribute), inherit: false))
+                !controller.IsDefined(typeof(ManagementApiAttribute), inherit: true))
                 return;
 
             operation.Security.Add(new OpenApiSecurityRequirement

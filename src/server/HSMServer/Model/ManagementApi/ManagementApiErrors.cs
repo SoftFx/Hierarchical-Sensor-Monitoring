@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Authentication;
@@ -70,31 +71,47 @@ namespace HSMServer.Model.ManagementApi
                 StatusCode = StatusCodes.Status400BadRequest,
             };
 
-        // The [ApiController] automatic-400 route into the contract (wired as
-        // ApiBehaviorOptions.InvalidModelStateResponseFactory): binding failures —
-        // malformed JSON, wrong types — bypass the action body, so they cannot go
-        // through the controllers' Validation calls. Scoped to management actions by
-        // the controller marker; every other ApiController keeps the framework's
-        // ValidationProblemDetails shape.
+        // The [ApiController] automatic-400 route into the contract for MANAGEMENT
+        // actions: binding failures — malformed JSON, wrong types — bypass the action
+        // body, so they cannot go through the controllers' Validation calls.
         public static IActionResult BindingFailureResponse(ActionContext context) =>
-            IsManagementAction(context)
-                ? Validation(FromModelState(context.ModelState))
-                : new BadRequestObjectResult(new ValidationProblemDetails(context.ModelState));
+            Validation(FromModelState(context.ModelState));
+
+        // The composition wired in Program.cs as InvalidModelStateResponseFactory:
+        // management actions get the uniform contract, everything else goes to the
+        // CAPTURED framework default verbatim — the sensor-data and Grafana APIs keep
+        // their exact previous wire shape (problem+json content types, type, traceId),
+        // not a reimplementation of it.
+        public static Func<ActionContext, IActionResult> WrapBindingFailureFactory(
+            Func<ActionContext, IActionResult> frameworkDefault) =>
+            context => IsManagementAction(context)
+                ? BindingFailureResponse(context)
+                : frameworkDefault(context);
 
         // The area-membership check of the binding-failure factory: the controller
-        // carries [ManagementApi] — the same marker the area guard admits endpoints by.
-        private static bool IsManagementAction(ActionContext context) =>
+        // carries [ManagementApi] — the same marker the area guard admits endpoints
+        // by. inherit: true — endpoint metadata (what the guard reads) includes
+        // attributes inherited from a base controller, and this check must not
+        // silently diverge from it.
+        public static bool IsManagementAction(ActionContext context) =>
             context.ActionDescriptor is ControllerActionDescriptor action &&
-            action.ControllerTypeInfo.IsDefined(typeof(ManagementApiAttribute), inherit: false);
+            action.ControllerTypeInfo.IsDefined(typeof(ManagementApiAttribute), inherit: true);
 
         // ModelState -> the contract's field-keyed details map. Keys stay exactly what
         // MVC produced (property paths, $.path[0] JSON paths) so a client can locate
-        // the offending entry, same as with the controllers' manual validation.
+        // the offending entry, same as with the controllers' manual validation. An
+        // empty error message (a binder exception that is not a Format/
+        // Overflow/InputFormatter one) gets the framework's own fallback wording —
+        // a field key with an empty message is not actionable.
         public static IDictionary<string, string[]> FromModelState(ModelStateDictionary modelState) =>
             modelState
                 .Where(entry => entry.Value.Errors.Count > 0)
                 .ToDictionary(
                     entry => entry.Key,
-                    entry => entry.Value.Errors.Select(error => error.ErrorMessage).ToArray());
+                    entry => entry.Value.Errors
+                        .Select(error => string.IsNullOrEmpty(error.ErrorMessage)
+                            ? "The input was not valid."
+                            : error.ErrorMessage)
+                        .ToArray());
     }
 }

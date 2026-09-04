@@ -115,6 +115,44 @@ namespace HSMServer.Core.Tests.Middleware
         }
 
         [Fact]
+        public async Task SwaggerGate_OffSitePort_IsUniformJsonNotFound()
+        {
+            // The doc enumerates the SitePort-only management surface — serving it on
+            // the sensor port would publish the map the area guard exists to hide
+            // (review #1366). Both swagger path families are gated.
+            foreach (var path in new[] { "/swagger/0.0.0/swagger.json", "/api/swagger/index.html" })
+            {
+                var context = BuildContext(path, SensorPort);
+
+                await new SwaggerSitePortOnlyMiddleware(_ => Task.CompletedTask, Bindings).InvokeAsync(context);
+
+                Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+                Assert.Equal(ManagementApiErrors.NotFoundCode, (await BodyAsync(context)).RootElement.GetProperty("error").GetString());
+            }
+        }
+
+        [Fact]
+        public async Task SwaggerGate_OnSitePort_PassesThrough()
+        {
+            var context = BuildContext("/api/swagger/index.html", SitePort);
+
+            await new SwaggerSitePortOnlyMiddleware(_ => Task.CompletedTask, Bindings).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        }
+
+        [Fact]
+        public async Task SwaggerGate_NonSwaggerPath_OnSensorPort_PassesThrough()
+        {
+            // Sensor-data traffic on the sensor port is none of this gate's business.
+            var context = BuildContext("/api/sensors/int", SensorPort);
+
+            await new SwaggerSitePortOnlyMiddleware(_ => Task.CompletedTask, Bindings).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        }
+
+        [Fact]
         public async Task LegacyGuard_HsmBearerOutsideArea_IsUniformJsonUnauthorized()
         {
             var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
@@ -153,17 +191,44 @@ namespace HSMServer.Core.Tests.Middleware
         }
 
         [Fact]
-        public void BindingFailures_OtherApiControllers_KeepTheFrameworkDefault()
+        public void FromModelState_EmptyMessages_GetTheFallbackWording()
+        {
+            // A binder exception that is not a Format/Overflow/InputFormatter one
+            // produces an EMPTY error message; a field key with "" is not actionable.
+            var state = new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary();
+            state.AddModelError("root", string.Empty);
+
+            var map = ManagementApiErrors.FromModelState(state);
+
+            Assert.Equal("The input was not valid.", Assert.Single(map["root"]));
+        }
+
+        [Fact]
+        public void BindingFailures_OtherApiControllers_DelegateToTheCapturedFrameworkDefault()
         {
             // The sensor-data API (SensorsController) is NOT part of the management
-            // area and must not change its error shape.
-            var context = BindingContext(typeof(HSMServer.Controllers.SensorsController));
-            context.ModelState.AddModelError("key", "broken");
+            // area: the wired factory must call through to the CAPTURED framework
+            // default verbatim — its wire shape (problem+json, type, traceId) is
+            // compatibility-sensitive, never a reimplementation (review #1366).
+            IActionResult fromDefault = new OkResult();
 
-            var result = ManagementApiErrors.BindingFailureResponse(context);
+            var factory = ManagementApiErrors.WrapBindingFailureFactory(_ => fromDefault);
 
-            var objectResult = Assert.IsType<BadRequestObjectResult>(result);
-            Assert.IsType<ValidationProblemDetails>(objectResult.Value);
+            Assert.Same(fromDefault, factory(BindingContext(typeof(HSMServer.Controllers.SensorsController))));
+        }
+
+        [Fact]
+        public void BindingFailures_ManagementActions_NeverCallTheFrameworkDefault()
+        {
+            IActionResult fromDefault = new OkResult();
+            var context = BindingContext(typeof(HSMServer.Controllers.AlertTemplatesApiController));
+            context.ModelState.AddModelError("name", "The name field is required.");
+
+            var result = ManagementApiErrors.WrapBindingFailureFactory(_ => fromDefault)(context);
+
+            Assert.NotSame(fromDefault, result);
+            Assert.Equal(ManagementApiErrors.ValidationFailedCode,
+                Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value).Error);
         }
 
 

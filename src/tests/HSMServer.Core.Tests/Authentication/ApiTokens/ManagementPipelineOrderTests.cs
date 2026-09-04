@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using Xunit;
 
 namespace HSMServer.Core.Tests.Authentication.ApiTokens
@@ -77,11 +78,13 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         public void BindingFailureFactory_IsWiredIntoApiBehaviorOptions()
         {
             // The other registration the contract's unit tests cannot see: the
-            // [ApiController] automatic-400 route must point at the uniform-contract
-            // factory (Program.cs, not ConfigureMiddleware).
+            // [ApiController] automatic-400 route must wrap — not replace — the
+            // framework default (Program.cs, not ConfigureMiddleware), so non-
+            // management ApiControllers keep their exact previous wire shape.
             var source = ReadSource("src/server/HSMServer/Program.cs");
 
-            Assert.Contains("InvalidModelStateResponseFactory = ManagementApiErrors.BindingFailureResponse", source);
+            Assert.Contains("InvalidModelStateResponseFactory =", source);
+            Assert.Contains("ManagementApiErrors.WrapBindingFailureFactory(options.InvalidModelStateResponseFactory)", source);
         }
 
 
@@ -101,7 +104,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         // The middleware block lives in ConfigureMiddleware; ordering is only meaningful
-        // within that method, not across the whole file.
+        // within that method, not across the whole file. Comment lines are stripped so
+        // the markers match REGISTRATIONS, not a comment that happens to quote one.
         private static string ExtractConfigureMiddlewareBody(string source)
         {
             var start = source.IndexOf("ConfigureMiddleware", System.StringComparison.Ordinal);
@@ -110,7 +114,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             var end = source.IndexOf("InitStorages", start, System.StringComparison.Ordinal);
 
-            return source[start..end];
+            return string.Join("\n", source[start..end]
+                .Split('\n')
+                .Where(line => !line.TrimStart().StartsWith("//")));
         }
     }
 }

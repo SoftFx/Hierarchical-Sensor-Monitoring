@@ -7,6 +7,7 @@ using HSMServer.Controllers;
 using HSMServer.Filters;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Xunit;
 
@@ -25,6 +26,9 @@ namespace HSMServer.Core.Tests.Swagger
             .GetMethods()
             .Single(m => m.Name == nameof(SensorsController.Post) &&
                          m.GetParameters().Single().ParameterType.Name == "IntSensorValue");
+
+        private static readonly MethodInfo GrafanaAction = typeof(HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController)
+            .GetMethod(nameof(HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.ReadHistory));
 
         private static readonly MethodInfo ManagementAction =
             typeof(AlertTemplatesApiController).GetMethod(nameof(AlertTemplatesApiController.GetTemplates));
@@ -49,6 +53,20 @@ namespace HSMServer.Core.Tests.Swagger
 
             Assert.Contains(operation.Parameters, p => p.Name == "Key" && p.In == Microsoft.OpenApi.Models.ParameterLocation.Header);
             Assert.Contains(operation.Parameters, p => p.Name == "ClientName");
+        }
+
+        [Fact]
+        public void KeyHeaderFilter_GrafanaActions_KeepTheKeyHeader()
+        {
+            // The Grafana JSON datasource authenticates EXCLUSIVELY through the Key
+            // header (TryGetKey reads Request.Headers["Key"]), and its request types do
+            // not derive from BaseRequest — a positive BaseRequest-type match would
+            // silently strip its credential from the spec (review finding on #1366).
+            var operation = new Microsoft.OpenApi.Models.OpenApiOperation();
+
+            new DataRequestHeaderSwaggerFilter().Apply(operation, Context(GrafanaAction));
+
+            Assert.Contains(operation.Parameters, p => p.Name == "Key" && p.In == Microsoft.OpenApi.Models.ParameterLocation.Header);
         }
 
         [Fact]
@@ -89,32 +107,37 @@ namespace HSMServer.Core.Tests.Swagger
 
 
         // The per-action error-response sets of the area, from
-        // aicontext/features/server/management-api/feature.md. An action absent from
+        // aicontext/features/server/management-api/feature.md — 500 on every action:
+        // the /api exception handler can answer any of them. An action absent from
         // this map fails the conventions test — adding a management endpoint means
         // documenting it here (and in the feature doc) in the same change.
         private static readonly Dictionary<(Type Controller, string Action), int[]> RequiredErrorResponses = new()
         {
-            [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.GetTemplates))] = [400, 401],
-            [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.GetTemplate))] = [401, 403, 404],
-            [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.CreateTemplate))] = [400, 401, 403, 404, 409],
-            [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.UpdateTemplate))] = [400, 401, 403, 404, 409],
-            [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.DeleteTemplate))] = [401, 403, 404, 409],
-            [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.GetSchedules))] = [400, 401, 403],
-            [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.GetSchedule))] = [401, 403, 404],
+            [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.GetTemplates))] = [400, 401, 500],
+            [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.GetTemplate))] = [401, 403, 404, 500],
+            [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.CreateTemplate))] = [400, 401, 403, 404, 409, 500],
+            [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.UpdateTemplate))] = [400, 401, 403, 404, 409, 500],
+            [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.DeleteTemplate))] = [401, 403, 404, 409, 500],
+            [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.GetSchedules))] = [400, 401, 403, 500],
+            [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.GetSchedule))] = [401, 403, 404, 500],
         };
 
 
         [Fact]
         public void ManagementActions_DeclareTheDocumentedResponses()
         {
+            // inherit: true — the runtime guard admits endpoints by ENDPOINT metadata,
+            // which includes attributes inherited from a base controller; the
+            // conventions set must not silently diverge from it.
             var controllers = typeof(AlertTemplatesApiController).Assembly.GetTypes()
-                .Where(t => t.IsDefined(typeof(ManagementApiAttribute), inherit: false))
+                .Where(t => t.IsDefined(typeof(ManagementApiAttribute), inherit: true))
                 .ToList();
 
             var documented = new HashSet<string>();
 
             foreach (var controller in controllers)
-                foreach (var action in controller.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+                foreach (var action in controller.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                             .Where(IsHttpAction))
                 {
                     documented.Add($"{controller.Name}.{action.Name}");
 
@@ -136,5 +159,10 @@ namespace HSMServer.Core.Tests.Swagger
             foreach (var (controller, action) in RequiredErrorResponses.Keys)
                 Assert.Contains($"{controller.Name}.{action}", documented);
         }
+
+        // Endpoints only: public helpers and property accessors are not swagger
+        // operations and must not trip the conventions map.
+        private static bool IsHttpAction(MethodInfo method) =>
+            method.GetCustomAttributes().OfType<HttpMethodAttribute>().Any();
     }
 }

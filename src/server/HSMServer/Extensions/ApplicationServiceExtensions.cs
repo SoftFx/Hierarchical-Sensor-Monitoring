@@ -222,6 +222,11 @@ namespace HSMServer.ServiceExtensions
             applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
 
 
+            // The doc enumerates the SitePort-only management surface (#1353/#1366
+            // review): serving it on the sensor port would publish the map the area
+            // guard exists to hide. Same listener registry the guard admits by.
+            applicationBuilder.UseMiddleware<SwaggerSitePortOnlyMiddleware>();
+
             applicationBuilder.UseSwagger();
             applicationBuilder.UseSwaggerUI(c =>
             {

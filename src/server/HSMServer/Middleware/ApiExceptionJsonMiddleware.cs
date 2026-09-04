@@ -23,8 +23,15 @@ namespace HSMServer.Middleware
             {
                 // Deliberately no exception text on the wire: the message carries no
                 // internals, and the trace id is the key that locates the record
-                // LoggingExceptionMiddleware has already written.
-                context.Response.Clear();
+                // LoggingExceptionMiddleware has already written (its layout carries
+                // ${aspnet-TraceIdentifier}).
+                //
+                // NOT Response.Clear(): headers set by outer middleware on the way in
+                // (HSTS above all) must survive the 500; only the aborted response's
+                // content staging is discarded, and the writer restages it.
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                context.Response.Headers.ContentLength = default;
+                context.Response.Headers.ContentType = default;
 
                 await ManagementApiErrorResponses.WriteInternalError(context, context.TraceIdentifier);
             }

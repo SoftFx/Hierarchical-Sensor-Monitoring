@@ -49,7 +49,8 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 - Area-guard rejection (unmatched `/api/v1` route) → 404 with the SAME generic body as the controllers' unknown id.
 - Legacy bearer guard (hsm_pat_ outside the area) → 401 `unauthorized` JSON.
 - Exception middleware: an exception on an `/api` path → 500 `internal_error` with `details.traceId == context.TraceIdentifier` and no exception text on the wire; a non-API path rethrows (Razor error page keeps serving the UI); a started response rethrows.
-- Binding-failure factory: a `[ManagementApi]` action's invalid ModelState → the uniform 400 with MVC's own field keys (`name`, `$.policies[1]`); a non-management `[ApiController]` (SensorsController) keeps the framework `ValidationProblemDetails` shape.
+- Binding-failure factory: a `[ManagementApi]` action's invalid ModelState → the uniform 400 with MVC's own field keys (`name`, `$.policies[1]`); an empty binder message gets the framework's fallback wording; the WIRED factory (`WrapBindingFailureFactory`) delegates non-management actions to the captured framework default **verbatim** (spy assertion — the sensor-data/Grafana `problem+json` shape is delegated to, never reimplemented) and never calls it for management actions.
+- Swagger port gate: swagger paths off the SitePort (both `/swagger/*` and `/api/swagger/*`) → the uniform 404 body; on the SitePort and for non-swagger paths on any port → pass-through.
 
 **Challenge** (`HsmApiTokenHandlerTests.Challenge_BodyIsTheUniformJsonErrorContract`): the 401 keeps `WWW-Authenticate: Bearer`, no redirect, and adds the uniform JSON body.
 
@@ -57,8 +58,8 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 
 `ManagementApiSwaggerTests`:
 
-- **Filter scoping**: `DataRequestHeaderSwaggerFilter` adds the Key/ClientName headers to sensor-data actions (a `BaseRequest`-derived body parameter) and NONE to management actions; `ManagementApiSecuritySwaggerFilter` attaches the `HsmApiToken` bearer requirement to management actions only.
-- **Response-annotations conventions pin**: every public action of every `[ManagementApi]` controller must be in the explicit per-action map (400/401 everywhere; 403/404 where authorization can deny; 409 on cache-conflicting writes) and declare at least one 2xx — adding a management endpoint without documenting its outcomes fails the suite; dead map entries fail too.
+- **Filter scoping**: `DataRequestHeaderSwaggerFilter` adds the Key/ClientName headers to NON-management actions (a NEGATIVE rule — skip `[ManagementApi]` controllers; pinned on a sensor-data action AND on a Grafana JSON-datasource action, whose request types do not derive from `BaseRequest` but whose only credential is the Key header) and NONE to management actions; `ManagementApiSecuritySwaggerFilter` attaches the `HsmApiToken` bearer requirement to management actions only. Both membership checks use `inherit: true`, matching the runtime guard's endpoint-metadata view.
+- **Response-annotations conventions pin**: every HTTP action (`HttpMethodAttribute`-bearing) of every `[ManagementApi]` controller must be in the explicit per-action map (400/401/500 everywhere; 403/404 where authorization can deny; 409 on cache-conflicting writes — 500 because the `/api` exception handler can answer any of them) and declare at least one 2xx — adding a management endpoint without documenting its outcomes fails the suite; dead map entries fail too.
 
 ## Negative coverage checklist
 
@@ -75,7 +76,7 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 - [x] List discloses nothing beyond what the operation allows (list predicate == item-endpoint operation, not mere reach)
 - [x] Authorization precedes validation (no information leak through error ordering)
 - [x] Global resource: unentitled caller learns nothing (403 for every id, provider never queried); sensor paths filtered per-caller visibility
-- [x] Every error path — controller 400/403/404/409, binding-failure 400, challenge 401, guard 404, legacy-guard 401, /api exception 500 — answers the uniform JSON body; never HTML, never an empty body
+- [x] Every error path — controller 400/403/404/409, binding-failure 400, challenge 401, guard 404, legacy-guard 401, /api exception 500 — answers the uniform JSON body; never HTML. Scope: `/api/v1` responses plus 500s anywhere under `/api`; unrouted non-v1 `/api` paths answer the framework's bare 404 (unchanged, deliberate)
 - [x] Unknown id, invisible folder and unmatched route render the SAME 404 body (anti-enumeration at routing level too)
 - [x] 500 bodies carry `details.traceId` and never exception text; non-/api paths still get the Razor error page
 - [x] Swagger: management actions carry the bearer security requirement and no Key header; sensor-data actions the reverse; every management action documents its error statuses

@@ -94,6 +94,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ApiPageDto<AlertTemplateDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public IActionResult GetTemplates(int page = 1, int pageSize = DefaultPageSize)
         {
             page = Math.Max(page, 1);
@@ -144,6 +145,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public IActionResult GetTemplate(Guid id)
         {
             var template = _cache.GetAlertTemplate(id);
@@ -168,6 +170,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateTemplate([FromBody] AlertTemplateDto dto)
         {
             // An all-zero folder id references no folder, so a 400 leaks nothing — and
@@ -213,6 +216,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateTemplate(Guid id, [FromBody] AlertTemplateDto dto)
         {
             var existing = _cache.GetAlertTemplate(id);
@@ -267,6 +271,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteTemplate(Guid id)
         {
             var template = _cache.GetAlertTemplate(id);

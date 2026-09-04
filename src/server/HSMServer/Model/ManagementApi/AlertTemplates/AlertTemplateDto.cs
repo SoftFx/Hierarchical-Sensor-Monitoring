@@ -27,7 +27,7 @@ namespace HSMServer.Model.ManagementApi.AlertTemplates
 
         /// <summary>
         /// SensorType enum value, or 100 (AnyType) to match every sensor type:
-        /// 0=Boolean, 1=Int, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File,
+        /// 0=Boolean, 1=Integer, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File,
         /// 7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType.
         /// </summary>
         public byte SensorType { get; init; }
