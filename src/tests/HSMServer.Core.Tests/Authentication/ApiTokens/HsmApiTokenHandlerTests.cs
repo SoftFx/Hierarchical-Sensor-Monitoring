@@ -101,6 +101,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var provider = services.BuildServiceProvider();
 
             var context = new DefaultHttpContext { RequestServices = provider.CreateScope().ServiceProvider };
+
+            // DefaultHttpContext writes into Stream.Null — capture the body for the
+            // error-contract assertions (challenge test parses what the handler wrote).
+            context.Response.Body = new System.IO.MemoryStream();
+
             if (authorizationHeader is not null)
                 context.Request.Headers.Authorization = authorizationHeader;
 
@@ -287,6 +292,23 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
             Assert.Equal("Bearer", context.Response.Headers.WWWAuthenticate.ToString());
             Assert.True(Microsoft.Extensions.Primitives.StringValues.IsNullOrEmpty(context.Response.Headers.Location));
+        }
+
+        [Fact]
+        public async Task Challenge_BodyIsTheUniformJsonErrorContract()
+        {
+            // #1353: the 401 is machine-readable too — same {error, message, details}
+            // body as every other management-API error path.
+            var context = await ChallengeAsync();
+
+            context.Response.Body.Position = 0;
+            using var body = await System.Text.Json.JsonDocument.ParseAsync(context.Response.Body);
+
+            var root = body.RootElement;
+
+            Assert.Equal(HSMServer.Model.ManagementApi.ManagementApiErrors.UnauthorizedCode, root.GetProperty("error").GetString());
+            Assert.False(string.IsNullOrEmpty(root.GetProperty("message").GetString()));
+            Assert.Equal(System.Text.Json.JsonValueKind.Null, root.GetProperty("details").ValueKind);
         }
 
         [Fact]

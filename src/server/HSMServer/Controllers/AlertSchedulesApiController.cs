@@ -7,10 +7,18 @@ using HSMServer.Core.Schedule;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HSMServer.Controllers
 {
+    /// <summary>
+    /// Read-only listing of alert schedules (epic #1347). Bearer-token authenticated
+    /// only (the HsmApiToken scheme — see the HsmApiToken security scheme of this
+    /// document); served on the web-UI port only. Readable by a token whose owner can
+    /// see at least one boundary with an alerts:read grant; sensor references are
+    /// filtered to the boundaries the caller can see under the same grant.
+    /// </summary>
     // Read-only REST surface for alert schedules (#1352, epic #1347) — the second
     // /api/v1 resource controller; area conventions are identical to
     // AlertTemplatesApiController (see aicontext/features/server/management-api/).
@@ -48,7 +56,18 @@ namespace HSMServer.Controllers
         }
 
 
+        /// <summary>
+        /// List schedules, paginated, ordered by name then id. Requires an alerts:read
+        /// grant at some boundary visible to the token's owner (the caller-wide gate);
+        /// each schedule's sensors list carries only paths the caller may see.
+        /// </summary>
+        /// <param name="page">1-based page number; clamped into [1, totalPages].</param>
+        /// <param name="pageSize">Page size, 1..200 (default 50).</param>
         [HttpGet]
+        [ProducesResponseType(typeof(ApiPageDto<AlertScheduleDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         public IActionResult GetSchedules(int page = 1, int pageSize = DefaultPageSize)
         {
             if (!AuthorizeSchedulesRead())
@@ -91,7 +110,13 @@ namespace HSMServer.Controllers
             });
         }
 
+        /// <summary>Get one schedule by id (same caller-wide gate as the list).</summary>
+        /// <param name="id">Schedule id.</param>
         [HttpGet("{id:guid}")]
+        [ProducesResponseType(typeof(AlertScheduleDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
         public IActionResult GetSchedule(Guid id)
         {
             if (!AuthorizeSchedulesRead())
@@ -100,7 +125,7 @@ namespace HSMServer.Controllers
             var schedule = _schedules.GetSchedule(id);
 
             if (schedule is null)
-                return NotFound();
+                return ManagementApiErrors.NotFound();
 
             return Ok(ToDto(schedule, _cache.GetSensorsByAlertSchedule(id), NewProductVisibilityFilter()));
         }
@@ -114,8 +139,8 @@ namespace HSMServer.Controllers
             _authorization.HasOperationAtAnyVisibleBoundary(User, ApiTokenOperations.AlertsRead);
 
         private IActionResult Denied() =>
-            Problem(statusCode: 403,
-                detail: "The token does not grant 'alerts:read' at any boundary accessible to its owner.");
+            ManagementApiErrors.Forbidden(
+                "The token does not grant 'alerts:read' at any boundary accessible to its owner.");
 
         // Sensors of a schedule cluster into a handful of products, and the evaluator
         // re-resolves caller + grants on every call — memoize per distinct product id

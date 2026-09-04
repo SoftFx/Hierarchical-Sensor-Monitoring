@@ -332,7 +332,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public void GetSchedule_Absent_Is404_ForAnEntitledCaller()
         {
-            Assert.IsType<NotFoundResult>(CreateController().GetSchedule(Guid.NewGuid()));
+            Assert.Equal(404, StatusCodeOf(CreateController().GetSchedule(Guid.NewGuid())));
         }
     }
 }

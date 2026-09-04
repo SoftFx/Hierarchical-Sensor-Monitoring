@@ -2,6 +2,7 @@ using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using HSMServer.Model.Authentication;
+using HSMServer.Middleware;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -112,11 +113,12 @@ namespace HSMServer.Authentication
 
         protected override Task HandleChallengeAsync(AuthenticationProperties properties)
         {
-            // A generic, non-redirecting bearer challenge. The cookie scheme's login
-            // redirect must never fire for management endpoints.
-            Response.StatusCode = StatusCodes.Status401Unauthorized;
+            // A generic, non-redirecting bearer challenge with the area's uniform JSON
+            // body (#1353) — a machine client reads the 401 without parsing HTML. The
+            // cookie scheme's login redirect must never fire for management endpoints.
             Response.Headers.WWWAuthenticate = "Bearer";
-            return Task.CompletedTask;
+
+            return ManagementApiErrorResponses.WriteUnauthorized(Context, "A valid bearer token is required.");
         }
 
 
