@@ -49,6 +49,68 @@
             Read `wwwroot/agent/version.txt` (one-line version string staged by CI). Falls back to
             "0.0.0" so the manifest stays valid even when the version file was not staged yet.
         </member>
+        <member name="T:HSMServer.Controllers.AlertSchedulesApiController">
+            <summary>
+            Read-only listing of alert schedules (epic #1347). Bearer-token authenticated
+            only (the HsmApiToken scheme — see the HsmApiToken security scheme of this
+            document); served on the web-UI port only. Readable by a token whose owner can
+            see at least one boundary with an alerts:read grant; sensor references are
+            filtered to the boundaries the caller can see under the same grant.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertSchedulesApiController.GetSchedules(System.Int32,System.Int32)">
+            <summary>
+            List schedules, paginated, ordered by name then id. Requires an alerts:read
+            grant at some boundary visible to the token's owner (the caller-wide gate);
+            each schedule's sensors list carries only paths the caller may see.
+            </summary>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertSchedulesApiController.GetSchedule(System.Guid)">
+            <summary>Get one schedule by id (same caller-wide gate as the list).</summary>
+            <param name="id">Schedule id.</param>
+        </member>
+        <member name="T:HSMServer.Controllers.AlertTemplatesApiController">
+            <summary>
+            CRUD over alert templates (epic #1347). Bearer-token authenticated only (the
+            HsmApiToken scheme — see the HsmApiToken security scheme of this document);
+            served on the web-UI port only. Reads need the token's alerts:read grant at the
+            template's folder, writes alerts:write; invisible or out-of-reach folders answer
+            the same 404 as an unknown id.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertTemplatesApiController.GetTemplates(System.Int32,System.Int32)">
+            <summary>
+            List templates, paginated, ordered by name then id. Only templates whose
+            folder passes the caller's alerts:read visibility are listed — ungranted
+            folders are silently absent, never a per-item 403.
+            </summary>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertTemplatesApiController.GetTemplate(System.Guid)">
+            <summary>Get one template by id.</summary>
+            <param name="id">Template id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertTemplatesApiController.CreateTemplate(HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto)">
+            <summary>
+            Create a template. A client-sent id is ignored (the server generates one);
+            the response echoes the STORED template — normalized ids, chat display names.
+            </summary>
+            <remarks>Requires alerts:write at the target folder; the folder must exist, be visible to the token's owner and contain products.</remarks>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertTemplatesApiController.UpdateTemplate(System.Guid,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto)">
+            <summary>
+            Update a template (upsert semantics). Moving it to another folder requires
+            alerts:write on BOTH folders; the response echoes the stored template.
+            </summary>
+            <param name="id">Template id; must equal the body id when the body carries one.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.AlertTemplatesApiController.DeleteTemplate(System.Guid)">
+            <summary>Delete a template and strip its per-sensor policies.</summary>
+            <param name="id">Template id.</param>
+        </member>
         <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.TestConnection">
             <summary>
             with 200 status code response. Used for "Test connection" on the datasource config page.
@@ -217,7 +279,26 @@
         </member>
         <member name="T:HSMServer.Filters.DataRequestHeaderSwaggerFilter">
             <summary>
-            Swagger filter for adding required string 'Key' in API requests header
+            Swagger filter for adding required string 'Key' in API requests header.
+            Historically global; since #1353 the single exclusion is the management API —
+            its operations authenticate through the Authorization bearer header and must
+            not advertise a Key header. The rule is deliberately negative (skip
+            [ManagementApi] controllers, add otherwise): several non-management families
+            whose request types do NOT derive from BaseRequest also authenticate through
+            the Key header (the Grafana JSON datasource above all — TryGetKey reads
+            Request.Headers["Key"] exclusively), so a positive "parameter derives from
+            BaseRequest" match would silently strip their credential from the spec.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Filters.ManagementApiSecuritySwaggerFilter">
+            <summary>
+            Attaches the HsmApiToken bearer requirement to MANAGEMENT operations only
+            (#1353, epic #1347). The single swagger doc also carries the sensor-data API
+            (Key header) and unauthenticated routes, so a global security requirement would
+            misdescribe them; membership here is the same controller marker the area guard
+            admits endpoints by. The scheme itself is defined in AddSwaggerGen under
+            <see cref="F:HSMServer.Filters.ManagementApiSecuritySwaggerFilter.SchemeName"/> — an agent that reads only the spec learns from it how
+            to authenticate.
             </summary>
         </member>
         <member name="T:HSMServer.Filters.ProductRoleFilters.ProductRoleFilterBySensorGroups">
@@ -329,6 +410,250 @@
             </summary>
             <param name="means"></param>
             <returns></returns>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto">
+            <summary>
+            Wire contract of the /api/v1/alertSchedules read-only surface. The four durable
+            fields are exactly what the web-UI editor shows.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto.Id">
+            <summary>Schedule id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto.Name">
+            <summary>Schedule name.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto.Timezone">
+            <summary>IANA/Windows timezone id, as configured by the operator.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto.Schedule">
+            <summary>
+            The YAML schedule text — the editor's source of truth; day schedules and
+            overrides are parsed from it, never stored separately.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto.Sensors">
+            <summary>
+            Full paths of the sensors currently using the schedule — FILTERED to the
+            boundaries the caller can see, so a folder-scoped token never learns paths
+            outside its grants.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto">
+            <summary>
+            Alert template wire contract of the /api/v1/alertTemplates surface. The shape
+            mirrors the durable template one field per field; ids are Guid strings. Byte
+            fields carry DOMAIN ENUM VALUES (documented per field) — membership is validated
+            structurally, unknown values answer 400 with the offending field key.
+            </summary>
+            <remarks>
+            Round-trip notes: a client-sent template id is IGNORED on create (server
+            generates one) and must equal the route id on update or be absent; Guid.Empty
+            policy ids are regenerated server-side on every write; destination chat display
+            names are overwritten with the manager's current names. `destination`/`schedule`
+            null means "omitted" (defaults apply). TTL policies and intervals are parallel
+            lists matched by position.
+            </remarks>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Id">
+            <summary>Output-only: assigned by the server on create. On update it must equal the route id or be absent.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Name">
+            <summary>Unique name, 1..200 characters, case-sensitive, globally unique across folders.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.SensorType">
+            <summary>
+            SensorType enum value, or 100 (AnyType) to match every sensor type:
+            0=Boolean, 1=Integer, 2=Double, 3=String, 4=IntegerBar, 5=DoubleBar, 6=File,
+            7=TimeSpan, 8=Version, 9=Rate, 10=Enum, 100=AnyType.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.FolderId">
+            <summary>Target folder id; required on create and update.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Paths">
+            <summary>Path templates the template applies to (e.g. "Root/*/cpu"); 1..100 entries, each a sensor path pattern.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.TtlPolicies">
+            <summary>TTL alert policies; parallel to <see cref="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Ttls"/> (same length, matched by position).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Ttls">
+            <summary>TTL intervals; parallel to <see cref="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.TtlPolicies"/> — the interval of TTLs[i] belongs to TtlPolicies[i].</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto.Policies">
+            <summary>Regular (non-TTL) alert policies applied to every matching sensor.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto">
+            <summary>
+            One alert policy: conditions + notification destination + schedule. A Guid.Empty
+            id is regenerated server-side on every write (empty ids would collide in
+            per-sensor policy collections); ids must be unique across policies and ttlPolicies.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.Id">
+            <summary>Policy id; Guid.Empty means "server generates one".</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.Conditions">
+            <summary>Conditions combined into the policy trigger.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.Destination">
+            <summary>Notification destination (chat set + mode flags); null means defaults.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.Schedule">
+            <summary>Send schedule of a fired alert; null means defaults.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.SensorStatus">
+            <summary>Status the sensor gets while the policy is triggered (HSMCommon SensorStatus): 0=Ok, 1=Error, 255=OffTime.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.IsDisabled">
+            <summary>Disabled policies stay stored but never fire.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.Template">
+            <summary>Alert message template (may reference sensor values).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.Icon">
+            <summary>UI icon name.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.ConfirmationPeriod">
+            <summary>Confirmation period (100-ns ticks), optional.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.TemplateId">
+            <summary>Reserved linkage fields of the durable policy; normally omitted by clients.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.ScheduleId">
+            <summary>Working-time schedule the policy respects; must reference an existing /api/v1/alertSchedules id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.AlertPolicyDto.TemplateAlertId">
+            <summary>Reserved linkage field of the durable policy; normally omitted by clients.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.PolicyConditionDto">
+            <summary>One condition of a policy: property, comparison operation, target value.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyConditionDto.Target">
+            <summary>The value the property is compared against (constant, or the sensor's last value).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyConditionDto.Combination">
+            <summary>How this condition combines with the PREVIOUS one: 0=And, 1=Or.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyConditionDto.Operation">
+            <summary>
+            Comparison operation (PolicyOperation enum):
+            0=LessThanOrEqual, 1=LessThan, 2=GreaterThan, 3=GreaterThanOrEqual, 4=Equal,
+            5=NotEqual, 20=IsChanged, 21=IsError, 22=IsOk, 23=IsChangedToError,
+            24=IsChangedToOk, 30=Contains, 31=StartsWith, 32=EndsWith, 50=ReceivedNewValue.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyConditionDto.Property">
+            <summary>
+            The sensor property compared (PolicyProperty enum):
+            0=Status, 1=Comment, 20=Value, 101=Min, 102=Max, 103=Mean, 104=Count,
+            105=LastValue, 106=FirstValue, 120=Length (value length), 151=OriginalSize,
+            200=NewSensorData, 210=EmaValue, 211=EmaMin, 212=EmaMax, 213=EmaMean, 214=EmaCount.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.PolicyTargetDto">
+            <summary>The right-hand side of a condition.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyTargetDto.Type">
+            <summary>0=Const (compare against <see cref="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyTargetDto.Value"/>), 1=LastValue (compare against the sensor's last value).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyTargetDto.Value">
+            <summary>The constant compared against when type is Const; ignored for LastValue.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.PolicyDestinationDto">
+            <summary>
+            Notification destination. Chat keys are chat ids (Guid strings); display names
+            are an echo that the server overwrites on every write. A chat must be global or
+            bound to the template's folder, otherwise the write answers 400.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyDestinationDto.Chats">
+            <summary>Chat id (Guid string) to chat display name; at least one chat for a custom destination.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyDestinationDto.IsNotInitialized">
+            <summary>Mode flag: destination not initialized (zero chats reconstruct as this).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyDestinationDto.IsEmpty">
+            <summary>Mode flag: no destination.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyDestinationDto.UseDefaultChats">
+            <summary>Mode flag: send through the folder's default chats.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyDestinationDto.AllChats">
+            <summary>Mode flag: send through every chat bound to the folder.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.PolicyScheduleDto">
+            <summary>Send schedule of a fired alert.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyScheduleDto.TimeTicks">
+            <summary>Send time offset within the aggregation window, in 100-ns ticks.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyScheduleDto.InstantSend">
+            <summary>Send immediately, outside the aggregation window.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.PolicyScheduleDto.RepeateMode">
+            <summary>
+            Re-send interval of a still-triggered policy (AlertRepeatMode enum):
+            0=Immediately, 5=FiveMinutes, 6=TenMinutes, 7=FifteenMinutes, 10=ThirtyMinutes,
+            20=Hourly, 50=Daily, 100=Weekly.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.TimeIntervalDto">
+            <summary>
+            One TTL interval. `Interval` is a SPARSE TimeInterval enum (long):
+            -100=FromFolder, -10=FromParent, -1=Ticks (authoritative — read Ticks),
+            0=None, 26784000000000=Month (31 days), 80352000000000=ThreeMonths,
+            160704000000000=SixMonths, 315360000000000=Year (365 days).
+            Undefined values answer 400 (they would throw inside the timeout scan later).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.TimeIntervalDto.Interval">
+            <summary>TimeInterval enum value (see the record summary for the full list).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.AlertTemplates.TimeIntervalDto.Ticks">
+            <summary>Custom interval in 100-ns ticks; authoritative when Interval is -1 (Ticks), otherwise ignored.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.ApiPageDto`1">
+            <summary>
+            List envelope of every management API collection endpoint: 1-based page,
+            server-clamped size, stable per-resource ordering.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ApiPageDto`1.Items">
+            <summary>The page's items.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ApiPageDto`1.Page">
+            <summary>1-based page number (a page request beyond the end returns the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ApiPageDto`1.PageSize">
+            <summary>Effective page size (1..200; default 50).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ApiPageDto`1.TotalCount">
+            <summary>Total item count across all pages.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ApiPageDto`1.TotalPages">
+            <summary>Total page count (0 when the collection is empty).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.ManagementApiErrorDto">
+            <summary>
+            The uniform error body of the management API: every error response of every
+            /api/v1 endpoint — controller results, authentication challenges, area-guard
+            rejections and the /api exception handler — carries this shape with
+            application/json, never HTML and never an empty body.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ManagementApiErrorDto.Error">
+            <summary>
+            Stable machine-readable code, one per HTTP status:
+            validation_failed (400), unauthorized (401), forbidden (403),
+            not_found (404), conflict (409), internal_error (500).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ManagementApiErrorDto.Message">
+            <summary>Human-readable summary; 404 bodies are generic by design (anti-enumeration).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.ManagementApiErrorDto.Details">
+            <summary>Field-keyed validation messages ({"field": ["msg"]}) on 400s; {"traceId": "..."} on 500s; null otherwise.</summary>
         </member>
         <member name="P:HSMServer.Model.ViewModel.EditProductViewModel.DisabledSensorGroups">
             Sensor groups currently disabled for this product's agents (#1198).
