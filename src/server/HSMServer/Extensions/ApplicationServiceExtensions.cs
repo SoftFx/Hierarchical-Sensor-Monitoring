@@ -72,6 +72,10 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton<ApiTokenInvalidAttemptLimiter>();
             services.AddSingleton<ApiTokenRetentionCleaner>();
 
+            // Issuance-side owner filter (#1356 step 4): what the create form may offer
+            // and what the lifecycle endpoints accept, from the owner's CURRENT roles.
+            services.AddSingleton<IApiTokenGrantOptionsService, ApiTokenGrantOptionsService>();
+
             services.AddSingleton<DataCollectorWrapper>()
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<TelemetryCollector>()

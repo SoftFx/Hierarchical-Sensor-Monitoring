@@ -3,13 +3,35 @@ using System;
 namespace HSMServer.ServerConfiguration
 {
     // Retention and abuse bounds of the API-token channel (#1356; initiative section
-    // "Configuration"). The issuance-side knobs (Enabled, DefaultLifetime,
-    // AllowNoExpiration, MaxTokensPerUser) land with the token-management endpoints
-    // (step 4); until then nothing creates tokens at runtime and these three bounds are
-    // the ones with a live consumer. Defaults are upgrade-safe: no section in config
-    // falls back to these values, not the other way round.
+    // "Configuration"), plus the issuance-side knobs that land with the token-management
+    // UI (step 4). Defaults are upgrade-safe: a deployment with no ApiTokens section in
+    // config gets tokens fully DISABLED and must opt in explicitly, never the other way
+    // round.
     public sealed class ApiTokensConfig
     {
+        // Emergency authentication/issuance kill switch (initiative: "ApiTokens.Enabled =
+        // false ... all API-token authentication plus create/rotate/restrict is denied
+        // immediately. Cookie-authenticated list/revoke and IsAdmin emergency
+        // revoke-user/revoke-all remain available for cleanup"). Default false: tokens
+        // are a new channel and an upgraded deployment must enable them deliberately.
+        public bool Enabled { get; set; }
+
+        // Quota of LIVE tokens per user (unexpired, not revoked, issued at the current
+        // global and owner revocation generations — exactly what
+        // IApiTokenManager.CountQuotaEligibleTokens counts). Dead records never block
+        // issuance; rotation replaces the source slot atomically.
+        public int MaxTokensPerUser { get; set; } = 10;
+
+        // Whether the "No expiration" option may be offered at all. Default false:
+        // an unlimited credential is the longest-lived secret a user can mint, so it
+        // exists only where an operator explicitly accepted that trade.
+        public bool AllowNoExpiration { get; set; }
+
+        // Expiry preselected by the create form (the "recommended preset" the initiative
+        // names). A preselect, not a cap: nothing enforces this value server-side, and a
+        // custom date may be shorter or longer.
+        public TimeSpan DefaultLifetime { get; set; } = TimeSpan.FromDays(90);
+
         // Upper bound for both retention windows: the retention sweep computes
         // utcNow - retention, and a window large enough to underflow DateTime would throw
         // from RunOnce outside every per-pass try block — validated here instead, with
@@ -37,6 +59,14 @@ namespace HSMServer.ServerConfiguration
 
         public void Validate()
         {
+            if (MaxTokensPerUser < 1)
+                throw new InvalidOperationException(
+                    $"ApiTokens.{nameof(MaxTokensPerUser)} must be at least 1 (was {MaxTokensPerUser}).");
+
+            if (DefaultLifetime <= TimeSpan.Zero || DefaultLifetime > MaxRetention)
+                throw new InvalidOperationException(
+                    $"ApiTokens.{nameof(DefaultLifetime)} must be between 0 and {MaxRetention.TotalDays:0} days (was {DefaultLifetime.TotalDays:0.##} days).");
+
             if (TokenRecordRetention < TimeSpan.Zero || TokenRecordRetention > MaxRetention)
                 throw new InvalidOperationException(
                     $"ApiTokens.{nameof(TokenRecordRetention)} must be between 0 and {MaxRetention.TotalDays:0} days (was {TokenRecordRetention}).");

@@ -31,6 +31,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             services.AddSingleton(new Moq.Mock<IApiTokenManager>().Object);
             services.AddSingleton(new Moq.Mock<IUserManager>().Object);
             services.AddSingleton(new Moq.Mock<IApiTokenSecurityEventSink>().Object);
+            services.AddSingleton(new ServerConfiguration.ApiTokensConfig { Enabled = true });
 
             services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)

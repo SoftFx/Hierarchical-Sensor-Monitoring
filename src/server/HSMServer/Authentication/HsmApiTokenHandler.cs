@@ -29,17 +29,19 @@ namespace HSMServer.Authentication
         private readonly IUserManager _users;
         private readonly IApiTokenSecurityEventSink _securityEvents;
         private readonly ApiTokenInvalidAttemptLimiter _invalidAttempts;
+        private readonly ServerConfiguration.ApiTokensConfig _config;
 
 
         public HsmApiTokenHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger,
             UrlEncoder encoder, IApiTokenManager tokens, IUserManager users, IApiTokenSecurityEventSink securityEvents,
-            ApiTokenInvalidAttemptLimiter invalidAttempts)
+            ApiTokenInvalidAttemptLimiter invalidAttempts, ServerConfiguration.ApiTokensConfig config)
             : base(options, logger, encoder)
         {
             _tokens = tokens;
             _users = users;
             _securityEvents = securityEvents;
             _invalidAttempts = invalidAttempts;
+            _config = config;
         }
 
 
@@ -65,6 +67,16 @@ namespace HSMServer.Authentication
             if (!ApiTokenMaterial.TryReadBearerCredential(header, out var credential) ||
                 !credential.StartsWith(ApiTokenMaterial.TokenPrefix, StringComparison.Ordinal))
                 return Task.FromResult(AuthenticateResult.NoResult());
+
+            // Emergency kill switch (ApiTokens.Enabled = false): every API-token
+            // authentication is denied immediately, before any parsing or index lookup —
+            // the operator's lever for disabling the channel without touching stored
+            // credentials. Same indistinguishable generic failure as any other denial.
+            if (!_config.Enabled)
+            {
+                RecordFailure(tokenId: null, ownerId: null);
+                return Task.FromResult(AuthenticateResult.Fail("Invalid bearer credential."));
+            }
 
             // A credential that claims the HSM prefix but does not survive strict parsing
             // is predictably rejected before any index lookup.
