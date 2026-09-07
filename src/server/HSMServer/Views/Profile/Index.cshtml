@@ -51,6 +51,7 @@
     .status-badge.active { color: #15803d; border-color: #a7f3d0; background-color: #ecfdf5; }
     .status-badge.expired { color: #92400e; border-color: #fde68a; background-color: #fffbeb; }
     .status-badge.revoked { color: #6b7280; background-color: #f3f4f6; }
+    .status-badge.invalidated { color: #6d28d9; border-color: #ddd6fe; background-color: #f5f3ff; }
     .op-check { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8125rem; }
     .modal-error { display: none; }
 </style>
@@ -152,8 +153,8 @@
                     </div>
                 </div>
                 <div style="flex: 1;" class="text-secondary" data-timestamp="@token.CreatedAtUnixMs">—</div>
-                <div style="flex: 1;" class="text-secondary" @(token.ExpiresAtUnixMs is null ? "" : $"data-timestamp=\"{token.ExpiresAtUnixMs}\"")>@(token.ExpiresAtUnixMs is null ? "never" : "—")</div>
-                <div style="flex: 1;" class="text-secondary" @(token.LastUsedAtUnixMs is null ? "" : $"data-timestamp=\"{token.LastUsedAtUnixMs}\"")>@(token.LastUsedAtUnixMs is null ? "never" : "—")</div>
+                <div style="flex: 1;" class="text-secondary" data-timestamp="@(token.ExpiresAtUnixMs)">@(token.ExpiresAtUnixMs is null ? "never" : "—")</div>
+                <div style="flex: 1;" class="text-secondary" data-timestamp="@(token.LastUsedAtUnixMs)">@(token.LastUsedAtUnixMs is null ? "never" : "—")</div>
                 <div style="width: 84px;"><span class="status-badge @token.Status">@token.Status</span></div>
                 <div style="width: 124px; text-align: right;" class="d-flex justify-content-end gap-1">
                     @if (!dead && Model.TokensEnabled)
@@ -320,9 +321,11 @@
 
     function tokenHasGrant(operation, boundary) {
         return restrictOriginalGrants.some(function (grant) {
+            // The Global boundary is empty text on both ends; older page state may
+            // still carry null from the stored record, so normalize before comparing.
             return grant.operation === operation &&
                    grant.boundaryKind === boundary.kind &&
-                   grant.boundaryId === boundary.id;
+                   (grant.boundaryId || '') === (boundary.id || '');
         });
     }
 
@@ -346,7 +349,12 @@
         var raw = cell.getAttribute('data-timestamp');
         if (!raw) return;
 
-        var date = new Date(parseInt(raw, 10));
+        // One malformed cell must never abort this script block: every handler
+        // registration below depends on this loop completing.
+        var ms = parseInt(raw, 10);
+        if (isNaN(ms)) return;
+
+        var date = new Date(ms);
         cell.textContent = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         cell.title = date.toISOString();
     });
@@ -423,7 +431,7 @@
             var alreadySelected = selectedGrants.some(function (grant) {
                 return grant.operation === operation &&
                        grant.boundaryKind === boundary.kind &&
-                       grant.boundaryId === boundary.id;
+                       (grant.boundaryId || '') === (boundary.id || '');
             });
 
             // Restriction may only remove: hide operations the token does not currently

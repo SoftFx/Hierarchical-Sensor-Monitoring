@@ -56,7 +56,9 @@ namespace HSMServer.Model.Profile
 
         public IReadOnlyList<ProfileTokenGrantViewModel> Grants { get; init; }
 
-        // "active", "expired" or "revoked" — computed from the record's timestamps.
+        // "active", "expired", "revoked" or "invalidated" (an emergency-revoke
+        // generation passed the at-issue stamps) — computed from the record's
+        // timestamps and generation comparison.
         public string Status { get; init; }
 
         // Unix milliseconds (UTC); null ExpiresAt means no expiration.

@@ -424,8 +424,11 @@ namespace HSMServer.Controllers
                     name = folder.Name;
             }
 
+            // Global grants persist BoundaryId = null; the picker's Global boundary
+            // carries an empty id — normalize here so the restrict-modal predicates
+            // (strict === comparisons) can never miss a Global grant.
             return new ProfileTokenGrantViewModel(grant.Operation,
-                kind.ToString().ToLowerInvariant(), grant.BoundaryId, name);
+                kind.ToString().ToLowerInvariant(), grant.BoundaryId ?? string.Empty, name);
         }
 
 
