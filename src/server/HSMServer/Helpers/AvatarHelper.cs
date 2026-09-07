@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 
 namespace HSMServer.Helpers
 {
@@ -19,11 +21,23 @@ namespace HSMServer.Helpers
             Colors[(userId.GetHashCode() & 0x7FFFFFFF) % Colors.Length];
 
 
+        // First two TEXT elements, not the first two chars: a name starting with an
+        // astral character (emoji, some scripts) is a surrogate pair, and a
+        // Substring(0, 2) there would yield a lone surrogate that renders as garbage.
         public static string InitialsOf(string userName)
         {
             var trimmed = (userName ?? string.Empty).Trim();
 
-            return trimmed.Length >= 2 ? trimmed.Substring(0, 2).ToUpperInvariant() : trimmed.ToUpperInvariant();
+            if (trimmed.Length == 0)
+                return string.Empty;
+
+            var elements = new List<string>(2);
+
+            var enumerator = StringInfo.GetTextElementEnumerator(trimmed);
+            while (enumerator.MoveNext() && elements.Count < 2)
+                elements.Add((string)enumerator.Current);
+
+            return string.Concat(elements).ToUpperInvariant();
         }
     }
 }

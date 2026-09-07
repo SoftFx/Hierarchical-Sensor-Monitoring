@@ -72,6 +72,9 @@ namespace HSMServer.Authentication
             // authentication is denied immediately, before any parsing or index lookup —
             // the operator's lever for disabling the channel without touching stored
             // credentials. Same indistinguishable generic failure as any other denial.
+            // RecordFailure here is deliberate: while the switch is off, clients still
+            // hammering the endpoint IS signal the operator wants in the audit trail
+            // (bounded by the per-source invalid-attempt budget, so it cannot flood).
             if (!_config.Enabled)
             {
                 RecordFailure(tokenId: null, ownerId: null);

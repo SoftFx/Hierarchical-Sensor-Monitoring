@@ -119,9 +119,13 @@ namespace HSMServer.Controllers
 
             var ownerId = CurrentUser.Id;
 
+            // Resolved once: per-grant re-resolution would consult the user manager
+            // once per grant (up to MaxGrants) and could observe a mid-loop role change.
+            var owner = StoredUser ?? CurrentUser;
+
             foreach (var grant in grants)
             {
-                if (!_grantOptions.IsGrantableByOwner(StoredUser ?? CurrentUser, grant.Operation,
+                if (!_grantOptions.IsGrantableByOwner(owner, grant.Operation,
                         (ApiTokenBoundaryKind)grant.BoundaryKind, grant.BoundaryId))
                     return Fail("grant_not_allowed",
                         $"The grant '{grant.Operation}' is not available to you at this boundary.");
@@ -179,7 +183,7 @@ namespace HSMServer.Controllers
             if (request is null)
                 return Fail("invalid_request", "The request body is missing.");
 
-            if (!TryResolveOwnLiveToken(request.EntityId, out var failure))
+            if (!TryResolveOwnLiveToken(request.EntityId, out var failure, out var token))
                 return failure;
 
             if (request.Grants is null)
@@ -202,8 +206,16 @@ namespace HSMServer.Controllers
 
             if (!_tokens.TryRestrictToken(request.EntityId, grants, shortenedExpiryUtc,
                     CurrentUser.Name, out _))
-                return Fail("restrict_failed",
-                    "Restriction failed: grants may only be removed and the expiration only shortened.");
+            {
+                // Distinguish the two no-expansion causes instead of one combined
+                // message: a later expiry is answered by the expiry rule, anything
+                // else by the grants rule.
+                if (shortenedExpiryUtc is not null && token.ExpiresAtUtc is not null &&
+                    shortenedExpiryUtc.Value > new DateTime(token.ExpiresAtUtc.Value, DateTimeKind.Utc))
+                    return Fail("restrict_failed", "The expiration may only be shortened.");
+
+                return Fail("restrict_failed", "Restriction failed: grants may only be removed.");
+            }
 
             return Success(new ProfileMutationResponse { Ok = true });
         }
@@ -221,7 +233,7 @@ namespace HSMServer.Controllers
             if (request is null)
                 return Fail("invalid_request", "The request body is missing.");
 
-            if (!TryResolveOwnLiveToken(request.EntityId, out var failure))
+            if (!TryResolveOwnLiveToken(request.EntityId, out var failure, out _))
                 return failure;
 
             DateTime? shortenedExpiryUtc = null;
@@ -285,6 +297,15 @@ namespace HSMServer.Controllers
             grants = null;
             error = null;
 
+            // Bounded before any allocation: the manager re-checks MaxGrants deep inside
+            // canonicalization, but walking and deduplicating a caller-sized list first
+            // is proportional work for a request that is certain to be rejected.
+            if (request.Count > ApiTokenGrants.MaxGrants)
+            {
+                error = Fail("invalid_grant", $"At most {ApiTokenGrants.MaxGrants} grants are allowed.");
+                return false;
+            }
+
             var seen = new HashSet<(string, byte, string)>();
             var result = new List<ApiTokenGrantEntity>(request.Count);
 
@@ -342,9 +363,9 @@ namespace HSMServer.Controllers
 
         // Resolves the entity id to the caller's own live token; a foreign, unknown,
         // revoked or expired id all produce the same indistinguishable failure.
-        private bool TryResolveOwnLiveToken(Guid entityId, out IActionResult failure)
+        private bool TryResolveOwnLiveToken(Guid entityId, out IActionResult failure, out ApiTokenInfo token)
         {
-            var token = _tokens.GetTokenByEntityId(entityId);
+            token = _tokens.GetTokenByEntityId(entityId);
 
             var isOwnLive = token is not null &&
                             token.OwnerUserId == CurrentUser.Id &&
@@ -397,8 +418,11 @@ namespace HSMServer.Controllers
             if (token.RevokedAtUtc is not null)
                 return "revoked";
 
-            if (token.GlobalRevocationGenerationAtIssue < globalGeneration ||
-                token.OwnerRevocationGenerationAtIssue < ownerGeneration)
+            // != rather than <: a generation ROLLBACK (e.g. a restored backup) puts
+            // AtIssue above current, which IsLive rejects just the same — the page must
+            // not render such a row "active" with live buttons.
+            if (token.GlobalRevocationGenerationAtIssue != globalGeneration ||
+                token.OwnerRevocationGenerationAtIssue != ownerGeneration)
                 return "invalidated";
 
             return token.ExpiresAtUtc is not null &&

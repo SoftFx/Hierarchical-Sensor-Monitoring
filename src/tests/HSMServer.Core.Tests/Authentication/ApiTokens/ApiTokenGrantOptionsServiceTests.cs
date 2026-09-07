@@ -188,9 +188,70 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 ApiTokenBoundaryKind.Global, string.Empty));
             Assert.True(service.IsGrantableByOwner(_user, ApiTokenOperations.ProductsWrite,
                 ApiTokenBoundaryKind.Product, ProductA.ToString()));
+            // The evaluator's OwnerCanPerform short-circuits admin → can write at the
+            // global boundary too; the issuance filter must not be stricter than what
+            // the picker offers and authorization allows.
+            Assert.True(service.IsGrantableByOwner(_user, ApiTokenOperations.AlertsWrite,
+                ApiTokenBoundaryKind.Global, string.Empty));
             // A global pair carrying an id is malformed and refused even for an admin.
             Assert.False(service.IsGrantableByOwner(_user, ApiTokenOperations.SystemHealthRead,
                 ApiTokenBoundaryKind.Global, ProductA.ToString()));
+        }
+
+
+        [Fact]
+        public void NonAdmin_WriteAtGlobalBoundary_Refused()
+        {
+            _user.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductManager));
+            var service = CreateService();
+
+            Assert.False(service.IsGrantableByOwner(_user, ApiTokenOperations.AlertsWrite,
+                ApiTokenBoundaryKind.Global, string.Empty));
+        }
+
+
+        [Fact]
+        public void PickerAndValidator_AgreeOnEveryOfferedPair()
+        {
+            // The PR's own invariant: the picker offers exactly what IsGrantableByOwner
+            // accepts — validator-hides-picker-offers (dead options) and
+            // picker-offers-validator-rejects (guaranteed grant_not_allowed) are both
+            // bugs. Checked across the three owner shapes.
+            var service = CreateService();
+
+            foreach (var user in BuildOwnerShapes())
+            {
+                foreach (var boundary in service.GetBoundaryOptions(user))
+                {
+                    foreach (var operation in boundary.Operations)
+                    {
+                        Assert.True(
+                            service.IsGrantableByOwner(user, operation,
+                                Enum.Parse<ApiTokenBoundaryKind>(boundary.Kind, ignoreCase: true), boundary.Id),
+                            $"{user.Name}: picker offered {operation} at {boundary.Kind}:{boundary.Id} " +
+                            "but the validator refuses it");
+                    }
+                }
+            }
+        }
+
+
+        private System.Collections.Generic.List<User> BuildOwnerShapes()
+        {
+            var viewer = new User("viewer") { Id = Guid.NewGuid() };
+            viewer.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductViewer));
+
+            var manager = new User("manager") { Id = Guid.NewGuid() };
+            manager.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductManager));
+            manager.FoldersRoles.Add(FolderF, ProductRoleEnum.ProductViewer);
+
+            var admin = new User("admin") { Id = Guid.NewGuid() };
+            admin.IsAdmin = true;
+
+            _cache.Setup(c => c.GetProducts()).Returns(new List<ProductModel> { _productA });
+            _folders.Setup(f => f.GetValues()).Returns(new List<FolderModel> { _folderF });
+
+            return new System.Collections.Generic.List<User> { viewer, manager, admin };
         }
 
 

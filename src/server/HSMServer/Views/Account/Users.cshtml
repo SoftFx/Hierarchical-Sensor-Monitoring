@@ -78,8 +78,10 @@
             {
                 var userItem = Model[i];
                 var trimmed = userItem.Username?.Trim() ?? string.Empty;
-                var initials = string.IsNullOrEmpty(AvatarHelper.InitialsOf(trimmed)) ? "??" : AvatarHelper.InitialsOf(trimmed);
-                var avatarColor = AvatarHelper.ColorOf(Guid.Parse(userItem.UserId));
+                var initialsValue = AvatarHelper.InitialsOf(trimmed);
+                var initials = string.IsNullOrEmpty(initialsValue) ? "??" : initialsValue;
+                // TryParse, not Parse: a non-Guid id must not take the whole page down.
+                var avatarColor = AvatarHelper.ColorOf(Guid.TryParse(userItem.UserId, out var avatarId) ? avatarId : Guid.Empty);
 
                 <div class="member-row" data-username="@userItem.Username.Trim().ToLower()" data-isadmin="@(userItem.IsAdmin ? "true" : "false")">
                     <div class="member-info">

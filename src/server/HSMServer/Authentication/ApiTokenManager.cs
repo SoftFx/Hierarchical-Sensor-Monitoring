@@ -82,8 +82,11 @@ namespace HSMServer.Authentication
         private long _globalGeneration;
 
 
+        // Production ctor: the config is required — a security bound whose silent
+        // fallback is "no bound" is the wrong default, and .NET DI would happily
+        // satisfy an optional null parameter, quietly disarming the quota.
         public ApiTokenManager(IDatabaseCore databaseCore, ILogger<ApiTokenManager> logger,
-            ServerConfiguration.ApiTokensConfig config = null)
+            ServerConfiguration.ApiTokensConfig config)
         {
             _databaseCore = databaseCore ?? throw new ArgumentNullException(nameof(databaseCore));
 
@@ -91,13 +94,20 @@ namespace HSMServer.Authentication
             // — the failure would escape as an exception from a never-throws contract.
             _logger = logger ?? NullLogger<ApiTokenManager>.Instance;
 
-            // The quota bound the create path enforces under the state lock; null means
-            // "no bound" (direct construction in tests) — production DI always passes
-            // the validated config.
-            _maxTokensPerUser = config?.MaxTokensPerUser ?? 0;
+            ArgumentNullException.ThrowIfNull(config);
+
+            _maxTokensPerUser = config.MaxTokensPerUser;
 
             _lastUsedFlushTimer = new Timer(_ => FlushPendingLastUsed(), null,
                 LastUsedFlushInterval, LastUsedFlushInterval);
+        }
+
+        // Test-only convenience (no quota bound), the pattern ApiTokenInvalidAttemptLimiter
+        // uses: an explicit zero-quota config instead of a null the production ctor
+        // rejects, so "unlimited" is a visible decision, not a silent default.
+        internal ApiTokenManager(IDatabaseCore databaseCore, ILogger<ApiTokenManager> logger)
+            : this(databaseCore, logger, new ServerConfiguration.ApiTokensConfig { MaxTokensPerUser = 0 })
+        {
         }
 
 

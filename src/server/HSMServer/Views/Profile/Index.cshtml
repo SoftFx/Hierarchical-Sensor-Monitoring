@@ -153,7 +153,7 @@
                     </div>
                 </div>
                 <div style="flex: 1;" class="text-secondary" data-timestamp="@token.CreatedAtUnixMs">—</div>
-                <div style="flex: 1;" class="text-secondary" data-timestamp="@(token.ExpiresAtUnixMs)">@(token.ExpiresAtUnixMs is null ? "never" : "—")</div>
+                <div style="flex: 1;" class="text-secondary" data-timestamp="@(token.ExpiresAtUnixMs)" data-expires="@(token.ExpiresAtUnixMs)">@(token.ExpiresAtUnixMs is null ? "never" : "—")</div>
                 <div style="flex: 1;" class="text-secondary" data-timestamp="@(token.LastUsedAtUnixMs)">@(token.LastUsedAtUnixMs is null ? "never" : "—")</div>
                 <div style="width: 84px;"><span class="status-badge @token.Status">@token.Status</span></div>
                 <div style="width: 124px; text-align: right;" class="d-flex justify-content-end gap-1">
@@ -403,6 +403,11 @@
             select.appendChild(empty);
         }
 
+        // Re-render the operations on every boundary switch: without this the checkbox
+        // closures kept pushing grants at the PREVIOUSLY rendered boundary while the
+        // dropdown already showed the new one - a silently mis-anchored credential.
+        select.onchange = renderOperations;
+
         renderOperations();
     }
 
@@ -547,6 +552,8 @@
         document.getElementById('noExpirationWarning').style.display = 'none';
         document.getElementById('customExpiryInput').value = '';
         document.getElementById('customExpiryInput').min = addDays(1);
+        // The shorten-only cap is mode-specific; reset it so create never inherits it.
+        document.getElementById('customExpiryInput').max = '';
     }
 
     function addExpiryOption(select, value, text, selected) {
@@ -644,8 +651,7 @@
 
             postMutation(createTokenUrl, payload).then(function (answer) {
                 if (answer.ok) {
-                    hideModal('grantModal');
-                    showSecret(answer.token, 'Token created');
+                    chainToSecret('grantModal', answer.token, 'Token created');
                 } else {
                     showError('grantModalError', answer.message || 'Creation failed.');
                 }
@@ -687,9 +693,19 @@
             document.getElementById('grantModalSave').textContent = 'Restrict';
             showError('grantModalError', null);
 
+            // Restriction may only SHORTEN: cap the custom-date input at the token's
+            // current expiry (read from the row's Expires cell) so an impossible date
+            // cannot be picked in the first place. Applied after resetExpirySelect,
+            // which clears the bound for the create mode.
+            var expiresRaw = row.querySelector('[data-expires]');
+            var expiresMs = expiresRaw ? parseInt(expiresRaw.getAttribute('data-expires'), 10) : NaN;
+
             loadGrantOptions(function () {
                 renderBoundarySelect();
                 resetExpirySelect();
+                document.getElementById('customExpiryInput').max = isNaN(expiresMs)
+                    ? ''
+                    : new Date(expiresMs).toISOString().substring(0, 10);
                 showModal('grantModal');
             });
         });
@@ -701,6 +717,19 @@
         document.getElementById('secretModalTitle').textContent = title || 'Token created';
         document.getElementById('secretValue').textContent = token;
         showModal('secretModal');
+    }
+
+    // Shows the secret modal only after the source modal finished hiding: Bootstrap
+    // restores modal-open/scroll compensation on the hide TRANSITION, and a
+    // synchronous show-while-hiding loses the body scroll lock.
+    function chainToSecret(fromModalId, token, title) {
+        var element = document.getElementById(fromModalId);
+
+        element.addEventListener('hidden.bs.modal', function () {
+            showSecret(token, title);
+        }, { once: true });
+
+        hideModal(fromModalId);
     }
 
     document.getElementById('copySecretButton').addEventListener('click', function () {
@@ -756,8 +785,7 @@
             expiresAtUtc: custom ? custom + 'T23:59:59Z' : null
         }).then(function (answer) {
             if (answer.ok) {
-                hideModal('rotateModal');
-                showSecret(answer.token, 'Token rotated');
+                chainToSecret('rotateModal', answer.token, 'Token rotated');
             } else {
                 showError('rotateModalError', answer.message || 'Rotation failed.');
             }

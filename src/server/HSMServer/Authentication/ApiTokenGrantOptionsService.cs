@@ -123,6 +123,13 @@ namespace HSMServer.Authentication
                 case ApiTokenBoundaryKind.Global:
                     if (!owner.IsAdmin || !string.IsNullOrEmpty(boundaryId))
                         return false;
+
+                    // The global boundary is admin-only, and an admin can write there —
+                    // the same rule the evaluator's OwnerCanPerform applies (IsAdmin
+                    // short-circuits to true) and GetBoundaryOptions offers; keeping
+                    // canWrite false here made every picker-offered global write pair
+                    // fail with grant_not_allowed.
+                    canWrite = true;
                     break;
 
                 case ApiTokenBoundaryKind.Product:
