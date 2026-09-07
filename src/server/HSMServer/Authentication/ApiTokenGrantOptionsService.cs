@@ -51,18 +51,28 @@ namespace HSMServer.Authentication
 
             if (owner.IsAdmin)
             {
+                // An admin can write at every boundary, so both operation sets are
+                // computed once — this endpoint is hit on every modal open.
+                var adminProductOperations = OperationsAt(ApiTokenBoundaryKind.Product, canWrite: true);
+                var adminFolderOperations = OperationsAt(ApiTokenBoundaryKind.Folder, canWrite: true);
+
+                // Global first (the whole-server boundary), then products and folders
+                // merged and name-sorted — the same order non-admins get.
                 result.Add(new(ApiTokenBoundaryKind.Global.ToString().ToLowerInvariant(), string.Empty,
-                    "Global", OperationsAt(ApiTokenResourceKind.Global, canWrite: true)));
+                    "Global", OperationsAt(ApiTokenBoundaryKind.Global, canWrite: true)));
 
-                foreach (var product in _cache.GetProducts().OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase))
-                    result.Add(new(ApiTokenBoundaryKind.Product.ToString().ToLowerInvariant(),
-                        product.Id.ToString(), product.DisplayName,
-                        OperationsAt(ApiTokenResourceKind.Product, canWrite: true)));
+                var scoped = new List<ApiTokenBoundaryOptions>();
+                scoped.AddRange(_cache.GetProducts()
+                    .Select(product => new ApiTokenBoundaryOptions(
+                        ApiTokenBoundaryKind.Product.ToString().ToLowerInvariant(),
+                        product.Id.ToString(), product.DisplayName, adminProductOperations)));
+                scoped.AddRange(_folders.GetValues()
+                    .Select(folder => new ApiTokenBoundaryOptions(
+                        ApiTokenBoundaryKind.Folder.ToString().ToLowerInvariant(),
+                        folder.Id.ToString(), folder.Name, adminFolderOperations)));
+                scoped.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
 
-                foreach (var folder in _folders.GetValues().OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
-                    result.Add(new(ApiTokenBoundaryKind.Folder.ToString().ToLowerInvariant(),
-                        folder.Id.ToString(), folder.Name,
-                        OperationsAt(ApiTokenResourceKind.Folder, canWrite: true)));
+                result.AddRange(scoped);
 
                 return result;
             }
@@ -77,7 +87,7 @@ namespace HSMServer.Authentication
 
                 result.Add(new(ApiTokenBoundaryKind.Product.ToString().ToLowerInvariant(),
                     productId.ToString(), product.DisplayName,
-                    OperationsAt(ApiTokenResourceKind.Product, canWrite: owner.IsManager(productId))));
+                    OperationsAt(ApiTokenBoundaryKind.Product, canWrite: owner.IsManager(productId))));
             }
 
             foreach (var folderId in owner.FoldersRoles.Keys)
@@ -87,7 +97,7 @@ namespace HSMServer.Authentication
 
                 result.Add(new(ApiTokenBoundaryKind.Folder.ToString().ToLowerInvariant(),
                     folderId.ToString(), folder.Name,
-                    OperationsAt(ApiTokenResourceKind.Folder, canWrite: owner.IsFolderManager(folderId))));
+                    OperationsAt(ApiTokenBoundaryKind.Folder, canWrite: owner.IsFolderManager(folderId))));
             }
 
             result.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
@@ -98,25 +108,14 @@ namespace HSMServer.Authentication
 
         public bool IsGrantableByOwner(User owner, string operation, ApiTokenBoundaryKind kind, string boundaryId)
         {
-            if (!ApiTokenOperations.IsValid(operation))
-                return false;
-
-            var resourceKind = kind switch
-            {
-                ApiTokenBoundaryKind.Global => ApiTokenResourceKind.Global,
-                ApiTokenBoundaryKind.Product => ApiTokenResourceKind.Product,
-                ApiTokenBoundaryKind.Folder => ApiTokenResourceKind.Folder,
-                _ => (ApiTokenResourceKind?)null,
-            };
-
-            if (resourceKind is null || !ApiTokenOperations.IsValidBoundary(operation, kind))
+            if (!ApiTokenOperations.IsValid(operation) || !ApiTokenOperations.IsValidBoundary(operation, kind))
                 return false;
 
             // Same per-kind conjunction the picker uses, so a hidden pair is also an
             // ungrantable pair: visibility for reads, the Manager role for writes, the
             // global boundary and its operations admin-only, and the boundary must
             // still exist (a stale role entry anchors nothing).
-            var canWrite = false;
+            bool canWrite;
 
             switch (kind)
             {
@@ -126,9 +125,7 @@ namespace HSMServer.Authentication
 
                     // The global boundary is admin-only, and an admin can write there —
                     // the same rule the evaluator's OwnerCanPerform applies (IsAdmin
-                    // short-circuits to true) and GetBoundaryOptions offers; keeping
-                    // canWrite false here made every picker-offered global write pair
-                    // fail with grant_not_allowed.
+                    // short-circuits to true) and GetBoundaryOptions offers.
                     canWrite = true;
                     break;
 
@@ -164,28 +161,17 @@ namespace HSMServer.Authentication
                     return false;
             }
 
-            return ApiTokenOperations.IsWrite(operation) ? canWrite : true;
+            return !ApiTokenOperations.IsWrite(operation) || canWrite;
         }
 
 
-        private static IReadOnlyList<string> OperationsAt(ApiTokenResourceKind kind, bool canWrite)
+        private static IReadOnlyList<string> OperationsAt(ApiTokenBoundaryKind kind, bool canWrite)
         {
-            var boundaryKind = kind switch
-            {
-                ApiTokenResourceKind.Global => ApiTokenBoundaryKind.Global,
-                ApiTokenResourceKind.Product => ApiTokenBoundaryKind.Product,
-                ApiTokenResourceKind.Folder => ApiTokenBoundaryKind.Folder,
-                _ => (ApiTokenBoundaryKind?)null,
-            };
-
-            if (boundaryKind is null)
-                return Array.Empty<string>();
-
             var operations = new List<string>();
 
             foreach (var operation in ApiTokenOperations.All)
             {
-                if (!ApiTokenOperations.IsValidBoundary(operation, boundaryKind.Value))
+                if (!ApiTokenOperations.IsValidBoundary(operation, kind))
                     continue;
 
                 // No boundary visibility check here: the callers already established the

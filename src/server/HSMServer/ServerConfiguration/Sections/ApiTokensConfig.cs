@@ -33,7 +33,8 @@ namespace HSMServer.ServerConfiguration
 
         // Expiry preselected by the create form (the "recommended preset" the initiative
         // names). A preselect, not a cap: nothing enforces this value server-side, and a
-        // custom date may be shorter or longer.
+        // custom date may be shorter or longer. Must be at least one day — the form's
+        // presets are day-granular and a sub-day default would render as "1 days".
         public TimeSpan DefaultLifetime { get; set; } = TimeSpan.FromDays(90);
 
         // Upper bound for both retention windows: the retention sweep computes
@@ -67,9 +68,9 @@ namespace HSMServer.ServerConfiguration
                 throw new InvalidOperationException(
                     $"ApiTokens.{nameof(MaxTokensPerUser)} must be at least 1 (was {MaxTokensPerUser}).");
 
-            if (DefaultLifetime <= TimeSpan.Zero || DefaultLifetime > MaxRetention)
+            if (DefaultLifetime < TimeSpan.FromDays(1) || DefaultLifetime > MaxRetention)
                 throw new InvalidOperationException(
-                    $"ApiTokens.{nameof(DefaultLifetime)} must be between 0 and {MaxRetention.TotalDays:0} days (was {DefaultLifetime.TotalDays:0.##} days).");
+                    $"ApiTokens.{nameof(DefaultLifetime)} must be between 1 and {MaxRetention.TotalDays:0} days (was {DefaultLifetime.TotalDays:0.##} days).");
 
             if (TokenRecordRetention < TimeSpan.Zero || TokenRecordRetention > MaxRetention)
                 throw new InvalidOperationException(

@@ -292,7 +292,7 @@
                 <p class="text-secondary">Applications using it stop authenticating immediately. This cannot be undone.</p>
                 <div class="mb-3">
                     <label class="form-label" for="revokeReasonInput">Reason <span class="text-secondary fw-normal">(optional)</span></label>
-                    <input type="text" class="form-control" id="revokeReasonInput" maxlength="500" placeholder="e.g. leaked in a CI log">
+                    <input type="text" class="form-control" id="revokeReasonInput" maxlength="256" placeholder="e.g. leaked in a CI log">
                 </div>
                 <div class="alert alert-danger py-2 modal-error" id="revokeModalError"></div>
             </div>
@@ -314,6 +314,8 @@
     var boundaryOptions = [];       // GET GrantOptions: [{kind,id,name,operations:[..]}]
     var selectedGrants = [];        // [{operation, boundaryKind, boundaryId, boundaryName}]
     var restrictOriginalGrants = []; // the restricted token's full current set
+    var restrictCurrentExpiryMs = null; // shorten-only ceiling of the restricted token
+    var rotateCurrentExpiryMs = null;   // shorten-only ceiling of the rotated token
     var grantModalMode = 'create';  // 'create' | 'restrict'
     var restrictEntityId = null;
     var rotateEntityId = null;
@@ -551,7 +553,9 @@
         document.getElementById('customExpiryBlock').style.display = 'none';
         document.getElementById('noExpirationWarning').style.display = 'none';
         document.getElementById('customExpiryInput').value = '';
-        document.getElementById('customExpiryInput').min = addDays(1);
+        // Today, not tomorrow: the server requires only "in the future", and a token
+        // expiring today/tomorrow must still be shortenable to a same-day value.
+        document.getElementById('customExpiryInput').min = addDays(0);
         // The shorten-only cap is mode-specific; reset it so create never inherits it.
         document.getElementById('customExpiryInput').max = '';
     }
@@ -573,7 +577,16 @@
         if (value === 'never') return { kind: 'never' };
 
         if (value === 'custom' && customInput.value) {
-            return { kind: 'date', iso: customInput.value + 'T23:59:59Z' };
+            var iso = customInput.value + 'T23:59:59Z';
+
+            // The date input is date-granular, so a same-day pick can still land after
+            // the current expiry hour: clamp to the expiry (a same-instant shorten is
+            // a legal no-op server-side).
+            if (restrictCurrentExpiryMs !== null && Date.parse(iso) > restrictCurrentExpiryMs) {
+                iso = new Date(restrictCurrentExpiryMs).toISOString();
+            }
+
+            return { kind: 'date', iso: iso };
         }
 
         var days = parseInt(value, 10);
@@ -615,6 +628,7 @@
         grantModalMode = 'create';
         selectedGrants = [];
         restrictOriginalGrants = [];
+        restrictCurrentExpiryMs = null;
         document.getElementById('grantModalTitle').textContent = 'Create token';
         document.getElementById('grantModalNameBlock').style.display = 'block';
         document.getElementById('grantModalSave').textContent = 'Create';
@@ -630,7 +644,15 @@
     });
 
     document.getElementById('grantModalSave').addEventListener('click', function () {
+        var saveButton = this;
         showError('grantModalError', null);
+
+        // In-flight guard: create/rotate are not safely repeatable client-side (a
+        // double click mints an orphan token / rotates twice); re-enabled on every
+        // failure branch — success either reloads or hands off to the secret modal.
+        saveButton.disabled = true;
+
+        function release() { saveButton.disabled = false; }
 
         if (grantModalMode === 'create') {
             var expiry = selectedExpiryUtc();
@@ -638,6 +660,7 @@
             // "Custom date…" without a date is a validation error, never a silent
             // no-expiration: null is reserved for the explicit "No expiration" choice.
             if (expiry.kind === 'invalid') {
+                release();
                 showError('grantModalError', 'Pick an expiration date.');
                 return;
             }
@@ -653,6 +676,7 @@
                 if (answer.ok) {
                     chainToSecret('grantModal', answer.token, 'Token created');
                 } else {
+                    release();
                     showError('grantModalError', answer.message || 'Creation failed.');
                 }
             });
@@ -660,6 +684,7 @@
             var restrictExpiry = selectedExpiryUtc();
 
             if (restrictExpiry.kind === 'invalid') {
+                release();
                 showError('grantModalError', 'Pick an expiration date.');
                 return;
             }
@@ -673,6 +698,7 @@
                     hideModal('grantModal');
                     window.location.reload();
                 } else {
+                    release();
                     showError('grantModalError', answer.message || 'Restriction failed.');
                 }
             });
@@ -694,18 +720,19 @@
             showError('grantModalError', null);
 
             // Restriction may only SHORTEN: cap the custom-date input at the token's
-            // current expiry (read from the row's Expires cell) so an impossible date
-            // cannot be picked in the first place. Applied after resetExpirySelect,
-            // which clears the bound for the create mode.
+            // current expiry (read from the row's Expires cell). The submitted instant
+            // is additionally clamped to the expiry in selectedExpiryUtc, because the
+            // date-granular max still admits same-day picks past the expiry hour.
             var expiresRaw = row.querySelector('[data-expires]');
-            var expiresMs = expiresRaw ? parseInt(expiresRaw.getAttribute('data-expires'), 10) : NaN;
+            restrictCurrentExpiryMs = expiresRaw ? parseInt(expiresRaw.getAttribute('data-expires'), 10) : NaN;
+            if (isNaN(restrictCurrentExpiryMs)) restrictCurrentExpiryMs = null;
 
             loadGrantOptions(function () {
                 renderBoundarySelect();
                 resetExpirySelect();
-                document.getElementById('customExpiryInput').max = isNaN(expiresMs)
+                document.getElementById('customExpiryInput').max = restrictCurrentExpiryMs === null
                     ? ''
-                    : new Date(expiresMs).toISOString().substring(0, 10);
+                    : new Date(restrictCurrentExpiryMs - 1).toISOString().substring(0, 10);
                 showModal('grantModal');
             });
         });
@@ -721,9 +748,17 @@
 
     // Shows the secret modal only after the source modal finished hiding: Bootstrap
     // restores modal-open/scroll compensation on the hide TRANSITION, and a
-    // synchronous show-while-hiding loses the body scroll lock.
+    // synchronous show-while-hiding loses the body scroll lock. If the source modal is
+    // ALREADY hidden (the user dismissed it while the request was in flight — hide()
+    // fires no event then), show immediately: the one-time secret must never be
+    // dropped on the floor.
     function chainToSecret(fromModalId, token, title) {
         var element = document.getElementById(fromModalId);
+
+        if (!element.classList.contains('show')) {
+            showSecret(token, title);
+            return;
+        }
 
         element.addEventListener('hidden.bs.modal', function () {
             showSecret(token, title);
@@ -756,7 +791,18 @@
             document.getElementById('rotateExpirySelect').value = 'inherit';
             document.getElementById('rotateCustomBlock').style.display = 'none';
             document.getElementById('rotateCustomInput').value = '';
-            document.getElementById('rotateCustomInput').min = addDays(1);
+            document.getElementById('rotateCustomInput').min = addDays(0);
+
+            // Rotation may only shorten a finite expiry: cap and clamp the custom date
+            // at the token's current expiry (same date-granularity caveat as restrict).
+            var expiresRaw = row.querySelector('[data-expires]');
+            rotateCurrentExpiryMs = expiresRaw ? parseInt(expiresRaw.getAttribute('data-expires'), 10) : NaN;
+            if (isNaN(rotateCurrentExpiryMs)) rotateCurrentExpiryMs = null;
+
+            document.getElementById('rotateCustomInput').max = rotateCurrentExpiryMs === null
+                ? ''
+                : new Date(rotateCurrentExpiryMs - 1).toISOString().substring(0, 10);
+
             showError('rotateModalError', null);
             showModal('rotateModal');
         });
@@ -767,6 +813,7 @@
     });
 
     document.getElementById('rotateConfirmButton').addEventListener('click', function () {
+        var confirmButton = this;
         showError('rotateModalError', null);
 
         // Read the custom date only when "Shorten to a custom date…" is the selected
@@ -780,13 +827,28 @@
             return;
         }
 
+        // In-flight guard: a double click rotates twice and the first replacement
+        // secret is lost; the failure branch re-enables, success reloads via the
+        // secret modal.
+        confirmButton.disabled = true;
+
+        var iso = null;
+        if (custom) {
+            iso = custom + 'T23:59:59Z';
+
+            if (rotateCurrentExpiryMs !== null && Date.parse(iso) > rotateCurrentExpiryMs) {
+                iso = new Date(rotateCurrentExpiryMs).toISOString();
+            }
+        }
+
         postMutation(rotateTokenUrl, {
             entityId: rotateEntityId,
-            expiresAtUtc: custom ? custom + 'T23:59:59Z' : null
+            expiresAtUtc: iso
         }).then(function (answer) {
             if (answer.ok) {
                 chainToSecret('rotateModal', answer.token, 'Token rotated');
             } else {
+                confirmButton.disabled = false;
                 showError('rotateModalError', answer.message || 'Rotation failed.');
             }
         });

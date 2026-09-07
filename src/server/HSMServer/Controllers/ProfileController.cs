@@ -32,6 +32,10 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class ProfileController : BaseController
     {
+        // Surface bounds, deliberately tighter than the manager's storage bounds
+        // (ApiTokenManager: name 256 / description 1024) — two independent numbers on
+        // the same field, kept apart on purpose: the surface rejects long input
+        // friendly, the manager bound is the durable backstop.
         public const int MaxNameLength = 200;
         public const int MaxDescriptionLength = 1000;
 
@@ -65,9 +69,14 @@ namespace HSMServer.Controllers
                 UserId = user.Id,
                 UserName = user.Name,
                 IsAdmin = user.IsAdmin,
-                Products = BuildProductBadges(user),
+                // The card never renders product badges for an admin, and stale roles
+                // for deleted products must not surface as raw GUID badges — the same
+                // entries the grant picker deliberately skips.
+                Products = user.IsAdmin ? Array.Empty<ProfileProductRoleViewModel>() : BuildProductBadges(user),
                 Tokens = tokens,
-                GrantsByTokenId = tokens.ToDictionary(t => t.EntityId.ToString(), t => t.Grants),
+                // Dead rows render no Restrict button, so their grants are never read.
+                GrantsByTokenId = tokens.Where(t => t.Status == "active")
+                    .ToDictionary(t => t.EntityId.ToString(), t => t.Grants),
                 TokensEnabled = _config.Enabled && _tokens.IsGenerationStateHealthy,
                 GenerationStateHealthy = _tokens.IsGenerationStateHealthy,
                 AllowNoExpiration = _config.AllowNoExpiration,
@@ -207,14 +216,14 @@ namespace HSMServer.Controllers
             if (!_tokens.TryRestrictToken(request.EntityId, grants, shortenedExpiryUtc,
                     CurrentUser.Name, out _))
             {
-                // Distinguish the two no-expansion causes instead of one combined
-                // message: a later expiry is answered by the expiry rule, anything
-                // else by the grants rule.
+                // Only the expiry cause is provable from here; everything else (grant
+                // expansion, generation invalidation, a failed durable write) gets the
+                // generic log-pointer wording rather than a hardcoded wrong cause.
                 if (shortenedExpiryUtc is not null && token.ExpiresAtUtc is not null &&
                     shortenedExpiryUtc.Value > new DateTime(token.ExpiresAtUtc.Value, DateTimeKind.Utc))
                     return Fail("restrict_failed", "The expiration may only be shortened.");
 
-                return Fail("restrict_failed", "Restriction failed: grants may only be removed.");
+                return Fail("restrict_failed", "Restriction failed. Check the server log.");
             }
 
             return Success(new ProfileMutationResponse { Ok = true });
@@ -233,7 +242,7 @@ namespace HSMServer.Controllers
             if (request is null)
                 return Fail("invalid_request", "The request body is missing.");
 
-            if (!TryResolveOwnLiveToken(request.EntityId, out var failure, out _))
+            if (!TryResolveOwnLiveToken(request.EntityId, out var failure, out var token))
                 return failure;
 
             DateTime? shortenedExpiryUtc = null;
@@ -255,8 +264,14 @@ namespace HSMServer.Controllers
             // would only block rotation (never the token itself) after a role loss.
             if (!_tokens.TryRotateToken(request.EntityId, shortenedExpiryUtc, CurrentUser.Name,
                     out _, out var fullToken))
-                return Fail("rotate_failed",
-                    "Rotation failed: the new expiration must not be later than the current one.");
+            {
+                // Same policy as restrict: only the expiry cause is provable here.
+                if (shortenedExpiryUtc is not null && token.ExpiresAtUtc is not null &&
+                    shortenedExpiryUtc.Value > new DateTime(token.ExpiresAtUtc.Value, DateTimeKind.Utc))
+                    return Fail("rotate_failed", "The new expiration must not be later than the current one.");
+
+                return Fail("rotate_failed", "Rotation failed. Check the server log.");
+            }
 
             return Success(new ProfileMutationResponse { Ok = true, Token = fullToken });
         }
@@ -362,7 +377,9 @@ namespace HSMServer.Controllers
 
 
         // Resolves the entity id to the caller's own live token; a foreign, unknown,
-        // revoked or expired id all produce the same indistinguishable failure.
+        // revoked, expired or generation-invalidated id all produce the same
+        // indistinguishable failure. The liveness rule is the same one the list
+        // projection renders (revoked/expired/invalidated rows show no actions).
         private bool TryResolveOwnLiveToken(Guid entityId, out IActionResult failure, out ApiTokenInfo token)
         {
             token = _tokens.GetTokenByEntityId(entityId);
@@ -371,7 +388,9 @@ namespace HSMServer.Controllers
                             token.OwnerUserId == CurrentUser.Id &&
                             token.RevokedAtUtc is null &&
                             (token.ExpiresAtUtc is null ||
-                             new DateTime(token.ExpiresAtUtc.Value, DateTimeKind.Utc) > DateTime.UtcNow);
+                             new DateTime(token.ExpiresAtUtc.Value, DateTimeKind.Utc) > DateTime.UtcNow) &&
+                            IsGenerationCurrent(token, _tokens.GlobalRevocationGeneration,
+                                _tokens.GetOwnerRevocationGeneration(CurrentUser.Id));
 
             if (isOwnLive)
             {
@@ -382,6 +401,14 @@ namespace HSMServer.Controllers
             failure = Fail("not_found", "Token not found.");
             return false;
         }
+
+
+        // != on purpose (not <): a generation ROLLBACK — e.g. a restored backup — puts
+        // AtIssue above current, and IsLive rejects that just the same; the list status
+        // and the endpoint liveness check must agree by construction.
+        private static bool IsGenerationCurrent(ApiTokenInfo token, long globalGeneration, long ownerGeneration) =>
+            token.GlobalRevocationGenerationAtIssue == globalGeneration &&
+            token.OwnerRevocationGenerationAtIssue == ownerGeneration;
 
 
         private List<ProfileTokenViewModel> BuildTokenList(Guid ownerId)
@@ -421,8 +448,7 @@ namespace HSMServer.Controllers
             // != rather than <: a generation ROLLBACK (e.g. a restored backup) puts
             // AtIssue above current, which IsLive rejects just the same — the page must
             // not render such a row "active" with live buttons.
-            if (token.GlobalRevocationGenerationAtIssue != globalGeneration ||
-                token.OwnerRevocationGenerationAtIssue != ownerGeneration)
+            if (!IsGenerationCurrent(token, globalGeneration, ownerGeneration))
                 return "invalidated";
 
             return token.ExpiresAtUtc is not null &&
@@ -460,8 +486,9 @@ namespace HSMServer.Controllers
             user.ProductsRoles
                 .GroupBy(r => r.Item1)
                 .Select(g => (Id: g.Key, IsManager: g.Any(r => r.Item2 == ProductRoleEnum.ProductManager)))
+                .Where(r => _cache.TryGetProductNameById(r.Id, out _))
                 .Select(r => new ProfileProductRoleViewModel(
-                    _cache.TryGetProductNameById(r.Id, out var name) ? name : r.Id.ToString(), r.IsManager))
+                    _cache.TryGetProductNameById(r.Id, out var name) ? name : string.Empty, r.IsManager))
                 .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 

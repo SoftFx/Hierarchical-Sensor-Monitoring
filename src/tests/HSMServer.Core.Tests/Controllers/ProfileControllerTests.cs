@@ -328,6 +328,29 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public void RestrictToken_GenerationInvalidatedToken_NotFound()
+        {
+            // The liveness rule must match what the page renders: a row the list shows
+            // as "invalidated" (dead, no buttons) answers not_found here too, instead
+            // of failing inside the manager with a misleading restrict_failed.
+            _tokens.Setup(t => t.GlobalRevocationGeneration).Returns(5);
+            _tokens.Setup(t => t.GetTokenByEntityId(EntityId))
+                .Returns(BuildInfo() with { GlobalRevocationGenerationAtIssue = 4 });
+
+            var answer = Mutate(CreateController().RestrictToken(new RestrictTokenRequest
+            {
+                EntityId = EntityId,
+                Grants = new List<ProfileGrantRequest>(BuildGrants()),
+            }));
+
+            Assert.False(answer.Ok);
+            Assert.Equal("not_found", answer.Error);
+            _tokens.Verify(t => t.TryRestrictToken(It.IsAny<Guid>(), It.IsAny<List<ApiTokenGrantEntity>>(),
+                It.IsAny<DateTime?>(), It.IsAny<string>(), out It.Ref<ApiTokenInfo>.IsAny), Times.Never);
+        }
+
+
+        [Fact]
         public void RotateToken_Valid_ReturnsNewSecretOnce()
         {
             _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo());

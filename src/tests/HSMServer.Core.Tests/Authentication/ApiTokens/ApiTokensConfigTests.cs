@@ -48,6 +48,17 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.Contains(nameof(ApiTokensConfig.DefaultLifetime), ex.Message);
         }
 
+
+        [Fact]
+        public void DefaultLifetime_BelowOneDay_Throws()
+        {
+            // The form's presets are day-granular; a 12h default would surface as a
+            // misleading "1 days" preset.
+            var config = new ApiTokensConfig { DefaultLifetime = TimeSpan.FromHours(12) };
+
+            Assert.Throws<InvalidOperationException>(config.Validate);
+        }
+
         [Fact]
         public void DefaultLifetime_AboveTenYears_Throws()
         {
