@@ -15,11 +15,19 @@ using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
 namespace HSMServer.Controllers
 {
+    /// <summary>
+    /// CRUD over alert templates (epic #1347). Bearer-token authenticated only (the
+    /// HsmApiToken scheme — see the HsmApiToken security scheme of this document);
+    /// served on the web-UI port only. Reads need the token's alerts:read grant at the
+    /// template's folder, writes alerts:write; invisible or out-of-reach folders answer
+    /// the same 404 as an unknown id.
+    /// </summary>
     // REST CRUD over alert templates — the first /api/v1 resource controller (#1351,
     // epic #1347). The class attributes are exactly what ManagementApiGuardMiddleware
     // admits into the management area: [ManagementApi] + the HsmApiToken management
@@ -32,10 +40,11 @@ namespace HSMServer.Controllers
     // additionally requires the owner's Manager role at the boundary). The evaluator's
     // 403/404 split is preserved verbatim — an invisible or out-of-reach folder is a
     // 404 so callers cannot enumerate templates, and authorization always precedes
-    // body validation for the same reason. Writes that fail inside the cache (folder
-    // without products, partial per-sensor policy removal) are 409 + ProblemDetails;
-    // request-shape problems are 400 + ValidationProblemDetails. The global exception
-    // handler renders Razor HTML, so nothing is allowed to throw out of an action.
+    // body validation for the same reason. Every error is the area's uniform JSON
+    // contract (#1353, ManagementApiErrors): writes that fail inside the cache (folder
+    // without products, partial per-sensor policy removal) are 409, request-shape
+    // problems are 400 with field-keyed details. The global exception handler renders
+    // Razor HTML, so nothing is allowed to throw out of an action.
     [ApiController]
     [ManagementApi]
     [Authorize(Policy = HsmApiTokenDefaults.ManagementPolicy)]
@@ -74,7 +83,18 @@ namespace HSMServer.Controllers
         }
 
 
+        /// <summary>
+        /// List templates, paginated, ordered by name then id. Only templates whose
+        /// folder passes the caller's alerts:read visibility are listed — ungranted
+        /// folders are silently absent, never a per-item 403.
+        /// </summary>
+        /// <param name="page">1-based page number; clamped into [1, totalPages].</param>
+        /// <param name="pageSize">Page size, 1..200 (default 50).</param>
         [HttpGet]
+        [ProducesResponseType(typeof(ApiPageDto<AlertTemplateDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public IActionResult GetTemplates(int page = 1, int pageSize = DefaultPageSize)
         {
             page = Math.Max(page, 1);
@@ -118,20 +138,39 @@ namespace HSMServer.Controllers
             });
         }
 
+        /// <summary>Get one template by id.</summary>
+        /// <param name="id">Template id.</param>
         [HttpGet("{id:guid}")]
+        [ProducesResponseType(typeof(AlertTemplateDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public IActionResult GetTemplate(Guid id)
         {
             var template = _cache.GetAlertTemplate(id);
 
             if (template is null)
-                return NotFound();
+                return ManagementApiErrors.NotFound();
 
             var failure = AuthorizeFolder(ApiTokenOperations.AlertsRead, template.FolderId);
 
             return failure ?? Ok(AlertTemplateDtoMapper.ToDto(template));
         }
 
+        /// <summary>
+        /// Create a template. A client-sent id is ignored (the server generates one);
+        /// the response echoes the STORED template — normalized ids, chat display names.
+        /// </summary>
+        /// <remarks>Requires alerts:write at the target folder; the folder must exist, be visible to the token's owner and contain products.</remarks>
         [HttpPost]
+        [ProducesResponseType(typeof(AlertTemplateDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateTemplate([FromBody] AlertTemplateDto dto)
         {
             // An all-zero folder id references no folder, so a 400 leaks nothing — and
@@ -151,7 +190,7 @@ namespace HSMServer.Controllers
             // the cache Add is an upsert by id, so honoring a client-chosen id would let
             // a folder-scoped token overwrite a template in a folder it cannot even see.
             if (!TryBuildValidatedTemplate(dto, id: Guid.NewGuid(), isCreate: true, out var model, out var errors))
-                return ValidationProblem(new ValidationProblemDetails(errors));
+                return ManagementApiErrors.Validation(errors);
 
             // Deliberately NOT tied to RequestAborted (see DeleteTemplate for the worst
             // case): the cache persists before reconciling, so a client-triggered
@@ -160,18 +199,30 @@ namespace HSMServer.Controllers
             var (success, error) = await _cache.AddAlertTemplateAsync(model);
 
             if (!success)
-                return ConflictProblem(error);
+                return ManagementApiErrors.Conflict(error);
 
             return CreatedAtAction(nameof(GetTemplate), new { id = model.Id }, AlertTemplateDtoMapper.ToDto(model));
         }
 
+        /// <summary>
+        /// Update a template (upsert semantics). Moving it to another folder requires
+        /// alerts:write on BOTH folders; the response echoes the stored template.
+        /// </summary>
+        /// <param name="id">Template id; must equal the body id when the body carries one.</param>
         [HttpPut("{id:guid}")]
+        [ProducesResponseType(typeof(AlertTemplateDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateTemplate(Guid id, [FromBody] AlertTemplateDto dto)
         {
             var existing = _cache.GetAlertTemplate(id);
 
             if (existing is null)
-                return NotFound();
+                return ManagementApiErrors.NotFound();
 
             // A template write is an indirect policy write on every matching sensor of
             // the target folder: moving a template needs write on BOTH folders — the
@@ -198,12 +249,12 @@ namespace HSMServer.Controllers
             }
 
             if (!TryBuildValidatedTemplate(dto, id, isCreate: false, out var model, out var errors))
-                return ValidationProblem(new ValidationProblemDetails(errors));
+                return ManagementApiErrors.Validation(errors);
 
             var (success, error) = await _cache.AddAlertTemplateAsync(model);
 
             if (!success)
-                return ConflictProblem(error);
+                return ManagementApiErrors.Conflict(error);
 
             // Echo the STORED template, not the request: the write normalizes ids and
             // chat names, and the caller must see the canonical result.
@@ -212,13 +263,21 @@ namespace HSMServer.Controllers
             return Ok(AlertTemplateDtoMapper.ToDto(stored));
         }
 
+        /// <summary>Delete a template and strip its per-sensor policies.</summary>
+        /// <param name="id">Template id.</param>
         [HttpDelete("{id:guid}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteTemplate(Guid id)
         {
             var template = _cache.GetAlertTemplate(id);
 
             if (template is null)
-                return NotFound();
+                return ManagementApiErrors.NotFound();
 
             var failure = AuthorizeFolder(ApiTokenOperations.AlertsWrite, template.FolderId);
 
@@ -233,7 +292,7 @@ namespace HSMServer.Controllers
             // is gone by definition). The delete completes once accepted.
             var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
 
-            return success ? NoContent() : ConflictProblem(error);
+            return success ? NoContent() : ManagementApiErrors.Conflict(error);
         }
 
 
@@ -241,10 +300,11 @@ namespace HSMServer.Controllers
             new(ApiTokenResourceKind.Folder, folderId);
 
         // Maps the evaluator's decision onto the documented status codes: null when
-        // allowed, an explicit 403 ProblemDetails when the folder is in reach but the
-        // operation is not granted, a bare 404 when the folder is invisible or
-        // out-of-reach (indistinguishable from absent). Forbid() is NOT used: it would
-        // engage the (cookie) default scheme's forbidden handling — a redirect.
+        // allowed, an explicit 403 uniform error when the folder is in reach but the
+        // operation is not granted, the area's generic 404 when the folder is invisible
+        // or out-of-reach (indistinguishable from an unknown id — same body). Forbid()
+        // is NOT used: it would engage the (cookie) default scheme's forbidden
+        // handling — a redirect.
         private IActionResult AuthorizeFolder(string operation, Guid folderId)
         {
             var decision = _authorization.Authorize(User, operation, FolderResource(folderId));
@@ -252,18 +312,15 @@ namespace HSMServer.Controllers
             return decision switch
             {
                 ApiTokenAuthorization.Allowed => null,
-                ApiTokenAuthorization.Forbidden => Problem(statusCode: 403,
-                    detail: $"The token does not grant '{operation}' at this folder."),
-                _ => NotFound(),
+                ApiTokenAuthorization.Forbidden => ManagementApiErrors.Forbidden(
+                    $"The token does not grant '{operation}' at this folder."),
+                _ => ManagementApiErrors.NotFound(),
             };
         }
 
-        private ObjectResult ConflictProblem(string error) =>
-            Problem(statusCode: 409, detail: error);
-
         private IActionResult FolderIdRequired() =>
-            ValidationProblem(new ValidationProblemDetails(
-                new Dictionary<string, string[]> { ["folderId"] = ["The folder id is required."] }));
+            ManagementApiErrors.Validation(
+                new Dictionary<string, string[]> { ["folderId"] = ["The folder id is required."] });
 
         // Structural validation, then entity reconstruction (inside a try — the domain
         // throws on legal-looking but unsupported input), then the semantic checks

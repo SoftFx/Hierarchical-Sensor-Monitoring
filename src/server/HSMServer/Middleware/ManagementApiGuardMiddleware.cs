@@ -17,10 +17,12 @@ namespace HSMServer.Middleware
     //     policy outside the reserved cookie-only /api/v1/api-tokens family, a cookie
     //     [Authorize] (the default policy) inside it — so it is never anonymous (there
     //     is no fallback policy behind the guard).
-    // Anything else under /api/v1 is a plain 404 BEFORE controller execution — including a
+    // Anything else under /api/v1 is a 404 BEFORE controller execution — including a
     // route someone adds without the metadata, which is exactly the default this guard
     // exists to enforce. 404 rather than 403 so SensorPort responses do not confirm that a
-    // management route exists.
+    // management route exists. Since #1353 the 404 carries the area's uniform JSON error
+    // body — the generic one the controllers also use, so a guard rejection is
+    // indistinguishable from an unknown id and confirms nothing about routing either.
     public sealed class ManagementApiGuardMiddleware(RequestDelegate next, HsmListenerBindings listeners)
     {
         // The sole v1 route family that authorizes through the cookie scheme (token
@@ -79,10 +81,7 @@ namespace HSMServer.Middleware
             metadata.OfType<AuthorizeAttribute>().Any(a =>
                 string.IsNullOrEmpty(a.Policy) && string.IsNullOrEmpty(a.AuthenticationSchemes));
 
-        private static Task NotFound(HttpContext context)
-        {
-            context.Response.StatusCode = StatusCodes.Status404NotFound;
-            return Task.CompletedTask;
-        }
+        private static Task NotFound(HttpContext context) =>
+            ManagementApiErrorResponses.WriteNotFound(context);
     }
 }

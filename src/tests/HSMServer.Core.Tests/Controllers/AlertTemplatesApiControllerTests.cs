@@ -344,7 +344,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public void GetTemplate_Absent_Is404()
         {
-            Assert.IsType<NotFoundResult>(CreateController().GetTemplate(Guid.NewGuid()));
+            Assert.Equal(404, StatusCodeOf(CreateController().GetTemplate(Guid.NewGuid())));
         }
 
 
@@ -375,7 +375,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             var dto = BuildDto() with { Name = "" };
 
-            Assert.IsType<NotFoundResult>(await CreateController().CreateTemplate(dto));
+            Assert.Equal(404, StatusCodeOf(await CreateController().CreateTemplate(dto)));
             _cache.Verify(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
@@ -752,7 +752,7 @@ namespace HSMServer.Core.Tests.Controllers
             var result = await CreateController().CreateTemplate(BuildDto());
 
             Assert.Equal(409, StatusCodeOf(result));
-            Assert.Contains("No products found", Assert.IsType<ProblemDetails>(Assert.IsType<ObjectResult>(result).Value).Detail);
+            Assert.Contains("No products found", Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value).Message);
         }
 
 
@@ -784,7 +784,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public async Task Update_Absent_Is404_WithoutEvaluatorCall()
         {
-            Assert.IsType<NotFoundResult>(await CreateController().UpdateTemplate(Guid.NewGuid(), BuildDto()));
+            Assert.Equal(404, StatusCodeOf(await CreateController().UpdateTemplate(Guid.NewGuid(), BuildDto())));
 
             _authorization.Verify(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
         }
@@ -875,7 +875,7 @@ namespace HSMServer.Core.Tests.Controllers
             var controller = CreateController();
 
             Assert.IsType<NoContentResult>(await controller.DeleteTemplate(stored.Id));
-            Assert.IsType<NotFoundResult>(controller.GetTemplate(stored.Id));
+            Assert.Equal(404, StatusCodeOf(controller.GetTemplate(stored.Id)));
         }
 
         [Fact]
@@ -916,7 +916,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             // Delete.
             Assert.IsType<NoContentResult>(await controller.DeleteTemplate(id));
-            Assert.IsType<NotFoundResult>(controller.GetTemplate(id));
+            Assert.Equal(404, StatusCodeOf(controller.GetTemplate(id)));
         }
     }
 }

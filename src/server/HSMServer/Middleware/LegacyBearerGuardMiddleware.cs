@@ -12,7 +12,8 @@ namespace HSMServer.Middleware
     // It performs no token lookup — the credential material only matters to the HsmApiToken
     // scheme — and answers a generic non-redirecting 401 so a legacy [Authorize] route can
     // never redirect it to the login page and a BaseController cast can never explode into
-    // a 500 over it.
+    // a 500 over it. Since #1353 the 401 carries the area's uniform JSON error body, so a
+    // client that misplaces its token gets a machine-readable answer here too.
     public sealed class LegacyBearerGuardMiddleware(RequestDelegate next)
     {
         public Task InvokeAsync(HttpContext context)
@@ -21,10 +22,8 @@ namespace HSMServer.Middleware
                 return next(context);
 
             if (ContainsHsmBearer(context.Request.Headers))
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return Task.CompletedTask;
-            }
+                return ManagementApiErrorResponses.WriteUnauthorized(context,
+                    "A management API token is not accepted on this route.");
 
             return next(context);
         }

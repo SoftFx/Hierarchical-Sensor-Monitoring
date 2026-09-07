@@ -97,10 +97,35 @@ namespace HSMServer.ServiceExtensions
             {
                 o.UseInlineDefinitionsForEnums();
                 o.OperationFilter<DataRequestHeaderSwaggerFilter>();
+                o.OperationFilter<ManagementApiSecuritySwaggerFilter>();
                 o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo
                 {
                     Version = ServerConfig.Version,
                     Title = ServerConfig.Name,
+                    // The self-describing entry point for /api/v1 clients (#1353): an
+                    // agent that reads only this document can authenticate and work
+                    // through the management area.
+                    Description =
+                        "HSM server API. The /api/v1 management area serves non-interactive clients " +
+                        "(AI agents, scripts): every operation requires the HsmApiToken bearer credential " +
+                        "(see the HsmApiToken security scheme), and every error response — 400/401/403/404/409/500 — " +
+                        "carries the uniform JSON body {\"error\": <machine-readable code>, \"message\": <human summary>, " +
+                        "\"details\": <field-keyed messages on 400s, traceId on 500s, else null>}. " +
+                        "Management endpoints are served on the web-UI port only.",
+                });
+
+                o.AddSecurityDefinition(ManagementApiSecuritySwaggerFilter.SchemeName, new OpenApiSecurityScheme
+                {
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "hsm_pat_v1_<token id>.<secret>",
+                    Description =
+                        "Personal API token of the management API. The full credential is minted by the server " +
+                        "and disclosed to its owner exactly once; provisioning is an operator action (a self-service " +
+                        "issuance flow is a follow-up). Send it verbatim as the Authorization header value: " +
+                        "'Authorization: Bearer hsm_pat_v1_...'. A token acts with the intersection of its own grants " +
+                        "and its owner's current rights; missing, revoked or malformed credentials all answer the same " +
+                        "generic 401.",
                 });
 
                 o.MapType<TimeSpan>(() => new OpenApiSchema
@@ -169,6 +194,12 @@ namespace HSMServer.ServiceExtensions
                 applicationBuilder.UseExceptionHandler("/Error");
             }
 
+            // Between the global handler and the logging middleware (the inner one logs
+            // first, then rethrows): /api paths answer their 500s with the uniform JSON
+            // error contract instead of the Razor /Error page (#1353) — never HTML on
+            // /api. Everything else rethrows untouched for the global handler.
+            applicationBuilder.UseMiddleware<ApiExceptionJsonMiddleware>();
+
             applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
 
             applicationBuilder.UseHttpsRedirection();
@@ -190,6 +221,11 @@ namespace HSMServer.ServiceExtensions
             applicationBuilder.UseMiddleware<TelemetryMiddleware>();
             applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
 
+
+            // The doc enumerates the SitePort-only management surface (#1353/#1366
+            // review): serving it on the sensor port would publish the map the area
+            // guard exists to hide. Same listener registry the guard admits by.
+            applicationBuilder.UseMiddleware<SwaggerSitePortOnlyMiddleware>();
 
             applicationBuilder.UseSwagger();
             applicationBuilder.UseSwaggerUI(c =>

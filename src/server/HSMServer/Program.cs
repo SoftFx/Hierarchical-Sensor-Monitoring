@@ -2,11 +2,13 @@
 using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Middleware;
+using HSMServer.Model.ManagementApi;
 using HSMServer.ServerConfiguration;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -79,6 +81,16 @@ builder.Services.AddMvc()
                 {
                     options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals;
                 });
+
+// #1353 (epic #1347): binding failures of the /api/v1 management controllers answer
+// with the area's uniform JSON error contract instead of ValidationProblemDetails.
+// Non-management ApiControllers (sensor-data, Grafana) DELEGATE to the captured
+// framework default, so their wire shape (problem+json, type, traceId) is untouched.
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory =
+        ManagementApiErrors.WrapBindingFailureFactory(options.InvalidModelStateResponseFactory);
+});
 
 builder.Services.AddFluentValidationAutoValidation()
                 .AddFluentValidationClientsideAdapters();
