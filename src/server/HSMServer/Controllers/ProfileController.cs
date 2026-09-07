@@ -62,6 +62,7 @@ namespace HSMServer.Controllers
 
             return View(new ProfilePageViewModel
             {
+                UserId = user.Id,
                 UserName = user.Name,
                 IsAdmin = user.IsAdmin,
                 Products = BuildProductBadges(user),
@@ -137,12 +138,17 @@ namespace HSMServer.Controllers
             }
             else
             {
-                if (request.ExpiresAtUtc.Value.ToUniversalTime() <= DateTime.UtcNow)
+                var requested = NormalizeUtc(request.ExpiresAtUtc.Value);
+
+                if (requested <= DateTime.UtcNow)
                     return Fail("past_expiry", "The expiration date must be in the future.");
 
-                expiresAtUtc = request.ExpiresAtUtc.Value.ToUniversalTime();
+                expiresAtUtc = requested;
             }
 
+            // Friendly pre-check only: the hard quota bound is enforced by the manager
+            // (its ApiTokens.MaxTokensPerUser) inside the same serialized create path,
+            // so a concurrent request cannot slip past the cap even when both pass here.
             if (_tokens.CountQuotaEligibleTokens(ownerId) >= _config.MaxTokensPerUser)
                 return Fail("quota",
                     $"The token limit is reached ({_config.MaxTokensPerUser}). Revoke an unused token to free a slot.");
@@ -186,10 +192,12 @@ namespace HSMServer.Controllers
 
             if (request.ExpiresAtUtc is not null)
             {
-                if (request.ExpiresAtUtc.Value.ToUniversalTime() <= DateTime.UtcNow)
+                var requested = NormalizeUtc(request.ExpiresAtUtc.Value);
+
+                if (requested <= DateTime.UtcNow)
                     return Fail("past_expiry", "The expiration date must be in the future.");
 
-                shortenedExpiryUtc = request.ExpiresAtUtc.Value.ToUniversalTime();
+                shortenedExpiryUtc = requested;
             }
 
             if (!_tokens.TryRestrictToken(request.EntityId, grants, shortenedExpiryUtc,
@@ -220,12 +228,19 @@ namespace HSMServer.Controllers
 
             if (request.ExpiresAtUtc is not null)
             {
-                if (request.ExpiresAtUtc.Value.ToUniversalTime() <= DateTime.UtcNow)
+                var requested = NormalizeUtc(request.ExpiresAtUtc.Value);
+
+                if (requested <= DateTime.UtcNow)
                     return Fail("past_expiry", "The expiration date must be in the future.");
 
-                shortenedExpiryUtc = request.ExpiresAtUtc.Value.ToUniversalTime();
+                shortenedExpiryUtc = requested;
             }
 
+            // Rotation deliberately re-mints the token's ALREADY-ISSUED grant set without
+            // re-running IsGrantableByOwner: the owner filter gates issuance (create),
+            // grants never expand through rotation, and effective rights are intersected
+            // with the owner's CURRENT roles on every request anyway — re-checking here
+            // would only block rotation (never the token itself) after a role loss.
             if (!_tokens.TryRotateToken(request.EntityId, shortenedExpiryUtc, CurrentUser.Name,
                     out _, out var fullToken))
                 return Fail("rotate_failed",
@@ -351,6 +366,8 @@ namespace HSMServer.Controllers
         private List<ProfileTokenViewModel> BuildTokenList(Guid ownerId)
         {
             var now = DateTime.UtcNow;
+            var globalGeneration = _tokens.GlobalRevocationGeneration;
+            var ownerGeneration = _tokens.GetOwnerRevocationGeneration(ownerId);
 
             return _tokens.GetTokensByOwner(ownerId)
                 .OrderByDescending(t => t.CreatedAtUtc)
@@ -360,15 +377,32 @@ namespace HSMServer.Controllers
                     Name = t.Name,
                     Description = t.Description,
                     Grants = t.Grants.Select(DescribeGrant).ToList(),
-                    Status = t.RevokedAtUtc is not null
-                        ? "revoked"
-                        : t.ExpiresAtUtc is not null &&
-                          new DateTime(t.ExpiresAtUtc.Value, DateTimeKind.Utc) <= now ? "expired" : "active",
+                    Status = DescribeStatus(t, now, globalGeneration, ownerGeneration),
                     CreatedAtUnixMs = ToUnixMs(t.CreatedAtUtc),
                     ExpiresAtUnixMs = t.ExpiresAtUtc is null ? null : ToUnixMs(t.ExpiresAtUtc.Value),
                     LastUsedAtUnixMs = t.LastUsedAtUtc is null ? null : ToUnixMs(t.LastUsedAtUtc.Value),
                 })
                 .ToList();
+        }
+
+
+        // Generation-invalidated records (an emergency revoke advanced a generation past
+        // the token's at-issue stamps) have no per-row timestamp — without this check
+        // they would list as "active" with live lifecycle buttons while no longer
+        // authenticating, and would disagree with the quota counter that already
+        // excludes them.
+        private static string DescribeStatus(ApiTokenInfo token, DateTime now,
+            long globalGeneration, long ownerGeneration)
+        {
+            if (token.RevokedAtUtc is not null)
+                return "revoked";
+
+            if (token.GlobalRevocationGenerationAtIssue < globalGeneration ||
+                token.OwnerRevocationGenerationAtIssue < ownerGeneration)
+                return "invalidated";
+
+            return token.ExpiresAtUtc is not null &&
+                   new DateTime(token.ExpiresAtUtc.Value, DateTimeKind.Utc) <= now ? "expired" : "active";
         }
 
 
@@ -407,9 +441,22 @@ namespace HSMServer.Controllers
 
         private static long ToUnixMs(long ticks)
         {
-            // Entity timestamps are UTC ticks; the page script wants Unix milliseconds.
-            return ticks / TimeSpan.TicksPerMillisecond;
+            // Entity timestamps are .NET ticks (since 0001-01-01); the page script wants
+            // Unix milliseconds — subtract the epoch offset before scaling.
+            return (ticks - DateTime.UnixEpoch.Ticks) / TimeSpan.TicksPerMillisecond;
         }
+
+
+        // The manager's UTC contract treats Kind.Unspecified as UTC; ToUniversalTime()
+        // would instead interpret it as the SERVER's local zone and shift the stored
+        // expiry on every non-UTC host. Normalize exactly the way the contract states.
+        private static DateTime NormalizeUtc(DateTime value) =>
+            value.Kind switch
+            {
+                DateTimeKind.Utc => value,
+                DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+                _ => value.ToUniversalTime(),
+            };
 
 
         private static IActionResult Success(ProfileMutationResponse response) => new JsonResult(response);

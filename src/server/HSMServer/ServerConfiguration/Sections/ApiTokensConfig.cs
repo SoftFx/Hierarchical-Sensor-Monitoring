@@ -24,7 +24,11 @@ namespace HSMServer.ServerConfiguration
 
         // Whether the "No expiration" option may be offered at all. Default false:
         // an unlimited credential is the longest-lived secret a user can mint, so it
-        // exists only where an operator explicitly accepted that trade.
+        // exists only where an operator explicitly accepted that trade. NOTE this is an
+        // interface gate, not a hard bound: the only server-side expiry rule is "in the
+        // future", so a determined user can still pick a far-future custom date (e.g.
+        // year 9999). Enforcing a maximum lifetime is a separate operator decision —
+        // add a MaxLifetime knob before relying on this switch as a policy bound.
         public bool AllowNoExpiration { get; set; }
 
         // Expiry preselected by the create form (the "recommended preset" the initiative

@@ -9,6 +9,8 @@ namespace HSMServer.Model.Profile
     // the full token exists exactly once, in the create/rotate mutation response.
     public sealed class ProfilePageViewModel
     {
+        public Guid UserId { get; init; }
+
         public string UserName { get; init; }
 
         public bool IsAdmin { get; init; }

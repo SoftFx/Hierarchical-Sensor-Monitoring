@@ -75,7 +75,11 @@ namespace HSMServer.Authentication
         // allows nothing). Persists first; publishes to the authentication index only after
         // the write. fullToken carries the secret exactly once and is never stored or logged.
         // Returns false — never throws — while generation state is unhealthy or unreadable:
-        // no token is minted against unproven generation values.
+        // no token is minted against unproven generation values. The configured
+        // MaxTokensPerUser quota (see the manager's construction) is enforced INSIDE the
+        // same state-lock hold, so two concurrent creates cannot both pass a caller-side
+        // pre-check and exceed the cap; callers may still pre-check for a friendly error,
+        // but the hard bound is here.
         bool TryCreateToken(Guid ownerUserId, string name, string description, List<ApiTokenGrantEntity> grants,
             DateTime? expiresAtUtc, string createdBy, out ApiTokenInfo entity, out string fullToken);
 

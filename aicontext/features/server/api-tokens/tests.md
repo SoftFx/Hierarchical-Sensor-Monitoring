@@ -114,10 +114,17 @@ The design's privilege-reduction matrix, recomputed per call:
 
 - Create: valid request returns the one-time secret exactly once with the entity id.
 - Create gates: `disabled` (no manager call at all), `unhealthy`, `quota` (at and above `MaxTokensPerUser`), `no_grants`, `invalid_name` (blank), `past_expiry`, `no_expiration_not_allowed` without the config switch (allowed with it), `duplicate_grant` (same pair in different Guid casing = same boundary), `grant_not_allowed` (picker hiding is not the enforcement), `create_failed` (manager false surfaces).
+- Create with `Kind.Unspecified` expiry passes the value through as UTC (the manager contract), never re-read as the host's local zone.
 - Restrict: the remaining set reaches the manager canonicalized; foreign entity ids answer `not_found` with no manager call (indistinguishable from unknown); revoked tokens are `not_found`; `disabled` while the kill switch is on.
 - Rotate: returns the new secret once; `past_expiry` refused before the manager.
 - Revoke: own token revoked with the signed-in actor; works with tokens disabled (the kill switch's documented cleanup path); `unhealthy` denies; foreign ids `not_found`.
 - Page: lists only the caller's tokens and maps quota/state flags (`TokensEnabled` = `Enabled AND healthy`); `GrantOptions` returns an empty picker while disabled or unhealthy and delegates to the owner filter otherwise.
+- Page timestamps are Unix milliseconds (entity ticks minus the .NET-epoch offset) — pinned against a known instant.
+- A generation-invalidated record (emergency-revoke generation above the at-issue stamps, both row timestamps unset) lists as `invalidated`, not `active`.
+
+## Manager quota (`ApiTokenManagerTests`)
+
+- `TryCreateToken` with a configured `MaxTokensPerUser = 1`: first live token mints, the second is refused inside the same state-locked path (no caller-side check races past the cap); revoking frees the slot immediately without reconciliation; a null config (direct construction) is unlimited.
 
 ## Configuration (`ApiTokensConfigTests`)
 

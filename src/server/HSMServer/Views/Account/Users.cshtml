@@ -78,11 +78,8 @@
             {
                 var userItem = Model[i];
                 var trimmed = userItem.Username?.Trim() ?? string.Empty;
-                var initials = trimmed.Length >= 2 ? trimmed.Substring(0, 2).ToUpper()
-                    : trimmed.Length == 1 ? trimmed.ToUpper()
-                    : "??";
-                var avatarColors = new[] { "#9ca3af", "#8b95b0", "#7a87c5", "#6979da", "#586bef", "#4659f5", "#3b4de0", "#2d3fc7" };
-                var avatarColor = avatarColors[(userItem.UserId.GetHashCode() & 0x7FFFFFFF) % avatarColors.Length];
+                var initials = string.IsNullOrEmpty(AvatarHelper.InitialsOf(trimmed)) ? "??" : AvatarHelper.InitialsOf(trimmed);
+                var avatarColor = AvatarHelper.ColorOf(Guid.Parse(userItem.UserId));
 
                 <div class="member-row" data-username="@userItem.Username.Trim().ToLower()" data-isadmin="@(userItem.IsAdmin ? "true" : "false")">
                     <div class="member-info">

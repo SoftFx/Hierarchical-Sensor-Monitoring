@@ -30,6 +30,33 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
 
         [Fact]
+        public void TryCreateToken_AtConfiguredQuota_RefusesSecondLiveToken()
+        {
+            // The hard quota bound lives INSIDE the manager's state-locked create path
+            // (its ApiTokens.MaxTokensPerUser), not in a caller-side pre-check: two
+            // concurrent creates cannot both pass such a check and exceed the cap. A
+            // null config (direct construction) is deliberately unlimited.
+            using var capped = new ApiTokenManager(_databaseCoreManager.DatabaseCore,
+                NullLogger<ApiTokenManager>.Instance,
+                new HSMServer.ServerConfiguration.ApiTokensConfig { MaxTokensPerUser = 1 });
+
+            capped.Initialize().Wait();
+
+            Assert.True(capped.TryCreateToken(OwnerId, "first", null, BuildGrants("alerts:read"),
+                null, "u", out _, out _));
+            Assert.False(capped.TryCreateToken(OwnerId, "second", null, BuildGrants("alerts:read"),
+                null, "u", out _, out _));
+            Assert.Equal(1, capped.CountQuotaEligibleTokens(OwnerId));
+
+            // A revoked record no longer counts: the slot frees without reconciliation.
+            var first = capped.GetTokensByOwner(OwnerId)[0];
+            Assert.True(capped.TryRevokeToken(first.EntityId, "u", "cap test", out _));
+            Assert.True(capped.TryCreateToken(OwnerId, "third", null, BuildGrants("alerts:read"),
+                null, "u", out _, out _));
+        }
+
+
+        [Fact]
         public void Initialize_FreshDatabase_IsHealthyWithZeroGenerations()
         {
             using var manager = CreateManager();

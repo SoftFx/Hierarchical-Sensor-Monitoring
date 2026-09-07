@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
@@ -463,6 +464,79 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public void Index_Timestamps_AreUnixMillisecondsNotDotNetTicks()
+        {
+            // Entity timestamps are .NET ticks (since 0001-01-01); feeding them to
+            // new Date(ms) as-is rendered dates ~2000 years in the future. The page
+            // projection must be true Unix milliseconds.
+            var created = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+            var expires = new DateTime(2027, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+
+            _tokens.Setup(t => t.GetTokensByOwner(OwnerId)).Returns(new List<ApiTokenInfo>
+            {
+                BuildInfo() with { CreatedAtUtc = created.Ticks, ExpiresAtUtc = expires.Ticks },
+            });
+
+            var token = PageModelOf(CreateController().Index()).Tokens.Single();
+
+            Assert.Equal(((DateTimeOffset)created).ToUnixTimeMilliseconds(), token.CreatedAtUnixMs);
+            Assert.Equal(((DateTimeOffset)expires).ToUnixTimeMilliseconds(), token.ExpiresAtUnixMs);
+        }
+
+
+        [Fact]
+        public void Index_GenerationInvalidatedToken_IsDeadNotActive()
+        {
+            // An emergency-revoke generation advance leaves both row timestamps unset;
+            // without comparing the at-issue stamps the row would list as "active" with
+            // live lifecycle buttons while no longer authenticating, and would disagree
+            // with the quota counter that already excludes it.
+            _tokens.Setup(t => t.GlobalRevocationGeneration).Returns(5);
+            _tokens.Setup(t => t.GetOwnerRevocationGeneration(OwnerId)).Returns(2);
+            _tokens.Setup(t => t.GetTokensByOwner(OwnerId)).Returns(new List<ApiTokenInfo>
+            {
+                BuildInfo(entityId: Guid.NewGuid()) with { GlobalRevocationGenerationAtIssue = 4, OwnerRevocationGenerationAtIssue = 2 },
+                BuildInfo(entityId: Guid.NewGuid()) with { GlobalRevocationGenerationAtIssue = 5, OwnerRevocationGenerationAtIssue = 1 },
+                BuildInfo(entityId: Guid.NewGuid()) with { GlobalRevocationGenerationAtIssue = 5, OwnerRevocationGenerationAtIssue = 2 },
+            });
+
+            var statuses = PageModelOf(CreateController().Index()).Tokens.Select(t => t.Status).ToList();
+
+            Assert.Equal(new[] { "invalidated", "invalidated", "active" }, statuses);
+        }
+
+
+        [Fact]
+        public void CreateToken_UnspecifiedExpiryKind_IsUtcPerManagerContract()
+        {
+            // The manager treats Kind.Unspecified as UTC; ToUniversalTime would instead
+            // read the SERVER's zone and shift the stored expiry on non-UTC hosts.
+            DateTime? received = null;
+            _tokens.Setup(t => t.TryCreateToken(OwnerId, It.IsAny<string>(), It.IsAny<string>(),
+                    It.IsAny<List<ApiTokenGrantEntity>>(), It.IsAny<DateTime?>(), It.IsAny<string>(),
+                    out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny))
+                .Callback(new CreateTokenCallback((Guid _, string __, string ___, List<ApiTokenGrantEntity> ____,
+                    DateTime? expiresAtUtc, string _____, out ApiTokenInfo info, out string token) =>
+                {
+                    received = expiresAtUtc;
+                    info = BuildInfo();
+                    token = "hsm_pat_v1_fulltoken";
+                }))
+                .Returns(true);
+
+            var unspecified = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(30).Date, DateTimeKind.Unspecified);
+            var request = BuildCreateRequest();
+            request.ExpiresAtUtc = unspecified;
+
+            var answer = Mutate(CreateController().CreateToken(request));
+
+            Assert.True(answer.Ok);
+            Assert.Equal(DateTimeKind.Utc, received.Value.Kind);
+            Assert.Equal(unspecified, received.Value);
+        }
+
+
+        [Fact]
         public void GrantOptions_Disabled_ReturnsEmptyPicker()
         {
             _config.Enabled = false;
@@ -510,9 +584,9 @@ namespace HSMServer.Core.Tests.Controllers
             Grants = BuildGrants(),
         };
 
-        private static ApiTokenInfo BuildInfo(Guid? owner = null) => new()
+        private static ApiTokenInfo BuildInfo(Guid? owner = null, Guid? entityId = null) => new()
         {
-            EntityId = EntityId,
+            EntityId = entityId ?? EntityId,
             OwnerUserId = owner ?? OwnerId,
             Name = "token",
             Grants = ImmutableArray<ApiTokenGrantEntity>.Empty,

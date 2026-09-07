@@ -142,10 +142,12 @@
                                     <ul class="navbar-nav">
                                         <li class="nav-item dropdown">
                                             @{
+                                                // Same deterministic colour as the Users page and the profile card
+                                                // (AvatarHelper): hashed from the user ID, never the name —
+                                                // String.GetHashCode is randomised per process.
                                                 var userName = ((User)Context.User).Name?.Trim() ?? string.Empty;
-                                                var userInitials = userName.Length >= 2 ? userName.Substring(0, 2).ToUpper() : userName.ToUpper();
-                                                var avatarColors = new[] { "#9ca3af", "#8b95b0", "#7a87c5", "#6979da", "#586bef", "#4659f5", "#3b4de0", "#2d3fc7" };
-                                                var avatarColor = avatarColors[(userName.GetHashCode() & 0x7FFFFFFF) % avatarColors.Length];
+                                                var userInitials = AvatarHelper.InitialsOf(userName);
+                                                var avatarColor = AvatarHelper.ColorOf(((User)Context.User).Id);
                                             }
                                             <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" id="userDropdown" role="button"
                                                data-bs-toggle="dropdown" aria-expanded="false">
