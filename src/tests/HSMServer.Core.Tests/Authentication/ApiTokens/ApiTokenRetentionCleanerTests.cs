@@ -66,7 +66,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // Halfway through the window: nothing is eligible yet.
             var earlyResult = cleaner.RunOnce(realNow.AddMinutes(5));
 
-            Assert.Equal((0, 0, 0), earlyResult);
+            Assert.Equal((0, 0, 0, 0), earlyResult);
             Assert.Equal(3, _databaseCoreManager.DatabaseCore.GetAllApiTokens().Count);
 
             // Past the window: the dead rows are gone (durable AND live index), the live
@@ -74,7 +74,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // the durable row is correlated by EntityId.
             var result = cleaner.RunOnce(realNow.AddMinutes(15));
 
-            Assert.Equal((2, 0, 0), result);
+            Assert.Equal((0, 2, 0, 0), result);
             var remaining = _databaseCoreManager.DatabaseCore.GetAllApiTokens();
             Assert.Single(remaining);
             Assert.Equal(live.EntityId, remaining[0].Entity.EntityId);
@@ -119,12 +119,12 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             // observation: inside the window the row stays.
             var firstPass = cleaner.RunOnce(firstSeen);
 
-            Assert.Equal((0, 0, 0), firstPass);
+            Assert.Equal((0, 0, 0, 0), firstPass);
             Assert.Contains(manager.GetOrphanTokenIds(), id => id == orphanKey);
 
             var secondPass = cleaner.RunOnce(firstSeen.AddMinutes(15));
 
-            Assert.Equal((0, 1, 0), secondPass);
+            Assert.Equal((0, 0, 1, 0), secondPass);
             Assert.DoesNotContain(manager.GetOrphanTokenIds(), id => id == orphanKey);
         }
 
@@ -148,7 +148,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             var result = cleaner.RunOnce(Now);
 
-            Assert.Equal((0, 0, 1), result);
+            Assert.Equal((0, 0, 0, 1), result);
 
             var remaining = _databaseCoreManager.DatabaseCore.ReadApiTokenSecurityEvents()
                 .Select(e => e.TimestampUtc)
@@ -184,10 +184,127 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             // One tick before the window elapses: the cutoff is still older than the
             // revoke stamp — kept.
-            Assert.Equal((0, 0, 0), cleaner.RunOnce(revokedAt + retention - TimeSpan.FromTicks(1)));
+            Assert.Equal((0, 0, 0, 0), cleaner.RunOnce(revokedAt + retention - TimeSpan.FromTicks(1)));
 
             // Exactly at the window: cutoff == RevokedAtUtc — removed (inclusive).
-            Assert.Equal((1, 0, 0), cleaner.RunOnce(revokedAt + retention));
+            Assert.Equal((0, 1, 0, 0), cleaner.RunOnce(revokedAt + retention));
+        }
+
+        [Fact]
+        public void EmergencyRevokedRows_AreStamped_ThenRemovedAfterTheWindow()
+        {
+            // An emergency revoke advances the generation and never touches the rows:
+            // the sweep's reconciliation pass is what eventually retires them. The
+            // stamp carries the sweep's observation clock and the coarse "emergency"
+            // actor — the initiator, reason and exact revoke instant live in the
+            // journal's audit record, not on every row.
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            var retention = TimeSpan.FromMinutes(10);
+            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = retention, SecurityEventRetention = EventsPinnedOff },
+                _databaseCoreManager.DatabaseCore, manager);
+
+            Assert.True(manager.TryCreateToken(OwnerId, "emergency-killed", null, [], expiresAtUtc: null, "test", out var token, out _));
+
+            // The public projection carries no TokenId (by design); the storage key IS
+            // the token id, so IsTokenLive is driven from the durable row.
+            var keyTokenId = _databaseCoreManager.DatabaseCore.GetAllApiTokens()
+                .Single(r => r.Entity.EntityId == token.EntityId).KeyTokenId;
+
+            manager.AdvanceOwnerRevocationGeneration(OwnerId);
+
+            // The token is dead to authentication the moment the generation advanced...
+            Assert.False(manager.IsTokenLive(keyTokenId));
+
+            // ...but the row keeps RevokedAtUtc null until the sweep stamps it.
+            var stampedPass = cleaner.RunOnce(DateTime.UtcNow);
+
+            Assert.Equal((1, 0, 0, 0), stampedPass);
+
+            var row = _databaseCoreManager.DatabaseCore.GetAllApiTokens()
+                .Single(r => r.Entity.EntityId == token.EntityId).Entity;
+
+            Assert.NotNull(row.RevokedAtUtc);
+            Assert.Equal(ApiTokenManager.EmergencyRevokedBy, row.RevokedBy);
+            Assert.Null(row.RevocationReason);
+
+            // A freshly stamped row is never removed by the pass that stamped it: the
+            // retention window counts from the (just now) stamp. Bit-exact readback,
+            // like the inclusive-boundary test — an after-the-fact UtcNow is strictly
+            // newer and could never pin the removal boundary.
+            var stampedAt = new DateTime(row.RevokedAtUtc.Value, DateTimeKind.Utc);
+
+            Assert.Equal((0, 0, 0, 0), cleaner.RunOnce(stampedAt + retention - TimeSpan.FromTicks(1)));
+            Assert.Equal((0, 1, 0, 0), cleaner.RunOnce(stampedAt + retention));
+        }
+
+        [Fact]
+        public void EmergencyRevocationStamping_IsBounded_TheRestDrainsNextPass()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = TimeSpan.FromMinutes(10), SecurityEventRetention = EventsPinnedOff },
+                _databaseCoreManager.DatabaseCore, manager);
+
+            // One more invalidated row than the per-pass batch limit (the internal test
+            // ctor's 0 = unlimited quota admits creating them all).
+            var total = ApiTokenRetentionCleaner.TokenRowBatchLimit + 1;
+
+            for (var i = 0; i < total; i++)
+                Assert.True(manager.TryCreateToken(OwnerId, $"killed-{i}", null, [], expiresAtUtc: null, "test", out _, out _),
+                    $"token {i} must be created");
+
+            manager.AdvanceGlobalRevocationGeneration();
+
+            var firstPass = cleaner.RunOnce(DateTime.UtcNow);
+
+            Assert.Equal(ApiTokenRetentionCleaner.TokenRowBatchLimit, firstPass.InvalidatedRowsStamped);
+            Assert.Equal(total, _databaseCoreManager.DatabaseCore.GetAllApiTokens().Count);
+
+            var secondPass = cleaner.RunOnce(DateTime.UtcNow);
+
+            Assert.Equal(1, secondPass.InvalidatedRowsStamped);
+        }
+
+        [Fact]
+        public void Stamping_NeverTouches_LiveOrPersonallyRevokedRows()
+        {
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = TimeSpan.FromMinutes(10), SecurityEventRetention = EventsPinnedOff },
+                _databaseCoreManager.DatabaseCore, manager);
+
+            // The live row belongs to ANOTHER owner: an owner-generation advance kills
+            // every token that owner issued earlier, so a same-owner "live" witness
+            // would be invalidated together with the target.
+            var untouchedOwner = Guid.NewGuid();
+
+            Assert.True(manager.TryCreateToken(untouchedOwner, "live", null, [], expiresAtUtc: null, "test", out var live, out _));
+            Assert.True(manager.TryCreateToken(OwnerId, "revoked", null, [], expiresAtUtc: null, "test", out var revoked, out _));
+            Assert.True(manager.TryRevokeToken(revoked.EntityId, "test", "personal revoke", out _));
+            Assert.True(manager.TryCreateToken(OwnerId, "invalidated", null, [], expiresAtUtc: null, "test", out var invalidated, out _));
+
+            manager.AdvanceOwnerRevocationGeneration(OwnerId);
+
+            var result = cleaner.RunOnce(DateTime.UtcNow);
+
+            Assert.Equal(1, result.InvalidatedRowsStamped);
+
+            var durableRows = _databaseCoreManager.DatabaseCore.GetAllApiTokens().ToList();
+            var rows = durableRows.ToDictionary(r => r.Entity.EntityId, r => r.Entity);
+            var keys = durableRows.ToDictionary(r => r.Entity.EntityId, r => r.KeyTokenId);
+
+            Assert.Null(rows[live.EntityId].RevokedAtUtc);
+            Assert.Equal("test", rows[revoked.EntityId].RevokedBy);
+            Assert.Equal("personal revoke", rows[revoked.EntityId].RevocationReason);
+            Assert.Equal(ApiTokenManager.EmergencyRevokedBy, rows[invalidated.EntityId].RevokedBy);
+
+            // The live row is still a live credential; the invalidated one is not.
+            Assert.True(manager.IsTokenLive(keys[live.EntityId]));
+            Assert.False(manager.IsTokenLive(keys[invalidated.EntityId]));
         }
 
         [Fact]
@@ -217,7 +334,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             var result = cleaner.RunOnce(Now);
 
-            Assert.Equal((0, 0, 1), result);
+            Assert.Equal((0, 0, 0, 1), result);
         }
 
         [Fact]

@@ -36,6 +36,12 @@ namespace HSMServer.Authentication
         // Revocation reasons and actor fields (createdBy/restrictedBy/rotatedBy/revokedBy).
         private const int MaxFreeTextLength = 256;
 
+        // The actor stamped on rows the retention sweep reconciles after an emergency
+        // revoke: the row's own record says only that a generation advance (not a
+        // personal revoke) killed it — the initiator and reason live in the journal's
+        // audit record, not on every row.
+        public const string EmergencyRevokedBy = "emergency";
+
         // How often pending last-used timestamps reach the durable row. With a failed
         // flush the pending entry survives and retries on the next tick.
         private static readonly TimeSpan LastUsedFlushInterval = TimeSpan.FromSeconds(30);
@@ -732,6 +738,83 @@ namespace HSMServer.Authentication
                     count++;
 
             return count;
+        }
+
+
+        // Same liveness rule as CountQuotaEligibleTokens, judged across every owner at
+        // once (see the interface doc): the count an emergency revoke-all reports in its
+        // audit record. Owner generations of indexed tokens are always cached —
+        // LoadGenerations fills them for every owner bucket, and every advance updates
+        // the cache — so the per-token lookup never falls back to a stale zero here.
+        public int CountQuotaEligibleTokensGlobally()
+        {
+            // One snapshot of time and the global generation for the whole count, so
+            // every token is judged against the same pair of values.
+            var now = DateTime.UtcNow.Ticks;
+            var globalGeneration = GlobalRevocationGeneration;
+
+            var count = 0;
+
+            foreach (var token in _tokensByTokenId.Values)
+                if (IsLive(token, now, globalGeneration, GetOwnerRevocationGeneration(token.OwnerUserId)))
+                    count++;
+
+            return count;
+        }
+
+
+        // Reconciliation pass driven by the retention sweep (see the interface doc).
+        // The candidate check before each stamp runs on a FRESH read under _stateLock:
+        // the enumeration snapshot can be stale by the time the row is written, and a
+        // concurrent personal revoke of the same row must not be overwritten with a
+        // coarser stamp. Enumeration itself is safe: ConcurrentDictionary values are
+        // snapshot-safe under concurrent writes.
+        public int StampGenerationInvalidatedTokens(int limit)
+        {
+            if (limit <= 0)
+                return 0;
+
+            // One observation moment for the whole bounded batch — the stamp is the
+            // sweep's clock, not the emergency revoke's (that instant lives in the
+            // journal audit record).
+            var observedAt = DateTime.UtcNow.Ticks;
+            var globalGeneration = GlobalRevocationGeneration;
+
+            var stamped = 0;
+
+            foreach (var candidate in _tokensByTokenId.Values)
+            {
+                if (stamped >= limit)
+                    break;
+
+                lock (_stateLock)
+                {
+                    // Fresh read: the snapshot candidate may have been revoked, removed
+                    // or re-issued (rotate) since enumeration.
+                    if (!_tokensByTokenId.TryGetValue(candidate.TokenId, out var current))
+                        continue;
+
+                    if (current.RevokedAtUtc is not null)
+                        continue;
+
+                    // Only generation-invalidated rows: a row at the current generations
+                    // is live, and stamping it would be a false revocation.
+                    if (IsIssuedAtCurrentGenerations(current, globalGeneration,
+                            GetOwnerRevocationGeneration(current.OwnerUserId)))
+                        continue;
+
+                    // TryPersistAndPublish logs its own write failure; the row simply
+                    // stays unstamped and the next pass retries it.
+                    if (TryPersistAndPublish(current with
+                        {
+                            RevokedAtUtc = observedAt,
+                            RevokedBy = EmergencyRevokedBy,
+                        }, out _))
+                        stamped++;
+                }
+            }
+
+            return stamped;
         }
 
 

@@ -19,6 +19,7 @@
         public const string HistoryController = "SensorHistory";
         public const string JournalController = "Journal";
         public const string ProfileController = "Profile";
+        public const string ApiTokensAdminController = "ApiTokensAdmin";
 
         public const string LogoutAction = "Logout";
         public const string RegistrationAction = "Registration";
@@ -30,6 +31,10 @@
         public const string RestrictTokenAction = "RestrictToken";
         public const string RotateTokenAction = "RotateToken";
         public const string RevokeTokenAction = "RevokeToken";
+
+        public const string UserTokenSummaryAction = "UserTokenSummary";
+        public const string RevokeUserTokensAction = "RevokeUserTokens";
+        public const string RevokeAllTokensAction = "RevokeAllTokens";
 
         public const string RemoveProductAction = "RemoveProduct";
         public const string EditProductAction = "EditProduct";

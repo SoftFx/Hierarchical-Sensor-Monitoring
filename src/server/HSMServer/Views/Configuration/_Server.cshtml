@@ -1,4 +1,5 @@
-﻿@using HSMServer.Model.Configuration
+﻿@using HSMServer.Constants
+@using HSMServer.Model.Configuration
 @using HSMServer.ServerConfiguration
 
 @model ServerSettingsViewModel
@@ -80,13 +81,129 @@
     </div>
 </div>
 
+<div class="row mt-2">
+    <div class="col-2 d-flex align-items-center">
+        <label class="col-form-label">Emergency</label>
+    </div>
+    <div class="col-3 d-flex align-items-center">
+        @* type="button" is load-bearing: this partial renders inside the server settings
+           form, and a default-type button would submit it instead of opening the modal. *@
+        <button id="revokeAllTokensButton" type="button" class="btn btn-outline-danger w-100">Revoke all API tokens</button>
+    </div>
+</div>
+<div class="row">
+    <div class="offset-2 col-10">
+        <label class="note">Immediately invalidates every API token of every user (an emergency revoke): existing tokens stop authenticating at once, and users create new tokens from their profile afterwards. Available even while token authentication is disabled.</label>
+    </div>
+</div>
+<div class="row">
+    <div class="offset-2 col-10">
+        <div id="revokeAllTokensResult" class="alert alert-success mt-2 d-none"></div>
+    </div>
+</div>
+
 <div class="d-flex justify-content-end mt-2">
     <button type="submit" class="btn btn-primary independentSizeButton mt-1">Save</button>
 </div>
 
 
+<!-- Emergency Revoke All Modal: outside the settings form's Save flow, but this partial
+     renders inside the form, so every button here carries an explicit type. Inputs have
+     ids only — no name attributes — so they never ride along the settings form POST. -->
+<div class="modal fade" id="modalRevokeAllTokens" tabindex="-1" aria-labelledby="modalRevokeAllTokensLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalRevokeAllTokensLabel">Revoke all API tokens</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="revokeAllTokensError" class="alert alert-danger d-none"></div>
+                <p class="mb-2">This immediately invalidates <strong>every API token of every user</strong> on this server. Integrations using API tokens stop working until new tokens are issued.</p>
+                <p class="text-secondary small mb-3">The operation takes effect at once and cannot be undone; users create replacement tokens from their profile afterwards.</p>
+                <div class="mb-3">
+                    <span class="form-label">Type <code>revoke-all</code> to confirm:</span>
+                    <input id="revokeAllTokensConfirmation" type="text" class="form-control" autocomplete="off" />
+                </div>
+                <div class="mb-3">
+                    <span class="form-label">Reason (required)</span>
+                    <textarea id="revokeAllTokensReason" class="form-control" rows="2" maxlength="256"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" style="min-width: 100px;" data-bs-dismiss="modal">Cancel</button>
+                <button id="confirmRevokeAllTokensButton" type="button" class="btn btn-danger" style="min-width: 100px;">Revoke all</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     $(document).ready(function () {
         savingFormSubscribe("serverSettings_form", "Server settings have been successfully saved!");
+    });
+
+    var revokeAllTokensAction = "@Html.Raw(Url.Action(ViewConstants.RevokeAllTokensAction, ViewConstants.ApiTokensAdminController))";
+
+    function antiForgeryToken() {
+        var input = document.querySelector("input[name='__RequestVerificationToken']");
+        return input ? input.value : '';
+    }
+
+    function showRevokeAllTokensError(message) {
+        $('#revokeAllTokensError').text(message).removeClass('d-none');
+    }
+
+    $('#revokeAllTokensButton').on('click', function () {
+        $('#revokeAllTokensError').addClass('d-none');
+        $('#revokeAllTokensResult').addClass('d-none');
+        $('#revokeAllTokensConfirmation').val('');
+        $('#revokeAllTokensReason').val('');
+
+        new bootstrap.Modal(document.getElementById('modalRevokeAllTokens')).show();
+    });
+
+    $('#confirmRevokeAllTokensButton').on('click', function () {
+        $('#revokeAllTokensError').addClass('d-none');
+
+        var confirmation = $('#revokeAllTokensConfirmation').val().trim();
+        var reason = $('#revokeAllTokensReason').val().trim();
+
+        if (confirmation !== 'revoke-all') {
+            showRevokeAllTokensError("Type the phrase 'revoke-all' exactly to confirm.");
+            return;
+        }
+
+        if (!reason) {
+            showRevokeAllTokensError('A reason is required.');
+            return;
+        }
+
+        fetch(revokeAllTokensAction, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': antiForgeryToken()
+            },
+            body: JSON.stringify({ confirmation: confirmation, reason: reason })
+        })
+            .then(function (response) { return response.json(); })
+            .then(function (answer) {
+                if (answer.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('modalRevokeAllTokens')).hide();
+                    $('#revokeAllTokensResult')
+                        .text('All API tokens invalidated (generation → ' + answer.newGeneration + ', ' +
+                            answer.affectedTokens + ' token(s) affected).')
+                        .removeClass('d-none');
+                    return;
+                }
+
+                showRevokeAllTokensError(answer.message ||
+                    (answer.correlationId ? 'Failed. Correlation id: ' + answer.correlationId : 'Failed.'));
+            })
+            .catch(function () {
+                showRevokeAllTokensError('The request failed.');
+            });
     });
 </script>

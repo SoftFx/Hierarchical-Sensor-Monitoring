@@ -524,3 +524,43 @@ Each PR must update the actual behavior documentation and run focused server/sec
 4. What retention policies apply separately to lifecycle journal records and the append-only per-request security-event sink?
 5. Should service accounts be a follow-up initiative?
 6. Do any routes require an exception to the 403-visible / 404-out-of-scope policy?
+
+## Implementation Deviations (as landed)
+
+Step 4 as delivered differs from the endpoint shapes above in four deliberate ways;
+the semantics (auth model, confirmation, reason, persist-first generation invalidation,
+audit content, degraded-mode availability) are unchanged. The historical design text
+above is kept as written; this section is the as-built record.
+
+1. **Cookie-MVC AJAX surface instead of the `/api/v1/api-tokens` REST family.**
+   Personal management (PR A) and the emergency endpoints (PR B) live as JSON
+   AJAX actions on MVC controllers — `ProfileController` and
+   `ApiTokensAdminController` — not as `/api/v1/api-tokens/...` routes. Rationale:
+   the only consumers are the Razor pages themselves (page-reload flow), a
+   destructive admin lever has no business in the public OpenAPI surface, and the
+   `/api/v1` guard/allow-list machinery stays reserved for third-party clients.
+   Consequence: the reserved cookie-only `/api/v1/api-tokens` family the area
+   guard anticipates has no members; the management-policy variant of the marker
+   remains the only used one.
+2. **HTTP 200 + JSON error codes instead of status-code semantics (204/400/401/403/404/503).**
+   The cookie-MVC sibling of the management-API error contract: `ok/error/message`
+   with stable machine codes (`not_found`, `invalid_confirmation`, `invalid_reason`,
+   `revoke_failed`), antiforgery enforced by the MVC filter rather than a 400 body.
+   The 503-with-correlation-id contract maps to `revoke_failed` + a `correlationId`
+   field carrying `HttpContext.TraceIdentifier` (the same key that locates the NLog
+   record). The admin gate is `[AuthorizeIsAdmin]` (401 for non-admins), matching
+   `AccountController.Users`.
+3. **Reconciliation is a step of the existing retention sweep, not a separate bounded queue.**
+   "Per-token revoked metadata reconciled afterward in bounded, retryable
+   maintenance" is implemented as the sweep's first pass
+   (`IApiTokenManager.StampGenerationInvalidatedTokens`, hourly, 100 rows per
+   pass): the same bounded/retryable/self-healing properties fall out of the
+   existing sweep without new scheduling machinery. The stamp carries the sweep's
+   observation clock and `RevokedBy = "emergency"`; the initiator, reason and
+   exact revoke instant live in the journal audit record only.
+4. **Audit of the emergency surface goes through the lifecycle journal only.**
+   The design's lifecycle audit channel (`IJournalService`) carries the
+   audit-of-record for emergency revocations (initiator, scope, reason, affected
+   count, generations, completion/failure, correlation id). Personal lifecycle
+   events (create/restrict/rotate/revoke from the profile page) shipped in PR A
+   without journal records — adding them is a separate decision, not part of PR B.

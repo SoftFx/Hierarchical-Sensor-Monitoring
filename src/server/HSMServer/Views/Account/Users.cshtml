@@ -14,6 +14,8 @@
     var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateUserAction, ViewConstants.AccountController))";
     var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveUserAction, ViewConstants.AccountController))";
     var updateAction = "@Html.Raw(Url.Action(ViewConstants.UpdateUserAction, ViewConstants.AccountController))";
+    var tokenSummaryAction = "@Html.Raw(Url.Action(ViewConstants.UserTokenSummaryAction, ViewConstants.ApiTokensAdminController))";
+    var revokeTokensAction = "@Html.Raw(Url.Action(ViewConstants.RevokeUserTokensAction, ViewConstants.ApiTokensAdminController))";
     var maxUsernameLength = @NewUserValidator.MaxUsernameLength;
 </script>
 
@@ -133,6 +135,10 @@
                                     data-userid="@userItem.UserId" data-username="@userItem.Username.Trim()" data-isadmin="@(userItem.IsAdmin ? "true" : "false")">
                                 <i class='fa-regular fa-pen-to-square'></i>
                             </button>
+                            <button id='revokeTokens_@userItem.UserId' type='button' class='action-btn danger' title='Revoke API tokens'
+                                    data-username="@userItem.Username.Trim()">
+                                <i class='fa-solid fa-key'></i>
+                            </button>
                             @if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
                             {
                                 <button id='delete_@userItem.UserId' name="@userItem.Username"
@@ -200,6 +206,36 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
                 <button id="confirmDeleteButton" type="button" class="btn btn-danger">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Emergency Revoke Tokens Modal (admin only) -->
+@Html.AntiForgeryToken()
+<div class="modal fade" id="modalRevokeTokens" tabindex="-1" aria-labelledby="modalRevokeTokensLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalRevokeTokensLabel">Revoke API tokens</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="revokeTokensError" class="alert alert-danger d-none"></div>
+                <p id="revokeTokensSummary" class="mb-2 text-break"></p>
+                <p class="text-secondary small mb-3">All of this user's API tokens stop authenticating immediately; they can create new tokens from their profile afterwards. Available even while API tokens are disabled on the server.</p>
+                <div class="mb-3">
+                    <span class="form-label" id="revokeTokensConfirmationLabel"></span>
+                    <input id="revokeTokensConfirmation" type="text" class="form-control" autocomplete="off" />
+                </div>
+                <div class="mb-3">
+                    <span class="form-label">Reason (required)</span>
+                    <textarea id="revokeTokensReason" class="form-control" rows="2" maxlength="256"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" style="min-width: 100px;" data-bs-dismiss="modal">Cancel</button>
+                <button id="confirmRevokeTokensButton" type="button" class="btn btn-danger" style="min-width: 100px;">Revoke</button>
             </div>
         </div>
     </div>
@@ -410,5 +446,87 @@
     $('.products-more-link').on('click', function (e) {
         e.preventDefault();
         this.focus();
+    });
+
+    // Emergency revoke of one user's API tokens (admin surface of the token channel):
+    // the modal loads the live count fresh, demands the username typed back, and posts
+    // with the antiforgery header — the same conventions the profile page uses.
+    function antiForgeryToken() {
+        var input = document.querySelector("input[name='__RequestVerificationToken']");
+        return input ? input.value : '';
+    }
+
+    function showRevokeTokensError(message) {
+        $('#revokeTokensError').text(message).removeClass('d-none');
+    }
+
+    $('[id^=revokeTokens_]').on('click', function () {
+        var userId = this.id.substring('revokeTokens_'.length);
+        var username = $(this).data('username');
+
+        $('#revokeTokensError').addClass('d-none');
+        $('#revokeTokensSummary').text('Loading the live token count of "' + username + '"...');
+        $('#revokeTokensConfirmationLabel').text("Type '" + username + "' to confirm:");
+        $('#revokeTokensConfirmation').val('');
+        $('#revokeTokensReason').val('');
+
+        var revokeModal = new bootstrap.Modal(document.getElementById('modalRevokeTokens'));
+        revokeModal.show();
+
+        fetch(tokenSummaryAction + '?userId=' + encodeURIComponent(userId), { credentials: 'same-origin' })
+            .then(function (response) { return response.json(); })
+            .then(function (summary) {
+                if (!summary.ok) {
+                    showRevokeTokensError('User not found.');
+                    return;
+                }
+
+                $('#revokeTokensSummary').text('This will immediately invalidate ' + summary.liveTokens +
+                    ' live token(s) of "' + summary.userName + '".');
+            })
+            .catch(function () {
+                showRevokeTokensError('The live token count could not be loaded.');
+            });
+
+        $('#confirmRevokeTokensButton').off('click').on('click', function () {
+            $('#revokeTokensError').addClass('d-none');
+
+            var confirmation = $('#revokeTokensConfirmation').val().trim();
+            var reason = $('#revokeTokensReason').val().trim();
+
+            if (!confirmation || confirmation.toLowerCase() !== String(username).toLowerCase()) {
+                showRevokeTokensError("Type the user's exact username to confirm.");
+                return;
+            }
+
+            if (!reason) {
+                showRevokeTokensError('A reason is required.');
+                return;
+            }
+
+            fetch(revokeTokensAction, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': antiForgeryToken()
+                },
+                body: JSON.stringify({ userId: userId, confirmation: confirmation, reason: reason })
+            })
+                .then(function (response) { return response.json(); })
+                .then(function (answer) {
+                    if (answer.ok) {
+                        revokeModal.hide();
+                        document.location.reload();
+                        return;
+                    }
+
+                    showRevokeTokensError(answer.message ||
+                        (answer.correlationId ? 'Failed. Correlation id: ' + answer.correlationId : 'Failed.'));
+                })
+                .catch(function () {
+                    showRevokeTokensError('The request failed.');
+                });
+        });
     });
 </script>
