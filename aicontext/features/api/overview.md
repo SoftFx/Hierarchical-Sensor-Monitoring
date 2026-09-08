@@ -70,7 +70,7 @@ The Web UI (:44333) has separate MVC controllers for user-facing operations (not
 
 ## Swagger
 
-Available at `https://{server}:44330/api/swagger` when running in development mode.
+Available at `https://{server}:44333/api/swagger` — served on the web-UI port only (`SwaggerSitePortOnlyMiddleware` answers swagger paths on the sensor port with the management area's uniform 404).
 
 ## Contract Areas
 
