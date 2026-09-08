@@ -30,6 +30,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         // need the budget to persist ACROSS authentications share one instance here.
         private int _invalidAttemptLimit = int.MaxValue;
         private ApiTokenInvalidAttemptLimiter _limiterOverride;
+        private ServerConfiguration.ApiTokensConfig _configOverride;
 
         private readonly User _owner = new("owner") { Id = OwnerId };
 
@@ -92,8 +93,17 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             services.AddSingleton(_managerMock.Object);
             services.AddSingleton(_usersMock.Object);
             services.AddSingleton(_securityEvents.Object);
+
+            // One config instance feeds both the handler's Enabled kill switch and the
+            // limiter; Enabled defaults to false, so existing contract tests opt in here.
+            var config = _configOverride ?? new ServerConfiguration.ApiTokensConfig
+            {
+                Enabled = true,
+                InvalidAttemptRateLimit = _invalidAttemptLimit,
+            };
+            services.AddSingleton(config);
             services.AddSingleton(_limiterOverride ?? new ApiTokenInvalidAttemptLimiter(
-                new ServerConfiguration.ApiTokensConfig { InvalidAttemptRateLimit = _invalidAttemptLimit },
+                config,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<ApiTokenInvalidAttemptLimiter>.Instance));
             services.AddAuthentication()
                 .AddScheme<AuthenticationSchemeOptions, HsmApiTokenHandler>(Scheme, _ => { });
@@ -112,6 +122,22 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             return (provider, context);
         }
 
+
+        [Fact]
+        public async Task DisabledKillSwitch_RejectsBeforeAnyLookup()
+        {
+            _configOverride = new ServerConfiguration.ApiTokensConfig { Enabled = false };
+            var credential = ValidCredential();
+            SetupManagerAccepts(credential, BuildInfo());
+
+            var result = await AuthenticateAsync($"Bearer {credential}");
+
+            Assert.False(result.Succeeded);
+            // Denied immediately: the manager's single authentication decision is never
+            // reached while the channel is switched off.
+            _managerMock.Verify(m => m.TryAuthenticate(It.IsAny<string>(),
+                out It.Ref<ApiTokenInfo>.IsAny), Times.Never);
+        }
 
         [Fact]
         public async Task ValidBearer_AuthenticatesWithSingleMinimalIdentity()

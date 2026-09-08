@@ -51,6 +51,12 @@ namespace HSMServer.Controllers
                     config.ServerCertificate.Name = settings.CertificateName;
                     config.ServerCertificate.Key = settings.CertificateKey;
 
+                    // The ApiTokensConfig singleton is the same instance the handler and
+                    // the profile endpoints read per request, so this toggle — unlike the
+                    // ports above — applies immediately, matching the kill-switch
+                    // semantics of ApiTokens.Enabled.
+                    config.ApiTokens.Enabled = settings.ApiTokensEnabled;
+
                     config.ResaveSettings();
                 }
             }
@@ -294,6 +300,9 @@ namespace HSMServer.Controllers
 
             if (config.ServerCertificate.Key != settings.CertificateKey)
                 sb.AppendLine($"ServerCertificate.Key: {config.ServerCertificate.Key} -> {settings.CertificateKey}");
+
+            if (config.ApiTokens.Enabled != settings.ApiTokensEnabled)
+                sb.AppendLine($"ApiTokens.Enabled: {config.ApiTokens.Enabled} -> {settings.ApiTokensEnabled}");
 
             string changes = sb.ToString();
 

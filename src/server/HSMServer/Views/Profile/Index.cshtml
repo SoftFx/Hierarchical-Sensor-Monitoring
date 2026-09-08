@@ -1,0 +1,932 @@
+@using HSMServer.Constants
+@using HSMServer.Helpers
+@using HSMServer.Model.Profile
+@model ProfilePageViewModel
+
+@{
+    ViewData["Title"] = "Profile";
+
+    var userName = Model.UserName?.Trim() ?? string.Empty;
+    var userInitials = AvatarHelper.InitialsOf(userName);
+    var avatarColor = AvatarHelper.ColorOf(Model.UserId);
+    var quotaFull = Model.QuotaUsed >= Model.QuotaMax;
+}
+
+<script>
+    var grantOptionsUrl = "@Html.Raw(Url.Action(ViewConstants.GrantOptionsAction, ViewConstants.ProfileController))";
+    var createTokenUrl = "@Html.Raw(Url.Action(ViewConstants.CreateTokenAction, ViewConstants.ProfileController))";
+    var restrictTokenUrl = "@Html.Raw(Url.Action(ViewConstants.RestrictTokenAction, ViewConstants.ProfileController))";
+    var rotateTokenUrl = "@Html.Raw(Url.Action(ViewConstants.RotateTokenAction, ViewConstants.ProfileController))";
+    var revokeTokenUrl = "@Html.Raw(Url.Action(ViewConstants.RevokeTokenAction, ViewConstants.ProfileController))";
+    var tokensEnabled = @Json.Serialize(Model.TokensEnabled);
+    var generationStateHealthy = @Json.Serialize(Model.GenerationStateHealthy);
+    var allowNoExpiration = @Json.Serialize(Model.AllowNoExpiration);
+    var defaultLifetimeDays = @Model.DefaultLifetimeDays;
+    var maxLifetimeDays = @Model.MaxLifetimeDays;
+    var serverNowMs = @Model.ServerNowUnixMs;
+    var pageRenderedAtMs = Date.now();
+    var tokenGrants = @Json.Serialize(Model.GrantsByTokenId);
+</script>
+
+<style>
+    .profile-container { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; }
+    .profile-avatar { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 500; }
+    .product-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; background-color: #f5f5f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 150px; }
+    .product-badge.manager { border-color: #a7f3d0; background-color: #ecfdf5; }
+    .admin-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; }
+    .token-row { padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; }
+    .token-row:last-child { border-bottom: none; }
+    .token-row:hover { background-color: #f9fafb; }
+    .token-row.dead { opacity: 0.55; }
+    .grant-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; background-color: #f5f5f5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .grant-badge .grant-remove { cursor: pointer; margin-left: 0.25rem; color: #6b7280; font-weight: 700; }
+    .grant-badge .grant-remove:hover { color: #ef4444; }
+    .grants-more-link { font-size: 0.75rem; color: #3b82f6; text-decoration: none; cursor: pointer; white-space: nowrap; }
+    .grants-more-link:hover { text-decoration: underline; }
+    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; background: none; border: 1px solid #d1d5db; border-radius: 0.5rem; cursor: pointer; color: #6b7280; font-size: 0.875rem; }
+    .action-btn:hover { background-color: #f9fafb; }
+    .action-btn.danger { color: #ef4444; }
+    .action-btn.danger:hover { background-color: #fef2f2; border-color: #fca5a5; }
+    .list-header { display: flex; gap: 1rem; padding: 0.75rem 1rem; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 0.875rem; color: #6b7280; border-radius: 0.5rem 0.5rem 0 0; }
+    .token-list { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
+    .token-secret { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8125rem; word-break: break-all; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.75rem; user-select: all; }
+    .status-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border-radius: 9999px; border: 1px solid #d1d5db; }
+    .status-badge.active { color: #15803d; border-color: #a7f3d0; background-color: #ecfdf5; }
+    .status-badge.expired { color: #92400e; border-color: #fde68a; background-color: #fffbeb; }
+    .status-badge.revoked { color: #6b7280; background-color: #f3f4f6; }
+    .status-badge.invalidated { color: #6d28d9; border-color: #ddd6fe; background-color: #f5f3ff; }
+    .op-check { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8125rem; }
+    .modal-error { display: none; }
+</style>
+
+<div class="profile-container">
+    <div class="d-flex align-items-center gap-3 mb-2">
+        <div class="profile-avatar" style="background-color: @avatarColor;">@userInitials</div>
+        <div>
+            <h1 class="h4 fw-semibold mb-0">@userName</h1>
+            <div class="d-flex flex-wrap gap-1 mt-1">
+                @if (Model.IsAdmin)
+                {
+                    <span class="admin-badge">Admin</span>
+                }
+                else
+                {
+                    foreach (var product in Model.Products)
+                    {
+                        <span class="product-badge @(product.IsManager ? "manager" : "")" title="@(product.IsManager ? "Product manager" : "Product viewer")">@product.Name</span>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <h2 class="h5 fw-semibold mb-0">API tokens</h2>
+        @if (Model.TokensEnabled)
+        {
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-secondary" id="quotaBadge">@Model.QuotaUsed / @Model.QuotaMax</span>
+                <button id="createTokenButton" type="button" class="btn d-flex align-items-center gap-1"
+                        style="background-color: #16a34a; color: #fff; border-color: #16a34a;"
+                @(quotaFull ? "disabled" : "") title="@(quotaFull ? "Revoke an unused token to free a slot" : "")">
+                    <i class="fas fa-plus"></i> Create token
+                </button>
+            </div>
+        }
+    </div>
+
+    @if (!Model.TokensEnabled)
+    {
+        if (!Model.GenerationStateHealthy)
+        {
+            <div class="alert alert-warning py-2">
+                Token state is unreliable after a storage problem; lifecycle operations are unavailable. Contact an administrator.
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info py-2">
+                API tokens are disabled by the server configuration; existing tokens no longer authenticate. Listing and revocation remain available.
+            </div>
+        }
+    }
+
+    <div class="token-list">
+        <div class="list-header">
+            <div style="flex: 2;">Name</div>
+            <div style="flex: 3;">Grants</div>
+            <div style="flex: 1;">Created</div>
+            <div style="flex: 1;">Expires</div>
+            <div style="flex: 1;">Last used</div>
+            <div style="width: 84px;">Status</div>
+            <div style="width: 124px; text-align: right;">Actions</div>
+        </div>
+
+        @foreach (var token in Model.Tokens)
+        {
+            var dead = token.Status != "active";
+            <div class="token-row d-flex align-items-center @(dead ? "dead" : "")"
+                 data-entity-id="@token.EntityId"
+                 data-status="@token.Status"
+                 data-name="@token.Name">
+                <div style="flex: 2; min-width: 0;">
+                    <div class="fw-medium text-truncate">@token.Name</div>
+                    @if (!string.IsNullOrEmpty(token.Description))
+                    {
+                        <div class="text-secondary text-truncate" style="font-size: 0.8125rem;">@token.Description</div>
+                    }
+                </div>
+                <div style="flex: 3; min-width: 0;">
+                    <div class="d-flex flex-wrap gap-1 align-items-center grants-cell">
+                        @{
+                            // All grants are rendered; the ones past the third are merely
+                            // hidden, so "+N more" can reveal them without a round trip.
+                            var hiddenCount = Math.Max(0, token.Grants.Count - 3);
+                        }
+                        @foreach (var (grant, index) in token.Grants.Select((g, i) => (g, i)))
+                        {
+                            <span class="grant-badge @(index >= 3 ? "d-none" : "")">@(grant.Operation + " @ " + grant.BoundaryName)</span>
+                        }
+                        @if (hiddenCount > 0)
+                        {
+                            <a class="grants-more-link" href="#" onclick="toggleGrants(this); return false;">+@hiddenCount more</a>
+                        }
+                    </div>
+                </div>
+                <div style="flex: 1;" class="text-secondary" data-timestamp="@token.CreatedAtUnixMs">—</div>
+                <div style="flex: 1;" class="text-secondary" data-timestamp="@(token.ExpiresAtUnixMs)" data-expires="@(token.ExpiresAtUnixMs)">@(token.ExpiresAtUnixMs is null ? "never" : "—")</div>
+                <div style="flex: 1;" class="text-secondary" data-timestamp="@(token.LastUsedAtUnixMs)">@(token.LastUsedAtUnixMs is null ? "never" : "—")</div>
+                <div style="width: 84px;"><span class="status-badge @token.Status">@token.Status</span></div>
+                <div style="width: 124px; text-align: right;" class="d-flex justify-content-end gap-1">
+                    @if (!dead && Model.TokensEnabled)
+                    {
+                        <button type="button" class="action-btn restrict-button" title="Restrict (remove grants or shorten expiration)"><i class="fas fa-compress-alt"></i></button>
+                        <button type="button" class="action-btn rotate-button" title="Rotate (new secret, same grants)"><i class="fas fa-sync-alt"></i></button>
+                    }
+                    @if (!dead && Model.GenerationStateHealthy)
+                    {
+                        <button type="button" class="action-btn danger revoke-button" title="Revoke"><i class="fas fa-ban"></i></button>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Model.Tokens.Count == 0)
+        {
+            <div class="token-row text-secondary">No tokens yet.</div>
+        }
+    </div>
+</div>
+
+@* One-time secret disclosure: the full credential exists exactly here, never in a
+   list. Deliberately non-dismissible by accident — static backdrop, Escape
+   disabled, no header close button: a stray keypress or background click must not destroy
+   a credential that cannot be recovered; the only ways out are the explicit
+   Copy/Close buttons (Close still reloads via hidden.bs.modal). *@
+<div class="modal fade" id="secretModal" tabindex="-1" aria-hidden="true"
+     data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="secretModalTitle">Token created</h5>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning py-2 mb-3">
+                    Copy the token now — it is shown <strong>only once</strong> and cannot be recovered. Store it like a password.
+                </div>
+                <div class="token-secret" id="secretValue"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" id="copySecretButton"><i class="fas fa-copy me-1"></i>Copy</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Create / Restrict share the boundary-first picker; the modal is reconfigured per mode. *@
+<div class="modal fade" id="grantModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="grantModalTitle">Create token</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="grantModalNameBlock">
+                    <div class="mb-3">
+                        <label class="form-label" for="tokenNameInput">Name</label>
+                        <input type="text" class="form-control" id="tokenNameInput" maxlength="200" placeholder="e.g. Grafana dashboard reader">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="tokenDescriptionInput">Description <span class="text-secondary fw-normal">(optional)</span></label>
+                        <input type="text" class="form-control" id="tokenDescriptionInput" maxlength="1000">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Grants</label>
+                    <div class="d-flex gap-2 align-items-center mb-2">
+                        <select class="form-select" id="boundarySelect" style="max-width: 320px;"></select>
+                    </div>
+                    <div id="operationsBlock" class="border rounded p-2 mb-2" style="max-height: 180px; overflow-y: auto; background-color: #f9fafb;"></div>
+                    <div class="d-flex flex-wrap gap-1 align-items-center" id="selectedGrants"></div>
+                    <div class="form-text" id="grantsHint"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="expirySelect">Expiration</label>
+                    <select class="form-select" id="expirySelect" style="max-width: 320px;"></select>
+                    <div class="mt-2" id="customExpiryBlock" style="display: none;">
+                        <input type="date" class="form-control" id="customExpiryInput" style="max-width: 320px;">
+                    </div>
+                    <div class="form-text text-warning-emphasis" id="noExpirationWarning" style="display: none;">
+                        This token will not expire until revoked. Prefer a limited lifetime.
+                    </div>
+                </div>
+
+                <div class="alert alert-danger py-2 modal-error" id="grantModalError"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn" id="grantModalSave" style="background-color: #16a34a; color: #fff; border-color: #16a34a; min-width: 100px;">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="rotateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Rotate token</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="rotateText">Rotate this token?</p>
+                <p class="text-secondary">The current token is revoked immediately and a new secret is issued with the same grants.</p>
+                <div class="mb-3">
+                    <label class="form-label" for="rotateExpirySelect">Expiration</label>
+                    <select class="form-select" id="rotateExpirySelect" style="max-width: 320px;">
+                        <option value="inherit" selected>Keep current expiration</option>
+                        <option value="custom">Shorten to a custom date…</option>
+                    </select>
+                    <div class="mt-2" id="rotateCustomBlock" style="display: none;">
+                        <input type="date" class="form-control" id="rotateCustomInput" style="max-width: 320px;">
+                    </div>
+                </div>
+                <div class="alert alert-danger py-2 modal-error" id="rotateModalError"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="rotateConfirmButton">Rotate</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="revokeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Revoke token</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="revokeText">Revoke this token?</p>
+                <p class="text-secondary">Applications using it stop authenticating immediately. This cannot be undone.</p>
+                <div class="mb-3">
+                    <label class="form-label" for="revokeReasonInput">Reason <span class="text-secondary fw-normal">(optional)</span></label>
+                    <input type="text" class="form-control" id="revokeReasonInput" maxlength="256" placeholder="e.g. leaked in a CI log">
+                </div>
+                <div class="alert alert-danger py-2 modal-error" id="revokeModalError"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="revokeConfirmButton">Revoke</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@Html.AntiForgeryToken()
+
+<script>
+    'use strict';
+
+    // ---- shared state -------------------------------------------------------
+
+    var boundaryOptions = [];       // GET GrantOptions: [{kind,id,name,operations:[..]}]
+    var selectedGrants = [];        // [{operation, boundaryKind, boundaryId, boundaryName}]
+    var restrictOriginalGrants = []; // the restricted token's full current set
+    var restrictCurrentExpiryMs = null; // shorten-only ceiling of the restricted token
+    var rotateCurrentExpiryMs = null;   // shorten-only ceiling of the rotated token
+    var grantModalMode = 'create';  // 'create' | 'restrict'
+    var restrictEntityId = null;
+    var rotateEntityId = null;
+    var revokeEntityId = null;
+
+    function tokenHasGrant(operation, boundary) {
+        return restrictOriginalGrants.some(function (grant) {
+            // The Global boundary is empty text on both ends; older page state may
+            // still carry null from the stored record, so normalize before comparing.
+            return grant.operation === operation &&
+                   grant.boundaryKind === boundary.kind &&
+                   (grant.boundaryId || '') === (boundary.id || '');
+        });
+    }
+
+    function antiForgeryToken() {
+        var input = document.querySelector("input[name='__RequestVerificationToken']");
+        return input ? input.value : '';
+    }
+
+    function showModal(id) { bootstrap.Modal.getOrCreateInstance(document.getElementById(id)).show(); }
+    function hideModal(id) { bootstrap.Modal.getInstance(document.getElementById(id))?.hide(); }
+
+    function showError(elementId, message) {
+        var el = document.getElementById(elementId);
+        el.textContent = message;
+        el.style.display = message ? 'block' : 'none';
+    }
+
+    // ---- timestamps ---------------------------------------------------------
+
+    document.querySelectorAll('[data-timestamp]').forEach(function (cell) {
+        var raw = cell.getAttribute('data-timestamp');
+        if (!raw) return;
+
+        // One malformed cell must never abort this script block: every handler
+        // registration below depends on this loop completing.
+        var ms = parseInt(raw, 10);
+        if (isNaN(ms)) return;
+
+        var date = new Date(ms);
+        cell.textContent = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        cell.title = date.toISOString();
+    });
+
+    function toggleGrants(link) {
+        var cell = link.closest('.grants-cell');
+        cell.querySelectorAll('.grant-badge.d-none').forEach(function (badge) { badge.classList.remove('d-none'); });
+        link.remove();
+    }
+
+    // Server-clock estimate: the render-time server instant advanced by the
+    // client-measured elapsed time. Expiry instants and date-input bounds derive
+    // from THIS, never from Date.now() alone — a browser clock ahead of the server
+    // would push the largest preset past the MaxLifetime cap (max_lifetime on a
+    // one-click option), one behind it would admit already-past days as "today".
+    function serverNow() {
+        return serverNowMs + (Date.now() - pageRenderedAtMs);
+    }
+
+    // UTC date for the date-input min/max attributes: the submitted instant is built
+    // as <date>T23:59:59Z, so a LOCAL-calendar min would still let negative-offset
+    // clients pick a day whose UTC instant is already past.
+    function addDays(days) {
+        return new Date(serverNow() + days * 86400000).toISOString().substring(0, 10);
+    }
+
+    // ---- grant picker (boundary-first) ---------------------------------------
+
+    function loadGrantOptions(callback) {
+        fetch(grantOptionsUrl, { credentials: 'same-origin' })
+            .then(function (response) {
+                // A non-OK answer (expired session among others) must not masquerade as
+                // the legitimate "no boundaries available to you" empty picker.
+                if (!response.ok) throw new Error('grant options request failed');
+
+                return response.json();
+            })
+            .then(function (data) { boundaryOptions = data || []; if (callback) callback(); })
+            .catch(function () {
+                // A failed picker load still opens the modal with an explicit error,
+                // instead of leaving the click silently dead.
+                boundaryOptions = [];
+                showError('grantModalError', 'Failed to load grant options — close and try again.');
+                if (callback) callback();
+            });
+    }
+
+    function renderBoundarySelect() {
+        var select = document.getElementById('boundarySelect');
+        select.innerHTML = '';
+
+        boundaryOptions.forEach(function (boundary, index) {
+            var option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = boundaryLabel(boundary);
+            select.appendChild(option);
+        });
+
+        if (!boundaryOptions.length) {
+            var empty = document.createElement('option');
+            empty.value = '0';
+            empty.textContent = 'No boundaries available to you';
+            select.appendChild(empty);
+        }
+
+        // Re-render the operations on every boundary switch: without this the checkbox
+        // closures kept pushing grants at the PREVIOUSLY rendered boundary while the
+        // dropdown already showed the new one - a silently mis-anchored credential.
+        select.onchange = renderOperations;
+
+        renderOperations();
+    }
+
+    function boundaryLabel(boundary) {
+        var prefix = boundary.kind === 'global' ? '' : boundary.kind.charAt(0).toUpperCase() + boundary.kind.slice(1) + ' — ';
+        return prefix + boundary.name;
+    }
+
+    function currentBoundary() {
+        var select = document.getElementById('boundarySelect');
+        var index = parseInt(select.value, 10);
+        return isNaN(index) ? null : boundaryOptions[index] || null;
+    }
+
+    function renderOperations() {
+        var block = document.getElementById('operationsBlock');
+        var boundary = currentBoundary();
+        block.innerHTML = '';
+
+        if (!boundary) {
+            block.innerHTML = '<div class="text-secondary p-2">No operations available.</div>';
+            return;
+        }
+
+        boundary.operations.forEach(function (operation) {
+            var alreadySelected = selectedGrants.some(function (grant) {
+                return grant.operation === operation &&
+                       grant.boundaryKind === boundary.kind &&
+                       (grant.boundaryId || '') === (boundary.id || '');
+            });
+
+            // Restriction may only remove: hide operations the token does not currently
+            // hold (checking one would be an expansion the server rejects). Grants the
+            // owner can no longer mint are still removable through the badge's ×.
+            if (grantModalMode === 'restrict' && !alreadySelected &&
+                !tokenHasGrant(operation, boundary)) {
+                return;
+            }
+
+            var wrapper = document.createElement('label');
+            wrapper.className = 'op-check';
+
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = alreadySelected;
+            checkbox.onchange = function () {
+                if (this.checked) {
+                    selectedGrants.push({
+                        operation: operation,
+                        boundaryKind: boundary.kind,
+                        boundaryId: boundary.id,
+                        boundaryName: boundary.name
+                    });
+                } else {
+                    removeGrant(operation, boundary.kind, boundary.id);
+                }
+                renderSelectedGrants();
+            };
+
+            var span = document.createElement('span');
+            span.textContent = operation;
+
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(span);
+            block.appendChild(wrapper);
+        });
+
+        renderSelectedGrants();
+    }
+
+    function removeGrant(operation, boundaryKind, boundaryId) {
+        selectedGrants = selectedGrants.filter(function (grant) {
+            return !(grant.operation === operation &&
+                     grant.boundaryKind === boundaryKind &&
+                     (grant.boundaryId || '') === (boundaryId || ''));
+        });
+    }
+
+    function renderSelectedGrants() {
+        var container = document.getElementById('selectedGrants');
+        container.innerHTML = '';
+
+        selectedGrants.forEach(function (grant) {
+            var badge = document.createElement('span');
+            badge.className = 'grant-badge';
+            // String.fromCharCode(64) renders the separator: a bare at-sign inside a
+            // JS string literal is still a Razor code transition at compile time.
+            badge.textContent = grant.operation + ' ' + String.fromCharCode(64) + ' ' + grant.boundaryName;
+
+            // × in BOTH modes: in restrict mode it is the only way to drop a grant the
+            // owner can no longer mint (its boundary may not even be in the picker).
+            var remove = document.createElement('span');
+            remove.className = 'grant-remove';
+            remove.textContent = '×';
+            remove.onclick = function () {
+                removeGrant(grant.operation, grant.boundaryKind, grant.boundaryId);
+                // Operations + badges only: rebuilding the <select> would reset the
+                // chosen boundary to the top of the list on every removal.
+                renderOperations();
+            };
+            badge.appendChild(remove);
+
+            container.appendChild(badge);
+        });
+
+        document.getElementById('grantsHint').textContent = selectedGrants.length
+            ? 'The token will be able to perform exactly these operations at these boundaries.'
+            : (grantModalMode === 'create' ? 'Select at least one operation.' : 'An empty set strips every grant (the token stops working but stays revocable).');
+    }
+
+    // ---- expiry select --------------------------------------------------------
+
+    function resetExpirySelect() {
+        var select = document.getElementById('expirySelect');
+        select.innerHTML = '';
+
+        if (grantModalMode === 'restrict') {
+            addExpiryOption(select, 'keep', 'Keep current expiration', true);
+            addExpiryOption(select, 'custom', 'Shorten to a custom date…', false);
+        } else {
+            // Presets beyond the server's MaxLifetime are removed: a one-click option
+            // the create endpoint would refuse as max_lifetime is a UI bug, not a
+            // shortcut. (DefaultLifetime never exceeds the cap — startup validation.)
+            var presets = [30, 90, 365].filter(function (days) { return days <= maxLifetimeDays; });
+
+            // A configured DefaultLifetime outside the standard presets becomes its own
+            // preselected option — otherwise the browser would silently fall back to
+            // the first preset and ignore the operator's default.
+            if (defaultLifetimeDays > 0 && presets.indexOf(defaultLifetimeDays) === -1) {
+                presets.push(defaultLifetimeDays);
+                presets.sort(function (a, b) { return a - b; });
+            }
+
+            presets.forEach(function (days) {
+                addExpiryOption(select, String(days), days + ' days', days === defaultLifetimeDays);
+            });
+            addExpiryOption(select, 'custom', 'Custom date…', false);
+            if (allowNoExpiration) {
+                addExpiryOption(select, 'never', 'No expiration', false);
+            }
+        }
+
+        document.getElementById('customExpiryBlock').style.display = 'none';
+        document.getElementById('noExpirationWarning').style.display = 'none';
+        document.getElementById('customExpiryInput').value = '';
+        // Today, not tomorrow: the server requires only "in the future", and a token
+        // expiring today/tomorrow must still be shortenable to a same-day value.
+        document.getElementById('customExpiryInput').min = addDays(0);
+        // Create caps the custom date at the server's MaxLifetime (a far-future pick
+        // would be refused as max_lifetime); restrict's shorten-only cap is
+        // token-specific and set by its own handler after this reset.
+        document.getElementById('customExpiryInput').max = grantModalMode === 'create'
+            ? addDays(maxLifetimeDays)
+            : '';
+    }
+
+    function addExpiryOption(select, value, text, selected) {
+        var option = document.createElement('option');
+        option.value = value;
+        option.textContent = text;
+        option.selected = !!selected;
+        select.appendChild(option);
+    }
+
+    function selectedExpiryUtc() {
+        var value = document.getElementById('expirySelect').value;
+        var customBlock = document.getElementById('customExpiryBlock');
+        var customInput = document.getElementById('customExpiryInput');
+
+        if (value === 'keep' || value === 'inherit') return { kind: 'keep' };
+        if (value === 'never') return { kind: 'never' };
+
+        if (value === 'custom' && customInput.value) {
+            var iso = customInput.value + 'T23:59:59Z';
+
+            // The date input is date-granular, so a same-day pick can still land after
+            // the current expiry hour: clamp to the expiry (a same-instant shorten is
+            // a legal no-op server-side).
+            if (restrictCurrentExpiryMs !== null && Date.parse(iso) > restrictCurrentExpiryMs) {
+                iso = new Date(restrictCurrentExpiryMs).toISOString();
+            }
+
+            // Create has the same day-granularity caveat against the server's
+            // MaxLifetime cap: the date-input max still admits same-day picks past the
+            // cap's hour, so the submitted instant is clamped to it. The cap instant
+            // is server-anchored (see serverNow) — clamping to a browser-clock
+            // instant would let a fast client clock overshoot the server's cap.
+            if (grantModalMode === 'create') {
+                var maxLifetimeMs = serverNow() + maxLifetimeDays * 86400000;
+                if (Date.parse(iso) > maxLifetimeMs) {
+                    iso = new Date(maxLifetimeMs).toISOString();
+                }
+            }
+
+            return { kind: 'date', iso: iso };
+        }
+
+        var days = parseInt(value, 10);
+        if (!isNaN(days)) {
+            // Server-anchored: a browser clock ahead of the server must not turn the
+            // largest preset (a day count equal to the cap) into a max_lifetime error.
+            return { kind: 'date', iso: new Date(serverNow() + days * 86400000).toISOString() };
+        }
+
+        return { kind: 'invalid' };
+    }
+
+    document.getElementById('expirySelect').addEventListener('change', function () {
+        document.getElementById('customExpiryBlock').style.display = this.value === 'custom' ? 'block' : 'none';
+        document.getElementById('noExpirationWarning').style.display = this.value === 'never' ? 'block' : 'none';
+    });
+
+    // ---- mutations -------------------------------------------------------------
+
+    function postMutation(url, payload) {
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': antiForgeryToken()
+            },
+            body: JSON.stringify(payload)
+        })
+            .then(function (response) { return response.json(); })
+            .catch(function () { return { ok: false, error: 'network', message: 'The request failed.' }; });
+    }
+
+    function grantsToRequest() {
+        return selectedGrants.map(function (grant) {
+            return { operation: grant.operation, boundaryKind: grant.boundaryKind, boundaryId: grant.boundaryId };
+        });
+    }
+
+    document.getElementById('createTokenButton')?.addEventListener('click', function () {
+        grantModalMode = 'create';
+        selectedGrants = [];
+        restrictOriginalGrants = [];
+        restrictCurrentExpiryMs = null;
+        document.getElementById('grantModalTitle').textContent = 'Create token';
+        document.getElementById('grantModalNameBlock').style.display = 'block';
+        document.getElementById('grantModalSave').textContent = 'Create';
+        document.getElementById('tokenNameInput').value = '';
+        document.getElementById('tokenDescriptionInput').value = '';
+        showError('grantModalError', null);
+
+        loadGrantOptions(function () {
+            renderBoundarySelect();
+            resetExpirySelect();
+            showModal('grantModal');
+        });
+    });
+
+    document.getElementById('grantModalSave').addEventListener('click', function () {
+        var saveButton = this;
+        showError('grantModalError', null);
+
+        // In-flight guard: create/rotate are not safely repeatable client-side (a
+        // double click mints an orphan token / rotates twice); re-enabled on every
+        // failure branch — success either reloads or hands off to the secret modal.
+        saveButton.disabled = true;
+
+        function release() { saveButton.disabled = false; }
+
+        if (grantModalMode === 'create') {
+            var expiry = selectedExpiryUtc();
+
+            // "Custom date…" without a date is a validation error, never a silent
+            // no-expiration: null is reserved for the explicit "No expiration" choice.
+            if (expiry.kind === 'invalid') {
+                release();
+                showError('grantModalError', 'Pick an expiration date.');
+                return;
+            }
+
+            var payload = {
+                name: document.getElementById('tokenNameInput').value.trim(),
+                description: document.getElementById('tokenDescriptionInput').value.trim(),
+                grants: grantsToRequest(),
+                expiresAtUtc: expiry.kind === 'date' ? expiry.iso : null
+            };
+
+            postMutation(createTokenUrl, payload).then(function (answer) {
+                if (answer.ok) {
+                    chainToSecret('grantModal', answer.token, 'Token created');
+                } else {
+                    release();
+                    showError('grantModalError', answer.message || 'Creation failed.');
+                }
+            });
+        } else {
+            var restrictExpiry = selectedExpiryUtc();
+
+            if (restrictExpiry.kind === 'invalid') {
+                release();
+                showError('grantModalError', 'Pick an expiration date.');
+                return;
+            }
+
+            postMutation(restrictTokenUrl, {
+                entityId: restrictEntityId,
+                grants: grantsToRequest(),
+                expiresAtUtc: restrictExpiry.kind === 'date' ? restrictExpiry.iso : null
+            }).then(function (answer) {
+                if (answer.ok) {
+                    hideModal('grantModal');
+                    window.location.reload();
+                } else {
+                    release();
+                    showError('grantModalError', answer.message || 'Restriction failed.');
+                }
+            });
+        }
+    });
+
+    document.querySelectorAll('.restrict-button').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var row = button.closest('.token-row');
+            restrictEntityId = row.getAttribute('data-entity-id');
+            grantModalMode = 'restrict';
+            selectedGrants = (tokenGrants[restrictEntityId] || []).slice();
+            // The token's full current set: restriction may only remove from it, so the
+            // picker hides operations outside it (checking those would be an expansion).
+            restrictOriginalGrants = selectedGrants.slice();
+            document.getElementById('grantModalTitle').textContent = 'Restrict token';
+            document.getElementById('grantModalNameBlock').style.display = 'none';
+            document.getElementById('grantModalSave').textContent = 'Restrict';
+            showError('grantModalError', null);
+
+            // Restriction may only SHORTEN: cap the custom-date input at the token's
+            // current expiry (read from the row's Expires cell). The submitted instant
+            // is additionally clamped to the expiry in selectedExpiryUtc, because the
+            // date-granular max still admits same-day picks past the expiry hour.
+            var expiresRaw = row.querySelector('[data-expires]');
+            restrictCurrentExpiryMs = expiresRaw ? parseInt(expiresRaw.getAttribute('data-expires'), 10) : NaN;
+            if (isNaN(restrictCurrentExpiryMs)) restrictCurrentExpiryMs = null;
+
+            loadGrantOptions(function () {
+                renderBoundarySelect();
+                resetExpirySelect();
+                document.getElementById('customExpiryInput').max = restrictCurrentExpiryMs === null
+                    ? ''
+                    : new Date(restrictCurrentExpiryMs - 1).toISOString().substring(0, 10);
+                showModal('grantModal');
+            });
+        });
+    });
+
+    // ---- one-time secret ---------------------------------------------------------
+
+    function showSecret(token, title) {
+        document.getElementById('secretModalTitle').textContent = title || 'Token created';
+        document.getElementById('secretValue').textContent = token;
+        showModal('secretModal');
+    }
+
+    // Shows the secret modal only after the source modal finished hiding: Bootstrap
+    // restores modal-open/scroll compensation on the hide TRANSITION, and a
+    // synchronous show-while-hiding loses the body scroll lock. If the source modal is
+    // ALREADY hidden (the user dismissed it while the request was in flight — hide()
+    // fires no event then), show immediately: the one-time secret must never be
+    // dropped on the floor.
+    function chainToSecret(fromModalId, token, title) {
+        var element = document.getElementById(fromModalId);
+
+        if (!element.classList.contains('show')) {
+            showSecret(token, title);
+            return;
+        }
+
+        element.addEventListener('hidden.bs.modal', function () {
+            showSecret(token, title);
+        }, { once: true });
+
+        hideModal(fromModalId);
+    }
+
+    document.getElementById('copySecretButton').addEventListener('click', function () {
+        var value = document.getElementById('secretValue').textContent;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(value);
+        }
+        this.textContent = 'Copied';
+        var self = this;
+        setTimeout(function () { self.innerHTML = '<i class="fas fa-copy me-1"></i>Copy'; }, 1500);
+    });
+
+    document.getElementById('secretModal').addEventListener('hidden.bs.modal', function () {
+        window.location.reload();
+    });
+
+    // ---- rotate ---------------------------------------------------------------------
+
+    document.querySelectorAll('.rotate-button').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var row = button.closest('.token-row');
+            rotateEntityId = row.getAttribute('data-entity-id');
+            document.getElementById('rotateText').textContent = 'Rotate "' + (row.getAttribute('data-name') || 'token') + '"?';
+            document.getElementById('rotateExpirySelect').value = 'inherit';
+            document.getElementById('rotateCustomBlock').style.display = 'none';
+            document.getElementById('rotateCustomInput').value = '';
+            document.getElementById('rotateCustomInput').min = addDays(0);
+
+            // Rotation may only shorten a finite expiry: cap and clamp the custom date
+            // at the token's current expiry (same date-granularity caveat as restrict).
+            var expiresRaw = row.querySelector('[data-expires]');
+            rotateCurrentExpiryMs = expiresRaw ? parseInt(expiresRaw.getAttribute('data-expires'), 10) : NaN;
+            if (isNaN(rotateCurrentExpiryMs)) rotateCurrentExpiryMs = null;
+
+            document.getElementById('rotateCustomInput').max = rotateCurrentExpiryMs === null
+                ? ''
+                : new Date(rotateCurrentExpiryMs - 1).toISOString().substring(0, 10);
+
+            showError('rotateModalError', null);
+            showModal('rotateModal');
+        });
+    });
+
+    document.getElementById('rotateExpirySelect').addEventListener('change', function () {
+        document.getElementById('rotateCustomBlock').style.display = this.value === 'custom' ? 'block' : 'none';
+    });
+
+    document.getElementById('rotateConfirmButton').addEventListener('click', function () {
+        var confirmButton = this;
+        showError('rotateModalError', null);
+
+        // Read the custom date only when "Shorten to a custom date…" is the selected
+        // option: a value typed earlier and then switched back to "Keep current" must
+        // not silently shorten the rotated token.
+        var wantsCustom = document.getElementById('rotateExpirySelect').value === 'custom';
+        var custom = wantsCustom ? document.getElementById('rotateCustomInput').value : '';
+
+        if (wantsCustom && !custom) {
+            showError('rotateModalError', 'Pick an expiration date.');
+            return;
+        }
+
+        // In-flight guard: a double click rotates twice and the first replacement
+        // secret is lost; the failure branch re-enables, success reloads via the
+        // secret modal.
+        confirmButton.disabled = true;
+
+        var iso = null;
+        if (custom) {
+            iso = custom + 'T23:59:59Z';
+
+            if (rotateCurrentExpiryMs !== null && Date.parse(iso) > rotateCurrentExpiryMs) {
+                iso = new Date(rotateCurrentExpiryMs).toISOString();
+            }
+        }
+
+        postMutation(rotateTokenUrl, {
+            entityId: rotateEntityId,
+            expiresAtUtc: iso
+        }).then(function (answer) {
+            if (answer.ok) {
+                chainToSecret('rotateModal', answer.token, 'Token rotated');
+            } else {
+                confirmButton.disabled = false;
+                showError('rotateModalError', answer.message || 'Rotation failed.');
+            }
+        });
+    });
+
+    // ---- revoke -----------------------------------------------------------------------
+
+    document.querySelectorAll('.revoke-button').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var row = button.closest('.token-row');
+            revokeEntityId = row.getAttribute('data-entity-id');
+            document.getElementById('revokeText').textContent = 'Revoke "' + (row.getAttribute('data-name') || 'token') + '"?';
+            document.getElementById('revokeReasonInput').value = '';
+            showError('revokeModalError', null);
+            showModal('revokeModal');
+        });
+    });
+
+    document.getElementById('revokeConfirmButton').addEventListener('click', function () {
+        showError('revokeModalError', null);
+
+        // Deliberately no in-flight guard, unlike create/rotate: revocation is
+        // idempotent server-side, so a double submit cannot mint or destroy anything.
+
+        postMutation(revokeTokenUrl, {
+            entityId: revokeEntityId,
+            reason: document.getElementById('revokeReasonInput').value.trim()
+        }).then(function (answer) {
+            if (answer.ok) {
+                hideModal('revokeModal');
+                window.location.reload();
+            } else {
+                showError('revokeModalError', answer.message || 'Revocation failed.');
+            }
+        });
+    });
+</script>

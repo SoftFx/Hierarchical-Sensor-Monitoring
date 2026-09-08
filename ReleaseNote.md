@@ -1,5 +1,9 @@
 # HSM Server
 
+## API tokens
+* Users can now create and manage their own personal API tokens from the new Profile page (header user menu → Profile): create with an operation/boundary grant picker and one-time secret disclosure, list, restrict, rotate and revoke. Tokens are disabled by default — enable them from Settings → Server ("Enable API tokens", effective immediately) or with `ApiTokens.Enabled` in the server configuration file (`MaxTokensPerUser`, `DefaultLifetime` and `MaxLifetime` are configurable too). Every finite lifetime is capped at `MaxLifetime` (365 days by default); `AllowNoExpiration` gates only the explicit "No expiration" option, which is the sole way past that cap. Existing tokens keep authenticating only while the feature is enabled; listing and revocation remain available for cleanup when it is off.
+* The web UI header now has a user menu (avatar + name): Profile and Logout.
+
 ## Management API
 * Added REST CRUD for alert templates at `/api/v1/alertTemplates` (list with pagination, get, create, update, delete) for non-interactive clients — authenticated with a personal API token (`hsm_pat_` bearer) and authorized per folder through the token's `alerts:read`/`alerts:write` grants intersected with the owner's current rights. SitePort only; JSON errors.
 * Added read-only REST access to alert schedules at `/api/v1/alertSchedules` (list with pagination, get by id); requires an `alerts:read` grant at any boundary accessible to the token's owner, and sensor references are filtered to the caller's visible products.

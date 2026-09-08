@@ -1,9 +1,10 @@
 # Tests: API tokens (authentication foundation)
 
-> Owner: server | Last reviewed: 2026-09-01 | Canonical: yes
+> Owner: server | Last reviewed: 2026-09-07 | Canonical: yes
 
-Coverage matrix for the token domain/persistence foundation (steps 1–2) and the HTTP
-authentication/authorization surface (step 3).
+Coverage matrix for the token domain/persistence foundation (steps 1–2), the HTTP
+authentication/authorization surface (step 3), and the personal token management UI
+(step 4 PR A).
 
 ## Token material (`ApiTokenMaterialTests`)
 
@@ -63,6 +64,7 @@ authentication/authorization surface (step 3).
 - No/foreign credentials (missing header, Basic, bare Bearer, non-hsm bearer) are `NoResult` with no manager lookup — another scheme's business.
 - Duplicated `Authorization` values are `NoResult` with no manager lookup (the `", "`-joined string would parse as the first value's scheme and hide the bearer).
 - A credential claiming the `hsm_pat_` prefix but failing the shape check (short, no separator, foreign alphabet, wrong secret length) fails closed with no manager lookup.
+- `ApiTokens.Enabled = false` (kill switch) rejects even a valid credential before any parse or lookup — the manager decision is never reached while the channel is off.
 - Failure events carry a TokenId only when it is canonical: a shape-valid credential with an attacker-chosen id alphabet records the failure with a null TokenId; a canonical-shaped failure records the public id.
 - Manager rejection and deleted-owner both fail closed; challenge is a generic 401 with `WWW-Authenticate: Bearer` and no redirect.
 - Success marks the token used exactly once; every failure path never marks it.
@@ -98,6 +100,37 @@ The design's privilege-reduction matrix, recomputed per call:
 - Global operations are admin-only; a sensor resolves through its product's current boundary (a parentless sensor fails closed to 404, not a cast exception); a deleted product → 404.
 - `IsVisible` (list filtering) requires owner sight plus a grant **for the asked operation** at the boundary (mere reach does not disclose an item the item endpoint would 403); for a write operation it also requires the owner's capability (Manager role); a materialised folder-manager role enables product write.
 - Denial security events preserve the decision: 404 denials are recorded as `AuthorizationNotFound`, 403 denials as `AuthorizationDenied` — the enumeration-probe signal stays visible in the stored trail.
+
+## Issuance-side owner filter (`ApiTokenGrantOptionsServiceTests`)
+
+- Admin picker: a Global boundary with every catalog operation (including the global-only `system-health:read` and all writes) plus every product and folder from the live stores; non-global boundaries never offer `system-health:read`.
+- ProductViewer: reads only (no `:write` operation offered), no Global boundary at all.
+- ProductManager: writes on the manager product, reads on the viewer product — per-boundary filtering.
+- Folder roles fold into a folder boundary with the Manager gate for writes.
+- Stale roles (deleted product/folder) anchor nothing and never appear.
+- `IsGrantableByOwner` matrix: viewer cannot write; foreign/dead boundaries refused; Global and `system-health:read` admin-only; a Global pair carrying an id is malformed even for an admin; unknown catalog operations fail closed.
+
+## Profile endpoints (`ProfileControllerTests`)
+
+- Create: valid request returns the one-time secret exactly once with the entity id.
+- Create gates: `disabled` (no manager call at all), `unhealthy`, `quota` (at and above `MaxTokensPerUser`), `no_grants`, `invalid_name` (blank), `past_expiry`, `max_lifetime` (beyond the configured cap and beyond the shipped 365d default; within the cap passes), `no_expiration_not_allowed` without the config switch (allowed with it), `duplicate_grant` (same pair in different Guid casing = same boundary), `grant_not_allowed` (picker hiding is not the enforcement), `create_failed` (manager false surfaces).
+- Create with `Kind.Unspecified` expiry passes the value through as UTC (the manager contract), never re-read as the host's local zone.
+- Restrict: the remaining set reaches the manager canonicalized; foreign entity ids answer `not_found` with no manager call (indistinguishable from unknown); revoked tokens are `not_found`; `disabled` while the kill switch is on.
+- Rotate: returns the new secret once; `past_expiry` refused before the manager.
+- Revoke: own token revoked with the signed-in actor; works with tokens disabled (the kill switch's documented cleanup path); `unhealthy` denies; foreign ids `not_found`.
+- Page: lists only the caller's tokens and maps quota/state flags (`TokensEnabled` = `Enabled AND healthy`); `GrantOptions` returns an empty picker while disabled or unhealthy and delegates to the owner filter otherwise.
+- Page timestamps are Unix milliseconds (entity ticks minus the .NET-epoch offset) — pinned against a known instant.
+- Page `ServerNowUnixMs` (the form's clock anchor for presets, the cap clamp and date-input bounds) is Unix milliseconds within the test's before/after window — a ticks value here would shift every derived expiry instant ~2000 years off.
+- A generation-invalidated record (emergency-revoke generation above the at-issue stamps, both row timestamps unset) lists as `invalidated`, not `active`.
+
+## Manager quota (`ApiTokenManagerTests`)
+
+- `TryCreateToken` with a configured `MaxTokensPerUser = 1`: first live token mints, the second is refused inside the same state-locked path (no caller-side check races past the cap); revoking frees the slot immediately without reconciliation; a null config (direct construction) is unlimited.
+
+## Configuration (`ApiTokensConfigTests`)
+
+- Defaults are upgrade-safe: channel disabled, quota 10, no unlimited tokens, 90d default lifetime, 365d max lifetime.
+- Startup validation: `MaxTokensPerUser` < 1, non-positive/oversized `DefaultLifetime` and `MaxLifetime`, and a `DefaultLifetime` above `MaxLifetime` (the preselected preset must not be a guaranteed create error) throw with the key(s) named.
 
 ## Pipeline order (`ManagementPipelineOrderTests`)
 
@@ -155,3 +188,8 @@ The design's privilege-reduction matrix, recomputed per call:
 - [x] Token principal never replaced by UserProcessorMiddleware
 - [x] Owner downgrade/deletion and resource moves take effect on the next request
 - [x] Global grants never act as wildcards over scoped resources
+- [x] Token management is cookie-only: the endpoints sit behind the cookie-pinned default policy and the legacy bearer guard
+- [x] Issuance never exceeds owner rights: every requested grant re-checked server-side (`IsGrantableByOwner`), picker filtering is UX only
+- [x] Foreign entity ids are indistinguishable from unknown ones on every lifecycle endpoint
+- [x] Kill switch denies authentication and issuance immediately; cookie list/revoke stay available
+- [x] The full credential appears exactly once (create/rotate response only), never in list/page payloads

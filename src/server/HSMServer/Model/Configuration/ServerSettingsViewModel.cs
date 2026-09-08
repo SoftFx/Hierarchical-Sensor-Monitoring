@@ -19,6 +19,10 @@ namespace HSMServer.Model.Configuration
         public int SitePort { get; set; }
 
 
+        [Display(Name = "Enable API tokens")]
+        public bool ApiTokensEnabled { get; set; }
+
+
         public ServerSettingsViewModel() { }
 
         public ServerSettingsViewModel(IServerConfig config)
@@ -28,6 +32,8 @@ namespace HSMServer.Model.Configuration
 
             SensorsPort = config.Kestrel.SensorPort;
             SitePort = config.Kestrel.SitePort;
+
+            ApiTokensEnabled = config.ApiTokens.Enabled;
         }
     }
 }

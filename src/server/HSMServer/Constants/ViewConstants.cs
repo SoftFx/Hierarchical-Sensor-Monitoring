@@ -18,11 +18,18 @@
         public const string NotificationsController = "Notifications";
         public const string HistoryController = "SensorHistory";
         public const string JournalController = "Journal";
+        public const string ProfileController = "Profile";
 
         public const string LogoutAction = "Logout";
         public const string RegistrationAction = "Registration";
 
         public const string IndexAction = "Index";
+
+        public const string GrantOptionsAction = "GrantOptions";
+        public const string CreateTokenAction = "CreateToken";
+        public const string RestrictTokenAction = "RestrictToken";
+        public const string RotateTokenAction = "RotateToken";
+        public const string RevokeTokenAction = "RevokeToken";
 
         public const string RemoveProductAction = "RemoveProduct";
         public const string EditProductAction = "EditProduct";
