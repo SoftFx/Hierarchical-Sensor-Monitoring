@@ -17,6 +17,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.False(config.Enabled);
             Assert.Equal(10, config.MaxTokensPerUser);
             Assert.False(config.AllowNoExpiration);
+            Assert.Equal(TimeSpan.FromDays(365), config.MaxLifetime);
             Assert.Equal(TimeSpan.FromDays(90), config.DefaultLifetime);
             Assert.Equal(TimeSpan.FromDays(30), config.TokenRecordRetention);
             Assert.Equal(TimeSpan.FromDays(30), config.SecurityEventRetention);
@@ -68,6 +69,41 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void MaxLifetime_BelowOneDay_Throws()
+        {
+            var config = new ApiTokensConfig { MaxLifetime = TimeSpan.FromHours(12) };
+
+            var ex = Assert.Throws<InvalidOperationException>(config.Validate);
+
+            Assert.Contains(nameof(ApiTokensConfig.MaxLifetime), ex.Message);
+        }
+
+        [Fact]
+        public void MaxLifetime_AboveTenYears_Throws()
+        {
+            var config = new ApiTokensConfig { MaxLifetime = TimeSpan.FromDays(3651) };
+
+            Assert.Throws<InvalidOperationException>(config.Validate);
+        }
+
+        [Fact]
+        public void DefaultLifetime_AboveMaxLifetime_Throws()
+        {
+            // The form preselects DefaultLifetime; a default over the cap would be a
+            // preset the create endpoint always refuses.
+            var config = new ApiTokensConfig
+            {
+                DefaultLifetime = TimeSpan.FromDays(90),
+                MaxLifetime = TimeSpan.FromDays(30),
+            };
+
+            var ex = Assert.Throws<InvalidOperationException>(config.Validate);
+
+            Assert.Contains(nameof(ApiTokensConfig.DefaultLifetime), ex.Message);
+            Assert.Contains(nameof(ApiTokensConfig.MaxLifetime), ex.Message);
+        }
+
+        [Fact]
         public void ValidIssuanceKnobs_PassValidation()
         {
             var config = new ApiTokensConfig
@@ -76,6 +112,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 MaxTokensPerUser = 25,
                 AllowNoExpiration = true,
                 DefaultLifetime = TimeSpan.FromDays(30),
+                MaxLifetime = TimeSpan.FromDays(60),
             };
 
             config.Validate();

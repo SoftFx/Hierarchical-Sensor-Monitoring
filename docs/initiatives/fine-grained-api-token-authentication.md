@@ -392,6 +392,7 @@ Introduce an explicit configuration section, names illustrative:
 ```text
 ApiTokens.Enabled
 ApiTokens.DefaultLifetime
+ApiTokens.MaxLifetime
 ApiTokens.AllowNoExpiration
 ApiTokens.MaxTokensPerUser
 ApiTokens.TokenRecordRetention

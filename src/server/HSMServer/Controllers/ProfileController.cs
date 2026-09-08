@@ -83,6 +83,9 @@ namespace HSMServer.Controllers
                 QuotaUsed = _tokens.CountQuotaEligibleTokens(ownerId),
                 QuotaMax = _config.MaxTokensPerUser,
                 DefaultLifetimeDays = Math.Max(1, (int)_config.DefaultLifetime.TotalDays),
+                // Floored on purpose: the client-side cap must never sit ABOVE the
+                // server's exact MaxLifetime instant.
+                MaxLifetimeDays = Math.Max(1, (int)_config.MaxLifetime.TotalDays),
             });
         }
 
@@ -112,7 +115,13 @@ namespace HSMServer.Controllers
             if (request is null)
                 return Fail("invalid_request", "The request body is missing.");
 
-            var name = (request.Name ?? string.Empty).Trim();
+            // Control characters are normalized to spaces by the manager's Sanitize
+            // before the empty-name rejection there; mirror that here so a
+            // control-only name gets invalid_name instead of a bare create_failed.
+            var name = new string((request.Name ?? string.Empty)
+                .Select(c => char.IsControl(c) ? ' ' : c)
+                .ToArray())
+                .Trim();
             if (name.Length is < 1 or > MaxNameLength)
                 return Fail("invalid_name", $"The token name must be 1-{MaxNameLength} characters long.");
 
@@ -152,9 +161,18 @@ namespace HSMServer.Controllers
             else
             {
                 var requested = NormalizeUtc(request.ExpiresAtUtc.Value);
+                var now = DateTime.UtcNow;
 
-                if (requested <= DateTime.UtcNow)
+                if (requested <= now)
                     return Fail("past_expiry", "The expiration date must be in the future.");
+
+                // The lifetime cap that makes AllowNoExpiration = false mean something:
+                // without it a far-future custom date would still mint a practically
+                // permanent credential on a deployment that switched unlimited off.
+                // Boundary-inclusive — the exact cap is a valid choice, not an error.
+                if (requested - now > _config.MaxLifetime)
+                    return Fail("max_lifetime",
+                        $"The token lifetime must not exceed {_config.MaxLifetime.TotalDays:0.##} days.");
 
                 expiresAtUtc = requested;
             }
@@ -486,9 +504,9 @@ namespace HSMServer.Controllers
             user.ProductsRoles
                 .GroupBy(r => r.Item1)
                 .Select(g => (Id: g.Key, IsManager: g.Any(r => r.Item2 == ProductRoleEnum.ProductManager)))
-                .Where(r => _cache.TryGetProductNameById(r.Id, out _))
-                .Select(r => new ProfileProductRoleViewModel(
-                    _cache.TryGetProductNameById(r.Id, out var name) ? name : string.Empty, r.IsManager))
+                .Select(r => (_cache.TryGetProductNameById(r.Id, out var name) ? name : null, r.IsManager))
+                .Where(r => r.Item1 is not null)
+                .Select(r => new ProfileProductRoleViewModel(r.Item1, r.IsManager))
                 .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 

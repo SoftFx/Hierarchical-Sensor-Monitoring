@@ -49,6 +49,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             SetupProductName(ProductA, "Product A");
             SetupProductName(ProductB, "Product B");
 
+            // Root-product registry: a Product boundary must be a root (picker set),
+            // not just any node TryGetProduct resolves.
+            _cache.Setup(c => c.GetProducts()).Returns(new List<ProductModel> { _productA, _productB });
+            _folders.Setup(f => f.GetValues()).Returns(new List<FolderModel>());
+
             SetupFolderLookup(FolderF, _folderF);
         }
 
@@ -139,6 +144,31 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var options = CreateService().GetBoundaryOptions(_user);
 
             Assert.Empty(options);
+        }
+
+
+        [Fact]
+        public void SubProductBoundary_NotGrantableEvenForAdmin()
+        {
+            // A Product boundary means a ROOT product (what GetProducts returns and the
+            // picker offers). TryGetProduct alone also resolves sub-product nodes, and
+            // a grant anchored there would be a silently dead boundary.
+            _user.IsAdmin = true;
+
+            var subProduct = Guid.NewGuid();
+            var subModel = new ProductModel(
+                EntitiesFactory.BuildProductEntity(name: "Sub") with { Id = subProduct.ToString() });
+
+            _cache.Setup(c => c.GetProducts()).Returns(new List<ProductModel> { _productA });
+            SetupProductLookup(subProduct, subModel);
+
+            var service = CreateService();
+            var options = service.GetBoundaryOptions(_user);
+
+            Assert.True(options.Any(o => o.Id == ProductA.ToString()), "root product must be offered");
+            Assert.False(options.Any(o => o.Id == subProduct.ToString()), "sub-product must not be offered");
+            Assert.False(service.IsGrantableByOwner(_user, ApiTokenOperations.ProductsRead,
+                ApiTokenBoundaryKind.Product, subProduct.ToString()));
         }
 
 

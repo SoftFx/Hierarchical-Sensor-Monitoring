@@ -135,6 +135,13 @@ namespace HSMServer.Authentication
                         !_cache.TryGetProduct(productId, out var product) || product is null)
                         return false;
 
+                    // Root products only — the same set the picker offers (GetProducts)
+                    // and the app itself treats as authorization boundaries. TryGetProduct
+                    // alone also resolves sub-product nodes, and a grant anchored there
+                    // would be a silently dead boundary nothing ever resolves to.
+                    if (_cache.GetProducts().All(p => p.Id != productId))
+                        return false;
+
                     // IsProductAvailable carries the IsAdmin fallback; plain
                     // IsUserProduct would deny an admin without per-product roles.
                     if (!owner.IsProductAvailable(productId))

@@ -113,7 +113,7 @@ The design's privilege-reduction matrix, recomputed per call:
 ## Profile endpoints (`ProfileControllerTests`)
 
 - Create: valid request returns the one-time secret exactly once with the entity id.
-- Create gates: `disabled` (no manager call at all), `unhealthy`, `quota` (at and above `MaxTokensPerUser`), `no_grants`, `invalid_name` (blank), `past_expiry`, `no_expiration_not_allowed` without the config switch (allowed with it), `duplicate_grant` (same pair in different Guid casing = same boundary), `grant_not_allowed` (picker hiding is not the enforcement), `create_failed` (manager false surfaces).
+- Create gates: `disabled` (no manager call at all), `unhealthy`, `quota` (at and above `MaxTokensPerUser`), `no_grants`, `invalid_name` (blank), `past_expiry`, `max_lifetime` (beyond the configured cap and beyond the shipped 365d default; within the cap passes), `no_expiration_not_allowed` without the config switch (allowed with it), `duplicate_grant` (same pair in different Guid casing = same boundary), `grant_not_allowed` (picker hiding is not the enforcement), `create_failed` (manager false surfaces).
 - Create with `Kind.Unspecified` expiry passes the value through as UTC (the manager contract), never re-read as the host's local zone.
 - Restrict: the remaining set reaches the manager canonicalized; foreign entity ids answer `not_found` with no manager call (indistinguishable from unknown); revoked tokens are `not_found`; `disabled` while the kill switch is on.
 - Rotate: returns the new secret once; `past_expiry` refused before the manager.
@@ -128,8 +128,8 @@ The design's privilege-reduction matrix, recomputed per call:
 
 ## Configuration (`ApiTokensConfigTests`)
 
-- Defaults are upgrade-safe: channel disabled, quota 10, no unlimited tokens, 90d default lifetime.
-- Startup validation: `MaxTokensPerUser` < 1 and non-positive/oversized `DefaultLifetime` throw with the key named.
+- Defaults are upgrade-safe: channel disabled, quota 10, no unlimited tokens, 90d default lifetime, 365d max lifetime.
+- Startup validation: `MaxTokensPerUser` < 1, non-positive/oversized `DefaultLifetime` and `MaxLifetime`, and a `DefaultLifetime` above `MaxLifetime` (the preselected preset must not be a guaranteed create error) throw with the key(s) named.
 
 ## Pipeline order (`ManagementPipelineOrderTests`)
 

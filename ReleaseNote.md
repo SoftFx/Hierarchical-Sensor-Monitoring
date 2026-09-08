@@ -1,7 +1,7 @@
 # HSM Server
 
 ## API tokens
-* Users can now create and manage their own personal API tokens from the new Profile page (header user menu → Profile): create with an operation/boundary grant picker and one-time secret disclosure, list, restrict, rotate and revoke. Tokens are disabled by default — enable them from Settings → Server ("Enable API tokens", effective immediately) or with `ApiTokens.Enabled` in the server configuration file (`MaxTokensPerUser` and `DefaultLifetime` are configurable too). `AllowNoExpiration` gates only the explicit "No expiration" option — it is not a lifetime cap, and a far-future custom date remains possible. Existing tokens keep authenticating only while the feature is enabled; listing and revocation remain available for cleanup when it is off.
+* Users can now create and manage their own personal API tokens from the new Profile page (header user menu → Profile): create with an operation/boundary grant picker and one-time secret disclosure, list, restrict, rotate and revoke. Tokens are disabled by default — enable them from Settings → Server ("Enable API tokens", effective immediately) or with `ApiTokens.Enabled` in the server configuration file (`MaxTokensPerUser`, `DefaultLifetime` and `MaxLifetime` are configurable too). Every finite lifetime is capped at `MaxLifetime` (365 days by default); `AllowNoExpiration` gates only the explicit "No expiration" option, which is the sole way past that cap. Existing tokens keep authenticating only while the feature is enabled; listing and revocation remain available for cleanup when it is off.
 * The web UI header now has a user menu (avatar + name): Profile and Logout.
 
 ## Management API

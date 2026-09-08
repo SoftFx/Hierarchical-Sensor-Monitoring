@@ -37,6 +37,11 @@ namespace HSMServer.Model.Profile
         public int QuotaMax { get; init; }
 
         public int DefaultLifetimeDays { get; init; }
+
+        // Day-granular ceiling for the create form's custom-date input, from
+        // ApiTokens.MaxLifetime (floored, so the client cap never exceeds the exact
+        // server-side instant).
+        public int MaxLifetimeDays { get; init; }
     }
 
     public sealed record ProfileProductRoleViewModel(string Name, bool IsManager);

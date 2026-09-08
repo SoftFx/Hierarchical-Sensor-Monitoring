@@ -25,6 +25,8 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             : base(fixture, registerFixture) { }
 
 
+        // 0 = unlimited through the internal test ctor; the production ctor takes the
+        // validated config (MaxTokensPerUser >= 1) and throws on null.
         private ApiTokenManager CreateManager() =>
             new(_databaseCoreManager.DatabaseCore, NullLogger<ApiTokenManager>.Instance);
 
@@ -34,8 +36,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         {
             // The hard quota bound lives INSIDE the manager's state-locked create path
             // (its ApiTokens.MaxTokensPerUser), not in a caller-side pre-check: two
-            // concurrent creates cannot both pass such a check and exceed the cap. A
-            // null config (direct construction) is deliberately unlimited.
+            // concurrent creates cannot both pass such a check and exceed the cap.
             using var capped = new ApiTokenManager(_databaseCoreManager.DatabaseCore,
                 NullLogger<ApiTokenManager>.Instance,
                 new HSMServer.ServerConfiguration.ApiTokensConfig { MaxTokensPerUser = 1 });

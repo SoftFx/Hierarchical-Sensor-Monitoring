@@ -161,6 +161,22 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public void CreateToken_ControlOnlyName_DeniedAsInvalidName()
+        {
+            // The manager's Sanitize maps control characters to spaces before its own
+            // empty-name rejection; without mirroring that here the answer was a bare
+            // create_failed pointing at a server log that says nothing.
+            var request = BuildCreateRequest();
+            request.Name = "";
+
+            var answer = Mutate(CreateController().CreateToken(request));
+
+            Assert.False(answer.Ok);
+            Assert.Equal("invalid_name", answer.Error);
+        }
+
+
+        [Fact]
         public void CreateToken_PastExpiry_Denied()
         {
             var request = BuildCreateRequest();
@@ -170,6 +186,51 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.False(answer.Ok);
             Assert.Equal("past_expiry", answer.Error);
+        }
+
+
+        [Fact]
+        public void CreateToken_BeyondMaxLifetime_Denied()
+        {
+            // The cap is what makes AllowNoExpiration = false a policy bound: without
+            // it, a year-9999 custom date would still mint a practically permanent
+            // credential on a deployment that switched unlimited tokens off.
+            _config.MaxLifetime = TimeSpan.FromDays(10);
+            var request = BuildCreateRequest();
+            request.ExpiresAtUtc = DateTime.UtcNow.AddDays(11);
+
+            var answer = Mutate(CreateController().CreateToken(request));
+
+            Assert.False(answer.Ok);
+            Assert.Equal("max_lifetime", answer.Error);
+        }
+
+
+        [Fact]
+        public void CreateToken_WithinMaxLifetime_Allowed()
+        {
+            _config.MaxLifetime = TimeSpan.FromDays(10);
+            var request = BuildCreateRequest();
+            request.ExpiresAtUtc = DateTime.UtcNow.AddDays(9);
+
+            var answer = Mutate(CreateController().CreateToken(request));
+
+            Assert.True(answer.Ok);
+        }
+
+
+        [Fact]
+        public void CreateToken_BeyondDefaultMaxLifetime_Denied()
+        {
+            // Pins the shipped default: one year, so the form's 365-day preset stays
+            // exactly at the cap while a longer custom date is refused.
+            var request = BuildCreateRequest();
+            request.ExpiresAtUtc = DateTime.UtcNow.AddDays(366);
+
+            var answer = Mutate(CreateController().CreateToken(request));
+
+            Assert.False(answer.Ok);
+            Assert.Equal("max_lifetime", answer.Error);
         }
 
 
@@ -466,6 +527,7 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal("owner", model.UserName);
             Assert.Equal(3, model.QuotaUsed);
             Assert.Equal(5, model.QuotaMax);
+            Assert.Equal(365, model.MaxLifetimeDays);
             Assert.True(model.TokensEnabled);
             var token = Assert.Single(model.Tokens);
             Assert.Equal(EntityId, token.EntityId);

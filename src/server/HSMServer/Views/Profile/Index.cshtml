@@ -22,6 +22,7 @@
     var generationStateHealthy = @Json.Serialize(Model.GenerationStateHealthy);
     var allowNoExpiration = @Json.Serialize(Model.AllowNoExpiration);
     var defaultLifetimeDays = @Model.DefaultLifetimeDays;
+    var maxLifetimeDays = @Model.MaxLifetimeDays;
     var tokenGrants = @Json.Serialize(Model.GrantsByTokenId);
 </script>
 
@@ -367,16 +368,24 @@
         link.remove();
     }
 
+    // UTC date for the date-input min/max attributes: the submitted instant is built
+    // as <date>T23:59:59Z, so a LOCAL-calendar min would still let negative-offset
+    // clients pick a day whose UTC instant is already past.
     function addDays(days) {
-        var date = new Date(Date.now() + days * 86400000);
-        return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().substring(0, 10);
+        return new Date(Date.now() + days * 86400000).toISOString().substring(0, 10);
     }
 
     // ---- grant picker (boundary-first) ---------------------------------------
 
     function loadGrantOptions(callback) {
         fetch(grantOptionsUrl, { credentials: 'same-origin' })
-            .then(function (response) { return response.ok ? response.json() : []; })
+            .then(function (response) {
+                // A non-OK answer (expired session among others) must not masquerade as
+                // the legitimate "no boundaries available to you" empty picker.
+                if (!response.ok) throw new Error('grant options request failed');
+
+                return response.json();
+            })
             .then(function (data) { boundaryOptions = data || []; if (callback) callback(); })
             .catch(function () {
                 // A failed picker load still opens the modal with an explicit error,
@@ -482,7 +491,9 @@
 
     function removeGrant(operation, boundaryKind, boundaryId) {
         selectedGrants = selectedGrants.filter(function (grant) {
-            return !(grant.operation === operation && grant.boundaryKind === boundaryKind && grant.boundaryId === boundaryId);
+            return !(grant.operation === operation &&
+                     grant.boundaryKind === boundaryKind &&
+                     (grant.boundaryId || '') === (boundaryId || ''));
         });
     }
 
@@ -526,8 +537,12 @@
 
         if (grantModalMode === 'restrict') {
             addExpiryOption(select, 'keep', 'Keep current expiration', true);
+            addExpiryOption(select, 'custom', 'Shorten to a custom date…', false);
         } else {
-            var presets = [30, 90, 365];
+            // Presets beyond the server's MaxLifetime are removed: a one-click option
+            // the create endpoint would refuse as max_lifetime is a UI bug, not a
+            // shortcut. (DefaultLifetime never exceeds the cap — startup validation.)
+            var presets = [30, 90, 365].filter(function (days) { return days <= maxLifetimeDays; });
 
             // A configured DefaultLifetime outside the standard presets becomes its own
             // preselected option — otherwise the browser would silently fall back to
@@ -546,18 +561,18 @@
             }
         }
 
-        if (grantModalMode === 'restrict') {
-            addExpiryOption(select, 'custom', 'Shorten to a custom date…', false);
-        }
-
         document.getElementById('customExpiryBlock').style.display = 'none';
         document.getElementById('noExpirationWarning').style.display = 'none';
         document.getElementById('customExpiryInput').value = '';
         // Today, not tomorrow: the server requires only "in the future", and a token
         // expiring today/tomorrow must still be shortenable to a same-day value.
         document.getElementById('customExpiryInput').min = addDays(0);
-        // The shorten-only cap is mode-specific; reset it so create never inherits it.
-        document.getElementById('customExpiryInput').max = '';
+        // Create caps the custom date at the server's MaxLifetime (a far-future pick
+        // would be refused as max_lifetime); restrict's shorten-only cap is
+        // token-specific and set by its own handler after this reset.
+        document.getElementById('customExpiryInput').max = grantModalMode === 'create'
+            ? addDays(maxLifetimeDays)
+            : '';
     }
 
     function addExpiryOption(select, value, text, selected) {
@@ -584,6 +599,16 @@
             // a legal no-op server-side).
             if (restrictCurrentExpiryMs !== null && Date.parse(iso) > restrictCurrentExpiryMs) {
                 iso = new Date(restrictCurrentExpiryMs).toISOString();
+            }
+
+            // Create has the same day-granularity caveat against the server's
+            // MaxLifetime cap: the date-input max still admits same-day picks past the
+            // cap's hour, so the submitted instant is clamped to it.
+            if (grantModalMode === 'create') {
+                var maxLifetimeMs = Date.now() + maxLifetimeDays * 86400000;
+                if (Date.parse(iso) > maxLifetimeMs) {
+                    iso = new Date(maxLifetimeMs).toISOString();
+                }
             }
 
             return { kind: 'date', iso: iso };
@@ -869,6 +894,9 @@
 
     document.getElementById('revokeConfirmButton').addEventListener('click', function () {
         showError('revokeModalError', null);
+
+        // Deliberately no in-flight guard, unlike create/rotate: revocation is
+        // idempotent server-side, so a double submit cannot mint or destroy anything.
 
         postMutation(revokeTokenUrl, {
             entityId: revokeEntityId,

@@ -42,7 +42,12 @@ namespace HSMServer.Authentication
 
         private readonly IDatabaseCore _databaseCore;
         private readonly ILogger<ApiTokenManager> _logger;
-        private readonly int _maxTokensPerUser;
+
+        // Held as the live config reference (not a snapshot of MaxTokensPerUser): the
+        // Settings page already mutates this singleton's Enabled at runtime, and a
+        // snapshot would silently diverge from the UI the moment MaxTokensPerUser
+        // becomes editable too. Read inside the state lock.
+        private readonly ServerConfiguration.ApiTokensConfig _config;
 
         // Serializes the whole read -> persist -> publish sequence of lifecycle mutations
         // and generation advances. One lock instead of per-entity striping: these are
@@ -96,15 +101,16 @@ namespace HSMServer.Authentication
 
             ArgumentNullException.ThrowIfNull(config);
 
-            _maxTokensPerUser = config.MaxTokensPerUser;
+            _config = config;
 
             _lastUsedFlushTimer = new Timer(_ => FlushPendingLastUsed(), null,
                 LastUsedFlushInterval, LastUsedFlushInterval);
         }
 
         // Test-only convenience (no quota bound), the pattern ApiTokenInvalidAttemptLimiter
-        // uses: an explicit zero-quota config instead of a null the production ctor
-        // rejects, so "unlimited" is a visible decision, not a silent default.
+        // uses: 0 = unlimited is reachable ONLY through this ctor — the production ctor
+        // takes the validated config, and ApiTokensConfig.Validate() rejects
+        // MaxTokensPerUser < 1, so a null config throws rather than disarming the quota.
         internal ApiTokenManager(IDatabaseCore databaseCore, ILogger<ApiTokenManager> logger)
             : this(databaseCore, logger, new ServerConfiguration.ApiTokensConfig { MaxTokensPerUser = 0 })
         {
@@ -214,13 +220,13 @@ namespace HSMServer.Authentication
 
                 // Hard quota bound, serialized with creation itself: a caller-side
                 // pre-check races another concurrent create past the same count, so the
-                // cap is enforced on the same lock that mints. 0 = unlimited (a null
-                // config at construction also means unlimited — tests build the manager
-                // directly; production DI always supplies the real config).
-                if (_maxTokensPerUser > 0 && CountQuotaEligibleTokens(ownerUserId) >= _maxTokensPerUser)
+                // cap is enforced on the same lock that mints. 0 = unlimited is
+                // reachable only through the internal test ctor; the production config
+                // is validated to >= 1.
+                if (_config.MaxTokensPerUser > 0 && CountQuotaEligibleTokens(ownerUserId) >= _config.MaxTokensPerUser)
                 {
                     _logger.LogWarning("API token creation refused: owner {OwnerUserId} is at the token quota ({Quota})",
-                        ownerUserId, _maxTokensPerUser);
+                        ownerUserId, _config.MaxTokensPerUser);
                     return false;
                 }
 
