@@ -152,12 +152,14 @@ namespace HSMServer.Authentication
         // Reconciliation half of the emergency revoke: generation-invalidated rows (no
         // per-row RevokedAtUtc, at-issue stamps older than the current generations)
         // keep their RevokedAtUtc null until this stamps them — retention cannot reap a
-        // row without a death timestamp, so unStamped rows would accumulate forever.
+        // row without a death timestamp, so unstamped rows would accumulate forever.
         // Stamps up to `limit` rows per call with RevokedBy = EmergencyRevokedBy and
         // returns how many were stamped; rows whose write failed stay unstamped and are
         // retried by the next call (the retention sweep drives this periodically).
         // Stamping is purely cosmetic-to-retention: the generations already killed the
-        // tokens, and this never touches live or already-revoked rows.
+        // tokens, and this never touches live or already-revoked rows. Like every index
+        // walk, it sees only rows the boot scan loaded — invalidated rows surviving a
+        // failed (unhealthy) scan are stamped once the index recovers.
         int StampGenerationInvalidatedTokens(int limit);
     }
 }

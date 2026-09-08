@@ -62,12 +62,12 @@ namespace HSMServer.Controllers
         public IActionResult UserTokenSummary(Guid userId)
         {
             if (userId == Guid.Empty)
-                return Fail("not_found", "User not found.");
+                return SummaryFail();
 
             var user = _userManager[userId];
 
             if (user is null)
-                return Fail("not_found", "User not found.");
+                return SummaryFail();
 
             return new JsonResult(new UserTokenSummaryResponse
             {
@@ -237,7 +237,7 @@ namespace HSMServer.Controllers
             {
                 _logger.LogError(e,
                     "Emergency revoke audit record could not be persisted (anchor {AnchorId}, correlation {CorrelationId}); the revocation itself is unaffected",
-                    anchorId, correlationId);
+                    anchorId, correlationId ?? "none");
             }
         }
 
@@ -258,5 +258,10 @@ namespace HSMServer.Controllers
 
         private static IActionResult Fail(string error, string message) =>
             new JsonResult(new EmergencyRevokeResponse { Ok = false, Error = error, Message = message });
+
+        // The summary endpoint's own failure shape: the same answer type as its success,
+        // just with Ok false — the modal script branches on ok alone.
+        private static IActionResult SummaryFail() =>
+            new JsonResult(new UserTokenSummaryResponse { Ok = false });
     }
 }

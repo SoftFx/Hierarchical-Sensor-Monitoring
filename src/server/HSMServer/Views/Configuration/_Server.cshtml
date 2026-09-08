@@ -154,56 +154,67 @@
         $('#revokeAllTokensError').text(message).removeClass('d-none');
     }
 
-    $('#revokeAllTokensButton').on('click', function () {
-        $('#revokeAllTokensError').addClass('d-none');
-        $('#revokeAllTokensResult').addClass('d-none');
-        $('#revokeAllTokensConfirmation').val('');
-        $('#revokeAllTokensReason').val('');
+    $(document).ready(function () {
+        $('#revokeAllTokensButton').on('click', function () {
+            $('#revokeAllTokensError').addClass('d-none');
+            $('#revokeAllTokensResult').addClass('d-none');
+            $('#revokeAllTokensConfirmation').val('');
+            $('#revokeAllTokensReason').val('');
 
-        new bootstrap.Modal(document.getElementById('modalRevokeAllTokens')).show();
-    });
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRevokeAllTokens')).show();
+        });
 
-    $('#confirmRevokeAllTokensButton').on('click', function () {
-        $('#revokeAllTokensError').addClass('d-none');
+        $('#confirmRevokeAllTokensButton').on('click', function () {
+            $('#revokeAllTokensError').addClass('d-none');
 
-        var confirmation = $('#revokeAllTokensConfirmation').val().trim();
-        var reason = $('#revokeAllTokensReason').val().trim();
+            var confirmation = $('#revokeAllTokensConfirmation').val().trim();
+            var reason = $('#revokeAllTokensReason').val().trim();
 
-        if (confirmation !== 'revoke-all') {
-            showRevokeAllTokensError("Type the phrase 'revoke-all' exactly to confirm.");
-            return;
-        }
+            if (confirmation !== 'revoke-all') {
+                showRevokeAllTokensError("Type the phrase 'revoke-all' exactly to confirm.");
+                return;
+            }
 
-        if (!reason) {
-            showRevokeAllTokensError('A reason is required.');
-            return;
-        }
+            if (!reason) {
+                showRevokeAllTokensError('A reason is required.');
+                return;
+            }
 
-        fetch(revokeAllTokensAction, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/json',
-                'RequestVerificationToken': antiForgeryToken()
-            },
-            body: JSON.stringify({ confirmation: confirmation, reason: reason })
-        })
-            .then(function (response) { return response.json(); })
-            .then(function (answer) {
-                if (answer.ok) {
-                    bootstrap.Modal.getInstance(document.getElementById('modalRevokeAllTokens')).hide();
-                    $('#revokeAllTokensResult')
-                        .text('All API tokens invalidated (generation → ' + answer.newGeneration + ', ' +
-                            answer.affectedTokens + ' token(s) affected).')
-                        .removeClass('d-none');
-                    return;
-                }
+            // In-flight guard: a double click would advance the generation (and audit)
+            // twice; re-enabled on the failure branches — success closes the modal.
+            var confirmButton = $(this);
+            confirmButton.prop('disabled', true);
 
-                showRevokeAllTokensError(answer.message ||
-                    (answer.correlationId ? 'Failed. Correlation id: ' + answer.correlationId : 'Failed.'));
+            function release() { confirmButton.prop('disabled', false); }
+
+            fetch(revokeAllTokensAction, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': antiForgeryToken()
+                },
+                body: JSON.stringify({ confirmation: confirmation, reason: reason })
             })
-            .catch(function () {
-                showRevokeAllTokensError('The request failed.');
-            });
+                .then(function (response) { return response.json(); })
+                .then(function (answer) {
+                    if (answer.ok) {
+                        bootstrap.Modal.getInstance(document.getElementById('modalRevokeAllTokens')).hide();
+                        $('#revokeAllTokensResult')
+                            .text('All API tokens invalidated (generation → ' + answer.newGeneration + ', ' +
+                                answer.affectedTokens + ' token(s) affected).')
+                            .removeClass('d-none');
+                        return;
+                    }
+
+                    release();
+                    showRevokeAllTokensError(answer.message ||
+                        (answer.correlationId ? 'Failed. Correlation id: ' + answer.correlationId : 'Failed.'));
+                })
+                .catch(function () {
+                    release();
+                    showRevokeAllTokensError('The request failed.');
+                });
+        });
     });
 </script>

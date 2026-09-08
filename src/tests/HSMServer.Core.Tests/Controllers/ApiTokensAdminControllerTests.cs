@@ -114,11 +114,32 @@ namespace HSMServer.Core.Tests.Controllers
         {
             var summary = Summary(CreateController().UserTokenSummary(UnknownUserId));
 
-            Assert.Null(summary);
+            Assert.NotNull(summary);
+            Assert.False(summary.Ok);
         }
 
 
         // ---- revoke-user ----------------------------------------------------------
+
+        [Fact]
+        public void RevokeUserTokens_NullRequest_Denied_WithoutAdvancing()
+        {
+            var answer = Revoke(CreateController().RevokeUserTokens(null));
+
+            Assert.False(answer.Ok);
+            Assert.Equal("invalid_request", answer.Error);
+            _tokens.Verify(t => t.AdvanceOwnerRevocationGeneration(It.IsAny<Guid>()), Times.Never);
+        }
+
+        [Fact]
+        public void RevokeAllTokens_NullRequest_Denied_WithoutAdvancing()
+        {
+            var answer = Revoke(CreateController().RevokeAllTokens(null));
+
+            Assert.False(answer.Ok);
+            Assert.Equal("invalid_request", answer.Error);
+            _tokens.Verify(t => t.AdvanceGlobalRevocationGeneration(), Times.Never);
+        }
 
         [Fact]
         public void RevokeUserTokens_UnknownUser_NotFound_WithoutAdvancing()

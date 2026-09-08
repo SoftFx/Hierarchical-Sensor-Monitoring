@@ -470,7 +470,7 @@
         $('#revokeTokensConfirmation').val('');
         $('#revokeTokensReason').val('');
 
-        var revokeModal = new bootstrap.Modal(document.getElementById('modalRevokeTokens'));
+        var revokeModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRevokeTokens'));
         revokeModal.show();
 
         fetch(tokenSummaryAction + '?userId=' + encodeURIComponent(userId), { credentials: 'same-origin' })
@@ -504,6 +504,13 @@
                 return;
             }
 
+            // In-flight guard: a double click would advance the generation (and audit)
+            // twice; re-enabled on every failure branch — success reloads the page.
+            var confirmButton = $(this);
+            confirmButton.prop('disabled', true);
+
+            function release() { confirmButton.prop('disabled', false); }
+
             fetch(revokeTokensAction, {
                 method: 'POST',
                 credentials: 'same-origin',
@@ -521,10 +528,12 @@
                         return;
                     }
 
+                    release();
                     showRevokeTokensError(answer.message ||
                         (answer.correlationId ? 'Failed. Correlation id: ' + answer.correlationId : 'Failed.'));
                 })
                 .catch(function () {
+                    release();
                     showRevokeTokensError('The request failed.');
                 });
         });

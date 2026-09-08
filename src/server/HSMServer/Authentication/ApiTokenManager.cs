@@ -746,6 +746,10 @@ namespace HSMServer.Authentication
         // audit record. Owner generations of indexed tokens are always cached —
         // LoadGenerations fills them for every owner bucket, and every advance updates
         // the cache — so the per-token lookup never falls back to a stale zero here.
+        // Unlike the per-owner count, owner generations are read PER ROW: a concurrent
+        // owner-advance mid-walk can move one owner's rows to the new generation while
+        // earlier rows were judged against the old one. Advisory-only metadata, so the
+        // walk stays lock-free rather than snapshotting the whole owner map.
         public int CountQuotaEligibleTokensGlobally()
         {
             // One snapshot of time and the global generation for the whole count, so
