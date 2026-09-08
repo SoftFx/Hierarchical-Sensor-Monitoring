@@ -86,6 +86,8 @@ namespace HSMServer.Controllers
                 // Floored on purpose: the client-side cap must never sit ABOVE the
                 // server's exact MaxLifetime instant.
                 MaxLifetimeDays = Math.Max(1, (int)_config.MaxLifetime.TotalDays),
+                // The form's clock anchor — see the view model comment.
+                ServerNowUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             });
         }
 

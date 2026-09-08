@@ -549,6 +549,20 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public void Index_ServerNowUnixMs_IsCurrentUnixMilliseconds()
+        {
+            // The form anchors every expiry computation (presets, MaxLifetime clamp,
+            // date-input bounds) to this value plus client-measured elapsed time; a
+            // .NET-ticks value here would silently shift them all ~2000 years off.
+            var before = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var model = PageModelOf(CreateController().Index());
+            var after = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            Assert.InRange(model.ServerNowUnixMs, before, after);
+        }
+
+
+        [Fact]
         public void Index_Timestamps_AreUnixMillisecondsNotDotNetTicks()
         {
             // Entity timestamps are .NET ticks (since 0001-01-01); feeding them to

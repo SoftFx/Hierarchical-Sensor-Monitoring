@@ -23,6 +23,8 @@
     var allowNoExpiration = @Json.Serialize(Model.AllowNoExpiration);
     var defaultLifetimeDays = @Model.DefaultLifetimeDays;
     var maxLifetimeDays = @Model.MaxLifetimeDays;
+    var serverNowMs = @Model.ServerNowUnixMs;
+    var pageRenderedAtMs = Date.now();
     var tokenGrants = @Json.Serialize(Model.GrantsByTokenId);
 </script>
 
@@ -178,13 +180,17 @@
     </div>
 </div>
 
-@* One-time secret disclosure: the full credential exists exactly here, never in a list. *@
-<div class="modal fade" id="secretModal" tabindex="-1" aria-hidden="true">
+@* One-time secret disclosure: the full credential exists exactly here, never in a
+   list. Deliberately non-dismissible by accident — static backdrop, Escape
+   disabled, no header close button: a stray keypress or background click must not destroy
+   a credential that cannot be recovered; the only ways out are the explicit
+   Copy/Close buttons (Close still reloads via hidden.bs.modal). *@
+<div class="modal fade" id="secretModal" tabindex="-1" aria-hidden="true"
+     data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="secretModalTitle">Token created</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-warning py-2 mb-3">
@@ -368,11 +374,20 @@
         link.remove();
     }
 
+    // Server-clock estimate: the render-time server instant advanced by the
+    // client-measured elapsed time. Expiry instants and date-input bounds derive
+    // from THIS, never from Date.now() alone — a browser clock ahead of the server
+    // would push the largest preset past the MaxLifetime cap (max_lifetime on a
+    // one-click option), one behind it would admit already-past days as "today".
+    function serverNow() {
+        return serverNowMs + (Date.now() - pageRenderedAtMs);
+    }
+
     // UTC date for the date-input min/max attributes: the submitted instant is built
     // as <date>T23:59:59Z, so a LOCAL-calendar min would still let negative-offset
     // clients pick a day whose UTC instant is already past.
     function addDays(days) {
-        return new Date(Date.now() + days * 86400000).toISOString().substring(0, 10);
+        return new Date(serverNow() + days * 86400000).toISOString().substring(0, 10);
     }
 
     // ---- grant picker (boundary-first) ---------------------------------------
@@ -603,9 +618,11 @@
 
             // Create has the same day-granularity caveat against the server's
             // MaxLifetime cap: the date-input max still admits same-day picks past the
-            // cap's hour, so the submitted instant is clamped to it.
+            // cap's hour, so the submitted instant is clamped to it. The cap instant
+            // is server-anchored (see serverNow) — clamping to a browser-clock
+            // instant would let a fast client clock overshoot the server's cap.
             if (grantModalMode === 'create') {
-                var maxLifetimeMs = Date.now() + maxLifetimeDays * 86400000;
+                var maxLifetimeMs = serverNow() + maxLifetimeDays * 86400000;
                 if (Date.parse(iso) > maxLifetimeMs) {
                     iso = new Date(maxLifetimeMs).toISOString();
                 }
@@ -616,7 +633,9 @@
 
         var days = parseInt(value, 10);
         if (!isNaN(days)) {
-            return { kind: 'date', iso: new Date(Date.now() + days * 86400000).toISOString() };
+            // Server-anchored: a browser clock ahead of the server must not turn the
+            // largest preset (a day count equal to the cap) into a max_lifetime error.
+            return { kind: 'date', iso: new Date(serverNow() + days * 86400000).toISOString() };
         }
 
         return { kind: 'invalid' };

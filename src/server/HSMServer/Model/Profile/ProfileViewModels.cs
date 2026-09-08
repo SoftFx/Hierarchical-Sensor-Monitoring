@@ -42,6 +42,13 @@ namespace HSMServer.Model.Profile
         // ApiTokens.MaxLifetime (floored, so the client cap never exceeds the exact
         // server-side instant).
         public int MaxLifetimeDays { get; init; }
+
+        // The server's clock at render, Unix milliseconds. The form derives every
+        // expiry instant and date-input bound from this value plus client-measured
+        // elapsed time — never from the browser clock: a browser running ahead of
+        // the server would push the largest preset past the MaxLifetime cap, one
+        // running behind would admit already-past days as "today".
+        public long ServerNowUnixMs { get; init; }
     }
 
     public sealed record ProfileProductRoleViewModel(string Name, bool IsManager);

@@ -120,6 +120,7 @@ The design's privilege-reduction matrix, recomputed per call:
 - Revoke: own token revoked with the signed-in actor; works with tokens disabled (the kill switch's documented cleanup path); `unhealthy` denies; foreign ids `not_found`.
 - Page: lists only the caller's tokens and maps quota/state flags (`TokensEnabled` = `Enabled AND healthy`); `GrantOptions` returns an empty picker while disabled or unhealthy and delegates to the owner filter otherwise.
 - Page timestamps are Unix milliseconds (entity ticks minus the .NET-epoch offset) — pinned against a known instant.
+- Page `ServerNowUnixMs` (the form's clock anchor for presets, the cap clamp and date-input bounds) is Unix milliseconds within the test's before/after window — a ticks value here would shift every derived expiry instant ~2000 years off.
 - A generation-invalidated record (emergency-revoke generation above the at-issue stamps, both row timestamps unset) lists as `invalidated`, not `active`.
 
 ## Manager quota (`ApiTokenManagerTests`)
