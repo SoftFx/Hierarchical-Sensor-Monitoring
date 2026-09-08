@@ -193,6 +193,7 @@ Manager/counter level (`ApiTokenManagerTests`):
 Retention/stamping level (`ApiTokenRetentionCleanerTests`):
 
 - An emergency-revoked row (generation advanced, `RevokedAtUtc` still null) is stamped by the sweep's reconciliation pass with `RevokedBy = "emergency"` and a null per-row reason; the token was already dead to `IsTokenLive` before the stamp.
+- The stamping pass refuses while the generation state is unhealthy — a manager whose token scan loaded the index but whose generation read failed (in-memory counters at zero, every row LOOKING invalidated) stamps nothing and leaves every `RevokedAtUtc` null, exactly like minting refusing unproven generations.
 - A freshly stamped row is never removed by the pass that stamped it; after the retention window from the stamp it is removed (bit-exact readback of the stamp, inclusive boundary).
 - Stamping is bounded per pass (limit + 1 invalidated rows → limit stamped, the rest next pass).
 - Live rows (another owner's, at current generations) and personally revoked rows are never stamped — the personal revoke's actor and reason survive untouched.

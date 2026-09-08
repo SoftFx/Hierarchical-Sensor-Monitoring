@@ -32,9 +32,10 @@ namespace HSMServer.Controllers
         // next to the input in the Configuration modal.
         public const string RevokeAllConfirmationPhrase = "revoke-all";
 
-        // Surface bound for the reason, deliberately the manager's free-text backstop
-        // (ApiTokenManager's MaxFreeTextLength): the audit record truncates there, so
-        // the surface rejects longer input friendly instead of silently shortening it.
+        // Surface bound for the reason, mirroring the manager's free-text bound for
+        // actor fields (256): the journal stores the reason verbatim, so THIS check is
+        // the actual enforcement — over-long input is rejected friendly instead of
+        // landing in the audit record as something the admin did not write.
         public const int MaxReasonLength = 256;
 
         // Stable journal anchor for deployment-scope records: every revoke-all event of

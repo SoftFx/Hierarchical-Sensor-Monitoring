@@ -109,7 +109,11 @@
 
 <!-- Emergency Revoke All Modal: outside the settings form's Save flow, but this partial
      renders inside the form, so every button here carries an explicit type. Inputs have
-     ids only — no name attributes — so they never ride along the settings form POST. -->
+     ids only — no name attributes — so they never ride along the settings form POST.
+     The standalone antiforgery token below is load-bearing: savingFormSubscribe replaces
+     a form's inner HTML on save, wiping the hidden inputs the tag helpers emitted — the
+     modal's own token survives every save (and the partial re-render regenerates it). -->
+@Html.AntiForgeryToken()
 <div class="modal fade" id="modalRevokeAllTokens" tabindex="-1" aria-labelledby="modalRevokeAllTokensLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">

@@ -308,6 +308,48 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void EmergencyRevocationStamping_RefusesWhileGenerationStateIsUnhealthy()
+        {
+            // The reachable degraded shape the stamping pass must refuse: the token
+            // scan LOADED the index while the generation read failed, so the in-memory
+            // counters sit at zero and every loaded row looks invalidated. A pass that
+            // stamped from those values would irreversibly revoke every live token
+            // before the operator repairs the storage and restarts — the same reason
+            // minting refuses unproven generations.
+            using var healthy = CreateManager();
+            healthy.Initialize().Wait();
+
+            Assert.True(healthy.TryCreateToken(OwnerId, "must-survive", null, [], expiresAtUtc: null, "test", out var token, out _));
+
+            var failing = new FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)
+            {
+                ShouldFailApiTokenOp = op => op == nameof(FailingDatabaseCore.GetGlobalRevocationGeneration),
+            };
+
+            using var unhealthy = new ApiTokenManager(failing, NullLogger<ApiTokenManager>.Instance);
+            unhealthy.Initialize().Wait();
+
+            // Index populated (the scan succeeded), generation state unproven.
+            Assert.False(unhealthy.IsGenerationStateHealthy);
+            Assert.NotNull(unhealthy.GetTokenByEntityId(token.EntityId));
+
+            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = TimeSpan.Zero, SecurityEventRetention = EventsPinnedOff },
+                _databaseCoreManager.DatabaseCore, unhealthy);
+
+            var result = cleaner.RunOnce(DateTime.UtcNow);
+
+            Assert.Equal((0, 0, 0, 0), result);
+
+            var row = _databaseCoreManager.DatabaseCore.GetAllApiTokens()
+                .Single(r => r.Entity.EntityId == token.EntityId).Entity;
+
+            // No stamp, no removal: the row survives verbatim for the healthy boot
+            // that follows the storage repair.
+            Assert.Null(row.RevokedAtUtc);
+            Assert.Null(row.RevokedBy);
+        }
+
+        [Fact]
         public void StorageFailure_Isolated_PerPass_NeverThrows()
         {
             var failing = new FailingDatabaseCore(_databaseCoreManager.DatabaseCore, _ => false)

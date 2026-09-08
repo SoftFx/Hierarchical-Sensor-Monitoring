@@ -759,8 +759,10 @@ namespace HSMServer.Authentication
 
             var count = 0;
 
-            foreach (var token in _tokensByTokenId.Values)
-                if (IsLive(token, now, globalGeneration, GetOwnerRevocationGeneration(token.OwnerUserId)))
+            // Direct enumeration of the concurrent dictionary: .Values would take every
+            // internal lock and materialize a snapshot list just to be walked once.
+            foreach (var entry in _tokensByTokenId)
+                if (IsLive(entry.Value, now, globalGeneration, GetOwnerRevocationGeneration(entry.Value.OwnerUserId)))
                     count++;
 
             return count;
@@ -768,34 +770,48 @@ namespace HSMServer.Authentication
 
 
         // Reconciliation pass driven by the retention sweep (see the interface doc).
-        // The candidate check before each stamp runs on a FRESH read under _stateLock:
-        // the enumeration snapshot can be stale by the time the row is written, and a
-        // concurrent personal revoke of the same row must not be overwritten with a
-        // coarser stamp. Enumeration itself is safe: ConcurrentDictionary values are
-        // snapshot-safe under concurrent writes.
+        // The whole invalidated-or-not decision — BOTH generations — is read fresh
+        // under _stateLock per row: an enumeration snapshot can be stale by the time
+        // the row is written, and the advance operations serialize on this same lock,
+        // so under it the comparison is exact rather than advisory. A concurrent
+        // personal revoke of the same row must not be overwritten with a coarser
+        // stamp. Enumeration itself is direct (lock-free enumerator): .Values would
+        // take every internal lock and materialize a snapshot list just to be walked
+        // once — the pattern the rest of this file avoids.
         public int StampGenerationInvalidatedTokens(int limit)
         {
             if (limit <= 0)
                 return 0;
 
+            // Unproven generation state must never produce a durable revocation stamp.
+            // The stamp is irreversible, and the reachable unhealthy shapes are exactly
+            // the wrong input: a failed generation read leaves _globalGeneration at 0
+            // (every loaded row would look invalidated), and a regressed counter puts
+            // it BELOW rows at issue. Minting already refuses unproven generations for
+            // the same reason; reconciliation defers until the state is healthy again.
+            if (!IsGenerationStateHealthy)
+            {
+                _logger.LogWarning("Emergency-revoke reconciliation skipped: the revocation generation state is not healthy");
+                return 0;
+            }
+
             // One observation moment for the whole bounded batch — the stamp is the
             // sweep's clock, not the emergency revoke's (that instant lives in the
             // journal audit record).
             var observedAt = DateTime.UtcNow.Ticks;
-            var globalGeneration = GlobalRevocationGeneration;
 
             var stamped = 0;
 
-            foreach (var candidate in _tokensByTokenId.Values)
+            foreach (var entry in _tokensByTokenId)
             {
                 if (stamped >= limit)
                     break;
 
                 lock (_stateLock)
                 {
-                    // Fresh read: the snapshot candidate may have been revoked, removed
-                    // or re-issued (rotate) since enumeration.
-                    if (!_tokensByTokenId.TryGetValue(candidate.TokenId, out var current))
+                    // Fresh read: the enumerated candidate may have been revoked,
+                    // removed or re-issued (rotate) since enumeration.
+                    if (!_tokensByTokenId.TryGetValue(entry.Key, out var current))
                         continue;
 
                     if (current.RevokedAtUtc is not null)
@@ -803,7 +819,7 @@ namespace HSMServer.Authentication
 
                     // Only generation-invalidated rows: a row at the current generations
                     // is live, and stamping it would be a false revocation.
-                    if (IsIssuedAtCurrentGenerations(current, globalGeneration,
+                    if (IsIssuedAtCurrentGenerations(current, GlobalRevocationGeneration,
                             GetOwnerRevocationGeneration(current.OwnerUserId)))
                         continue;
 
