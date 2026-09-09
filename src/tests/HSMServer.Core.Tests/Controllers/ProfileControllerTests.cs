@@ -235,8 +235,10 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public void CreateToken_NoExpiration_RequiresConfigSwitch()
+        public void CreateToken_NoExpiration_RejectedWhenSwitchedOff()
         {
+            // Explicit, not the default: since #1373 the config default allows it.
+            _config.AllowNoExpiration = false;
             var request = BuildCreateRequest();
             request.ExpiresAtUtc = null;
 

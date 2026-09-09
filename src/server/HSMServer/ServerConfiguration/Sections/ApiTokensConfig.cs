@@ -22,12 +22,15 @@ namespace HSMServer.ServerConfiguration
         // issuance; rotation replaces the source slot atomically.
         public int MaxTokensPerUser { get; set; } = 10;
 
-        // Whether the "No expiration" option may be offered at all. Default false:
-        // an unlimited credential is the longest-lived secret a user can mint, so it
-        // exists only where an operator explicitly accepted that trade. Together with
-        // MaxLifetime this is a real policy bound: every finite lifetime is capped at
-        // create time, and the only way past the cap is this explicit opt-in.
-        public bool AllowNoExpiration { get; set; }
+        // Whether the "No expiration" option may be offered at all. Default true since
+        // #1373: the create form preselects "No expiration", and the typical token
+        // (an agent/integration credential) outlives any preset — forcing a renewal
+        // date on it was the worse default. The knob remains the operator's opt-OUT
+        // for deployments that do not accept unlimited credentials. Together with
+        // MaxLifetime this is still a real policy bound: every finite lifetime is
+        // capped at create time, and switching this off removes the only way past
+        // the cap.
+        public bool AllowNoExpiration { get; set; } = true;
 
         // Hard upper bound on the lifetime of a newly created token (expiry minus the
         // create instant), enforced by the create endpoint alongside the past-expiry

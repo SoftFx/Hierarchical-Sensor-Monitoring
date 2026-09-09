@@ -129,8 +129,8 @@ The design's privilege-reduction matrix, recomputed per call:
 
 ## Configuration (`ApiTokensConfigTests`)
 
-- Defaults are upgrade-safe: channel disabled, quota 10, no unlimited tokens, 90d default lifetime, 365d max lifetime.
-- Startup validation: `MaxTokensPerUser` < 1, non-positive/oversized `DefaultLifetime` and `MaxLifetime`, and a `DefaultLifetime` above `MaxLifetime` (the preselected preset must not be a guaranteed create error) throw with the key(s) named.
+- Defaults are upgrade-safe in the channel sense: channel disabled, quota 10, 90d default lifetime, 365d max lifetime. Since #1373 `AllowNoExpiration` defaults **true** — the create form preselects "No expiration"; the knob is the operator's opt-out, and an upgraded deployment without an explicit `ApiTokens` section silently gains no-expiration tokens.
+- Startup validation: `MaxTokensPerUser` < 1, non-positive/oversized `DefaultLifetime` and `MaxLifetime`, and a `DefaultLifetime` above `MaxLifetime` (the preselect while no-expiration is switched off must not be a guaranteed create error) throw with the key(s) named.
 
 ## Pipeline order (`ManagementPipelineOrderTests`)
 

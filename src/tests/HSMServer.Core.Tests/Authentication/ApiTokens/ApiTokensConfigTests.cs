@@ -16,7 +16,9 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
             Assert.False(config.Enabled);
             Assert.Equal(10, config.MaxTokensPerUser);
-            Assert.False(config.AllowNoExpiration);
+            // No-expiration is the product default since #1373: the create form
+            // preselects it; the knob is now the operator's opt-OUT.
+            Assert.True(config.AllowNoExpiration);
             Assert.Equal(TimeSpan.FromDays(365), config.MaxLifetime);
             Assert.Equal(TimeSpan.FromDays(90), config.DefaultLifetime);
             Assert.Equal(TimeSpan.FromDays(30), config.TokenRecordRetention);
