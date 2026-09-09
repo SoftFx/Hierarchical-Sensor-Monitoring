@@ -4,13 +4,14 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.Authentication.ApiTokens
 {
-    // ApiTokensConfig contract (initiative step 4): upgrade-safe defaults — a deployment
-    // with no ApiTokens section gets the token channel fully disabled — and startup
+    // ApiTokensConfig contract (initiative step 4): upgrade-safe defaults in the channel
+    // sense — a deployment with no ApiTokens section gets the token channel fully
+    // disabled; the expiry gate defaults the permissive way since #1373 — and startup
     // validation with actionable, key-named errors for every knob.
     public class ApiTokensConfigTests
     {
         [Fact]
-        public void Defaults_AreUpgradeSafeDisabledChannel()
+        public void Defaults_DisabledChannel_NoExpirationAllowed()
         {
             var config = new ApiTokensConfig();
 
