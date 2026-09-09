@@ -109,7 +109,9 @@
 
 <!-- Emergency Revoke All Modal: outside the settings form's Save flow, but this partial
      renders inside the form, so every button here carries an explicit type. Inputs have
-     ids only — no name attributes — so they never ride along the settings form POST.
+     ids only — no name attributes — so they never ride along the settings form POST;
+     the confirmation input's Enter key is intercepted in the script below, so implicit
+     submission cannot post the settings form from the modal either.
      The standalone antiforgery token below is load-bearing: savingFormSubscribe replaces
      a form's inner HTML on save, wiping the hidden inputs the tag helpers emitted — the
      modal's own token survives every save (and the partial re-render regenerates it). -->
@@ -166,6 +168,24 @@
             $('#revokeAllTokensReason').val('');
 
             bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRevokeAllTokens')).show();
+        });
+
+        // The modal renders inside the settings form: an Enter in the confirmation input
+        // would implicitly submit that form, and its save handler replaces the form's
+        // inner HTML — wedging the open modal. Route Enter to the confirm button instead.
+        $('#revokeAllTokensConfirmation').on('keydown', function (e) {
+            if (e.key !== 'Enter') {
+                return;
+            }
+
+            e.preventDefault();
+
+            // The disabled guard holds for real clicks only; a programmatic click still
+            // fires the handler, so keep the in-flight guard meaningful for Enter too.
+            var confirmButton = $('#confirmRevokeAllTokensButton');
+            if (!confirmButton.prop('disabled')) {
+                confirmButton.click();
+            }
         });
 
         $('#confirmRevokeAllTokensButton').on('click', function () {
