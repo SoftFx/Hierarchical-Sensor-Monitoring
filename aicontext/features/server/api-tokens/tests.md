@@ -171,6 +171,33 @@ The design's privilege-reduction matrix, recomputed per call:
 - `ApiTokensConfig.Validate` rejects negative and over-bound retention windows with the config key named (cleaner constructor); the upper bound keeps `utcNow - retention` from underflowing `DateTime` outside the per-pass try blocks.
 - Tests share one LevelDB class fixture: the clock anchor is relative to the run (a hardcoded date would rot past the default retention), token-row tests pin the event window off so leftover event rows can never contaminate exact counts, and event-asserting tests drain the event table first.
 
+## Emergency revoke (`ApiTokensAdminControllerTests`; `ApiTokenManagerTests`; `ApiTokenRetentionCleanerTests`)
+
+Controller level (mocked manager/user manager/journal, direct action invocation):
+
+- Surface contract: class-level `[AuthorizeIsAdmin]` (the `AccountController.Users` gate); both mutations are `[HttpPost]` + antiforgery-filtered; the summary GET is a plain GET.
+- `UserTokenSummary` answers the live count for a known user and the not-found shape for an unknown one.
+- Revoke-user: an unknown `userId` answers `not_found` without advancing; a wrong typed confirmation answers `invalid_confirmation` without advancing; the confirmation comparison is trimmed and case-insensitive (the deliberation is in the typing); empty/control-only/over-256 reasons answer `invalid_reason` without advancing.
+- A valid revoke-user advances the owner generation, reports the new generation and the pre-advance affected count, and writes the journal audit-of-record (initiator, scope path with username and id, old/new generation, count, sanitized reason).
+- A target with zero live tokens still advances and succeeds (idempotent by effect).
+- Control characters in the reason are sanitized before the audit record (log-forging hygiene).
+- A throwing generation advance answers a retryable `revoke_failed` with a non-empty `CorrelationId` (the trace identifier), no exception text on the wire, and a "(failed)" audit record carrying the same correlation id; the exception never escapes to the global handler.
+- A journaling failure after a successful advance does not fail the response (the revoke already happened).
+- Revoke-all: a case-variant or wrong phrase is denied (ordinal match on the literal `revoke-all`); a valid call advances the global generation, uses the global count accessor, and audits with the deployment scope and anchor.
+- Both levers work in every degraded mode — the healthy flag flipped either way (the endpoints take no `Enabled`/health dependency at all).
+
+Manager/counter level (`ApiTokenManagerTests`):
+
+- `CountQuotaEligibleTokensGlobally` applies the per-owner IsLive rule across owners: revoked tokens never count; an owner-generation advance removes only that owner's live tokens from the global count; a token minted after an advance counts again; a global advance empties the count and a fresh token after it counts.
+
+Retention/stamping level (`ApiTokenRetentionCleanerTests`):
+
+- An emergency-revoked row (generation advanced, `RevokedAtUtc` still null) is stamped by the sweep's reconciliation pass with `RevokedBy = "emergency"` and a null per-row reason; the token was already dead to `IsTokenLive` before the stamp.
+- The stamping pass refuses while the generation state is unhealthy — a manager whose token scan loaded the index but whose generation read failed (in-memory counters at zero, every row LOOKING invalidated) stamps nothing and leaves every `RevokedAtUtc` null, exactly like minting refusing unproven generations.
+- A freshly stamped row is never removed by the pass that stamped it; after the retention window from the stamp it is removed (bit-exact readback of the stamp, inclusive boundary).
+- Stamping is bounded per pass (limit + 1 invalidated rows → limit stamped, the rest next pass).
+- Live rows (another owner's, at current generations) and personally revoked rows are never stamped — the personal revoke's actor and reason survive untouched.
+
 ## Negative coverage checklist
 
 - [x] Malformed/oversized credentials rejected before database access
@@ -193,3 +220,7 @@ The design's privilege-reduction matrix, recomputed per call:
 - [x] Foreign entity ids are indistinguishable from unknown ones on every lifecycle endpoint
 - [x] Kill switch denies authentication and issuance immediately; cookie list/revoke stay available
 - [x] The full credential appears exactly once (create/rotate response only), never in list/page payloads
+- [x] Emergency revoke is IsAdmin-cookie-only with antiforgery on every mutation, and answers typed-confirmation/reason validation without advancing anything
+- [x] Emergency revoke works exactly in the degraded modes (disabled kill switch, unhealthy generation state) and never consults them
+- [x] A failed generation advance reports a retryable correlation-id failure and never claims success; a failed audit write never retracts a completed revoke
+- [x] Emergency-revoked rows are reconciled by the retention sweep (stamped, then reaped after the window); live and personally revoked rows are never stamped

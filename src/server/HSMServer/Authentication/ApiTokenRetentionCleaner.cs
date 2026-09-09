@@ -9,7 +9,10 @@ namespace HSMServer.Authentication
 {
     // Bounded retention sweep over the API-token durable state (initiative: cleanup in
     // bounded batches, eventually draining eligible records, restart/failure safe).
-    // Three independent passes per run:
+    // Four independent passes per run:
+    //   0. reconciliation of emergency-revoked rows — generation-invalidated records
+    //      keep RevokedAtUtc null until stamped (IApiTokenManager.StampGenerationInvalidatedTokens),
+    //      because the generation advance that killed them never touches the rows;
     //   1. dead token rows older than TokenRecordRetention (revoked or expired at or
     //      before the cutoff) — removed row-by-row through IApiTokenManager.TryRemoveToken,
     //      which is atomic across the durable row and the live index;
@@ -60,28 +63,52 @@ namespace HSMServer.Authentication
         // One retention pass. Single-threaded contract: the orphan first-observation
         // map is a plain Dictionary, so exactly one caller (the retention background
         // service) may run passes at a time.
-        public (int TokenRowsRemoved, int OrphanRowsRemoved, int SecurityEventsRemoved) RunOnce(DateTime utcNow)
+        public (int InvalidatedRowsStamped, int TokenRowsRemoved, int OrphanRowsRemoved, int SecurityEventsRemoved) RunOnce(DateTime utcNow)
         {
             var tokenCutoff = utcNow - _config.TokenRecordRetention;
             var eventCutoff = utcNow - _config.SecurityEventRetention;
 
+            var stamped = StampInvalidatedRows();
             var tokensRemoved = RemoveDeadTokenRows(tokenCutoff);
             var orphansRemoved = RemoveOrphanRows(utcNow, tokenCutoff);
             var eventsRemoved = RemoveSecurityEvents(eventCutoff);
 
-            if (tokensRemoved > 0 || orphansRemoved > 0 || eventsRemoved > 0)
+            if (stamped > 0 || tokensRemoved > 0 || orphansRemoved > 0 || eventsRemoved > 0)
                 _logger.LogInformation(
-                    "API token retention pass at {UtcNow:u}: {TokenRows} dead token rows, {OrphanRows} orphan rows, {SecurityEvents} security events removed (cutoffs {TokenCutoff:u} / {EventCutoff:u})",
-                    utcNow, tokensRemoved, orphansRemoved, eventsRemoved, tokenCutoff, eventCutoff);
+                    "API token retention pass at {UtcNow:u}: {StampedRows} emergency-revoked rows stamped, {TokenRows} dead token rows, {OrphanRows} orphan rows, {SecurityEvents} security events removed (cutoffs {TokenCutoff:u} / {EventCutoff:u})",
+                    utcNow, stamped, tokensRemoved, orphansRemoved, eventsRemoved, tokenCutoff, eventCutoff);
 
-            return (tokensRemoved, orphansRemoved, eventsRemoved);
+            return (stamped, tokensRemoved, orphansRemoved, eventsRemoved);
+        }
+
+        // Reconciliation of the emergency revoke: rows killed by a generation advance
+        // carry no death timestamp, so pass 1 below would never find them eligible —
+        // this stamp is what eventually retires them. Bounded by the same batch limit
+        // as the removal passes; unstamped leftovers (a failed write, over-limit
+        // backlog) are picked up by the next hourly pass. A newly stamped row's
+        // RevokedAtUtc is this pass's moment, which is AT or before the cutoff only
+        // once the retention window has passed — freshly stamped rows never get
+        // removed by the pass that stamped them.
+        private int StampInvalidatedRows()
+        {
+            try
+            {
+                return _tokens.StampGenerationInvalidatedTokens(TokenRowBatchLimit);
+            }
+            catch (Exception e)
+            {
+                // The manager isolates per-row failures; this guards only against the
+                // unexpected, keeping the sweep's other passes running.
+                _logger.LogError(e, "API token retention could not stamp emergency-revoked rows this pass");
+
+                return 0;
+            }
         }
 
         // Eligible: revoked at or before the cutoff, or expired at or before the cutoff.
         // Never a live record, whatever its age; a generation-invalidated record without
-        // a per-row RevokedAtUtc (pre-reconciliation) is not eligible either — it keeps
-        // its row until reconciliation stamps it (emergency-revoke reconciliation is the
-        // management endpoint's job, a later step).
+        // a per-row RevokedAtUtc is not eligible either — it keeps its row until the
+        // reconciliation pass above stamps it (StampInvalidatedRows).
         private int RemoveDeadTokenRows(DateTime tokenCutoff)
         {
             var cutoffTicks = tokenCutoff.Ticks;

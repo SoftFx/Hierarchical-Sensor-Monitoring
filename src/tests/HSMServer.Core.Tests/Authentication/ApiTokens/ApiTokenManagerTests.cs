@@ -58,6 +58,46 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
 
         [Fact]
+        public void CountQuotaEligibleTokensGlobally_CountsOnlyLiveTokensAcrossOwners()
+        {
+            // The advisory count an emergency revoke-all reports: the same IsLive rule
+            // as the per-owner quota counter, judged across every owner at once.
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            var otherOwner = Guid.NewGuid();
+
+            Assert.True(manager.TryCreateToken(OwnerId, "live-a", null, BuildGrants("alerts:read"), null, "u", out _, out _));
+            Assert.True(manager.TryCreateToken(otherOwner, "live-b", null, BuildGrants("alerts:read"), null, "u", out _, out _));
+            Assert.True(manager.TryCreateToken(OwnerId, "revoked", null, BuildGrants("alerts:read"), null, "u", out var revoked, out _));
+            Assert.True(manager.TryRevokeToken(revoked.EntityId, "u", "count test", out _));
+
+            Assert.Equal(2, manager.CountQuotaEligibleTokensGlobally());
+
+            // An owner-scoped emergency revoke removes that owner's live token from the
+            // global count without touching the other owner's.
+            manager.AdvanceOwnerRevocationGeneration(OwnerId);
+
+            Assert.Equal(1, manager.CountQuotaEligibleTokensGlobally());
+
+            // A token minted after the advance is stamped at the new generation and
+            // counts again.
+            Assert.True(manager.TryCreateToken(OwnerId, "fresh", null, BuildGrants("alerts:read"), null, "u", out _, out _));
+
+            Assert.Equal(2, manager.CountQuotaEligibleTokensGlobally());
+
+            // The deployment-wide lever empties the count; a fresh token after it counts.
+            manager.AdvanceGlobalRevocationGeneration();
+
+            Assert.Equal(0, manager.CountQuotaEligibleTokensGlobally());
+
+            Assert.True(manager.TryCreateToken(otherOwner, "fresh-b", null, BuildGrants("alerts:read"), null, "u", out _, out _));
+
+            Assert.Equal(1, manager.CountQuotaEligibleTokensGlobally());
+        }
+
+
+        [Fact]
         public void Initialize_FreshDatabase_IsHealthyWithZeroGenerations()
         {
             using var manager = CreateManager();

@@ -139,5 +139,33 @@ namespace HSMServer.Authentication
         // and issued at the current global and owner revocation generations. Revoked,
         // expired, orphaned and generation-invalidated records never count.
         int CountQuotaEligibleTokens(Guid ownerUserId);
+
+        // The same liveness rule counted across every owner: how many tokens an
+        // emergency revoke-all would currently invalidate. Advisory audit metadata for
+        // the emergency surface — computed before the generation advance, not
+        // transactional with it (a token created between the count and the advance is
+        // simply missed by the number while still being invalidated by the revoke).
+        // Reports 0 while the index is unhealthy-empty after a failed boot scan; the
+        // revoke itself does not depend on the count.
+        int CountQuotaEligibleTokensGlobally();
+
+        // Reconciliation half of the emergency revoke: generation-invalidated rows (no
+        // per-row RevokedAtUtc, at-issue stamps older than the current generations)
+        // keep their RevokedAtUtc null until this stamps them — retention cannot reap a
+        // row without a death timestamp, so unstamped rows would accumulate forever.
+        // Stamps up to `limit` rows per call with RevokedBy = EmergencyRevokedBy and
+        // returns how many were stamped; rows whose write failed stay unstamped and are
+        // retried by the next call (the retention sweep drives this periodically).
+        // Stamping is purely cosmetic-to-retention: the generations already killed the
+        // tokens, and this never touches live or already-revoked rows.
+        //
+        // Refuses (returns 0) while IsGenerationStateHealthy is false, by the same rule
+        // that makes minting refuse: the stamp is a durable, irreversible revocation
+        // derived from the generation values, and an unhealthy state is exactly the
+        // unproven input that must not produce one — a failed generation read leaves
+        // the in-memory counters at zero (every loaded row would look invalidated) and
+        // a regressed counter sits below rows at issue. Reconciliation simply waits for
+        // a healthy boot; invalidated rows accumulate their delay, nothing else.
+        int StampGenerationInvalidatedTokens(int limit);
     }
 }
