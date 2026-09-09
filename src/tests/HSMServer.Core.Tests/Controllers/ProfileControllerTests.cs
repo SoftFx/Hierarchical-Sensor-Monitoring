@@ -245,11 +245,19 @@ namespace HSMServer.Core.Tests.Controllers
             var answer = Mutate(CreateController().CreateToken(request));
             Assert.False(answer.Ok);
             Assert.Equal("no_expiration_not_allowed", answer.Error);
+        }
 
-            _config.AllowNoExpiration = true;
+        [Fact]
+        public void CreateToken_NoExpiration_AllowedByDefault()
+        {
+            // Pins the shipped default (#1373) through the controller: an unmutated
+            // config accepts a null expiry — the assertion that breaks if anyone
+            // flips the default back.
+            var request = BuildCreateRequest();
+            request.ExpiresAtUtc = null;
 
-            var allowed = Mutate(CreateController().CreateToken(request));
-            Assert.True(allowed.Ok);
+            var answer = Mutate(CreateController().CreateToken(request));
+            Assert.True(answer.Ok);
         }
 
 

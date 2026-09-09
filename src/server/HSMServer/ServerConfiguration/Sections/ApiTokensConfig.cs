@@ -4,9 +4,9 @@ namespace HSMServer.ServerConfiguration
 {
     // Retention and abuse bounds of the API-token channel (#1356; initiative section
     // "Configuration"), plus the issuance-side knobs that land with the token-management
-    // UI (step 4). Defaults are upgrade-safe: a deployment with no ApiTokens section in
-    // config gets tokens fully DISABLED and must opt in explicitly, never the other way
-    // round.
+    // UI (step 4). Defaults are upgrade-safe in the channel sense: a deployment with no
+    // ApiTokens section in config gets tokens fully DISABLED and must opt in explicitly.
+    // The expiry gate defaults the permissive way since #1373 (see AllowNoExpiration).
     public sealed class ApiTokensConfig
     {
         // Emergency authentication/issuance kill switch (initiative: "ApiTokens.Enabled =
@@ -41,11 +41,11 @@ namespace HSMServer.ServerConfiguration
         // operator's explicit decision.
         public TimeSpan MaxLifetime { get; set; } = TimeSpan.FromDays(365);
 
-        // Expiry preselected by the create form (the "recommended preset" the initiative
-        // names). A preselect, not the bound: the create endpoint enforces MaxLifetime,
-        // and a custom date may be shorter or longer than this value within it. Must be
-        // at least one day — the form's presets are day-granular and a sub-day default
-        // would render as "1 days".
+        // Expiry preselected by the create form while no-expiration is switched off (the
+        // "recommended preset" the initiative names). A preselect, not the bound: the
+        // create endpoint enforces MaxLifetime, and a custom date may be shorter or
+        // longer than this value within it. Must be at least one day — the form's
+        // presets are day-granular and a sub-day default would render as "1 days".
         public TimeSpan DefaultLifetime { get; set; } = TimeSpan.FromDays(90);
 
         // Upper bound for both retention windows: the retention sweep computes
@@ -87,8 +87,9 @@ namespace HSMServer.ServerConfiguration
                 throw new InvalidOperationException(
                     $"ApiTokens.{nameof(MaxLifetime)} must be between 1 and {MaxRetention.TotalDays:0} days (was {MaxLifetime.TotalDays:0.##} days).");
 
-            // The form preselects DefaultLifetime; a default the create endpoint would
-            // refuse as over-cap would make the form's own preset a guaranteed error.
+            // The form preselects DefaultLifetime where the no-expiration gate is off;
+            // a default the create endpoint would refuse as over-cap would make the
+            // form's own preset a guaranteed error.
             if (DefaultLifetime > MaxLifetime)
                 throw new InvalidOperationException(
                     $"ApiTokens.{nameof(DefaultLifetime)} must not exceed {nameof(MaxLifetime)} (was {DefaultLifetime.TotalDays:0.##} days, cap {MaxLifetime.TotalDays:0.##} days).");
