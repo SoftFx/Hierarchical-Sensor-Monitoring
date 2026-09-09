@@ -560,24 +560,30 @@
             var presets = [30, 90, 365].filter(function (days) { return days <= maxLifetimeDays; });
 
             // A configured DefaultLifetime outside the standard presets becomes its own
-            // preselected option — otherwise the browser would silently fall back to
-            // the first preset and ignore the operator's default.
+            // option (the preselect while the gate is off) — otherwise the browser
+            // would silently fall back to the first preset and ignore the operator's
+            // default.
             if (defaultLifetimeDays > 0 && presets.indexOf(defaultLifetimeDays) === -1) {
                 presets.push(defaultLifetimeDays);
                 presets.sort(function (a, b) { return a - b; });
             }
 
+            // No expiration is the product default since #1373 (the typical token —
+            // an agent/integration credential — outlives any preset); DefaultLifetime
+            // stays the preselect only where the operator switched the gate off.
             presets.forEach(function (days) {
-                addExpiryOption(select, String(days), days + ' days', days === defaultLifetimeDays);
+                addExpiryOption(select, String(days), days + ' days', days === defaultLifetimeDays && !allowNoExpiration);
             });
             addExpiryOption(select, 'custom', 'Custom date…', false);
             if (allowNoExpiration) {
-                addExpiryOption(select, 'never', 'No expiration', false);
+                addExpiryOption(select, 'never', 'No expiration', true);
             }
         }
 
         document.getElementById('customExpiryBlock').style.display = 'none';
-        document.getElementById('noExpirationWarning').style.display = 'none';
+        // A preselected "No expiration" (#1373) shows its warning from the start,
+        // not only after the user re-picks it.
+        setNoExpirationWarning(select.value);
         document.getElementById('customExpiryInput').value = '';
         // Today, not tomorrow: the server requires only "in the future", and a token
         // expiring today/tomorrow must still be shortenable to a same-day value.
@@ -596,6 +602,12 @@
         option.textContent = text;
         option.selected = !!selected;
         select.appendChild(option);
+    }
+
+    // Single owner of the warning's visibility: the change listener and the
+    // create-form reset (which may preselect 'never', #1373) must not drift.
+    function setNoExpirationWarning(value) {
+        document.getElementById('noExpirationWarning').style.display = value === 'never' ? 'block' : 'none';
     }
 
     function selectedExpiryUtc() {
@@ -643,7 +655,7 @@
 
     document.getElementById('expirySelect').addEventListener('change', function () {
         document.getElementById('customExpiryBlock').style.display = this.value === 'custom' ? 'block' : 'none';
-        document.getElementById('noExpirationWarning').style.display = this.value === 'never' ? 'block' : 'none';
+        setNoExpirationWarning(this.value);
     });
 
     // ---- mutations -------------------------------------------------------------

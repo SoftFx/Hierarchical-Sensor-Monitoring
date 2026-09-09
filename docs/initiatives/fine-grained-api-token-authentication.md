@@ -86,7 +86,7 @@ From the authenticated HSM web UI, the user chooses **API tokens → Create toke
 
 - Name, required, human-readable, unique per owner if practical.
 - Optional description/purpose.
-- Expiration: recommended presets plus explicit `No expiration` with a warning.
+- Expiration: recommended presets plus explicit `No expiration` with a warning (offered and preselected by default since #1373 — see ADR-0004).
 - Explicit operation/resource grants selected from combinations currently available to the owner.
 - Product/Folder boundary selected for each resource-scoped operation; global operations use an explicit global boundary.
 
@@ -198,7 +198,7 @@ CreatedAtUtc
 CreatedBy             audit initiator
 RestrictedAtUtc        nullable
 RestrictedBy           nullable audit initiator
-ExpiresAtUtc           nullable only when no-expiration is explicitly selected
+ExpiresAtUtc           nullable only when no-expiration is explicitly selected (explicitness is enforced client-side only; see ADR-0004 follow-ups)
 LastUsedAtUtc          nullable, operational metadata
 RotatedAtUtc           nullable
 RotatedFromEntityId    nullable stable entity GUID
@@ -519,7 +519,7 @@ Each PR must update the actual behavior documentation and run focused server/sec
 ## Implementation Questions Requiring Review
 
 1. What operation matrix is granted by IsAdmin, ProductManager, and ProductViewer for each API capability?
-2. Should No expiration require explicit confirmation or server policy?
+2. ~~Should No expiration require explicit confirmation or server policy?~~ Resolved by #1373 / ADR-0004: offered and preselected by default; the operator policy knob (`ApiTokens.AllowNoExpiration`) remains as the opt-out.
 3. Is same-user token-name uniqueness useful?
 4. What retention policies apply separately to lifecycle journal records and the append-only per-request security-event sink?
 5. Should service accounts be a follow-up initiative?

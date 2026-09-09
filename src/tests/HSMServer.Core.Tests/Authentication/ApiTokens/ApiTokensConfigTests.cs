@@ -4,19 +4,22 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.Authentication.ApiTokens
 {
-    // ApiTokensConfig contract (initiative step 4): upgrade-safe defaults — a deployment
-    // with no ApiTokens section gets the token channel fully disabled — and startup
+    // ApiTokensConfig contract (initiative step 4): upgrade-safe defaults in the channel
+    // sense — a deployment with no ApiTokens section gets the token channel fully
+    // disabled; the expiry gate defaults the permissive way since #1373 — and startup
     // validation with actionable, key-named errors for every knob.
     public class ApiTokensConfigTests
     {
         [Fact]
-        public void Defaults_AreUpgradeSafeDisabledChannel()
+        public void Defaults_DisabledChannel_NoExpirationAllowed()
         {
             var config = new ApiTokensConfig();
 
             Assert.False(config.Enabled);
             Assert.Equal(10, config.MaxTokensPerUser);
-            Assert.False(config.AllowNoExpiration);
+            // No-expiration is the product default since #1373: the create form
+            // preselects it; the knob is now the operator's opt-OUT.
+            Assert.True(config.AllowNoExpiration);
             Assert.Equal(TimeSpan.FromDays(365), config.MaxLifetime);
             Assert.Equal(TimeSpan.FromDays(90), config.DefaultLifetime);
             Assert.Equal(TimeSpan.FromDays(30), config.TokenRecordRetention);
