@@ -55,7 +55,16 @@
     .status-badge.expired { color: #92400e; border-color: #fde68a; background-color: #fffbeb; }
     .status-badge.revoked { color: #6b7280; background-color: #f3f4f6; }
     .status-badge.invalidated { color: #6d28d9; border-color: #ddd6fe; background-color: #f5f3ff; }
-    .op-check { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8125rem; }
+    .op-table { width: 100%; margin: 0; border-collapse: collapse; font-size: 0.8125rem; }
+    /* Sticky within #operationsBlock's scroll: the column toggles are the point of
+       the table and must stay reachable when the catalog overflows the block. */
+    .op-table thead th { position: sticky; top: 0; background: #f9fafb; padding: 0.25rem 0.5rem; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-weight: 500; font-size: 0.75rem; }
+    .op-table td, .op-table tbody th { padding: 0.25rem 0.5rem; border-bottom: 1px solid #f3f4f6; }
+    .op-table tr:last-child td, .op-table tbody tr:last-child th { border-bottom: none; }
+    /* Row headers keep the data-cell look (th defaults to bold + centered). */
+    .op-table .op-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 400; text-align: left; }
+    .op-table .op-cell { width: 20%; text-align: center; }
+    .op-table .op-none { color: #d1d5db; }
     .modal-error { display: none; }
 </style>
 
@@ -328,13 +337,19 @@
     var rotateEntityId = null;
     var revokeEntityId = null;
 
+    // A grant is identified by operation + boundary. The Global boundary is empty text
+    // on both ends; older page state may still carry null from the stored record, so
+    // normalize before comparing. Single owner of the predicate — the picker asks it
+    // from three places (selection state, restrict's held-set, removal).
+    function grantMatches(grant, operation, boundary) {
+        return grant.operation === operation &&
+               grant.boundaryKind === boundary.kind &&
+               (grant.boundaryId || '') === (boundary.id || '');
+    }
+
     function tokenHasGrant(operation, boundary) {
         return restrictOriginalGrants.some(function (grant) {
-            // The Global boundary is empty text on both ends; older page state may
-            // still carry null from the stored record, so normalize before comparing.
-            return grant.operation === operation &&
-                   grant.boundaryKind === boundary.kind &&
-                   (grant.boundaryId || '') === (boundary.id || '');
+            return grantMatches(grant, operation, boundary);
         });
     }
 
@@ -448,67 +463,220 @@
         return isNaN(index) ? null : boundaryOptions[index] || null;
     }
 
+    // The selected boundary's operations as a Name/Read/Write table (#1374): each row
+    // is an operation family ("products" -> Products), the Read/Write cells carry the
+    // family's :read/:write checkbox wherever the owner may mint it; anything else —
+    // a write the owner's role does not cover, History's nonexistent :write, System
+    // health off the Global boundary — renders a dash. The header checkbox of a column
+    // selects/clears every checkbox of that column at this boundary.
     function renderOperations() {
         var block = document.getElementById('operationsBlock');
-        var boundary = currentBoundary();
         block.innerHTML = '';
 
-        if (!boundary) {
-            block.innerHTML = '<div class="text-secondary p-2">No operations available.</div>';
+        var boundary = currentBoundary();
+        var families = operationFamilies(boundary);
+        if (!families.length) {
+            // The empty picker still refreshes the badges: restrict opens on the
+            // dropdown's first boundary, which for a product-scoped token is one it
+            // holds nothing at — the badge row must always mirror selectedGrants, or
+            // the modal shows a grant set that is not what will be submitted.
+            block.innerHTML = '<div class="text-secondary p-2">' +
+                (grantModalMode === 'restrict'
+                    ? 'This token holds no operations at this boundary.'
+                    : 'No operations available.') + '</div>';
+            renderSelectedGrants();
             return;
         }
 
-        boundary.operations.forEach(function (operation) {
-            var alreadySelected = selectedGrants.some(function (grant) {
-                return grant.operation === operation &&
-                       grant.boundaryKind === boundary.kind &&
-                       (grant.boundaryId || '') === (boundary.id || '');
-            });
+        var table = document.createElement('table');
+        table.className = 'op-table';
 
-            // Restriction may only remove: hide operations the token does not currently
-            // hold (checking one would be an expansion the server rejects). Grants the
-            // owner can no longer mint are still removable through the badge's ×.
-            if (grantModalMode === 'restrict' && !alreadySelected &&
-                !tokenHasGrant(operation, boundary)) {
-                return;
-            }
+        var headRow = document.createElement('tr');
+        var nameHeader = document.createElement('th');
+        nameHeader.scope = 'col';
+        nameHeader.textContent = 'Name';
+        headRow.appendChild(nameHeader);
+        headRow.appendChild(columnHeaderCell('Read', 'read'));
+        headRow.appendChild(columnHeaderCell('Write', 'write'));
+        var thead = document.createElement('thead');
+        thead.appendChild(headRow);
+        table.appendChild(thead);
 
-            var wrapper = document.createElement('label');
-            wrapper.className = 'op-check';
+        var tbody = document.createElement('tbody');
+        families.forEach(function (family) {
+            var row = document.createElement('tr');
 
-            var checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.checked = alreadySelected;
-            checkbox.onchange = function () {
-                if (this.checked) {
-                    selectedGrants.push({
-                        operation: operation,
-                        boundaryKind: boundary.kind,
-                        boundaryId: boundary.id,
-                        boundaryName: boundary.name
-                    });
-                } else {
-                    removeGrant(operation, boundary.kind, boundary.id);
-                }
-                renderSelectedGrants();
-            };
+            // A row header, not a data cell: with bare checkboxes in the Read/Write
+            // cells this is what ties a row to its family for assistive tech.
+            var name = document.createElement('th');
+            name.scope = 'row';
+            name.className = 'op-name';
+            name.textContent = family.label;
+            row.appendChild(name);
 
-            var span = document.createElement('span');
-            span.textContent = operation;
-
-            wrapper.appendChild(checkbox);
-            wrapper.appendChild(span);
-            block.appendChild(wrapper);
+            row.appendChild(operationCell(family.read, boundary, 'read'));
+            row.appendChild(operationCell(family.write, boundary, 'write'));
+            tbody.appendChild(row);
         });
+        table.appendChild(tbody);
+        block.appendChild(table);
 
+        refreshColumnToggles();
         renderSelectedGrants();
     }
 
-    function removeGrant(operation, boundaryKind, boundaryId) {
+    // Families of the boundary's grantable operations, in catalog order. Restrict mode
+    // keeps only the operations the token currently holds — its cells stay toggleable
+    // (re-checking restores what a previous uncheck removed, never more), everything
+    // else would be an expansion the server rejects. Grants the owner can no longer
+    // mint are still removable through the badge's ×.
+    function operationFamilies(boundary) {
+        var order = [];
+        var byFamily = {};
+        var unmatched = [];
+
+        if (boundary) {
+            boundary.operations.forEach(function (operation) {
+                var separator = operation.indexOf(':');
+                var family = separator === -1 ? operation : operation.substring(0, separator);
+                var access = separator === -1 ? '' : operation.substring(separator + 1);
+                if (access !== 'read' && access !== 'write') {
+                    unmatched.push(operation);
+                    return;
+                }
+
+                if (grantModalMode === 'restrict' && !tokenHasGrant(operation, boundary)) return;
+
+                if (!byFamily[family]) {
+                    byFamily[family] = { label: familyLabel(family), read: null, write: null };
+                    order.push(family);
+                }
+                byFamily[family][access] = operation;
+            });
+        }
+
+        // The catalog's discipline is read/write pairs only (ADR-0002); anything else
+        // has no cell to land in — say so instead of letting a capability vanish from
+        // the only UI that mints it.
+        if (unmatched.length)
+            console.warn('Grant picker skipped non-read/write operations: ' + unmatched.join(', '));
+
+        return order.map(function (family) { return byFamily[family]; });
+    }
+
+    // "products" -> "Products", "system-health" -> "System health" (sentence case).
+    function familyLabel(family) {
+        var spaced = family.replace(/-/g, ' ');
+        return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+    }
+
+    // A column header: its checkbox selects/clears every checkbox of the column at
+    // the current boundary; state and disabled-ness live in refreshColumnToggles.
+    function columnHeaderCell(text, column) {
+        var th = document.createElement('th');
+        th.scope = 'col';
+        th.className = 'op-cell';
+
+        var toggle = document.createElement('input');
+        toggle.type = 'checkbox';
+        toggle.className = 'op-column-toggle';
+        toggle.dataset.column = column;
+        toggle.title = 'Select or clear every ' + column + ' operation at this boundary';
+        toggle.setAttribute('aria-label', toggle.title);
+        toggle.onchange = function () { toggleColumn(column, this.checked); };
+
+        th.appendChild(toggle);
+        th.appendChild(document.createTextNode(' ' + text));
+        return th;
+    }
+
+    function operationCell(operation, boundary, column) {
+        var td = document.createElement('td');
+        td.className = 'op-cell';
+
+        if (!operation) {
+            // Not grantable here (owner filter, restrict's held-only set) or not an
+            // operation at all (History has no :write): a dash keeps the grid legible
+            // instead of a silently missing cell.
+            td.className += ' op-none';
+            td.textContent = '—';
+            return td;
+        }
+
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.dataset.column = column;
+        checkbox.dataset.operation = operation;
+        // No wrapping <label> in a grid cell — the operation id is the checkbox's
+        // accessible name (and its tooltip).
+        checkbox.title = operation;
+        checkbox.setAttribute('aria-label', operation);
+        checkbox.checked = isSelected(operation, boundary);
+        checkbox.onchange = function () {
+            if (this.checked) addGrant(operation, boundary);
+            else removeGrant(operation, boundary);
+            renderSelectedGrants();
+            refreshColumnToggles();
+        };
+
+        td.appendChild(checkbox);
+        return td;
+    }
+
+    function isSelected(operation, boundary) {
+        return selectedGrants.some(function (grant) {
+            return grantMatches(grant, operation, boundary);
+        });
+    }
+
+    function addGrant(operation, boundary) {
+        selectedGrants.push({
+            operation: operation,
+            boundaryKind: boundary.kind,
+            boundaryId: boundary.id,
+            boundaryName: boundary.name
+        });
+    }
+
+    function toggleColumn(column, checked) {
+        var boundary = currentBoundary();
+        columnCheckboxes(column).forEach(function (checkbox) {
+            if (checkbox.checked === checked) return;
+
+            checkbox.checked = checked;
+            if (checked) addGrant(checkbox.dataset.operation, boundary);
+            else removeGrant(checkbox.dataset.operation, boundary);
+        });
+
+        renderSelectedGrants();
+        refreshColumnToggles();
+    }
+
+    function columnCheckboxes(column) {
+        return document.querySelectorAll("#operationsBlock tbody input[data-column='" + column + "']");
+    }
+
+    // Header state mirrors its column: checked when every checkbox is, indeterminate
+    // on a partial set, disabled where the column has nothing to toggle (the dash-only
+    // case — e.g. a Viewer's Write column).
+    function refreshColumnToggles() {
+        ['read', 'write'].forEach(function (column) {
+            var toggle = document.querySelector("#operationsBlock .op-column-toggle[data-column='" + column + "']");
+            if (!toggle) return;
+
+            var cells = columnCheckboxes(column);
+            var checkedCount = 0;
+            cells.forEach(function (checkbox) { if (checkbox.checked) checkedCount++; });
+
+            toggle.disabled = cells.length === 0;
+            toggle.checked = cells.length > 0 && checkedCount === cells.length;
+            toggle.indeterminate = checkedCount > 0 && checkedCount < cells.length;
+        });
+    }
+
+    function removeGrant(operation, boundary) {
         selectedGrants = selectedGrants.filter(function (grant) {
-            return !(grant.operation === operation &&
-                     grant.boundaryKind === boundaryKind &&
-                     (grant.boundaryId || '') === (boundaryId || ''));
+            return !grantMatches(grant, operation, boundary);
         });
     }
 
@@ -529,7 +697,9 @@
             remove.className = 'grant-remove';
             remove.textContent = '×';
             remove.onclick = function () {
-                removeGrant(grant.operation, grant.boundaryKind, grant.boundaryId);
+                // A boundary-shaped shim from the grant itself — the badge outlives
+                // picker re-renders, so there is no boundary object at hand here.
+                removeGrant(grant.operation, { kind: grant.boundaryKind, id: grant.boundaryId });
                 // Operations + badges only: rebuilding the <select> would reset the
                 // chosen boundary to the top of the list on every removal.
                 renderOperations();
