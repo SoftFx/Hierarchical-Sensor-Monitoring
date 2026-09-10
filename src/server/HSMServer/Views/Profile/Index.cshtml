@@ -40,9 +40,10 @@
     .token-row:hover { background-color: #f9fafb; }
     .token-row.dead { opacity: 0.55; }
     .grant-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; background-color: #f5f5f5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    /* The all-reads preselect (#1375) can mint hundreds of badges — without a cap the
-       badge row grows past the 180px table above it and pushes Expiration and Create
-       off-screen (the dialog is not scrollable). */
+    /* A wide hand-built selection (or a restrict of a cap-sized token) can carry
+       hundreds of badges — without a cap the badge row grows past the 180px table
+       above it and pushes Expiration and Create off-screen (the dialog is not
+       scrollable). */
     #selectedGrants { max-height: 110px; overflow-y: auto; }
     .grant-badge .grant-remove { cursor: pointer; margin-left: 0.25rem; color: #6b7280; font-weight: 700; }
     .grant-badge .grant-remove:hover { color: #ef4444; }
@@ -246,9 +247,9 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <label class="form-label">Grants</label>
-                        @* One-click narrowing for the all-reads preselect (#1375): the column
-                           toggles only clear ONE boundary at a time, and a capped or unwanted
-                           preselect would otherwise need a click per boundary to undo. *@
+                        @* One-click narrowing for wide selections: the column toggles
+                           only clear ONE boundary at a time, so undoing a broad
+                           hand-built set would otherwise need a click per boundary. *@
                         <button type="button" class="btn btn-link btn-sm py-0" id="clearGrantsButton" style="display: none;">Clear all</button>
                     </div>
                     <div class="d-flex gap-2 align-items-center mb-2 mt-1">
@@ -772,7 +773,7 @@
               (boundaryCount === 1 ? ' boundary' : ' boundaries') +
               ' — the token will be able to perform exactly these operations there.' +
               (selectedGrants.length >= maxGrants
-                  ? ' Grant cap (' + maxGrants + ') reached — remove some grants first.'
+                  ? ' At the grant cap (' + maxGrants + ') — remove a grant before adding another.'
                   : '')
             : (grantModalMode === 'create' ? 'Select at least one operation.' : 'An empty set strips every grant (the token stops working but stays revocable).');
 
