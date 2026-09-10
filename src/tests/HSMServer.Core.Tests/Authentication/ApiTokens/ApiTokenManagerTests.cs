@@ -286,6 +286,27 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
 
         [Fact]
+        public void TryAuthenticate_PreSimplificationRowWithRestrictionStamps_FailsClosedAtLoad()
+        {
+            // Unreachable through the old surface (a restricted record also carried
+            // grants), but the invariant is "pre-simplification rows fail closed": a
+            // restriction stamp alone marks the row as pre-simplification.
+            var tokenId = new string('S', ApiTokenMaterial.TokenIdLength);
+
+            _databaseCoreManager.DatabaseCore.PutApiToken(BuildRow(tokenId: tokenId, name: "was-restricted") with
+            {
+                RestrictedAtUtc = DateTime.UtcNow.AddDays(-1).Ticks,
+            });
+
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            Assert.Null(manager.GetToken(tokenId));
+            Assert.Equal(new[] { tokenId }, manager.GetOrphanTokenIds());
+        }
+
+
+        [Fact]
         public void TryAuthenticate_UnhealthyState_RefusesEvenValidCredentials()
         {
             using var manager = CreateManager();

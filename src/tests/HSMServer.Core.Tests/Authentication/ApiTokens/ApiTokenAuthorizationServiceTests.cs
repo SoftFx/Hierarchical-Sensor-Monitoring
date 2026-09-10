@@ -500,6 +500,29 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
 
         [Fact]
+        public void CanSeeAnyBoundary_StaleRolesOnly_False()
+        {
+            // The gate's contract says the role must currently RESOLVE: entries pointing
+            // at deleted products/folders count for nothing, exactly like
+            // TryResolveBoundary fails closed on deleted ids. The user's only product was
+            // deleted — their tokens must not keep passing the schedules gate.
+            _info = BuildInfo(readOnly: false);
+
+            var service = CreateService();
+
+            _owner.ProductsRoles.Add((Guid.NewGuid(), ProductRoleEnum.ProductViewer));
+            _owner.FoldersRoles.Add(Guid.NewGuid(), ProductRoleEnum.ProductViewer);
+
+            Assert.False(service.CanSeeAnyBoundary(Principal()));
+
+            // A resolvable entry flips it back on.
+            _owner.ProductsRoles.Add((ProductA, ProductRoleEnum.ProductViewer));
+
+            Assert.True(service.CanSeeAnyBoundary(Principal()));
+        }
+
+
+        [Fact]
         public void CanSeeAnyBoundary_UnresolvableToken_False_RecordsDeniedOnce()
         {
             // Revoked/removed between authentication and authorization: fail closed,

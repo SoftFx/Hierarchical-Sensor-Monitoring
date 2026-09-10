@@ -159,6 +159,62 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void LegacyExpiredRow_IsReapedByPassOne_ByItsOwnDeathStamp()
+        {
+            // #1384 keeps the expiry half of DeadAtTicks deliberately: a
+            // pre-simplification row (rejected at load, so absent from the live index)
+            // with an already-old expiry is reaped by pass 1 immediately, instead of
+            // waiting the orphan pass's first-observation window. Future expiry —
+            // before the retention cutoff elapses — keeps the row for the window, like
+            // any other death stamp.
+            var realNow = DateTime.UtcNow;
+            var retention = TimeSpan.FromMinutes(10);
+
+            var longDead = new string('D', ApiTokenMaterial.TokenIdLength);
+            var recentlyDead = new string('E', ApiTokenMaterial.TokenIdLength);
+
+            _databaseCoreManager.DatabaseCore.PutApiToken(new HSMDatabase.AccessManager.DatabaseEntities.ApiTokenEntity
+            {
+                EntityVersion = 1,
+                EntityId = Guid.NewGuid(),
+                TokenId = longDead,
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "legacy-expired",
+                Grants = [],
+                CreatedAtUtc = DateTime.UtcNow.AddDays(-40).Ticks,
+                ExpiresAtUtc = (realNow - TimeSpan.FromDays(30)).Ticks,
+            });
+
+            _databaseCoreManager.DatabaseCore.PutApiToken(new HSMDatabase.AccessManager.DatabaseEntities.ApiTokenEntity
+            {
+                EntityVersion = 1,
+                EntityId = Guid.NewGuid(),
+                TokenId = recentlyDead,
+                VersionByte = ApiTokenMaterial.CurrentVersionByte,
+                Verifier = new byte[32],
+                OwnerUserId = OwnerId,
+                Name = "legacy-expiring-later",
+                Grants = [],
+                CreatedAtUtc = DateTime.UtcNow.AddDays(-40).Ticks,
+                ExpiresAtUtc = (realNow + TimeSpan.FromMinutes(5)).Ticks,
+            });
+
+            using var manager = CreateManager();
+            manager.Initialize().Wait();
+
+            var cleaner = CreateCleaner(new ApiTokensConfig { TokenRecordRetention = retention, SecurityEventRetention = EventsPinnedOff },
+                _databaseCoreManager.DatabaseCore, manager);
+
+            var result = cleaner.RunOnce(realNow);
+
+            Assert.Equal(1, result.TokenRowsRemoved);
+            Assert.Null(_databaseCoreManager.DatabaseCore.GetApiToken(longDead));
+            Assert.NotNull(_databaseCoreManager.DatabaseCore.GetApiToken(recentlyDead));
+        }
+
+        [Fact]
         public void DeadRowExactlyAtTheCutoff_IsRemoved_InclusiveBoundary()
         {
             // The token-row cutoff is INCLUSIVE (deadAt <= cutoff), unlike the

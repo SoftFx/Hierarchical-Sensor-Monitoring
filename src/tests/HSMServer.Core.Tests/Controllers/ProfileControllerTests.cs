@@ -338,6 +338,50 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
+        [Fact]
+        public void RotateToken_RevokedToken_NotFound()
+        {
+            // Rotation is the one lifecycle op that mints a fresh live credential — its
+            // guards are worth pinning at the controller level, symmetric with create.
+            _tokens.Setup(t => t.GetTokenByEntityId(EntityId))
+                .Returns(BuildInfo() with { RevokedAtUtc = DateTime.UtcNow.Ticks });
+
+            var answer = Mutate(CreateController().RotateToken(new RotateTokenRequest { EntityId = EntityId }));
+
+            Assert.Equal("not_found", answer.Error);
+            _tokens.Verify(t => t.TryRotateToken(It.IsAny<Guid>(), It.IsAny<string>(),
+                out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny), Times.Never);
+        }
+
+
+        [Fact]
+        public void RotateToken_Disabled_Denied()
+        {
+            _config.Enabled = false;
+            _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo());
+
+            var answer = Mutate(CreateController().RotateToken(new RotateTokenRequest { EntityId = EntityId }));
+
+            Assert.Equal("disabled", answer.Error);
+            _tokens.Verify(t => t.TryRotateToken(It.IsAny<Guid>(), It.IsAny<string>(),
+                out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny), Times.Never);
+        }
+
+
+        [Fact]
+        public void RotateToken_UnhealthyGenerations_Denied()
+        {
+            _tokens.Setup(t => t.IsGenerationStateHealthy).Returns(false);
+            _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo());
+
+            var answer = Mutate(CreateController().RotateToken(new RotateTokenRequest { EntityId = EntityId }));
+
+            Assert.Equal("unhealthy", answer.Error);
+            _tokens.Verify(t => t.TryRotateToken(It.IsAny<Guid>(), It.IsAny<string>(),
+                out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny), Times.Never);
+        }
+
+
         // ---- revoke ---------------------------------------------------------------
 
         [Fact]

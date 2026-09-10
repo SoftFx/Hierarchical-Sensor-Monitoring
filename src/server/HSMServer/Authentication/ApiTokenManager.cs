@@ -31,7 +31,7 @@ namespace HSMServer.Authentication
         private const int MaxInsertAttempts = 3;
         private const int MaxNameLength = 256;
 
-        // Revocation reasons and actor fields (createdBy/restrictedBy/rotatedBy/revokedBy).
+        // Revocation reasons and actor fields (createdBy/rotatedBy/revokedBy).
         private const int MaxFreeTextLength = 256;
 
         // The actor stamped on rows the retention sweep reconciles after an emergency
@@ -875,6 +875,14 @@ namespace HSMServer.Authentication
                     else if (candidate.ExpiresAtUtc is not null)
                     {
                         problem = "pre-simplification record with an expiry";
+                    }
+                    else if (candidate.RestrictedAtUtc is not null)
+                    {
+                        // Unreachable through the old surface (a restricted record also
+                        // carried grants), but the invariant is "pre-simplification rows
+                        // fail closed": a restriction stamp is a pre-simplification
+                        // signal, and nothing new ever writes one.
+                        problem = "pre-simplification record with restriction stamps";
                     }
 
                     if (problem is not null)

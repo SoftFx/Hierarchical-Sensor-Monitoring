@@ -1,6 +1,6 @@
 # ADR-0004: No-expiration API tokens are the issuance default
 
-**Status:** Superseded (2026-09-10, #1384 — token expiry was removed entirely; all tokens are eternal owner mirrors)
+**Status:** Superseded by ADR-0005 (2026-09-10, #1384 — token expiry was removed entirely; all tokens are eternal owner mirrors)
 **Date:** 2026-09-09
 **Supersedes:** —
 

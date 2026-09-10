@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Security.Claims;
 using HSMServer.Core.Cache;
 using HSMServer.Folders;
@@ -38,7 +39,8 @@ namespace HSMServer.Authentication
         bool IsVisible(ClaimsPrincipal principal, ApiTokenResource resource);
 
         // Caller-wide gate for GLOBAL resources (alert schedules): the owner is an
-        // admin or currently holds a role on at least one product/folder. A denial is
+        // admin or holds a role that currently RESOLVES (a stale entry pointing at a
+        // deleted product/folder counts for nothing). A denial is
         // recorded ONCE, as AuthorizationDenied: the gate is caller-wide and answers
         // 403, so it must not feed the enumeration-probe signal
         // (AuthorizationNotFound) that per-target 404s carry.
@@ -256,12 +258,14 @@ namespace HSMServer.Authentication
             };
 
         // The caller-wide gate's owner side: an admin sees everything; any other owner
-        // needs at least one current product or folder role. A user with no roles sees
-        // nothing anywhere, so no global resource can disclose anything to them.
-        private static bool OwnerSeesAnyBoundary(User owner) =>
+        // needs a role that currently RESOLVES — a stale entry pointing at a deleted
+        // product/folder grants nothing, exactly like TryResolveBoundary fails closed on
+        // deleted ids. A user with no resolvable role sees nothing anywhere, so no
+        // global resource can disclose anything to them.
+        private bool OwnerSeesAnyBoundary(User owner) =>
             owner.IsAdmin ||
-            owner.ProductsRoles.Count > 0 ||
-            owner.FoldersRoles.Count > 0;
+            owner.ProductsRoles.Any(role => _cache.TryGetProduct(role.Item1, out _)) ||
+            owner.FoldersRoles.Any(role => _folders.TryGetValue(role.Key, out _));
 
         // Text forms of the ids are precomputed once per boundary.
         private sealed record AuthorizationBoundary(ApiTokenResourceKind Kind, Guid Id, Guid? FolderId);

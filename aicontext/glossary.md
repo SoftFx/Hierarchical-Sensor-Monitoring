@@ -76,6 +76,7 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Revocation generation | Monotonic global/per-owner counter; a token authenticates only while its at-issue generations equal current values. | Emergency revoke-all/revoke-user advances it; missing-as-zero is the fresh baseline, corrupt/regressed fails closed. |
 | HsmApiToken scheme | The dedicated ASP.NET authentication scheme for API-token bearers; never the default scheme, runs only from the management policy. | Cookie stays default and is pinned into the `DefaultPolicy`; a cookie-only principal never satisfies a management endpoint. |
 | Management area (`/api/v1`) | The versioned management-API route family, SitePort-only and fail-closed: endpoints need `[ManagementApi]` plus their policy, everything else in the area is 404 by default. | `/api/v1/api-tokens` is the sole cookie-only family inside the area. |
+| Authorization boundary | The anchor a management-API target resolves to at evaluation time: Global, a product, or a folder (a sensor inherits its product's CURRENT folder). | Resolved from the live hierarchy per request; deleted ids fail closed. A token mirrors its owner's rights at whatever boundary the target resolves to (ADR-0005). |
 | C++ wrapper | Native wrapper surface under `src/wrapper`. | Keep parity with collector public APIs. |
 | Ping module | External module under `src/module/HSMPingModule`. | Integration surface and deployment assumptions matter. |
 

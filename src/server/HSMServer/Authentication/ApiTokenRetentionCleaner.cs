@@ -152,7 +152,9 @@ namespace HSMServer.Authentication
 
         // The row died at whichever death came first — a row that expired before it was
         // revoked must not outlive its retention window just because the revoke stamp is
-        // newer (feature.md: revoked OR expired at or before the cutoff).
+        // newer. Nothing new can carry an expiry (#1384); the ExpiresAtUtc half exists
+        // for pre-simplification rows so they reap by their own old death stamp instead
+        // of waiting the orphan pass's first-observation window.
         private static long? DeadAtTicks(HSMDatabase.AccessManager.DatabaseEntities.ApiTokenEntity entity) =>
             entity.RevokedAtUtc is { } revoked && entity.ExpiresAtUtc is { } expired
                 ? Math.Min(revoked, expired)
