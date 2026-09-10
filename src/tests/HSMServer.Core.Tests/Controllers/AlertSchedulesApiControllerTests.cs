@@ -289,7 +289,14 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.NotNull(page);
             var item = Assert.Single(page.Items);
-            Assert.Equal([sensorA.FullPath, sensorB.FullPath], item.Sensors.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray());
+            // Both sides normalized: the sensor names are randomly generated (the
+            // product name is fixed), so the construction order of the two FullPaths
+            // is a coin flip against sorted order — the expected array used to be
+            // left unsorted and the test flaked ~50% of runs (shipped unnoticed in
+            // the #1352 follow-up round).
+            Assert.Equal(
+                new[] { sensorA.FullPath, sensorB.FullPath }.OrderBy(p => p, StringComparer.OrdinalIgnoreCase),
+                item.Sensors.OrderBy(p => p, StringComparer.OrdinalIgnoreCase));
 
             // The per-product predicate is never consulted when the global shape holds.
             _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
