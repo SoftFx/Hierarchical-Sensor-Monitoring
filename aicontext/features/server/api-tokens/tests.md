@@ -118,7 +118,7 @@ The design's privilege-reduction matrix, recomputed per call:
 - Restrict: the remaining set reaches the manager canonicalized; foreign entity ids answer `not_found` with no manager call (indistinguishable from unknown); revoked tokens are `not_found`; `disabled` while the kill switch is on.
 - Rotate: returns the new secret once; `past_expiry` refused before the manager.
 - Revoke: own token revoked with the signed-in actor; works with tokens disabled (the kill switch's documented cleanup path); `unhealthy` denies; foreign ids `not_found`.
-- Page: lists only the caller's tokens and maps quota/state flags (`TokensEnabled` = `Enabled AND healthy`); `GrantOptions` returns an empty picker while disabled or unhealthy and delegates to the owner filter otherwise.
+- Page: lists only the caller's tokens and maps quota/state flags (`TokensEnabled` = `Enabled AND healthy`), and mirrors `MaxGrants` — the bound of the create form's all-reads preselect (#1375); `GrantOptions` returns an empty picker while disabled or unhealthy and delegates to the owner filter otherwise.
 - Page timestamps are Unix milliseconds (entity ticks minus the .NET-epoch offset) — pinned against a known instant.
 - Page `ServerNowUnixMs` (the form's clock anchor for presets, the cap clamp and date-input bounds) is Unix milliseconds within the test's before/after window — a ticks value here would shift every derived expiry instant ~2000 years off.
 - A generation-invalidated record (emergency-revoke generation above the at-issue stamps, both row timestamps unset) lists as `invalidated`, not `active`.
