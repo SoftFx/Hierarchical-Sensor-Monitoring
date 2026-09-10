@@ -43,6 +43,12 @@ namespace HSMServer.Model.Profile
         // server-side instant).
         public int MaxLifetimeDays { get; init; }
 
+        // The server's per-token grant cap (ApiTokenGrants.MaxGrants). The create
+        // form's all-reads preselect (#1375) stops here: past ~170 visible boundaries
+        // the preselected set would exceed it and every create would be refused —
+        // the preselect must never build a payload the server rejects.
+        public int MaxGrants { get; init; }
+
         // The server's clock at render, Unix milliseconds. The form derives every
         // expiry instant and date-input bound from this value plus client-measured
         // elapsed time — never from the browser clock: a browser running ahead of
