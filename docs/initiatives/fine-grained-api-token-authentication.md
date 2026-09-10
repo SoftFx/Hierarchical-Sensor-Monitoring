@@ -1,6 +1,18 @@
 # Initiative: Fine-grained API token authentication
 
 > Owner: server | Last reviewed: 2026-08-25 | Canonical: yes
+>
+> **SUPERSEDED (2026-09-10, #1384)**: the fine-granted model below — explicit
+> operation + boundary grants, per-token expiry — was removed before anything
+> shipped (the last release predates the whole initiative). A token is now an
+> eternal, full mirror of its owner's rights, optionally read-only; the operation
+> catalog, grant canonicalization, the grant picker UI and the expiry machinery
+> are gone. The delivered and still-current parts of this initiative: token
+> material and verifier, the persist-first store, the authoritative index,
+> revocation generations and the emergency revoke surface, scheme isolation, the
+> fail-closed `/api/v1` area, the security-event sink, retention, and the
+> profile-page management UI. See `aicontext/features/server/api-tokens/feature.md`
+> for the current model.
 
 ## Problem
 

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 
 namespace HSMServer.Authentication
@@ -53,7 +52,7 @@ namespace HSMServer.Authentication
         // The single authentication decision for a presented bearer credential: strict
         // parse, index lookup, stored-or-dummy constant-time verifier compare (and still
         // false when no record was found — the compare result alone is never the
-        // decision), then revoked/expired/both-generation-stamps and boot health. Use
+        // decision), then revoked/both-generation-stamps and boot health. Use
         // this from the handler instead of reassembling the checks from GetToken and the
         // generation accessors: every omitted predicate there is an authentication bypass.
         bool TryAuthenticate(string presentedToken, out ApiTokenInfo entity);
@@ -66,41 +65,36 @@ namespace HSMServer.Authentication
 
         // The liveness half of TryAuthenticate for callers that already hold a TokenId (an
         // evaluator re-checking a principal mid-request): the same IsLive rule — unrevoked,
-        // unexpired, current global and owner generations, healthy boot state — assembled
+        // current global and owner generations, healthy boot state — assembled
         // here so no consumer can reassemble it wrong. Like TryAuthenticate, this is the
         // only sanctioned way to judge a record's liveness from its id.
         bool IsTokenLive(string tokenId);
 
-        // Creates a token with the explicit grants (canonicalized; empty means a token that
-        // allows nothing). Persists first; publishes to the authentication index only after
-        // the write. fullToken carries the secret exactly once and is never stored or logged.
-        // Returns false — never throws — while generation state is unhealthy or unreadable:
-        // no token is minted against unproven generation values. The configured
-        // MaxTokensPerUser quota (see the manager's construction) is enforced INSIDE the
-        // same state-lock hold, so two concurrent creates cannot both pass a caller-side
-        // pre-check and exceed the cap; callers may still pre-check for a friendly error,
-        // but the hard bound is here.
-        bool TryCreateToken(Guid ownerUserId, string name, string description, List<ApiTokenGrantEntity> grants,
-            DateTime? expiresAtUtc, string createdBy, out ApiTokenInfo entity, out string fullToken);
+        // Creates a token with the fixed power profile of #1384: a full mirror of the
+        // owner's rights, minus every write operation when readOnly. Persists first;
+        // publishes to the authentication index only after the write. fullToken carries
+        // the secret exactly once and is never stored or logged. Returns false — never
+        // throws — while generation state is unhealthy or unreadable: no token is minted
+        // against unproven generation values. The configured MaxTokensPerUser quota (see
+        // the manager's construction) is enforced INSIDE the same state-lock hold, so two
+        // concurrent creates cannot both pass a caller-side pre-check and exceed the cap;
+        // callers may still pre-check for a friendly error, but the hard bound is here.
+        bool TryCreateToken(Guid ownerUserId, string name, bool readOnly, string createdBy,
+            out ApiTokenInfo entity, out string fullToken);
 
-        // Restriction only removes grant pairs and/or shortens expiry; returns false on any
-        // expansion attempt and for a dead record — a revoked or generation-invalidated
-        // (emergency-revoked) token cannot be restricted. Null remainingGrants keeps the
-        // current grants, symmetric with null shortenedExpiryUtc keeping the current
-        // expiry; an explicit empty list strips every grant. A no-op request (grants
-        // unchanged, expiry unchanged) succeeds without a rewrite. Changing requests
-        // record RestrictedAtUtc/RestrictedBy.
-        bool TryRestrictToken(Guid entityId, List<ApiTokenGrantEntity> remainingGrants, DateTime? shortenedExpiryUtc,
-            string restrictedBy, out ApiTokenInfo entity);
+        // Renames a live token — the only mutable field of the simplified model (the
+        // read-only flag is fixed at creation; rotation is the credential swap). Returns
+        // false for a dead record (revoked or generation-invalidated) and when the name
+        // sanitizes to nothing. A no-op rename succeeds without a rewrite.
+        bool TryRenameToken(Guid entityId, string newName, string renamedBy, out ApiTokenInfo entity);
 
-        // Rotation issues a completely fresh EntityId/TokenId/secret with the same grants
-        // (narrowing a token is what restriction is for) and an expiry no later than the
-        // source, and atomically revokes the source token in the same durable write. Never
-        // turns a finite expiry into an unlimited one; the resulting expiry must not
-        // already be in the past (requested or inherited). Refused, like creation, while
-        // generation state is unhealthy or unreadable, and for a dead source token —
-        // revoked, or invalidated by an emergency revoke generation.
-        bool TryRotateToken(Guid entityId, DateTime? shortenedExpiryUtc, string rotatedBy,
+        // Rotation issues a completely fresh EntityId/TokenId/secret with the same name
+        // and the same read-only flag (a pure credential swap — changing the power is
+        // what revoke + create is for) and atomically revokes the source token in the
+        // same durable write. Refused, like creation, while generation state is unhealthy
+        // or unreadable, and for a dead source token — revoked, or invalidated by an
+        // emergency revoke generation.
+        bool TryRotateToken(Guid entityId, string rotatedBy,
             out ApiTokenInfo entity, out string fullToken);
 
         // Revocation is immediate and idempotent — for any token visible in the index.
@@ -135,9 +129,9 @@ namespace HSMServer.Authentication
         // must surface.
         long AdvanceOwnerRevocationGeneration(Guid ownerUserId);
 
-        // Tokens counted by MaxTokensPerUser: unexpired, individually active (not revoked),
-        // and issued at the current global and owner revocation generations. Revoked,
-        // expired, orphaned and generation-invalidated records never count.
+        // Tokens counted by MaxTokensPerUser: individually active (not revoked) and issued
+        // at the current global and owner revocation generations. Revoked, orphaned and
+        // generation-invalidated records never count.
         int CountQuotaEligibleTokens(Guid ownerUserId);
 
         // The same liveness rule counted across every owner: how many tokens an

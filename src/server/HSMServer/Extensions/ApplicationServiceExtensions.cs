@@ -61,7 +61,7 @@ namespace HSMServer.ServiceExtensions
                     .AddAsyncStorage<IApiTokenManager, ApiTokenManager>();
 
             // Management-API authorization foundation (#1356 step 3): append-only
-            // per-request security events and the effective-rights/resource evaluator.
+            // per-request security events and the owner-mirroring evaluator (#1384).
             services.AddSingleton<IApiTokenSecurityEventSink, ApiTokenSecurityEventSink>();
             services.AddSingleton<IApiTokenAuthorizationService, ApiTokenAuthorizationService>();
 
@@ -71,10 +71,6 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton(config.ApiTokens);
             services.AddSingleton<ApiTokenInvalidAttemptLimiter>();
             services.AddSingleton<ApiTokenRetentionCleaner>();
-
-            // Issuance-side owner filter (#1356 step 4): what the create form may offer
-            // and what the lifecycle endpoints accept, from the owner's CURRENT roles.
-            services.AddSingleton<IApiTokenGrantOptionsService, ApiTokenGrantOptionsService>();
 
             services.AddSingleton<DataCollectorWrapper>()
                     .AddSingleton<TreeViewModel>()

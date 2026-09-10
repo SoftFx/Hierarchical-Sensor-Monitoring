@@ -24,9 +24,9 @@ namespace HSMServer.Controllers
     /// <summary>
     /// CRUD over alert templates (epic #1347). Bearer-token authenticated only (the
     /// HsmApiToken scheme — see the HsmApiToken security scheme of this document);
-    /// served on the web-UI port only. Reads need the token's alerts:read grant at the
-    /// template's folder, writes alerts:write; invisible or out-of-reach folders answer
-    /// the same 404 as an unknown id.
+    /// served on the web-UI port only. The token mirrors its owner: reads follow the
+    /// owner's sight, writes additionally need the owner's Manager role at the folder
+    /// and a read-write token; invisible folders answer the same 404 as an unknown id.
     /// </summary>
     // REST CRUD over alert templates — the first /api/v1 resource controller (#1351,
     // epic #1347). The class attributes are exactly what ManagementApiGuardMiddleware
@@ -36,9 +36,10 @@ namespace HSMServer.Controllers
     // cookie-world BaseController.
     //
     // Authorization is per request through IApiTokenAuthorizationService, at the
-    // template's FOLDER boundary: reads need alerts:read, writes alerts:write (which
-    // additionally requires the owner's Manager role at the boundary). The evaluator's
-    // 403/404 split is preserved verbatim — an invisible or out-of-reach folder is a
+    // template's FOLDER boundary: a token is a full mirror of its owner (#1384), so
+    // reads follow the owner's sight and writes additionally require the owner's
+    // Manager role at the boundary and a read-write token. The evaluator's
+    // 403/404 split is preserved verbatim — an invisible folder is a
     // 404 so callers cannot enumerate templates, and authorization always precedes
     // body validation for the same reason. Every error is the area's uniform JSON
     // contract (#1353, ManagementApiErrors): writes that fail inside the cache (folder
@@ -85,8 +86,8 @@ namespace HSMServer.Controllers
 
         /// <summary>
         /// List templates, paginated, ordered by name then id. Only templates whose
-        /// folder passes the caller's alerts:read visibility are listed — ungranted
-        /// folders are silently absent, never a per-item 403.
+        /// folder is visible to the token's owner are listed — everything else is
+        /// silently absent, never a per-item 403.
         /// </summary>
         /// <param name="page">1-based page number; clamped into [1, totalPages].</param>
         /// <param name="pageSize">Page size, 1..200 (default 50).</param>
@@ -100,20 +101,18 @@ namespace HSMServer.Controllers
             page = Math.Max(page, 1);
             pageSize = Math.Min(pageSize <= 0 ? DefaultPageSize : pageSize, MaxPageSize);
 
-            // The list returns full entity bodies, so reach alone is not enough: an
-            // item is listed only under the SAME operation its item endpoint would
-            // demand (alerts:read) — a token granted only, say, history:read at the
-            // folder gets a 403 on GET {id}, so the list must not disclose the item
-            // either. Never 403-per-item: ungranted folders are simply not listed.
-            // The decision is memoized per DISTINCT folder (templates cluster into a
-            // handful of folders, and the evaluator recomputes user + token + grants
-            // on every call); IsVisible records nothing, unlike per-item Authorize.
+            // The list predicate is the owner-sight half of the item read decision, so
+            // an item is listed exactly when GET {id} would answer it. Never
+            // 403-per-item: out-of-sight folders are simply not listed. The decision is
+            // memoized per DISTINCT folder (templates cluster into a handful of folders,
+            // and the evaluator re-resolves user + token on every call); IsVisible
+            // records nothing, unlike per-item authorization.
             var decisionByFolder = new Dictionary<Guid, bool>();
 
             bool IsListable(Guid folderId) =>
                 decisionByFolder.TryGetValue(folderId, out var listable)
                     ? listable
-                    : decisionByFolder[folderId] = _authorization.IsVisible(User, ApiTokenOperations.AlertsRead, FolderResource(folderId));
+                    : decisionByFolder[folderId] = _authorization.IsVisible(User, FolderResource(folderId));
 
             var visible = (_cache.GetAlertTemplateModels() ?? [])
                 .Where(t => IsListable(t.FolderId))
@@ -153,7 +152,7 @@ namespace HSMServer.Controllers
             if (template is null)
                 return ManagementApiErrors.NotFound();
 
-            var failure = AuthorizeFolder(ApiTokenOperations.AlertsRead, template.FolderId);
+            var failure = AuthorizeFolder(write: false, template.FolderId);
 
             return failure ?? Ok(AlertTemplateDtoMapper.ToDto(template));
         }
@@ -162,7 +161,7 @@ namespace HSMServer.Controllers
         /// Create a template. A client-sent id is ignored (the server generates one);
         /// the response echoes the STORED template — normalized ids, chat display names.
         /// </summary>
-        /// <remarks>Requires alerts:write at the target folder; the folder must exist, be visible to the token's owner and contain products.</remarks>
+        /// <remarks>Requires a read-write token and the owner's write access at the target folder; the folder must exist, be visible to the token's owner and contain products.</remarks>
         [HttpPost]
         [ProducesResponseType(typeof(AlertTemplateDto), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
@@ -181,7 +180,7 @@ namespace HSMServer.Controllers
 
             // The authorization target is the requested folder; no validation error is
             // reported before this decision (404-first).
-            var failure = AuthorizeFolder(ApiTokenOperations.AlertsWrite, dto.FolderId);
+            var failure = AuthorizeFolder(write: true, dto.FolderId);
 
             if (failure is not null)
                 return failure;
@@ -206,7 +205,7 @@ namespace HSMServer.Controllers
 
         /// <summary>
         /// Update a template (upsert semantics). Moving it to another folder requires
-        /// alerts:write on BOTH folders; the response echoes the stored template.
+        /// the owner's write access on BOTH folders; the response echoes the stored template.
         /// </summary>
         /// <param name="id">Template id; must equal the body id when the body carries one.</param>
         [HttpPut("{id:guid}")]
@@ -228,7 +227,7 @@ namespace HSMServer.Controllers
             // the target folder: moving a template needs write on BOTH folders — the
             // current one (the move destroys the old folder's per-sensor policies) and
             // the new one (the template injects policies into its sensors).
-            var failure = AuthorizeFolder(ApiTokenOperations.AlertsWrite, existing.FolderId);
+            var failure = AuthorizeFolder(write: true, existing.FolderId);
 
             if (failure is not null)
                 return failure;
@@ -242,7 +241,7 @@ namespace HSMServer.Controllers
 
             if (dto.FolderId != existing.FolderId)
             {
-                failure = AuthorizeFolder(ApiTokenOperations.AlertsWrite, dto.FolderId);
+                failure = AuthorizeFolder(write: true, dto.FolderId);
 
                 if (failure is not null)
                     return failure;
@@ -279,7 +278,7 @@ namespace HSMServer.Controllers
             if (template is null)
                 return ManagementApiErrors.NotFound();
 
-            var failure = AuthorizeFolder(ApiTokenOperations.AlertsWrite, template.FolderId);
+            var failure = AuthorizeFolder(write: true, template.FolderId);
 
             if (failure is not null)
                 return failure;
@@ -300,20 +299,22 @@ namespace HSMServer.Controllers
             new(ApiTokenResourceKind.Folder, folderId);
 
         // Maps the evaluator's decision onto the documented status codes: null when
-        // allowed, an explicit 403 uniform error when the folder is in reach but the
-        // operation is not granted, the area's generic 404 when the folder is invisible
-        // or out-of-reach (indistinguishable from an unknown id — same body). Forbid()
-        // is NOT used: it would engage the (cookie) default scheme's forbidden
-        // handling — a redirect.
-        private IActionResult AuthorizeFolder(string operation, Guid folderId)
+        // allowed, an explicit 403 uniform error when the folder is in sight but the
+        // caller cannot write there (a read-only token or the owner's Viewer role), the
+        // area's generic 404 when the folder is invisible (indistinguishable from an
+        // unknown id — same body). Forbid() is NOT used: it would engage the (cookie)
+        // default scheme's forbidden handling — a redirect.
+        private IActionResult AuthorizeFolder(bool write, Guid folderId)
         {
-            var decision = _authorization.Authorize(User, operation, FolderResource(folderId));
+            var decision = write
+                ? _authorization.AuthorizeWrite(User, FolderResource(folderId))
+                : _authorization.AuthorizeRead(User, FolderResource(folderId));
 
             return decision switch
             {
                 ApiTokenAuthorization.Allowed => null,
                 ApiTokenAuthorization.Forbidden => ManagementApiErrors.Forbidden(
-                    $"The token does not grant '{operation}' at this folder."),
+                    "The token is read-only or the token's owner cannot write at this folder."),
                 _ => ManagementApiErrors.NotFound(),
             };
         }

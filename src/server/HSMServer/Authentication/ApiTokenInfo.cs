@@ -1,7 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Authentication
 {
@@ -30,23 +27,14 @@ namespace HSMServer.Authentication
 
         public string Name { get; init; }
 
-        public string Description { get; init; }
-
-        // ImmutableArray on purpose: a projection must not alias a mutable list a
-        // consumer could edit in place (and through it the live index entry).
-        public ImmutableArray<ApiTokenGrantEntity> Grants { get; init; }
+        // The token's power: full mirror of the owner's rights, minus every write
+        // operation when true. Fixed at creation (#1384); rotation carries it as-is.
+        public bool ReadOnly { get; init; }
 
         public long CreatedAtUtc { get; init; }
 
         // Who minted the credential; survives rotation (the rotating actor is RotatedBy).
         public string CreatedBy { get; init; }
-
-        public long? RestrictedAtUtc { get; init; }
-
-        public string RestrictedBy { get; init; }
-
-        // Null = no expiration was explicitly confirmed at creation/rotation.
-        public long? ExpiresAtUtc { get; init; }
 
         public long? LastUsedAtUtc { get; init; }
 

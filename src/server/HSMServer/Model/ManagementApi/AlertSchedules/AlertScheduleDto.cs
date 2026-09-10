@@ -26,8 +26,8 @@ namespace HSMServer.Model.ManagementApi.AlertSchedules
 
         /// <summary>
         /// Full paths of the sensors currently using the schedule — FILTERED to the
-        /// boundaries the caller can see, so a folder-scoped token never learns paths
-        /// outside its grants.
+        /// products the token's owner can see, so a token never learns paths outside
+        /// its owner's sight.
         /// </summary>
         public List<string> Sensors { get; init; } = [];
     }

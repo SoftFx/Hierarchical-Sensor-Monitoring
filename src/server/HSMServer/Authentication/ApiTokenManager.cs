@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
@@ -24,14 +23,13 @@ namespace HSMServer.Authentication
     //
     // Thread safety: the manager is a singleton reached from request threads. Every
     // lifecycle mutation and every generation advance runs its whole read -> persist ->
-    // publish sequence under _stateLock, so a restrict/rotate derived from a
+    // publish sequence under _stateLock, so a rename/rotate derived from a
     // pre-revocation snapshot can never durably overwrite a revocation. Readers take no
     // lock and walk lock-free snapshot-safe structures only.
     public sealed class ApiTokenManager : IApiTokenManager
     {
         private const int MaxInsertAttempts = 3;
         private const int MaxNameLength = 256;
-        private const int MaxDescriptionLength = 1024;
 
         // Revocation reasons and actor fields (createdBy/restrictedBy/rotatedBy/revokedBy).
         private const int MaxFreeTextLength = 256;
@@ -181,34 +179,22 @@ namespace HSMServer.Authentication
         public long GetOwnerRevocationGeneration(Guid ownerUserId) => _ownerGenerations.GetValueOrDefault(ownerUserId);
 
 
-        public bool TryCreateToken(Guid ownerUserId, string name, string description, List<ApiTokenGrantEntity> grants,
-            DateTime? expiresAtUtc, string createdBy, out ApiTokenInfo entity, out string fullToken)
+        public bool TryCreateToken(Guid ownerUserId, string name, bool readOnly, string createdBy,
+            out ApiTokenInfo entity, out string fullToken)
         {
             entity = null;
             fullToken = null;
 
             var sanitizedName = Sanitize(name, MaxNameLength);
-            var sanitizedDescription = Sanitize(description, MaxDescriptionLength);
 
-            // Over-length name/description is rejected, not silently shortened — an
+            // Over-length name is rejected, not silently shortened — an
             // operator's token must not be named something other than what they typed.
             // (Actor fields and revocation reasons still truncate: a revocation must
             // never be blocked by an over-long reason.)
             if (name is not null && name.Trim().Length > MaxNameLength)
                 return false;
 
-            if (description is not null && description.Trim().Length > MaxDescriptionLength)
-                return false;
-
             if (ownerUserId == Guid.Empty || string.IsNullOrEmpty(sanitizedName))
-                return false;
-
-            if (!ApiTokenGrants.TryCanonicalize(grants, out var canonicalGrants, out _))
-                return false;
-
-            var expiryTicks = NormalizeUtcTicks(expiresAtUtc);
-
-            if (expiryTicks.HasValue && expiryTicks.Value <= DateTime.UtcNow.Ticks)
                 return false;
 
             var sanitizedCreatedBy = Sanitize(createdBy, MaxFreeTextLength);
@@ -257,11 +243,13 @@ namespace HSMServer.Authentication
                         GlobalRevocationGenerationAtIssue = globalGenerationAtIssue,
                         OwnerRevocationGenerationAtIssue = ownerGenerationAtIssue,
                         Name = sanitizedName,
-                        Description = sanitizedDescription,
-                        Grants = canonicalGrants,
+                        ReadOnly = readOnly,
+                        // The dormant grant list is always written EMPTY (#1384): a
+                        // default ImmutableArray is not serializable and a non-empty
+                        // one would fail closed at the next load anyway.
+                        Grants = [],
                         CreatedAtUtc = DateTime.UtcNow.Ticks,
                         CreatedBy = sanitizedCreatedBy,
-                        ExpiresAtUtc = expiryTicks,
                     };
 
                     ApiTokenMaterial.Clear(material.SecretBytes);
@@ -295,17 +283,23 @@ namespace HSMServer.Authentication
         }
 
 
-        public bool TryRestrictToken(Guid entityId, List<ApiTokenGrantEntity> remainingGrants, DateTime? shortenedExpiryUtc,
-            string restrictedBy, out ApiTokenInfo entity)
+        public bool TryRenameToken(Guid entityId, string newName, string renamedBy, out ApiTokenInfo entity)
         {
             entity = null;
+
+            var sanitizedName = Sanitize(newName, MaxNameLength);
+
+            // Over-length name is rejected, not silently shortened — the caller learns
+            // the name it typed is not storable instead of getting a different token.
+            if (newName is not null && newName.Trim().Length > MaxNameLength)
+                return false;
 
             lock (_stateLock)
             {
                 if (!TryGetTrackedToken(entityId, out var current))
                     return false;
 
-                // A revoked token is terminal; "restrict succeeded" on a dead record would be
+                // A revoked token is terminal; "rename succeeded" on a dead record would be
                 // a misleading result for the management layer.
                 if (current.RevokedAtUtc is not null)
                     return false;
@@ -319,52 +313,26 @@ namespace HSMServer.Authentication
                 if (!IsIssuedAtCurrentGenerations(current, globalGeneration, ownerGeneration))
                     return false;
 
-                // Null keeps the current grants — symmetric with shortenedExpiryUtc == null
-                // keeping the current expiry — while an explicit empty list strips every
-                // grant. The copy also keeps the restricted record from sharing the grant
-                // list instance with its predecessor.
-                ImmutableArray<ApiTokenGrantEntity> canonicalRemaining;
-
-                if (remainingGrants is null)
-                    canonicalRemaining = [.. current.Grants];
-                else if (!ApiTokenGrants.TryCanonicalize(remainingGrants, out canonicalRemaining, out _))
+                if (string.IsNullOrEmpty(sanitizedName))
                     return false;
 
-                // Restriction can only remove pairs; any pair not in the current set is
-                // expansion. Set lookup, not List.Contains: with MaxGrants on both sides
-                // the linear scan would be ~1M record comparisons inside _stateLock.
-                var currentGrants = new HashSet<ApiTokenGrantEntity>(current.Grants);
-
-                foreach (var grant in canonicalRemaining)
-                    if (!currentGrants.Contains(grant))
-                        return false;
-
-                if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
-                    return false;
-
-                // A no-op request (same grants, unchanged expiry) succeeds without a durable
-                // write or an audit stamp — nothing changed, so there is nothing to persist.
-                if (newExpiry == current.ExpiresAtUtc && canonicalRemaining.SequenceEqual(current.Grants))
+                // A no-op rename succeeds without a durable write — nothing changed, so
+                // there is nothing to persist.
+                if (sanitizedName == current.Name)
                 {
                     entity = ToInfo(current);
 
                     return true;
                 }
 
-                var restricted = current with
-                {
-                    Grants = canonicalRemaining,
-                    ExpiresAtUtc = newExpiry,
-                    RestrictedAtUtc = DateTime.UtcNow.Ticks,
-                    RestrictedBy = Sanitize(restrictedBy, MaxFreeTextLength),
-                };
+                var renamed = current with { Name = sanitizedName };
 
-                return TryPersistAndPublish(restricted, out entity);
+                return TryPersistAndPublish(renamed, out entity);
             }
         }
 
 
-        public bool TryRotateToken(Guid entityId, DateTime? shortenedExpiryUtc, string rotatedBy,
+        public bool TryRotateToken(Guid entityId, string rotatedBy,
             out ApiTokenInfo entity, out string fullToken)
         {
             entity = null;
@@ -386,8 +354,7 @@ namespace HSMServer.Authentication
                 if (current.RevokedAtUtc is not null)
                     return false;
 
-                // Captured under _stateLock, so a concurrent restrict cannot wedge a
-                // just-removed grant into the replacement; inside a try, so an unreadable
+                // Captured under _stateLock; inside a try, so an unreadable
                 // generation row fails the Try* contract with false instead of throwing.
                 if (!TryCaptureGenerations(current.OwnerUserId, out var globalGenerationAtIssue, out var ownerGenerationAtIssue))
                     return false;
@@ -395,8 +362,7 @@ namespace HSMServer.Authentication
                 // A generation-invalidated source (an emergency revoke advanced the
                 // generation without touching the row) is as dead as a revoked one.
                 // Without this check the replacement would be stamped with the current
-                // generations — a live credential re-disclosing the killed token's
-                // grants and silently undoing the emergency revoke.
+                // generations — a live credential silently undoing the emergency revoke.
                 if (!IsIssuedAtCurrentGenerations(current, globalGenerationAtIssue, ownerGenerationAtIssue))
                 {
                     _logger.LogWarning("API token rotation refused: token entity {EntityId} is invalidated by a revocation generation",
@@ -404,15 +370,6 @@ namespace HSMServer.Authentication
 
                     return false;
                 }
-
-                if (!TryShortenExpiry(current.ExpiresAtUtc, shortenedExpiryUtc, out var newExpiry))
-                    return false;
-
-                // Mirror of the create-time rule, on the resulting value: disclosing a
-                // replacement secret that is already expired (requested or inherited)
-                // would hand the caller a dead credential.
-                if (newExpiry.HasValue && newExpiry.Value <= DateTime.UtcNow.Ticks)
-                    return false;
 
                 var sanitizedRotatedBy = Sanitize(rotatedBy, MaxFreeTextLength);
 
@@ -434,17 +391,17 @@ namespace HSMServer.Authentication
                         GlobalRevocationGenerationAtIssue = globalGenerationAtIssue,
                         OwnerRevocationGenerationAtIssue = ownerGenerationAtIssue,
                         Name = current.Name,
-                        Description = current.Description,
-                        // Own list instance: the replacement must not share grants with
-                        // the revoked source record still held in the index.
-                        Grants = [.. current.Grants],
+                        // The power profile survives rotation unchanged: rotation is a pure
+                        // credential swap, and changing a token's power is what
+                        // revoke + create is for (#1384).
+                        ReadOnly = current.ReadOnly,
+                        Grants = [],
                         CreatedAtUtc = now,
                         // The original creator survives rotation for the audit trail; the
                         // rotating actor is recorded separately. Once retention removes the
                         // source row, RotatedFromEntityId alone cannot answer "who minted
                         // this lineage".
                         CreatedBy = current.CreatedBy,
-                        ExpiresAtUtc = newExpiry,
                         RotatedAtUtc = now,
                         RotatedBy = sanitizedRotatedBy,
                         RotatedFromEntityId = current.EntityId,
@@ -619,7 +576,7 @@ namespace HSMServer.Authentication
                 if (!ApiTokenVerifier.Verify(candidateVerifier, token.Verifier))
                     return false;
 
-                if (!IsGenerationStateHealthy || !IsLive(token, DateTime.UtcNow.Ticks,
+                if (!IsGenerationStateHealthy || !IsLive(token,
                         GlobalRevocationGeneration, GetOwnerRevocationGeneration(token.OwnerUserId)))
                     return false;
 
@@ -662,7 +619,7 @@ namespace HSMServer.Authentication
             // Same predicate family as TryAuthenticate's post-verifier checks: boot
             // health gates everything, and the record must be live against a single
             // snapshot of both generations.
-            return IsGenerationStateHealthy && IsLive(token, DateTime.UtcNow.Ticks,
+            return IsGenerationStateHealthy && IsLive(token,
                 GlobalRevocationGeneration, GetOwnerRevocationGeneration(token.OwnerUserId));
         }
 
@@ -724,7 +681,6 @@ namespace HSMServer.Authentication
 
             // One snapshot of both generations for the whole count, so every token is
             // judged against the same pair of values.
-            var now = DateTime.UtcNow.Ticks;
             var globalGeneration = GlobalRevocationGeneration;
             var ownerGeneration = GetOwnerRevocationGeneration(ownerUserId);
 
@@ -734,7 +690,7 @@ namespace HSMServer.Authentication
             // lock and materialize a snapshot list just to be walked once.
             foreach (var entry in tokenIds)
                 if (_tokensByTokenId.TryGetValue(entry.Key, out var token) &&
-                    IsLive(token, now, globalGeneration, ownerGeneration))
+                    IsLive(token, globalGeneration, ownerGeneration))
                     count++;
 
             return count;
@@ -752,9 +708,8 @@ namespace HSMServer.Authentication
         // walk stays lock-free rather than snapshotting the whole owner map.
         public int CountQuotaEligibleTokensGlobally()
         {
-            // One snapshot of time and the global generation for the whole count, so
-            // every token is judged against the same pair of values.
-            var now = DateTime.UtcNow.Ticks;
+            // One snapshot of the global generation for the whole count, so every token
+            // is judged against the same value.
             var globalGeneration = GlobalRevocationGeneration;
 
             var count = 0;
@@ -762,7 +717,7 @@ namespace HSMServer.Authentication
             // Direct enumeration of the concurrent dictionary: .Values would take every
             // internal lock and materialize a snapshot list just to be walked once.
             foreach (var entry in _tokensByTokenId)
-                if (IsLive(entry.Value, now, globalGeneration, GetOwnerRevocationGeneration(entry.Value.OwnerUserId)))
+                if (IsLive(entry.Value, globalGeneration, GetOwnerRevocationGeneration(entry.Value.OwnerUserId)))
                     count++;
 
             return count;
@@ -849,18 +804,17 @@ namespace HSMServer.Authentication
 
 
         // The one liveness rule, shared by authentication and quota counting (callers
-        // snapshot the generations once and pass them in): unrevoked, unexpired, issued
-        // at exactly the current generations. TryRestrictToken/TryRevokeToken deliberately
-        // do NOT gate on IsGenerationStateHealthy the way create/rotate do: a narrowing
+        // snapshot the generations once and pass them in): unrevoked and issued
+        // at exactly the current generations. TryRenameToken/TryRevokeToken deliberately
+        // do NOT gate on IsGenerationStateHealthy the way create/rotate do: a rename
         // persisted onto an already-dead row grants nothing, and revoking must work
         // whenever the record is VISIBLE in the index. It is reachable per token only
         // then: after a failed boot scan the index is empty, every per-token revoke
         // reports false while the durable rows survive — the operator's lever in that
         // state is the emergency revoke (a generation advance), which bypasses the index
         // and acts durably.
-        private static bool IsLive(ApiTokenEntity token, long nowTicks, long globalGeneration, long ownerGeneration) =>
+        private static bool IsLive(ApiTokenEntity token, long globalGeneration, long ownerGeneration) =>
             token.RevokedAtUtc is null &&
-            (token.ExpiresAtUtc is null || token.ExpiresAtUtc.Value > nowTicks) &&
             token.GlobalRevocationGenerationAtIssue == globalGeneration &&
             token.OwnerRevocationGenerationAtIssue == ownerGeneration;
 
@@ -903,16 +857,34 @@ namespace HSMServer.Authentication
                         continue;
                     }
 
-                    string grantProblem = null;
+                    string problem = null;
 
-                    if (!IsLoadable(candidate) || !ApiTokenGrants.TryCanonicalize(candidate.Grants, out var canonicalGrants, out grantProblem))
+                    if (!IsLoadable(candidate))
+                    {
+                        problem = "loadable-shape check failed";
+                    }
+                    else if (!candidate.Grants.IsEmpty)
+                    {
+                        // #1384: a row carrying grants is a pre-simplification record whose
+                        // fine-granted power profile no longer exists. Loading it as a
+                        // full owner mirror would WIDEN a deliberately narrow credential,
+                        // so it fails closed instead — the token's holder re-mints under
+                        // the simplified model. Same for a set expiry below.
+                        problem = "pre-simplification record with grants";
+                    }
+                    else if (candidate.ExpiresAtUtc is not null)
+                    {
+                        problem = "pre-simplification record with an expiry";
+                    }
+
+                    if (problem is not null)
                     {
                         // Fail closed: an unloadable record is simply never published to the
-                        // authentication index and can never authenticate. The grant problem
-                        // is named explicitly — "operation X is not in the catalog" is what
-                        // an operator can act on; a bare entity id is not.
+                        // authentication index and can never authenticate. The problem is
+                        // named explicitly — that is what an operator can act on; a bare
+                        // entity id is not.
                         _logger.LogWarning("Skipping unloadable API token record (entity {EntityId}, version {Version}): {Problem}",
-                            candidate?.EntityId, candidate?.EntityVersion, grantProblem ?? "loadable-shape check failed");
+                            candidate?.EntityId, candidate?.EntityVersion, problem);
 
                         RememberOrphan(keyTokenId);
 
@@ -937,9 +909,7 @@ namespace HSMServer.Authentication
                         continue;
                     }
 
-                    // Publish the canonical grant list, not the raw row: a record written
-                    // with a non-canonical boundary id must still restrict cleanly.
-                    Publish(candidate with { Grants = canonicalGrants });
+                    Publish(candidate);
                 }
             }
 
@@ -1001,7 +971,7 @@ namespace HSMServer.Authentication
             entity.Verifier is { Length: SHA256.HashSizeInBytes } &&
             entity.EntityId != Guid.Empty &&
             entity.OwnerUserId != Guid.Empty &&
-            !entity.Grants.IsDefault;
+            !entity.Grants.IsDefault; // a default (unset) Grants array means a damaged row
 
         private bool TryGetTrackedToken(Guid entityId, out ApiTokenEntity entity)
         {
@@ -1032,13 +1002,9 @@ namespace HSMServer.Authentication
                     GlobalRevocationGenerationAtIssue = entity.GlobalRevocationGenerationAtIssue,
                     OwnerRevocationGenerationAtIssue = entity.OwnerRevocationGenerationAtIssue,
                     Name = entity.Name,
-                    Description = entity.Description,
-                    Grants = entity.Grants,
+                    ReadOnly = entity.ReadOnly,
                     CreatedAtUtc = entity.CreatedAtUtc,
                     CreatedBy = entity.CreatedBy,
-                    RestrictedAtUtc = entity.RestrictedAtUtc,
-                    RestrictedBy = entity.RestrictedBy,
-                    ExpiresAtUtc = entity.ExpiresAtUtc,
                     LastUsedAtUtc = entity.LastUsedAtUtc,
                     RotatedAtUtc = entity.RotatedAtUtc,
                     RotatedBy = entity.RotatedBy,
@@ -1134,36 +1100,6 @@ namespace HSMServer.Authentication
         // cache it. Only called under _stateLock, so a concurrent advance cannot interleave.
         private long GetOrLoadOwnerGeneration(Guid ownerUserId) =>
             _ownerGenerations.GetOrAdd(ownerUserId, static (id, database) => database.GetOwnerRevocationGeneration(id), _databaseCore);
-
-        // Expiry can only be shortened: from an unlimited token to any finite value, or from
-        // a finite value to an earlier one. Passing null keeps the current expiry.
-        private static bool TryShortenExpiry(long? currentExpiryTicks, DateTime? requestedUtc, out long? newExpiryTicks)
-        {
-            newExpiryTicks = currentExpiryTicks;
-
-            if (!requestedUtc.HasValue)
-                return true;
-
-            var requestedTicks = NormalizeUtcTicks(requestedUtc).Value;
-
-            if (currentExpiryTicks.HasValue && requestedTicks > currentExpiryTicks.Value)
-                return false;
-
-            newExpiryTicks = requestedTicks;
-
-            return true;
-        }
-
-        // DateTime inputs are UTC by contract (the parameter names say so). Kind.Local
-        // values convert; Kind.Unspecified — an offset-less form or JSON value — is
-        // interpreted as UTC rather than converted from the server's local zone, so a
-        // stored expiry never shifts silently with the deployment timezone.
-        private static long? NormalizeUtcTicks(DateTime? valueUtc) =>
-            valueUtc.HasValue
-                ? (valueUtc.Value.Kind == DateTimeKind.Unspecified
-                    ? DateTime.SpecifyKind(valueUtc.Value, DateTimeKind.Utc)
-                    : valueUtc.Value.ToUniversalTime()).Ticks
-                : null;
 
         // Bounds and neutralizes free text before it is persisted or logged: control
         // characters (log forging, UI rendering) become spaces, unpaired surrogates are

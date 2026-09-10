@@ -3,10 +3,11 @@ using System.Collections.Generic;
 
 namespace HSMServer.Model.Profile
 {
-    // View models of the profile page (#1356 step 4): a read-only card about the
-    // signed-in user plus the metadata-only projection of their API tokens. The token
-    // view model is built from ApiTokenInfo and never carries credential material —
-    // the full token exists exactly once, in the create/rotate mutation response.
+    // View models of the profile page (#1356 step 4, simplified by #1384): a read-only
+    // card about the signed-in user plus the metadata-only projection of their API
+    // tokens. The token view model is built from ApiTokenInfo and never carries
+    // credential material — the full token exists exactly once, in the create/rotate
+    // mutation response.
     public sealed class ProfilePageViewModel
     {
         public Guid UserId { get; init; }
@@ -21,48 +22,17 @@ namespace HSMServer.Model.Profile
 
         public IReadOnlyList<ProfileTokenViewModel> Tokens { get; init; }
 
-        // Structured grants keyed by entity id (string): the restrict modal preloads its
-        // picker from this map without scraping badges out of the rendered DOM.
-        public IReadOnlyDictionary<string, IReadOnlyList<ProfileTokenGrantViewModel>> GrantsByTokenId { get; init; }
-
-        // Degraded-mode and form state consumed by the page script.
+        // Degraded-mode state consumed by the page script.
         public bool TokensEnabled { get; init; }
 
         public bool GenerationStateHealthy { get; init; }
 
-        public bool AllowNoExpiration { get; init; }
-
         public int QuotaUsed { get; init; }
 
         public int QuotaMax { get; init; }
-
-        public int DefaultLifetimeDays { get; init; }
-
-        // Day-granular ceiling for the create form's custom-date input, from
-        // ApiTokens.MaxLifetime (floored, so the client cap never exceeds the exact
-        // server-side instant).
-        public int MaxLifetimeDays { get; init; }
-
-        // The server's per-token grant cap (ApiTokenGrants.MaxGrants), mirrored so
-        // the create form's hint can name it: a hand-built selection can pass it (the
-        // preselect cannot — #1380 narrowed it to one boundary), and the user should
-        // learn the cap from the hint, not from an invalid_grant rejection.
-        public int MaxGrants { get; init; }
-
-        // The server's clock at render, Unix milliseconds. The form derives every
-        // expiry instant and date-input bound from this value plus client-measured
-        // elapsed time — never from the browser clock: a browser running ahead of
-        // the server would push the largest preset past the MaxLifetime cap, one
-        // running behind would admit already-past days as "today".
-        public long ServerNowUnixMs { get; init; }
     }
 
     public sealed record ProfileProductRoleViewModel(string Name, bool IsManager);
-
-    // One grant of a listed token: the canonical pair plus the boundary's display name
-    // ("removed boundary" when the anchored product/folder no longer exists — the grant
-    // still resolves server-side, it just matches nothing).
-    public sealed record ProfileTokenGrantViewModel(string Operation, string BoundaryKind, string BoundaryId, string BoundaryName);
 
     public sealed class ProfileTokenViewModel
     {
@@ -70,63 +40,40 @@ namespace HSMServer.Model.Profile
 
         public string Name { get; init; }
 
-        public string Description { get; init; }
+        // The token's power: full mirror of the owner's rights, minus every write
+        // operation when true. Fixed at creation (#1384).
+        public bool ReadOnly { get; init; }
 
-        public IReadOnlyList<ProfileTokenGrantViewModel> Grants { get; init; }
-
-        // "active", "expired", "revoked" or "invalidated" (an emergency-revoke
-        // generation passed the at-issue stamps) — computed from the record's
-        // timestamps and generation comparison.
+        // "active", "revoked" or "invalidated" (an emergency-revoke generation passed
+        // the at-issue stamps) — computed from the record's timestamps and generation
+        // comparison.
         public string Status { get; init; }
 
-        // Unix milliseconds (UTC); null ExpiresAt means no expiration.
+        // Unix milliseconds (UTC).
         public long CreatedAtUnixMs { get; init; }
 
-        public long? ExpiresAtUnixMs { get; init; }
-
         public long? LastUsedAtUnixMs { get; init; }
-    }
-
-    // Wire shape of one requested grant pair: a catalog operation plus the boundary it
-    // is anchored at ("global" carries no id, "product"/"folder" carry a Guid text).
-    public sealed class ProfileGrantRequest
-    {
-        public string Operation { get; set; }
-
-        public string BoundaryKind { get; set; }
-
-        public string BoundaryId { get; set; }
     }
 
     public sealed class CreateTokenRequest
     {
         public string Name { get; set; }
 
-        public string Description { get; set; }
-
-        // Null = explicitly confirmed "No expiration" (gated by AllowNoExpiration).
-        public DateTime? ExpiresAtUtc { get; set; }
-
-        public List<ProfileGrantRequest> Grants { get; set; }
+        // True mints a read-only credential: every write operation of the management
+        // API is denied; reads follow the owner's sight.
+        public bool ReadOnly { get; set; }
     }
 
-    public sealed class RestrictTokenRequest
+    public sealed class RenameTokenRequest
     {
         public Guid EntityId { get; set; }
 
-        // The full remaining grant set; an empty list strips every grant. Null expiry
-        // keeps the current one.
-        public List<ProfileGrantRequest> Grants { get; set; }
-
-        public DateTime? ExpiresAtUtc { get; set; }
+        public string Name { get; set; }
     }
 
     public sealed class RotateTokenRequest
     {
         public Guid EntityId { get; set; }
-
-        // Null inherits the source expiry.
-        public DateTime? ExpiresAtUtc { get; set; }
     }
 
     public sealed class RevokeTokenRequest

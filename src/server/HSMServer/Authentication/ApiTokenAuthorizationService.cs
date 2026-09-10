@@ -1,53 +1,48 @@
 using System;
-using System.Collections.Immutable;
 using System.Security.Claims;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
-using HSMDatabase.AccessManager;
 
 namespace HSMServer.Authentication
 {
-    // Resource-authorization evaluator of the management API (initiative step 3). Every
-    // call recomputes BOTH sides of the intersection from the authoritative stores:
+    // Resource-authorization evaluator of the management API. Since #1384 a token is a
+    // full mirror of its owner: every call recomputes the OWNER side from the
+    // authoritative stores, and the token side contributes exactly one fact — whether
+    // the credential is read-only.
     //
-    //     allowed(operation, resource) = ownerCurrentlyAllows(operation, resource)
-    //                                 AND tokenGrantAllows(operation, currentBoundary(resource))
+    //     read allowed(resource)  = ownerCurrentlySees(resource)
+    //     write allowed(resource) = ownerCurrentlySees(resource)
+    //                              AND ownerCanWriteAt(resource)
+    //                              AND !token.ReadOnly
     //
-    // Nothing is cached: owner downgrade/deletion, role removal, resource moves and token
-    // revocation between requests take effect on the very next evaluation.
+    // Nothing is cached: owner downgrade/deletion, role removal, resource moves and
+    // token revocation between requests take effect on the very next evaluation.
     public interface IApiTokenAuthorizationService
     {
-        // Decision for a concrete operation on a concrete target, with the documented
-        // 403/404 split (see ApiTokenAuthorization).
-        ApiTokenAuthorization Authorize(ClaimsPrincipal principal, string operation, ApiTokenResource resource);
+        // Decision for a read on a concrete target, with the documented 403/404 split
+        // (see ApiTokenAuthorization). A read-only token never fails here — the flag
+        // constrains writes only.
+        ApiTokenAuthorization AuthorizeRead(ClaimsPrincipal principal, ApiTokenResource resource);
 
-        // List-filtering predicate: the target is listable under the given operation —
-        // the same conjunction Authorize applies (owner sight, operation grant at the
-        // current boundary, owner capability) minus the security-event recording: a
-        // list that returns full bodies must not disclose items whose item endpoint
-        // would 403, and list filtering is not a probe signal. Out-of-reach or
-        // ungranted targets are simply not listed, never 403-per-item.
-        bool IsVisible(ClaimsPrincipal principal, string operation, ApiTokenResource resource);
+        // Decision for a write on a concrete target: NotFound when the owner cannot see
+        // the target; Forbidden when the owner sees it but cannot write there (Viewer
+        // role) or the token is read-only.
+        ApiTokenAuthorization AuthorizeWrite(ClaimsPrincipal principal, ApiTokenResource resource);
 
-        // Caller-wide gate for GLOBAL resources (alert schedules): the caller may act
-        // when ANY of the token's grants for the operation sits at a boundary that
-        // currently passes the list predicate above. Candidate boundaries are
-        // enumerated from the token's own grants INSIDE the evaluator — callers never
-        // touch grant records. A denial is recorded ONCE, as AuthorizationDenied: the
-        // gate is caller-wide and answers 403, so it must not feed the
-        // enumeration-probe signal (AuthorizationNotFound) that per-target 404s carry.
-        bool HasOperationAtAnyVisibleBoundary(ClaimsPrincipal principal, string operation);
+        // List-filtering predicate: the target is listable — the owner-sight half of
+        // AuthorizeRead minus the security-event recording: a list that returns full
+        // bodies must not disclose items whose item endpoint would refuse them, and
+        // list filtering is not a probe signal. Out-of-sight targets are simply not
+        // listed, never 403-per-item.
+        bool IsVisible(ClaimsPrincipal principal, ApiTokenResource resource);
 
-        // Whether the operation is granted to a LIVE caller at the GLOBAL boundary
-        // under an admin owner — the token-side "everywhere" shape. Scoped-resource
-        // decisions deliberately do NOT treat it as a wildcard (a Global grant never
-        // covers Product/Folder targets); the one sanctioned use is a short-circuit
-        // for callers that already passed the caller-wide gate above, so a filter
-        // over scoped items does not hand the broadest token an empty-everywhere
-        // result. Records nothing, like IsVisible.
-        bool HasOperationAtGlobalScope(ClaimsPrincipal principal, string operation);
+        // Caller-wide gate for GLOBAL resources (alert schedules): the owner is an
+        // admin or currently holds a role on at least one product/folder. A denial is
+        // recorded ONCE, as AuthorizationDenied: the gate is caller-wide and answers
+        // 403, so it must not feed the enumeration-probe signal
+        // (AuthorizationNotFound) that per-target 404s carry.
+        bool CanSeeAnyBoundary(ClaimsPrincipal principal);
     }
 
 
@@ -71,101 +66,67 @@ namespace HSMServer.Authentication
         }
 
 
-        public ApiTokenAuthorization Authorize(ClaimsPrincipal principal, string operation, ApiTokenResource resource)
+        public ApiTokenAuthorization AuthorizeRead(ClaimsPrincipal principal, ApiTokenResource resource) =>
+            Authorize(principal, write: false, resource);
+
+        public ApiTokenAuthorization AuthorizeWrite(ClaimsPrincipal principal, ApiTokenResource resource) =>
+            Authorize(principal, write: true, resource);
+
+        public bool IsVisible(ClaimsPrincipal principal, ApiTokenResource resource) =>
+            TryResolveCaller(principal, out var owner, out _) &&
+            TryResolveBoundary(resource, out var boundary) &&
+            OwnerCanSee(owner, boundary);
+
+        public bool CanSeeAnyBoundary(ClaimsPrincipal principal)
         {
-            if (!TryResolveCaller(principal, out var owner, out var grants))
+            var allowed = TryResolveCaller(principal, out var owner, out _) && OwnerSeesAnyBoundary(owner);
+
+            if (!allowed)
+                Record(principal, write: false, ApiTokenResource.GlobalScope, ApiTokenAuthorization.Forbidden);
+
+            return allowed;
+        }
+
+        private ApiTokenAuthorization Authorize(ClaimsPrincipal principal, bool write, ApiTokenResource resource)
+        {
+            if (!TryResolveCaller(principal, out var owner, out var readOnly))
             {
-                Record(principal, operation, resource, ApiTokenAuthorization.NotFound);
+                Record(principal, write, resource, ApiTokenAuthorization.NotFound);
                 return ApiTokenAuthorization.NotFound;
             }
 
             if (!TryResolveBoundary(resource, out var boundary))
             {
-                Record(principal, operation, resource, ApiTokenAuthorization.NotFound);
+                Record(principal, write, resource, ApiTokenAuthorization.NotFound);
                 return ApiTokenAuthorization.NotFound;
             }
 
-            // 404 first: absent, invisible to the owner, or entirely outside the token's
-            // reach — indistinguishable so callers cannot enumerate resources.
+            // 404 first: absent or invisible to the owner — indistinguishable, so
+            // callers cannot enumerate resources.
             if (!OwnerCanSee(owner, boundary))
             {
-                Record(principal, operation, resource, ApiTokenAuthorization.NotFound);
+                Record(principal, write, resource, ApiTokenAuthorization.NotFound);
                 return ApiTokenAuthorization.NotFound;
             }
 
-            if (!TokenReachesBoundary(grants, boundary))
+            // 403: the target is known and in sight, but this is a write and either the
+            // owner currently cannot perform writes there (Viewer role) or the token is
+            // a read-only credential.
+            if (write && (readOnly || !OwnerCanWrite(owner, boundary)))
             {
-                Record(principal, operation, resource, ApiTokenAuthorization.NotFound);
-                return ApiTokenAuthorization.NotFound;
-            }
-
-            // 403: the target is known and in reach, but this operation is not granted or
-            // the owner currently cannot perform it.
-            if (!TokenGrantsOperation(grants, operation, boundary))
-            {
-                Record(principal, operation, resource, ApiTokenAuthorization.Forbidden);
-                return ApiTokenAuthorization.Forbidden;
-            }
-
-            if (!OwnerCanPerform(owner, operation, boundary))
-            {
-                Record(principal, operation, resource, ApiTokenAuthorization.Forbidden);
+                Record(principal, write, resource, ApiTokenAuthorization.Forbidden);
                 return ApiTokenAuthorization.Forbidden;
             }
 
             return ApiTokenAuthorization.Allowed;
         }
 
-        public bool IsVisible(ClaimsPrincipal principal, string operation, ApiTokenResource resource) =>
-            TryResolveCaller(principal, out var owner, out var grants) &&
-            IsVisibleCore(owner, grants, operation, resource);
-
-        public bool HasOperationAtAnyVisibleBoundary(ClaimsPrincipal principal, string operation)
-        {
-            // The caller is resolved once; the per-candidate decision is the plain list
-            // predicate, so a Global grant still requires an admin owner and a scoped
-            // grant still requires the boundary to resolve and the owner to see it.
-            var allowed = TryResolveCaller(principal, out var owner, out var grants) &&
-                GrantsOperationAtAnyVisibleBoundary(owner, grants, operation);
-
-            if (!allowed)
-                Record(principal, operation, ApiTokenResource.GlobalScope, ApiTokenAuthorization.Forbidden);
-
-            return allowed;
-        }
-
-        public bool HasOperationAtGlobalScope(ClaimsPrincipal principal, string operation) =>
-            TryResolveCaller(principal, out var owner, out var grants) &&
-            IsVisibleCore(owner, grants, operation, ApiTokenResource.GlobalScope);
-
-        private bool GrantsOperationAtAnyVisibleBoundary(User owner,
-            ImmutableArray<ApiTokenGrantEntity> grants, string operation)
-        {
-            foreach (var grant in grants)
-            {
-                if (grant.Operation != operation || !TryGrantResource(grant, out var resource))
-                    continue;
-
-                if (IsVisibleCore(owner, grants, operation, resource))
-                    return true;
-            }
-
-            return false;
-        }
-
-        private bool IsVisibleCore(User owner, ImmutableArray<ApiTokenGrantEntity> grants,
-            string operation, ApiTokenResource resource) =>
-            TryResolveBoundary(resource, out var boundary) &&
-            OwnerCanSee(owner, boundary) &&
-            TokenGrantsOperation(grants, operation, boundary) &&
-            OwnerCanPerform(owner, operation, boundary);
-
         // Denials reach the append-only security-event sink with the safe identifiers the
-        // design names: token id, subject id, required permission, safe target id — and
-        // with the decision preserved: 404 denials (invisible/out-of-reach targets, the
-        // enumeration-probe signal) are AuthorizationNotFound, 403 scope denials are
+        // design names: token id, subject id, the access mode, a safe target id — and
+        // with the decision preserved: 404 denials (invisible targets, the
+        // enumeration-probe signal) are AuthorizationNotFound, 403 write denials are
         // AuthorizationDenied. Allowed decisions are not per-request events.
-        private void Record(ClaimsPrincipal principal, string operation, ApiTokenResource resource,
+        private void Record(ClaimsPrincipal principal, bool write, ApiTokenResource resource,
             ApiTokenAuthorization decision)
         {
             var tokenId = principal?.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
@@ -178,15 +139,15 @@ namespace HSMServer.Authentication
 
             _securityEvents.Record(new ApiTokenSecurityEvent(
                 kind,
-                tokenId, ownerId, operation,
+                tokenId, ownerId, write ? "write" : "read",
                 TargetId: $"{resource.Kind}:{resource.Id}"));
         }
 
 
-        private bool TryResolveCaller(ClaimsPrincipal principal, out User owner, out ImmutableArray<ApiTokenGrantEntity> grants)
+        private bool TryResolveCaller(ClaimsPrincipal principal, out User owner, out bool readOnly)
         {
             owner = null;
-            grants = default;
+            readOnly = false;
 
             // The principal shape is enforced upstream by the management policy; anything
             // else fails closed rather than throwing.
@@ -199,7 +160,7 @@ namespace HSMServer.Authentication
             owner = _users[ownerId];
 
             // Liveness re-check through the manager's sanctioned predicate: a token
-            // revoked, expired or generation-invalidated between authentication and this
+            // revoked or generation-invalidated between authentication and this
             // authorization fails closed here, not on the next request.
             if (!_tokens.IsTokenLive(tokenClaim.Value))
                 return false;
@@ -209,23 +170,12 @@ namespace HSMServer.Authentication
             if (owner is null || token is null)
                 return false;
 
-            grants = token.Grants;
+            readOnly = token.ReadOnly;
             return true;
         }
 
-        // Current authorization anchor of a target, resolved from the live hierarchy.
-        // Text forms of the ids are precomputed once: grant BoundaryIds are canonical
-        // Guid strings, so per-grant ToString would allocate on every comparison of every
-        // request.
-        private sealed record AuthorizationBoundary(ApiTokenResourceKind Kind, Guid Id, Guid? FolderId)
-        {
-            public string IdText { get; } = Id.ToString();
-
-            public string FolderText { get; } = FolderId?.ToString();
-        }
-
-        // Resolves the target to its CURRENT authorization boundary from the live
-        // hierarchy: sensor -> its product, product -> itself plus its current folder.
+        // Current authorization anchor of a target, resolved from the live hierarchy:
+        // sensor -> its product, product -> itself plus its current folder.
         // Deleted/unknown ids fail closed (false).
         private bool TryResolveBoundary(ApiTokenResource resource, out AuthorizationBoundary boundary)
         {
@@ -287,108 +237,33 @@ namespace HSMServer.Authentication
         private static bool OwnerCanSee(User owner, AuthorizationBoundary boundary) =>
             owner.IsAdmin || boundary.Kind switch
             {
-                ApiTokenResourceKind.Global => false, // global operations are admin-only
+                ApiTokenResourceKind.Global => false, // global resources are admin-only
                 ApiTokenResourceKind.Product => owner.IsUserProduct(boundary.Id),
                 ApiTokenResourceKind.Folder => owner.IsFolderAvailable(boundary.Id),
                 _ => false,
             };
 
-        // Owner capability for the operation: writes need the Manager role at the
-        // boundary; reads need exactly the visibility checked above. No folder fallback
-        // for products, for the same materialisation reason as OwnerCanSee — the owner
-        // side never exceeds what the app's own IsManager check grants.
-        private static bool OwnerCanPerform(User owner, string operation, AuthorizationBoundary boundary)
-        {
-            if (owner.IsAdmin)
-                return true;
-
-            if (!ApiTokenOperations.IsWrite(operation))
-                return true; // OwnerCanSee already established a read-level role
-
-            return boundary.Kind switch
+        // Owner write capability: writes need the Manager role at the boundary (admins
+        // write everywhere they can see). No folder fallback for products, for the same
+        // materialisation reason as OwnerCanSee — the owner side never exceeds what the
+        // app's own IsManager check grants.
+        private static bool OwnerCanWrite(User owner, AuthorizationBoundary boundary) =>
+            owner.IsAdmin || boundary.Kind switch
             {
                 ApiTokenResourceKind.Product => owner.IsManager(boundary.Id),
                 ApiTokenResourceKind.Folder => owner.IsFolderManager(boundary.Id),
                 _ => false, // writes at the global boundary are admin-only
             };
-        }
 
-        // Whether ANY grant of the token is anchored at the target's current boundary —
-        // the reach test that keeps out-of-scope targets 404. A Global grant never counts
-        // as a wildcard over Product/Folder targets ("all boundaries" expands to concrete
-        // ids at creation and is never persisted as a wildcard).
-        private static bool TokenReachesBoundary(ImmutableArray<ApiTokenGrantEntity> grants,
-            AuthorizationBoundary boundary) =>
-            AnyGrantAt(grants, boundary, operation: null);
+        // The caller-wide gate's owner side: an admin sees everything; any other owner
+        // needs at least one current product or folder role. A user with no roles sees
+        // nothing anywhere, so no global resource can disclose anything to them.
+        private static bool OwnerSeesAnyBoundary(User owner) =>
+            owner.IsAdmin ||
+            owner.ProductsRoles.Count > 0 ||
+            owner.FoldersRoles.Count > 0;
 
-        private static bool TokenGrantsOperation(ImmutableArray<ApiTokenGrantEntity> grants, string operation,
-            AuthorizationBoundary boundary) =>
-            AnyGrantAt(grants, boundary, operation);
-
-        private static bool AnyGrantAt(ImmutableArray<ApiTokenGrantEntity> grants,
-            AuthorizationBoundary boundary, string operation)
-        {
-            foreach (var grant in grants)
-            {
-                if (operation is not null && grant.Operation != operation)
-                    continue;
-
-                var kind = (ApiTokenBoundaryKind)grant.BoundaryKind;
-
-                switch (boundary.Kind)
-                {
-                    case ApiTokenResourceKind.Global:
-                        if (kind == ApiTokenBoundaryKind.Global)
-                            return true;
-                        break;
-
-                    case ApiTokenResourceKind.Product:
-                        // Explicit product grant, or a folder grant over the product's
-                        // CURRENT folder (the only dynamic-membership case).
-                        if (kind == ApiTokenBoundaryKind.Product && grant.BoundaryId == boundary.IdText)
-                            return true;
-
-                        if (kind == ApiTokenBoundaryKind.Folder && boundary.FolderText is not null &&
-                            grant.BoundaryId == boundary.FolderText)
-                            return true;
-                        break;
-
-                    case ApiTokenResourceKind.Folder:
-                        if (kind == ApiTokenBoundaryKind.Folder && grant.BoundaryId == boundary.IdText)
-                            return true;
-                        break;
-                }
-            }
-
-            return false;
-        }
-
-        // A grant's own boundary as an authorization target — the inverse of the
-        // matching above, used to enumerate the candidate boundaries of the
-        // caller-wide gate. Malformed pairs (unknown kind, unparsable id, Global with
-        // an id) are rejected by ApiTokenGrants.TryCanonicalize at persistence and at
-        // load, so they cannot reach a live token; skipping them here is defense in
-        // depth that fails closed.
-        private static bool TryGrantResource(ApiTokenGrantEntity grant, out ApiTokenResource resource)
-        {
-            switch ((ApiTokenBoundaryKind)grant.BoundaryKind)
-            {
-                case ApiTokenBoundaryKind.Global when string.IsNullOrEmpty(grant.BoundaryId):
-                    resource = ApiTokenResource.GlobalScope;
-                    return true;
-
-                case ApiTokenBoundaryKind.Product when Guid.TryParse(grant.BoundaryId, out var productId):
-                    resource = ApiTokenResource.Product(productId);
-                    return true;
-
-                case ApiTokenBoundaryKind.Folder when Guid.TryParse(grant.BoundaryId, out var folderId):
-                    resource = ApiTokenResource.Folder(folderId);
-                    return true;
-
-                default:
-                    resource = null;
-                    return false;
-            }
-        }
+        // Text forms of the ids are precomputed once per boundary.
+        private sealed record AuthorizationBoundary(ApiTokenResourceKind Kind, Guid Id, Guid? FolderId);
     }
 }
