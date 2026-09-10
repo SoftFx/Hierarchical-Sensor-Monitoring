@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
@@ -16,6 +17,7 @@ using HSMServer.Core.Schedule;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
 using HSMServer.Folders;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertTemplates;
@@ -917,6 +919,85 @@ namespace HSMServer.Core.Tests.Controllers
             // Delete.
             Assert.IsType<NoContentResult>(await controller.DeleteTemplate(id));
             Assert.Equal(404, StatusCodeOf(controller.GetTemplate(id)));
+        }
+
+        // #1382: the reported scenario end to end — a token whose ONLY grants are
+        // alerts:read + alerts:write at the Global boundary, admin owner. Runs the
+        // REAL ApiTokenAuthorizationService (not the fixture's always-allow mock)
+        // with real folder resolution: before the wildcard, the list came back
+        // EMPTY and every item/write endpoint answered 404, because a Folder
+        // boundary only matched Folder-boundary grants.
+        [Fact]
+        public async Task CrudLifecycle_GlobalOnlyToken_RealEvaluator_SeesEveryFolder()
+        {
+            var owner = new User("admin") { Id = Guid.NewGuid(), IsAdmin = true };
+            var tokenId = new string('A', ApiTokenMaterial.TokenIdLength);
+
+            var users = new Mock<IUserManager>();
+            users.Setup(u => u[owner.Id]).Returns(owner);
+
+            var tokens = new Mock<IApiTokenManager>();
+            tokens.Setup(t => t.IsTokenLive(tokenId)).Returns(true);
+            tokens.Setup(t => t.GetToken(tokenId)).Returns(new ApiTokenInfo
+            {
+                EntityId = Guid.NewGuid(),
+                OwnerUserId = owner.Id,
+                Name = "global-token",
+                Grants = ImmutableArray.Create(
+                    new ApiTokenGrantEntity { Operation = ApiTokenOperations.AlertsRead, BoundaryKind = (byte)ApiTokenBoundaryKind.Global },
+                    new ApiTokenGrantEntity { Operation = ApiTokenOperations.AlertsWrite, BoundaryKind = (byte)ApiTokenBoundaryKind.Global }),
+            });
+
+            var authorization = new ApiTokenAuthorizationService(users.Object, tokens.Object,
+                _folders.Object, _cache.Object, new Mock<IApiTokenSecurityEventSink>().Object);
+
+            var folderA = Guid.NewGuid();
+            var folderB = Guid.NewGuid();
+            SetupFolderWithChats(folderA);
+            SetupFolderWithChats(folderB);
+
+            var controller = new AlertTemplatesApiController(_cache.Object, _folders.Object, _chats.Object,
+                _schedules.Object, authorization, NullLogger<AlertTemplatesApiController>.Instance)
+            {
+                ControllerContext = new ControllerContext
+                {
+                    HttpContext = new DefaultHttpContext
+                    {
+                        User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [
+                            new Claim(HsmApiTokenClaims.OwnerUserId, owner.Id.ToString()),
+                            new Claim(HsmApiTokenClaims.TokenId, tokenId),
+                        ], HsmApiTokenDefaults.AuthenticationScheme)),
+                    },
+                },
+            };
+
+            // Create in two folders — each write authorizes at its own Folder boundary.
+            var createdA = Assert.IsType<CreatedAtActionResult>(
+                await controller.CreateTemplate(BuildDto(name: "global-a") with { FolderId = folderA }));
+            var createdB = Assert.IsType<CreatedAtActionResult>(
+                await controller.CreateTemplate(BuildDto(name: "global-b") with { FolderId = folderB }));
+            var idA = Assert.IsType<Guid>(createdA.RouteValues["id"]);
+            var idB = Assert.IsType<Guid>(createdB.RouteValues["id"]);
+
+            // The reported bug: the list filtered every folder out for this token.
+            var page = Assert.IsType<ApiPageDto<AlertTemplateDto>>(
+                Assert.IsType<OkObjectResult>(controller.GetTemplates()).Value);
+            Assert.Equal(2, page.TotalCount);
+            Assert.Equal([idA, idB], page.Items.Select(t => t.Id).OrderBy(i => i).ToArray());
+
+            // Item read + update + delete through the same real evaluator.
+            Assert.Equal(200, StatusCodeOf(controller.GetTemplate(idA)));
+
+            Assert.Equal(200, StatusCodeOf(
+                await controller.UpdateTemplate(idB, BuildDto(name: "global-b-2") with { FolderId = folderB })));
+
+            Assert.IsType<NoContentResult>(await controller.DeleteTemplate(idA));
+            Assert.Equal(404, StatusCodeOf(controller.GetTemplate(idA)));
+
+            var afterDelete = Assert.IsType<ApiPageDto<AlertTemplateDto>>(
+                Assert.IsType<OkObjectResult>(controller.GetTemplates()).Value);
+            Assert.Equal(idB, Assert.Single(afterDelete.Items).Id);
         }
     }
 }

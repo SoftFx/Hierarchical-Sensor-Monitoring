@@ -260,12 +260,13 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
-        public void GetSchedules_GlobalGrant_SeesSensorsOfAllProducts()
+        public void GetSchedules_SensorPaths_SortedOrdinalIgnoreCase()
         {
-            // The gate can pass through the Global boundary (admin owner +
-            // alerts:read@Global); the per-product predicate deliberately ignores a
-            // Global grant, so without a short-circuit the broadest token would get
-            // every schedule with an EMPTY sensors list.
+            // Two visible products (the default evaluator mock allows both) — kept
+            // from the #1381 flake fix when the short-circuit test it lived in was
+            // removed (#1382): a Global alerts:read grant now passes the per-product
+            // predicate itself through the evaluator wildcard, so no special
+            // controller path exists anymore.
             var schedule = BuildSchedule("night-shift");
             _store.Add(schedule);
 
@@ -278,13 +279,6 @@ namespace HSMServer.Core.Tests.Controllers
                     [schedule.Id] = [sensorA, sensorB],
                 });
 
-            // The evaluator answers the Global-scope probe true and every Product
-            // probe false — only the short-circuit can produce a non-empty list.
-            _authorization.Setup(a => a.HasOperationAtGlobalScope(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
-                .Returns(true);
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
-                .Returns(false);
-
             var page = Assert.IsType<OkObjectResult>(CreateController().GetSchedules()).Value as ApiPageDto<AlertScheduleDto>;
 
             Assert.NotNull(page);
@@ -293,14 +287,10 @@ namespace HSMServer.Core.Tests.Controllers
             // side is normalized to that order and the actual is compared as
             // returned, so the response's sort contract is pinned too. The sensor
             // names are randomly generated (the product name is fixed), which is what
-            // made the old unsorted-expected form flake ~50% of runs (shipped
-            // unnoticed in the #1352 follow-up round).
+            // made the old unsorted-expected form flake ~50% of runs.
             Assert.Equal(
                 new[] { sensorA.FullPath, sensorB.FullPath }.OrderBy(p => p, StringComparer.OrdinalIgnoreCase),
                 item.Sensors);
-
-            // The per-product predicate is never consulted when the global shape holds.
-            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
         }
 
 

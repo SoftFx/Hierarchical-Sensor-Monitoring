@@ -1,6 +1,6 @@
 # Tests: API tokens (authentication foundation)
 
-> Owner: server | Last reviewed: 2026-09-07 | Canonical: yes
+> Owner: server | Last reviewed: 2026-09-10 | Canonical: yes
 
 Coverage matrix for the token domain/persistence foundation (steps 1–2), the HTTP
 authentication/authorization surface (step 3), and the personal token management UI
@@ -95,7 +95,7 @@ The design's privilege-reduction matrix, recomputed per call:
 - Boundary covered but operation not granted → 403; manager owner + write grant on own product → allowed; cross-product → 404 (never a confirming 403).
 - Viewer owner with a (forged) write grant → 403; owner downgrade manager→viewer flips write to 403 while read stays allowed — no token change.
 - Deleted owner or a token record missing at authorization time → 404; a token whose liveness re-check fails (revoked between authentication and authorization) → 404.
-- Folder grant covers the product currently in the folder; a product moved out → 404; a Global grant is never a wildcard over scoped targets.
+- Folder grant covers the product currently in the folder; a product moved out → 404; a Global grant IS a wildcard over scoped targets (#1382): allowed at Product and Folder boundaries, at a visible boundary for an operation the token does not hold → 403 (any Global grant puts every boundary in reach), for a demoted owner → 404 (owner side fails closed), and a scoped grant never reaches the Global boundary.
 - The owner side has NO folder fallback (HSM materialises folder roles into per-product entries; per-product narrowing wins): folder Manager + per-product Viewer downgrade → write 403, read allowed; per-product role removal under a folder role → 404.
 - Global operations are admin-only; a sensor resolves through its product's current boundary (a parentless sensor fails closed to 404, not a cast exception); a deleted product → 404.
 - `IsVisible` (list filtering) requires owner sight plus a grant **for the asked operation** at the boundary (mere reach does not disclose an item the item endpoint would 403); for a write operation it also requires the owner's capability (Manager role); a materialised folder-manager role enables product write.
@@ -214,7 +214,7 @@ Retention/stamping level (`ApiTokenRetentionCleanerTests`):
 - [x] The hsm_pat_ credential never reaches a log: sink-level redaction covers the catch logger, inner exceptions and the outer exception handlers
 - [x] Token principal never replaced by UserProcessorMiddleware
 - [x] Owner downgrade/deletion and resource moves take effect on the next request
-- [x] Global grants never act as wildcards over scoped resources
+- [x] Global grants act as wildcards over scoped resources on the token side only — the owner-side sight check still gates every concrete target (demoted admin → 404)
 - [x] Token management is cookie-only: the endpoints sit behind the cookie-pinned default policy and the legacy bearer guard
 - [x] Issuance never exceeds owner rights: every requested grant re-checked server-side (`IsGrantableByOwner`), picker filtering is UX only
 - [x] Foreign entity ids are indistinguishable from unknown ones on every lifecycle endpoint

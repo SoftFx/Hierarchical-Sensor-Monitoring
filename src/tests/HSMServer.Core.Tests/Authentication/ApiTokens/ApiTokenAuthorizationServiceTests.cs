@@ -334,15 +334,88 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
-        public void GlobalGrant_DoesNotCoverScopedOperation_NoImplicitWildcard()
+        public void GlobalGrant_CoversScopedProduct_Allowed()
         {
-            // "All available boundaries" is a UI convenience only; a persisted Global pair
-            // never acts as a wildcard over Product/Folder resources.
+            // A persisted Global pair is the token-side "everywhere" shape: it matches
+            // every Product/Folder boundary for its operation. Safe because the owner
+            // side of the intersection is recomputed per concrete target — Global
+            // grants are admin-minted, and a demoted owner fails closed in
+            // OwnerCanSee before the token side is even consulted.
             _owner.IsAdmin = true;
             _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global, null));
 
+            var service = CreateService();
+
+            Assert.Equal(ApiTokenAuthorization.Allowed,
+                service.Authorize(Principal(), ApiTokenOperations.AlertsRead, ApiTokenResource.Product(ProductA)));
+            // The schedules sensor filter's exact shape: the list predicate at a
+            // Product boundary must honor the Global grant too.
+            Assert.True(service.IsVisible(Principal(), ApiTokenOperations.AlertsRead, ApiTokenResource.Product(ProductA)));
+        }
+
+        [Fact]
+        public void GlobalGrant_CoversScopedFolder_Allowed()
+        {
+            // The same wildcard at the Folder boundary — the alert-templates seam
+            // (list IsVisible + per-item Authorize must agree).
+            _owner.IsAdmin = true;
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global, null));
+
+            var service = CreateService();
+
+            Assert.Equal(ApiTokenAuthorization.Allowed,
+                service.Authorize(Principal(), ApiTokenOperations.AlertsRead, ApiTokenResource.Folder(FolderF)));
+            Assert.True(service.IsVisible(Principal(), ApiTokenOperations.AlertsRead, ApiTokenResource.Folder(FolderF)));
+        }
+
+        [Fact]
+        public void GlobalGrant_OtherOperation_AtOwnerVisibleScopedBoundary_Forbidden()
+        {
+            // The deliberate consequence of the wildcard: any Global grant puts every
+            // boundary in the token's REACH, so asking for an operation the token does
+            // not hold answers Forbidden, not NotFound. Acceptable — the only owner a
+            // Global grant can be minted for is an admin, who already knows every
+            // boundary exists.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(Grant(ApiTokenOperations.ProductsRead, ApiTokenBoundaryKind.Global, null));
+
             var decision = CreateService().Authorize(Principal(), ApiTokenOperations.AlertsRead,
                 ApiTokenResource.Product(ProductA));
+
+            Assert.Equal(ApiTokenAuthorization.Forbidden, decision);
+        }
+
+        [Fact]
+        public void GlobalGrant_DemotedOwner_ScopedTarget_NotFound()
+        {
+            // An admin minted a Global token, then lost the admin role: the owner side
+            // of the intersection fails closed per concrete target — the wildcard
+            // widens the token side only, never the owner's current sight.
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global, null));
+
+            var service = CreateService();
+
+            _owner.IsAdmin = true;
+            Assert.Equal(ApiTokenAuthorization.Allowed,
+                service.Authorize(Principal(), ApiTokenOperations.AlertsRead, ApiTokenResource.Product(ProductA)));
+
+            _owner.IsAdmin = false;
+            Assert.Equal(ApiTokenAuthorization.NotFound,
+                service.Authorize(Principal(), ApiTokenOperations.AlertsRead, ApiTokenResource.Product(ProductA)));
+            Assert.False(service.IsVisible(Principal(), ApiTokenOperations.AlertsRead, ApiTokenResource.Folder(FolderF)));
+        }
+
+        [Fact]
+        public void ScopedGrant_DoesNotCoverGlobalBoundary_NotFound()
+        {
+            // The wildcard is one-way: a Product/Folder grant never reaches the Global
+            // boundary — system-health:read and future global operations stay
+            // admin+Global-grant only.
+            _owner.IsAdmin = true;
+            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Product, ProductA));
+
+            var decision = CreateService().Authorize(Principal(), ApiTokenOperations.AlertsRead,
+                ApiTokenResource.GlobalScope);
 
             Assert.Equal(ApiTokenAuthorization.NotFound, decision);
         }
@@ -525,36 +598,6 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             });
 
             Assert.False(CreateService().HasOperationAtAnyVisibleBoundary(Principal(), ApiTokenOperations.AlertsRead));
-        }
-
-        [Fact]
-        public void HasOperationAtGlobalScope_AdminOwnerWithMatchingGlobalGrant_True()
-        {
-            _owner.IsAdmin = true;
-            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global, null));
-
-            Assert.True(CreateService().HasOperationAtGlobalScope(Principal(), ApiTokenOperations.AlertsRead));
-        }
-
-        [Fact]
-        public void HasOperationAtGlobalScope_NonAdminOwner_OtherOperation_ScopedGrant_False()
-        {
-            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Global, null));
-            var service = CreateService();
-
-            // The owner side: global scope is admin-only.
-            _owner.IsAdmin = false;
-            Assert.False(service.HasOperationAtGlobalScope(Principal(), ApiTokenOperations.AlertsRead));
-
-            // The token side: a grant for ANOTHER operation must not wildcard into
-            // this one's responses.
-            _owner.IsAdmin = true;
-            Assert.False(service.HasOperationAtGlobalScope(Principal(), ApiTokenOperations.ProductsRead));
-
-            // A scoped grant is not a global one — the short-circuit must not fire
-            // for it (the per-product predicate remains the decider).
-            _info = BuildInfo(Grant(ApiTokenOperations.AlertsRead, ApiTokenBoundaryKind.Product, ProductA));
-            Assert.False(service.HasOperationAtGlobalScope(Principal(), ApiTokenOperations.AlertsRead));
         }
 
         [Fact]

@@ -39,15 +39,6 @@ namespace HSMServer.Authentication
         // gate is caller-wide and answers 403, so it must not feed the
         // enumeration-probe signal (AuthorizationNotFound) that per-target 404s carry.
         bool HasOperationAtAnyVisibleBoundary(ClaimsPrincipal principal, string operation);
-
-        // Whether the operation is granted to a LIVE caller at the GLOBAL boundary
-        // under an admin owner — the token-side "everywhere" shape. Scoped-resource
-        // decisions deliberately do NOT treat it as a wildcard (a Global grant never
-        // covers Product/Folder targets); the one sanctioned use is a short-circuit
-        // for callers that already passed the caller-wide gate above, so a filter
-        // over scoped items does not hand the broadest token an empty-everywhere
-        // result. Records nothing, like IsVisible.
-        bool HasOperationAtGlobalScope(ClaimsPrincipal principal, string operation);
     }
 
 
@@ -133,10 +124,6 @@ namespace HSMServer.Authentication
 
             return allowed;
         }
-
-        public bool HasOperationAtGlobalScope(ClaimsPrincipal principal, string operation) =>
-            TryResolveCaller(principal, out var owner, out var grants) &&
-            IsVisibleCore(owner, grants, operation, ApiTokenResource.GlobalScope);
 
         private bool GrantsOperationAtAnyVisibleBoundary(User owner,
             ImmutableArray<ApiTokenGrantEntity> grants, string operation)
@@ -314,9 +301,8 @@ namespace HSMServer.Authentication
         }
 
         // Whether ANY grant of the token is anchored at the target's current boundary —
-        // the reach test that keeps out-of-scope targets 404. A Global grant never counts
-        // as a wildcard over Product/Folder targets ("all boundaries" expands to concrete
-        // ids at creation and is never persisted as a wildcard).
+        // the reach test that keeps out-of-scope targets 404. A Global grant counts as
+        // a wildcard over every boundary (see AnyGrantAt).
         private static bool TokenReachesBoundary(ImmutableArray<ApiTokenGrantEntity> grants,
             AuthorizationBoundary boundary) =>
             AnyGrantAt(grants, boundary, operation: null);
@@ -335,11 +321,25 @@ namespace HSMServer.Authentication
 
                 var kind = (ApiTokenBoundaryKind)grant.BoundaryKind;
 
+                // The token-side "everywhere" shape: a Global-boundary grant matches
+                // EVERY authorization boundary, for its own operation and for reach.
+                // Safe because the owner side of the conjunction is recomputed per
+                // concrete target — Global grants are mint-able by admins only, and a
+                // demoted owner fails closed in OwnerCanSee before the token side is
+                // consulted. One deliberate consequence: any Global grant puts every
+                // boundary in reach, so asking for an operation the token does not
+                // hold answers Forbidden, not NotFound — an admin owner (the only kind
+                // that can hold a Global grant at mint time) already knows every
+                // boundary exists. The reverse is NOT true: a scoped grant never
+                // reaches the Global boundary (the switch below).
+                if (kind == ApiTokenBoundaryKind.Global)
+                    return true;
+
                 switch (boundary.Kind)
                 {
                     case ApiTokenResourceKind.Global:
-                        if (kind == ApiTokenBoundaryKind.Global)
-                            return true;
+                        // Scoped grants never cover the Global boundary; a Global grant
+                        // has already returned above.
                         break;
 
                     case ApiTokenResourceKind.Product:
