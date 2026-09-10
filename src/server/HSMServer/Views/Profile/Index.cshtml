@@ -680,6 +680,19 @@
         });
     }
 
+    // #1375: create opens ready to go — every owner-grantable read preselected at
+    // EVERY owner-visible boundary (a read-only token is the common case; writes stay
+    // an explicit choice). Runs after the picker data arrives and before the first
+    // render, so the badges, the cells and the Read column toggle all reflect it from
+    // the first paint. Create only: restrict seeds from the token's own grants.
+    function preselectAllReads() {
+        boundaryOptions.forEach(function (boundary) {
+            boundary.operations.forEach(function (operation) {
+                if (operation.endsWith(':read')) addGrant(operation, boundary);
+            });
+        });
+    }
+
     function renderSelectedGrants() {
         var container = document.getElementById('selectedGrants');
         container.innerHTML = '';
@@ -863,6 +876,7 @@
         showError('grantModalError', null);
 
         loadGrantOptions(function () {
+            preselectAllReads();
             renderBoundarySelect();
             resetExpirySelect();
             showModal('grantModal');
