@@ -68,9 +68,11 @@ namespace HSMServer.Core.Tests.Controllers
                     return Task.FromResult((true, (string)null));
                 });
 
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Allowed);
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
 
             _chats.Setup(c => c.GetValues()).Returns(new List<Chat>());
@@ -201,41 +203,14 @@ namespace HSMServer.Core.Tests.Controllers
             _store[Guid.NewGuid()] = new AlertTemplateModel { Name = "beta", FolderId = folderB };
             _store[Guid.NewGuid()] = new AlertTemplateModel { Name = "alpha", FolderId = folderA };
 
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
-                .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) => resource.Id != folderB);
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, ApiTokenResource resource) => resource.Id != folderB);
 
             var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates()).Value as ApiPageDto<AlertTemplateDto>;
 
             Assert.NotNull(page);
             Assert.Equal(2, page.TotalCount);
             Assert.Equal(["alpha", "zeta"], page.Items.Select(t => t.Name).ToArray());
-        }
-
-        [Fact]
-        public void GetTemplates_ListsUnderTheReadOperation_NotJustReach()
-        {
-            // A list returns full bodies: an item may appear only under the SAME
-            // operation its item endpoint would demand (alerts:read). A token whose
-            // grants reach the folder without alerts:read (the old any-operation
-            // predicate) must see an empty page.
-            var folder = Guid.NewGuid();
-            _store[Guid.NewGuid()] = new AlertTemplateModel { Name = "secret", FolderId = folder };
-
-            string askedOperation = null;
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
-                .Returns((ClaimsPrincipal _, string operation, ApiTokenResource _) =>
-                {
-                    askedOperation = operation;
-                    return false; // the evaluator denies alerts:read
-                })
-                .Verifiable();
-
-            var page = Assert.IsType<OkObjectResult>(CreateController().GetTemplates()).Value as ApiPageDto<AlertTemplateDto>;
-
-            Assert.Equal(ApiTokenOperations.AlertsRead, askedOperation);
-            Assert.Empty(page.Items);
-            Assert.Equal(0, page.TotalCount);
-            _authorization.Verify();
         }
 
         [Fact]
@@ -250,8 +225,8 @@ namespace HSMServer.Core.Tests.Controllers
             CreateController().GetTemplates();
 
             // Six templates, two distinct folders: the evaluator runs twice, not six
-            // times (it re-resolves user + token + grants on every call).
-            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Exactly(2));
+            // times (it re-resolves user + token on every call).
+            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()), Times.Exactly(2));
         }
 
         [Fact]
@@ -312,7 +287,7 @@ namespace HSMServer.Core.Tests.Controllers
             var template = new AlertTemplateModel { Name = "t" };
             _store[template.Id] = template;
 
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(decision);
 
             Assert.Equal(expected, StatusCodeOf(CreateController().GetTemplate(template.Id)));
@@ -370,7 +345,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             // Authorization decides before any body validation runs — an invalid payload
             // in an unreachable folder is a 404, and the cache is never touched.
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.NotFound);
 
             var dto = BuildDto() with { Name = "" };
@@ -414,7 +389,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(400, StatusCodeOf(result));
             Assert.Empty(_store);
-            _authorization.Verify(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
+            _authorization.Verify(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()), Times.Never);
         }
 
         [Theory]
@@ -786,7 +761,7 @@ namespace HSMServer.Core.Tests.Controllers
         {
             Assert.Equal(404, StatusCodeOf(await CreateController().UpdateTemplate(Guid.NewGuid(), BuildDto())));
 
-            _authorization.Verify(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
+            _authorization.Verify(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()), Times.Never);
         }
 
         [Fact]
@@ -800,11 +775,11 @@ namespace HSMServer.Core.Tests.Controllers
 
             var dto = BuildDto() with { FolderId = folderB };
 
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), ApiTokenOperations.AlertsWrite,
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(),
                     It.Is<ApiTokenResource>(r => r.Id == folderA)))
                 .Returns(ApiTokenAuthorization.Allowed);
 
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), ApiTokenOperations.AlertsWrite,
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(),
                     It.Is<ApiTokenResource>(r => r.Id == folderB)))
                 .Returns(ApiTokenAuthorization.Forbidden);
 
@@ -812,7 +787,7 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(folderA, _store[stored.Id].FolderId); // unchanged
 
             // Both sides allowed: the move happens.
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), ApiTokenOperations.AlertsWrite,
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(),
                     It.Is<ApiTokenResource>(r => r.Id == folderB)))
                 .Returns(ApiTokenAuthorization.Allowed);
 
@@ -829,14 +804,14 @@ namespace HSMServer.Core.Tests.Controllers
             // A body-shape 400 must not leak existence to a caller outside the
             // folder's reach: the evaluator decides FIRST (403 here), even though the
             // body omits folderId.
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), ApiTokenOperations.AlertsWrite,
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(),
                     It.Is<ApiTokenResource>(r => r.Id == stored.FolderId)))
                 .Returns(ApiTokenAuthorization.Forbidden);
 
             Assert.Equal(403, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, BuildDto() with { FolderId = Guid.Empty })));
 
             // An authorized caller gets the 400 instead.
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
 
             Assert.Equal(400, StatusCodeOf(await CreateController().UpdateTemplate(stored.Id, BuildDto() with { FolderId = Guid.Empty })));

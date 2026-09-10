@@ -1,13 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
-using HSMDatabase.AccessManager;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Controllers;
 using HSMServer.Core.Cache;
-using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Profile;
 using HSMServer.ServerConfiguration;
@@ -18,23 +14,19 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.Controllers
 {
-    // Cookie-only token-management endpoints of the profile page (#1356 step 4): the
-    // degraded-mode gates (kill switch, unhealthy generations, quota), the create
-    // validation matrix (at least one grant, grantable pairs only, no duplicates, future
-    // expiry, gated no-expiration), the one-time secret contract, and the
-    // indistinguishable not-found answer for foreign/dead entity ids.
+    // Cookie-only token-management endpoints of the profile page (#1356 step 4,
+    // simplified by #1384): the degraded-mode gates (kill switch, unhealthy
+    // generations, quota), the create/rename validation matrix, the one-time secret
+    // contract, and the indistinguishable not-found answer for foreign/dead entity ids.
     public class ProfileControllerTests
     {
         private static readonly Guid OwnerId = Guid.NewGuid();
         private static readonly Guid ForeignOwnerId = Guid.NewGuid();
         private static readonly Guid EntityId = Guid.NewGuid();
-        private static readonly Guid ProductA = Guid.NewGuid();
 
         private readonly Mock<IApiTokenManager> _tokens = new();
-        private readonly Mock<IApiTokenGrantOptionsService> _grantOptions = new();
         private readonly Mock<IUserManager> _users = new();
         private readonly Mock<ITreeValuesCache> _cache = new();
-        private readonly Mock<IFolderManager> _folders = new();
         private readonly ApiTokensConfig _config = new() { Enabled = true };
 
         private readonly User _user = new("owner") { Id = OwnerId };
@@ -52,15 +44,10 @@ namespace HSMServer.Core.Tests.Controllers
             _tokens.Setup(t => t.IsGenerationStateHealthy).Returns(true);
             _tokens.Setup(t => t.CountQuotaEligibleTokens(OwnerId)).Returns(0);
 
-            _grantOptions.Setup(g => g.IsGrantableByOwner(It.IsAny<User>(), It.IsAny<string>(),
-                    It.IsAny<ApiTokenBoundaryKind>(), It.IsAny<string>()))
-                .Returns(true);
-
-            _tokens.Setup(t => t.TryCreateToken(OwnerId, It.IsAny<string>(), It.IsAny<string>(),
-                    It.IsAny<List<ApiTokenGrantEntity>>(), It.IsAny<DateTime?>(), It.IsAny<string>(),
+            _tokens.Setup(t => t.TryCreateToken(OwnerId, It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string>(),
                     out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny))
-                .Callback(new CreateTokenCallback((Guid _, string __, string ___, List<ApiTokenGrantEntity> ____,
-                    DateTime? _____, string ______, out ApiTokenInfo info, out string token) =>
+                .Callback(new CreateTokenCallback((Guid _, string __, bool ___, string ____,
+                    out ApiTokenInfo info, out string token) =>
                 {
                     info = BuildInfo();
                     token = "hsm_pat_v1_fulltoken";
@@ -72,7 +59,7 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         private ProfileController CreateController() =>
-            new(_users.Object, _tokens.Object, _grantOptions.Object, _config, _cache.Object, _folders.Object)
+            new(_users.Object, _tokens.Object, _config, _cache.Object)
             {
                 ControllerContext = new ControllerContext
                 {
@@ -95,6 +82,33 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public void CreateToken_ReadOnlyFlag_PassedToManagerUntouched()
+        {
+            // The flag is the token's whole power profile and is fixed at creation;
+            // the surface must neither drop it (a read-write mint from a read-only
+            // request) nor flip it.
+            bool received = true;
+
+            _tokens.Setup(t => t.TryCreateToken(OwnerId, It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string>(),
+                    out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny))
+                .Callback(new CreateTokenCallback((Guid _, string __, bool readOnly, string ___,
+                    out ApiTokenInfo info, out string token) =>
+                {
+                    received = readOnly;
+                    info = BuildInfo();
+                    token = "hsm_pat_v1_fulltoken";
+                }))
+                .Returns(true);
+
+            var request = BuildCreateRequest();
+            request.ReadOnly = true;
+
+            Assert.True(Mutate(CreateController().CreateToken(request)).Ok);
+            Assert.True(received);
+        }
+
+
+        [Fact]
         public void CreateToken_Disabled_DeniedWithoutManagerCall()
         {
             _config.Enabled = false;
@@ -103,9 +117,8 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.False(answer.Ok);
             Assert.Equal("disabled", answer.Error);
-            _tokens.Verify(t => t.TryCreateToken(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<List<ApiTokenGrantEntity>>(), It.IsAny<DateTime?>(), It.IsAny<string>(),
-                out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny), Times.Never);
+            _tokens.Verify(t => t.TryCreateToken(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(),
+                It.IsAny<string>(), out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny), Times.Never);
         }
 
 
@@ -131,19 +144,6 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.False(answer.Ok);
             Assert.Equal("quota", answer.Error);
-        }
-
-
-        [Fact]
-        public void CreateToken_NoGrants_Denied()
-        {
-            var request = BuildCreateRequest();
-            request.Grants = new List<ProfileGrantRequest>();
-
-            var answer = Mutate(CreateController().CreateToken(request));
-
-            Assert.False(answer.Ok);
-            Assert.Equal("no_grants", answer.Error);
         }
 
 
@@ -177,136 +177,9 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public void CreateToken_PastExpiry_Denied()
-        {
-            var request = BuildCreateRequest();
-            request.ExpiresAtUtc = DateTime.UtcNow.AddDays(-1);
-
-            var answer = Mutate(CreateController().CreateToken(request));
-
-            Assert.False(answer.Ok);
-            Assert.Equal("past_expiry", answer.Error);
-        }
-
-
-        [Fact]
-        public void CreateToken_BeyondMaxLifetime_Denied()
-        {
-            // The cap is what makes AllowNoExpiration = false a policy bound: without
-            // it, a year-9999 custom date would still mint a practically permanent
-            // credential on a deployment that switched unlimited tokens off.
-            _config.MaxLifetime = TimeSpan.FromDays(10);
-            var request = BuildCreateRequest();
-            request.ExpiresAtUtc = DateTime.UtcNow.AddDays(11);
-
-            var answer = Mutate(CreateController().CreateToken(request));
-
-            Assert.False(answer.Ok);
-            Assert.Equal("max_lifetime", answer.Error);
-        }
-
-
-        [Fact]
-        public void CreateToken_WithinMaxLifetime_Allowed()
-        {
-            _config.MaxLifetime = TimeSpan.FromDays(10);
-            var request = BuildCreateRequest();
-            request.ExpiresAtUtc = DateTime.UtcNow.AddDays(9);
-
-            var answer = Mutate(CreateController().CreateToken(request));
-
-            Assert.True(answer.Ok);
-        }
-
-
-        [Fact]
-        public void CreateToken_BeyondDefaultMaxLifetime_Denied()
-        {
-            // Pins the shipped default: one year, so the form's 365-day preset stays
-            // exactly at the cap while a longer custom date is refused.
-            var request = BuildCreateRequest();
-            request.ExpiresAtUtc = DateTime.UtcNow.AddDays(366);
-
-            var answer = Mutate(CreateController().CreateToken(request));
-
-            Assert.False(answer.Ok);
-            Assert.Equal("max_lifetime", answer.Error);
-        }
-
-
-        [Fact]
-        public void CreateToken_NoExpiration_RejectedWhenSwitchedOff()
-        {
-            // Explicit, not the default: since #1373 the config default allows it.
-            _config.AllowNoExpiration = false;
-            var request = BuildCreateRequest();
-            request.ExpiresAtUtc = null;
-
-            var answer = Mutate(CreateController().CreateToken(request));
-            Assert.False(answer.Ok);
-            Assert.Equal("no_expiration_not_allowed", answer.Error);
-        }
-
-        [Fact]
-        public void CreateToken_NoExpiration_AllowedByDefault()
-        {
-            // Pins the shipped default (#1373) through the controller: an unmutated
-            // config accepts a null expiry — the assertion that breaks if anyone
-            // flips the default back.
-            var request = BuildCreateRequest();
-            request.ExpiresAtUtc = null;
-
-            var answer = Mutate(CreateController().CreateToken(request));
-            Assert.True(answer.Ok);
-        }
-
-
-        [Fact]
-        public void CreateToken_DuplicatePairs_Denied()
-        {
-            var request = BuildCreateRequest();
-            request.Grants.Add(new ProfileGrantRequest
-            {
-                Operation = ApiTokenOperations.AlertsRead,
-                BoundaryKind = "product",
-                BoundaryId = ProductA.ToString().ToUpperInvariant(),
-            });
-
-            var answer = Mutate(CreateController().CreateToken(request));
-
-            // Same pair in a different Guid casing is still the same boundary.
-            Assert.False(answer.Ok);
-            Assert.Equal("duplicate_grant", answer.Error);
-        }
-
-
-        [Fact]
-        public void CreateToken_GrantOutsideOwnerRights_Denied()
-        {
-            _grantOptions.Setup(g => g.IsGrantableByOwner(It.IsAny<User>(), ApiTokenOperations.AlertsWrite,
-                    ApiTokenBoundaryKind.Product, ProductA.ToString()))
-                .Returns(false);
-
-            var request = BuildCreateRequest();
-            request.Grants.Add(new ProfileGrantRequest
-            {
-                Operation = ApiTokenOperations.AlertsWrite,
-                BoundaryKind = "product",
-                BoundaryId = ProductA.ToString(),
-            });
-
-            var answer = Mutate(CreateController().CreateToken(request));
-
-            Assert.False(answer.Ok);
-            Assert.Equal("grant_not_allowed", answer.Error);
-        }
-
-
-        [Fact]
         public void CreateToken_ManagerFailure_Reported()
         {
-            _tokens.Setup(t => t.TryCreateToken(OwnerId, It.IsAny<string>(), It.IsAny<string>(),
-                    It.IsAny<List<ApiTokenGrantEntity>>(), It.IsAny<DateTime?>(), It.IsAny<string>(),
+            _tokens.Setup(t => t.TryCreateToken(OwnerId, It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string>(),
                     out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny))
                 .Returns(false);
 
@@ -317,64 +190,77 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
-        // ---- restrict / rotate ----------------------------------------------------
+        // ---- rename / rotate ----------------------------------------------------
 
         [Fact]
-        public void RestrictToken_Valid_CallsManagerWithRemainingSet()
+        public void RenameToken_Valid_CallsManagerWithNewName()
         {
-            List<ApiTokenGrantEntity> persisted = null;
+            string persisted = null;
             _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo());
-            _tokens.Setup(t => t.TryRestrictToken(EntityId, It.IsAny<List<ApiTokenGrantEntity>>(),
-                    It.IsAny<DateTime?>(), It.IsAny<string>(), out It.Ref<ApiTokenInfo>.IsAny))
-                .Callback(new RestrictCallback((Guid _, List<ApiTokenGrantEntity> grants, DateTime? expiry,
-                    string ___, out ApiTokenInfo ____) =>
+            _tokens.Setup(t => t.TryRenameToken(EntityId, It.IsAny<string>(), It.IsAny<string>(),
+                    out It.Ref<ApiTokenInfo>.IsAny))
+                .Callback(new RenameCallback((Guid _, string name, string ___, out ApiTokenInfo ____) =>
                 {
-                    persisted = grants;
+                    persisted = name;
                     ____ = null;
                 }))
                 .Returns(true);
 
-            var answer = Mutate(CreateController().RestrictToken(new RestrictTokenRequest
+            var answer = Mutate(CreateController().RenameToken(new RenameTokenRequest
             {
                 EntityId = EntityId,
-                Grants = new List<ProfileGrantRequest>(BuildGrants()),
+                Name = "renamed",
             }));
 
             Assert.True(answer.Ok);
-            var grant = Assert.Single(persisted);
-            Assert.Equal(ApiTokenOperations.AlertsRead, grant.Operation);
-            Assert.Equal(ProductA.ToString(), grant.BoundaryId);
+            Assert.Equal("renamed", persisted);
         }
 
 
         [Fact]
-        public void RestrictToken_ForeignToken_IndistinguishableNotFound()
+        public void RenameToken_EmptyName_Denied()
+        {
+            _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo());
+
+            var answer = Mutate(CreateController().RenameToken(new RenameTokenRequest
+            {
+                EntityId = EntityId,
+                Name = "   ",
+            }));
+
+            Assert.False(answer.Ok);
+            Assert.Equal("invalid_name", answer.Error);
+        }
+
+
+        [Fact]
+        public void RenameToken_ForeignToken_IndistinguishableNotFound()
         {
             _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo(ForeignOwnerId));
 
-            var answer = Mutate(CreateController().RestrictToken(new RestrictTokenRequest
+            var answer = Mutate(CreateController().RenameToken(new RenameTokenRequest
             {
                 EntityId = EntityId,
-                Grants = new List<ProfileGrantRequest>(BuildGrants()),
+                Name = "renamed",
             }));
 
             Assert.False(answer.Ok);
             Assert.Equal("not_found", answer.Error);
-            _tokens.Verify(t => t.TryRestrictToken(It.IsAny<Guid>(), It.IsAny<List<ApiTokenGrantEntity>>(),
-                It.IsAny<DateTime?>(), It.IsAny<string>(), out It.Ref<ApiTokenInfo>.IsAny), Times.Never);
+            _tokens.Verify(t => t.TryRenameToken(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(),
+                out It.Ref<ApiTokenInfo>.IsAny), Times.Never);
         }
 
 
         [Fact]
-        public void RestrictToken_RevokedToken_NotFound()
+        public void RenameToken_RevokedToken_NotFound()
         {
             _tokens.Setup(t => t.GetTokenByEntityId(EntityId))
                 .Returns(BuildInfo() with { RevokedAtUtc = DateTime.UtcNow.Ticks });
 
-            var answer = Mutate(CreateController().RestrictToken(new RestrictTokenRequest
+            var answer = Mutate(CreateController().RenameToken(new RenameTokenRequest
             {
                 EntityId = EntityId,
-                Grants = new List<ProfileGrantRequest>(BuildGrants()),
+                Name = "renamed",
             }));
 
             Assert.False(answer.Ok);
@@ -383,15 +269,15 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public void RestrictToken_Disabled_Denied()
+        public void RenameToken_Disabled_Denied()
         {
             _config.Enabled = false;
             _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo());
 
-            var answer = Mutate(CreateController().RestrictToken(new RestrictTokenRequest
+            var answer = Mutate(CreateController().RenameToken(new RenameTokenRequest
             {
                 EntityId = EntityId,
-                Grants = new List<ProfileGrantRequest>(BuildGrants()),
+                Name = "renamed",
             }));
 
             Assert.Equal("disabled", answer.Error);
@@ -399,25 +285,25 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public void RestrictToken_GenerationInvalidatedToken_NotFound()
+        public void RenameToken_GenerationInvalidatedToken_NotFound()
         {
             // The liveness rule must match what the page renders: a row the list shows
             // as "invalidated" (dead, no buttons) answers not_found here too, instead
-            // of failing inside the manager with a misleading restrict_failed.
+            // of failing inside the manager with a misleading rename_failed.
             _tokens.Setup(t => t.GlobalRevocationGeneration).Returns(5);
             _tokens.Setup(t => t.GetTokenByEntityId(EntityId))
                 .Returns(BuildInfo() with { GlobalRevocationGenerationAtIssue = 4 });
 
-            var answer = Mutate(CreateController().RestrictToken(new RestrictTokenRequest
+            var answer = Mutate(CreateController().RenameToken(new RenameTokenRequest
             {
                 EntityId = EntityId,
-                Grants = new List<ProfileGrantRequest>(BuildGrants()),
+                Name = "renamed",
             }));
 
             Assert.False(answer.Ok);
             Assert.Equal("not_found", answer.Error);
-            _tokens.Verify(t => t.TryRestrictToken(It.IsAny<Guid>(), It.IsAny<List<ApiTokenGrantEntity>>(),
-                It.IsAny<DateTime?>(), It.IsAny<string>(), out It.Ref<ApiTokenInfo>.IsAny), Times.Never);
+            _tokens.Verify(t => t.TryRenameToken(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(),
+                out It.Ref<ApiTokenInfo>.IsAny), Times.Never);
         }
 
 
@@ -425,9 +311,9 @@ namespace HSMServer.Core.Tests.Controllers
         public void RotateToken_Valid_ReturnsNewSecretOnce()
         {
             _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo());
-            _tokens.Setup(t => t.TryRotateToken(EntityId, It.IsAny<DateTime?>(), It.IsAny<string>(),
+            _tokens.Setup(t => t.TryRotateToken(EntityId, It.IsAny<string>(),
                     out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny))
-                .Callback(new RotateCallback((Guid _, DateTime? _, string ___, out ApiTokenInfo ____, out string token) =>
+                .Callback(new RotateCallback((Guid _, string ___, out ApiTokenInfo ____, out string token) =>
                 {
                     ____ = null;
                     token = "hsm_pat_v1_rotated";
@@ -442,17 +328,57 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public void RotateToken_PastExpiry_Denied()
+        public void RotateToken_ForeignToken_NotFound()
         {
+            _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo(ForeignOwnerId));
+
+            var answer = Mutate(CreateController().RotateToken(new RotateTokenRequest { EntityId = EntityId }));
+
+            Assert.Equal("not_found", answer.Error);
+        }
+
+
+        [Fact]
+        public void RotateToken_RevokedToken_NotFound()
+        {
+            // Rotation is the one lifecycle op that mints a fresh live credential — its
+            // guards are worth pinning at the controller level, symmetric with create.
+            _tokens.Setup(t => t.GetTokenByEntityId(EntityId))
+                .Returns(BuildInfo() with { RevokedAtUtc = DateTime.UtcNow.Ticks });
+
+            var answer = Mutate(CreateController().RotateToken(new RotateTokenRequest { EntityId = EntityId }));
+
+            Assert.Equal("not_found", answer.Error);
+            _tokens.Verify(t => t.TryRotateToken(It.IsAny<Guid>(), It.IsAny<string>(),
+                out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny), Times.Never);
+        }
+
+
+        [Fact]
+        public void RotateToken_Disabled_Denied()
+        {
+            _config.Enabled = false;
             _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo());
 
-            var answer = Mutate(CreateController().RotateToken(new RotateTokenRequest
-            {
-                EntityId = EntityId,
-                ExpiresAtUtc = DateTime.UtcNow.AddDays(-1),
-            }));
+            var answer = Mutate(CreateController().RotateToken(new RotateTokenRequest { EntityId = EntityId }));
 
-            Assert.Equal("past_expiry", answer.Error);
+            Assert.Equal("disabled", answer.Error);
+            _tokens.Verify(t => t.TryRotateToken(It.IsAny<Guid>(), It.IsAny<string>(),
+                out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny), Times.Never);
+        }
+
+
+        [Fact]
+        public void RotateToken_UnhealthyGenerations_Denied()
+        {
+            _tokens.Setup(t => t.IsGenerationStateHealthy).Returns(false);
+            _tokens.Setup(t => t.GetTokenByEntityId(EntityId)).Returns(BuildInfo());
+
+            var answer = Mutate(CreateController().RotateToken(new RotateTokenRequest { EntityId = EntityId }));
+
+            Assert.Equal("unhealthy", answer.Error);
+            _tokens.Verify(t => t.TryRotateToken(It.IsAny<Guid>(), It.IsAny<string>(),
+                out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny), Times.Never);
         }
 
 
@@ -521,7 +447,7 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
-        // ---- page / picker ---------------------------------------------------------
+        // ---- page -------------------------------------------------------------------
 
         [Fact]
         public void Index_ListsOnlyOwnTokensWithDegradedState()
@@ -537,11 +463,6 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal("owner", model.UserName);
             Assert.Equal(3, model.QuotaUsed);
             Assert.Equal(5, model.QuotaMax);
-            Assert.Equal(365, model.MaxLifetimeDays);
-            // Feeds the create form's grant-count hint: it names the cap for
-            // hand-built selections (the preselect itself seeds one boundary and
-            // cannot approach it).
-            Assert.Equal(1024, model.MaxGrants);
             Assert.True(model.TokensEnabled);
             var token = Assert.Single(model.Tokens);
             Assert.Equal(EntityId, token.EntityId);
@@ -563,37 +484,36 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public void Index_ServerNowUnixMs_IsCurrentUnixMilliseconds()
-        {
-            // The form anchors every expiry computation (presets, MaxLifetime clamp,
-            // date-input bounds) to this value plus client-measured elapsed time; a
-            // .NET-ticks value here would silently shift them all ~2000 years off.
-            var before = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var model = PageModelOf(CreateController().Index());
-            var after = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-            Assert.InRange(model.ServerNowUnixMs, before, after);
-        }
-
-
-        [Fact]
         public void Index_Timestamps_AreUnixMillisecondsNotDotNetTicks()
         {
             // Entity timestamps are .NET ticks (since 0001-01-01); feeding them to
             // new Date(ms) as-is rendered dates ~2000 years in the future. The page
             // projection must be true Unix milliseconds.
             var created = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
-            var expires = new DateTime(2027, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
             _tokens.Setup(t => t.GetTokensByOwner(OwnerId)).Returns(new List<ApiTokenInfo>
             {
-                BuildInfo() with { CreatedAtUtc = created.Ticks, ExpiresAtUtc = expires.Ticks },
+                BuildInfo() with { CreatedAtUtc = created.Ticks },
             });
 
             var token = PageModelOf(CreateController().Index()).Tokens.Single();
 
             Assert.Equal(((DateTimeOffset)created).ToUnixTimeMilliseconds(), token.CreatedAtUnixMs);
-            Assert.Equal(((DateTimeOffset)expires).ToUnixTimeMilliseconds(), token.ExpiresAtUnixMs);
+        }
+
+
+        [Fact]
+        public void Index_ReadOnlyFlag_SurfacedOnTheRow()
+        {
+            _tokens.Setup(t => t.GetTokensByOwner(OwnerId)).Returns(new List<ApiTokenInfo>
+            {
+                BuildInfo(entityId: Guid.NewGuid()) with { ReadOnly = true },
+                BuildInfo(entityId: Guid.NewGuid()) with { ReadOnly = false },
+            });
+
+            var flags = PageModelOf(CreateController().Index()).Tokens.Select(t => t.ReadOnly).ToList();
+
+            Assert.Equal(new[] { true, false }, flags);
         }
 
 
@@ -610,91 +530,21 @@ namespace HSMServer.Core.Tests.Controllers
             {
                 BuildInfo(entityId: Guid.NewGuid()) with { GlobalRevocationGenerationAtIssue = 4, OwnerRevocationGenerationAtIssue = 2 },
                 BuildInfo(entityId: Guid.NewGuid()) with { GlobalRevocationGenerationAtIssue = 5, OwnerRevocationGenerationAtIssue = 1 },
-                BuildInfo(entityId: Guid.NewGuid()) with { GlobalRevocationGenerationAtIssue = 5, OwnerRevocationGenerationAtIssue = 2 },
+                BuildInfo(entityId: Guid.NewGuid()) with { GlobalRevocationGenerationAtIssue = 5, OwnerRevocationGenerationAtIssue = 2, RevokedAtUtc = DateTime.UtcNow.Ticks },
             });
 
             var statuses = PageModelOf(CreateController().Index()).Tokens.Select(t => t.Status).ToList();
 
-            Assert.Equal(new[] { "invalidated", "invalidated", "active" }, statuses);
-        }
-
-
-        [Fact]
-        public void CreateToken_UnspecifiedExpiryKind_IsUtcPerManagerContract()
-        {
-            // The manager treats Kind.Unspecified as UTC; ToUniversalTime would instead
-            // read the SERVER's zone and shift the stored expiry on non-UTC hosts.
-            DateTime? received = null;
-            _tokens.Setup(t => t.TryCreateToken(OwnerId, It.IsAny<string>(), It.IsAny<string>(),
-                    It.IsAny<List<ApiTokenGrantEntity>>(), It.IsAny<DateTime?>(), It.IsAny<string>(),
-                    out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny))
-                .Callback(new CreateTokenCallback((Guid _, string __, string ___, List<ApiTokenGrantEntity> ____,
-                    DateTime? expiresAtUtc, string _____, out ApiTokenInfo info, out string token) =>
-                {
-                    received = expiresAtUtc;
-                    info = BuildInfo();
-                    token = "hsm_pat_v1_fulltoken";
-                }))
-                .Returns(true);
-
-            var unspecified = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(30).Date, DateTimeKind.Unspecified);
-            var request = BuildCreateRequest();
-            request.ExpiresAtUtc = unspecified;
-
-            var answer = Mutate(CreateController().CreateToken(request));
-
-            Assert.True(answer.Ok);
-            Assert.Equal(DateTimeKind.Utc, received.Value.Kind);
-            Assert.Equal(unspecified, received.Value);
-        }
-
-
-        [Fact]
-        public void GrantOptions_Disabled_ReturnsEmptyPicker()
-        {
-            _config.Enabled = false;
-
-            var result = Assert.IsType<JsonResult>(CreateController().GrantOptions());
-            var boundaries = Assert.IsAssignableFrom<System.Collections.Generic.IReadOnlyList<ApiTokenBoundaryOptions>>(result.Value);
-
-            Assert.Empty(boundaries);
-            _grantOptions.Verify(g => g.GetBoundaryOptions(It.IsAny<User>()), Times.Never);
-        }
-
-
-        [Fact]
-        public void GrantOptions_Enabled_DelegatesToOwnerFilter()
-        {
-            var expected = new List<ApiTokenBoundaryOptions>
-            {
-                new("global", "", "Global", new[] { ApiTokenOperations.SystemHealthRead }),
-            };
-            _grantOptions.Setup(g => g.GetBoundaryOptions(_user)).Returns(expected);
-
-            var result = Assert.IsType<JsonResult>(CreateController().GrantOptions());
-            var boundaries = Assert.IsAssignableFrom<System.Collections.Generic.IReadOnlyList<ApiTokenBoundaryOptions>>(result.Value);
-
-            Assert.Equal(expected, boundaries);
+            Assert.Equal(new[] { "invalidated", "invalidated", "revoked" }, statuses);
         }
 
 
         // ---- helpers ------------------------------------------------------------------
 
-        private static ProfileGrantRequest Grant() => new()
-        {
-            Operation = ApiTokenOperations.AlertsRead,
-            BoundaryKind = "product",
-            BoundaryId = ProductA.ToString(),
-        };
-
-        private static List<ProfileGrantRequest> BuildGrants() => new() { Grant() };
-
         private static CreateTokenRequest BuildCreateRequest() => new()
         {
             Name = "ci runner",
-            Description = "read alerts",
-            ExpiresAtUtc = DateTime.UtcNow.AddDays(30),
-            Grants = BuildGrants(),
+            ReadOnly = false,
         };
 
         private static ApiTokenInfo BuildInfo(Guid? owner = null, Guid? entityId = null) => new()
@@ -702,7 +552,6 @@ namespace HSMServer.Core.Tests.Controllers
             EntityId = entityId ?? EntityId,
             OwnerUserId = owner ?? OwnerId,
             Name = "token",
-            Grants = ImmutableArray<ApiTokenGrantEntity>.Empty,
         };
 
         private static ProfilePageViewModel PageModelOf(IActionResult action) =>
@@ -712,14 +561,12 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.IsType<ProfileMutationResponse>(Assert.IsType<JsonResult>(action).Value);
 
 
-        private delegate void CreateTokenCallback(Guid owner, string name, string description,
-            List<ApiTokenGrantEntity> grants, DateTime? expiresAtUtc, string createdBy,
+        private delegate void CreateTokenCallback(Guid owner, string name, bool readOnly, string createdBy,
             out ApiTokenInfo entity, out string fullToken);
 
-        private delegate void RestrictCallback(Guid entityId, List<ApiTokenGrantEntity> grants,
-            DateTime? shortenedExpiryUtc, string restrictedBy, out ApiTokenInfo entity);
+        private delegate void RenameCallback(Guid entityId, string newName, string renamedBy, out ApiTokenInfo entity);
 
-        private delegate void RotateCallback(Guid entityId, DateTime? shortenedExpiryUtc, string rotatedBy,
+        private delegate void RotateCallback(Guid entityId, string rotatedBy,
             out ApiTokenInfo entity, out string fullToken);
 
         private delegate void RevokeCallback(Guid entityId, string revokedBy, string reason, out ApiTokenInfo entity);

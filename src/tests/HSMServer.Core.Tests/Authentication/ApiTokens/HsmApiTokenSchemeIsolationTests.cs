@@ -23,12 +23,12 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         private static readonly string TokenId = new('A', ApiTokenMaterial.TokenIdLength);
 
 
-        private static IServiceProvider BuildProvider()
+        private static IServiceProvider BuildProvider(Moq.Mock<IApiTokenManager> tokens = null)
         {
             var services = new ServiceCollection();
 
             services.AddLogging();
-            services.AddSingleton(new Moq.Mock<IApiTokenManager>().Object);
+            services.AddSingleton((tokens ?? new Moq.Mock<IApiTokenManager>()).Object);
             services.AddSingleton(new Moq.Mock<IUserManager>().Object);
             services.AddSingleton(new Moq.Mock<IApiTokenSecurityEventSink>().Object);
             services.AddSingleton(new ServerConfiguration.ApiTokensConfig { Enabled = true });
@@ -146,6 +146,87 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 HsmApiTokenDefaults.ManagementPolicy);
 
             Assert.False(result.Succeeded);
+        }
+
+
+        // The read-only flag's method-shaped backstop (#1384): the policy itself denies
+        // unsafe HTTP methods for a read-only credential, so a future mutating action
+        // that forgets the evaluator cannot hand a read-only token write access. The
+        // denial is uniform across targets — it cannot disagree with the evaluator's
+        // 403/404 anti-enumeration split.
+        private static Moq.Mock<IApiTokenManager> TokensWith(bool readOnly)
+        {
+            var tokens = new Moq.Mock<IApiTokenManager>();
+            tokens.Setup(t => t.GetToken(TokenId)).Returns(new ApiTokenInfo
+            {
+                EntityId = Guid.NewGuid(),
+                OwnerUserId = OwnerId,
+                Name = "token",
+                ReadOnly = readOnly,
+            });
+            return tokens;
+        }
+
+        private static HttpContext RequestOf(string method) => new DefaultHttpContext
+        {
+            Request = { Method = method },
+        };
+
+        [Theory]
+        [InlineData("POST")]
+        [InlineData("PUT")]
+        [InlineData("PATCH")]
+        [InlineData("DELETE")]
+        public async Task ManagementPolicy_UnsafeMethod_ReadOnlyToken_IsDenied(string method)
+        {
+            var provider = BuildProvider(TokensWith(readOnly: true));
+            var authorization = provider.GetRequiredService<IAuthorizationService>();
+
+            var result = await authorization.AuthorizeAsync(TokenPrincipal(), RequestOf(method),
+                HsmApiTokenDefaults.ManagementPolicy);
+
+            Assert.False(result.Succeeded);
+        }
+
+        [Theory]
+        [InlineData("POST")]
+        [InlineData("DELETE")]
+        public async Task ManagementPolicy_UnsafeMethod_ReadWriteToken_Passes(string method)
+        {
+            var provider = BuildProvider(TokensWith(readOnly: false));
+            var authorization = provider.GetRequiredService<IAuthorizationService>();
+
+            var result = await authorization.AuthorizeAsync(TokenPrincipal(), RequestOf(method),
+                HsmApiTokenDefaults.ManagementPolicy);
+
+            Assert.True(result.Succeeded);
+        }
+
+        [Fact]
+        public async Task ManagementPolicy_SafeMethod_ReadOnlyToken_Passes()
+        {
+            var provider = BuildProvider(TokensWith(readOnly: true));
+            var authorization = provider.GetRequiredService<IAuthorizationService>();
+
+            var result = await authorization.AuthorizeAsync(TokenPrincipal(), RequestOf("GET"),
+                HsmApiTokenDefaults.ManagementPolicy);
+
+            Assert.True(result.Succeeded);
+        }
+
+        [Fact]
+        public async Task ManagementPolicy_NoHttpContextResource_ReadOnlyToken_Passes()
+        {
+            // The backstop keys off the HTTP context; without one (unit-level calls,
+            // non-HTTP resources) it stays silent and the evaluator remains the only
+            // decider — the guard is a backstop, never the primary gate.
+            var provider = BuildProvider(TokensWith(readOnly: true));
+            var authorization = provider.GetRequiredService<IAuthorizationService>();
+
+            var result = await authorization.AuthorizeAsync(TokenPrincipal(), null,
+                HsmApiTokenDefaults.ManagementPolicy);
+
+            Assert.True(result.Succeeded);
         }
     }
 }

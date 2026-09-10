@@ -4,24 +4,20 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.Authentication.ApiTokens
 {
-    // ApiTokensConfig contract (initiative step 4): upgrade-safe defaults in the channel
-    // sense — a deployment with no ApiTokens section gets the token channel fully
-    // disabled; the expiry gate defaults the permissive way since #1373 — and startup
-    // validation with actionable, key-named errors for every knob.
+    // ApiTokensConfig contract (#1356 step 4, simplified by #1384): upgrade-safe defaults
+    // in the channel sense — a deployment with no ApiTokens section gets the token
+    // channel fully disabled — and startup validation with actionable, key-named errors
+    // for every knob. The expiry knobs of the fine-granted model are gone: tokens are
+    // eternal owner mirrors with an optional read-only flag.
     public class ApiTokensConfigTests
     {
         [Fact]
-        public void Defaults_DisabledChannel_NoExpirationAllowed()
+        public void Defaults_DisabledChannel_EternalTokens()
         {
             var config = new ApiTokensConfig();
 
             Assert.False(config.Enabled);
             Assert.Equal(10, config.MaxTokensPerUser);
-            // No-expiration is the product default since #1373: the create form
-            // preselects it; the knob is now the operator's opt-OUT.
-            Assert.True(config.AllowNoExpiration);
-            Assert.Equal(TimeSpan.FromDays(365), config.MaxLifetime);
-            Assert.Equal(TimeSpan.FromDays(90), config.DefaultLifetime);
             Assert.Equal(TimeSpan.FromDays(30), config.TokenRecordRetention);
             Assert.Equal(TimeSpan.FromDays(30), config.SecurityEventRetention);
             Assert.Equal(60, config.InvalidAttemptRateLimit);
@@ -41,81 +37,55 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Theory]
-        [InlineData(0)]
         [InlineData(-1)]
-        public void DefaultLifetime_NotPositive_Throws(int days)
+        public void TokenRecordRetention_Negative_Throws(int days)
         {
-            var config = new ApiTokensConfig { DefaultLifetime = TimeSpan.FromDays(days) };
+            var config = new ApiTokensConfig { TokenRecordRetention = TimeSpan.FromDays(days) };
 
             var ex = Assert.Throws<InvalidOperationException>(config.Validate);
 
-            Assert.Contains(nameof(ApiTokensConfig.DefaultLifetime), ex.Message);
+            Assert.Contains(nameof(ApiTokensConfig.TokenRecordRetention), ex.Message);
         }
 
 
         [Fact]
-        public void DefaultLifetime_BelowOneDay_Throws()
+        public void TokenRecordRetention_AboveTenYears_Throws()
         {
-            // The form's presets are day-granular; a 12h default would surface as a
-            // misleading "1 days" preset.
-            var config = new ApiTokensConfig { DefaultLifetime = TimeSpan.FromHours(12) };
+            var config = new ApiTokensConfig { TokenRecordRetention = TimeSpan.FromDays(3651) };
 
             Assert.Throws<InvalidOperationException>(config.Validate);
         }
 
-        [Fact]
-        public void DefaultLifetime_AboveTenYears_Throws()
-        {
-            var config = new ApiTokensConfig { DefaultLifetime = TimeSpan.FromDays(3651) };
-
-            Assert.Throws<InvalidOperationException>(config.Validate);
-        }
 
         [Fact]
-        public void MaxLifetime_BelowOneDay_Throws()
+        public void SecurityEventRetention_Negative_Throws()
         {
-            var config = new ApiTokensConfig { MaxLifetime = TimeSpan.FromHours(12) };
+            var config = new ApiTokensConfig { SecurityEventRetention = TimeSpan.FromHours(-1) };
 
             var ex = Assert.Throws<InvalidOperationException>(config.Validate);
 
-            Assert.Contains(nameof(ApiTokensConfig.MaxLifetime), ex.Message);
+            Assert.Contains(nameof(ApiTokensConfig.SecurityEventRetention), ex.Message);
         }
 
-        [Fact]
-        public void MaxLifetime_AboveTenYears_Throws()
-        {
-            var config = new ApiTokensConfig { MaxLifetime = TimeSpan.FromDays(3651) };
-
-            Assert.Throws<InvalidOperationException>(config.Validate);
-        }
 
         [Fact]
-        public void DefaultLifetime_AboveMaxLifetime_Throws()
+        public void InvalidAttemptRateLimit_BelowOne_Throws()
         {
-            // The form preselects DefaultLifetime; a default over the cap would be a
-            // preset the create endpoint always refuses.
-            var config = new ApiTokensConfig
-            {
-                DefaultLifetime = TimeSpan.FromDays(90),
-                MaxLifetime = TimeSpan.FromDays(30),
-            };
+            var config = new ApiTokensConfig { InvalidAttemptRateLimit = 0 };
 
             var ex = Assert.Throws<InvalidOperationException>(config.Validate);
 
-            Assert.Contains(nameof(ApiTokensConfig.DefaultLifetime), ex.Message);
-            Assert.Contains(nameof(ApiTokensConfig.MaxLifetime), ex.Message);
+            Assert.Contains(nameof(ApiTokensConfig.InvalidAttemptRateLimit), ex.Message);
         }
 
+
         [Fact]
-        public void ValidIssuanceKnobs_PassValidation()
+        public void ValidKnobs_PassValidation()
         {
             var config = new ApiTokensConfig
             {
                 Enabled = true,
                 MaxTokensPerUser = 25,
-                AllowNoExpiration = true,
-                DefaultLifetime = TimeSpan.FromDays(30),
-                MaxLifetime = TimeSpan.FromDays(60),
             };
 
             config.Validate();

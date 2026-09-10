@@ -1,10 +1,10 @@
 # Tests: API tokens (authentication foundation)
 
-> Owner: server | Last reviewed: 2026-09-07 | Canonical: yes
+> Owner: server | Last reviewed: 2026-09-10 | Canonical: yes
 
-Coverage matrix for the token domain/persistence foundation (steps 1–2), the HTTP
-authentication/authorization surface (step 3), and the personal token management UI
-(step 4 PR A).
+Coverage matrix for the token domain/persistence foundation, the HTTP
+authentication/authorization surface, and the personal token management UI — all under
+the #1384 owner-mirrored model (eternal tokens, read-only flag, no grants/expiry).
 
 ## Token material (`ApiTokenMaterialTests`)
 
@@ -24,12 +24,6 @@ authentication/authorization surface (step 3), and the personal token management
 - `Verify` is constant-time compare: correct passes, tampered fails, wrong lengths fail.
 - `DummyVerifier` is CSPRNG-drawn and never equals a real generated verifier, nor the verifier of the all-zero id+secret credential (which parses canonically as 22 'A' + 43 'A') — the dummy must not be derivable from any presentable token.
 
-## Grants (`ApiTokenGrantsTests`)
-
-- Valid grants canonicalize: Guid ids to canonical form, deterministic (operation, boundary) order; same input in different order → same canonical list.
-- Empty/null grant list is valid (a token that allows nothing); lists above `MaxGrants` (1024) fail closed, exactly at the bound still canonicalize; a server-wide operation (`system-health:read`) at a Product/Folder boundary and an empty-guid resource id fail closed.
-- Fail closed: unknown operations (including `*`, `admin`, case variants, credential capabilities), unknown boundary kind, Global with a boundary id, resource boundary without a valid Guid, duplicate pairs, null entries.
-
 ## Store (`ApiTokenStoreTests`, worker level)
 
 - `TryInsertApiToken` persists a readable-back row; same TokenId twice → false with the original row intact.
@@ -40,23 +34,18 @@ authentication/authorization surface (step 3), and the personal token management
 ## Manager (`ApiTokenManagerTests`, DatabaseCore level)
 
 - Persist-first: create/rotate/revoke/advance publish only after the durable write; injected write failures (via `FailingDatabaseCore`) leave neither durable nor live state.
-- Create: disclosed full token parses; stored verifier matches the presented secret; restart-safe reload; bad input (empty owner/name, invalid grants, past expiry) rejected; 50 tokens all unique.
-- Create normalizes inputs: `Kind.Unspecified` expiry is read as UTC (no local-zone shift); over-long name/description is rejected; reason/actor fields are control-character-sanitized and truncated without splitting a surrogate pair or ending in the space of a replaced control character (the live entity stays identical to the reloaded row); input that sanitizes to nothing normalizes to null. Public results carry no verifier — the persisted verifier is read from the store when a test needs it.
+- Create: disclosed full token parses; stored verifier matches the presented secret; the durable row carries the read-only flag, an EMPTY grant list and no expiry; restart-safe reload keeps the flag; bad input (empty owner/name, over-long name) rejected; 50 tokens all unique.
+- Create normalizes inputs: reason/actor fields are control-character-sanitized and truncated without splitting a surrogate pair or ending in the space of a replaced control character (the live entity stays identical to the reloaded row); input that sanitizes to nothing normalizes to null. Public results carry no verifier — the persisted verifier is read from the store when a test needs it.
 - Revoke: immediate, idempotent, revoked tokens leave the quota count.
-- Restrict: removes grants and shortens expiry (unlimited → finite allowed); null grants keep the current grants (empty list strips all); a no-op request (grants unchanged, expiry unchanged) succeeds without a rewrite or audit stamp; expansion of pairs/boundaries and expiry extension rejected with the token unchanged; a revoked or generation-invalidated (emergency-revoked) token is rejected as terminal.
-- Rotate: fresh EntityId/TokenId/secret, grants and finite expiry preserved (never expanded, never made unlimited), old revoked atomically, quota slot replaced 1:1; the original creator survives rotation and the rotating actor lands in `RotatedBy`; a past requested or inherited expiry is refused; rotation after a global or owner emergency revoke is refused — no live replacement is minted from a generation-invalidated source (checked in-memory and after reopen).
-- Authenticate (`TryAuthenticate`): a valid credential returns the live record; every fail-closed reason returns false — garbage/unknown id/wrong secret (tampered but canonical), revoked, expired, generation-invalidated by global or owner advance, and unhealthy boot state refusing even valid credentials.
+- Rename: persists the new name across restart, touches nothing but the name (the flag survives); a no-op rename succeeds without a rewrite; an empty name is rejected with the token unchanged; revoked and generation-invalidated tokens are terminal; a revocation racing a rename is never lost (in-memory and after reopen).
+- Rotate: fresh EntityId/TokenId/secret, the name and the read-only flag carried over (a pure credential swap), old revoked atomically, quota slot replaced 1:1; the original creator survives rotation and the rotating actor lands in `RotatedBy`; rotation after a global or owner emergency revoke is refused — no live replacement is minted from a generation-invalidated source (checked in-memory and after reopen).
+- Authenticate (`TryAuthenticate`): a valid credential returns the live record; every fail-closed reason returns false — garbage/unknown id/wrong secret (tampered but canonical), revoked, generation-invalidated by global or owner advance, and unhealthy boot state refusing even valid credentials.
 - Generations: global advance invalidates every owner's quota immediately; owner advance invalidates only that owner; an owner with a durable generation but no cached value (post-retention) gets it read and cached on create, staying consistent across restart.
 - Minting fails closed: create/rotate return false (never throw) while generation state is unhealthy or when the owner-generation fallback read hits an unreadable row; no durable or live state is left.
-- Fail closed at load: an unreadable token-row scan marks the index unhealthy (empty scan ≠ fresh install); regressed generation state marks the index unhealthy; unloadable records (bad TokenId shape, foreign version byte) are skipped and never authenticate; a row whose key disagrees with its payload TokenId is skipped (not republished, key logged) while the index stays healthy; a grants-less JSON row cannot become a loadable record (the deserializer rejects it or it lands as a default array the loadable check refuses — the entity type itself can no longer represent it); two rows sharing an EntityId publish exactly one; a row with a non-canonical boundary id loads canonicalized and still restricts.
+- Fail closed at load: an unreadable token-row scan marks the index unhealthy (empty scan ≠ fresh install); regressed generation state marks the index unhealthy; unloadable records (bad TokenId shape, foreign version byte) are skipped and never authenticate; a row whose key disagrees with its payload TokenId is skipped (not republished, key logged) while the index stays healthy; a grants-less JSON row cannot become a loadable record (the deserializer rejects it or it lands as a default array the loadable check refuses); two rows sharing an EntityId publish exactly one.
+- **Pre-simplification rows (#1384)**: a row carrying a non-empty grant list, a set expiry, or restriction stamps never loads — it is registered as an orphan (retention clears it) and its bearer cannot authenticate; loading such a row as a full owner mirror would silently widen a deliberately narrow credential.
 - `TryRemoveToken` removes the durable row and the live index together (fresh index does not resurrect the record; an already-absent row reports true — "gone" — and null ids false); an orphan row rejected at load (future `EntityVersion`) is still removed durably; a failed durable removal unpublishes nothing.
-
-## Operations catalog (`ApiTokenOperationsTests`)
-
-- `All` has no duplicates and every member is accepted by `IsValid` (the management UI renders grant pickers from it); the exposed collection is a snapshot — mutating it cannot alter the catalog or `IsValid`.
-- Naming discipline: every member ends with `:read` or `:write`, and `IsWrite` matches the suffix exactly — a member added outside the pattern would fail open as a Viewer-executable read, so the test fails the addition instead.
-- `IsValid` rejects null/empty, whitespace and case variants, and plausible-but-absent operations.
-- Concurrency: parallel creates for one owner all publish while enumeration of the owner index never throws; revoke racing restrict/rotate on one entity never loses the revocation (in-memory and after reopen); parallel generation advances return each durable value exactly once and leave the in-memory values equal to the durable counters.
+- Concurrency: parallel creates for one owner all publish while enumeration of the owner index never throws; revoke racing rename/rotate on one entity never loses the revocation (in-memory and after reopen); parallel generation advances return each durable value exactly once and leave the in-memory values equal to the durable counters.
 
 ## Authentication handler (`HsmApiTokenHandlerTests`)
 
@@ -74,6 +63,7 @@ authentication/authorization surface (step 3), and the personal token management
 - Cookie remains the default authenticate AND challenge scheme; the DefaultPolicy behind bare `[Authorize]` is pinned to cookie only.
 - The HsmApiToken scheme is registered (handler type pinned) and never a default.
 - The management policy accepts exactly the single-identity token principal and rejects: a cookie-only principal, a mixed cookie+token principal (fail closed as denial, not an exception), and an identity that merely claims the scheme name without the handler's claims.
+- **Read-only method backstop (#1384):** the policy's requirement denies unsafe HTTP methods (POST/PUT/PATCH/DELETE) for a read-only credential — method-shaped, so it cannot disagree with the evaluator's 403/404 split; a read-write token passes the same methods, a read-only token passes safe ones (GET), and with no HTTP-context resource the backstop stays silent (it is a backstop, never the primary gate).
 
 ## Route guards (`ApiTokenRouteGuardsTests`)
 
@@ -88,40 +78,29 @@ authentication/authorization surface (step 3), and the personal token management
 
 - A token principal passes through UNCHANGED (strict mock proves no user resolution is attempted) — also when the token identity is not the principal's primary identity; a cookie principal is still replaced by the stored HSM user.
 
-## Effective-rights evaluator (`ApiTokenAuthorizationServiceTests`)
+## Owner-mirror evaluator (`ApiTokenAuthorizationServiceTests`)
 
-The design's privilege-reduction matrix, recomputed per call:
-- IsAdmin + explicit read grant → allowed; IsAdmin owner alone grants nothing (no grant covering the boundary → 404).
-- Boundary covered but operation not granted → 403; manager owner + write grant on own product → allowed; cross-product → 404 (never a confirming 403).
-- Viewer owner with a (forged) write grant → 403; owner downgrade manager→viewer flips write to 403 while read stays allowed — no token change.
-- Deleted owner or a token record missing at authorization time → 404; a token whose liveness re-check fails (revoked between authentication and authorization) → 404.
-- Folder grant covers the product currently in the folder; a product moved out → 404; a Global grant is never a wildcard over scoped targets.
+The #1384 privilege matrix, recomputed per call:
+- Admin owner + read-write token: reads and writes allowed everywhere, including global (admin-only) scope; the same owner with a read-only token writes global scope → 403.
+- Global resources are admin-only sight: a non-admin owner gets 404 regardless of the token.
+- Manager owner + read-write token on own product → write allowed; cross-product → 404 (never a confirming 403).
+- Viewer owner + read-write token → write 403, read allowed; **read-only token** → write 403 on a visible target, reads follow owner sight exactly (visible product allowed, invisible one 404); a read-only token writing an invisible target gets 404, not 403 (404-first anti-enumeration).
+- Owner downgrade manager→viewer flips write to 403 while read stays allowed — no token change; **admin demoted mid-flight**: the token minted by an admin loses scoped targets entirely (404 via the owner-side gate) the moment the admin flag drops.
+- Deleted owner, a token record missing at authorization time, or a token whose liveness re-check fails (revoked between authentication and authorization) → 404.
 - The owner side has NO folder fallback (HSM materialises folder roles into per-product entries; per-product narrowing wins): folder Manager + per-product Viewer downgrade → write 403, read allowed; per-product role removal under a folder role → 404.
-- Global operations are admin-only; a sensor resolves through its product's current boundary (a parentless sensor fails closed to 404, not a cast exception); a deleted product → 404.
-- `IsVisible` (list filtering) requires owner sight plus a grant **for the asked operation** at the boundary (mere reach does not disclose an item the item endpoint would 403); for a write operation it also requires the owner's capability (Manager role); a materialised folder-manager role enables product write.
-- Denial security events preserve the decision: 404 denials are recorded as `AuthorizationNotFound`, 403 denials as `AuthorizationDenied` — the enumeration-probe signal stays visible in the stored trail.
-
-## Issuance-side owner filter (`ApiTokenGrantOptionsServiceTests`)
-
-- Admin picker: a Global boundary with every catalog operation (including the global-only `system-health:read` and all writes) plus every product and folder from the live stores; non-global boundaries never offer `system-health:read`.
-- ProductViewer: reads only (no `:write` operation offered), no Global boundary at all.
-- ProductManager: writes on the manager product, reads on the viewer product — per-boundary filtering.
-- Folder roles fold into a folder boundary with the Manager gate for writes.
-- Stale roles (deleted product/folder) anchor nothing and never appear.
-- `IsGrantableByOwner` matrix: viewer cannot write; foreign/dead boundaries refused; Global and `system-health:read` admin-only; a Global pair carrying an id is malformed even for an admin; unknown catalog operations fail closed.
+- A sensor resolves through its product's current boundary (a parentless sensor fails closed to 404, not a cast exception); a deleted product → 404.
+- `IsVisible` (list filtering) is the owner-sight half of the read decision: the read-only flag never narrows lists, only item writes; a revoked-mid-request token filters everything out.
+- The caller-wide gate `CanSeeAnyBoundary` (global resources): admin, product role and folder role owners pass (no event); an owner with no roles at all — or only STALE roles pointing at deleted products/folders — is denied with exactly one `AuthorizationDenied`; an unresolvable (revoked/missing) token is denied the same way.
+- Denial security events preserve the decision: 404 denials are recorded as `AuthorizationNotFound`, 403 denials as `AuthorizationDenied` — the enumeration-probe signal stays visible in the stored trail; the operation field carries the literal `read`/`write` access mode.
 
 ## Profile endpoints (`ProfileControllerTests`)
 
-- Create: valid request returns the one-time secret exactly once with the entity id.
-- Create gates: `disabled` (no manager call at all), `unhealthy`, `quota` (at and above `MaxTokensPerUser`), `no_grants`, `invalid_name` (blank), `past_expiry`, `max_lifetime` (beyond the configured cap and beyond the shipped 365d default; within the cap passes), `no_expiration_not_allowed` without the config switch (allowed with it), `duplicate_grant` (same pair in different Guid casing = same boundary), `grant_not_allowed` (picker hiding is not the enforcement), `create_failed` (manager false surfaces).
-- Create with `Kind.Unspecified` expiry passes the value through as UTC (the manager contract), never re-read as the host's local zone.
-- Restrict: the remaining set reaches the manager canonicalized; foreign entity ids answer `not_found` with no manager call (indistinguishable from unknown); revoked tokens are `not_found`; `disabled` while the kill switch is on.
-- Rotate: returns the new secret once; `past_expiry` refused before the manager.
+- Create: valid request returns the one-time secret exactly once with the entity id; the read-only flag reaches the manager untouched (dropping or flipping it would silently change the credential's power).
+- Create gates: `disabled` (no manager call at all), `unhealthy`, `quota` (at `MaxTokensPerUser`), `invalid_name` (blank and control-only), `create_failed` (manager false surfaces).
+- Rename: the new name reaches the manager; blank names are `invalid_name`; foreign entity ids answer `not_found` with no manager call (indistinguishable from unknown); revoked and generation-invalidated tokens are `not_found`; `disabled` while the kill switch is on.
+- Rotate: returns the new secret once; foreign and revoked ids `not_found` with no manager call; `disabled` and `unhealthy` deny without reaching the manager (rotation mints a fresh live credential — its guards are pinned symmetric with create).
 - Revoke: own token revoked with the signed-in actor; works with tokens disabled (the kill switch's documented cleanup path); `unhealthy` denies; foreign ids `not_found`.
-- Page: lists only the caller's tokens and maps quota/state flags (`TokensEnabled` = `Enabled AND healthy`), and mirrors `MaxGrants` — the create form's hint names the cap when a hand-built selection reaches it (the #1375/#1380 preselect itself seeds only the opening boundary); `GrantOptions` returns an empty picker while disabled or unhealthy and delegates to the owner filter otherwise.
-- Page timestamps are Unix milliseconds (entity ticks minus the .NET-epoch offset) — pinned against a known instant.
-- Page `ServerNowUnixMs` (the form's clock anchor for presets, the cap clamp and date-input bounds) is Unix milliseconds within the test's before/after window — a ticks value here would shift every derived expiry instant ~2000 years off.
-- A generation-invalidated record (emergency-revoke generation above the at-issue stamps, both row timestamps unset) lists as `invalidated`, not `active`.
+- Page: lists only the caller's tokens and maps quota/state flags (`TokensEnabled` = `Enabled AND healthy`); the read-only flag surfaces on every row; timestamps are Unix milliseconds (entity ticks minus the .NET-epoch offset) — pinned against a known instant; a generation-invalidated record (emergency-revoke generation above the at-issue stamps, row timestamp unset) lists as `invalidated`, a revoked one as `revoked` — never `active` with live buttons.
 
 ## Manager quota (`ApiTokenManagerTests`)
 
@@ -129,8 +108,8 @@ The design's privilege-reduction matrix, recomputed per call:
 
 ## Configuration (`ApiTokensConfigTests`)
 
-- Defaults are upgrade-safe in the channel sense: channel disabled, quota 10, 90d default lifetime, 365d max lifetime. Since #1373 `AllowNoExpiration` defaults **true** — the create form preselects "No expiration"; the knob is the operator's opt-out. The flip's reach: fresh installs and deployments upgrading from pre-step-4 builds (no persisted `ApiTokens` section) — `ServerConfig.ResaveSettings` serializes every knob, defaults included, on the first start of a step-4+ build, so a deployment that already ran one keeps its persisted value.
-- Startup validation: `MaxTokensPerUser` < 1, non-positive/oversized `DefaultLifetime` and `MaxLifetime`, and a `DefaultLifetime` above `MaxLifetime` (the preselect while no-expiration is switched off must not be a guaranteed create error) throw with the key(s) named.
+- Defaults are upgrade-safe in the channel sense: channel disabled, quota 10, 30-day retention windows, invalid-attempt budget 60. The expiry knobs of the fine-granted model are gone with expiry itself (#1384).
+- Startup validation: `MaxTokensPerUser` < 1, negative/oversized retention windows and `InvalidAttemptRateLimit` < 1 throw with the key named.
 
 ## Pipeline order (`ManagementPipelineOrderTests`)
 
@@ -149,7 +128,7 @@ The design's privilege-reduction matrix, recomputed per call:
 
 ## Security-event sink (`ApiTokenSecurityEventSinkTests`, DatabaseCore level)
 
-- Failures and authorization denials persist and round-trip with their safe identifiers (kind, token id, owner, operation).
+- Failures and authorization denials persist and round-trip with their safe identifiers (kind, token id, owner, access mode).
 - Successes are sampled (16 recorded events → exactly 1 row); failures always recorded.
 - Events are chronological and collision-free (distinct event ids); a failed write drops and counts (`DroppedCount` asserted) — never throws on the request path.
 - A full queue drops and counts: with the background writer stalled inside the database call, capacity+3 records leave exactly 3 counted drops and never block the caller (`FullMode.Wait` makes `TryWrite` return false instead of silently evicting).
@@ -164,10 +143,11 @@ The design's privilege-reduction matrix, recomputed per call:
 
 ## Retention (`ApiTokenRetentionCleanerTests`, DatabaseCore level; `ApiTokenStoreTests`, worker level)
 
-- Dead rows (revoked or expired) at or before `utcNow - TokenRecordRetention` are removed from durable storage AND the live index, atomically per row; halfway through the window nothing is eligible; a live row is never eligible. The inclusive cutoff is pinned bit-exactly: the durable `RevokedAtUtc` is read back and `RunOnce(death + retention)` removes while one tick before keeps.
+- Dead rows (revoked) at or before `utcNow - TokenRecordRetention` are removed from durable storage AND the live index, atomically per row; halfway through the window nothing is eligible; a live row is never eligible. The inclusive cutoff is pinned bit-exactly: the durable `RevokedAtUtc` is read back and `RunOnce(death + retention)` removes while one tick before keeps.
+- The expiry half of the death stamp survives for pre-simplification rows: a legacy row whose old `ExpiresAtUtc` is past the cutoff is reaped by pass 1 immediately (not by the orphan pass's first-observation window), while a legacy row with a still-future expiry waits like any other death stamp.
 - Orphan rows wait one window from the cleaner's first observation (a damaged row has no trustworthy clock), then are removed and pruned from the manager's orphan registry; the registry lists rejected rows by their STORAGE key and `TryRemoveToken` prunes it (`ApiTokenManagerTests`); a duplicate-EntityId row is deliberately not registered as an orphan (auto-deleting an ambiguous credential row is riskier than leaking it).
-- Security events strictly older than `utcNow - SecurityEventRetention` are removed oldest-first in bounded batches; an event exactly at the cutoff survives; a non-positive limit is a no-op (worker-level `RemoveApiTokenSecurityEventsBefore`, including the bytewise-order pin — a key longer than its prefix bound must still order below it). A backlog larger than one batch drains in repeated batches within a single pass (repeat while the batch comes back full), and a pass is capped at 50 batches — one sweep stays bounded.
-- A storage failure in one pass (scan or removal) is isolated: `RunOnce` returns zeros and never throws; the next pass retries. The orphan-pass failure isolation is exercised with the removal actually attempted (zero retention makes the first-observation gate elapse immediately, so the throwing `TryRemoveToken` is reached).
+- Security events strictly older than `utcNow - SecurityEventRetention` are removed oldest-first in bounded batches; an event exactly at the cutoff survives; a non-positive limit is a no-op (worker-level `RemoveApiTokenSecurityEventsBefore`, including the bytewise-order pin). A backlog larger than one batch drains in repeated batches within a single pass, and a pass is capped at 50 batches — one sweep stays bounded.
+- A storage failure in one pass (scan or removal) is isolated: `RunOnce` returns zeros and never throws; the next pass retries. The orphan-pass failure isolation is exercised with the removal actually attempted.
 - `ApiTokensConfig.Validate` rejects negative and over-bound retention windows with the config key named (cleaner constructor); the upper bound keeps `utcNow - retention` from underflowing `DateTime` outside the per-pass try blocks.
 - Tests share one LevelDB class fixture: the clock anchor is relative to the run (a hardcoded date would rot past the default retention), token-row tests pin the event window off so leftover event rows can never contaminate exact counts, and event-asserting tests drain the event table first.
 
@@ -203,9 +183,10 @@ Retention/stamping level (`ApiTokenRetentionCleanerTests`):
 - [x] Malformed/oversized credentials rejected before database access
 - [x] Collision never overwrites; retry uses a completely new pair
 - [x] Write failure leaves neither durable nor live state
-- [x] Grant expansion impossible in place (restriction and rotation)
-- [x] Emergency-revoked (generation-invalidated) tokens cannot be rotated or restricted
-- [x] Unknown operations/boundaries/ids fail closed (validation and load)
+- [x] A token never exceeds its owner's CURRENT rights: the owner side is recomputed per request (downgrade, role removal, demotion all shrink the token immediately)
+- [x] A read-only token can never write (403 on reachable targets, 404 on invisible ones)
+- [x] Pre-simplification grant/expiry rows fail closed at load — no silent widening of old credentials
+- [x] Emergency-revoked (generation-invalidated) tokens cannot be renamed or rotated
 - [x] Corrupt/regressed generation state fails the whole index closed
 - [x] Concurrent lifecycle mutations cannot lose or resurrect a revocation
 - [x] Cookie-only principal rejected by the management policy; mixed identities fail closed
@@ -213,10 +194,7 @@ Retention/stamping level (`ApiTokenRetentionCleanerTests`):
 - [x] /api/v1 unavailable on SensorPort and for unmarked/anonymous/policy-less endpoints
 - [x] The hsm_pat_ credential never reaches a log: sink-level redaction covers the catch logger, inner exceptions and the outer exception handlers
 - [x] Token principal never replaced by UserProcessorMiddleware
-- [x] Owner downgrade/deletion and resource moves take effect on the next request
-- [x] Global grants never act as wildcards over scoped resources
 - [x] Token management is cookie-only: the endpoints sit behind the cookie-pinned default policy and the legacy bearer guard
-- [x] Issuance never exceeds owner rights: every requested grant re-checked server-side (`IsGrantableByOwner`), picker filtering is UX only
 - [x] Foreign entity ids are indistinguishable from unknown ones on every lifecycle endpoint
 - [x] Kill switch denies authentication and issuance immediately; cookie list/revoke stay available
 - [x] The full credential appears exactly once (create/rotate response only), never in list/page payloads

@@ -1,6 +1,6 @@
 # ADR-0002: The API token operation catalog is append-only; renames and removals require a migration
 
-**Status:** Accepted
+**Status:** Superseded by ADR-0005 (2026-09-10, #1384 — the operation catalog and grants were removed; a token is now an owner-mirrored credential with a read-only flag)
 **Date:** 2026-09-01
 **Supersedes:** —
 

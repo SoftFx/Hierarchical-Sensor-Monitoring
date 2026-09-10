@@ -26,9 +26,8 @@
 
         public const string IndexAction = "Index";
 
-        public const string GrantOptionsAction = "GrantOptions";
         public const string CreateTokenAction = "CreateToken";
-        public const string RestrictTokenAction = "RestrictToken";
+        public const string RenameTokenAction = "RenameToken";
         public const string RotateTokenAction = "RotateToken";
         public const string RevokeTokenAction = "RevokeToken";
 

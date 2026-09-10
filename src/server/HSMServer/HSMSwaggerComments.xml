@@ -53,16 +53,16 @@
             <summary>
             Read-only listing of alert schedules (epic #1347). Bearer-token authenticated
             only (the HsmApiToken scheme — see the HsmApiToken security scheme of this
-            document); served on the web-UI port only. Readable by a token whose owner can
-            see at least one boundary with an alerts:read grant; sensor references are
-            filtered to the boundaries the caller can see under the same grant.
+            document); served on the web-UI port only. Readable by any token whose owner
+            is an admin or holds a role on at least one product/folder; sensor references
+            are filtered to the products the owner can see.
             </summary>
         </member>
         <member name="M:HSMServer.Controllers.AlertSchedulesApiController.GetSchedules(System.Int32,System.Int32)">
             <summary>
-            List schedules, paginated, ordered by name then id. Requires an alerts:read
-            grant at some boundary visible to the token's owner (the caller-wide gate);
-            each schedule's sensors list carries only paths the caller may see.
+            List schedules, paginated, ordered by name then id. Requires the caller-wide
+            gate (the owner is an admin or sees at least one boundary); each schedule's
+            sensors list carries only paths the caller's owner may see.
             </summary>
             <param name="page">1-based page number; clamped into [1, totalPages].</param>
             <param name="pageSize">Page size, 1..200 (default 50).</param>
@@ -75,16 +75,16 @@
             <summary>
             CRUD over alert templates (epic #1347). Bearer-token authenticated only (the
             HsmApiToken scheme — see the HsmApiToken security scheme of this document);
-            served on the web-UI port only. Reads need the token's alerts:read grant at the
-            template's folder, writes alerts:write; invisible or out-of-reach folders answer
-            the same 404 as an unknown id.
+            served on the web-UI port only. The token mirrors its owner: reads follow the
+            owner's sight, writes additionally need the owner's Manager role at the folder
+            and a read-write token; invisible folders answer the same 404 as an unknown id.
             </summary>
         </member>
         <member name="M:HSMServer.Controllers.AlertTemplatesApiController.GetTemplates(System.Int32,System.Int32)">
             <summary>
             List templates, paginated, ordered by name then id. Only templates whose
-            folder passes the caller's alerts:read visibility are listed — ungranted
-            folders are silently absent, never a per-item 403.
+            folder is visible to the token's owner are listed — everything else is
+            silently absent, never a per-item 403.
             </summary>
             <param name="page">1-based page number; clamped into [1, totalPages].</param>
             <param name="pageSize">Page size, 1..200 (default 50).</param>
@@ -98,12 +98,12 @@
             Create a template. A client-sent id is ignored (the server generates one);
             the response echoes the STORED template — normalized ids, chat display names.
             </summary>
-            <remarks>Requires alerts:write at the target folder; the folder must exist, be visible to the token's owner and contain products.</remarks>
+            <remarks>Requires a read-write token and the owner's write access at the target folder; the folder must exist, be visible to the token's owner and contain products.</remarks>
         </member>
         <member name="M:HSMServer.Controllers.AlertTemplatesApiController.UpdateTemplate(System.Guid,HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto)">
             <summary>
             Update a template (upsert semantics). Moving it to another folder requires
-            alerts:write on BOTH folders; the response echoes the stored template.
+            the owner's write access on BOTH folders; the response echoes the stored template.
             </summary>
             <param name="id">Template id; must equal the body id when the body carries one.</param>
         </member>
@@ -435,8 +435,8 @@
         <member name="P:HSMServer.Model.ManagementApi.AlertSchedules.AlertScheduleDto.Sensors">
             <summary>
             Full paths of the sensors currently using the schedule — FILTERED to the
-            boundaries the caller can see, so a folder-scoped token never learns paths
-            outside its grants.
+            products the token's owner can see, so a token never learns paths outside
+            its owner's sight.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto">

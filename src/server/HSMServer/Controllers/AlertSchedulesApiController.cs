@@ -15,9 +15,9 @@ namespace HSMServer.Controllers
     /// <summary>
     /// Read-only listing of alert schedules (epic #1347). Bearer-token authenticated
     /// only (the HsmApiToken scheme — see the HsmApiToken security scheme of this
-    /// document); served on the web-UI port only. Readable by a token whose owner can
-    /// see at least one boundary with an alerts:read grant; sensor references are
-    /// filtered to the boundaries the caller can see under the same grant.
+    /// document); served on the web-UI port only. Readable by any token whose owner
+    /// is an admin or holds a role on at least one product/folder; sensor references
+    /// are filtered to the products the owner can see.
     /// </summary>
     // Read-only REST surface for alert schedules (#1352, epic #1347) — the second
     // /api/v1 resource controller; area conventions are identical to
@@ -28,11 +28,11 @@ namespace HSMServer.Controllers
     // Authorization differs from folder-scoped resources: schedules are GLOBAL, and
     // the web UI shows them to every logged-in user. The token-side equivalent of
     // "this principal may work with alerts" is delegated to the evaluator's
-    // caller-wide gate (HasOperationAtAnyVisibleBoundary): an alerts:read grant at
-    // ANY boundary the owner can currently see, with liveness, boundary resolution
-    // and the denial audit record all inside the evaluator. Nothing about schedule
-    // existence is per-caller scoped, so an entitled caller gets a plain 404 for an
-    // unknown id while an unentitled one gets 403 for every id.
+    // caller-wide gate (CanSeeAnyBoundary): the owner is an admin or currently sees
+    // at least one boundary, with liveness and the denial audit record inside the
+    // evaluator. Nothing about schedule existence is per-caller scoped, so an
+    // entitled caller gets a plain 404 for an unknown id while an unentitled one
+    // gets 403 for every id.
     [ApiController]
     [ManagementApi]
     [Authorize(Policy = HsmApiTokenDefaults.ManagementPolicy)]
@@ -57,9 +57,9 @@ namespace HSMServer.Controllers
 
 
         /// <summary>
-        /// List schedules, paginated, ordered by name then id. Requires an alerts:read
-        /// grant at some boundary visible to the token's owner (the caller-wide gate);
-        /// each schedule's sensors list carries only paths the caller may see.
+        /// List schedules, paginated, ordered by name then id. Requires the caller-wide
+        /// gate (the owner is an admin or sees at least one boundary); each schedule's
+        /// sensors list carries only paths the caller's owner may see.
         /// </summary>
         /// <param name="page">1-based page number; clamped into [1, totalPages].</param>
         /// <param name="pageSize">Page size, 1..200 (default 50).</param>
@@ -133,49 +133,38 @@ namespace HSMServer.Controllers
         }
 
 
-        // The caller-wide gate lives in the evaluator: it enumerates the token's own
-        // alerts:read grants and applies the full list predicate per candidate
-        // boundary, recording one AuthorizationDenied (the 403 kind — never the
-        // enumeration-probe kind) when nothing qualifies.
+        // The caller-wide gate lives in the evaluator: the owner is an admin or
+        // currently holds a role on at least one product/folder, recording one
+        // AuthorizationDenied (the 403 kind — never the enumeration-probe kind) when
+        // nothing qualifies.
         private bool AuthorizeSchedulesRead() =>
-            _authorization.HasOperationAtAnyVisibleBoundary(User, ApiTokenOperations.AlertsRead);
+            _authorization.CanSeeAnyBoundary(User);
 
         private IActionResult Denied() =>
             ManagementApiErrors.Forbidden(
-                "The token does not grant 'alerts:read' at any boundary accessible to its owner.");
+                "The token's owner cannot see any product or folder.");
 
         // Sensors of a schedule cluster into a handful of products, and the evaluator
-        // re-resolves caller + grants on every call — memoize per distinct product id
-        // within one request.
+        // re-resolves caller + token on every call — memoize per distinct product id
+        // within one request. An admin owner passes every per-product check, so no
+        // separate "everywhere" short-circuit exists: the mirror covers it.
         private Func<Guid, bool> NewProductVisibilityFilter()
         {
-            // A Global alerts:read grant under an admin owner is the token-side
-            // "everywhere" shape — the shape that can pass the caller-wide gate
-            // through the Global boundary. The per-product predicate deliberately
-            // does NOT treat it as a wildcard (a Global grant never covers scoped
-            // resources), so it is resolved once here as a short-circuit: without
-            // it, the broadest token would get every schedule with an empty
-            // sensors list on each.
-            var globallyVisible = _authorization.HasOperationAtGlobalScope(User, ApiTokenOperations.AlertsRead);
-
             var visibilityByProduct = new Dictionary<Guid, bool>();
 
-            return productId => globallyVisible ||
-                (visibilityByProduct.TryGetValue(productId, out var visible)
+            return productId =>
+                visibilityByProduct.TryGetValue(productId, out var visible)
                     ? visible
                     : visibilityByProduct[productId] = _authorization.IsVisible(User,
-                        ApiTokenOperations.AlertsRead, ApiTokenResource.Product(productId)));
+                        ApiTokenResource.Product(productId));
         }
 
         private AlertScheduleDto ToDto(Core.Model.Policies.AlertSchedule schedule,
             List<Core.Model.BaseSensorModel> sensors, Func<Guid, bool> isProductVisible)
         {
-            // Sensor references filtered to the caller's sight under the SAME operation
-            // the resource demands (alerts:read) — mere reach is not enough: a token
-            // granted only, say, dashboards:read at a product must not learn its sensor
-            // paths from an alerts response. Resolved exactly the way the evaluator
-            // resolves sensors: through the sensor's product's current boundary.
-            // Parentless sensors fail closed (dropped from the list).
+            // Sensor references filtered to the owner's sight — resolved exactly the
+            // way the evaluator resolves sensors: through the sensor's product's
+            // current boundary. Parentless sensors fail closed (dropped from the list).
             var visiblePaths = (sensors ?? [])
                 .Where(sensor => sensor.Parent?.Root is { } product && isProductVisible(product.Id))
                 .Select(sensor => sensor.FullPath)

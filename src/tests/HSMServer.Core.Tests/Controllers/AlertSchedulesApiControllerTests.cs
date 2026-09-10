@@ -20,9 +20,9 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.Controllers
 {
-    // Read-only REST surface for alert schedules (#1352): the /api/v1 area
-    // conventions, the caller-wide alerts:read gate (delegated to the evaluator —
-    // its decision matrix and denial-event kind live in
+    // Read-only REST surface for alert schedules (#1352, #1384): the /api/v1 area
+    // conventions, the caller-wide sight gate (delegated to the evaluator — its
+    // decision matrix and denial-event kind live in
     // ApiTokenAuthorizationServiceTests), per-sensor visibility filtering, and
     // pagination. The list path resolves the page's sensor references in ONE bulk
     // cache call and memoizes the visibility decision per distinct product.
@@ -46,9 +46,9 @@ namespace HSMServer.Core.Tests.Controllers
                 .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>>());
 
             // Entitled by default; deny scenarios override the gate.
-            _authorization.Setup(a => a.HasOperationAtAnyVisibleBoundary(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
+            _authorization.Setup(a => a.CanSeeAnyBoundary(It.IsAny<ClaimsPrincipal>()))
                 .Returns(true);
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(true);
         }
 
@@ -118,7 +118,7 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public void DeniedGate_List_Is403_ProviderAndCacheNeverQueried()
         {
-            _authorization.Setup(a => a.HasOperationAtAnyVisibleBoundary(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
+            _authorization.Setup(a => a.CanSeeAnyBoundary(It.IsAny<ClaimsPrincipal>()))
                 .Returns(false);
 
             Assert.Equal(403, StatusCodeOf(CreateController().GetSchedules()));
@@ -137,7 +137,7 @@ namespace HSMServer.Core.Tests.Controllers
             var schedule = BuildSchedule("secret-name");
             _store.Add(schedule);
 
-            _authorization.Setup(a => a.HasOperationAtAnyVisibleBoundary(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
+            _authorization.Setup(a => a.CanSeeAnyBoundary(It.IsAny<ClaimsPrincipal>()))
                 .Returns(false);
 
             Assert.Equal(403, StatusCodeOf(CreateController().GetSchedule(schedule.Id)));
@@ -222,8 +222,8 @@ namespace HSMServer.Core.Tests.Controllers
                     [schedule.Id] = [visibleSensor, hiddenSensor],
                 });
 
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
-                .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) =>
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, ApiTokenResource resource) =>
                     resource.Kind == ApiTokenResourceKind.Product && resource.Id == visibleProduct.Id);
 
             var page = Assert.IsType<OkObjectResult>(CreateController().GetSchedules()).Value as ApiPageDto<AlertScheduleDto>;
@@ -235,10 +235,40 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
+        public void GetSchedules_AllProductsVisible_ListsEverySensorPath()
+        {
+            // The owner-mirrored admin shape (#1384): the per-product predicate passes
+            // for every product, so the broadest caller gets every schedule WITH its
+            // sensor paths — the empty-everywhere bug of the fine-granted model
+            // (#1382) must not come back.
+            var schedule = BuildSchedule("night-shift");
+            _store.Add(schedule);
+
+            var sensorA = BuildSensor(BuildProduct(Guid.NewGuid()));
+            var sensorB = BuildSensor(BuildProduct(Guid.NewGuid()));
+
+            _cache.Setup(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()))
+                .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>>
+                {
+                    [schedule.Id] = [sensorA, sensorB],
+                });
+
+            var page = Assert.IsType<OkObjectResult>(CreateController().GetSchedules()).Value as ApiPageDto<AlertScheduleDto>;
+
+            Assert.NotNull(page);
+            var item = Assert.Single(page.Items);
+            // The controller sorts the sensor paths (OrdinalIgnoreCase); both sides are
+            // normalized to that order so the response's sort contract is pinned too.
+            Assert.Equal(
+                new[] { sensorA.FullPath, sensorB.FullPath }.OrderBy(p => p, StringComparer.OrdinalIgnoreCase),
+                item.Sensors);
+        }
+
+        [Fact]
         public void GetSchedules_MemoizesVisibility_PerDistinctProduct()
         {
             // Sensors cluster into few products; the evaluator re-resolves caller +
-            // grants on every call, so the decision is computed once per DISTINCT
+            // token on every call, so the decision is computed once per DISTINCT
             // product on the page — twice here, not once per sensor.
             var schedule = BuildSchedule("night-shift");
             _store.Add(schedule);
@@ -256,51 +286,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.IsType<OkObjectResult>(CreateController().GetSchedules());
 
-            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Exactly(2));
-        }
-
-        [Fact]
-        public void GetSchedules_GlobalGrant_SeesSensorsOfAllProducts()
-        {
-            // The gate can pass through the Global boundary (admin owner +
-            // alerts:read@Global); the per-product predicate deliberately ignores a
-            // Global grant, so without a short-circuit the broadest token would get
-            // every schedule with an EMPTY sensors list.
-            var schedule = BuildSchedule("night-shift");
-            _store.Add(schedule);
-
-            var sensorA = BuildSensor(BuildProduct(Guid.NewGuid()));
-            var sensorB = BuildSensor(BuildProduct(Guid.NewGuid()));
-
-            _cache.Setup(c => c.GetSensorsByAlertSchedules(It.IsAny<IReadOnlyCollection<Guid>>()))
-                .Returns(new Dictionary<Guid, List<Core.Model.BaseSensorModel>>
-                {
-                    [schedule.Id] = [sensorA, sensorB],
-                });
-
-            // The evaluator answers the Global-scope probe true and every Product
-            // probe false — only the short-circuit can produce a non-empty list.
-            _authorization.Setup(a => a.HasOperationAtGlobalScope(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
-                .Returns(true);
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
-                .Returns(false);
-
-            var page = Assert.IsType<OkObjectResult>(CreateController().GetSchedules()).Value as ApiPageDto<AlertScheduleDto>;
-
-            Assert.NotNull(page);
-            var item = Assert.Single(page.Items);
-            // The controller sorts the sensor paths (OrdinalIgnoreCase); the expected
-            // side is normalized to that order and the actual is compared as
-            // returned, so the response's sort contract is pinned too. The sensor
-            // names are randomly generated (the product name is fixed), which is what
-            // made the old unsorted-expected form flake ~50% of runs (shipped
-            // unnoticed in the #1352 follow-up round).
-            Assert.Equal(
-                new[] { sensorA.FullPath, sensorB.FullPath }.OrderBy(p => p, StringComparer.OrdinalIgnoreCase),
-                item.Sensors);
-
-            // The per-product predicate is never consulted when the global shape holds.
-            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);
+            _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()), Times.Exactly(2));
         }
 
 
@@ -321,8 +307,8 @@ namespace HSMServer.Core.Tests.Controllers
 
             // The sensor filter checks each sensor's product — only one of the two
             // products is visible.
-            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
-                .Returns((ClaimsPrincipal _, string _, ApiTokenResource resource) =>
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns((ClaimsPrincipal _, ApiTokenResource resource) =>
                     resource.Kind == ApiTokenResourceKind.Product && resource.Id == visibleProduct.Id);
 
             var dto = Assert.IsType<OkObjectResult>(CreateController().GetSchedule(schedule.Id))

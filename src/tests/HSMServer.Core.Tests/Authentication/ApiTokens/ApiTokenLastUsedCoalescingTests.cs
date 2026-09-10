@@ -24,8 +24,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
         private (string TokenId, string FullToken) CreateToken(ApiTokenManager manager)
         {
-            manager.TryCreateToken(OwnerId, "token", null, grants: null, expiresAtUtc: null,
-                createdBy: "test", out _, out var fullToken);
+            manager.TryCreateToken(OwnerId, "token", readOnly: false, createdBy: "test", out _, out var fullToken);
 
             return (ApiTokenMaterial.TokenIdOf(fullToken), fullToken);
         }

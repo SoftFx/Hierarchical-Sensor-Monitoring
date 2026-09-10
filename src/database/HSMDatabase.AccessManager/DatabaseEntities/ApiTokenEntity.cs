@@ -34,27 +34,31 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public string Name { get; init; }
 
+        // Dormant fields of the pre-#1384 fine-granted model, kept in the serialization
+        // shape but always written empty: a record loaded with a non-empty Grants list or
+        // a set ExpiresAtUtc is a pre-simplification row and fails closed at load
+        // (ApiTokenManager.LoadTokens). Description and the restriction stamps were part
+        // of the same surface and stay empty too.
         public string Description { get; init; }
 
-        // Canonical grant list (see ApiTokenGrants; duplicate pairs are rejected before
-        // persistence). ImmutableArray, not IReadOnlyList over a List: the interface is
-        // not a defensive boundary — a cast back to List<T> would let a consumer rewrite
-        // a live token's grants in place, bypassing restrict-only-narrows with no durable
-        // write. Records are shared with the live authentication index; sharing an
-        // ImmutableArray is safe by construction (elements are init-only records).
         public ImmutableArray<ApiTokenGrantEntity> Grants { get; init; }
-
-        public long CreatedAtUtc { get; init; }
-
-        // Who minted the credential; survives rotation (the rotating actor is RotatedBy).
-        public string CreatedBy { get; init; }
 
         public long? RestrictedAtUtc { get; init; }
 
         public string RestrictedBy { get; init; }
 
-        // Null only when no-expiration was explicitly confirmed at creation/rotation.
         public long? ExpiresAtUtc { get; init; }
+
+        // The token's power since #1384: full mirror of the owner's rights (read
+        // everywhere the owner reads), minus every write operation when true. Fixed at
+        // creation; rotation carries it as-is. Records written before the field existed
+        // deserialize it as false, but those rows carry grants and never load.
+        public bool ReadOnly { get; init; }
+
+        public long CreatedAtUtc { get; init; }
+
+        // Who minted the credential; survives rotation (the rotating actor is RotatedBy).
+        public string CreatedBy { get; init; }
 
         public long? LastUsedAtUtc { get; init; }
 

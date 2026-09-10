@@ -50,9 +50,13 @@ namespace HSMServer.Core.Tests.Controllers
             _cache.Setup(c => c.RemoveAlertTemplateAsync(It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync((true, (string)null));
 
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Allowed);
-            _authorization.Setup(a => a.HasOperationAtAnyVisibleBoundary(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(ApiTokenAuthorization.Allowed);
+            _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
+                .Returns(true);
+            _authorization.Setup(a => a.CanSeeAnyBoundary(It.IsAny<ClaimsPrincipal>()))
                 .Returns(true);
 
             _chats.Setup(c => c.GetValues()).Returns(new List<Chat>());
@@ -124,7 +128,7 @@ namespace HSMServer.Core.Tests.Controllers
             // the SAME body — same error code, same message.
             var template = BuildStoredTemplate(Guid.NewGuid());
 
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.NotFound);
 
             var absent = ErrorBodyOf(CreateTemplatesController().GetTemplate(Guid.NewGuid()));
@@ -137,18 +141,18 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
         [Fact]
-        public void Template_UngrantedFolder_IsUniformForbidden()
+        public async Task Template_ReadOnlyTokenWrite_IsUniformForbidden()
         {
             var template = BuildStoredTemplate(Guid.NewGuid());
 
-            _authorization.Setup(a => a.Authorize(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()))
+            _authorization.Setup(a => a.AuthorizeWrite(It.IsAny<ClaimsPrincipal>(), It.IsAny<ApiTokenResource>()))
                 .Returns(ApiTokenAuthorization.Forbidden);
 
-            var (body, status) = BodyAndStatus(CreateTemplatesController().GetTemplate(template.Id));
+            var (body, status) = BodyAndStatus(await CreateTemplatesController().DeleteTemplate(template.Id));
 
             Assert.Equal(403, status);
             Assert.Equal(ManagementApiErrors.ForbiddenCode, body.Error);
-            Assert.Contains(ApiTokenOperations.AlertsRead, body.Message, StringComparison.Ordinal);
+            Assert.Contains("read-only", body.Message, StringComparison.Ordinal);
             Assert.Null(body.Details);
         }
 
@@ -199,14 +203,14 @@ namespace HSMServer.Core.Tests.Controllers
         [Fact]
         public void Schedule_DeniedGate_IsUniformForbidden()
         {
-            _authorization.Setup(a => a.HasOperationAtAnyVisibleBoundary(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>()))
+            _authorization.Setup(a => a.CanSeeAnyBoundary(It.IsAny<ClaimsPrincipal>()))
                 .Returns(false);
 
             var (body, status) = BodyAndStatus(CreateSchedulesController().GetSchedules());
 
             Assert.Equal(403, status);
             Assert.Equal(ManagementApiErrors.ForbiddenCode, body.Error);
-            Assert.Contains(ApiTokenOperations.AlertsRead, body.Message, StringComparison.Ordinal);
+            Assert.Contains("cannot see", body.Message, StringComparison.Ordinal);
             Assert.Null(body.Details);
         }
 

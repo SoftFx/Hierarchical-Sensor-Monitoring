@@ -35,14 +35,14 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             {
                 sink.Record(new ApiTokenSecurityEvent(ApiTokenSecurityEventKind.AuthFailed, TokenId, OwnerId));
                 sink.Record(new ApiTokenSecurityEvent(ApiTokenSecurityEventKind.AuthorizationDenied, TokenId, OwnerId,
-                    Operation: ApiTokenOperations.AlertsWrite, TargetId: $"{ApiTokenResourceKind.Product}:{Guid.NewGuid()}"));
+                    Operation: "write", TargetId: $"{ApiTokenResourceKind.Product}:{Guid.NewGuid()}"));
             } // Dispose drains the queue before assertions.
 
             var stored = _databaseCoreManager.DatabaseCore.ReadApiTokenSecurityEvents();
 
             Assert.Contains(stored, e => e.Kind == (byte)ApiTokenSecurityEventKind.AuthFailed && e.TokenId == TokenId);
             var denial = Assert.Single(stored, e => e.Kind == (byte)ApiTokenSecurityEventKind.AuthorizationDenied);
-            Assert.Equal(ApiTokenOperations.AlertsWrite, denial.Operation);
+            Assert.Equal("write", denial.Operation);
             Assert.Equal(OwnerId, denial.OwnerUserId);
         }
 
