@@ -538,8 +538,9 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(3, model.QuotaUsed);
             Assert.Equal(5, model.QuotaMax);
             Assert.Equal(365, model.MaxLifetimeDays);
-            // The create form's preselect stops at the server's grant cap (#1375):
-            // past ~170 boundaries the all-reads default would exceed it.
+            // Feeds the create form's grant-count hint: it names the cap for
+            // hand-built selections (the preselect itself seeds one boundary and
+            // cannot approach it).
             Assert.Equal(1024, model.MaxGrants);
             Assert.True(model.TokensEnabled);
             var token = Assert.Single(model.Tokens);

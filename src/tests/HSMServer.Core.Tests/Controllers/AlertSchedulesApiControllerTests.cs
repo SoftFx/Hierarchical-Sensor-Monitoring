@@ -289,7 +289,15 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.NotNull(page);
             var item = Assert.Single(page.Items);
-            Assert.Equal([sensorA.FullPath, sensorB.FullPath], item.Sensors.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray());
+            // The controller sorts the sensor paths (OrdinalIgnoreCase); the expected
+            // side is normalized to that order and the actual is compared as
+            // returned, so the response's sort contract is pinned too. The sensor
+            // names are randomly generated (the product name is fixed), which is what
+            // made the old unsorted-expected form flake ~50% of runs (shipped
+            // unnoticed in the #1352 follow-up round).
+            Assert.Equal(
+                new[] { sensorA.FullPath, sensorB.FullPath }.OrderBy(p => p, StringComparer.OrdinalIgnoreCase),
+                item.Sensors);
 
             // The per-product predicate is never consulted when the global shape holds.
             _authorization.Verify(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(), It.IsAny<string>(), It.IsAny<ApiTokenResource>()), Times.Never);

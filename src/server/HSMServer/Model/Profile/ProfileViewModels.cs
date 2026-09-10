@@ -43,10 +43,10 @@ namespace HSMServer.Model.Profile
         // server-side instant).
         public int MaxLifetimeDays { get; init; }
 
-        // The server's per-token grant cap (ApiTokenGrants.MaxGrants). The create
-        // form's all-reads preselect (#1375) stops here: past ~170 visible boundaries
-        // the preselected set would exceed it and every create would be refused —
-        // the preselect must never build a payload the server rejects.
+        // The server's per-token grant cap (ApiTokenGrants.MaxGrants), mirrored so
+        // the create form's hint can name it: a hand-built selection can pass it (the
+        // preselect cannot — #1380 narrowed it to one boundary), and the user should
+        // learn the cap from the hint, not from an invalid_grant rejection.
         public int MaxGrants { get; init; }
 
         // The server's clock at render, Unix milliseconds. The form derives every

@@ -86,8 +86,8 @@ namespace HSMServer.Controllers
                 // Floored on purpose: the client-side cap must never sit ABOVE the
                 // server's exact MaxLifetime instant.
                 MaxLifetimeDays = Math.Max(1, (int)_config.MaxLifetime.TotalDays),
-                // Bounds the create form's all-reads preselect (#1375) — see the view
-                // model comment.
+                // Feeds the create form's grant-count hint (see the view model
+                // comment).
                 MaxGrants = ApiTokenGrants.MaxGrants,
                 // The form's clock anchor — see the view model comment.
                 ServerNowUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),

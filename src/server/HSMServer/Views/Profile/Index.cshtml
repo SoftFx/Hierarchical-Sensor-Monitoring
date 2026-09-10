@@ -40,9 +40,10 @@
     .token-row:hover { background-color: #f9fafb; }
     .token-row.dead { opacity: 0.55; }
     .grant-badge { padding: 0.125rem 0.5rem; font-size: 0.75rem; border: 1px solid #d1d5db; border-radius: 9999px; background-color: #f5f5f5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    /* The all-reads preselect (#1375) can mint hundreds of badges — without a cap the
-       badge row grows past the 180px table above it and pushes Expiration and Create
-       off-screen (the dialog is not scrollable). */
+    /* A wide hand-built selection (or a restrict of a cap-sized token) can carry
+       hundreds of badges — without a cap the badge row grows past the 180px table
+       above it and pushes Expiration and Create off-screen (the dialog is not
+       scrollable). */
     #selectedGrants { max-height: 110px; overflow-y: auto; }
     .grant-badge .grant-remove { cursor: pointer; margin-left: 0.25rem; color: #6b7280; font-weight: 700; }
     .grant-badge .grant-remove:hover { color: #ef4444; }
@@ -60,10 +61,13 @@
     .status-badge.expired { color: #92400e; border-color: #fde68a; background-color: #fffbeb; }
     .status-badge.revoked { color: #6b7280; background-color: #f3f4f6; }
     .status-badge.invalidated { color: #6d28d9; border-color: #ddd6fe; background-color: #f5f3ff; }
-    .op-table { width: 100%; margin: 0; border-collapse: collapse; font-size: 0.8125rem; }
+    /* separate + spacing 0 (not collapse): collapsed borders do not stick with the
+       header cell, and the scrolling rows show through the sticky header's edge. */
+    .op-table { width: 100%; margin: 0; border-collapse: separate; border-spacing: 0; font-size: 0.8125rem; }
     /* Sticky within #operationsBlock's scroll: the column toggles are the point of
        the table and must stay reachable when the catalog overflows the block. */
-    .op-table thead th { position: sticky; top: 0; background: #f9fafb; padding: 0.25rem 0.5rem; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-weight: 500; font-size: 0.75rem; }
+    .op-table thead th { position: sticky; top: 0; z-index: 1; background: #f9fafb; padding: 0.25rem 0.5rem; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-weight: 500; font-size: 0.75rem; }
+    .op-column-head { display: flex; flex-direction: column; align-items: center; gap: 0.125rem; }
     .op-table td, .op-table tbody th { padding: 0.25rem 0.5rem; border-bottom: 1px solid #f3f4f6; }
     .op-table tr:last-child td, .op-table tbody tr:last-child th { border-bottom: none; }
     /* Row headers keep the data-cell look (th defaults to bold + centered). */
@@ -243,9 +247,9 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <label class="form-label">Grants</label>
-                        @* One-click narrowing for the all-reads preselect (#1375): the column
-                           toggles only clear ONE boundary at a time, and a capped or unwanted
-                           preselect would otherwise need a click per boundary to undo. *@
+                        @* One-click narrowing for wide selections: the column toggles
+                           only clear ONE boundary at a time, so undoing a broad
+                           hand-built set would otherwise need a click per boundary. *@
                         <button type="button" class="btn btn-link btn-sm py-0" id="clearGrantsButton" style="display: none;">Clear all</button>
                     </div>
                     <div class="d-flex gap-2 align-items-center mb-2 mt-1">
@@ -583,10 +587,16 @@
 
     // A column header: its checkbox selects/clears every checkbox of the column at
     // the current boundary; state and disabled-ness live in refreshColumnToggles.
+    // The content is a column (checkbox above, label below) so the toggle sits
+    // exactly on the body checkboxes' vertical axis — a "checkbox + label" row would
+    // center as a group and shift the toggle left of the column's checkboxes.
     function columnHeaderCell(text, column) {
         var th = document.createElement('th');
         th.scope = 'col';
         th.className = 'op-cell';
+
+        var head = document.createElement('div');
+        head.className = 'op-column-head';
 
         var toggle = document.createElement('input');
         toggle.type = 'checkbox';
@@ -596,8 +606,9 @@
         toggle.setAttribute('aria-label', toggle.title);
         toggle.onchange = function () { toggleColumn(column, this.checked); };
 
-        th.appendChild(toggle);
-        th.appendChild(document.createTextNode(' ' + text));
+        head.appendChild(toggle);
+        head.appendChild(document.createTextNode(text));
+        th.appendChild(head);
         return th;
     }
 
@@ -697,22 +708,24 @@
         });
     }
 
-    // #1375: create opens ready to go — every owner-grantable read preselected at
-    // EVERY owner-visible boundary (a read-only token is the common case; writes stay
-    // an explicit choice). Runs after the picker data arrives and before the first
+    // #1375/#1380: create opens ready to go — the read operations of the OPENING
+    // boundary preselected (a read-only token is the common case; writes stay an
+    // explicit choice). The dropdown opens on the payload's first boundary — Global
+    // for admins, the first name-sorted boundary otherwise — and the seeding targets
+    // exactly that one: #1375's every-boundary seeding opened with hundreds of badges
+    // on large deployments (283 observed), far past any intended width. Extending to
+    // more boundaries is the picker's normal per-boundary flow (the column toggles),
+    // not the default. Runs after the picker data arrives and before the first
     // render, so the badges, the cells and the Read column toggle all reflect it from
-    // the first paint. Create only: restrict seeds from the token's own grants.
-    // The seeding stops at the server's grant cap (maxGrants): past ~170 visible
-    // boundaries the all-reads set exceeds it and every create would be refused —
-    // the preselect never builds a payload the server rejects. The access part is
-    // derived exactly like operationFamilies does (first colon), so the two parsers
-    // cannot drift apart on a future multi-separator operation.
-    function preselectAllReads() {
-        boundaryOptions.forEach(function (boundary) {
-            boundary.operations.forEach(function (operation) {
-                if (selectedGrants.length >= maxGrants) return;
-                if (operation.substring(operation.indexOf(':') + 1) === 'read') addGrant(operation, boundary);
-            });
+    // the first paint. Create only: restrict seeds from the token's own grants. The
+    // access part is derived exactly like operationFamilies does (first colon), so
+    // the two parsers cannot drift on a future multi-separator operation.
+    function preselectReads() {
+        var opening = boundaryOptions[0];
+        if (!opening) return;
+
+        opening.operations.forEach(function (operation) {
+            if (operation.substring(operation.indexOf(':') + 1) === 'read') addGrant(operation, opening);
         });
     }
 
@@ -746,8 +759,9 @@
         });
 
         // Counts keep the breadth legible without scrolling the badges (#1375): an
-        // owner should see "how wide is this token" in one glance, and the cap note
-        // explains a preselect that stopped early.
+        // owner should see "how wide is this token" in one glance. The cap note fires
+        // only on hand-built selections — the preselect seeds a single boundary and
+        // cannot approach the cap (#1380).
         var boundaryKeys = {};
         selectedGrants.forEach(function (grant) {
             boundaryKeys[grant.boundaryKind + '|' + (grant.boundaryId || '')] = true;
@@ -759,7 +773,7 @@
               (boundaryCount === 1 ? ' boundary' : ' boundaries') +
               ' — the token will be able to perform exactly these operations there.' +
               (selectedGrants.length >= maxGrants
-                  ? ' Grant cap (' + maxGrants + ') reached — reads were preselected only at the first boundaries.'
+                  ? ' At the grant cap (' + maxGrants + ') — remove a grant before adding another.'
                   : '')
             : (grantModalMode === 'create' ? 'Select at least one operation.' : 'An empty set strips every grant (the token stops working but stays revocable).');
 
@@ -922,7 +936,7 @@
         showError('grantModalError', null);
 
         loadGrantOptions(function () {
-            preselectAllReads();
+            preselectReads();
             renderBoundarySelect();
             resetExpirySelect();
             showModal('grantModal');
