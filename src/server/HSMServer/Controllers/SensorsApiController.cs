@@ -7,6 +7,7 @@ using HSMCommon.Model;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.SensorTree;
@@ -181,8 +182,8 @@ namespace HSMServer.Controllers
             if (!TryGetVisibleSensor(id, out var sensor, out var failure))
                 return failure;
 
-            var toUtc = AsUtc(to ?? DateTime.UtcNow);
-            var fromUtc = AsUtc(from ?? toUtc - DefaultHistoryWindow);
+            var toUtc = (to ?? DateTime.UtcNow).ToUtcInstant();
+            var fromUtc = (from ?? toUtc - DefaultHistoryWindow).ToUtcInstant();
 
             if (fromUtc > toUtc)
                 return ManagementApiErrors.Validation(new Dictionary<string, string[]>
@@ -260,7 +261,7 @@ namespace HSMServer.Controllers
 
             IEnumerable<BaseSensorModel> candidates = subtree is not null ? subtree.GetAllSensors() : _cache.GetSensors();
 
-            var isProductVisible = NewProductVisibilityFilter();
+            var isProductVisible = _authorization.MemoizedProductVisibility(User);
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             var matched = new List<BaseSensorModel>();
 
@@ -334,31 +335,5 @@ namespace HSMServer.Controllers
         }
 
 
-        // Sensors cluster into a handful of products, and the evaluator re-resolves
-        // caller + token on every call — memoize per distinct product id within one
-        // request. An admin owner passes every per-product check, so no separate
-        // "everywhere" short-circuit exists: the mirror covers it.
-        private Func<Guid, bool> NewProductVisibilityFilter()
-        {
-            var visibilityByProduct = new Dictionary<Guid, bool>();
-
-            return productId =>
-                visibilityByProduct.TryGetValue(productId, out var visible)
-                    ? visible
-                    : visibilityByProduct[productId] = _authorization.IsVisible(User,
-                        ApiTokenResource.Product(productId));
-        }
-
-
-        // Query timestamps are UTC by contract. The binder leaves no Kind on
-        // zone-less inputs (pin them as UTC) but can hand over offset-bearing
-        // inputs as server-LOCAL Kind — those must be converted, not relabeled,
-        // or the window shifts on a non-UTC server.
-        private static DateTime AsUtc(DateTime time) => time.Kind switch
-        {
-            DateTimeKind.Utc => time,
-            DateTimeKind.Local => time.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(time, DateTimeKind.Utc),
-        };
     }
 }

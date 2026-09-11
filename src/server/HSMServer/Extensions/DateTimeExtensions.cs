@@ -55,6 +55,17 @@ namespace HSMServer.Extensions
 
         internal static DateTime ToUtcKind(this DateTime dateTime) => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
 
+        // The API-timestamp rule of the management area (#1386): UTC by contract.
+        // Zone-less inputs are pinned as UTC (as ToUtcKind does), but a LOCAL-Kind
+        // instant — what model binding can hand over for offset-bearing ISO inputs —
+        // must CONVERT, not relabel, or the instant shifts on a non-UTC server.
+        internal static DateTime ToUtcInstant(this DateTime dateTime) => dateTime.Kind switch
+        {
+            DateTimeKind.Utc => dateTime,
+            DateTimeKind.Local => dateTime.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc),
+        };
+
         internal static DateTime RoundToMin(this DateTime time) => time.AddSeconds(-time.Second).AddMicroseconds(-time.Millisecond);
 
         internal static long ToUnixMilliseconds(this DateTime time) => new DateTimeOffset(time).ToUnixTimeMilliseconds();

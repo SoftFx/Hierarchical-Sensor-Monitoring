@@ -4,6 +4,7 @@ using System.Linq;
 using HSMCommon.Extensions;
 using HSMCommon.Model;
 using HSMServer.Core.Model;
+using HSMServer.Extensions;
 
 namespace HSMServer.Model.ManagementApi.SensorTree
 {
@@ -19,7 +20,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             Id = product.Id,
             Name = product.DisplayName,
             Description = product.Description,
-            CreationDate = AsUtc(product.CreationDate),
+            CreationDate = product.CreationDate.ToUtcInstant(),
         };
 
 
@@ -30,7 +31,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             Description = node.Description,
             Type = node.IsRoot ? NodeTypeProduct : NodeTypeFolder,
             Path = node.FullPath,
-            CreationDate = AsUtc(node.CreationDate),
+            CreationDate = node.CreationDate.ToUtcInstant(),
             Parent = node.Parent is { } parent ? ToNodeRef(parent) : null,
             Folders = node.SubProducts.Values
                 .OrderBy(folder => folder.DisplayName, StringComparer.OrdinalIgnoreCase)
@@ -75,8 +76,8 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             Unit = UnitOf(sensor),
             Status = sensor.Status?.Status.ToString(),
             State = sensor.State.ToString(),
-            CreationDate = AsUtc(sensor.CreationDate),
-            LastUpdate = sensor.HasData ? AsUtc(sensor.LastUpdate) : null,
+            CreationDate = sensor.CreationDate.ToUtcInstant(),
+            LastUpdate = sensor.HasData ? sensor.LastUpdate.ToUtcInstant() : null,
             Product = sensor.Parent?.Root is { } product ? ToNodeRef(product) : null,
             Parent = sensor.Parent is { } parent ? ToNodeRef(parent) : null,
             LastValue = ToValueDto(sensor, sensor.LastValue),
@@ -91,7 +92,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
             return new SensorValueDto
             {
-                Time = AsUtc(value.Time),
+                Time = value.Time.ToUtcInstant(),
                 Status = value.Status.ToString(),
                 Comment = value.Comment,
                 Value = BoxValue(sensor, value),
@@ -167,16 +168,6 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
             return null;
         }
-
-
-        // Model timestamps are UTC-sourced ticks without a Kind (pin them);
-        // a Local-kind instant (binder-produced) converts instead of relabeling.
-        private static DateTime AsUtc(DateTime time) => time.Kind switch
-        {
-            DateTimeKind.Utc => time,
-            DateTimeKind.Local => time.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(time, DateTimeKind.Utc),
-        };
 
 
         public const string NodeTypeProduct = "product";
