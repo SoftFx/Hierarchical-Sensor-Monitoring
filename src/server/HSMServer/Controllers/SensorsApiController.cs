@@ -126,7 +126,7 @@ namespace HSMServer.Controllers
             page = Math.Max(page, 1);
             pageSize = Math.Min(pageSize <= 0 ? DefaultPageSize : pageSize, MaxPageSize);
 
-            var all = FilterSensors(subtree, predicate, typeFilter, out var searchAborted);
+            var all = FilterSensors(subtree, predicate, typeFilter, !string.IsNullOrEmpty(search), out var searchAborted);
 
             if (searchAborted)
                 return ManagementApiErrors.Validation(new Dictionary<string, string[]>
@@ -218,11 +218,14 @@ namespace HSMServer.Controllers
             maxPoints = maxPoints <= 0 ? DefaultMaxPoints : Math.Min(maxPoints, MaxPointsLimit);
 
             // The window streams oldest-first; keep the newest maxPoints values in
-            // a sliding buffer. The read's count is the scan cap (see
-            // MaxScannedValues) — not the response size, which maxPoints bounds.
-            // includeTtl: OffTime markers are part of the honest picture of a
-            // sensor's timeline (#1386).
-            var window = new Queue<BaseValue>(maxPoints);
+            // a sliding buffer. Projection happens INSIDE the loop: the buffer
+            // holds the metadata DTOs, never the BaseValue instances — a File
+            // sensor's values carry the full (decompressed) byte payloads, and
+            // retaining maxPoints of those would retain gigabytes (#1387 review).
+            // The read's count is the scan cap (see MaxScannedValues) — not the
+            // response size, which maxPoints bounds. includeTtl: OffTime markers
+            // are part of the honest picture of a sensor's timeline (#1386).
+            var window = new Queue<SensorValueDto>(maxPoints);
             long totalSeen = 0;
 
             await foreach (var page in _cache.GetSensorValuesPage(id, fromUtc, toUtc, MaxScannedValues + 1,
@@ -230,7 +233,7 @@ namespace HSMServer.Controllers
             {
                 foreach (var value in page)
                 {
-                    window.Enqueue(value);
+                    window.Enqueue(SensorTreeDtoMapper.ToValueDto(sensor, value));
                     totalSeen++;
 
                     if (window.Count > maxPoints)
@@ -240,7 +243,7 @@ namespace HSMServer.Controllers
 
             return Ok(new SensorHistoryDto
             {
-                Points = [.. window.Select(value => SensorTreeDtoMapper.ToValueDto(sensor, value))],
+                Points = [.. window],
                 From = fromUtc,
                 To = toUtc,
                 MaxPoints = maxPoints,
@@ -277,25 +280,32 @@ namespace HSMServer.Controllers
         // whole cache), the owner's sight per ROOT product (memoized — the same
         // resolution the evaluator applies to a sensor resource), the type filter
         // and the search predicate, ordered by path for stable pagination. The
-        // regex match timeout bounds ONE match; this budget bounds the WHOLE scan
-        // — a pattern running just under the per-match timeout over thousands of
-        // sensors must not stretch one request into minutes.
+        // regex match timeout bounds ONE match; the evaluation budget bounds the
+        // WHOLE scan — a pattern running just under the per-match timeout over
+        // thousands of sensors must not stretch one request into minutes. The
+        // budget applies only when a search text was sent: an unfiltered listing
+        // is a linear scan with an O(1) per-item predicate, and a 400 blaming a
+        // "search pattern" the caller never sent is not actionable (#1387 review).
+        // The path sort runs through OrderBy — FullPath is a recursive, allocating
+        // property, and a comparison-delegate Sort would re-walk the parent chain
+        // on every comparison (#1387 review).
         private List<BaseSensorModel> FilterSensors(ProductModel subtree, Func<BaseSensorModel, bool> predicate,
-            SensorType? typeFilter, out bool searchAborted)
+            SensorType? typeFilter, bool budgetApplies, out bool searchAborted)
         {
             searchAborted = false;
 
             IEnumerable<BaseSensorModel> candidates = subtree is not null ? subtree.GetAllSensors() : _cache.GetSensors();
 
             var isProductVisible = _authorization.MemoizedProductVisibility(User);
-            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var budgetTicks = budgetApplies ? StopwatchTimestamps.PerMs * SearchBudgetMs : long.MaxValue;
+            var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
             var matched = new List<BaseSensorModel>();
 
             try
             {
                 foreach (var sensor in candidates)
                 {
-                    if (stopwatch.ElapsedMilliseconds > SearchBudgetMs)
+                    if (System.Diagnostics.Stopwatch.GetTimestamp() - startedAt > budgetTicks)
                     {
                         searchAborted = true;
                         return [];
@@ -319,13 +329,15 @@ namespace HSMServer.Controllers
                 return [];
             }
 
-            matched.Sort((left, right) =>
-            {
-                var byPath = string.Compare(left.FullPath, right.FullPath, StringComparison.OrdinalIgnoreCase);
-                return byPath != 0 ? byPath : left.Id.CompareTo(right.Id);
-            });
+            return [.. matched
+                .OrderBy(sensor => sensor.FullPath, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(sensor => sensor.Id)];
+        }
 
-            return matched;
+
+        private static class StopwatchTimestamps
+        {
+            public static readonly long PerMs = System.Diagnostics.Stopwatch.Frequency / 1000;
         }
 
 
