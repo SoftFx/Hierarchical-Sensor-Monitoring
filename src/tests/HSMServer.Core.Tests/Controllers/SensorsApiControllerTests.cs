@@ -432,6 +432,22 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public async Task GetSensorHistory_SensorDeletedAfterAuthorization_Is404_Not500()
+        {
+            // The re-check between the sight decision and the stream: a sensor
+            // removed in that window must land on the 404 path, not dereference
+            // a null deep inside the cache's page read.
+            var sensor = AddSensor(_productA, "cpu", "load", SensorType.Integer);
+
+            _cache.SetupSequence(c => c.GetSensor(sensor.Id))
+                .Returns(sensor)
+                .Returns((Core.Model.BaseSensorModel)null);
+
+            Assert.Equal(404, StatusCodeOf(await CreateController().GetSensorHistory(sensor.Id)));
+        }
+
+
+        [Fact]
         public async Task GetSensorHistory_ReturnsNewestPoints_SetsTruncated()
         {
             var sensor = AddSensor(_productA, "cpu", "load", SensorType.Integer);

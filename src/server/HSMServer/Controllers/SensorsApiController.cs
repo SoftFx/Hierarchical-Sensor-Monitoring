@@ -56,11 +56,11 @@ namespace HSMServer.Controllers
         // Ceiling on how many values one history read may stream (#1386 review,
         // pass 2): newest-N selection needs the window streamed oldest-first, but
         // a huge window with a tiny maxPoints must not deserialize the sensor's
-        // entire stored history. Implemented as the read's own count bound (not a
-        // mid-stream break) so the cache's generator completes normally — early
-        // abandonment would leave a file sensor's history lock latched forever.
-        // A window denser than the cap returns the newest maxPoints of the
-        // SCANNED PREFIX with truncated=true — narrow the window.
+        // entire stored history. Implemented as the read's own count bound; the
+        // cache's generator releases the file-history lock on every exit path
+        // (try/finally — the count-reached exit used to latch it, pass 3). A
+        // window denser than the cap returns the newest maxPoints of the SCANNED
+        // PREFIX with truncated=true — narrow the window.
         public const int MaxScannedValues = 100_000;
 
         private static readonly TimeSpan DefaultHistoryWindow = TimeSpan.FromHours(24);
