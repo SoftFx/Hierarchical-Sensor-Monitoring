@@ -155,5 +155,20 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(["inner"], node.Sensors.Select(s => s.Name));
             Assert.Equal(DateTimeKind.Utc, node.CreationDate.Kind);
         }
+
+
+        [Fact]
+        public void GetNode_NestedFolder_AuthorizesAtTheRootProductBoundary()
+        {
+            // Sight is keyed on root products (folder roles materialize per
+            // root): the FOLDER id must resolve through its ROOT, or a scoped
+            // owner whose sensors are listable would get a 404 for the node.
+            CreateController().GetNode(_folder.Id);
+
+            _authorization.Verify(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(),
+                It.Is<ApiTokenResource>(r => r.Kind == ApiTokenResourceKind.Product && r.Id == _root.Id)), Times.Once);
+            _authorization.Verify(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(),
+                It.Is<ApiTokenResource>(r => r.Id == _folder.Id)), Times.Never);
+        }
     }
 }

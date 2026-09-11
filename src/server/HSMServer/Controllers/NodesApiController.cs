@@ -56,10 +56,14 @@ namespace HSMServer.Controllers
             if (!_cache.TryGetProduct(id, out var node) || node is null)
                 return ManagementApiErrors.NotFound();
 
-            // Reads are never forbidden in the owner-mirror model (the read-only
-            // flag constrains writes); the Forbidden arm is unreachable and kept
-            // only so the evaluator's full decision surface maps to a response.
-            var decision = _authorization.AuthorizeRead(User, ApiTokenResource.Product(id));
+            // Sight is keyed on the node's ROOT product (ProductsRoles holds root
+            // ids; folder roles materialize per root) — authorizing the folder id
+            // itself would 404 a scoped owner whose sensors under that folder ARE
+            // listable via the root. Reads are never forbidden in the owner-mirror
+            // model (the read-only flag constrains writes); the Forbidden arm is
+            // unreachable and kept only so the evaluator's full decision surface
+            // maps to a response.
+            var decision = _authorization.AuthorizeRead(User, ApiTokenResource.Product(node.Root.Id));
 
             return decision switch
             {

@@ -53,6 +53,16 @@ namespace HSMServer.Controllers
         // match timeout bounds one IsMatch; this bounds the full scan.
         public const int SearchBudgetMs = 2_000;
 
+        // Ceiling on how many values one history read may stream (#1386 review,
+        // pass 2): newest-N selection needs the window streamed oldest-first, but
+        // a huge window with a tiny maxPoints must not deserialize the sensor's
+        // entire stored history. Implemented as the read's own count bound (not a
+        // mid-stream break) so the cache's generator completes normally — early
+        // abandonment would leave a file sensor's history lock latched forever.
+        // A window denser than the cap returns the newest maxPoints of the
+        // SCANNED PREFIX with truncated=true — narrow the window.
+        public const int MaxScannedValues = 100_000;
+
         private static readonly TimeSpan DefaultHistoryWindow = TimeSpan.FromHours(24);
 
         private readonly ITreeValuesCache _cache;
@@ -89,13 +99,17 @@ namespace HSMServer.Controllers
         {
             // The optional subtree filter: an unknown id is the plain area 404 (no
             // evaluator call), an invisible one the evaluator's 404 — the caller
-            // cannot tell a forbidden tree from a missing one.
+            // cannot tell a forbidden tree from a missing one. Sight is keyed on
+            // the node's ROOT product (ProductsRoles holds root ids; folder roles
+            // materialize per root) — authorizing the folder id itself would 404
+            // a scoped owner whose sensors under that folder ARE listable via
+            // the root, breaking the tree walk the flat search offers.
             ProductModel subtree = null;
 
             if (product is { } productId)
             {
                 if (!_cache.TryGetProduct(productId, out var node) || node is null ||
-                    _authorization.AuthorizeRead(User, ApiTokenResource.Product(productId)) != ApiTokenAuthorization.Allowed)
+                    _authorization.AuthorizeRead(User, ApiTokenResource.Product(node.Root.Id)) != ApiTokenAuthorization.Allowed)
                 {
                     return ManagementApiErrors.NotFound();
                 }
@@ -163,7 +177,9 @@ namespace HSMServer.Controllers
         /// [from, to], oldest first, no aggregation. Timeout markers (OffTime
         /// points where the sensor was silent) are included. When the window holds
         /// more values than requested, the oldest excess is dropped and
-        /// <c>truncated</c> is set — narrow the window for full resolution.
+        /// <c>truncated</c> is set — narrow the window for full resolution. One
+        /// request streams at most 100001 values: a window denser than that
+        /// returns the newest points of the scanned prefix (still truncated).
         /// </summary>
         /// <param name="id">Sensor id.</param>
         /// <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
@@ -182,6 +198,14 @@ namespace HSMServer.Controllers
             if (!TryGetVisibleSensor(id, out var sensor, out var failure))
                 return failure;
 
+            // The sensor may have been deleted between the sight check and the
+            // stream — the page read would dereference a null deep in the cache
+            // (a pre-existing landmine there). A cheap re-check keeps this
+            // endpoint on the 404 path; the residual race (deleted after the
+            // re-check) is the cache's own, see feature.md Known Issues.
+            if (_cache.GetSensor(id) is null)
+                return ManagementApiErrors.NotFound();
+
             var toUtc = (to ?? DateTime.UtcNow).ToUtcInstant();
             var fromUtc = (from ?? toUtc - DefaultHistoryWindow).ToUtcInstant();
 
@@ -194,12 +218,14 @@ namespace HSMServer.Controllers
             maxPoints = maxPoints <= 0 ? DefaultMaxPoints : Math.Min(maxPoints, MaxPointsLimit);
 
             // The window streams oldest-first; keep the newest maxPoints values in
-            // a sliding buffer. includeTtl: OffTime markers are part of the honest
-            // picture of a sensor's timeline (#1386).
+            // a sliding buffer. The read's count is the scan cap (see
+            // MaxScannedValues) — not the response size, which maxPoints bounds.
+            // includeTtl: OffTime markers are part of the honest picture of a
+            // sensor's timeline (#1386).
             var window = new Queue<BaseValue>(maxPoints);
             long totalSeen = 0;
 
-            await foreach (var page in _cache.GetSensorValuesPage(id, fromUtc, toUtc, int.MaxValue,
+            await foreach (var page in _cache.GetSensorValuesPage(id, fromUtc, toUtc, MaxScannedValues + 1,
                                RequestOptions.IncludeTtl))
             {
                 foreach (var value in page)

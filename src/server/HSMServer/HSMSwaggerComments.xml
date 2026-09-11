@@ -214,7 +214,9 @@
             [from, to], oldest first, no aggregation. Timeout markers (OffTime
             points where the sensor was silent) are included. When the window holds
             more values than requested, the oldest excess is dropped and
-            <c>truncated</c> is set — narrow the window for full resolution.
+            <c>truncated</c> is set — narrow the window for full resolution. One
+            request streams at most 100001 values: a window denser than that
+            returns the newest points of the scanned prefix (still truncated).
             </summary>
             <param name="id">Sensor id.</param>
             <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>

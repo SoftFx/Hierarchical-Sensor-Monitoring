@@ -338,6 +338,42 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public void GetSensors_RegexSearch_NullDescription_SimplyDoesNotMatch_NeverA500()
+        {
+            // Description is null for any sensor that never got one — the default
+            // for collector-created sensors; Regex.IsMatch(null) throws (#1386
+            // review, pass 2). The predicate must null-guard like contains does.
+            AddSensor(_productA, "eth0", null);
+
+            var page = ListPage(CreateController().GetSensors(search: "eth", searchMode: "regex"));
+
+            Assert.Equal(["alpha/eth0"], page.Items.Select(s => s.Path));
+
+            var none = ListPage(CreateController().GetSensors(search: "missing", searchMode: "regex"));
+            Assert.Empty(none.Items);
+        }
+
+
+        [Fact]
+        public void GetSensors_FolderSubtree_AuthorizesAtTheRootProductBoundary()
+        {
+            AddSensor(_folderA, "eth0", "throughput");
+
+            // Sight is keyed on root products (folder roles materialize per
+            // root): the FOLDER id must resolve through its ROOT, or a scoped
+            // owner whose sensors are listable would get a 404 for the subtree.
+            var page = ListPage(CreateController().GetSensors(product: _folderA.Id));
+
+            Assert.Equal(["alpha/net/eth0"], page.Items.Select(s => s.Path));
+
+            _authorization.Verify(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(),
+                It.Is<ApiTokenResource>(r => r.Kind == ApiTokenResourceKind.Product && r.Id == _productA.Id)), Times.Once);
+            _authorization.Verify(a => a.AuthorizeRead(It.IsAny<ClaimsPrincipal>(),
+                It.Is<ApiTokenResource>(r => r.Id == _folderA.Id)), Times.Never);
+        }
+
+
+        [Fact]
         public void GetSensor_UnknownId_IsPlain404_EvaluatorNeverQueried()
         {
             Assert.Equal(404, StatusCodeOf(CreateController().GetSensor(Guid.NewGuid())));
@@ -482,7 +518,7 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public async Task GetSensorHistory_ReadsUnboundedWindow_WithTimeoutMarkersIncluded()
+        public async Task GetSensorHistory_ReadsBoundedByTheScanCap_WithTimeoutMarkersIncluded()
         {
             var sensor = AddSensor(_productA, "cpu", "load", SensorType.Integer);
 
@@ -498,11 +534,43 @@ namespace HSMServer.Core.Tests.Controllers
 
             await CreateController().GetSensorHistory(sensor.Id, from: from, to: to);
 
-            // The window stream must be unbounded (the newest-N selection happens
-            // endpoint-side) and must carry the IncludeTtl flag — OffTime markers
-            // are part of the timeline (#1386).
-            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, to, int.MaxValue,
+            // The stream is bounded by the SCAN CAP (not maxPoints — the newest-N
+            // selection happens endpoint-side; not unbounded — a huge window with
+            // a tiny maxPoints must not deserialize the whole history) and carries
+            // the IncludeTtl flag — OffTime markers are part of the timeline (#1386).
+            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, to, SensorsApiController.MaxScannedValues + 1,
                 It.Is<RequestOptions>(o => o.HasFlag(RequestOptions.IncludeTtl))), Times.Once);
+        }
+
+
+        [Fact]
+        public async Task GetSensorHistory_WindowDenserThanTheScanCap_TruncatesToNewestOfScannedPrefix()
+        {
+            var sensor = AddSensor(_productA, "cpu", "load", SensorType.Integer);
+
+            var from = new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc);
+
+            // Denser than the cap: the endpoint must stop converting at
+            // MaxScannedValues + 1 values and return the newest maxPoints of that
+            // prefix with truncated=true — never the whole window, never a hang.
+            var values = Enumerable.Range(0, SensorsApiController.MaxScannedValues + 10)
+                .Select(i => new IntegerValue { Value = i, Time = from.AddSeconds(i) })
+                .ToList<BaseValue>();
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) => PagesOf(values.Take(count)));
+
+            var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 5)).Value as SensorHistoryDto;
+
+            Assert.True(history.Truncated);
+            Assert.Equal(5, history.Points.Count);
+
+            // The newest of the SCANNED PREFIX: the cap-th values of the stream,
+            // not the stream's true tail.
+            var prefixEnd = SensorsApiController.MaxScannedValues;
+            Assert.Equal([prefixEnd - 4, prefixEnd - 3, prefixEnd - 2, prefixEnd - 1, prefixEnd],
+                history.Points.Select(p => p.Value));
         }
     }
 }

@@ -13,7 +13,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     // MaxSearchLength is a 400, and the compiled regex carries a match timeout so a
     // catastrophic pattern can never hang a request (the timeout raises
     // RegexMatchTimeoutException from the filter pass — the controller maps it to a
-    // 400 as well).
+    // 400 as well). Every field match is null-guarded: Description is null for any
+    // sensor that never got one (the default for collector-created sensors), and
+    // Regex.IsMatch(null) throws — a null description must simply not match.
     public static class SensorSearchMatcher
     {
         public const string ContainsMode = "contains";
@@ -59,9 +61,12 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                 return false;
             }
 
-            predicate = sensor => regex.IsMatch(sensor.DisplayName) || regex.IsMatch(sensor.Description) || regex.IsMatch(sensor.FullPath);
+            predicate = sensor => IsMatch(sensor.DisplayName) || IsMatch(sensor.Description) || IsMatch(sensor.FullPath);
             return true;
 
+
+            bool IsMatch(string field) =>
+                !string.IsNullOrEmpty(field) && regex.IsMatch(field);
 
             bool Contains(string field) =>
                 !string.IsNullOrEmpty(field) && field.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0;
