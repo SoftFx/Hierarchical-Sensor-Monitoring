@@ -1251,43 +1251,53 @@ namespace HSMServer.Core.Cache
                 if (sensor is FileSensorModel)
                     _fileHistoryLocks[sensor.Id] = true;
 
-                var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
-
-                if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) &&
-                    (includeTtl || IsNotTimout(latest)))
-                    from = latest.Time;
-
-                var result = new List<BaseValue>(_database.SensorValuesPageCount);
-                var totalCount = 0;
-                var requestedCount = Math.Abs(count);
-                
-                await foreach (var byteValue in _database.GetSensorValues(sensor.Id, from, to))
+                try
                 {
-                    var convertedValue = sensor.Convert(byteValue);
-                    if(!includeTtl && convertedValue.IsTimeout)
-                        continue;
+                    var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
-                    result.Add(convertedValue);
-                    totalCount++;
+                    if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) &&
+                        (includeTtl || IsNotTimout(latest)))
+                        from = latest.Time;
 
-                    if (result.Count == _database.SensorValuesPageCount)
+                    var result = new List<BaseValue>(_database.SensorValuesPageCount);
+                    var totalCount = 0;
+                    var requestedCount = Math.Abs(count);
+
+                    await foreach (var byteValue in _database.GetSensorValues(sensor.Id, from, to))
                     {
-                        yield return result.ToList();
-                        result.Clear();
+                        var convertedValue = sensor.Convert(byteValue);
+                        if (!includeTtl && convertedValue.IsTimeout)
+                            continue;
+
+                        result.Add(convertedValue);
+                        totalCount++;
+
+                        if (result.Count == _database.SensorValuesPageCount)
+                        {
+                            yield return result.ToList();
+                            result.Clear();
+                        }
+
+                        if (requestedCount == totalCount)
+                        {
+                            yield return result.ToList();
+                            yield break;
+                        }
                     }
 
-                    if (requestedCount == totalCount)
-                    {
-                        yield return result.ToList();
-                        yield break;
-                    }
+                    yield return result.ToList();
                 }
-
-                yield return result.ToList();
-
-
-                if (sensor is FileSensorModel)
-                    _fileHistoryLocks[sensor.Id] = false;
+                finally
+                {
+                    // Every exit path must release the per-sensor file-history lock:
+                    // the count-reached `yield break` above used to SKIP this line
+                    // (it was plain trailing code), latching the lock forever —
+                    // every later history read of that sensor answered an empty
+                    // page until restart (#1386 review, pass 3). try/finally with
+                    // yields inside is legal in an async iterator.
+                    if (sensor is FileSensorModel)
+                        _fileHistoryLocks[sensor.Id] = false;
+                }
             }
         }
 

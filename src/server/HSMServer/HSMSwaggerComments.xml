@@ -131,8 +131,42 @@
             to return panel data or annotations
             </summary>
         </member>
+        <member name="T:HSMServer.Controllers.NodesApiController">
+            <summary>
+            One tree node — a root product or a nested folder — with its direct children
+            (#1386). Bearer-token authenticated only (the HsmApiToken scheme); served on
+            the web-UI port only. Unknown and invisible ids answer the SAME 404 (the
+            area's anti-enumeration rule).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.NodesApiController.GetNode(System.Guid)">
+            <summary>
+            Get a node (product or folder) by id: metadata plus its DIRECT children
+            (folders and sensors of the node itself, no recursion). For the sensors
+            of the whole subtree use the sensor search with product = this id.
+            </summary>
+            <param name="id">Node id (a root product or a nested folder).</param>
+        </member>
         <member name="M:HSMServer.Controllers.ProductController.UpdateSensorGroups(HSMServer.Model.ViewModel.SensorGroupsRequest)">
             <summary>Update which sensor groups agents under this product should collect (#1198).</summary>
+        </member>
+        <member name="T:HSMServer.Controllers.ProductsApiController">
+            <summary>
+            Root products visible to the token's owner (#1386) — the discovery entry
+            point of the sensor-tree read surface for AI agents. Bearer-token
+            authenticated only (the HsmApiToken scheme); served on the web-UI port only.
+            An owner who sees nothing gets an empty list, not a 403: the list carries no
+            per-item secret, and emptiness discloses nothing.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.ProductsApiController.GetProducts(System.Int32,System.Int32)">
+            <summary>
+            List root products visible to the token's owner, paginated, ordered by
+            name then id. Nested folders are not listed here — walk them via the node
+            endpoint or search sensors with the product filter.
+            </summary>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
         </member>
         <member name="M:HSMServer.Controllers.SensorHistoryController.NodeChartHistory(HSMServer.Model.Model.History.NodeChartRequest)">
             <summary>
@@ -142,6 +176,52 @@
             <c>MaxSensorsPerChart</c> children by current value are charted. Read-only; children with no data
             in the window are omitted (drawn with gaps, never zero-filled).
             </summary>
+        </member>
+        <member name="T:HSMServer.Controllers.SensorsApiController">
+            <summary>
+            Read-only sensor surface of the management API (#1386): flat recursive
+            sensor search, one sensor with its current value, and the sensor's recent
+            history. Bearer-token authenticated only (the HsmApiToken scheme); served on
+            the web-UI port only. A token sees exactly the sensors its owner sees;
+            unknown and invisible ids answer the SAME 404.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsApiController.GetSensors(System.Nullable{System.Guid},System.String,System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Search sensors, paginated, ordered by full path then id. Without
+            parameters: every sensor visible to the token's owner. With
+            <c>product</c>: the subtree of that node (any product or folder id —
+            unknown and invisible ids answer the uniform 404). The search text
+            matches name, description and path (OR).
+            </summary>
+            <param name="product">Optional node id (root product or folder) whose whole subtree is searched.</param>
+            <param name="search">Optional search text (see searchMode).</param>
+            <param name="searchMode">How the search text matches: "contains" (default, case-insensitive substring) or "regex" (.NET regular expression, case-insensitive, time-bounded).</param>
+            <param name="type">Optional sensor type name, e.g. "Double" or "IntegerBar".</param>
+            <param name="page">1-based page number; clamped into [1, totalPages].</param>
+            <param name="pageSize">Page size, 1..200 (default 50).</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsApiController.GetSensor(System.Guid)">
+            <summary>
+            Get one sensor by id: metadata plus its current value — the same shape
+            the search list returns.
+            </summary>
+            <param name="id">Sensor id.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsApiController.GetSensorHistory(System.Guid,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32)">
+            <summary>
+            Read the sensor's history: the NEWEST maxPoints values inside
+            [from, to], oldest first, no aggregation. Timeout markers (OffTime
+            points where the sensor was silent) are included. When the window holds
+            more values than requested, the oldest excess is dropped and
+            <c>truncated</c> is set — narrow the window for full resolution. One
+            request streams at most 100001 values: a window denser than that
+            returns the newest points of the scanned prefix (still truncated).
+            </summary>
+            <param name="id">Sensor id.</param>
+            <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
+            <param name="to">Window end, UTC ISO 8601; default: now.</param>
+            <param name="maxPoints">Point limit, 1..10000 (default 1000); non-positive values fall back to the default.</param>
         </member>
         <member name="T:HSMServer.Controllers.SensorsController">
             <summary>
@@ -654,6 +734,256 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ManagementApiErrorDto.Details">
             <summary>Field-keyed validation messages ({"field": ["msg"]}) on 400s; {"traceId": "..."} on 500s; null otherwise.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.NodeRefDto">
+            <summary>
+            Minimal reference to a tree node (product or folder): enough for an agent to
+            address the node without fetching its full body.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeRefDto.Id">
+            <summary>Node id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeRefDto.Name">
+            <summary>Node display name.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorRefDto">
+            <summary>
+            Minimal reference to a sensor among a node's direct children.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorRefDto.Id">
+            <summary>Sensor id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorRefDto.Name">
+            <summary>Sensor display name (the last segment of its path).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorRefDto.Type">
+            <summary>
+            Sensor type. Value table (see the sensor endpoint for the full meaning):
+            Boolean, Integer, Double, String, IntegerBar, DoubleBar, File, TimeSpan,
+            Version, Rate, Enum.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.NodeDto">
+            <summary>
+            A tree node — a root product or a nested folder — with its DIRECT children
+            only (no recursion): folders and sensors are listed separately, both ordered
+            by name. Sensors of the whole subtree are served by the sensor search
+            endpoint with <c>product={node id}</c>.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Id">
+            <summary>Node id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Name">
+            <summary>Node display name.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Description">
+            <summary>Free-form node description (may be empty).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Type">
+            <summary>
+            Node kind — a root of the tree or a nested folder.
+            Node kind table: product, folder.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Path">
+            <summary>Full node path from its root product (the root product's own path is its name).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.CreationDate">
+            <summary>Node creation time (UTC).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Parent">
+            <summary>Parent node reference; null for a root product.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Folders">
+            <summary>Direct child folders, ordered by name.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Sensors">
+            <summary>Direct child sensors, ordered by name.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.ProductDto">
+            <summary>
+            A root product visible to the token's owner. Nested folders are not listed
+            here — walk them through the node endpoint or search sensors recursively.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.ProductDto.Id">
+            <summary>Product id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.ProductDto.Name">
+            <summary>Product display name (the first segment of every sensor path under it).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.ProductDto.Description">
+            <summary>Free-form product description (may be empty).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.ProductDto.CreationDate">
+            <summary>Product creation time (UTC).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorEnumOptionDto">
+            <summary>
+            One enum option of an Enum sensor: the option registered by the collector
+            that maps the raw int to a label.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorEnumOptionDto.Value">
+            <summary>Raw enum int as sent by the collector.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorEnumOptionDto.Label">
+            <summary>Option label (the collector's option name).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorEnumOptionDto.Description">
+            <summary>Option description (may be empty).</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorDto">
+            <summary>
+            Sensor metadata plus its current value. The shape is IDENTICAL in the search
+            list and in the single-sensor endpoint — an agent never needs a second fetch
+            to see what a found sensor currently reads.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Id">
+            <summary>Sensor id.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Path">
+            <summary>Full sensor path from the root product (e.g. "ProductX/Host/Network/eth0").</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Name">
+            <summary>Sensor display name (the last segment of the path).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Description">
+            <summary>Free-form sensor description (may be empty) — the main search target.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Type">
+            <summary>
+            Sensor type. Value table: Boolean, Integer, Double, String, IntegerBar,
+            DoubleBar, File, TimeSpan, Version, Rate, Enum.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Unit">
+            <summary>
+            Human-readable unit of the value (e.g. "%", "ms", "Bytes/sec", "# per sec");
+            null when the sensor has none.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Status">
+            <summary>
+            Current sensor status (policy-aware; a muted sensor reports OffTime).
+            Value table: 0=Ok, 1=Error, 255=OffTime. Null when the sensor has no data yet.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.State">
+            <summary>
+            Sensor lifecycle state. Value table: Available, Muted, Blocked.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.CreationDate">
+            <summary>Sensor creation time (UTC).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.LastUpdate">
+            <summary>Time of the newest value (UTC); null when the sensor has no data yet.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Product">
+            <summary>Reference to the sensor's root product.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Parent">
+            <summary>Reference to the sensor's immediate parent node (folder or root product).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.LastValue">
+            <summary>Current value (see <c>SensorValueDto</c>); null when the sensor has no data yet.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.EnumOptions">
+            <summary>Registered enum options; present on Enum sensors only, null otherwise.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto">
+            <summary>
+            Sensor history over a time window: the NEWEST <c>maxPoints</c> values inside
+            [<c>from</c>, <c>to</c>], oldest first. No server-side aggregation or
+            decimation — when the window holds more values than requested, the oldest
+            excess is dropped and <c>truncated</c> is set; narrow the window to see more.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.Points">
+            <summary>
+            The returned values, oldest first (see <c>SensorValueDto</c>). Timeout
+            markers — periods the sensor was silent — are included as OffTime points.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.From">
+            <summary>Effective window start (UTC, ISO 8601) — the request value or the default.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.To">
+            <summary>Effective window end (UTC, ISO 8601) — the request value or the default.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.MaxPoints">
+            <summary>Effective point limit (1..10000).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.Truncated">
+            <summary>True when the window held more values than returned — narrow the window for full resolution.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorValueDto">
+            <summary>
+            One sensor value — the current (<c>lastValue</c>) or a history point — as a
+            uniform envelope: <c>value</c> is typed by the sensor type. Boolean, Integer,
+            Double, Rate → a JSON number/boolean; String → string; TimeSpan → a .NET
+            round-trip string ("d.hh:mm:ss"); Version → "major.minor.build.revision";
+            Enum → <c>EnumValueDto</c>; IntegerBar/DoubleBar → <c>BarValueDto</c>;
+            File → <c>FileValueDto</c> (metadata only — file content is never served).
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorValueDto.Time">
+            <summary>Value time as recorded by the collector (UTC, ISO 8601).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorValueDto.Status">
+            <summary>
+            Sensor status at this value. Value table: 0=Ok, 1=Error, 255=OffTime.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorValueDto.Comment">
+            <summary>Comment attached to the value (may be null).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorValueDto.Value">
+            <summary>The typed value — see the record summary for the per-type shapes.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.EnumValueDto">
+            <summary>Typed value of an Enum sensor: the raw int plus its resolved option label.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.EnumValueDto.Value">
+            <summary>Raw enum int as sent by the collector.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.EnumValueDto.Label">
+            <summary>Option label from the sensor's enum options; null when the option is not registered.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.BarValueDto">
+            <summary>Typed value of an IntegerBar/DoubleBar sensor: the statistics of one aggregation period.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.BarValueDto.Min">
+            <summary>Minimum of the period.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.BarValueDto.Max">
+            <summary>Maximum of the period.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.BarValueDto.Mean">
+            <summary>Mean of the period.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.BarValueDto.Count">
+            <summary>Number of aggregated values in the period.</summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.FileValueDto">
+            <summary>
+            Typed value of a File sensor: metadata only. The file CONTENT is never part
+            of any management API response.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.Name">
+            <summary>File name without extension.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.Extension">
+            <summary>File extension (with the leading dot, may be empty).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.FileValueDto.Size">
+            <summary>Original file size in bytes.</summary>
         </member>
         <member name="P:HSMServer.Model.ViewModel.EditProductViewModel.DisabledSensorGroups">
             Sensor groups currently disabled for this product's agents (#1198).
