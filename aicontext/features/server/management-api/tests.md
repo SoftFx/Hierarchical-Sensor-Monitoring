@@ -1,8 +1,8 @@
 # Tests: Management REST API (resource controllers)
 
-> Owner: server | Last reviewed: 2026-09-04 | Canonical: yes
+> Owner: server | Last reviewed: 2026-09-11 | Canonical: yes
 
-Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`), alert schedules (`AlertSchedulesApiControllerTests` + the caller-wide gate matrix in `ApiTokenAuthorizationServiceTests`), the uniform JSON error contract (`ManagementApiErrorContractTests`, `ApiJsonErrorContractTests`, the challenge test in `HsmApiTokenHandlerTests`), and the OpenAPI publication (`ManagementApiSwaggerTests`).
+Coverage for the `/api/v1` resource controllers: alert templates (`AlertTemplatesApiControllerTests`), alert schedules (`AlertSchedulesApiControllerTests` + the caller-wide gate matrix in `ApiTokenAuthorizationServiceTests`), the sensor-tree read surface (`ProductsApiControllerTests`, `NodesApiControllerTests`, `SensorsApiControllerTests`, `SensorTreeDtoMapperTests`), the uniform JSON error contract (`ManagementApiErrorContractTests`, `ApiJsonErrorContractTests`, the challenge test in `HsmApiTokenHandlerTests`), and the OpenAPI publication (`ManagementApiSwaggerTests`).
 
 ## Conventions (area admission)
 
@@ -35,6 +35,40 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 - Denied gate → 403 with the provider and the sensor cache never queried (list), and 403 for ANY id on get-by-id — no existence leak for an unentitled caller.
 - **List**: pagination math and clamps (same envelope and constants as templates); ordering name-then-id; the page's sensor references resolved in ONE bulk cache call (`GetSensorsByAlertSchedules`, never the per-id lookup on the list path); sensor paths filtered per product visibility — same leak surface as get-by-id, pinned on the list path too; the visibility decision memoized per DISTINCT product (3 sensors over 2 products → exactly 2 `IsVisible` calls); the Global-grant short-circuit (admin + `alerts:read@Global` → sensors of ALL products, per-product predicate never consulted).
 - **Get by id**: DTO maps the durable fields (id/name/timezone/schedule YAML); sensor references carry only the sensors whose PRODUCT boundary is visible to the caller (hidden product's sensor dropped, paths of the visible one kept); absent id → 404 for an entitled caller.
+
+## Sensor-tree read surface (#1386)
+
+Harness: Moq over `ITreeValuesCache` (backed by real `ProductModel`/`BaseSensorModel` graphs built through the entities factory) and `IApiTokenAuthorizationService`; controllers constructed directly with a token principal.
+
+**Products** (`ProductsApiControllerTests`):
+
+- Conventions reflection pin (route `api/v1/products`).
+- Root-only listing: nested folders excluded, invisible roots excluded by `IsVisible`; an owner who sees nothing gets an EMPTY list (200), never a 403.
+- Ordering name-then-id; pagination math (`page=2&pageSize=2` over 5 → items 3-4); page-beyond-end → the (possibly partial) last page; field mapping incl. the UTC-pinned `creationDate`.
+
+**Nodes** (`NodesApiControllerTests`):
+
+- Conventions reflection pin (route `api/v1/nodes`).
+- Unknown id → plain 404 with the evaluator NEVER called; invisible id → the SAME uniform body as unknown (anti-enumeration, asserted at body level).
+- Root product: `type=product`, empty `parent`, children split folders/sensors ordered by name, sensor type names; nested folder: `type=folder`, parent ref, path `root/folder`; a node's `path` is its FULL path (a root's path is its name, unlike the model's empty `Path`).
+
+**Sensors** (`SensorsApiControllerTests`):
+
+- Conventions reflection pin (route `api/v1/sensors`).
+- **List/visibility**: no-filter listing over visible subtrees only; parentless sensors dropped (fail closed); per-ROOT-product sight memoized per distinct product (6 sensors over 2 roots → exactly 2 `IsVisible` calls).
+- **Subtree filter**: `product={root}` searches recursively (nested folder's sensors included); `product={folderId}` addresses the folder's own subtree; unknown vs invisible `product` → the SAME 404, with the unknown id never reaching the evaluator.
+- **Search**: contains matches name, description and path independently, case-insensitive; regex alternation works; invalid regex → 400 with `details.search`; unknown `searchMode` → 400; over-length search → 400; a catastrophic pattern (`(a+)+$` against 40 a's) → bounded 400, never a hang or 500 (the per-match regex timeout plus the whole-scan evaluation budget map to the same 400).
+- **Type filter**: valid names case-insensitive; unknown name → 400 with the full value table in `details.type`.
+- **Pagination**: ordering by full path then id; the same clamps as the area (page≥1, `pageSize=0` → default, page-beyond-end → last page, possibly partial).
+- **Item**: unknown → 404 (evaluator never called); invisible → the same 404 as unknown; visible → metadata mapping (path/name/description/type, product+parent refs, null lastValue/lastUpdate/enumOptions for a valueless sensor).
+- **History**: unknown/invisible sensor → 404; `from` > `to` → 400 with `details.from`; LOCAL-kind timestamps CONVERT to their instant (not relabeled — the window does not shift on a non-UTC server); the NEWEST maxPoints returned with `truncated=true` when excess was dropped (10 values, `maxPoints=5` → values 5-9; `maxPoints=50` → all, `truncated=false`); defaults (24 h window exactly, `maxPoints` default, UTC-kind echo); `maxPoints` clamped to the 10 000 cap; the cache is asked for the UNBOUNDED window (`int.MaxValue`) with the `IncludeTtl` flag (OffTime markers included) — the newest-N selection is endpoint-side.
+
+**Wire shapes** (`SensorTreeDtoMapperTests`):
+
+- The typed value envelope for every sensor type: scalars native (bool/int/double/string, TimeSpan "7.02:03:04", Version "1.2.3.4", Rate double); Enum `{value, label}` with the label resolved from registered options and NULL for unregistered; Bar `{min,max,mean,count}` for IntegerBar and DoubleBar; File metadata only (`{name, extension, size}` — never a `byte[]`, asserted by type).
+- Envelope carries time/status/comment with the UTC kind pinned.
+- Unit resolution: `OriginalUnit` display name ("%"), the Rate default denominator ("# per sec"), null otherwise.
+- Enum options mapped ordered by value with label+description; null `enumOptions` for non-Enum sensors.
 
 ## Uniform JSON error contract (#1353)
 
@@ -81,3 +115,7 @@ Harness: Moq, controller constructed directly with a token principal (owner + to
 - [x] Unknown id, invisible folder and unmatched route render the SAME 404 body (anti-enumeration at routing level too)
 - [x] 500 bodies carry `details.traceId` and never exception text; non-/api paths still get the Razor error page
 - [x] Swagger: management actions carry the bearer security requirement and no Key header; sensor-data actions the reverse; every management action documents its error statuses
+- [x] Agent-supplied regex is bounded on both axes — invalid grammar and catastrophic backtracking are 400s, never a hang or a 500 (#1386)
+- [x] File sensor content is never serialized — lastValue and history points carry metadata only (asserted by wire-shape type)
+- [x] Sensor-tree visibility: parentless sensors dropped; the `product` filter's unknown/invisible 404s are indistinguishable and the unknown path skips the evaluator
+- [x] History truncation is honest: `truncated=true` exactly when older values were dropped by the newest-N selection
