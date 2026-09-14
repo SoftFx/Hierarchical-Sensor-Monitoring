@@ -27,7 +27,9 @@ using HSMServer.Folders;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.Migrations;
+using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Mcp;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
@@ -64,6 +66,31 @@ namespace HSMServer.ServiceExtensions
             // per-request security events and the owner-mirroring evaluator (#1384).
             services.AddSingleton<IApiTokenSecurityEventSink, ApiTokenSecurityEventSink>();
             services.AddSingleton<IApiTokenAuthorizationService, ApiTokenAuthorizationService>();
+
+            // The shared sensor-tree read implementation (#1391): one instance of
+            // search/visibility/mapping behind both the REST controllers and the
+            // MCP tools. Statelessly wraps singletons — scoped so a future
+            // per-request state has a home without a lifetime change.
+            services.AddScoped<SensorTreeReadService>();
+
+            // The MCP read-only adapter over the management API (#1391):
+            // Streamable HTTP served at /mcp (see Program.cs), the same
+            // HsmApiToken credential and ManagementPolicy as /api/v1, stateless
+            // sessions (no affinity needed — the tools are pure reads). The
+            // tools resolve the caller through the ambient HTTP context.
+            services.AddHttpContextAccessor();
+            services.AddMcpServer(options =>
+                {
+                    options.ServerInfo = new ModelContextProtocol.Protocol.Implementation
+                    {
+                        Name = "HSMServer",
+                        Title = "HSM monitoring server",
+                        Version = ServerConfig.Version,
+                    };
+                })
+                .WithHttpTransport()
+                .WithTools<SensorTreeMcpTools>()
+                .WithTools<AlertsMcpTools>();
 
             // Retention + abuse bounds (#1356, prerequisite of the step-4 management
             // endpoints): bounded cleanup of dead token rows/orphans/security events and
@@ -215,6 +242,12 @@ namespace HSMServer.ServiceExtensions
             // off every legacy route with a plain non-redirecting 401.
             applicationBuilder.UseMiddleware<ManagementApiGuardMiddleware>();
             applicationBuilder.UseMiddleware<LegacyBearerGuardMiddleware>();
+
+            // The MCP endpoint is SitePort-only like the whole token surface
+            // (#1391) — placed with the other guards, BEFORE authentication, so
+            // a probe on the SensorPort gets the uniform 404 and never a 401
+            // that confirms the endpoint exists.
+            applicationBuilder.UseMiddleware<McpSitePortOnlyMiddleware>();
 
             applicationBuilder.UseAuthentication();
             applicationBuilder.UseAuthorization();

@@ -403,6 +403,80 @@
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
             </summary>
         </member>
+        <member name="T:HSMServer.Mcp.AlertsMcpTools">
+            <summary>
+            The four alert tools of the read-only MCP surface (#1391): alert
+            templates and alert schedules as the REST surface serves them. Per the
+            #1391 design these tools use the existing thin providers directly (the
+            shared-service extraction is scoped to the sensor tree); the list/get
+            logic below mirrors AlertTemplatesApiController/AlertSchedulesApiController.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpProductsResult">
+            <summary>Result of the list_products tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpProductsResult.Products">
+            <summary>The first `limit` visible root products, ordered by name.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpProductsResult.TotalFound">
+            <summary>Total visible root products, whatever the limit.</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpSensorSummary">
+            <summary>
+            Compact sensor summary of the find_sensors tool — the fields an agent
+            needs to pick sensors for analysis; the current value comes from
+            get_sensor on the chosen id.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorSummary.Path">
+            <summary>Full sensor path from the root product.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorSummary.Type">
+            <summary>Sensor type name (Double, IntegerBar, ...).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorSummary.Status">
+            <summary>Current status (Ok, Error, OffTime); null when no data yet.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorSummary.Unit">
+            <summary>Human-readable unit (e.g. "%", "ms"); null when none.</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpSensorsResult">
+            <summary>Result of the find_sensors tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorsResult.Sensors">
+            <summary>The first `limit` matching sensors, ordered by path.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorsResult.TotalFound">
+            <summary>Total matching sensors, whatever the limit.</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpAlertTemplatesResult">
+            <summary>Result of the list_alert_templates tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAlertTemplatesResult.Templates">
+            <summary>The first `limit` visible templates, ordered by name.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAlertTemplatesResult.TotalFound">
+            <summary>Total visible templates, whatever the limit.</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.McpAlertSchedulesResult">
+            <summary>Result of the list_alert_schedules tool.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.Schedules">
+            <summary>The first `limit` schedules, ordered by name; sensor paths
+            are filtered to the token owner's sight.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.TotalFound">
+            <summary>Total schedules, whatever the limit.</summary>
+        </member>
+        <member name="T:HSMServer.Mcp.SensorTreeMcpTools">
+            <summary>
+            The five sensor-tree tools of the read-only MCP surface (#1391) — a thin
+            rendering of <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService"/> over Model Context
+            Protocol. The same bearer token, the same owner sight, the same DTOs as
+            the REST surface; expected failures surface as tool errors (isError) for
+            the calling agent to self-correct, never as protocol-level crashes.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.Agent.AgentConnectionResolver">
             <summary>
             Resolves the (address, port) the agent bundle's config.json points at. Prefers the admin-set
@@ -976,6 +1050,61 @@
             read this sensor's values — retry shortly. Never true for other sensor
             types; an empty points list without this flag means the window holds
             no values.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService">
+            <summary>
+            The single implementation of the sensor-tree read surface (#1386, #1391):
+            visible root products, one node with its direct children, flat recursive
+            sensor search, one sensor with its current value, and the newest-N history.
+            Transport-agnostic — the REST controllers and the MCP tools both call it;
+            the caller supplies the token principal and a cancellation token, and gets
+            DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadFailure"/> back, never an IActionResult.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.ListProducts(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32)">
+            <summary>
+            Root products visible to the token's owner, ordered by name then id.
+            An owner who sees nothing gets an empty list, not a failure: the list
+            carries no per-item secret, and emptiness discloses nothing.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.GetNode(System.Guid,System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32)">
+            <summary>
+            One tree node (root product or folder) by id: metadata plus its DIRECT
+            children, folders paginated, sensors capped. Unknown and invisible ids
+            answer the SAME NotFound.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.FindSensors(System.Nullable{System.Guid},System.String,System.String,System.String,System.Int32,System.Int32,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken)">
+            <summary>
+            Search sensors, ordered by full path then id. Without parameters: every
+            sensor visible to the token's owner. With <paramref name="product"/>:
+            the subtree of that node (any product or folder id — unknown and
+            invisible ids answer the uniform NotFound). The search text matches
+            name, description and path (OR).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.GetSensor(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            One sensor by id: metadata plus its current value — the same shape the
+            search list returns.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.GetSensorHistoryAsync(System.Guid,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken)">
+            <summary>
+            The sensor's history: the NEWEST maxPoints values inside
+            [from, to], oldest first, no aggregation. Timeout markers (OffTime
+            points where the sensor was silent) are included. When the window holds
+            more values than requested, the oldest excess is dropped and
+            <c>truncated</c> is set — narrow the window for full resolution. A
+            File sensor whose history is being read by another request answers
+            with <c>readUnavailable</c>=true and no points — retry shortly (File
+            response bounds are additionally capped at 100 points). For
+            aggregated (bar) sensors the response may carry one point older than
+            the echoed <c>from</c> — the pre-window border value (only in an
+            under-full response: a full one drops the border first, and dropping
+            it alone never sets <c>truncated</c> — it is outside the window).
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorValueDto">

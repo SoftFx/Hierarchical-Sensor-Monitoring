@@ -15,10 +15,13 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
     // Fail-closed route guards of the management area (initiative step 3):
     //  - LegacyBearerGuardMiddleware: an hsm_pat_ bearer outside /api/v1 gets a generic
     //    non-redirecting 401 before MVC, with no token lookup — it can never reach a
-    //    BaseController cast or an [Authorize]-only legacy action.
+    //    BaseController cast or an [Authorize]-only legacy action. Since #1391 /mcp is
+    //    exempted too: a token-authenticated route outside the area, same credential family.
     //  - ManagementApiGuardMiddleware: /api/v1 is allow-listed per endpoint (marker +
     //    policy, never anonymous) and only on the SitePort listener; anything else in the
     //    area is 404, so a newly added route without the metadata is unreachable by default.
+    //  - McpSitePortOnlyMiddleware (#1391): /mcp off the SitePort is the uniform 404
+    //    BEFORE authentication — the sensor port never confirms the endpoint exists.
     public class ApiTokenRouteGuardsTests
     {
         private const int SitePort = 44333;
@@ -86,6 +89,55 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             var context = BuildContext("/api/v1/products", SitePort, authorization: $"Bearer {credential}");
 
             await new LegacyBearerGuardMiddleware(NextThatMarks).InvokeAsync(context);
+
+            Assert.True(context.Items.ContainsKey("reached"));
+        }
+
+        [Fact]
+        public async Task LegacyGuard_HsmBearerOnMcpEndpoint_PassesThrough()
+        {
+            // /mcp is outside the /api/v1 AREA but inside the bearer credential
+            // family (#1391): the token travels to the MCP handler, never a 401.
+            var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
+            var context = BuildContext("/mcp", SitePort, authorization: $"Bearer {credential}");
+
+            await new LegacyBearerGuardMiddleware(NextThatMarks).InvokeAsync(context);
+
+            Assert.True(context.Items.ContainsKey("reached"));
+        }
+
+
+        [Fact]
+        public async Task McpSitePortGuard_OffSitePort_IsUniform404_BeforeAuthentication()
+        {
+            // The sensor port must not confirm the MCP endpoint exists: the guard
+            // runs BEFORE authentication, so even a bearer-carrying probe gets the
+            // uniform 404, never a 401.
+            var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
+            var context = BuildContext("/mcp", SensorPort, authorization: $"Bearer {credential}");
+
+            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+            Assert.False(context.Items.ContainsKey("reached"));
+        }
+
+        [Fact]
+        public async Task McpSitePortGuard_OnSitePort_PassesThrough()
+        {
+            var context = BuildContext("/mcp", SitePort);
+
+            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+
+            Assert.True(context.Items.ContainsKey("reached"));
+        }
+
+        [Fact]
+        public async Task McpSitePortGuard_OtherPaths_PassThroughUntouched()
+        {
+            var context = BuildContext("/not-mcp-at-all", SensorPort);
+
+            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
         }

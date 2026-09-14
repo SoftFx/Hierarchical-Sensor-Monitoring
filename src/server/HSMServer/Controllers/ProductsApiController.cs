@@ -1,7 +1,4 @@
-using System;
-using System.Linq;
 using HSMServer.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Authorization;
@@ -22,6 +19,9 @@ namespace HSMServer.Controllers
     // aicontext/features/server/management-api/): paginated ApiPageDto envelope,
     // name-then-id ordering, per-item visibility through the evaluator's IsVisible
     // (the owner-sight predicate — never a 403-per-item).
+    //
+    // Since #1391 the read logic lives in SensorTreeReadService, shared with the
+    // MCP tools; this controller is the REST rendering of it.
     [ApiController]
     [ManagementApi]
     [Authorize(Policy = HsmApiTokenDefaults.ManagementPolicy)]
@@ -29,13 +29,11 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class ProductsApiController : ControllerBase
     {
-        private readonly ITreeValuesCache _cache;
-        private readonly IApiTokenAuthorizationService _authorization;
+        private readonly SensorTreeReadService _reader;
 
-        public ProductsApiController(ITreeValuesCache cache, IApiTokenAuthorizationService authorization)
+        public ProductsApiController(SensorTreeReadService reader)
         {
-            _cache = cache;
-            _authorization = authorization;
+            _reader = reader;
         }
 
 
@@ -51,33 +49,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
-        public IActionResult GetProducts(int page = 1, int pageSize = ApiPagination.DefaultPageSize)
-        {
-            (page, pageSize) = ApiPagination.Normalize(page, pageSize);
-
-            // GetProducts serves the ROOT-PRODUCT NAME INDEX (_productsByName —
-            // roots only, maintained on add/rename/remove); the IsRoot filter is
-            // a defensive no-op, kept in case the accessor ever moves to a
-            // broader index. Visibility follows the owner's sight at the product
-            // boundary — the same predicate every sensor listing resolves
-            // through.
-            var all = _cache.GetProducts()
-                .Where(product => product.IsRoot && _authorization.IsVisible(User, ApiTokenResource.Product(product.Id)))
-                .OrderBy(product => product.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(product => product.Id)
-                .ToList();
-
-            var totalPages = ApiPagination.TotalPagesOf(all.Count, pageSize);
-            page = ApiPagination.ClampPage(page, totalPages);
-
-            return Ok(new ApiPageDto<ProductDto>
-            {
-                Items = [.. all.Skip((page - 1) * pageSize).Take(pageSize).Select(SensorTreeDtoMapper.ToProductDto)],
-                Page = page,
-                PageSize = pageSize,
-                TotalCount = all.Count,
-                TotalPages = totalPages,
-            });
-        }
+        public IActionResult GetProducts(int page = 1, int pageSize = ApiPagination.DefaultPageSize) =>
+            Ok(_reader.ListProducts(User, page, pageSize));
     }
 }

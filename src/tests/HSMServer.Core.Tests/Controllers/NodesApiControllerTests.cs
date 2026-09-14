@@ -57,7 +57,7 @@ namespace HSMServer.Core.Tests.Controllers
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
         private NodesApiController CreateController() =>
-            new(_cache.Object, _authorization.Object)
+            new(new SensorTreeReadService(_cache.Object, _authorization.Object))
             {
                 ControllerContext = new ControllerContext
                 {

@@ -93,6 +93,7 @@ The acceptance bar of the epic: an AI agent that starts from NOTHING but the Ope
 | `src/server/HSMServer/Controllers/ProductsApiController.cs` | Sensor-tree read surface (#1386): visible root products |
 | `src/server/HSMServer/Controllers/NodesApiController.cs` | Sensor-tree read surface (#1386): any node + direct children |
 | `src/server/HSMServer/Controllers/SensorsApiController.cs` | Sensor-tree read surface (#1386): recursive search, sensor item, newest-N history |
+| `src/server/HSMServer/Model/ManagementApi/SensorTree/SensorTreeReadService.cs` | The sensor-tree read implementation (search, visibility, mapping, newest-N history), shared with the MCP tools since #1391; the controllers are thin REST renderings of its transport-agnostic `SensorTreeReadResult` envelope |
 | `src/server/HSMServer/Model/ManagementApi/AlertTemplates/AlertTemplateDto.cs` | Wire DTOs |
 | `src/server/HSMServer/Model/ManagementApi/AlertTemplates/AlertTemplateDtoMapper.cs` | DTO ↔ entity mapping + write-side normalizations |
 | `src/server/HSMServer/Model/DataAlertTemplates/AlertTemplatePathValidation.cs` | #1210 path/type mismatch rule shared by the cookie UI controller and this API controller so the two surfaces cannot drift |
@@ -145,7 +146,7 @@ No UI. The cookie web UI (`AlertTemplatesController`) remains the human surface;
 ## Dependencies
 
 - Depends on: api-tokens feature (scheme, area guard, evaluator, security events), alert templates domain (`TreeValuesCache`, `AlertTemplateModel`), alert schedules domain (`IAlertScheduleProvider`), Swashbuckle (the server's single OpenAPI doc).
-- Used by: non-interactive management clients; the OpenAPI document at `/api/swagger` is their self-describing entry point.
+- Used by: non-interactive management clients; the OpenAPI document at `/api/swagger` is their self-describing entry point. The MCP feature (`aicontext/features/server/mcp/`, #1391) renders the same sensor-tree read logic (`SensorTreeReadService`) and the alert read paths for MCP-native agents.
 
 ## Tests
 

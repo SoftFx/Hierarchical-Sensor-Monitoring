@@ -1,6 +1,7 @@
 ﻿using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
 using HSMServer.Authentication;
+using HSMServer.Mcp;
 using HSMServer.Middleware;
 using HSMServer.Model.ManagementApi;
 using HSMServer.ServerConfiguration;
@@ -126,6 +127,14 @@ try
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
 
     app.MapControllers();
+
+    // The MCP endpoint (#1391): Streamable HTTP at /mcp, authorized by the SAME
+    // HsmApiToken bearer policy as /api/v1 but deliberately OUTSIDE the area
+    // guard — the SDK handler owns the route and errors follow MCP's JSON-RPC
+    // semantics, not the uniform JSON contract. SitePort-only and bearer-exempt
+    // through the dedicated middlewares (see ApplicationServiceExtensions).
+    app.MapMcp(HsmMcp.EndpointPath)
+       .RequireAuthorization(HsmApiTokenDefaults.ManagementPolicy);
 
     app.MapControllerRoute(
         name: "Account",
