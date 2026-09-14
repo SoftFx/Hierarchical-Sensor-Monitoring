@@ -224,7 +224,9 @@
             with <c>readUnavailable</c>=true and no points — retry shortly (File
             response bounds are additionally capped at 100 points). For
             aggregated (bar) sensors the response may carry one point older than
-            the echoed <c>from</c> — the pre-window border value.
+            the echoed <c>from</c> — the pre-window border value (only in an
+            under-full response: a full one drops the border first, and dropping
+            it alone never sets <c>truncated</c> — it is outside the window).
             </summary>
             <param name="id">Sensor id.</param>
             <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
@@ -944,7 +946,9 @@
             decimation — when the window holds more values than requested, the oldest
             excess is dropped and <c>truncated</c> is set; narrow the window to see more.
             For aggregated (bar) sensors the response may carry one point older than the
-            echoed <c>from</c> — the pre-window border value.
+            echoed <c>from</c> — the pre-window border value (only in an under-full
+            response: a full one drops the border first, and dropping it alone never
+            sets <c>truncated</c> — it is outside the window).
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.Points">

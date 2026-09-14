@@ -32,10 +32,11 @@ namespace HSMServer.Controllers
     // call — the schedules-list pattern).
     //
     // History is the NEWEST maxPoints values of the window (no decimation, #1386):
-    // the database streams a window oldest-first with no count primitive, so the
-    // endpoint keeps a sliding buffer of the requested size and reports whether
-    // anything older was dropped (truncated) — the agent narrows the window for
-    // full resolution instead of the server guessing how to aggregate.
+    // the database streams a window NEWEST-FIRST (#1389), so the newest-N read is
+    // a bounded PREFIX of the stream (maxPoints + 1 rows, the page generator's
+    // own count bound) — the surplus point is the OLDEST of the batch, and its
+    // presence is `truncated` — the agent narrows the window for full
+    // resolution instead of the server guessing how to aggregate.
     [ApiController]
     [ManagementApi]
     [Authorize(Policy = HsmApiTokenDefaults.ManagementPolicy)]
@@ -179,7 +180,9 @@ namespace HSMServer.Controllers
         /// with <c>readUnavailable</c>=true and no points — retry shortly (File
         /// response bounds are additionally capped at 100 points). For
         /// aggregated (bar) sensors the response may carry one point older than
-        /// the echoed <c>from</c> — the pre-window border value.
+        /// the echoed <c>from</c> — the pre-window border value (only in an
+        /// under-full response: a full one drops the border first, and dropping
+        /// it alone never sets <c>truncated</c> — it is outside the window).
         /// </summary>
         /// <param name="id">Sensor id.</param>
         /// <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
@@ -261,10 +264,20 @@ namespace HSMServer.Controllers
 
             // Newest-first arrival: the surplus point beyond maxPoints is the
             // oldest of the batch — its presence is exactly "the window held
-            // more than maxPoints".
+            // more than maxPoints", with one exception. An aggregated sensor's
+            // batch may END with the pre-window BORDER value (the cache rewinds
+            // its read back to it — the same AggregateValues flag gates that
+            // rewind — so it arrives last on the descending stream): that point
+            // is older than the echoed `from`, outside the window, and dropping
+            // it alone is not truncation — every in-window value is still
+            // returned. RemoveRange keeps the maxPoints response cap enforced
+            // by construction, whatever the stream's exact count.
             var truncated = points.Count > maxPoints;
             if (truncated)
-                points.RemoveAt(points.Count - 1);
+            {
+                truncated = !(sensor.AggregateValues && points[^1].Time < fromUtc);
+                points.RemoveRange(maxPoints, points.Count - maxPoints);
+            }
 
             points.Reverse();
 

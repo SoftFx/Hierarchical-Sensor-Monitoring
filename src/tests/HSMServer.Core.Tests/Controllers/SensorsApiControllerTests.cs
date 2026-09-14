@@ -95,12 +95,15 @@ namespace HSMServer.Core.Tests.Controllers
 
         // A sensor under a product; `description` exercises the Description search
         // field, which the random factory description would make untestable.
+        // `aggregateValues` mirrors the entity flag that gates the cache's
+        // pre-window border rewind for bar sensors.
         private Core.Model.BaseSensorModel AddSensor(Core.Model.ProductModel parent, string name, string description,
-            SensorType type = SensorType.Double)
+            SensorType type = SensorType.Double, bool aggregateValues = false)
         {
             var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity(name: name, type: (byte)type) with
             {
                 Description = description,
+                AggregateValues = aggregateValues,
             });
 
             parent.AddSensor(sensor);
@@ -501,6 +504,83 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
+        public async Task GetSensorHistory_WindowOfExactlyMaxPoints_IsNotTruncated()
+        {
+            // The exact boundary of the truncation decision: W == maxPoints.
+            // The 10-vs-5 and 10-vs-50 siblings bracket it from both sides;
+            // the boundary itself is where an off-by-one in the newest-first
+            // selection would land, and `truncated` derives from a single `>`
+            // comparison (#1390 review).
+            var sensor = AddSensor(_productA, "cpu", "load", SensorType.Integer);
+
+            var from = new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc);
+            var oldestFirst = Enumerable.Range(0, 5)
+                .Select(i => new IntegerValue { Value = i, Time = from.AddMinutes(i) })
+                .ToList<BaseValue>();
+            var newestFirst = Enumerable.Reverse(oldestFirst).ToList();
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) => PagesOf(newestFirst.Take(count)));
+
+            var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 5)).Value as SensorHistoryDto;
+
+            Assert.Equal([0, 1, 2, 3, 4], history.Points.Select(p => p.Value));
+            Assert.False(history.Truncated);
+        }
+
+
+        [Fact]
+        public async Task GetSensorHistory_BarSensorBorderOccupyingTheSurplusSlot_IsNotTruncated()
+        {
+            // For AggregateValues sensors the cache rewinds its read back to
+            // the pre-window BORDER value (TreeValuesCache rewinds `from` to
+            // the latest value strictly before the window), so the border
+            // arrives LAST on the newest-first stream — when the window holds
+            // exactly maxPoints values, the border is the value in the
+            // maxPoints + 1 slot. Dropping it must NOT set `truncated`: it is
+            // outside the window and every in-window value is returned
+            // (#1390 review).
+            var sensor = AddSensor(_productA, "cpu", "bars", SensorType.IntegerBar, aggregateValues: true);
+
+            var from = new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc);
+            var inWindow = Enumerable.Range(0, 5)
+                .Select(i => (BaseValue)new IntegerBarValue { Min = i, Max = i, Mean = i, Count = 1, Time = from.AddMinutes(i) })
+                .ToList();
+            var border = new IntegerBarValue { Min = -1, Max = -1, Mean = -1, Count = 1, Time = from.AddMinutes(-1) };
+
+            // What the rewound cache stream yields: the window newest-first,
+            // then the border (strictly older than the echoed `from`).
+            var stream = Enumerable.Reverse(inWindow).Append(border).ToList();
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) => PagesOf(stream.Take(count)));
+
+            var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, from: from, maxPoints: 5)).Value as SensorHistoryDto;
+
+            Assert.All(history.Points, point => Assert.True(point.Time >= from));
+            Assert.Equal(inWindow.Select(v => v.Time), history.Points.Select(p => p.Time));
+            Assert.False(history.Truncated);
+
+            // The gate's other side: a bar sensor whose surplus IS an in-window
+            // value (window denser than maxPoints) must still report truncation
+            // — the border exception must not swallow genuine truncation.
+            var dense = Enumerable.Range(0, 10)
+                .Select(i => (BaseValue)new IntegerBarValue { Min = i, Max = i, Mean = i, Count = 1, Time = from.AddMinutes(i) })
+                .ToList();
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) => PagesOf(Enumerable.Reverse(dense).Take(count)));
+
+            var denseHistory = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, from: from, maxPoints: 5)).Value as SensorHistoryDto;
+
+            Assert.True(denseHistory.Truncated);
+            Assert.Equal(5, denseHistory.Points.Count);
+        }
+
+
+        [Fact]
         public async Task GetSensorHistory_DenseWindow_ReturnsTheNewestEnd_NotTheOldest()
         {
             // The #1389 regression: a dense window used to answer with the OLDEST
@@ -602,7 +682,7 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public async Task GetSensorHistory_ReadsBoundedByTheScanCap_WithTimeoutMarkersIncluded()
+        public async Task GetSensorHistory_ReadsBoundedByTheResponseBound_WithTimeoutMarkersIncluded()
         {
             var sensor = AddSensor(_productA, "cpu", "load", SensorType.Integer);
 

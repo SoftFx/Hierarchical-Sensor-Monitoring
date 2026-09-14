@@ -9,7 +9,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     /// decimation — when the window holds more values than requested, the oldest
     /// excess is dropped and <c>truncated</c> is set; narrow the window to see more.
     /// For aggregated (bar) sensors the response may carry one point older than the
-    /// echoed <c>from</c> — the pre-window border value.
+    /// echoed <c>from</c> — the pre-window border value (only in an under-full
+    /// response: a full one drops the border first, and dropping it alone never
+    /// sets <c>truncated</c> — it is outside the window).
     /// </summary>
     public sealed record SensorHistoryDto
     {
