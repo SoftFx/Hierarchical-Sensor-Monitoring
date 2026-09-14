@@ -8,10 +8,10 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     /// [<c>from</c>, <c>to</c>], oldest first. No server-side aggregation or
     /// decimation — when the window holds more values than requested, the oldest
     /// excess is dropped and <c>truncated</c> is set; narrow the window to see more.
-    /// A window denser than the server's scan cap instead sets <c>scanCapReached</c>:
-    /// the points then cover the OLDEST portion of the window, not its newest end.
     /// For aggregated (bar) sensors the response may carry one point older than the
-    /// echoed <c>from</c> — the pre-window border value.
+    /// echoed <c>from</c> — the pre-window border value (only in an under-full
+    /// response: a full one drops the border first, and dropping it alone never
+    /// sets <c>truncated</c> — it is outside the window).
     /// </summary>
     public sealed record SensorHistoryDto
     {
@@ -27,19 +27,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// <summary>Effective window end (UTC, ISO 8601) — the request value or the default.</summary>
         public DateTime To { get; init; }
 
-        /// <summary>Effective point limit (1..10000).</summary>
+        /// <summary>Effective point limit (1..10000; 100 for File sensors).</summary>
         public int MaxPoints { get; init; }
 
         /// <summary>True when the window held more values than returned — narrow the window for full resolution.</summary>
         public bool Truncated { get; init; }
-
-        /// <summary>
-        /// True when one request's scan cap was reached: the window was too dense,
-        /// and the points are the newest ones OF THE SCANNED PREFIX — i.e. the
-        /// OLDEST portion of the window, not its newest end. Narrow the window
-        /// before treating the data as current.
-        /// </summary>
-        public bool ScanCapReached { get; init; }
 
         /// <summary>
         /// True only for File sensors whose history another request is currently
