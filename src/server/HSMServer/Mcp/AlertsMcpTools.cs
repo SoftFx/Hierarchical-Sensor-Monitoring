@@ -6,6 +6,7 @@ using System.Security.Claims;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Schedule;
+using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using Microsoft.AspNetCore.Http;
@@ -31,8 +32,6 @@ namespace HSMServer.Mcp
     [McpServerToolType]
     public sealed class AlertsMcpTools
     {
-        private const string NotFoundMessage = "The requested resource was not found.";
-
         private readonly ITreeValuesCache _cache;
         private readonly IAlertScheduleProvider _schedules;
         private readonly IApiTokenAuthorizationService _authorization;
@@ -88,7 +87,7 @@ namespace HSMServer.Mcp
             var template = _cache.GetAlertTemplate(templateId);
 
             if (template is null)
-                throw new McpException(NotFoundMessage);
+                throw new McpException(ManagementApiErrors.NotFoundMessage);
 
             // Reads authorize at the template's FOLDER through the Product
             // boundary (mirrors the REST controller): the evaluator's 404 arm
@@ -99,7 +98,7 @@ namespace HSMServer.Mcp
             {
                 ApiTokenAuthorization.Allowed => AlertTemplateDtoMapper.ToDto(template),
                 ApiTokenAuthorization.Forbidden => throw new McpException("The token's owner cannot see this template."),
-                _ => throw new McpException(NotFoundMessage),
+                _ => throw new McpException(ManagementApiErrors.NotFoundMessage),
             };
         }
 
@@ -150,7 +149,7 @@ namespace HSMServer.Mcp
             var schedule = _schedules.GetSchedule(scheduleId);
 
             if (schedule is null)
-                throw new McpException(NotFoundMessage);
+                throw new McpException(ManagementApiErrors.NotFoundMessage);
 
             return ToDto(schedule, _cache.GetSensorsByAlertSchedule(scheduleId),
                 _authorization.MemoizedProductVisibility(User));
@@ -164,11 +163,9 @@ namespace HSMServer.Mcp
         private bool AuthorizeSchedulesRead() =>
             _authorization.CanSeeAnyBoundary(User);
 
-        private ClaimsPrincipal User =>
-            // See SensorTreeMcpTools.User — behind RequireAuthorization the
-            // principal is always there; this is a defensive backstop.
-            _http.HttpContext?.User
-            ?? throw new McpException("No authenticated HTTP context is available for this tool call.");
+        // The shared ambient-principal accessor (see McpToolContext); a property
+        // so the tool bodies read like their REST twins' `User`.
+        private ClaimsPrincipal User => McpToolContext.UserOf(_http);
 
 
         private static ApiTokenResource FolderResource(Guid folderId) =>

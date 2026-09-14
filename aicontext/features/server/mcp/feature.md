@@ -45,7 +45,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 |---|---|---|
 | `POST /mcp` (Streamable HTTP, stateless) | `Program.cs` (`MapMcp`), SDK `StreamableHttpHandler` | JSON-RPC envelope per the MCP spec; the SDK validates protocol headers/versions; 401 through the HsmApiToken challenge before the handler on a bad credential |
 | `list_products(limit?)` | `SensorTreeMcpTools.ListProducts` | `{products: ProductDto[], totalFound}` — REST DTO verbatim, name-ordered |
-| `get_node(nodeId)` | `SensorTreeMcpTools.GetNode` | `NodeDto` verbatim (folders page 1 × 200, sensors capped 200 — REST `get_node` shape) |
+| `get_node(nodeId, foldersPage?)` | `SensorTreeMcpTools.GetNode` | `NodeDto` verbatim (folders paginated × 200, sensors capped 200 — REST `get_node` shape; `foldersPage` keeps folder ids beyond page 1 reachable) |
 | `find_sensors(search?, searchMode?, productId?, type?, limit?)` | `SensorTreeMcpTools.FindSensors` | `{sensors: McpSensorSummary[], totalFound}` — compact summaries ordered by path; `searchMode` = `contains`\|`regex` with the REST bounds (100 ms per-match, 2 s scan budget — exhaustion is a tool error naming the remedy) |
 | `get_sensor(sensorId)` | `SensorTreeMcpTools.GetSensor` | `SensorDto` verbatim — `lastValue` embedded |
 | `get_sensor_history(sensorId, from?, to?, maxPoints?)` | `SensorTreeMcpTools.GetSensorHistoryAsync` | `SensorHistoryDto` verbatim — newest-N oldest-first, `truncated`, `readUnavailable`; File cap 100 |
@@ -57,8 +57,10 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | File | Purpose |
 |---|---|
 | `src/server/HSMServer/Mcp/HsmMcp.cs` | Endpoint path + list-limit constants (`/mcp`, 20/200) |
+| `src/server/HSMServer/Mcp/HsmMcpServiceCollectionExtensions.cs` | `AddHsmMcpServer()` — server + tool registration in one testable place |
 | `src/server/HSMServer/Mcp/SensorTreeMcpTools.cs` | The five sensor-tree tools — rendering of `SensorTreeReadService` |
 | `src/server/HSMServer/Mcp/AlertsMcpTools.cs` | The four alert tools — direct over the thin providers, mirroring the REST controllers |
+| `src/server/HSMServer/Mcp/McpToolContext.cs` | The shared ambient-principal accessor behind `RequireAuthorization` |
 | `src/server/HSMServer/Mcp/McpToolResults.cs` | List envelopes + the compact `McpSensorSummary`; item DTOs are the REST ones |
 | `src/server/HSMServer/Middleware/McpSitePortOnlyMiddleware.cs` | Uniform 404 for `/mcp` off the SitePort, before authentication |
 | `src/server/HSMServer/Middleware/LegacyBearerGuardMiddleware.cs` | `IsTokenRoutePath`: `/api/v1` + `/mcp` — the bearer credential family |
@@ -100,11 +102,11 @@ No UI. Operators provision the same API tokens as for REST (`/api/v1/api-tokens`
 
 ## Notes
 
-- Wire casing is camelCase on both transports (MVC JSON options vs the SDK protocol serializer) — the REST DTOs serialize identically through MCP; covered by the shared-DTO design, not by a wire-level test (see tests.md).
+- Wire casing is camelCase on both transports: MVC JSON options vs the SDK's `McpJsonUtilities.DefaultOptions` (documented to enable `JsonSerializerDefaults.Web`); a registration test pins the camelCase rendering of the tool result records, so an SDK default change cannot silently diverge the surfaces.
 - Server identity: `Implementation { Name="HSMServer", Version=ServerConfig.Version }`; stateless sessions (default since the 2026-07-28 protocol revision — no affinity requirement).
 
 ## Known Issues / Limitations
 
 - v1 is read-only (write tools are phase 2 of AI-agent access); no MCP resources/prompts primitives.
-- `get_node` always answers folders page 1 (page size 200) — an agent needing deep folder walks uses the REST endpoint or narrows with `find_sensors`.
+- The endpoint-level wiring (MapMcp + RequireAuthorization against the management policy) is routing configuration without a dedicated test; the registration test covers the server, the nine tools and their schemas. A full wire-level smoke test (initialize → tools/list → tools/call against a booted server) is the follow-up if drift is ever suspected.
 - No E2E/Playwright coverage yet; the wire-level MCP handshake (protocol headers, JSON-RPC envelope) is the SDK's tested surface, ours starts at the tool classes.

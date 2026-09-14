@@ -69,28 +69,15 @@ namespace HSMServer.ServiceExtensions
 
             // The shared sensor-tree read implementation (#1391): one instance of
             // search/visibility/mapping behind both the REST controllers and the
-            // MCP tools. Statelessly wraps singletons — scoped so a future
-            // per-request state has a home without a lifetime change.
+            // MCP tools. Scoped to match the per-request consumers (controllers
+            // and tool classes) that inject it; stateless over singletons.
             services.AddScoped<SensorTreeReadService>();
 
-            // The MCP read-only adapter over the management API (#1391):
-            // Streamable HTTP served at /mcp (see Program.cs), the same
-            // HsmApiToken credential and ManagementPolicy as /api/v1, stateless
-            // sessions (no affinity needed — the tools are pure reads). The
-            // tools resolve the caller through the ambient HTTP context.
-            services.AddHttpContextAccessor();
-            services.AddMcpServer(options =>
-                {
-                    options.ServerInfo = new ModelContextProtocol.Protocol.Implementation
-                    {
-                        Name = "HSMServer",
-                        Title = "HSM monitoring server",
-                        Version = ServerConfig.Version,
-                    };
-                })
-                .WithHttpTransport()
-                .WithTools<SensorTreeMcpTools>()
-                .WithTools<AlertsMcpTools>();
+            // The MCP read-only adapter over the management API (#1391): server
+            // and tool wiring in one testable place (HsmMcpServiceCollectionExtensions);
+            // the endpoint mapping and its SitePort/bearer guards live with the
+            // pipeline configuration in this file and Program.cs.
+            services.AddHsmMcpServer();
 
             // Retention + abuse bounds (#1356, prerequisite of the step-4 management
             // endpoints): bounded cleanup of dead token rows/orphans/security events and

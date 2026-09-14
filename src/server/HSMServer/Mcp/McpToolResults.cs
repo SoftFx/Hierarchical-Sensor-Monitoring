@@ -13,7 +13,10 @@ namespace HSMServer.Mcp
     // item shape (the full DTO embeds the current value, too heavy for a list).
     //
     // Wire casing is camelCase on both transports: REST through MVC's JSON
-    // options, MCP through the SDK's protocol serializer.
+    // options, MCP through the SDK's McpJsonUtilities.DefaultOptions (documented
+    // to enable JsonSerializerDefaults.Web). The DTOs carry no naming policy of
+    // their own; HsmMcpServerRegistrationTests pins the camelCase rendering so
+    // an SDK default change cannot diverge the two surfaces silently.
 
     /// <summary>Result of the list_products tool.</summary>
     public sealed record McpProductsResult

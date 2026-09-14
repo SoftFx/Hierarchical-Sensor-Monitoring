@@ -11,6 +11,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using TestSensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
 using HSMServer.Mcp;
+using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Http;
 using Moq;
@@ -128,6 +129,48 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(["alpha"], result.Products.Select(p => p.Name));
             Assert.Equal(1, result.TotalFound);
+        }
+
+
+        [Fact]
+        public void GetNode_ReturnsDirectChildren_AndPagesFolders()
+        {
+            // >200 direct subfolders: page 1 caps at 200 (folder ids 201+ stay
+            // reachable ONLY through foldersPage — the same reachability rule
+            // that paginated the REST node endpoint, #1387 r3), page 2 serves
+            // the rest.
+            var folder = new Core.Model.ProductModel(EntitiesFactory.BuildProductEntity(name: "f") with { Id = Guid.NewGuid().ToString() });
+            _productA.AddSubProduct(folder);
+            SetupProduct(folder.Id, folder);
+
+            foreach (var index in Enumerable.Range(0, 205))
+                folder.AddSubProduct(new Core.Model.ProductModel(
+                    EntitiesFactory.BuildProductEntity(name: $"sub{index:D3}") with { Id = Guid.NewGuid().ToString() }));
+
+            var tools = CreateTools();
+
+            var firstPage = tools.GetNode(folder.Id);
+
+            Assert.Equal(200, firstPage.Folders.Count);
+            Assert.Equal(205, firstPage.TotalFolders);
+            Assert.Equal(2, firstPage.FoldersTotalPages);
+            Assert.Equal(1, firstPage.FoldersPage);
+
+            var secondPage = tools.GetNode(folder.Id, foldersPage: 2);
+
+            Assert.Equal(5, secondPage.Folders.Count);
+            Assert.Equal(2, secondPage.FoldersPage);
+            Assert.Equal(["sub200", "sub201", "sub202", "sub203", "sub204"], secondPage.Folders.Select(f => f.Name));
+        }
+
+
+        [Fact]
+        public void GetNode_UnknownId_IsToolError()
+        {
+            var error = Assert.Throws<ModelContextProtocol.McpException>(
+                () => CreateTools().GetNode(Guid.NewGuid()));
+
+            Assert.Equal(ManagementApiErrors.NotFoundMessage, error.Message);
         }
 
 

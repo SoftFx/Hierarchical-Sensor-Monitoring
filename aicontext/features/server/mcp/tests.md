@@ -6,9 +6,15 @@
 
 `SensorTreeMcpToolsTests` — the tool rendering of `SensorTreeReadService` (the service's own behavior is pinned by the REST controller suites — the shared regression net — so these tests pin only the tool contracts):
 
+`HsmMcpServerRegistrationTests` — the wiring (#1391 review): `AddHsmMcpServer` surfaces EXACTLY the nine spec tools (the SDK builds their schemas at registration — a bad tool signature throws), the server identity, and the camelCase rendering of the tool result records under the SDK's `McpJsonUtilities.DefaultOptions` (Web defaults) — the parity pin that keeps MCP and REST JSON keys identical.
+
+`SensorTreeMcpToolsTests` and `AlertsMcpToolsTests` — the tool renderings:
+
 - `NormalizeLimit_FallsBackAndCaps` — `limit` 0/negative → default 20; >200 → 200 (the theory also pins the in-range pass-through).
 - `ListProducts_ReturnsFirstLimit_WithTotalFound` — first `limit` items travel; `totalFound` carries the full count.
 - `ListProducts_InvisibleProduct_AbsentFromBothCounters` — owner sight holds on the tool path.
+- `GetNode_ReturnsDirectChildren_AndPagesFolders` — >200 direct subfolders: page 1 caps at 200 with totals, `foldersPage: 2` serves the rest (folder ids stay reachable).
+- `GetNode_UnknownId_IsToolError` — the shared area 404 constant.
 - `FindSensors_CompactShape_WithTotalFound` — the summary carries id/path/type/status; values are NOT embedded.
 - `FindSensors_InvisibleSubtree_SilentlyAbsent` — per-root-product sight.
 - `FindSensors_UnknownProduct_IsToolError` — the uniform not-found text.
@@ -41,4 +47,4 @@ The three sensor-tree controller suites (`SensorsApiControllerTests`, `NodesApiC
 ## Not covered (deliberate)
 
 - The MCP wire layer (JSON-RPC envelope, protocol-version validation, stateless session handling) is the SDK's tested surface, not ours; a wire-level smoke test would re-test the transport. If drift is ever suspected, an E2E test against a booted server with a real `initialize`/`tools/list`/`tools/call` exchange is the follow-up.
-- camelCase wire parity between MVC and the SDK serializer is covered by design (shared DTOs), not by an assertion; flagged as residual risk in feature.md Notes.
+- The endpoint mapping's `RequireAuthorization` (routing configuration in Program.cs) has no dedicated test — the registration test covers the server, tools and schemas; the guard middlewares have their own pins in `ApiTokenRouteGuardsTests`.

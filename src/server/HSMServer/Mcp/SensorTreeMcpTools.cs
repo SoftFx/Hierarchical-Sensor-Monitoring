@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Http;
 using ModelContextProtocol;
@@ -51,11 +52,12 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "get_node", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-        [Description("Gets one tree node (a root product or a nested folder) by id: metadata plus its DIRECT children. The folders list is capped at 200 with totalFolders carrying the uncapped count; the sensors list is capped at 200 with totalSensors — use find_sensors with productId for the full list. Unknown and invisible ids answer the same error.")]
+        [Description("Gets one tree node (a root product or a nested folder) by id: metadata plus its DIRECT children. The folders list is paginated (foldersPage, page size 200) so folder ids beyond the first page stay reachable; the sensors list is capped at 200 with totalSensors — use find_sensors with productId for the full list. Unknown and invisible ids answer the same error.")]
         public NodeDto GetNode(
-            [Description("Node id (a root product or a nested folder).")] Guid nodeId)
+            [Description("Node id (a root product or a nested folder).")] Guid nodeId,
+            [Description("1-based page of the folders list; clamped into [1, totalPages].")] int foldersPage = 1)
         {
-            var result = _reader.GetNode(nodeId, User, foldersPage: 1,
+            var result = _reader.GetNode(nodeId, User, foldersPage,
                 foldersPageSize: SensorTreeDtoMapper.MaxChildrenPerNode);
 
             return Unwrap(result);
@@ -110,19 +112,18 @@ namespace HSMServer.Mcp
             Unwrap(await _reader.GetSensorHistoryAsync(sensorId, from, to, maxPoints, User, cancellationToken));
 
 
-        private ClaimsPrincipal User =>
-            // The endpoint is behind RequireAuthorization(ManagementPolicy), so a
-            // reaching call always has an HTTP context with an authenticated
-            // principal; the throw is a defensive backstop, not a reachable path.
-            _http.HttpContext?.User
-            ?? throw new McpException("No authenticated HTTP context is available for this tool call.");
+        // The shared ambient-principal accessor (see McpToolContext); a property
+        // so the tool bodies read like their REST twins' `User`.
+        private ClaimsPrincipal User => McpToolContext.UserOf(_http);
 
 
         // The shared read service's failure becomes a tool error (isError=true
         // with the message) — the MCP rendering of what REST answers with the
         // uniform JSON error contract. Validation messages are flattened into
         // one text (the field-keyed JSON details shape has no MCP equivalent an
-        // agent consumes better).
+        // agent consumes better). The 404 text is the area's shared constant:
+        // unknown and invisible must answer the SAME string, and a private copy
+        // could drift from it silently.
         private static T Unwrap<T>(SensorTreeReadResult<T> result) =>
             result.Failure is { } failure
                 ? throw new McpException(failure.Outcome switch
@@ -131,7 +132,7 @@ namespace HSMServer.Mcp
                         ? string.Join(" ", errors.Select(pair => $"{pair.Key}: {string.Join("; ", pair.Value)}"))
                         : "The request is invalid.",
                     SensorTreeReadOutcome.Forbidden or SensorTreeReadOutcome.Unavailable => failure.Message,
-                    _ => "The requested resource was not found.",
+                    _ => ManagementApiErrors.NotFoundMessage,
                 })
                 : result.Value;
     }
