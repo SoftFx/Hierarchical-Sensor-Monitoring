@@ -270,7 +270,9 @@ namespace HSMServer.Core.Tests.Controllers
             var result = Assert.IsType<ObjectResult>(CreateController().GetSensors(search: "x", searchMode: "glob"));
 
             Assert.Equal(400, result.StatusCode);
-            Assert.Contains("search", DetailsOf(ErrorOf(result)).Keys);
+            // The detail key names the FAILING parameter, so the client corrects
+            // searchMode, not the search text (#1392 review).
+            Assert.Contains("searchMode", DetailsOf(ErrorOf(result)).Keys);
         }
 
 
@@ -307,7 +309,7 @@ namespace HSMServer.Core.Tests.Controllers
             var result = Assert.IsType<ObjectResult>(CreateController().GetSensors(searchMode: "glob"));
 
             Assert.Equal(400, result.StatusCode);
-            Assert.Contains("search", DetailsOf(ErrorOf(result)).Keys);
+            Assert.Contains("searchMode", DetailsOf(ErrorOf(result)).Keys);
         }
 
 

@@ -108,8 +108,17 @@ namespace HSMServer.Mcp
             [Description("Window start, UTC ISO 8601; default: to − 24 hours.")] DateTime? from = null,
             [Description("Window end, UTC ISO 8601; default: now.")] DateTime? to = null,
             [Description("Point limit, 1..10000 (default 200 — the result feeds the model's context; 100 for File sensors).")] int maxPoints = HsmMcp.DefaultMaxPoints,
-            CancellationToken cancellationToken = default) =>
-            Unwrap(await _reader.GetSensorHistoryAsync(sensorId, from, to, maxPoints, User, cancellationToken));
+            CancellationToken cancellationToken = default)
+        {
+            // Bind the MCP default BEFORE the shared service applies its REST
+            // fallback: an explicit non-positive maxPoints is a common agent
+            // rendering of "no preference" and must not surface the REST twin's
+            // 1000 into a model's context window (#1392 review) — the same
+            // normalization NormalizeLimit applies to the list limits.
+            maxPoints = maxPoints <= 0 ? HsmMcp.DefaultMaxPoints : maxPoints;
+
+            return Unwrap(await _reader.GetSensorHistoryAsync(sensorId, from, to, maxPoints, User, cancellationToken));
+        }
 
 
         // The shared ambient-principal accessor (see McpToolContext); a property

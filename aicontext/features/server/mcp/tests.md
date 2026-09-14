@@ -18,11 +18,12 @@
 - `FindSensors_CompactShape_WithTotalFound` — the summary carries id/path/type/status; values are NOT embedded.
 - `FindSensors_InvisibleSubtree_SilentlyAbsent` — per-root-product sight.
 - `FindSensors_UnknownProduct_IsToolError` — the uniform not-found text.
-- `FindSensors_InvalidSearchMode_FlattensFieldErrors` — field-keyed validation details flatten into the tool error text with keys preserved.
+- `FindSensors_InvalidSearchMode_FlattensFieldErrors` — field-keyed validation details flatten into the tool error text with keys preserved; the key names the FAILING parameter (`searchMode:`, not `search:`), so the agent corrects the right argument (#1392 review; the matcher keys the mode error under `searchMode` on both transports).
 - `GetSensor_EmbedsLastValue` — the only tool embedding the current value.
 - `GetSensor_UnknownId_IsToolError`.
 - `GetSensorHistory_NewestPointsOldestFirst_WithTruncatedFlag` — the #1389/#1390 direction contract through the tool (page generator's count bound honored, surplus-oldest dropped, reversed, `truncated` set).
 - `GetSensorHistory_OmittedMaxPoints_DefaultsToTheMcpDefault` — an omitted `maxPoints` asks for the MCP default 200 (context-window bound), not the REST twin's 1000.
+- `GetSensorHistory_NonPositiveMaxPoints_IsTheMcpDefault_NotTheRestFallback` — an explicit zero/negative `maxPoints` (a common agent rendering of "no preference") also normalizes to 200 BEFORE the shared service's REST fallback could turn it into 1000 (#1392 review).
 - `GetSensorHistory_FileSensorBusy_ReportsReadUnavailable` — busy file lock → `readUnavailable=true`, no points.
 
 `AlertsMcpToolsTests` — the alert tools over the thin providers:
@@ -42,6 +43,8 @@
 The tools take `IHttpContextAccessor` (ambient principal — behind `RequireAuthorization` it is always present); the tests fake it with `HttpContextAccessor { HttpContext = DefaultHttpContext { User = … } }`, the same principal shape the controller suites build.
 
 `ApiTokenRouteGuardsTests` (`src/tests/HSMServer.Core.Tests/Authentication/ApiTokens/`) pins the two MCP guards: the bearer pass-through is case-insensitive (`/mcp` and `/MCP` — endpoint routing matches segments case-insensitively, so a mixed-case POST must not read as a misplaced token), the off-SitePort uniform 404 fires before authentication, and the fail-closed policy check rejects a matched `/mcp` endpoint without `ManagementPolicy` or with `[AllowAnonymous]` while admitting the policy-carrying endpoint.
+
+`ApiJsonErrorContractTests` (`src/tests/HSMServer.Core.Tests/Middleware/`) additionally pins that an exception escaping the handler on `/mcp` answers the uniform JSON 500 with the trace id — never the Razor error page (#1392 review).
 
 ## Regression — REST suites are the shared net
 

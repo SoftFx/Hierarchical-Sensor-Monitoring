@@ -213,7 +213,8 @@ namespace HSMServer.Core.Tests.Mcp
             var error = Assert.Throws<ModelContextProtocol.McpException>(
                 () => CreateTools().FindSensors(productId: Guid.NewGuid()));
 
-            Assert.Equal("The requested resource was not found.", error.Message);
+            // The shared area constant, not a private copy that could drift.
+            Assert.Equal(ManagementApiErrors.NotFoundMessage, error.Message);
         }
 
 
@@ -224,8 +225,9 @@ namespace HSMServer.Core.Tests.Mcp
                 () => CreateTools().FindSensors(search: "x", searchMode: "glob"));
 
             // The field-keyed validation details flatten into the tool error
-            // text with their keys preserved.
-            Assert.Contains("search:", error.Message);
+            // text with their keys preserved — the key names the FAILING tool
+            // parameter, so the agent corrects searchMode, not search.
+            Assert.Contains("searchMode:", error.Message);
             Assert.Contains("glob", error.Message);
         }
 
@@ -296,6 +298,29 @@ namespace HSMServer.Core.Tests.Mcp
                 .Returns((Guid _, DateTime _, DateTime _, int _, RequestOptions _) => PagesOf([]));
 
             await CreateTools().GetSensorHistoryAsync(sensor.Id, from);
+
+            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, It.IsAny<DateTime>(),
+                HsmMcp.DefaultMaxPoints + 1, It.IsAny<RequestOptions>()), Times.Once);
+        }
+
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(-3)]
+        public async Task GetSensorHistory_NonPositiveMaxPoints_IsTheMcpDefault_NotTheRestFallback(int passed)
+        {
+            // An explicit zero/negative maxPoints is a common agent rendering of
+            // "no preference": it must normalize to the MCP default (200) BEFORE
+            // the shared service's REST fallback can turn it into 1000 — the
+            // same rule NormalizeLimit applies to limits (#1392 review).
+            var sensor = AddSensor(_productA, "cpu", "load");
+            var from = new DateTime(2026, 9, 14, 0, 0, 0, DateTimeKind.Utc);
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, from, It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int _, RequestOptions _) => PagesOf([]));
+
+            await CreateTools().GetSensorHistoryAsync(sensor.Id, from, maxPoints: passed);
 
             _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, It.IsAny<DateTime>(),
                 HsmMcp.DefaultMaxPoints + 1, It.IsAny<RequestOptions>()), Times.Once);

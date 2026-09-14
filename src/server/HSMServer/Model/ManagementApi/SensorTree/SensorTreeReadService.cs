@@ -182,12 +182,16 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                 // A capacity abort is NOT a validation failure (#1387 review,
                 // round 4): a 400 tells an agent its request is malformed, and
                 // an exhausted evaluation budget is a server-side bound. 503
-                // with the mode-appropriate remedy in the message.
+                // with the mode-appropriate remedy in the message. The remedy
+                // is parameter-NEUTRAL: the subtree filter is 'product' on REST
+                // and 'productId' on MCP, and a remedy naming one surface's
+                // parameter sends the other's client after an unknown argument
+                // (#1392 review).
                 var message = string.IsNullOrEmpty(search)
-                    ? "The listing exceeded the evaluation budget; narrow it with 'product'."
+                    ? "The listing exceeded the evaluation budget; narrow it to a single product."
                     : regexMode
-                        ? $"The search pattern is too complex to evaluate (per-match timeout {SensorSearchMatcher.RegexTimeoutMs} ms, evaluation budget {SearchBudgetMs} ms); simplify it or narrow the listing with 'product'."
-                        : "The search exceeded the evaluation budget; narrow it with 'product' or a more specific text.";
+                        ? $"The search pattern is too complex to evaluate (per-match timeout {SensorSearchMatcher.RegexTimeoutMs} ms, evaluation budget {SearchBudgetMs} ms); simplify it or narrow the listing to a single product."
+                        : "The search exceeded the evaluation budget; narrow it to a single product or a more specific text.";
 
                 return SensorTreeReadResult<ApiPageDto<SensorDto>>.Fail(SensorTreeReadOutcome.Unavailable, message: message);
             }

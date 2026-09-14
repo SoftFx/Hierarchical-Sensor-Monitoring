@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using HSMServer.Mcp;
 using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Middleware
@@ -8,9 +9,10 @@ namespace HSMServer.Middleware
     // re-executes /Error, which renders Razor — a machine client would get an HTML
     // page for a 500. This middleware sits between the global handler and
     // LoggingExceptionMiddleware (the inner one logs first, then rethrows), catches
-    // everything left on an /api path and answers with the area's uniform JSON error
-    // contract. Non-/api paths rethrow untouched, so the Razor error page keeps serving
-    // the browser UI; a started response cannot be rewritten and rethrows too.
+    // everything left on an /api or /mcp path and answers with the area's uniform
+    // JSON error contract. Every other path rethrows untouched, so the Razor error
+    // page keeps serving the browser UI; a started response cannot be rewritten and
+    // rethrows too.
     public sealed class ApiExceptionJsonMiddleware(RequestDelegate next)
     {
         public async Task InvokeAsync(HttpContext context)
@@ -45,8 +47,12 @@ namespace HSMServer.Middleware
         }
 
         // Covers /api/v1 (management) and the sibling unauthenticated API families
-        // (agent self-update, sensor data) — none of them may answer HTML.
+        // (agent self-update, sensor data), plus the MCP endpoint — none of them
+        // may answer HTML. On /mcp the JSON contract is not a JSON-RPC error body,
+        // but it is the machine-readable answer where the alternative is the Razor
+        // page for whatever escaped the SDK handler (#1392 review).
         private static bool IsApiPath(PathString path) =>
-            path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase);
+            path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments(HsmMcp.EndpointPath, StringComparison.OrdinalIgnoreCase);
     }
 }

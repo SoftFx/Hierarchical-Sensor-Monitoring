@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
+using HSMServer.Mcp;
 using HSMServer.Middleware;
 using HSMServer.Model.ManagementApi;
 using HSMServer.ServerConfiguration;
@@ -259,6 +260,29 @@ namespace HSMServer.Core.Tests.Middleware
             // report must locate the server-side log record.
             Assert.Equal(context.TraceIdentifier, root.GetProperty("details").GetProperty("traceId").GetString());
             // The exception itself never reaches the wire.
+            Assert.DoesNotContain("boom", root.GetRawText());
+        }
+
+        [Fact]
+        public async Task ExceptionMiddleware_McpPath_IsUniformJson500WithTraceId()
+        {
+            // Whatever escapes the SDK's JSON-RPC handler on /mcp must reach a
+            // machine client as JSON, never the Razor /Error page — /mcp is the
+            // newest machine-only route, same HTML-off rule as /api (#1392
+            // review). The body is the JSON contract, not a JSON-RPC error
+            // envelope; that is still the parseable answer.
+            var context = BuildContext(HsmMcp.EndpointPath);
+
+            static Task Throw(HttpContext _) => throw new InvalidOperationException("boom");
+
+            await new ApiExceptionJsonMiddleware(Throw).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+
+            var root = (await BodyAsync(context)).RootElement;
+
+            Assert.Equal(ManagementApiErrors.InternalErrorCode, root.GetProperty("error").GetString());
+            Assert.Equal(context.TraceIdentifier, root.GetProperty("details").GetProperty("traceId").GetString());
             Assert.DoesNotContain("boom", root.GetRawText());
         }
 
