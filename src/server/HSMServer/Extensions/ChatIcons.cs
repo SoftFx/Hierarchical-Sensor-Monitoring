@@ -71,17 +71,17 @@ namespace HSMServer.Extensions
         // Builds the value for the bootstrap-select `data-content` attribute on a chat <option>:
         // the multi-channel brand icons followed by the chat name.
         //
-        // Razor HtmlEncodes any string it emits into an attribute, so the icon markup (e.g.
-        // "<i class='fab fa-telegram'></i>") is round-tripped through encode → browser attribute
-        // decode and lands in the DOM as raw markup — exactly what bootstrap-select inserts via
-        // `innerHTML` (bootstrap-select.js:748).
+        // This method returns IHtmlContent (HtmlString), so Razor writes the value into the
+        // attribute RAW — no HtmlEncoding pass, no encode → attribute-decode round trip. (An
+        // ordinary string WOULD be round-tripped that way and still land in the DOM as markup —
+        // the reason we cannot lean on Razor encoding for safety.) What we return here is
+        // exactly what bootstrap-select later inserts via `innerHTML` (bootstrap-select.js:748).
         //
-        // chat.Name is user-controlled. The same encode → attribute-decode round trip that
-        // restores the icon markup would also restore any "<script>" / "<img onerror=...>" in the
-        // name, and innerHTML would then execute it. To prevent that we return an IHtmlContent
-        // (so Razor does not re-encode) and double-encode the name ourselves: attribute decode
-        // undoes one layer, the innerHTML HTML-entity decode undoes the second, leaving "&lt;" /
-        // "&gt;" entities in the parsed markup that the browser renders as inert text.
+        // chat.Name is user-controlled. Because the value reaches that innerHTML call raw, any
+        // "<script>" / "<img onerror=...>" in the name would execute. To prevent that we
+        // double-encode the name ourselves: attribute decode undoes one layer, the innerHTML
+        // HTML-entity decode undoes the second, leaving "&lt;" / "&gt;" entities in the parsed
+        // markup that the browser renders as inert text.
         public static IHtmlContent ChatBrandIconsAndName(this Chat chat)
         {
             var icons = chat.ChatBrandIcons() ?? string.Empty;
