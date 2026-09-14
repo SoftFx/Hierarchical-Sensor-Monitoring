@@ -1240,17 +1240,16 @@ namespace HSMServer.Core.Cache
             return GetSensorValuesPageInternal(sensor, from, to, count, options);
         }
 
+        public bool IsFileHistoryReadInProgress(Guid sensorId) => _fileHistoryLocks[sensorId];
+
         private async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPageInternal(BaseSensorModel sensor, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
             bool IsNotTimout(BaseValue value) => !value.IsTimeout;
 
-            if (sensor is FileSensorModel && _fileHistoryLocks[sensor.Id])
+            if (sensor is FileSensorModel && !TryAcquireFileHistoryLock(sensor.Id))
                 yield return new List<BaseValue>();
             else
             {
-                if (sensor is FileSensorModel)
-                    _fileHistoryLocks[sensor.Id] = true;
-
                 try
                 {
                     var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
@@ -1290,8 +1289,8 @@ namespace HSMServer.Core.Cache
                 finally
                 {
                     // Every exit path must release the per-sensor file-history lock:
-                    // the count-reached `yield break` above used to SKIP this line
-                    // (it was plain trailing code), latching the lock forever —
+                    // the count-reached `yield break` above used to SKIP the release
+                    // when it was plain trailing code, latching the lock forever —
                     // every later history read of that sensor answered an empty
                     // page until restart (#1386 review, pass 3). try/finally with
                     // yields inside is legal in an async iterator.
@@ -1301,37 +1300,20 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        // Atomic acquire of the per-sensor file-history lock: the previous
+        // read-then-set could interleave two readers through the same gap (both
+        // read false, both set true, both streamed — the "crutch" existed to
+        // prevent exactly that, so it must actually prevent it, #1387 review r3).
+        private bool TryAcquireFileHistoryLock(Guid sensorId) =>
+            _fileHistoryLocks.TryAdd(sensorId, true) ||
+            _fileHistoryLocks.TryUpdate(sensorId, true, false);
 
 
-        private async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPageInternalOld(BaseSensorModel sensor, DateTime from, DateTime to, int count, RequestOptions options = default)
-        {
-            bool IsNotTimout(BaseValue value) => !value.IsTimeout;
 
-            if (sensor is FileSensorModel && _fileHistoryLocks[sensor.Id])
-                yield return new List<BaseValue>();
-            else
-            {
-                if (sensor is FileSensorModel)
-                    _fileHistoryLocks[sensor.Id] = true;
-
-                var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
-
-                if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) &&
-                    (includeTtl || IsNotTimout(latest)))
-                    from = latest.Time;
-
-                await foreach (var page in _database.GetSensorValuesPage(sensor.Id, from, to, count))
-                {
-                    var convertedValues = sensor.Convert(page);
-
-                    yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
-                }
-
-
-                if (sensor is FileSensorModel)
-                    _fileHistoryLocks[sensor.Id] = false;
-            }
-        }
+        // GetSensorValuesPageInternalOld was deleted (#1387 review, round 3):
+        // unreferenced dead code carrying the ORIGINAL latch bug (trailing lock
+        // release that the count-reached exit skips) — a copy-paste source for
+        // reintroducing it next door.
 
         public SensorHistoryInfo GetSensorHistoryInfo(Guid sensorId)
         {

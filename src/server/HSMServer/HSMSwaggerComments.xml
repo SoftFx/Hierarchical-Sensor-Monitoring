@@ -139,13 +139,18 @@
             area's anti-enumeration rule).
             </summary>
         </member>
-        <member name="M:HSMServer.Controllers.NodesApiController.GetNode(System.Guid)">
+        <member name="M:HSMServer.Controllers.NodesApiController.GetNode(System.Guid,System.Int32,System.Int32)">
             <summary>
             Get a node (product or folder) by id: metadata plus its DIRECT children
-            (folders and sensors of the node itself, no recursion). For the sensors
-            of the whole subtree use the sensor search with product = this id.
+            (no recursion). The folders list is paginated (foldersPage/foldersPageSize,
+            name-ordered); the sensors list is capped at 200 with totalSensors
+            carrying the uncapped count — the paginated sensor search with
+            product = this id serves the full sensor list. Folder ids beyond the
+            first page are reachable ONLY here: walk the pages.
             </summary>
             <param name="id">Node id (a root product or a nested folder).</param>
+            <param name="foldersPage">1-based page of the folders list; clamped into [1, totalPages].</param>
+            <param name="foldersPageSize">Folders page size, 1..200 (default 200 — the single-request ceiling).</param>
         </member>
         <member name="M:HSMServer.Controllers.ProductController.UpdateSensorGroups(HSMServer.Model.ViewModel.SensorGroupsRequest)">
             <summary>Update which sensor groups agents under this product should collect (#1198).</summary>
@@ -214,11 +219,13 @@
             [from, to], oldest first, no aggregation. Timeout markers (OffTime
             points where the sensor was silent) are included. When the window holds
             more values than requested, the oldest excess is dropped and
-            <c>truncated</c> is set — narrow the window for full resolution. One
-            request streams at most 100001 values: a denser window sets
-            <c>scanCapReached</c> and the points cover the OLDEST portion of the
-            window, not its newest end — narrow the window before trusting the
-            data as current.
+            <c>truncated</c> is set — narrow the window for full resolution. A
+            window denser than the scan cap (50001 values; maxPoints for File
+            sensors) sets <c>scanCapReached</c> and the points cover the OLDEST
+            portion of the window, not its newest end — narrow the window before
+            trusting the data as current. A File sensor whose history is being
+            read by another request answers with <c>readUnavailable</c>=true and
+            no points — retry shortly.
             </summary>
             <param name="id">Sensor id.</param>
             <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
@@ -802,12 +809,20 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Folders">
             <summary>
-            Direct child folders, ordered by name, capped at the area's list
-            ceiling (200); <c>totalFolders</c> carries the uncapped count.
+            Direct child folders, ordered by name, paginated (the only addressable
+            surface for subfolder ids — walk the pages for a node with many of
+            them; default page size is the 200 ceiling, so a single request covers
+            every node below it).
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.TotalFolders">
-            <summary>Total number of direct child folders (the list above may be capped).</summary>
+            <summary>Total number of direct child folders.</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.FoldersPage">
+            <summary>1-based page of the folders list above (clamped into [1, totalPages]).</summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.FoldersTotalPages">
+            <summary>Total page count of the folders list (0 when the node has no folders).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Sensors">
             <summary>
@@ -899,7 +914,11 @@
             <summary>Sensor creation time (UTC).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.LastUpdate">
-            <summary>Time of the newest value (UTC); null when the sensor has no data yet.</summary>
+            <summary>
+            Server RECEIVE time of the newest value (UTC) — not the collector's
+            measurement time (the value's own <c>time</c>); the two can differ for
+            aggregated or re-sent values. Null when the sensor has no data yet.
+            </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Product">
             <summary>Reference to the sensor's root product.</summary>
@@ -947,6 +966,15 @@
             and the points are the newest ones OF THE SCANNED PREFIX — i.e. the
             OLDEST portion of the window, not its newest end. Narrow the window
             before treating the data as current.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.ReadUnavailable">
+            <summary>
+            True only for File sensors whose history another request is currently
+            reading (their reads are serialized per sensor): the server could not
+            read this sensor's values — retry shortly. Never true for other sensor
+            types; an empty points list without this flag means the window holds
+            no values.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorValueDto">

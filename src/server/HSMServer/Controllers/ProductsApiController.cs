@@ -59,10 +59,12 @@ namespace HSMServer.Controllers
             page = Math.Max(page, 1);
             pageSize = Math.Min(pageSize <= 0 ? DefaultPageSize : pageSize, MaxPageSize);
 
-            // _tree is a flat index of every product (roots and nested folders);
-            // roots are the ones without a parent. Visibility follows the owner's
-            // sight at the product boundary — the same predicate every sensor
-            // listing resolves through.
+            // GetProducts serves the ROOT-PRODUCT NAME INDEX (_productsByName —
+            // roots only, maintained on add/rename/remove); the IsRoot filter is
+            // a defensive no-op, kept in case the accessor ever moves to a
+            // broader index. Visibility follows the owner's sight at the product
+            // boundary — the same predicate every sensor listing resolves
+            // through.
             var all = _cache.GetProducts()
                 .Where(product => product.IsRoot && _authorization.IsVisible(User, ApiTokenResource.Product(product.Id)))
                 .OrderBy(product => product.DisplayName, StringComparer.OrdinalIgnoreCase)

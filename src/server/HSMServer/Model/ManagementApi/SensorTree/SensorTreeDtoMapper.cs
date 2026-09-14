@@ -24,7 +24,12 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         };
 
 
-        public static NodeDto ToNodeDto(ProductModel node) => new()
+        // The folders list is the only addressable surface for direct subfolders
+        // (the sensor search pages sensors, not folders), so the caller passes a
+        // PRE-CLAMPED page (see the controller); the sensors list stays capped at
+        // the ceiling with its total pointing at the paginated sensor search.
+        public static NodeDto ToNodeDto(ProductModel node, int foldersPage = 1,
+            int foldersPageSize = MaxChildrenPerNode) => new()
         {
             Id = node.Id,
             Name = node.DisplayName,
@@ -36,10 +41,15 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             Folders = node.SubProducts.Values
                 .OrderBy(folder => folder.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(folder => folder.Id)
-                .Take(MaxChildrenPerNode)
+                .Skip((foldersPage - 1) * foldersPageSize)
+                .Take(foldersPageSize)
                 .Select(ToNodeRef)
                 .ToList(),
             TotalFolders = node.SubProducts.Count,
+            FoldersPage = foldersPage,
+            FoldersTotalPages = node.SubProducts.Count == 0
+                ? 0
+                : (int)Math.Ceiling(node.SubProducts.Count / (double)foldersPageSize),
             Sensors = node.Sensors.Values
                 .OrderBy(sensor => sensor.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(sensor => sensor.Id)

@@ -71,13 +71,21 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         public NodeRefDto Parent { get; init; }
 
         /// <summary>
-        /// Direct child folders, ordered by name, capped at the area's list
-        /// ceiling (200); <c>totalFolders</c> carries the uncapped count.
+        /// Direct child folders, ordered by name, paginated (the only addressable
+        /// surface for subfolder ids — walk the pages for a node with many of
+        /// them; default page size is the 200 ceiling, so a single request covers
+        /// every node below it).
         /// </summary>
         public List<NodeRefDto> Folders { get; init; } = [];
 
-        /// <summary>Total number of direct child folders (the list above may be capped).</summary>
+        /// <summary>Total number of direct child folders.</summary>
         public int TotalFolders { get; init; }
+
+        /// <summary>1-based page of the folders list above (clamped into [1, totalPages]).</summary>
+        public int FoldersPage { get; init; }
+
+        /// <summary>Total page count of the folders list (0 when the node has no folders).</summary>
+        public int FoldersTotalPages { get; init; }
 
         /// <summary>
         /// Direct child sensors, ordered by name, capped at the area's list

@@ -139,6 +139,7 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(["sensor-a", "sensor-b"], node.Sensors.Select(s => s.Name));
             Assert.Equal(["Double", "Double"], node.Sensors.Select(s => s.Type));
             Assert.Equal((1, 2), (node.TotalFolders, node.TotalSensors));
+            Assert.Equal((1, 1), (node.FoldersPage, node.FoldersTotalPages));
         }
 
 
@@ -160,6 +161,38 @@ namespace HSMServer.Core.Tests.Controllers
             // Ordered by name: the cap keeps the FIRST 200 in name order.
             Assert.Equal("sensor-000", node.Sensors.First().Name);
             Assert.Equal($"sensor-{SensorTreeDtoMapper.MaxChildrenPerNode - 1:000}", node.Sensors.Last().Name);
+        }
+
+
+        [Fact]
+        public void GetNode_FoldersPaginate_BeyondTheCeiling()
+        {
+            // Direct subfolders have no other addressable surface (the sensor
+            // search pages sensors, not folders), so the folders list paginates —
+            // folders 201..N stay reachable (#1387 review, round 3). The fixture
+            // already links one folder into _root, hence the +1.
+            var total = SensorTreeDtoMapper.MaxChildrenPerNode + 5 + 1;
+
+            for (var i = 0; i < total - 1; i++)
+                _root.AddSubProduct(new Core.Model.ProductModel(
+                    EntitiesFactory.BuildProductEntity(name: $"folder-{i:000}") with { Id = Guid.NewGuid().ToString() }));
+
+            var firstPage = Assert.IsType<OkObjectResult>(CreateController().GetNode(_root.Id)).Value as NodeDto;
+
+            Assert.Equal(SensorTreeDtoMapper.MaxChildrenPerNode, firstPage.Folders.Count);
+            Assert.Equal(total, firstPage.TotalFolders);
+            Assert.Equal((1, 2), (firstPage.FoldersPage, firstPage.FoldersTotalPages));
+            // Name order: the fixture's own "folder" sorts before "folder-000".
+            Assert.Equal("folder", firstPage.Folders.First().Name);
+
+            var secondPage = Assert.IsType<OkObjectResult>(CreateController().GetNode(_root.Id, foldersPage: 2)).Value as NodeDto;
+
+            Assert.Equal(total - SensorTreeDtoMapper.MaxChildrenPerNode, secondPage.Folders.Count);
+            Assert.Equal((2, 2), (secondPage.FoldersPage, secondPage.FoldersTotalPages));
+
+            // Page beyond the end clamps to the last page (area convention).
+            var beyondEnd = Assert.IsType<OkObjectResult>(CreateController().GetNode(_root.Id, foldersPage: 99)).Value as NodeDto;
+            Assert.Equal((2, total - SensorTreeDtoMapper.MaxChildrenPerNode), (beyondEnd.FoldersPage, beyondEnd.Folders.Count));
         }
 
 

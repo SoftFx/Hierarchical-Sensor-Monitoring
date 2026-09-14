@@ -97,6 +97,13 @@ namespace HSMServer.Core.Cache
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
         IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions requestOptions = default);
 
+        // True while another caller holds the per-sensor file-history lock for
+        // this sensor: a file-sensor history read issued now answers an empty
+        // stream. Consumers that must distinguish "busy" from "no values"
+        // (the management API history endpoint) consult this before and after
+        // their read (#1387).
+        bool IsFileHistoryReadInProgress(Guid sensorId);
+
         SensorHistoryInfo GetSensorHistoryInfo(Guid sensorId);
         NodeHistoryInfo GetNodeHistoryInfo(Guid nodeId);
 

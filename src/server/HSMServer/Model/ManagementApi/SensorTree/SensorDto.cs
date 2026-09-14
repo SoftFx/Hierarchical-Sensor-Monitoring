@@ -66,7 +66,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// <summary>Sensor creation time (UTC).</summary>
         public DateTime CreationDate { get; init; }
 
-        /// <summary>Time of the newest value (UTC); null when the sensor has no data yet.</summary>
+        /// <summary>
+        /// Server RECEIVE time of the newest value (UTC) — not the collector's
+        /// measurement time (the value's own <c>time</c>); the two can differ for
+        /// aggregated or re-sent values. Null when the sensor has no data yet.
+        /// </summary>
         public DateTime? LastUpdate { get; init; }
 
         /// <summary>Reference to the sensor's root product.</summary>

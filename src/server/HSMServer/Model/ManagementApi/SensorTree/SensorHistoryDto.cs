@@ -38,5 +38,14 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// before treating the data as current.
         /// </summary>
         public bool ScanCapReached { get; init; }
+
+        /// <summary>
+        /// True only for File sensors whose history another request is currently
+        /// reading (their reads are serialized per sensor): the server could not
+        /// read this sensor's values — retry shortly. Never true for other sensor
+        /// types; an empty points list without this flag means the window holds
+        /// no values.
+        /// </summary>
+        public bool ReadUnavailable { get; init; }
     }
 }

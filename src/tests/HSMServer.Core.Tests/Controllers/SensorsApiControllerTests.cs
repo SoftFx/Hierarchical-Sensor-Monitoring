@@ -307,6 +307,12 @@ namespace HSMServer.Core.Tests.Controllers
             var details = DetailsOf(ErrorOf(invalid));
             Assert.Contains("type", details.Keys);
             Assert.Contains("IntegerBar", details["type"].Single());
+
+            // Numeric input is NOT a name: Enum.TryParse would happily resolve
+            // "5" to IntegerBar, quietly diverging from the documented
+            // name-list contract (#1387 review, round 3).
+            var numeric = Assert.IsType<ObjectResult>(CreateController().GetSensors(type: "5"));
+            Assert.Equal(400, numeric.StatusCode);
         }
 
 
@@ -557,6 +563,72 @@ namespace HSMServer.Core.Tests.Controllers
             // the IncludeTtl flag — OffTime markers are part of the timeline (#1386).
             _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, to, SensorsApiController.MaxScannedValues + 1,
                 It.Is<RequestOptions>(o => o.HasFlag(RequestOptions.IncludeTtl))), Times.Once);
+        }
+
+
+        [Fact]
+        public async Task GetSensorHistory_FileSensor_ScanCapEqualsTheResponseBound()
+        {
+            // File payloads are the expensive part of every scanned row: the
+            // response bound IS their scan bound (#1387 review, round 3).
+            var sensor = AddSensor(_productA, "logs", "app logs", SensorType.File);
+
+            var from = new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc);
+            var values = Enumerable.Range(0, 10)
+                .Select(i => new FileValue { Value = [1, 2, 3], Name = $"log-{i}", Extension = ".txt", OriginalSize = 3, Time = from.AddMinutes(i) })
+                .ToList<BaseValue>();
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) => PagesOf(values.Take(count)));
+
+            var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 5)).Value as SensorHistoryDto;
+
+            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(), 6,
+                It.IsAny<RequestOptions>()), Times.Once);
+
+            Assert.True(history.ScanCapReached);
+            Assert.True(history.Truncated);
+
+            // Metadata only, even though the buffered values carry bytes.
+            Assert.All(history.Points, point => Assert.IsType<FileValueDto>(point.Value));
+        }
+
+
+        [Fact]
+        public async Task GetSensorHistory_FileSensorWithBusyLock_ReportsReadUnavailable_SkipsTheRead()
+        {
+            var sensor = AddSensor(_productA, "logs", "app logs", SensorType.File);
+
+            _cache.Setup(c => c.IsFileHistoryReadInProgress(sensor.Id)).Returns(true);
+
+            var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id)).Value as SensorHistoryDto;
+
+            Assert.True(history.ReadUnavailable);
+            Assert.Empty(history.Points);
+
+            // A busy per-sensor lock must not even start a (wasteful, locked-out)
+            // stream; the flag is the retry signal, distinct from "no values".
+            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                It.IsAny<int>(), It.IsAny<RequestOptions>()), Times.Never);
+        }
+
+
+        [Fact]
+        public async Task GetSensorHistory_NonFileSensor_NeverReportsReadUnavailable()
+        {
+            var sensor = AddSensor(_productA, "cpu", "load", SensorType.Integer);
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int _, RequestOptions _) => PagesOf([]));
+
+            _cache.Setup(c => c.IsFileHistoryReadInProgress(It.IsAny<Guid>())).Returns(true);
+
+            var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id)).Value as SensorHistoryDto;
+
+            Assert.False(history.ReadUnavailable);
+            Assert.Empty(history.Points);
         }
 
 
