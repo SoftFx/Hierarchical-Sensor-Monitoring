@@ -91,6 +91,30 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             }
         }
 
+        [Fact]
+        [Trait("Category", "Getting sensor values history")]
+        public async Task FileHistory_BoundedRead_ReleasesThePerSensorLock()
+        {
+            // #1386 review, pass 3: the count-reached exit of the page generator
+            // used to skip the file-history lock release (it was plain trailing
+            // code, not a finally) — one bounded read of a window larger than the
+            // count latched the lock forever, and every later history read of that
+            // sensor answered an empty page until restart. The second read below
+            // returns values only when the release runs on EVERY exit path.
+            const int sensorValuesCount = 100;
+            const int boundedCount = 10;
+
+            var sensors = await AddAndGetSensorsWithAllSensorValues(1, sensorValuesCount, SensorType.File);
+            var (sensor, _) = sensors.Single();
+
+            var first = await _valuesCache.GetSensorValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, boundedCount).Flatten();
+            Assert.Equal(boundedCount, first.Count);
+
+            var second = await _valuesCache.GetSensorValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, boundedCount).Flatten();
+            Assert.Equal(boundedCount, second.Count);
+        }
+
+
         [Theory]
         [InlineData(SensorType.Boolean)]
         [InlineData(SensorType.Integer)]

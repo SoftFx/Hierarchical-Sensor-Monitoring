@@ -8,9 +8,11 @@ using HSMServer.Controllers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Filters;
+using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Routing;
+using Moq;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Xunit;
 
@@ -56,6 +58,62 @@ namespace HSMServer.Core.Tests.Swagger
 
             Assert.Contains(operation.Parameters, p => p.Name == "Key" && p.In == Microsoft.OpenApi.Models.ParameterLocation.Header);
             Assert.Contains(operation.Parameters, p => p.Name == "ClientName");
+        }
+
+
+        [Fact]
+        public void SensorValueUnionFilter_MapsTheValuePropertyToTheTypedUnion()
+        {
+            // An agent bootstrapping from the OpenAPI document must learn the
+            // per-type value shapes from the SCHEMA, not from prose: the filter
+            // replaces the free-form `value` with an explicit oneOf (#1387 r4).
+            var schema = new Microsoft.OpenApi.Models.OpenApiSchema();
+            schema.Properties["value"] = new Microsoft.OpenApi.Models.OpenApiSchema();
+
+            var generated = new HashSet<Type>();
+            var generator = new Mock<Swashbuckle.AspNetCore.SwaggerGen.ISchemaGenerator>();
+            generator.Setup(g => g.GenerateSchema(It.IsAny<Type>(), It.IsAny<Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository>(), It.IsAny<System.Reflection.MemberInfo>(), It.IsAny<System.Reflection.ParameterInfo>(), It.IsAny<Microsoft.AspNetCore.Mvc.ApiExplorer.ApiParameterRouteInfo>()))
+                .Returns((Type type, Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository _, System.Reflection.MemberInfo _, System.Reflection.ParameterInfo _, Microsoft.AspNetCore.Mvc.ApiExplorer.ApiParameterRouteInfo _) =>
+                {
+                    generated.Add(type);
+                    return new Microsoft.OpenApi.Models.OpenApiSchema();
+                });
+
+            new HSMServer.Filters.SensorValueUnionSchemaFilter().Apply(schema,
+                new Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext(
+                    typeof(HSMServer.Model.ManagementApi.SensorTree.SensorValueDto), generator.Object,
+                    new Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository()));
+
+            var value = schema.Properties["value"];
+
+            Assert.Null(value.Type);
+            Assert.Equal(6, value.OneOf.Count);
+            Assert.Equal(
+                [typeof(HSMServer.Model.ManagementApi.SensorTree.EnumValueDto),
+                 typeof(HSMServer.Model.ManagementApi.SensorTree.BarValueDto),
+                 typeof(HSMServer.Model.ManagementApi.SensorTree.FileValueDto)],
+                generated);
+            Assert.Contains(value.OneOf, s => s.Type == "number" && s.Nullable);
+            Assert.Contains(value.OneOf, s => s.Type == "string" && s.Nullable);
+            Assert.Contains(value.OneOf, s => s.Type == "boolean" && s.Nullable);
+        }
+
+
+        [Fact]
+        public void SensorValueUnionFilter_LeavesOtherSchemasUntouched()
+        {
+            var schema = new Microsoft.OpenApi.Models.OpenApiSchema();
+            schema.Properties["value"] = new Microsoft.OpenApi.Models.OpenApiSchema { Type = "string" };
+
+            var generator = new Mock<Swashbuckle.AspNetCore.SwaggerGen.ISchemaGenerator>();
+
+            new HSMServer.Filters.SensorValueUnionSchemaFilter().Apply(schema,
+                new Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext(
+                    typeof(string), generator.Object,
+                    new Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository()));
+
+            Assert.Equal("string", schema.Properties["value"].Type);
+            generator.Verify(g => g.GenerateSchema(It.IsAny<Type>(), It.IsAny<Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository>(), It.IsAny<System.Reflection.MemberInfo>(), It.IsAny<System.Reflection.ParameterInfo>(), It.IsAny<Microsoft.AspNetCore.Mvc.ApiExplorer.ApiParameterRouteInfo>()), Times.Never);
         }
 
         [Fact]
@@ -123,6 +181,16 @@ namespace HSMServer.Core.Tests.Swagger
             [(typeof(AlertTemplatesApiController), nameof(AlertTemplatesApiController.DeleteTemplate))] = [401, 403, 404, 409, 500],
             [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.GetSchedules))] = [400, 401, 403, 500],
             [(typeof(AlertSchedulesApiController), nameof(AlertSchedulesApiController.GetSchedule))] = [401, 403, 404, 500],
+
+            // The sensor-tree read surface (#1386): item endpoints declare the
+            // (read-unreachable) 403 because their evaluator switch carries the
+            // Forbidden arm; the search list answers 404 for an unknown/invisible
+            // product filter and has no 403 path at all.
+            [(typeof(ProductsApiController), nameof(ProductsApiController.GetProducts))] = [400, 401, 500],
+            [(typeof(NodesApiController), nameof(NodesApiController.GetNode))] = [400, 401, 403, 404, 500],
+            [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensors))] = [400, 401, 404, 500, 503],
+            [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensor))] = [401, 403, 404, 500],
+            [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensorHistory))] = [400, 401, 403, 404, 500],
         };
 
 
@@ -203,18 +271,39 @@ namespace HSMServer.Core.Tests.Swagger
             AssertTable(source, "public sealed record TimeIntervalDto", typeof(HSMServer.Core.Model.TimeInterval));
         }
 
+
+        // The string-valued fields of the sensor-tree DTOs (#1386) publish their
+        // tables as bare NAME lists — the wire value is the enum's name, not its
+        // byte — so they pin through the name-list variant of the same check.
+        [Fact]
+        public void SensorTreeDtos_DocumentedTables_MatchTheDomainEnums()
+        {
+            var values = ReadRepoFile("src/server/HSMServer/Model/ManagementApi/SensorTree/SensorValueDto.cs");
+            AssertNameTable(values, "public string Status { get; init; }", typeof(HSMCommon.Model.SensorStatus));
+
+            var sensor = ReadRepoFile("src/server/HSMServer/Model/ManagementApi/SensorTree/SensorDto.cs");
+            AssertNameTable(sensor, "public string Type { get; init; }", typeof(HSMCommon.Model.SensorType));
+            AssertNameTable(sensor, "public string State { get; init; }", typeof(HSMServer.Core.Model.SensorState));
+            AssertNameTable(sensor, "public string Status { get; init; }", typeof(HSMCommon.Model.SensorStatus));
+
+            var node = ReadRepoFile("src/server/HSMServer/Model/ManagementApi/SensorTree/NodeDto.cs");
+
+            // The node kind list is not a domain enum — pin it against the mapper
+            // constants the controller path actually emits. Scope the search to
+            // the NodeDto record body: SensorRefDto's Type (with the sensor type
+            // list) precedes it in the same file.
+            var nodeDtoBody = node[node.IndexOf("public sealed record NodeDto", StringComparison.Ordinal)..];
+            var nodeSummary = System.Text.RegularExpressions.Regex.Replace(
+                SummaryAbove(nodeDtoBody, "public string Type { get; init; }"), @"(\s|///)+", " ");
+            var nodeKinds = System.Text.RegularExpressions.Regex.Match(nodeSummary, @"Node kind table: ([A-Za-z, ]+)")
+                .Groups[1].Value.TrimEnd(' ', '.');
+            Assert.Equal($"{SensorTreeDtoMapper.NodeTypeProduct}, {SensorTreeDtoMapper.NodeTypeFolder}", nodeKinds);
+        }
+
         private static void AssertTable(string source, string memberDeclaration, Type enumType,
             params (long Value, string Name)[] extras)
         {
-            var index = source.IndexOf(memberDeclaration, StringComparison.Ordinal);
-            Assert.True(index >= 0, $"{memberDeclaration} not found in the DTO source");
-
-            var before = source[..index];
-            var summaryEnd = before.LastIndexOf("</summary>", StringComparison.Ordinal);
-            Assert.True(summaryEnd >= 0, $"no <summary> found above {memberDeclaration}");
-
-            var summaryStart = before.LastIndexOf("<summary>", summaryEnd, StringComparison.Ordinal);
-            var summary = before[summaryStart..summaryEnd];
+            var summary = SummaryAbove(source, memberDeclaration);
 
             var documented = System.Text.RegularExpressions.Regex.Matches(summary, @"(-?\d+)=([A-Za-z]+)")
                 .Select(m => (Value: long.Parse(m.Groups[1].Value), Name: m.Groups[2].Value))
@@ -227,6 +316,41 @@ namespace HSMServer.Core.Tests.Swagger
                 .ToDictionary(pair => pair.Value, pair => pair.Name);
 
             Assert.Equal(actual, documented);
+        }
+
+
+        // The string-valued fields of the sensor-tree DTOs (#1386) publish bare
+        // NAME lists ("Value table: Boolean, Integer, …") — the wire value is the
+        // enum's name, not its byte. Pin those lists the same way the numeric
+        // tables are pinned, so a renamed/added domain member fails here instead
+        // of silently diverging from the spec an agent reads.
+        private static void AssertNameTable(string source, string memberDeclaration, Type enumType)
+        {
+            var summary = SummaryAbove(source, memberDeclaration);
+
+            // Remarks wrap across source lines; strip the /// markers and collapse
+            // the whitespace so a wrapped table matches the same way a single-line
+            // one does.
+            var flattened = System.Text.RegularExpressions.Regex.Replace(summary, @"///", " ");
+            flattened = System.Text.RegularExpressions.Regex.Replace(flattened, @"\s+", " ");
+
+            var documented = System.Text.RegularExpressions.Regex.Match(flattened, @"Value table: ([A-Za-z, ]+)")
+                .Groups[1].Value.TrimEnd(' ', '.');
+
+            Assert.Equal(string.Join(", ", Enum.GetNames(enumType)), documented);
+        }
+
+        private static string SummaryAbove(string source, string memberDeclaration)
+        {
+            var index = source.IndexOf(memberDeclaration, StringComparison.Ordinal);
+            Assert.True(index >= 0, $"{memberDeclaration} not found in the DTO source");
+
+            var before = source[..index];
+            var summaryEnd = before.LastIndexOf("</summary>", StringComparison.Ordinal);
+            Assert.True(summaryEnd >= 0, $"no <summary> found above {memberDeclaration}");
+
+            var summaryStart = before.LastIndexOf("<summary>", summaryEnd, StringComparison.Ordinal);
+            return before[summaryStart..summaryEnd];
         }
 
         private static string ReadRepoFile(string relativeSource)

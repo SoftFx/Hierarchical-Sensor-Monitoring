@@ -1,6 +1,6 @@
 # HSM Glossary
 
-> Owner: shared | Last reviewed: 2026-05-28 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-09-14 | Canonical: yes
 
 Canonical terms for Hierarchical-Sensor-Monitoring. Prefer these names in code,
 docs, PR descriptions, review comments, and user-facing documentation.
@@ -77,6 +77,7 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | HsmApiToken scheme | The dedicated ASP.NET authentication scheme for API-token bearers; never the default scheme, runs only from the management policy. | Cookie stays default and is pinned into the `DefaultPolicy`; a cookie-only principal never satisfies a management endpoint. |
 | Management area (`/api/v1`) | The versioned management-API route family, SitePort-only and fail-closed: endpoints need `[ManagementApi]` plus their policy, everything else in the area is 404 by default. | `/api/v1/api-tokens` is the sole cookie-only family inside the area. |
 | Authorization boundary | The anchor a management-API target resolves to at evaluation time: Global, a product, or a folder (a sensor inherits its product's CURRENT folder). | Resolved from the live hierarchy per request; deleted ids fail closed. A token mirrors its owner's rights at whatever boundary the target resolves to (ADR-0005). |
+| Sensor-tree folder (wire) | In the management-API sensor-tree surface (#1386), `"type": "folder"` on a node — a NESTED `ProductModel` under a root product; `"type": "product"` is a root. | Distinct from the access-grouping Folder entity (`FolderModel`, `IsFolderAvailable`): those are NOT addressable through the sensor-tree surface. The wire pair mirrors the web UI's product/folder vocabulary. |
 | C++ wrapper | Native wrapper surface under `src/wrapper`. | Keep parity with collector public APIs. |
 | Ping module | External module under `src/module/HSMPingModule`. | Integration surface and deployment assumptions matter. |
 

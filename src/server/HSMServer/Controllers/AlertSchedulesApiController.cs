@@ -97,7 +97,7 @@ namespace HSMServer.Controllers
             // DISTINCT product — the same per-request memoization the templates list
             // applies per folder.
             var sensorsBySchedule = _cache.GetSensorsByAlertSchedules([.. pageItems.Select(s => s.Id)]) ?? [];
-            var isProductVisible = NewProductVisibilityFilter();
+            var isProductVisible = _authorization.MemoizedProductVisibility(User);
 
             return Ok(new ApiPageDto<AlertScheduleDto>
             {
@@ -129,7 +129,7 @@ namespace HSMServer.Controllers
             if (schedule is null)
                 return ManagementApiErrors.NotFound();
 
-            return Ok(ToDto(schedule, _cache.GetSensorsByAlertSchedule(id), NewProductVisibilityFilter()));
+            return Ok(ToDto(schedule, _cache.GetSensorsByAlertSchedule(id), _authorization.MemoizedProductVisibility(User)));
         }
 
 
@@ -143,21 +143,6 @@ namespace HSMServer.Controllers
         private IActionResult Denied() =>
             ManagementApiErrors.Forbidden(
                 "The token's owner cannot see any product or folder.");
-
-        // Sensors of a schedule cluster into a handful of products, and the evaluator
-        // re-resolves caller + token on every call — memoize per distinct product id
-        // within one request. An admin owner passes every per-product check, so no
-        // separate "everywhere" short-circuit exists: the mirror covers it.
-        private Func<Guid, bool> NewProductVisibilityFilter()
-        {
-            var visibilityByProduct = new Dictionary<Guid, bool>();
-
-            return productId =>
-                visibilityByProduct.TryGetValue(productId, out var visible)
-                    ? visible
-                    : visibilityByProduct[productId] = _authorization.IsVisible(User,
-                        ApiTokenResource.Product(productId));
-        }
 
         private AlertScheduleDto ToDto(Core.Model.Policies.AlertSchedule schedule,
             List<Core.Model.BaseSensorModel> sensors, Func<Guid, bool> isProductVisible)
