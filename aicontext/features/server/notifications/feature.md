@@ -236,6 +236,8 @@ Operators can mix selections across all groups in one action. `_AlertsFormCollec
 
 `ActionViewModel` exposes one selection-test helper (`ChatIsSelected(Chat)`) so the partial can mark pre-selected options. It reads from the single `HashSet<Guid> AvailableChats`. The available-set itself is `folder.Chats ∪ {chats with Folders.Count == 0}` (single heterogeneous `HashSet<Guid>`), resolved via `NodeExtensions.TryGetChats`.
 
+Icon markup carried in a chat option's `data-content` goes through bootstrap-select's sanitizer (`bootstrap-select.js`, `DefaultWhitelist`): anything not on the tag+attribute whitelist — e.g. an inline `svg`/`path` icon — is silently deleted at render time, with no error anywhere. Chat brand icons therefore stick to whitelisted shapes only: `<i class='fab fa-…'>` for Telegram/Slack (upgraded to SVG by the Font Awesome runtime) and a class-only `<span class='mattermost-brand-icon'>` for Mattermost whose mask styling lives in `site.css` (`ChatIcons`; the markup shape is pinned by `ChatIconsTests`). Any future change to `ChatIcons`/`ChatBrandIconsAndName` output must keep this constraint.
+
 ### Single-channel heterogeneous FromParent
 
 `Policy.TargetChats` walks the parent chain when `ChatsMode.FromParent` and resolves a single heterogeneous `Dictionary<Guid, string>` from `parent.Settings.DefaultChats.CurValue`. The pre-refactor parallel Slack parent-walk has been removed — the single heterogeneous walk covers both channels simultaneously because `DefaultChats` itself is heterogeneous.

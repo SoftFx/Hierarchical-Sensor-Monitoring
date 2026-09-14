@@ -286,8 +286,10 @@
             } else {
                 // Each chat is one option. IconsHtml is server-rendered markup from
                 // Chat.ChatBrandIcons(): `<i class='fab fa-...'>` tags plus the Mattermost
-                // CSS-mask <span> — tags bootstrap-select's data-content sanitizer keeps, so
-                // they render intact. chat.Name is user-controlled; route it
+                // CSS-mask <span> — only tags AND attributes on bootstrap-select's data-content
+                // sanitizer whitelist render intact (svg/path and non-whitelisted attributes
+                // are silently deleted), so the icons stick to whitelisted entries only.
+                // chat.Name is user-controlled; route it
                 // through jQuery's DOM API rather than concatenating strings:
                 //   - .text(name) creates a text node, no HTML parsing — safe and renders as
                 //     the literal name.

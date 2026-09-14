@@ -13,38 +13,22 @@ namespace HSMServer.Extensions
         public const string SlackBrandClass = "fab fa-slack";
 
         // Font Awesome Free lacks an official Mattermost brand glyph, so we ship the brand mark
-        // from Simple Icons (CC0-1.0) as a CSS mask on a <span>. An inline <svg> would disappear
-        // inside chat pickers: bootstrap-select sanitizes `data-content` HTML with a tag
-        // whitelist that has no svg/path (bootstrap-select.js, DefaultWhitelist), while <span>
-        // and its class/style attributes are whitelisted and the sanitizer never parses CSS
-        // inside `style`, so the mask data URI passes through untouched. The em-sized box and
-        // background-color:currentColor make the icon inherit font-size/color just like the
-        // surrounding <i class='fab fa-...'> tags — both in sanitized dropdowns and wherever
-        // this markup is rendered raw outside a <select>.
-        private const string MattermostBrandMaskUrl =
-            "data:image/svg+xml;base64," +
-            "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyLjA4" +
-            "MSAwQzcuMDQ4LS4wMzQgMi4zMzkgMy4xMjUuNjM3IDguMTUzYy0yLjEyNSA2LjI3NiAxLjI0IDEzLjA4NiA3LjUxNiAxNS4yMSA2" +
-            "LjI3NiAyLjEyNSAxMy4wODYtMS4yNCAxNS4yMS03LjUxNiAxLjcyNy01LjEtLjE3Mi0xMC41NTItNC4zMTEtMTMuNTU3bC4xMjYg" +
-            "Mi41NDdjMi4wNjUgMi4yODIgMi44OCA1LjUxMiAxLjg1MiA4LjU0OS0xLjUzNCA0LjUzMi02LjU5NCA2LjkxNS0xMS4zIDUuMzIx" +
-            "LTQuNzA4LTEuNTkzLTcuMjgtNi41NTktNS43NDUtMTEuMDkyIDEuMDMxLTMuMDQ2IDMuNjU1LTUuMTIxIDYuNjk0LTUuNjdsMS42" +
-            "NDItMS45NEE0Ljg3IDQuODcgMCAwIDAgMTIuMDggMHptMy41MjggMS4wOTRhLjI4NC4yODQgMCAwIDAtLjEyMy4wMjRsLS4wMDQu" +
-            "MDAxYS4zMy4zMyAwIDAgMC0uMTA5LjA3MWMtLjE0NS4xNDItLjY1Ny44MjgtLjY1Ny44MjhMMTMuNiAzLjRsLTEuMyAxLjU4NS0y" +
-            "LjIzMiAyLjc3NnMtMS4wMjQgMS4yNzgtLjc5OCAyLjg1MWMuMjI2IDEuNTc0IDEuMzk2IDIuMzQgMi4zMDQgMi42NDguOTA3LjMw" +
-            "NyAyLjMwMi40MDggMy40MzgtLjcwNCAxLjEzNS0xLjExMiAxLjA5OC0yLjc1IDEuMDk4LTIuNzVsLS4wODctMy41Ni0uMDctMi4w" +
-            "NS0uMDQ3LTEuNzc1cy4wMS0uODU2LS4wMi0xLjA1N2EuMzMuMzMgMCAwIDAtLjAzNS0uMTA3bC0uMDA2LS4wMTItLjAwNy0uMDEx" +
-            "YS4yNzcuMjc3IDAgMCAwLS4yMjktLjE0eiIvPjwvc3ZnPg==";
-
+        // from Simple Icons (CC0-1.0) as a CSS-masked <span>. Chat pickers pass icon markup
+        // through bootstrap-select's `data-content` sanitizer, which keeps only whitelisted
+        // tags AND attributes (bootstrap-select.js, DefaultWhitelist) — an inline <svg> has no
+        // whitelisted tag, so it is silently deleted. The span therefore carries only the
+        // globally whitelisted class/aria attributes, while all styling — the base64 mask,
+        // the em-sized box, the currentColor fill — lives in site.css under
+        // .mattermost-brand-icon: the data URI ships once in the cached bundle instead of per
+        // icon instance in HTML/JSON responses, and the icon still inherits font-size/color
+        // just like the surrounding <i class='fab fa-...'> tags.
+        //
         // The whole string must stay free of double quotes: ChatBrandIconsAndName returns
         // IHtmlContent, which Razor writes into data-content attributes RAW — a double
-        // quote would terminate the attribute mid-style (the old svg used single quotes
-        // only for the same reason). CSS url() tolerates unquoted tokens, and the base64
-        // alphabet never contains quotes, whitespace or parentheses.
+        // quote would terminate the attribute mid-markup and leak the rest as stray
+        // attributes. Pinned by ChatIconsTests.
         public const string MattermostBrandIconHtml =
-            "<span aria-hidden='true' style='" +
-            "display:inline-block;width:1em;height:1em;vertical-align:-.125em;background-color:currentColor;" +
-            $"-webkit-mask-image:url({MattermostBrandMaskUrl});-webkit-mask-repeat:no-repeat;-webkit-mask-size:100% 100%;" +
-            $"mask-image:url({MattermostBrandMaskUrl});mask-repeat:no-repeat;mask-size:100% 100%'></span>";
+            "<span class='mattermost-brand-icon' aria-hidden='true'></span>";
 
 
         public static string ChatBrandIcon(this Chat chat)

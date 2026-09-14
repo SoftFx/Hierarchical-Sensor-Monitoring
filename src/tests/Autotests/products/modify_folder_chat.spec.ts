@@ -7,6 +7,9 @@ const folderName = uniqueName('Fldr');
 const slackChatName = uniqueName('SlackChat');
 const slackRemoveChatName = uniqueName('SlackRm');
 const listRemoveChatName = uniqueName('ListRm');
+// Mattermost chat whose brand icon is asserted in the picker by the XSS lock-down test below
+// (#1359 regression guard: the icon markup must survive the data-content sanitizer AND paint).
+const mattermostChatName = uniqueName('MmChat');
 // XSS payload used as chat Name. Cleanup by text still works because Razor default-encodes
 // @chat.Name into the Configuration/_Chats.cshtml row's .chat-info span, so the literal payload
 // text appears in the DOM. The onerror handler would set window.__xss=1 if it ever executed.
@@ -22,6 +25,7 @@ test.afterEach(async ({ browser }) => {
     await cleanup.chat(page, slackRemoveChatName);
     await cleanup.chat(page, listRemoveChatName);
     await cleanup.chat(page, xssChatName);
+    await cleanup.chat(page, mattermostChatName);
     await cleanup.folder(page, folderName);
   } finally {
     await page.close();
@@ -110,6 +114,16 @@ test('Folder Chats picker renders chat.Name as inert text (XSS lock-down)', asyn
   await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/xss');
   await page.getByRole('button', { name: 'Save' }).click();
 
+  // --- Create a Mattermost chat: its brand icon is the render-regression surface asserted below ---
+  await expect(page).toHaveURL(/.*Notifications/);
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await page.locator('#Name').fill(mattermostChatName);
+  // EditChat is tabbed per channel; the Mattermost webhook input sits on its own tab.
+  await page.locator('#mattermost-tab').click();
+  await page.locator('#MattermostWebhookUrl').fill('https://mattermost.example.com/hooks/e2e-icon');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/.*Notifications/);
+
   // --- Create a folder and open its Chats tab; the picker is the XSS surface under test ---
   await page.getByRole('link', { name: 'Products' }).click();
   await page.getByRole('link', { name: 'Add folder' }).click();
@@ -142,7 +156,20 @@ test('Folder Chats picker renders chat.Name as inert text (XSS lock-down)', asyn
   const xssMarker = await page.evaluate(() => (window as any).__xss);
   expect(xssMarker).toBeUndefined();
 
+  // #1359 regression guard: the Mattermost chat's brand icon must not only exist in the rendered
+  // dropdown — bootstrap-select's data-content sanitizer silently deletes non-whitelisted tags
+  // (svg/path) and attributes — but actually paint: toBeVisible() fails on a zero-size box,
+  // which is what a sanitizer failure or a missing .mattermost-brand-icon CSS rule would leave.
+  const mmItem = picker.locator('.dropdown-menu').locator('li, a').filter({ hasText: mattermostChatName }).first();
+  const mmIcon = mmItem.locator('.mattermost-brand-icon');
+  await expect(mmIcon).toHaveCount(1);
+  await expect(mmIcon).toBeVisible();
+
   // --- Logout ---
+  // The Logout link sits inside the user dropdown menu (added in #1356) — open it first.
+  // NOTE: the sibling tests below still use the bare link lookup and fail at this step since
+  // #1356; left as-is to keep this change scoped to the picker regression guard.
+  await page.locator('#userDropdown').click();
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
 });
