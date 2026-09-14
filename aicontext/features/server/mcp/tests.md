@@ -6,7 +6,7 @@
 
 `SensorTreeMcpToolsTests` — the tool rendering of `SensorTreeReadService` (the service's own behavior is pinned by the REST controller suites — the shared regression net — so these tests pin only the tool contracts):
 
-`HsmMcpServerRegistrationTests` — the wiring (#1391 review): `AddHsmMcpServer` surfaces EXACTLY the nine spec tools (the SDK builds their schemas at registration — a bad tool signature throws), the server identity, and the camelCase rendering of the tool result records under the SDK's `McpJsonUtilities.DefaultOptions` (Web defaults) — the parity pin that keeps MCP and REST JSON keys identical.
+`HsmMcpServerRegistrationTests` — the wiring (#1391 review): `AddHsmMcpServer` surfaces EXACTLY the nine spec tools (the SDK builds their schemas at registration — a bad tool signature throws), the server identity, the pinned **stateless** HTTP transport (the ambient-principal flow of every tool depends on it), and the camelCase rendering of the tool result records under the SDK's `McpJsonUtilities.DefaultOptions` (Web defaults) — the parity pin that keeps MCP and REST JSON keys identical.
 
 `SensorTreeMcpToolsTests` and `AlertsMcpToolsTests` — the tool renderings:
 
@@ -22,6 +22,7 @@
 - `GetSensor_EmbedsLastValue` — the only tool embedding the current value.
 - `GetSensor_UnknownId_IsToolError`.
 - `GetSensorHistory_NewestPointsOldestFirst_WithTruncatedFlag` — the #1389/#1390 direction contract through the tool (page generator's count bound honored, surplus-oldest dropped, reversed, `truncated` set).
+- `GetSensorHistory_OmittedMaxPoints_DefaultsToTheMcpDefault` — an omitted `maxPoints` asks for the MCP default 200 (context-window bound), not the REST twin's 1000.
 - `GetSensorHistory_FileSensorBusy_ReportsReadUnavailable` — busy file lock → `readUnavailable=true`, no points.
 
 `AlertsMcpToolsTests` — the alert tools over the thin providers:
@@ -40,6 +41,8 @@
 
 The tools take `IHttpContextAccessor` (ambient principal — behind `RequireAuthorization` it is always present); the tests fake it with `HttpContextAccessor { HttpContext = DefaultHttpContext { User = … } }`, the same principal shape the controller suites build.
 
+`ApiTokenRouteGuardsTests` (`src/tests/HSMServer.Core.Tests/Authentication/ApiTokens/`) pins the two MCP guards: the bearer pass-through is case-insensitive (`/mcp` and `/MCP` — endpoint routing matches segments case-insensitively, so a mixed-case POST must not read as a misplaced token), the off-SitePort uniform 404 fires before authentication, and the fail-closed policy check rejects a matched `/mcp` endpoint without `ManagementPolicy` or with `[AllowAnonymous]` while admitting the policy-carrying endpoint.
+
 ## Regression — REST suites are the shared net
 
 The three sensor-tree controller suites (`SensorsApiControllerTests`, `NodesApiControllerTests`, `ProductsApiControllerTests`) construct the REAL `SensorTreeReadService` around the same mocks — they pin the service behavior that both transports now share (the #1391 extraction was behavior-neutral: all 47 controller tests + 10 swagger pins green unchanged).
@@ -47,4 +50,4 @@ The three sensor-tree controller suites (`SensorsApiControllerTests`, `NodesApiC
 ## Not covered (deliberate)
 
 - The MCP wire layer (JSON-RPC envelope, protocol-version validation, stateless session handling) is the SDK's tested surface, not ours; a wire-level smoke test would re-test the transport. If drift is ever suspected, an E2E test against a booted server with a real `initialize`/`tools/list`/`tools/call` exchange is the follow-up.
-- The endpoint mapping's `RequireAuthorization` (routing configuration in Program.cs) has no dedicated test — the registration test covers the server, tools and schemas; the guard middlewares have their own pins in `ApiTokenRouteGuardsTests`.
+- The endpoint mapping's `RequireAuthorization` (routing configuration in Program.cs) has no dedicated wire-level test — but `McpSitePortOnlyMiddleware` structurally enforces the policy on every matched endpoint under `/mcp` (pinned in `ApiTokenRouteGuardsTests`), so a `MapMcp` that lost its `RequireAuthorization` answers the uniform 404 rather than opening the endpoint. A WebApplicationFactory-style test (401 without a credential, tool result with one) would need new in-proc host infrastructure — HSMServer boots LevelDB storages and dual fixed-port listeners, which the unit suites deliberately never do.

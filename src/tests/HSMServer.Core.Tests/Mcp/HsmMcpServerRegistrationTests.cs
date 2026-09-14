@@ -6,6 +6,7 @@ using HSMServer.Mcp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
+using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Server;
 using Xunit;
 
@@ -54,6 +55,23 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal("HSMServer", serverInfo.Name);
             Assert.False(string.IsNullOrEmpty(serverInfo.Version));
+        }
+
+        [Fact]
+        public void AddHsmMcpServer_PinsStatelessHttpTransport()
+        {
+            // The tools resolve the caller through the ambient HTTP context
+            // (McpToolContext), which holds only while a tools/call executes
+            // INLINE within its POST — the stateless mode. The SDK 2.2.0
+            // default is stateless (since the 2026-07-28 protocol revision),
+            // but an SDK default change would otherwise silently degrade every
+            // tool call to the backstop error; pinned here like the camelCase
+            // pin below, so SDK drift fails a test instead.
+            using var provider = new ServiceCollection().AddHsmMcpServer().BuildServiceProvider();
+
+            var transport = provider.GetRequiredService<IOptions<HttpServerTransportOptions>>().Value;
+
+            Assert.True(transport.Stateless);
         }
 
         [Fact]

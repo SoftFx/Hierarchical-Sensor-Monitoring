@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -61,7 +63,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// An owner who sees nothing gets an empty list, not a failure: the list
         /// carries no per-item secret, and emptiness discloses nothing.
         /// </summary>
-        public ApiPageDto<ProductDto> ListProducts(System.Security.Claims.ClaimsPrincipal user, int page, int pageSize)
+        public ApiPageDto<ProductDto> ListProducts(ClaimsPrincipal user, int page, int pageSize)
         {
             (page, pageSize) = ApiPagination.Normalize(page, pageSize);
 
@@ -96,7 +98,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// children, folders paginated, sensors capped. Unknown and invisible ids
         /// answer the SAME NotFound.
         /// </summary>
-        public SensorTreeReadResult<NodeDto> GetNode(Guid id, System.Security.Claims.ClaimsPrincipal user,
+        public SensorTreeReadResult<NodeDto> GetNode(Guid id, ClaimsPrincipal user,
             int foldersPage, int foldersPageSize)
         {
             // Unknown id: the plain area 404, issued BEFORE the evaluator call —
@@ -144,7 +146,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// name, description and path (OR).
         /// </summary>
         public SensorTreeReadResult<ApiPageDto<SensorDto>> FindSensors(Guid? product, string search, string searchMode,
-            string type, int page, int pageSize, System.Security.Claims.ClaimsPrincipal user, CancellationToken cancellation)
+            string type, int page, int pageSize, ClaimsPrincipal user, CancellationToken cancellation)
         {
             // The optional subtree filter: an unknown id is the plain area 404 (no
             // evaluator call), an invisible one the evaluator's 404 — the caller
@@ -208,7 +210,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// One sensor by id: metadata plus its current value — the same shape the
         /// search list returns.
         /// </summary>
-        public SensorTreeReadResult<SensorDto> GetSensor(Guid id, System.Security.Claims.ClaimsPrincipal user)
+        public SensorTreeReadResult<SensorDto> GetSensor(Guid id, ClaimsPrincipal user)
         {
             if (!TryGetVisibleSensor(id, user, out var sensor, out var failure))
                 return SensorTreeReadResult<SensorDto>.FromFailure(failure);
@@ -232,7 +234,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// it alone never sets <c>truncated</c> — it is outside the window).
         /// </summary>
         public async Task<SensorTreeReadResult<SensorHistoryDto>> GetSensorHistoryAsync(Guid id, DateTime? from,
-            DateTime? to, int maxPoints, System.Security.Claims.ClaimsPrincipal user, CancellationToken cancellation)
+            DateTime? to, int maxPoints, ClaimsPrincipal user, CancellationToken cancellation)
         {
             if (!TryGetVisibleSensor(id, user, out var sensor, out var failure))
                 return SensorTreeReadResult<SensorHistoryDto>.FromFailure(failure);
@@ -374,7 +376,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // property, and a comparison-delegate Sort would re-walk the parent chain
         // on every comparison (#1387 review).
         private List<BaseSensorModel> FilterSensors(ProductModel subtree, Func<BaseSensorModel, bool> predicate,
-            SensorType? typeFilter, System.Security.Claims.ClaimsPrincipal user, CancellationToken cancellation,
+            SensorType? typeFilter, ClaimsPrincipal user, CancellationToken cancellation,
             out bool searchAborted)
         {
             searchAborted = false;
@@ -387,11 +389,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             // filter pass, and the sort after it (#1387 review, round 4 —
             // checking only inside the loop bounded the cheapest phase of the
             // most expensive request).
-            var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            var startedAt = Stopwatch.GetTimestamp();
 
             IEnumerable<BaseSensorModel> candidates = subtree is not null ? subtree.GetAllSensors() : _cache.GetSensors();
 
-            bool OutOfBudget() => System.Diagnostics.Stopwatch.GetTimestamp() - startedAt > budgetTicks;
+            bool OutOfBudget() => Stopwatch.GetTimestamp() - startedAt > budgetTicks;
 
             var matched = new List<BaseSensorModel>();
 
@@ -447,7 +449,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
         private static class StopwatchTimestamps
         {
-            public static readonly long PerMs = System.Diagnostics.Stopwatch.Frequency / 1000;
+            public static readonly long PerMs = Stopwatch.Frequency / 1000;
         }
 
 
@@ -456,7 +458,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // Reads are never forbidden in the owner-mirror model; the Forbidden arm
         // is unreachable and kept only so the evaluator's full decision surface
         // maps to a response.
-        private bool TryGetVisibleSensor(Guid id, System.Security.Claims.ClaimsPrincipal user,
+        private bool TryGetVisibleSensor(Guid id, ClaimsPrincipal user,
             out BaseSensorModel sensor, out SensorTreeReadFailure failure)
         {
             sensor = _cache.GetSensor(id);

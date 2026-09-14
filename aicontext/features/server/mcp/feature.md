@@ -15,7 +15,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 
 - **Same credential, same sight, no second credential kind**: the endpoint requires the SAME `HsmApiToken` bearer scheme and `HsmApiTokenDefaults.ManagementPolicy` as `/api/v1` (`RequireAuthorization` on `app.MapMcp("/mcp")`). Read-write tokens are admitted — the v1 tools are read-only regardless. No anonymous access. Visibility follows the token owner's sight through the exact REST decision paths (per-root-product sensor sight, per-folder template sight, caller-wide schedule gate).
 - **Outside the area guard, inside the credential family**: `/mcp` is NOT under `ManagementApiGuardMiddleware` (no `[ManagementApi]` marker; the SDK owns the route and errors follow MCP's JSON-RPC semantics, not the uniform JSON contract). `LegacyBearerGuardMiddleware` exempts it (`IsTokenRoutePath`) — the hsm_pat_ credential is expected there, not misplaced.
-- **SitePort-only, probing-blind**: `McpSitePortOnlyMiddleware` (before authentication, with the other guards) answers `/mcp` off the SitePort with the area's uniform 404 — an unauthenticated probe on the sensor port never gets a 401 that confirms the endpoint exists.
+- **SitePort-only, probing-blind, fail-closed over the endpoint family**: `McpSitePortOnlyMiddleware` (before authentication, with the other guards) answers `/mcp` off the SitePort with the area's uniform 404 — an unauthenticated probe on the sensor port never gets a 401 that confirms the endpoint exists. It also carries the area guard's rule over `/mcp`'s endpoints: a matched endpoint under `/mcp` must require `ManagementPolicy` and never be anonymous, so a future route mapped there is unreachable without the credential, exactly like an unmarked route under `/api/v1`.
 - **Always on, no config toggle**: like `/api/v1`, the endpoint ships enabled behind its auth; there is no feature flag to drift.
 - **Read-only tool metadata**: every tool declares `ReadOnly=true, Idempotent=true, OpenWorld=false` — clients can surface the safety hints.
 - **Compactness rule**: only `get_sensor` embeds the current value (`lastValue`); `find_sensors` returns compact summaries (id, path, type, status, unit). No tool serializes file content (the REST File-value metadata rule holds).
@@ -48,7 +48,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `get_node(nodeId, foldersPage?)` | `SensorTreeMcpTools.GetNode` | `NodeDto` verbatim (folders paginated × 200, sensors capped 200 — REST `get_node` shape; `foldersPage` keeps folder ids beyond page 1 reachable) |
 | `find_sensors(search?, searchMode?, productId?, type?, limit?)` | `SensorTreeMcpTools.FindSensors` | `{sensors: McpSensorSummary[], totalFound}` — compact summaries ordered by path; `searchMode` = `contains`\|`regex` with the REST bounds (100 ms per-match, 2 s scan budget — exhaustion is a tool error naming the remedy) |
 | `get_sensor(sensorId)` | `SensorTreeMcpTools.GetSensor` | `SensorDto` verbatim — `lastValue` embedded |
-| `get_sensor_history(sensorId, from?, to?, maxPoints?)` | `SensorTreeMcpTools.GetSensorHistoryAsync` | `SensorHistoryDto` verbatim — newest-N oldest-first, `truncated`, `readUnavailable`; File cap 100 |
+| `get_sensor_history(sensorId, from?, to?, maxPoints?)` | `SensorTreeMcpTools.GetSensorHistoryAsync` | `SensorHistoryDto` verbatim — newest-N oldest-first, `truncated`, `readUnavailable`; MCP default `maxPoints` 200 (the result feeds the model's context — tighter than the REST twin's 1000; explicit range 1..10000 unchanged); File cap 100 |
 | `list_alert_templates(limit?)` / `get_alert_template(templateId)` | `AlertsMcpTools` | `{templates: AlertTemplateDto[], totalFound}` / `AlertTemplateDto` — folder-sighted like REST |
 | `list_alert_schedules(limit?)` / `get_alert_schedule(scheduleId)` | `AlertsMcpTools` | `{schedules: AlertScheduleDto[], totalFound}` / `AlertScheduleDto` — caller-wide gate, sensor paths filtered to the owner's sight |
 
@@ -62,7 +62,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `src/server/HSMServer/Mcp/AlertsMcpTools.cs` | The four alert tools — direct over the thin providers, mirroring the REST controllers |
 | `src/server/HSMServer/Mcp/McpToolContext.cs` | The shared ambient-principal accessor behind `RequireAuthorization` |
 | `src/server/HSMServer/Mcp/McpToolResults.cs` | List envelopes + the compact `McpSensorSummary`; item DTOs are the REST ones |
-| `src/server/HSMServer/Middleware/McpSitePortOnlyMiddleware.cs` | Uniform 404 for `/mcp` off the SitePort, before authentication |
+| `src/server/HSMServer/Middleware/McpSitePortOnlyMiddleware.cs` | Uniform 404 for `/mcp` off the SitePort, before authentication; fail-closed policy check on matched `/mcp` endpoints |
 | `src/server/HSMServer/Middleware/LegacyBearerGuardMiddleware.cs` | `IsTokenRoutePath`: `/api/v1` + `/mcp` — the bearer credential family |
 | `src/server/HSMServer/Extensions/ApplicationServiceExtensions.cs` | `AddMcpServer().WithHttpTransport().WithTools<…>()` + `MapMcp` wiring context |
 | `src/server/HSMServer/Model/ManagementApi/SensorTree/SensorTreeReadService.cs` | The shared sensor-tree read implementation (REST + MCP; extracted #1391) |
@@ -103,10 +103,10 @@ No UI. Operators provision the same API tokens as for REST (`/api/v1/api-tokens`
 ## Notes
 
 - Wire casing is camelCase on both transports: MVC JSON options vs the SDK's `McpJsonUtilities.DefaultOptions` (documented to enable `JsonSerializerDefaults.Web`); a registration test pins the camelCase rendering of the tool result records, so an SDK default change cannot silently diverge the surfaces.
-- Server identity: `Implementation { Name="HSMServer", Version=ServerConfig.Version }`; stateless sessions (default since the 2026-07-28 protocol revision — no affinity requirement).
+- Server identity: `Implementation { Name="HSMServer", Version=ServerConfig.Version }`; stateless sessions set explicitly (`WithHttpTransport(options => options.Stateless = true)` — the 2.2.0 default since the 2026-07-28 protocol revision) and pinned by a registration test: the tools resolve the caller through the ambient HTTP context, which only flows in stateless mode, so an SDK default change must fail a test rather than silently degrade every `tools/call`.
 
 ## Known Issues / Limitations
 
 - v1 is read-only (write tools are phase 2 of AI-agent access); no MCP resources/prompts primitives.
-- The endpoint-level wiring (MapMcp + RequireAuthorization against the management policy) is routing configuration without a dedicated test; the registration test covers the server, the nine tools and their schemas. A full wire-level smoke test (initialize → tools/list → tools/call against a booted server) is the follow-up if drift is ever suspected.
+- The endpoint-level wiring (MapMcp + RequireAuthorization against the management policy) has no wire-level test; the registration test covers the server, the nine tools and their schemas, and `McpSitePortOnlyMiddleware` structurally enforces the policy on every matched endpoint under `/mcp` (pinned in `ApiTokenRouteGuardsTests`), so a `MapMcp` that lost its `RequireAuthorization` would be a uniform 404, not an open endpoint. A full wire-level smoke test (initialize → tools/list → tools/call against a booted server) is the follow-up if drift is ever suspected.
 - No E2E/Playwright coverage yet; the wire-level MCP handshake (protocol headers, JSON-RPC envelope) is the SDK's tested surface, ours starts at the tool classes.

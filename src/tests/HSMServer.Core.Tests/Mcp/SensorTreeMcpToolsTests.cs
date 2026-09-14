@@ -281,6 +281,28 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
+        public async Task GetSensorHistory_OmittedMaxPoints_DefaultsToTheMcpDefault()
+        {
+            // The tool result feeds the calling model's context window, so an
+            // omitted maxPoints asks for the MCP default (200), not the REST
+            // twin's 1000 (#1392 review); the 1..10000 range is unchanged for
+            // explicit calls. Pinned through the service's count bound: the
+            // page request asks for default + 1.
+            var sensor = AddSensor(_productA, "cpu", "load");
+            var from = new DateTime(2026, 9, 14, 0, 0, 0, DateTimeKind.Utc);
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, from, It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int _, RequestOptions _) => PagesOf([]));
+
+            await CreateTools().GetSensorHistoryAsync(sensor.Id, from);
+
+            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, It.IsAny<DateTime>(),
+                HsmMcp.DefaultMaxPoints + 1, It.IsAny<RequestOptions>()), Times.Once);
+        }
+
+
+        [Fact]
         public async Task GetSensorHistory_FileSensorBusy_ReportsReadUnavailable()
         {
             var sensor = AddSensor(_productA, "log", "file sensor", SensorType.File);

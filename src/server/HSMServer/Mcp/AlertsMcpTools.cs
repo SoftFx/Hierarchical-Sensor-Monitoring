@@ -110,7 +110,7 @@ namespace HSMServer.Mcp
         {
             var user = User;
 
-            if (!AuthorizeSchedulesRead())
+            if (!AuthorizeSchedulesRead(user))
                 throw new McpException("The token's owner cannot see any product or folder.");
 
             var all = (_schedules.GetAllSchedules() ?? [])
@@ -143,7 +143,9 @@ namespace HSMServer.Mcp
         public AlertScheduleDto GetAlertSchedule(
             [Description("Schedule id.")] Guid scheduleId)
         {
-            if (!AuthorizeSchedulesRead())
+            var user = User;
+
+            if (!AuthorizeSchedulesRead(user))
                 throw new McpException("The token's owner cannot see any product or folder.");
 
             var schedule = _schedules.GetSchedule(scheduleId);
@@ -152,7 +154,7 @@ namespace HSMServer.Mcp
                 throw new McpException(ManagementApiErrors.NotFoundMessage);
 
             return ToDto(schedule, _cache.GetSensorsByAlertSchedule(scheduleId),
-                _authorization.MemoizedProductVisibility(User));
+                _authorization.MemoizedProductVisibility(user));
         }
 
 
@@ -160,8 +162,8 @@ namespace HSMServer.Mcp
         // controller): the owner is an admin or currently holds a role on at
         // least one product/folder, recording one AuthorizationDenied when
         // nothing qualifies.
-        private bool AuthorizeSchedulesRead() =>
-            _authorization.CanSeeAnyBoundary(User);
+        private bool AuthorizeSchedulesRead(ClaimsPrincipal user) =>
+            _authorization.CanSeeAnyBoundary(user);
 
         // The shared ambient-principal accessor (see McpToolContext); a property
         // so the tool bodies read like their REST twins' `User`.

@@ -107,7 +107,7 @@ namespace HSMServer.Mcp
             [Description("Sensor id.")] Guid sensorId,
             [Description("Window start, UTC ISO 8601; default: to − 24 hours.")] DateTime? from = null,
             [Description("Window end, UTC ISO 8601; default: now.")] DateTime? to = null,
-            [Description("Point limit, 1..10000 (default 1000; 100 for File sensors).")] int maxPoints = SensorTreeReadService.DefaultMaxPoints,
+            [Description("Point limit, 1..10000 (default 200 — the result feeds the model's context; 100 for File sensors).")] int maxPoints = HsmMcp.DefaultMaxPoints,
             CancellationToken cancellationToken = default) =>
             Unwrap(await _reader.GetSensorHistoryAsync(sensorId, from, to, maxPoints, User, cancellationToken));
 

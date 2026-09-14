@@ -47,9 +47,12 @@ namespace HSMServer.Middleware
         // /mcp is a token-authenticated route outside the /api/v1 AREA (no
         // [ManagementApi] marker, JSON-RPC errors, SDK-owned handler — #1391),
         // but it belongs to the same bearer credential family: the credential
-        // is expected there, not misplaced.
+        // is expected there, not misplaced. Case-insensitive like the area arm
+        // above — endpoint routing matches path segments case-insensitively,
+        // so POST /MCP reaches the handler and must not look like a misplaced
+        // token here (#1392 review).
         internal static bool IsTokenRoutePath(PathString path) =>
             IsManagementAreaPath(path) ||
-            path.StartsWithSegments(HsmMcp.EndpointPath, StringComparison.Ordinal);
+            path.StartsWithSegments(HsmMcp.EndpointPath, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -93,13 +93,17 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.True(context.Items.ContainsKey("reached"));
         }
 
-        [Fact]
-        public async Task LegacyGuard_HsmBearerOnMcpEndpoint_PassesThrough()
+        [Theory]
+        [InlineData("/mcp")]
+        [InlineData("/MCP")] // endpoint routing matches segments case-insensitively
+        public async Task LegacyGuard_HsmBearerOnMcpEndpoint_PassesThrough(string path)
         {
             // /mcp is outside the /api/v1 AREA but inside the bearer credential
             // family (#1391): the token travels to the MCP handler, never a 401.
+            // Case-insensitive like the area arm — a mixed-case POST reaches the
+            // handler, so the guard must not read it as a misplaced token (#1392).
             var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
-            var context = BuildContext("/mcp", SitePort, authorization: $"Bearer {credential}");
+            var context = BuildContext(path, SitePort, authorization: $"Bearer {credential}");
 
             await new LegacyBearerGuardMiddleware(NextThatMarks).InvokeAsync(context);
 
@@ -140,6 +144,46 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
 
             Assert.True(context.Items.ContainsKey("reached"));
+        }
+
+        [Fact]
+        public async Task McpSitePortGuard_EndpointWithManagementPolicy_Passes()
+        {
+            // The mapped /mcp endpoint carries RequireAuthorization(ManagementPolicy):
+            // it passes the guard's fail-closed policy check (#1392 review).
+            var endpoint = Endpoint(new AuthorizeAttribute(HsmApiTokenDefaults.ManagementPolicy));
+            var context = BuildContext("/mcp", SitePort, endpoint);
+
+            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+
+            Assert.True(context.Items.ContainsKey("reached"));
+        }
+
+        [Fact]
+        public async Task McpSitePortGuard_EndpointWithoutManagementPolicy_Is404()
+        {
+            // The area-guard rule carried over the endpoint family (#1392 review):
+            // a future route mapped under /mcp without the token policy is
+            // unreachable by default — never anonymously reachable.
+            var endpoint = Endpoint(new AuthorizeAttribute());
+            var context = BuildContext("/mcp/health", SitePort, endpoint);
+
+            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+            Assert.False(context.Items.ContainsKey("reached"));
+        }
+
+        [Fact]
+        public async Task McpSitePortGuard_AnonymousEndpoint_Is404()
+        {
+            var endpoint = Endpoint(new AllowAnonymousAttribute());
+            var context = BuildContext("/mcp", SitePort, endpoint);
+
+            await new McpSitePortOnlyMiddleware(NextThatMarks, Bindings).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+            Assert.False(context.Items.ContainsKey("reached"));
         }
 
         [Fact]

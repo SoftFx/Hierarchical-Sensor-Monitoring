@@ -17,6 +17,13 @@ namespace HSMServer.Mcp
         public const int DefaultLimit = 20;
         public const int MaxLimit = 200;
 
+        // A tool result lands directly in the calling model's context window
+        // (#1392 review), so the history tool defaults tighter than the REST
+        // twin's 1000 (a programmatic client pages; a model should narrow).
+        // The 1..10000 range and the truncated flag are unchanged — an agent
+        // opts into more with an explicit maxPoints.
+        public const int DefaultMaxPoints = 200;
+
         public static int NormalizeLimit(int limit) =>
             limit <= 0 ? DefaultLimit : Math.Min(limit, MaxLimit);
     }

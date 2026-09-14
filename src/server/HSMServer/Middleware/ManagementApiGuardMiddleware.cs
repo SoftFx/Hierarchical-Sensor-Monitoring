@@ -70,7 +70,9 @@ namespace HSMServer.Middleware
         private static bool IsReservedCookieOnlyFamily(PathString path) =>
             path.StartsWithSegments(CookieOnlyRouteRoot, System.StringComparison.OrdinalIgnoreCase);
 
-        private static bool RequiresManagementPolicy(EndpointMetadataCollection metadata) =>
+        // Internal for McpSitePortOnlyMiddleware (#1392 review): the /mcp
+        // surface enforces the same policy rule without the area marker.
+        internal static bool RequiresManagementPolicy(EndpointMetadataCollection metadata) =>
             metadata.OfType<AuthorizeAttribute>().Any(a => a.Policy == HsmApiTokenDefaults.ManagementPolicy);
 
         // The reserved family authorizes through the cookie-pinned DefaultPolicy: a bare
