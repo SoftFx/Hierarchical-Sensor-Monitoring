@@ -1,6 +1,7 @@
 using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Extensions;
+using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using Xunit;
@@ -39,9 +40,10 @@ namespace HSMServer.Core.Tests.Notifications
         // whitelisted tag, and an inline style would re-introduce the per-instance base64
         // payload (~1.6 KB per icon occurrence in HTML/JSON). The span must carry nothing but
         // the globally whitelisted class/aria attributes, with all styling in site.css
-        // (.mattermost-brand-icon).
+        // (.mattermost-brand-icon). svg/path are asserted explicitly — the literal shape
+        // #1359 was about: the sanitizer deletes them silently, so nothing else would fail.
         [Fact]
-        public void MattermostBrandIconHtml_UsesOnlySanitizerWhitelistedTagAndAttributes()
+        public void MattermostBrandIconHtml_ContainsOnlyWhitelistedTagAndAttributes()
         {
             var html = ChatIcons.MattermostBrandIconHtml;
 
@@ -50,6 +52,29 @@ namespace HSMServer.Core.Tests.Notifications
             Assert.Contains("class='mattermost-brand-icon'", html);
             Assert.Contains("aria-hidden='true'", html);
             Assert.DoesNotContain("style=", html);
+            Assert.DoesNotContain("<svg", html);
+            Assert.DoesNotContain("<path", html);
+        }
+
+        // ChatViewModel carries a SECOND ChatBrandIcons implementation (used by the
+        // Configuration/_Chats list rows) composed from its own Has* flags. It feeds the same
+        // raw data-content surface, so pin it to the same contract — without this the two
+        // implementations can drift apart with no test noticing.
+        [Fact]
+        public void ChatViewModelChatBrandIcons_AllChannels_MatchesExtensionMethodOutput()
+        {
+            var chat = BuildChat(telegram: true, slack: true, mattermost: true);
+            var viewModel = new ChatViewModel
+            {
+                TelegramChatId = chat.TelegramChatId!.Identifier,
+                SlackWebhookUrl = chat.SlackWebhookUrl,
+                MattermostWebhookUrl = chat.MattermostWebhookUrl,
+            };
+
+            var html = viewModel.ChatBrandIcons();
+
+            Assert.DoesNotContain("\"", html);
+            Assert.Equal(chat.ChatBrandIcons(), html);
         }
 
         private static Chat BuildChat(bool telegram = false, bool slack = false, bool mattermost = false) =>

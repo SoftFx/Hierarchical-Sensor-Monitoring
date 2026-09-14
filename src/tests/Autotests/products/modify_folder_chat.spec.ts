@@ -177,8 +177,10 @@ test('Folder Chats picker renders chat.Name as inert text (XSS lock-down)', asyn
 
   // --- Logout ---
   // The Logout link sits inside the user dropdown menu (added in #1356) — open it first.
-  // Every test in this file opens the dropdown before the Logout click; the remaining bare
-  // `getByRole('link', { name: 'Logout' })` lookups elsewhere in the suite predate #1356.
+  // Every test in this file does so. The bare `getByRole('link', { name: 'Logout' })`
+  // lookups still present in other spec files are EQUALLY broken by #1356 — the collapsed
+  // dropdown-menu keeps the link hidden until #userDropdown opens it, so those clicks time
+  // out — and need the same two-line treatment; they are just outside this PR's scope.
   await page.locator('#userDropdown').click();
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
