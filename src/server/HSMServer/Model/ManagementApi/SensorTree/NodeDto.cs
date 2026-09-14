@@ -40,8 +40,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     /// <summary>
     /// A tree node — a root product or a nested folder — with its DIRECT children
     /// only (no recursion): folders and sensors are listed separately, both ordered
-    /// by name. Sensors of the whole subtree are served by the sensor search
-    /// endpoint with <c>product={node id}</c>.
+    /// by name and capped (the area's response bound); the totals tell the caller
+    /// whether the full list was returned. Sensors of the whole subtree are served
+    /// paginated by the sensor search endpoint with <c>product={node id}</c>.
     /// </summary>
     public sealed record NodeDto
     {
@@ -69,10 +70,23 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// <summary>Parent node reference; null for a root product.</summary>
         public NodeRefDto Parent { get; init; }
 
-        /// <summary>Direct child folders, ordered by name.</summary>
+        /// <summary>
+        /// Direct child folders, ordered by name, capped at the area's list
+        /// ceiling (200); <c>totalFolders</c> carries the uncapped count.
+        /// </summary>
         public List<NodeRefDto> Folders { get; init; } = [];
 
-        /// <summary>Direct child sensors, ordered by name.</summary>
+        /// <summary>Total number of direct child folders (the list above may be capped).</summary>
+        public int TotalFolders { get; init; }
+
+        /// <summary>
+        /// Direct child sensors, ordered by name, capped at the area's list
+        /// ceiling (200); <c>totalSensors</c> carries the uncapped count — the
+        /// paginated sensor search with product = this id serves the full list.
+        /// </summary>
         public List<SensorRefDto> Sensors { get; init; } = [];
+
+        /// <summary>Total number of direct child sensors (the list above may be capped).</summary>
+        public int TotalSensors { get; init; }
     }
 }

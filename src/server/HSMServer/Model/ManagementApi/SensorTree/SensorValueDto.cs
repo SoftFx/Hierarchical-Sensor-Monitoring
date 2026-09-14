@@ -16,7 +16,8 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         public DateTime Time { get; init; }
 
         /// <summary>
-        /// Sensor status at this value. Value table: 0=Ok, 1=Error, 255=OffTime.
+        /// Sensor status at this value, as the enum NAME (the wire value is the
+        /// string, not the number). Value table: Ok, Error, OffTime.
         /// </summary>
         public string Status { get; init; }
 

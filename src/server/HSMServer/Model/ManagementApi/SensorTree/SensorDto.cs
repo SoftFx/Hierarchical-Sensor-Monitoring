@@ -52,8 +52,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         public string Unit { get; init; }
 
         /// <summary>
-        /// Current sensor status (policy-aware; a muted sensor reports OffTime).
-        /// Value table: 0=Ok, 1=Error, 255=OffTime. Null when the sensor has no data yet.
+        /// Current sensor status (policy-aware; a muted sensor reports OffTime),
+        /// as the enum NAME (the wire value is the string, not the number).
+        /// Value table: Ok, Error, OffTime. Null when the sensor has no data yet.
         /// </summary>
         public string Status { get; init; }
 

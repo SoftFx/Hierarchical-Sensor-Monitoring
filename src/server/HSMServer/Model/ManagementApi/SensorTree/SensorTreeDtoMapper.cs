@@ -36,13 +36,17 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             Folders = node.SubProducts.Values
                 .OrderBy(folder => folder.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(folder => folder.Id)
+                .Take(MaxChildrenPerNode)
                 .Select(ToNodeRef)
                 .ToList(),
+            TotalFolders = node.SubProducts.Count,
             Sensors = node.Sensors.Values
                 .OrderBy(sensor => sensor.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(sensor => sensor.Id)
+                .Take(MaxChildrenPerNode)
                 .Select(ToSensorRef)
                 .ToList(),
+            TotalSensors = node.Sensors.Count,
         };
 
 
@@ -172,5 +176,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
         public const string NodeTypeProduct = "product";
         public const string NodeTypeFolder = "folder";
+
+        // The node endpoint's response bound, matching the area's list ceiling:
+        // a node's DIRECT children can reach thousands (a flat product with
+        // 5000+ sensors), and no /api/v1 response may be unbounded — the totals
+        // plus the paginated sensor search cover the rest (#1387 review, r2).
+        public const int MaxChildrenPerNode = 200;
     }
 }

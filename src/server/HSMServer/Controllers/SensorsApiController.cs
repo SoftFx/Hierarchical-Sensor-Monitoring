@@ -117,7 +117,7 @@ namespace HSMServer.Controllers
                 subtree = node;
             }
 
-            if (!SensorSearchMatcher.TryBuild(search, searchMode, out var predicate, out var searchErrors))
+            if (!SensorSearchMatcher.TryBuild(search, searchMode, out var predicate, out var regexMode, out var searchErrors))
                 return ManagementApiErrors.Validation(searchErrors);
 
             if (!TryResolveTypeFilter(type, out var typeFilter, out var typeErrors))
@@ -126,7 +126,7 @@ namespace HSMServer.Controllers
             page = Math.Max(page, 1);
             pageSize = Math.Min(pageSize <= 0 ? DefaultPageSize : pageSize, MaxPageSize);
 
-            var all = FilterSensors(subtree, predicate, typeFilter, !string.IsNullOrEmpty(search), out var searchAborted);
+            var all = FilterSensors(subtree, predicate, typeFilter, regexMode, out var searchAborted);
 
             if (searchAborted)
                 return ManagementApiErrors.Validation(new Dictionary<string, string[]>
@@ -178,8 +178,10 @@ namespace HSMServer.Controllers
         /// points where the sensor was silent) are included. When the window holds
         /// more values than requested, the oldest excess is dropped and
         /// <c>truncated</c> is set — narrow the window for full resolution. One
-        /// request streams at most 100001 values: a window denser than that
-        /// returns the newest points of the scanned prefix (still truncated).
+        /// request streams at most 100001 values: a denser window sets
+        /// <c>scanCapReached</c> and the points cover the OLDEST portion of the
+        /// window, not its newest end — narrow the window before trusting the
+        /// data as current.
         /// </summary>
         /// <param name="id">Sensor id.</param>
         /// <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
@@ -248,6 +250,12 @@ namespace HSMServer.Controllers
                 To = toUtc,
                 MaxPoints = maxPoints,
                 Truncated = totalSeen > maxPoints,
+
+                // Conservative by design: flagged whenever the scan stopped at
+                // the cap, even if the window happened to end exactly there —
+                // the dangerous confusion is the opposite one (stale points
+                // read as current), and it can never occur (#1387 review, r2).
+                ScanCapReached = totalSeen > MaxScannedValues,
             });
         }
 
@@ -283,9 +291,10 @@ namespace HSMServer.Controllers
         // regex match timeout bounds ONE match; the evaluation budget bounds the
         // WHOLE scan — a pattern running just under the per-match timeout over
         // thousands of sensors must not stretch one request into minutes. The
-        // budget applies only when a search text was sent: an unfiltered listing
-        // is a linear scan with an O(1) per-item predicate, and a 400 blaming a
-        // "search pattern" the caller never sent is not actionable (#1387 review).
+        // budget applies to REGEX searches only: a substring scan cannot
+        // backtrack, so its cost is volume alone (pagination addresses that), and
+        // a 400 blaming a "search pattern" the caller never wrote is not
+        // actionable (#1387 review, round 2).
         // The path sort runs through OrderBy — FullPath is a recursive, allocating
         // property, and a comparison-delegate Sort would re-walk the parent chain
         // on every comparison (#1387 review).

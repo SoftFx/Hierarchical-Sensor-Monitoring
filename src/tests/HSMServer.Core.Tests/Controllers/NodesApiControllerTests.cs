@@ -138,6 +138,28 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal([_folder.Id], node.Folders.Select(f => f.Id));
             Assert.Equal(["sensor-a", "sensor-b"], node.Sensors.Select(s => s.Name));
             Assert.Equal(["Double", "Double"], node.Sensors.Select(s => s.Type));
+            Assert.Equal((1, 2), (node.TotalFolders, node.TotalSensors));
+        }
+
+
+        [Fact]
+        public void GetNode_ChildrenAreCappedAtTheAreaCeiling_TotalsCarryTheUncappedCount()
+        {
+            // No /api/v1 response may be unbounded: a flat product can carry
+            // thousands of DIRECT sensors, and the node body caps its children
+            // like every other list, with totals pointing at the paginated
+            // sensor search for the rest (#1387 review, round 2).
+            for (var i = 0; i < SensorTreeDtoMapper.MaxChildrenPerNode + 1; i++)
+                _root.AddSensor(BuildSensor(_root, $"sensor-{i:000}"));
+
+            var node = Assert.IsType<OkObjectResult>(CreateController().GetNode(_root.Id)).Value as NodeDto;
+
+            Assert.Equal(SensorTreeDtoMapper.MaxChildrenPerNode, node.Sensors.Count);
+            Assert.Equal(SensorTreeDtoMapper.MaxChildrenPerNode + 1, node.TotalSensors);
+
+            // Ordered by name: the cap keeps the FIRST 200 in name order.
+            Assert.Equal("sensor-000", node.Sensors.First().Name);
+            Assert.Equal($"sensor-{SensorTreeDtoMapper.MaxChildrenPerNode - 1:000}", node.Sensors.Last().Name);
         }
 
 

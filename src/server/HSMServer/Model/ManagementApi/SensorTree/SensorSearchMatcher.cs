@@ -27,10 +27,17 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
         // A null/empty search matches everything — the endpoint doubles as a plain
         // sensor listing. Errors are field-keyed for the uniform validation body.
+        // A null/empty search matches everything — the endpoint doubles as a plain
+        // sensor listing. Errors are field-keyed for the uniform validation body.
+        // `regexMode` tells the caller whether the evaluation budget applies: a
+        // substring scan cannot backtrack catastrophically, so volume alone is
+        // its only cost (pagination addresses that); only regex evaluation is
+        // time-bounded (#1387 review, round 2).
         public static bool TryBuild(string search, string searchMode,
-            out Func<BaseSensorModel, bool> predicate, out IDictionary<string, string[]> errors)
+            out Func<BaseSensorModel, bool> predicate, out bool regexMode, out IDictionary<string, string[]> errors)
         {
             predicate = MatchesEverything;
+            regexMode = false;
             errors = null;
 
             if (string.IsNullOrEmpty(search))
@@ -61,6 +68,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                 return false;
             }
 
+            regexMode = true;
             predicate = sensor => IsMatch(sensor.DisplayName) || IsMatch(sensor.Description) || IsMatch(sensor.FullPath);
             return true;
 

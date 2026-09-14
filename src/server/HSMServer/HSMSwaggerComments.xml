@@ -215,8 +215,10 @@
             points where the sensor was silent) are included. When the window holds
             more values than requested, the oldest excess is dropped and
             <c>truncated</c> is set — narrow the window for full resolution. One
-            request streams at most 100001 values: a window denser than that
-            returns the newest points of the scanned prefix (still truncated).
+            request streams at most 100001 values: a denser window sets
+            <c>scanCapReached</c> and the points cover the OLDEST portion of the
+            window, not its newest end — narrow the window before trusting the
+            data as current.
             </summary>
             <param name="id">Sensor id.</param>
             <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
@@ -769,8 +771,9 @@
             <summary>
             A tree node — a root product or a nested folder — with its DIRECT children
             only (no recursion): folders and sensors are listed separately, both ordered
-            by name. Sensors of the whole subtree are served by the sensor search
-            endpoint with <c>product={node id}</c>.
+            by name and capped (the area's response bound); the totals tell the caller
+            whether the full list was returned. Sensors of the whole subtree are served
+            paginated by the sensor search endpoint with <c>product={node id}</c>.
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Id">
@@ -798,10 +801,23 @@
             <summary>Parent node reference; null for a root product.</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Folders">
-            <summary>Direct child folders, ordered by name.</summary>
+            <summary>
+            Direct child folders, ordered by name, capped at the area's list
+            ceiling (200); <c>totalFolders</c> carries the uncapped count.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.TotalFolders">
+            <summary>Total number of direct child folders (the list above may be capped).</summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Sensors">
-            <summary>Direct child sensors, ordered by name.</summary>
+            <summary>
+            Direct child sensors, ordered by name, capped at the area's list
+            ceiling (200); <c>totalSensors</c> carries the uncapped count — the
+            paginated sensor search with product = this id serves the full list.
+            </summary>
+        </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.TotalSensors">
+            <summary>Total number of direct child sensors (the list above may be capped).</summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.ProductDto">
             <summary>
@@ -869,8 +885,9 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.Status">
             <summary>
-            Current sensor status (policy-aware; a muted sensor reports OffTime).
-            Value table: 0=Ok, 1=Error, 255=OffTime. Null when the sensor has no data yet.
+            Current sensor status (policy-aware; a muted sensor reports OffTime),
+            as the enum NAME (the wire value is the string, not the number).
+            Value table: Ok, Error, OffTime. Null when the sensor has no data yet.
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorDto.State">
@@ -902,6 +919,8 @@
             [<c>from</c>, <c>to</c>], oldest first. No server-side aggregation or
             decimation — when the window holds more values than requested, the oldest
             excess is dropped and <c>truncated</c> is set; narrow the window to see more.
+            A window denser than the server's scan cap instead sets <c>scanCapReached</c>:
+            the points then cover the OLDEST portion of the window, not its newest end.
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.Points">
@@ -922,6 +941,14 @@
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.Truncated">
             <summary>True when the window held more values than returned — narrow the window for full resolution.</summary>
         </member>
+        <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.ScanCapReached">
+            <summary>
+            True when one request's scan cap was reached: the window was too dense,
+            and the points are the newest ones OF THE SCANNED PREFIX — i.e. the
+            OLDEST portion of the window, not its newest end. Narrow the window
+            before treating the data as current.
+            </summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.SensorTree.SensorValueDto">
             <summary>
             One sensor value — the current (<c>lastValue</c>) or a history point — as a
@@ -937,7 +964,8 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorValueDto.Status">
             <summary>
-            Sensor status at this value. Value table: 0=Ok, 1=Error, 255=OffTime.
+            Sensor status at this value, as the enum NAME (the wire value is the
+            string, not the number). Value table: Ok, Error, OffTime.
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorValueDto.Comment">

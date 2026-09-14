@@ -222,11 +222,12 @@ namespace HSMServer.Core.Tests.Swagger
         public void SensorTreeDtos_DocumentedTables_MatchTheDomainEnums()
         {
             var values = ReadRepoFile("src/server/HSMServer/Model/ManagementApi/SensorTree/SensorValueDto.cs");
-            AssertTable(values, "public string Status { get; init; }", typeof(HSMCommon.Model.SensorStatus));
+            AssertNameTable(values, "public string Status { get; init; }", typeof(HSMCommon.Model.SensorStatus));
 
             var sensor = ReadRepoFile("src/server/HSMServer/Model/ManagementApi/SensorTree/SensorDto.cs");
             AssertNameTable(sensor, "public string Type { get; init; }", typeof(HSMCommon.Model.SensorType));
             AssertNameTable(sensor, "public string State { get; init; }", typeof(HSMServer.Core.Model.SensorState));
+            AssertNameTable(sensor, "public string Status { get; init; }", typeof(HSMCommon.Model.SensorStatus));
 
             var node = ReadRepoFile("src/server/HSMServer/Model/ManagementApi/SensorTree/NodeDto.cs");
 

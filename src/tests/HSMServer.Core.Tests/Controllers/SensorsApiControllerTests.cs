@@ -465,6 +465,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal([5, 6, 7, 8, 9], history.Points.Select(p => p.Value));
             Assert.True(history.Truncated);
+            Assert.False(history.ScanCapReached);
             Assert.Equal(5, history.MaxPoints);
 
             var full = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 50)).Value as SensorHistoryDto;
@@ -580,6 +581,10 @@ namespace HSMServer.Core.Tests.Controllers
             var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 5)).Value as SensorHistoryDto;
 
             Assert.True(history.Truncated);
+
+            // The DISTINCT truncation signal: these points are the oldest
+            // portion of the window, not its newest end.
+            Assert.True(history.ScanCapReached);
             Assert.Equal(5, history.Points.Count);
 
             // The newest of the SCANNED PREFIX: the cap-th values of the stream,
