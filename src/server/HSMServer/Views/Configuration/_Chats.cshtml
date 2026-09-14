@@ -54,7 +54,7 @@
             </button>
         </div>
         <select id="channelFilter" class="form-select" style="max-width: 180px;">
-            <option value="any" selected>Any channel</option>
+            <option value="any" selected>All channels</option>
             <option value="telegram">Telegram</option>
             <option value="slack">Slack</option>
             <option value="mattermost">Mattermost</option>
@@ -165,8 +165,8 @@
             );
         });
 
-        // Filter rows by Name substring (case-insensitive) AND the selected channel. "Any channel"
-        // (the default) means no channel filter — mirrors Users' "Role" select semantics.
+        // Filter rows by Name substring (case-insensitive) AND the selected channel. "All channels"
+        // (the default) means no channel filter — mirrors Users' "All users" select semantics.
         //
         // Read data-name via .attr() + String() rather than .data() — jQuery's data() coerces
         // values that look like numbers/booleans/JSON into native types. A chat named e.g.

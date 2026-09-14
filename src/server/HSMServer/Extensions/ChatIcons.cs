@@ -12,16 +12,39 @@ namespace HSMServer.Extensions
 
         public const string SlackBrandClass = "fab fa-slack";
 
-        // Font Awesome Free lacks an official Mattermost brand icon, so we inline the brand
-        // mark from Simple Icons (CC0-1.0). Sized with em units and currentColor so it inherits
-        // font-size/color just like the surrounding <i class='fab fa-...'> tags.
-        public const string MattermostBrandIconSvg =
-            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' " +
-            "width='1em' height='1em' fill='currentColor' aria-hidden='true' " +
-            "role='img' focusable='false' style='vertical-align:-.125em'>" +
-            "<title>Mattermost</title>" +
-            "<path d='M12.081 0C7.048-.034 2.339 3.125.637 8.153c-2.125 6.276 1.24 13.086 7.516 15.21 6.276 2.125 13.086-1.24 15.21-7.516 1.727-5.1-.172-10.552-4.311-13.557l.126 2.547c2.065 2.282 2.88 5.512 1.852 8.549-1.534 4.532-6.594 6.915-11.3 5.321-4.708-1.593-7.28-6.559-5.745-11.092 1.031-3.046 3.655-5.121 6.694-5.67l1.642-1.94A4.87 4.87 0 0 0 12.08 0zm3.528 1.094a.284.284 0 0 0-.123.024l-.004.001a.33.33 0 0 0-.109.071c-.145.142-.657.828-.657.828L13.6 3.4l-1.3 1.585-2.232 2.776s-1.024 1.278-.798 2.851c.226 1.574 1.396 2.34 2.304 2.648.907.307 2.302.408 3.438-.704 1.135-1.112 1.098-2.75 1.098-2.75l-.087-3.56-.07-2.05-.047-1.775s.01-.856-.02-1.057a.33.33 0 0 0-.035-.107l-.006-.012-.007-.011a.277.277 0 0 0-.229-.14z'/>" +
-            "</svg>";
+        // Font Awesome Free lacks an official Mattermost brand glyph, so we ship the brand mark
+        // from Simple Icons (CC0-1.0) as a CSS mask on a <span>. An inline <svg> would disappear
+        // inside chat pickers: bootstrap-select sanitizes `data-content` HTML with a tag
+        // whitelist that has no svg/path (bootstrap-select.js, DefaultWhitelist), while <span>
+        // and its class/style attributes are whitelisted and the sanitizer never parses CSS
+        // inside `style`, so the mask data URI passes through untouched. The em-sized box and
+        // background-color:currentColor make the icon inherit font-size/color just like the
+        // surrounding <i class='fab fa-...'> tags — both in sanitized dropdowns and wherever
+        // this markup is rendered raw outside a <select>.
+        private const string MattermostBrandMaskUrl =
+            "data:image/svg+xml;base64," +
+            "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyLjA4" +
+            "MSAwQzcuMDQ4LS4wMzQgMi4zMzkgMy4xMjUuNjM3IDguMTUzYy0yLjEyNSA2LjI3NiAxLjI0IDEzLjA4NiA3LjUxNiAxNS4yMSA2" +
+            "LjI3NiAyLjEyNSAxMy4wODYtMS4yNCAxNS4yMS03LjUxNiAxLjcyNy01LjEtLjE3Mi0xMC41NTItNC4zMTEtMTMuNTU3bC4xMjYg" +
+            "Mi41NDdjMi4wNjUgMi4yODIgMi44OCA1LjUxMiAxLjg1MiA4LjU0OS0xLjUzNCA0LjUzMi02LjU5NCA2LjkxNS0xMS4zIDUuMzIx" +
+            "LTQuNzA4LTEuNTkzLTcuMjgtNi41NTktNS43NDUtMTEuMDkyIDEuMDMxLTMuMDQ2IDMuNjU1LTUuMTIxIDYuNjk0LTUuNjdsMS42" +
+            "NDItMS45NEE0Ljg3IDQuODcgMCAwIDAgMTIuMDggMHptMy41MjggMS4wOTRhLjI4NC4yODQgMCAwIDAtLjEyMy4wMjRsLS4wMDQu" +
+            "MDAxYS4zMy4zMyAwIDAgMC0uMTA5LjA3MWMtLjE0NS4xNDItLjY1Ny44MjgtLjY1Ny44MjhMMTMuNiAzLjRsLTEuMyAxLjU4NS0y" +
+            "LjIzMiAyLjc3NnMtMS4wMjQgMS4yNzgtLjc5OCAyLjg1MWMuMjI2IDEuNTc0IDEuMzk2IDIuMzQgMi4zMDQgMi42NDguOTA3LjMw" +
+            "NyAyLjMwMi40MDggMy40MzgtLjcwNCAxLjEzNS0xLjExMiAxLjA5OC0yLjc1IDEuMDk4LTIuNzVsLS4wODctMy41Ni0uMDctMi4w" +
+            "NS0uMDQ3LTEuNzc1cy4wMS0uODU2LS4wMi0xLjA1N2EuMzMuMzMgMCAwIDAtLjAzNS0uMTA3bC0uMDA2LS4wMTItLjAwNy0uMDEx" +
+            "YS4yNzcuMjc3IDAgMCAwLS4yMjktLjE0eiIvPjwvc3ZnPg==";
+
+        // The whole string must stay free of double quotes: ChatBrandIconsAndName returns
+        // IHtmlContent, which Razor writes into data-content attributes RAW — a double
+        // quote would terminate the attribute mid-style (the old svg used single quotes
+        // only for the same reason). CSS url() tolerates unquoted tokens, and the base64
+        // alphabet never contains quotes, whitespace or parentheses.
+        public const string MattermostBrandIconHtml =
+            "<span aria-hidden='true' style='" +
+            "display:inline-block;width:1em;height:1em;vertical-align:-.125em;background-color:currentColor;" +
+            $"-webkit-mask-image:url({MattermostBrandMaskUrl});-webkit-mask-repeat:no-repeat;-webkit-mask-size:100% 100%;" +
+            $"mask-image:url({MattermostBrandMaskUrl});mask-repeat:no-repeat;mask-size:100% 100%'></span>";
 
 
         public static string ChatBrandIcon(this Chat chat)
@@ -33,7 +56,7 @@ namespace HSMServer.Extensions
                 return $"<i class='{SlackBrandClass}'></i>";
 
             if (!string.IsNullOrEmpty(chat.MattermostWebhookUrl))
-                return MattermostBrandIconSvg;
+                return MattermostBrandIconHtml;
 
             return null;
         }
@@ -49,7 +72,7 @@ namespace HSMServer.Extensions
                 icons.Add($"<i class='{SlackBrandClass}'></i>");
 
             if (!string.IsNullOrEmpty(chat.MattermostWebhookUrl))
-                icons.Add(MattermostBrandIconSvg);
+                icons.Add(MattermostBrandIconHtml);
 
             if (icons.Count == 0)
                 return null;
