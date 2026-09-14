@@ -55,22 +55,6 @@ namespace HSMServer.Controllers
         // match timeout bounds one IsMatch; this bounds the full scan.
         public const int SearchBudgetMs = 2_000;
 
-        // Ceiling on how many values one history read may stream (#1386 review,
-        // pass 2): newest-N selection needs the window streamed oldest-first, but
-        // a huge window with a tiny maxPoints must not deserialize the sensor's
-        // entire stored history. Aligned with the server's own per-read ceiling —
-        // TreeValuesCache.MaxHistoryCount is the bound every other history
-        // consumer respects, and following it directly means a future ceiling
-        // raise carries this endpoint along (#1387 review, round 4). File sensors
-        // get tighter limits at the call site: their converter deserializes the
-        // full byte payload per row for a metadata-only projection, so their
-        // response bound doubles as their scan bound. Implemented as the read's
-        // own count bound; the cache's generator releases the file-history lock
-        // on every exit path (try/finally — the count-reached exit used to latch
-        // it, pass 3). A window denser than the cap returns the newest maxPoints
-        // of the SCANNED PREFIX with scanCapReached=true — narrow the window.
-        public static readonly int MaxScannedValues = TreeValuesCache.MaxHistoryCount;
-
         private static readonly TimeSpan DefaultHistoryWindow = TimeSpan.FromHours(24);
 
         private readonly ITreeValuesCache _cache;
@@ -191,14 +175,11 @@ namespace HSMServer.Controllers
         /// points where the sensor was silent) are included. When the window holds
         /// more values than requested, the oldest excess is dropped and
         /// <c>truncated</c> is set — narrow the window for full resolution. A
-        /// window denser than the scan cap (50001 values; maxPoints for File
-        /// sensors, whose response bound is also capped at 100) sets
-        /// <c>scanCapReached</c> and the points cover the OLDEST portion of the
-        /// window, not its newest end — narrow the window before trusting the
-        /// data as current. A File sensor whose history is being read by another
-        /// request answers with <c>readUnavailable</c>=true and no points — retry
-        /// shortly. For aggregated (bar) sensors the response may carry one point
-        /// older than the echoed <c>from</c> — the pre-window border value.
+        /// File sensor whose history is being read by another request answers
+        /// with <c>readUnavailable</c>=true and no points — retry shortly (File
+        /// response bounds are additionally capped at 100 points). For
+        /// aggregated (bar) sensors the response may carry one point older than
+        /// the echoed <c>from</c> — the pre-window border value.
         /// </summary>
         /// <param name="id">Sensor id.</param>
         /// <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
@@ -239,12 +220,6 @@ namespace HSMServer.Controllers
             if (sensor.Type == SensorType.File)
                 maxPoints = Math.Min(maxPoints, FileMaxPointsLimit);
 
-            // File payloads are the expensive part of every scanned row (the
-            // converter deserializes the full byte[] for a metadata-only
-            // projection): for File sensors the response bound IS the scan bound
-            // — there is no newest-N benefit in scanning past it (#1387 r3).
-            var scanLimit = sensor.Type == SensorType.File ? maxPoints : MaxScannedValues;
-
             // File history reads are serialized per sensor; when another reader
             // holds the lock the cache answers an EMPTY stream. An agent must be
             // able to tell "no values in this window" from "busy, retry" — hence
@@ -252,20 +227,20 @@ namespace HSMServer.Controllers
             // (#1387 review, round 3).
             var readUnavailable = sensor.Type == SensorType.File && _cache.IsFileHistoryReadInProgress(id);
 
-            // The window streams oldest-first; keep the newest maxPoints values in
-            // a sliding buffer. Projection happens INSIDE the loop: the buffer
-            // holds the metadata DTOs, never the BaseValue instances — a File
-            // sensor's values carry the full (decompressed) byte payloads, and
-            // retaining maxPoints of those would retain gigabytes (#1387 review).
-            // The read's count is the scan cap (see MaxScannedValues) — not the
-            // response size, which maxPoints bounds. includeTtl: OffTime markers
-            // are part of the honest picture of a sensor's timeline (#1386).
-            var window = new Queue<SensorValueDto>(maxPoints);
-            long totalSeen = 0;
+            // The database streams the window NEWEST-FIRST (Database.GetValueToFrom
+            // iterates descending keys, `to` → `from` — #1389), so the newest-N
+            // read is a bounded prefix of the stream: ask for maxPoints + 1 (the
+            // page generator's own count bound), drop the extra — the OLDEST of
+            // the batch — and reverse for the oldest-first wire order. Projection
+            // happens INSIDE the loop: the buffer holds metadata DTOs, never the
+            // BaseValue instances — a File sensor's values carry the full
+            // (decompressed) byte payloads (#1387 review). includeTtl: OffTime
+            // markers are part of the honest picture of a sensor's timeline.
+            var points = new List<SensorValueDto>(maxPoints + 1);
 
             if (!readUnavailable)
             {
-                await foreach (var page in _cache.GetSensorValuesPage(id, fromUtc, toUtc, scanLimit + 1,
+                await foreach (var page in _cache.GetSensorValuesPage(id, fromUtc, toUtc, maxPoints + 1,
                                    RequestOptions.IncludeTtl))
                 {
                     // A disconnected caller must not keep the (heavy) stream
@@ -274,35 +249,32 @@ namespace HSMServer.Controllers
                     HttpContext.RequestAborted.ThrowIfCancellationRequested();
 
                     foreach (var value in page)
-                    {
-                        window.Enqueue(SensorTreeDtoMapper.ToValueDto(sensor, value));
-                        totalSeen++;
-
-                        if (window.Count > maxPoints)
-                            window.Dequeue();
-                    }
+                        points.Add(SensorTreeDtoMapper.ToValueDto(sensor, value));
                 }
             }
 
             // The lock can also be taken WHILE this read ran (the pre-read check
             // races by nature): an empty File-sensor answer with the lock held
             // now is likelier "busy" than "no data".
-            if (!readUnavailable && sensor.Type == SensorType.File && window.Count == 0)
+            if (!readUnavailable && sensor.Type == SensorType.File && points.Count == 0)
                 readUnavailable = _cache.IsFileHistoryReadInProgress(id);
+
+            // Newest-first arrival: the surplus point beyond maxPoints is the
+            // oldest of the batch — its presence is exactly "the window held
+            // more than maxPoints".
+            var truncated = points.Count > maxPoints;
+            if (truncated)
+                points.RemoveAt(points.Count - 1);
+
+            points.Reverse();
 
             return Ok(new SensorHistoryDto
             {
-                Points = [.. window],
+                Points = points,
                 From = fromUtc,
                 To = toUtc,
                 MaxPoints = maxPoints,
-                Truncated = totalSeen > maxPoints,
-
-                // Conservative by design: flagged whenever the scan stopped at
-                // the cap, even if the window happened to end exactly there —
-                // the dangerous confusion is the opposite one (stale points
-                // read as current), and it can never occur (#1387 review, r2).
-                ScanCapReached = totalSeen > scanLimit,
+                Truncated = truncated,
                 ReadUnavailable = readUnavailable,
             });
         }

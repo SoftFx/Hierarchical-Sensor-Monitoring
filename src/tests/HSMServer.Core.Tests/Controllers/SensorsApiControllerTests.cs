@@ -470,29 +470,74 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public async Task GetSensorHistory_ReturnsNewestPoints_SetsTruncated()
+        public async Task GetSensorHistory_ReturnsNewestPoints_OldestFirst_EvenWhenDense()
         {
+            // The database streams the window NEWEST-FIRST (Database.GetValueToFrom
+            // iterates descending keys, #1389): the mock mirrors that direction, and
+            // the endpoint must answer with the genuinely NEWEST maxPoints of the
+            // window in OLDEST-FIRST order — regardless of how dense the window is.
             var sensor = AddSensor(_productA, "cpu", "load", SensorType.Integer);
 
             var from = new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc);
-            var values = Enumerable.Range(0, 10)
+            var oldestFirst = Enumerable.Range(0, 10)
                 .Select(i => new IntegerValue { Value = i, Time = from.AddMinutes(i) })
                 .ToList<BaseValue>();
+            var newestFirst = Enumerable.Reverse(oldestFirst).ToList();
 
             _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
                     It.IsAny<int>(), It.IsAny<RequestOptions>()))
-                .Returns((Guid _, DateTime _, DateTime _, int _, RequestOptions _) => PagesOf(values));
+                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) => PagesOf(newestFirst.Take(count)));
 
             var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 5)).Value as SensorHistoryDto;
 
             Assert.Equal([5, 6, 7, 8, 9], history.Points.Select(p => p.Value));
             Assert.True(history.Truncated);
-            Assert.False(history.ScanCapReached);
             Assert.Equal(5, history.MaxPoints);
 
             var full = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 50)).Value as SensorHistoryDto;
-            Assert.Equal(10, full.Points.Count);
+            Assert.Equal([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], full.Points.Select(p => p.Value));
             Assert.False(full.Truncated);
+        }
+
+
+        [Fact]
+        public async Task GetSensorHistory_DenseWindow_ReturnsTheNewestEnd_NotTheOldest()
+        {
+            // The #1389 regression: a dense window used to answer with the OLDEST
+            // points of the scanned range (the sliding window kept the wrong end
+            // of a newest-first stream). A window far denser than maxPoints must
+            // return its NEWEST end, and read cost must not scale with density:
+            // the cache receives maxPoints + 1, never a full-window scan.
+            var sensor = AddSensor(_productA, "cpu", "load", SensorType.Integer);
+
+            var from = new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc);
+            var total = 500_000;
+
+            int? requestedCount = null;
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) =>
+                {
+                    requestedCount = count;
+
+                    // Newest-first stream of a dense window, honoring the count
+                    // bound exactly like the real page generator.
+                    return PagesOf(Enumerable.Range(0, count).Select(i => (BaseValue)new IntegerValue
+                    {
+                        Value = total - 1 - i,
+                        Time = from.AddSeconds(total - 1 - i),
+                    }));
+                });
+
+            var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 5)).Value as SensorHistoryDto;
+
+            // The read is bounded by the RESPONSE bound: maxPoints + 1, however
+            // dense the window is.
+            Assert.Equal(6, requestedCount!.Value);
+
+            Assert.Equal([total - 5, total - 4, total - 3, total - 2, total - 1],
+                history.Points.Select(p => p.Value));
+            Assert.True(history.Truncated);
         }
 
 
@@ -573,41 +618,43 @@ namespace HSMServer.Core.Tests.Controllers
 
             await CreateController().GetSensorHistory(sensor.Id, from: from, to: to);
 
-            // The stream is bounded by the SCAN CAP (not maxPoints — the newest-N
-            // selection happens endpoint-side; not unbounded — a huge window with
-            // a tiny maxPoints must not deserialize the whole history) and carries
-            // the IncludeTtl flag — OffTime markers are part of the timeline (#1386).
-            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, to, SensorsApiController.MaxScannedValues + 1,
+            // The stream is bounded by the RESPONSE bound (maxPoints + 1 — the
+            // newest-first read makes the newest-N selection a stream prefix,
+            // #1389) and carries the IncludeTtl flag — OffTime markers are part
+            // of the timeline (#1386).
+            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, to, SensorsApiController.DefaultMaxPoints + 1,
                 It.Is<RequestOptions>(o => o.HasFlag(RequestOptions.IncludeTtl))), Times.Once);
         }
 
 
         [Fact]
-        public async Task GetSensorHistory_FileSensor_ScanCapEqualsTheResponseBound()
+        public async Task GetSensorHistory_FileSensor_ReadIsBoundedByTheResponseBound()
         {
-            // File payloads are the expensive part of every scanned row: the
-            // response bound IS their scan bound (#1387 review, round 3).
+            // File payloads are the expensive part of every scanned row: their
+            // read is exactly maxPoints + 1 rows, nothing more (#1389).
             var sensor = AddSensor(_productA, "logs", "app logs", SensorType.File);
 
             var from = new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc);
-            var values = Enumerable.Range(0, 10)
-                .Select(i => new FileValue { Value = [1, 2, 3], Name = $"log-{i}", Extension = ".txt", OriginalSize = 3, Time = from.AddMinutes(i) })
-                .ToList<BaseValue>();
+            var newestFirst = Enumerable.Range(0, 10)
+                .Select(i => (BaseValue)new FileValue { Value = [1, 2, 3], Name = $"log-{9 - i}", Extension = ".txt", OriginalSize = 3, Time = from.AddMinutes(9 - i) })
+                .ToList();
 
             _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
                     It.IsAny<int>(), It.IsAny<RequestOptions>()))
-                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) => PagesOf(values.Take(count)));
+                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) => PagesOf(newestFirst.Take(count)));
 
             var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 5)).Value as SensorHistoryDto;
 
             _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(), 6,
                 It.IsAny<RequestOptions>()), Times.Once);
 
-            Assert.True(history.ScanCapReached);
             Assert.True(history.Truncated);
 
-            // Metadata only, even though the buffered values carry bytes.
+            // Metadata only, even though the buffered values carry bytes; the
+            // newest five, oldest-first.
             Assert.All(history.Points, point => Assert.IsType<FileValueDto>(point.Value));
+            Assert.Equal(["log-5", "log-6", "log-7", "log-8", "log-9"],
+                history.Points.Select(p => ((FileValueDto)p.Value).Name));
         }
 
 
@@ -669,38 +716,5 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
-        [Fact]
-        public async Task GetSensorHistory_WindowDenserThanTheScanCap_TruncatesToNewestOfScannedPrefix()
-        {
-            var sensor = AddSensor(_productA, "cpu", "load", SensorType.Integer);
-
-            var from = new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc);
-
-            // Denser than the cap: the endpoint must stop converting at
-            // MaxScannedValues + 1 values and return the newest maxPoints of that
-            // prefix with truncated=true — never the whole window, never a hang.
-            var values = Enumerable.Range(0, SensorsApiController.MaxScannedValues + 10)
-                .Select(i => new IntegerValue { Value = i, Time = from.AddSeconds(i) })
-                .ToList<BaseValue>();
-
-            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
-                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
-                .Returns((Guid _, DateTime _, DateTime _, int count, RequestOptions _) => PagesOf(values.Take(count)));
-
-            var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 5)).Value as SensorHistoryDto;
-
-            Assert.True(history.Truncated);
-
-            // The DISTINCT truncation signal: these points are the oldest
-            // portion of the window, not its newest end.
-            Assert.True(history.ScanCapReached);
-            Assert.Equal(5, history.Points.Count);
-
-            // The newest of the SCANNED PREFIX: the cap-th values of the stream,
-            // not the stream's true tail.
-            var prefixEnd = SensorsApiController.MaxScannedValues;
-            Assert.Equal([prefixEnd - 4, prefixEnd - 3, prefixEnd - 2, prefixEnd - 1, prefixEnd],
-                history.Points.Select(p => p.Value));
-        }
     }
 }
