@@ -43,11 +43,13 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class SensorsApiController : ControllerBase
     {
-        public const int DefaultPageSize = 50;
-        public const int MaxPageSize = 200;
-
         public const int DefaultMaxPoints = 1_000;
         public const int MaxPointsLimit = 10_000;
+
+        // File metadata history pages rarely need thousands of entries, and
+        // every scanned File row deserializes a full payload while holding the
+        // per-sensor lock: a much tighter response bound for them (#1387 r4).
+        public const int FileMaxPointsLimit = 100;
 
         // Whole-request ceiling on search evaluation (#1386 review): the regex
         // match timeout bounds one IsMatch; this bounds the full scan.
@@ -56,19 +58,18 @@ namespace HSMServer.Controllers
         // Ceiling on how many values one history read may stream (#1386 review,
         // pass 2): newest-N selection needs the window streamed oldest-first, but
         // a huge window with a tiny maxPoints must not deserialize the sensor's
-        // entire stored history. Aligned with the server's own per-read ceiling
-        // (TreeValuesCache.MaxHistoryCount is the bound every other history
-        // consumer respects; the raw page overload this endpoint uses clamps
-        // nothing, #1387 review round 3). File sensors get a tighter limit at the
-        // call site: their converter deserializes the full byte payload per row
-        // for a metadata-only projection, so the response bound is their scan
-        // bound. Implemented as the read's own count bound; the cache's generator
-        // releases the file-history lock on every exit path (try/finally — the
-        // count-reached exit used to latch it, pass 3). A window denser than the
-        // cap returns the newest maxPoints of the SCANNED PREFIX with
-        // scanCapReached=true — narrow the window.
-        public static readonly int MaxScannedValues =
-            Math.Min(100_000, TreeValuesCache.MaxHistoryCount);
+        // entire stored history. Aligned with the server's own per-read ceiling —
+        // TreeValuesCache.MaxHistoryCount is the bound every other history
+        // consumer respects, and following it directly means a future ceiling
+        // raise carries this endpoint along (#1387 review, round 4). File sensors
+        // get tighter limits at the call site: their converter deserializes the
+        // full byte payload per row for a metadata-only projection, so their
+        // response bound doubles as their scan bound. Implemented as the read's
+        // own count bound; the cache's generator releases the file-history lock
+        // on every exit path (try/finally — the count-reached exit used to latch
+        // it, pass 3). A window denser than the cap returns the newest maxPoints
+        // of the SCANNED PREFIX with scanCapReached=true — narrow the window.
+        public static readonly int MaxScannedValues = TreeValuesCache.MaxHistoryCount;
 
         private static readonly TimeSpan DefaultHistoryWindow = TimeSpan.FromHours(24);
 
@@ -101,8 +102,9 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status503ServiceUnavailable)]
         public IActionResult GetSensors(Guid? product = null, string search = null,
-            string searchMode = null, string type = null, int page = 1, int pageSize = DefaultPageSize)
+            string searchMode = null, string type = null, int page = 1, int pageSize = ApiPagination.DefaultPageSize)
         {
             // The optional subtree filter: an unknown id is the plain area 404 (no
             // evaluator call), an invisible one the evaluator's 404 — the caller
@@ -130,31 +132,27 @@ namespace HSMServer.Controllers
             if (!TryResolveTypeFilter(type, out var typeFilter, out var typeErrors))
                 return ManagementApiErrors.Validation(typeErrors);
 
-            page = Math.Max(page, 1);
-            pageSize = Math.Min(pageSize <= 0 ? DefaultPageSize : pageSize, MaxPageSize);
+            (page, pageSize) = ApiPagination.Normalize(page, pageSize);
 
             var all = FilterSensors(subtree, predicate, typeFilter, out var searchAborted);
 
             if (searchAborted)
             {
-                // Mode-appropriate blame (#1387 review, round 3): only a regex
-                // caller has a "pattern" to simplify; a contains search or a
-                // plain listing must be told the actionable remedy instead.
-                var (field, message) = string.IsNullOrEmpty(search)
-                    ? ("product", "The listing exceeded the evaluation budget; narrow it with 'product'.")
+                // A capacity abort is NOT a validation failure (#1387 review,
+                // round 4): a 400 tells an agent its request is malformed, and
+                // an exhausted evaluation budget is a server-side bound. 503
+                // with the mode-appropriate remedy in the message.
+                var message = string.IsNullOrEmpty(search)
+                    ? "The listing exceeded the evaluation budget; narrow it with 'product'."
                     : regexMode
-                        ? ("search", $"The search pattern is too complex (per-match timeout {SensorSearchMatcher.RegexTimeoutMs} ms, evaluation budget {SearchBudgetMs} ms).")
-                        : ("product", "The search exceeded the evaluation budget; narrow it with 'product' or a more specific text.");
+                        ? $"The search pattern is too complex to evaluate (per-match timeout {SensorSearchMatcher.RegexTimeoutMs} ms, evaluation budget {SearchBudgetMs} ms); simplify it or narrow the listing with 'product'."
+                        : "The search exceeded the evaluation budget; narrow it with 'product' or a more specific text.";
 
-                return ManagementApiErrors.Validation(new Dictionary<string, string[]> { [field] = [message] });
+                return ManagementApiErrors.Unavailable(message);
             }
 
-            var totalPages = all.Count == 0 ? 0 : (int)Math.Ceiling(all.Count / (double)pageSize);
-
-            // Clamp the page into [1, totalPages]: unchecked (page - 1) * pageSize
-            // would overflow int for huge page numbers, and a NEGATIVE Skip count
-            // silently returns the FIRST page labeled as page N.
-            page = Math.Min(page, Math.Max(totalPages, 1));
+            var totalPages = ApiPagination.TotalPagesOf(all.Count, pageSize);
+            page = ApiPagination.ClampPage(page, totalPages);
 
             return Ok(new ApiPageDto<SensorDto>
             {
@@ -194,11 +192,13 @@ namespace HSMServer.Controllers
         /// more values than requested, the oldest excess is dropped and
         /// <c>truncated</c> is set — narrow the window for full resolution. A
         /// window denser than the scan cap (50001 values; maxPoints for File
-        /// sensors) sets <c>scanCapReached</c> and the points cover the OLDEST
-        /// portion of the window, not its newest end — narrow the window before
-        /// trusting the data as current. A File sensor whose history is being
-        /// read by another request answers with <c>readUnavailable</c>=true and
-        /// no points — retry shortly.
+        /// sensors, whose response bound is also capped at 100) sets
+        /// <c>scanCapReached</c> and the points cover the OLDEST portion of the
+        /// window, not its newest end — narrow the window before trusting the
+        /// data as current. A File sensor whose history is being read by another
+        /// request answers with <c>readUnavailable</c>=true and no points — retry
+        /// shortly. For aggregated (bar) sensors the response may carry one point
+        /// older than the echoed <c>from</c> — the pre-window border value.
         /// </summary>
         /// <param name="id">Sensor id.</param>
         /// <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
@@ -235,6 +235,9 @@ namespace HSMServer.Controllers
                 });
 
             maxPoints = maxPoints <= 0 ? DefaultMaxPoints : Math.Min(maxPoints, MaxPointsLimit);
+
+            if (sensor.Type == SensorType.File)
+                maxPoints = Math.Min(maxPoints, FileMaxPointsLimit);
 
             // File payloads are the expensive part of every scanned row (the
             // converter deserializes the full byte[] for a metadata-only
@@ -352,18 +355,26 @@ namespace HSMServer.Controllers
         {
             searchAborted = false;
 
-            IEnumerable<BaseSensorModel> candidates = subtree is not null ? subtree.GetAllSensors() : _cache.GetSensors();
-
             var isProductVisible = _authorization.MemoizedProductVisibility(User);
             var budgetTicks = StopwatchTimestamps.PerMs * SearchBudgetMs;
+
+            // The clock covers EVERY phase of the shape, not just the loop: the
+            // candidate snapshot (GetSensors materializes a full copy), the
+            // filter pass, and the sort after it (#1387 review, round 4 —
+            // checking only inside the loop bounded the cheapest phase of the
+            // most expensive request).
             var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            IEnumerable<BaseSensorModel> candidates = subtree is not null ? subtree.GetAllSensors() : _cache.GetSensors();
+
+            bool OutOfBudget() => System.Diagnostics.Stopwatch.GetTimestamp() - startedAt > budgetTicks;
+
             var matched = new List<BaseSensorModel>();
 
             try
             {
                 foreach (var sensor in candidates)
                 {
-                    if (System.Diagnostics.Stopwatch.GetTimestamp() - startedAt > budgetTicks)
+                    if (OutOfBudget())
                     {
                         searchAborted = true;
                         return [];
@@ -386,16 +397,25 @@ namespace HSMServer.Controllers
 
                     matched.Add(sensor);
                 }
+
+                var sorted = matched
+                    .OrderBy(sensor => sensor.FullPath, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(sensor => sensor.Id)
+                    .ToList();
+
+                if (OutOfBudget())
+                {
+                    searchAborted = true;
+                    return [];
+                }
+
+                return sorted;
             }
             catch (RegexMatchTimeoutException)
             {
                 searchAborted = true;
                 return [];
             }
-
-            return [.. matched
-                .OrderBy(sensor => sensor.FullPath, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(sensor => sensor.Id)];
         }
 
 

@@ -56,7 +56,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         public string Description { get; init; }
 
         /// <summary>
-        /// Node kind — a root of the tree or a nested folder.
+        /// Node kind — a root of the tree or a nested product ("folder" in the
+        /// web UI's vocabulary; NOT the separate access-grouping Folder entity,
+        /// which this surface does not address).
         /// Node kind table: product, folder.
         /// </summary>
         public string Type { get; init; }

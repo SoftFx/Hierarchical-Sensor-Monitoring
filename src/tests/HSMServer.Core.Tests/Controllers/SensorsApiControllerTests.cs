@@ -281,14 +281,30 @@ namespace HSMServer.Core.Tests.Controllers
 
 
         [Fact]
-        public void GetSensors_CatastrophicRegex_IsBounded400_NeverA500()
+        public void GetSensors_CatastrophicRegex_IsBounded503_NeverA500()
         {
             AddSensor(_productA, new string('a', 40) + "!", "load");
 
             var result = Assert.IsType<ObjectResult>(CreateController().GetSensors(search: "(a+)+$", searchMode: "regex"));
 
+            // A capacity abort is NOT a validation failure (#1387 r4): a 400
+            // would tell the agent its request is malformed; an exhausted
+            // evaluation budget is a server-side bound with a remedy in the
+            // message.
+            Assert.Equal(503, result.StatusCode);
+            Assert.Equal(ManagementApiErrors.ServiceUnavailableCode, (result.Value as ManagementApiErrorDto).Error);
+        }
+
+
+        [Fact]
+        public void GetSensors_UnknownSearchMode_Is400_EvenWithoutSearchText()
+        {
+            // Probing parameter support must not get a false-positive 200
+            // (#1387 review, round 4).
+            var result = Assert.IsType<ObjectResult>(CreateController().GetSensors(searchMode: "glob"));
+
             Assert.Equal(400, result.StatusCode);
-            Assert.Equal(ManagementApiErrors.ValidationFailedCode, (result.Value as ManagementApiErrorDto).Error);
+            Assert.Contains("search", DetailsOf(ErrorOf(result)).Keys);
         }
 
 
@@ -339,7 +355,7 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(["beta/disk"], beyondEnd.Items.Select(s => s.Path));
 
             var nonPositiveSize = ListPage(CreateController().GetSensors(pageSize: 0));
-            Assert.Equal(SensorsApiController.DefaultPageSize, nonPositiveSize.PageSize);
+            Assert.Equal(ApiPagination.DefaultPageSize, nonPositiveSize.PageSize);
         }
 
 
@@ -592,6 +608,27 @@ namespace HSMServer.Core.Tests.Controllers
 
             // Metadata only, even though the buffered values carry bytes.
             Assert.All(history.Points, point => Assert.IsType<FileValueDto>(point.Value));
+        }
+
+
+        [Fact]
+        public async Task GetSensorHistory_FileSensor_ResponseBoundCappedTight()
+        {
+            // Every scanned File row deserializes a full payload while holding
+            // the per-sensor lock: the file response bound is capped at 100
+            // regardless of the requested maxPoints (#1387 r4).
+            var sensor = AddSensor(_productA, "logs", "app logs", SensorType.File);
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int _, RequestOptions _) => PagesOf([]));
+
+            var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 5_000)).Value as SensorHistoryDto;
+
+            Assert.Equal(SensorsApiController.FileMaxPointsLimit, history.MaxPoints);
+
+            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
+                SensorsApiController.FileMaxPointsLimit + 1, It.IsAny<RequestOptions>()), Times.Once);
         }
 
 

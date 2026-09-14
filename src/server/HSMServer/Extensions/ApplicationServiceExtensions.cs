@@ -98,6 +98,7 @@ namespace HSMServer.ServiceExtensions
                 o.UseInlineDefinitionsForEnums();
                 o.OperationFilter<DataRequestHeaderSwaggerFilter>();
                 o.OperationFilter<ManagementApiSecuritySwaggerFilter>();
+                o.SchemaFilter<SensorValueUnionSchemaFilter>();
                 o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo
                 {
                     Version = ServerConfig.Version,

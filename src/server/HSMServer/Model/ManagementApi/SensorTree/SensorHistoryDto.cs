@@ -10,6 +10,8 @@ namespace HSMServer.Model.ManagementApi.SensorTree
     /// excess is dropped and <c>truncated</c> is set; narrow the window to see more.
     /// A window denser than the server's scan cap instead sets <c>scanCapReached</c>:
     /// the points then cover the OLDEST portion of the window, not its newest end.
+    /// For aggregated (bar) sensors the response may carry one point older than the
+    /// echoed <c>from</c> — the pre-window border value.
     /// </summary>
     public sealed record SensorHistoryDto
     {

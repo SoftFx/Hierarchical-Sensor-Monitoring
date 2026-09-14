@@ -29,9 +29,6 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class ProductsApiController : ControllerBase
     {
-        public const int DefaultPageSize = 50;
-        public const int MaxPageSize = 200;
-
         private readonly ITreeValuesCache _cache;
         private readonly IApiTokenAuthorizationService _authorization;
 
@@ -54,10 +51,9 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
-        public IActionResult GetProducts(int page = 1, int pageSize = DefaultPageSize)
+        public IActionResult GetProducts(int page = 1, int pageSize = ApiPagination.DefaultPageSize)
         {
-            page = Math.Max(page, 1);
-            pageSize = Math.Min(pageSize <= 0 ? DefaultPageSize : pageSize, MaxPageSize);
+            (page, pageSize) = ApiPagination.Normalize(page, pageSize);
 
             // GetProducts serves the ROOT-PRODUCT NAME INDEX (_productsByName —
             // roots only, maintained on add/rename/remove); the IsRoot filter is
@@ -71,12 +67,8 @@ namespace HSMServer.Controllers
                 .ThenBy(product => product.Id)
                 .ToList();
 
-            var totalPages = all.Count == 0 ? 0 : (int)Math.Ceiling(all.Count / (double)pageSize);
-
-            // Clamp the page into [1, totalPages]: unchecked (page - 1) * pageSize
-            // would overflow int for huge page numbers, and a NEGATIVE Skip count
-            // silently returns the FIRST page labeled as page N.
-            page = Math.Min(page, Math.Max(totalPages, 1));
+            var totalPages = ApiPagination.TotalPagesOf(all.Count, pageSize);
+            page = ApiPagination.ClampPage(page, totalPages);
 
             return Ok(new ApiPageDto<ProductDto>
             {

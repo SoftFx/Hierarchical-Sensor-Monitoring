@@ -12,6 +12,7 @@ using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Routing;
+using Moq;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Xunit;
 
@@ -57,6 +58,62 @@ namespace HSMServer.Core.Tests.Swagger
 
             Assert.Contains(operation.Parameters, p => p.Name == "Key" && p.In == Microsoft.OpenApi.Models.ParameterLocation.Header);
             Assert.Contains(operation.Parameters, p => p.Name == "ClientName");
+        }
+
+
+        [Fact]
+        public void SensorValueUnionFilter_MapsTheValuePropertyToTheTypedUnion()
+        {
+            // An agent bootstrapping from the OpenAPI document must learn the
+            // per-type value shapes from the SCHEMA, not from prose: the filter
+            // replaces the free-form `value` with an explicit oneOf (#1387 r4).
+            var schema = new Microsoft.OpenApi.Models.OpenApiSchema();
+            schema.Properties["value"] = new Microsoft.OpenApi.Models.OpenApiSchema();
+
+            var generated = new HashSet<Type>();
+            var generator = new Mock<Swashbuckle.AspNetCore.SwaggerGen.ISchemaGenerator>();
+            generator.Setup(g => g.GenerateSchema(It.IsAny<Type>(), It.IsAny<Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository>(), It.IsAny<System.Reflection.MemberInfo>(), It.IsAny<System.Reflection.ParameterInfo>(), It.IsAny<Microsoft.AspNetCore.Mvc.ApiExplorer.ApiParameterRouteInfo>()))
+                .Returns((Type type, Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository _, System.Reflection.MemberInfo _, System.Reflection.ParameterInfo _, Microsoft.AspNetCore.Mvc.ApiExplorer.ApiParameterRouteInfo _) =>
+                {
+                    generated.Add(type);
+                    return new Microsoft.OpenApi.Models.OpenApiSchema();
+                });
+
+            new HSMServer.Filters.SensorValueUnionSchemaFilter().Apply(schema,
+                new Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext(
+                    typeof(HSMServer.Model.ManagementApi.SensorTree.SensorValueDto), generator.Object,
+                    new Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository()));
+
+            var value = schema.Properties["value"];
+
+            Assert.Null(value.Type);
+            Assert.Equal(6, value.OneOf.Count);
+            Assert.Equal(
+                [typeof(HSMServer.Model.ManagementApi.SensorTree.EnumValueDto),
+                 typeof(HSMServer.Model.ManagementApi.SensorTree.BarValueDto),
+                 typeof(HSMServer.Model.ManagementApi.SensorTree.FileValueDto)],
+                generated);
+            Assert.Contains(value.OneOf, s => s.Type == "number" && s.Nullable);
+            Assert.Contains(value.OneOf, s => s.Type == "string" && s.Nullable);
+            Assert.Contains(value.OneOf, s => s.Type == "boolean" && s.Nullable);
+        }
+
+
+        [Fact]
+        public void SensorValueUnionFilter_LeavesOtherSchemasUntouched()
+        {
+            var schema = new Microsoft.OpenApi.Models.OpenApiSchema();
+            schema.Properties["value"] = new Microsoft.OpenApi.Models.OpenApiSchema { Type = "string" };
+
+            var generator = new Mock<Swashbuckle.AspNetCore.SwaggerGen.ISchemaGenerator>();
+
+            new HSMServer.Filters.SensorValueUnionSchemaFilter().Apply(schema,
+                new Swashbuckle.AspNetCore.SwaggerGen.SchemaFilterContext(
+                    typeof(string), generator.Object,
+                    new Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository()));
+
+            Assert.Equal("string", schema.Properties["value"].Type);
+            generator.Verify(g => g.GenerateSchema(It.IsAny<Type>(), It.IsAny<Swashbuckle.AspNetCore.SwaggerGen.SchemaRepository>(), It.IsAny<System.Reflection.MemberInfo>(), It.IsAny<System.Reflection.ParameterInfo>(), It.IsAny<Microsoft.AspNetCore.Mvc.ApiExplorer.ApiParameterRouteInfo>()), Times.Never);
         }
 
         [Fact]
@@ -130,8 +187,8 @@ namespace HSMServer.Core.Tests.Swagger
             // Forbidden arm; the search list answers 404 for an unknown/invisible
             // product filter and has no 403 path at all.
             [(typeof(ProductsApiController), nameof(ProductsApiController.GetProducts))] = [400, 401, 500],
-            [(typeof(NodesApiController), nameof(NodesApiController.GetNode))] = [401, 403, 404, 500],
-            [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensors))] = [400, 401, 404, 500],
+            [(typeof(NodesApiController), nameof(NodesApiController.GetNode))] = [400, 401, 403, 404, 500],
+            [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensors))] = [400, 401, 404, 500, 503],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensor))] = [401, 403, 404, 500],
             [(typeof(SensorsApiController), nameof(SensorsApiController.GetSensorHistory))] = [400, 401, 403, 404, 500],
         };

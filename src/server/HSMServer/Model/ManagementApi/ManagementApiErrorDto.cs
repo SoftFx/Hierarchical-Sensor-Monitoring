@@ -11,7 +11,8 @@ namespace HSMServer.Model.ManagementApi
         /// <summary>
         /// Stable machine-readable code, one per HTTP status:
         /// validation_failed (400), unauthorized (401), forbidden (403),
-        /// not_found (404), conflict (409), internal_error (500).
+        /// not_found (404), conflict (409), internal_error (500),
+        /// service_unavailable (503).
         /// </summary>
         public string Error { get; init; }
 

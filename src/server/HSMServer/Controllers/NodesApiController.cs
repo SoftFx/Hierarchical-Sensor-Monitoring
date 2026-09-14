@@ -49,6 +49,7 @@ namespace HSMServer.Controllers
         /// <param name="foldersPageSize">Folders page size, 1..200 (default 200 — the single-request ceiling).</param>
         [HttpGet("{id:guid}")]
         [ProducesResponseType(typeof(NodeDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
@@ -74,16 +75,12 @@ namespace HSMServer.Controllers
             // subfolders (the sensor search pages sensors, not folders), so it
             // paginates like every area list — a node with more than 200 direct
             // subfolders would otherwise strand folders 201..N unreachably
-            // (#1387 review, round 3). Same clamps as the area convention.
-            foldersPage = Math.Max(foldersPage, 1);
-            foldersPageSize = Math.Min(foldersPageSize <= 0 ? SensorTreeDtoMapper.MaxChildrenPerNode : foldersPageSize,
-                SensorTreeDtoMapper.MaxChildrenPerNode);
+            // (#1387 review, round 3). Shared clamps (the pagination ceiling
+            // equals the mapper's children ceiling).
+            (foldersPage, foldersPageSize) = ApiPagination.Normalize(foldersPage, foldersPageSize);
 
-            var totalPages = node.SubProducts.Count == 0
-                ? 0
-                : (int)Math.Ceiling(node.SubProducts.Count / (double)foldersPageSize);
-
-            foldersPage = Math.Min(foldersPage, Math.Max(totalPages, 1));
+            var totalPages = ApiPagination.TotalPagesOf(node.SubProducts.Count, foldersPageSize);
+            foldersPage = ApiPagination.ClampPage(foldersPage, totalPages);
 
             return decision switch
             {

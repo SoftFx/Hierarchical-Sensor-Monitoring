@@ -221,11 +221,13 @@
             more values than requested, the oldest excess is dropped and
             <c>truncated</c> is set — narrow the window for full resolution. A
             window denser than the scan cap (50001 values; maxPoints for File
-            sensors) sets <c>scanCapReached</c> and the points cover the OLDEST
-            portion of the window, not its newest end — narrow the window before
-            trusting the data as current. A File sensor whose history is being
-            read by another request answers with <c>readUnavailable</c>=true and
-            no points — retry shortly.
+            sensors, whose response bound is also capped at 100) sets
+            <c>scanCapReached</c> and the points cover the OLDEST portion of the
+            window, not its newest end — narrow the window before trusting the
+            data as current. A File sensor whose history is being read by another
+            request answers with <c>readUnavailable</c>=true and no points — retry
+            shortly. For aggregated (bar) sensors the response may carry one point
+            older than the echoed <c>from</c> — the pre-window border value.
             </summary>
             <param name="id">Sensor id.</param>
             <param name="from">Window start, UTC ISO 8601; default: to − 24 hours.</param>
@@ -723,6 +725,9 @@
         <member name="P:HSMServer.Model.ManagementApi.ApiPageDto`1.TotalPages">
             <summary>Total page count (0 when the collection is empty).</summary>
         </member>
+        <member name="M:HSMServer.Model.ManagementApi.ApiPagination.Normalize(System.Int32,System.Int32)">
+            <summary>Normalizes a page/size pair: page ≥ 1; size falls back to the default when non-positive and never exceeds the ceiling.</summary>
+        </member>
         <member name="T:HSMServer.Model.ManagementApi.ManagementApiErrorDto">
             <summary>
             The uniform error body of the management API: every error response of every
@@ -735,7 +740,8 @@
             <summary>
             Stable machine-readable code, one per HTTP status:
             validation_failed (400), unauthorized (401), forbidden (403),
-            not_found (404), conflict (409), internal_error (500).
+            not_found (404), conflict (409), internal_error (500),
+            service_unavailable (503).
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.ManagementApiErrorDto.Message">
@@ -794,7 +800,9 @@
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.NodeDto.Type">
             <summary>
-            Node kind — a root of the tree or a nested folder.
+            Node kind — a root of the tree or a nested product ("folder" in the
+            web UI's vocabulary; NOT the separate access-grouping Folder entity,
+            which this surface does not address).
             Node kind table: product, folder.
             </summary>
         </member>
@@ -940,6 +948,8 @@
             excess is dropped and <c>truncated</c> is set; narrow the window to see more.
             A window denser than the server's scan cap instead sets <c>scanCapReached</c>:
             the points then cover the OLDEST portion of the window, not its newest end.
+            For aggregated (bar) sensors the response may carry one point older than the
+            echoed <c>from</c> — the pre-window border value.
             </summary>
         </member>
         <member name="P:HSMServer.Model.ManagementApi.SensorTree.SensorHistoryDto.Points">

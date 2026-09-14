@@ -33,6 +33,12 @@ namespace HSMServer.Model.ManagementApi
         // 500 — unhandled server error; details carries {traceId}.
         public const string InternalErrorCode = "internal_error";
 
+        // 503 — the server cannot evaluate this request within its resource
+        // bounds right now; the message names the caller-side remedy (narrow the
+        // request or simplify the pattern). NOT a validation failure: a 400
+        // tells an agent its request is malformed, and a capacity abort is not.
+        public const string ServiceUnavailableCode = "service_unavailable";
+
 
         // The single 404 message of the area: area-guard rejections (no such route,
         // wrong port, non-conforming endpoint), unknown ids and the authorization
@@ -57,6 +63,12 @@ namespace HSMServer.Model.ManagementApi
             new(new ManagementApiErrorDto { Error = ConflictCode, Message = message })
             {
                 StatusCode = StatusCodes.Status409Conflict,
+            };
+
+        public static ObjectResult Unavailable(string message) =>
+            new(new ManagementApiErrorDto { Error = ServiceUnavailableCode, Message = message })
+            {
+                StatusCode = StatusCodes.Status503ServiceUnavailable,
             };
 
         // 400 with field-keyed details; an empty error map is not a validation failure.

@@ -37,15 +37,19 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             regexMode = false;
             errors = null;
 
-            if (string.IsNullOrEmpty(search))
-                return true;
-
+            // The mode is validated even without search text (#1387 review,
+            // round 4): ?searchMode=glob silently answering 200 is a false
+            // positive for an agent probing parameter support — the same typo
+            // 400s the moment text is added.
             var mode = ResolveMode(searchMode);
             if (mode is null)
             {
                 errors = NewError($"Unknown search mode '{searchMode}'. Valid values: {ContainsMode}, {RegexMode}.");
                 return false;
             }
+
+            if (string.IsNullOrEmpty(search))
+                return true;
 
             if (search.Length > MaxSearchLength)
             {

@@ -1240,7 +1240,10 @@ namespace HSMServer.Core.Cache
             return GetSensorValuesPageInternal(sensor, from, to, count, options);
         }
 
-        public bool IsFileHistoryReadInProgress(Guid sensorId) => _fileHistoryLocks[sensorId];
+        // A query, not a mutation: the CDict indexer would GetOrAdd a default
+        // entry for every id asked about (#1387 review, round 4).
+        public bool IsFileHistoryReadInProgress(Guid sensorId) =>
+            _fileHistoryLocks.TryGetValue(sensorId, out var busy) && busy;
 
         private async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPageInternal(BaseSensorModel sensor, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
