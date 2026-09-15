@@ -285,8 +285,11 @@
                 $select.append('<option disabled value="">No chats configured</option>');
             } else {
                 // Each chat is one option. IconsHtml is server-rendered markup from
-                // Chat.ChatBrandIcons() (only `<i class='fab fa-...'>` tags from static brand
-                // constants) and is inserted verbatim. chat.Name is user-controlled; route it
+                // Chat.ChatBrandIcons(): `<i class='fab fa-...'>` tags plus the Mattermost
+                // CSS-mask <span> — only tags AND attributes on bootstrap-select's data-content
+                // sanitizer whitelist render intact (svg/path and non-whitelisted attributes
+                // are silently deleted), so the icons stick to whitelisted entries only.
+                // chat.Name is user-controlled; route it
                 // through jQuery's DOM API rather than concatenating strings:
                 //   - .text(name) creates a text node, no HTML parsing — safe and renders as
                 //     the literal name.

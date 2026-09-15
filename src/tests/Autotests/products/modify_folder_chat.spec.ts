@@ -7,6 +7,9 @@ const folderName = uniqueName('Fldr');
 const slackChatName = uniqueName('SlackChat');
 const slackRemoveChatName = uniqueName('SlackRm');
 const listRemoveChatName = uniqueName('ListRm');
+// Mattermost chat whose brand icon is asserted in the picker by the XSS lock-down test below
+// (#1359 regression guard: the icon markup must survive the data-content sanitizer AND paint).
+const mattermostChatName = uniqueName('MmChat');
 // XSS payload used as chat Name. Cleanup by text still works because Razor default-encodes
 // @chat.Name into the Configuration/_Chats.cshtml row's .chat-info span, so the literal payload
 // text appears in the DOM. The onerror handler would set window.__xss=1 if it ever executed.
@@ -22,6 +25,7 @@ test.afterEach(async ({ browser }) => {
     await cleanup.chat(page, slackRemoveChatName);
     await cleanup.chat(page, listRemoveChatName);
     await cleanup.chat(page, xssChatName);
+    await cleanup.chat(page, mattermostChatName);
     await cleanup.folder(page, folderName);
   } finally {
     await page.close();
@@ -81,6 +85,8 @@ test('Folder Chats tab: Add-chat dropdown offers Telegram help and Slack webhook
   await expect(page.locator('.chat-row').filter({ hasText: slackChatName })).toBeVisible();
 
   // --- Logout ---
+  // The Logout link sits inside the user dropdown menu (added in #1356) — open it first.
+  await page.locator('#userDropdown').click();
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
 });
@@ -109,6 +115,19 @@ test('Folder Chats picker renders chat.Name as inert text (XSS lock-down)', asyn
   await page.locator('#Name').fill(xssChatName);
   await page.locator('#SlackWebhookUrl').fill('https://hooks.slack.com/services/xss');
   await page.getByRole('button', { name: 'Save' }).click();
+
+  // --- Create a Mattermost chat: its brand icon is the render-regression surface asserted below ---
+  // The URL regex is anchored so it cannot match the still-open AddChat form after a failed
+  // POST — without the anchor a silent validation failure would surface ~40 lines later as an
+  // opaque ".mattermost-brand-icon not found".
+  await expect(page).toHaveURL(/\/Notifications\/?(\?|$)/);
+  await page.getByRole('link', { name: 'Add new chat' }).click();
+  await page.locator('#Name').fill(mattermostChatName);
+  // EditChat is tabbed per channel; the Mattermost webhook input sits on its own tab.
+  await page.locator('#mattermost-tab').click();
+  await page.locator('#MattermostWebhookUrl').fill('https://mattermost.example.com/hooks/e2e-icon');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/\/Notifications\/?(\?|$)/);
 
   // --- Create a folder and open its Chats tab; the picker is the XSS surface under test ---
   await page.getByRole('link', { name: 'Products' }).click();
@@ -142,7 +161,27 @@ test('Folder Chats picker renders chat.Name as inert text (XSS lock-down)', asyn
   const xssMarker = await page.evaluate(() => (window as any).__xss);
   expect(xssMarker).toBeUndefined();
 
+  // #1359 regression guard: the Mattermost chat's brand icon must not only exist in the rendered
+  // dropdown — bootstrap-select's data-content sanitizer silently deletes non-whitelisted tags
+  // (svg/path) and attributes — but hold a rendered box and a resolved mask: toHaveCount(1)
+  // catches a sanitizer failure (the span would be gone), toBeVisible() catches a missing
+  // .mattermost-brand-icon CSS rule (an empty inline span has a zero-size box). Playwright
+  // visibility never inspects painted pixels, so the toHaveCSS check adds the one failure mode
+  // the box assertions cannot see — a mask declaration that dropped or failed to resolve leaves
+  // the span either a solid currentColor square or unpainted, both with a healthy bounding box.
+  const mmItem = picker.locator('.dropdown-menu').locator('li, a').filter({ hasText: mattermostChatName }).first();
+  const mmIcon = mmItem.locator('.mattermost-brand-icon');
+  await expect(mmIcon).toHaveCount(1);
+  await expect(mmIcon).toBeVisible();
+  await expect(mmIcon).toHaveCSS('mask-image', /data:image\/svg\+xml/);
+
   // --- Logout ---
+  // The Logout link sits inside the user dropdown menu (added in #1356) — open it first.
+  // Every test in this file does so. The bare `getByRole('link', { name: 'Logout' })`
+  // lookups still present in other spec files are EQUALLY broken by #1356 — the collapsed
+  // dropdown-menu keeps the link hidden until #userDropdown opens it, so those clicks time
+  // out — and need the same two-line treatment; they are just outside this PR's scope.
+  await page.locator('#userDropdown').click();
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
 });
@@ -211,6 +250,8 @@ test('EditChat: per-channel Remove clears Slack webhook without deleting the cha
   await expect(page.locator('.chat-row').filter({ hasText: slackRemoveChatName })).toBeVisible();
 
   // --- Logout ---
+  // The Logout link sits inside the user dropdown menu (added in #1356) — open it first.
+  await page.locator('#userDropdown').click();
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
 });
@@ -259,6 +300,8 @@ test('Configuration Chats list: Remove deletes the chat and keeps the page usabl
   await expect(page.locator('.chat-row').filter({ hasText: listRemoveChatName })).toHaveCount(0);
 
   // --- Logout ---
+  // The Logout link sits inside the user dropdown menu (added in #1356) — open it first.
+  await page.locator('#userDropdown').click();
   await page.getByRole('link', { name: 'Logout' }).click();
   await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
 });

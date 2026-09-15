@@ -100,7 +100,7 @@ namespace HSMServer.Model.Notifications
             if (HasSlack)
                 icons += $"<i class='{ChatIcons.SlackBrandClass}'></i> ";
             if (HasMattermost)
-                icons += $"{ChatIcons.MattermostBrandIconSvg} ";
+                icons += $"{ChatIcons.MattermostBrandIconHtml} ";
 
             return string.IsNullOrEmpty(icons) ? null : icons.TrimEnd();
         }

@@ -230,3 +230,34 @@ input.input-validation-error {
 .bootstrap-select.unit-select {
     width: 9rem !important;
 }
+
+/* Mattermost brand mark (Simple Icons, CC0-1.0) - Font Awesome Free has no glyph.
+   Rendered by ChatIcons.MattermostBrandIconHtml as <span class="mattermost-brand-icon">.
+   Styling lives here (not in an inline style attribute) so chat picker data-content
+   markup carries only bootstrap-select-sanitizer-whitelisted attributes and the data
+   URI ships once per page instead of per icon instance. */
+.mattermost-brand-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    vertical-align: -.125em;
+}
+
+/* The fill and the mask apply only where a mask can actually render: without mask support
+   `background-color: currentColor` would paint a solid 1em square of the text colour —
+   visually worse than a missing icon. The `or` arm covers engines that only implement the
+   -webkit- prefixed forms (unprefixed `mask` shipped in Chrome 120 / Safari 15.4). */
+@supports (mask-image: url("")) or (-webkit-mask-image: url("")) {
+    .mattermost-brand-icon {
+        background-color: currentColor;
+        /* Single copy of the mask payload; the -webkit- prefixed shorthand below only
+           predates Safari 15.4, so only the reference needs repeating, not the base64
+           blob itself. `center / contain` pins position and size explicitly: bare
+           percentages would parse as position (bottom-right) with mask-size left at
+           auto, which only looks right while the embedded SVG carries no intrinsic
+           width/height attributes. */
+        --mattermost-mask: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyLjA4MSAwQzcuMDQ4LS4wMzQgMi4zMzkgMy4xMjUuNjM3IDguMTUzYy0yLjEyNSA2LjI3NiAxLjI0IDEzLjA4NiA3LjUxNiAxNS4yMSA2LjI3NiAyLjEyNSAxMy4wODYtMS4yNCAxNS4yMS03LjUxNiAxLjcyNy01LjEtLjE3Mi0xMC41NTItNC4zMTEtMTMuNTU3bC4xMjYgMi41NDdjMi4wNjUgMi4yODIgMi44OCA1LjUxMiAxLjg1MiA4LjU0OS0xLjUzNCA0LjUzMi02LjU5NCA2LjkxNS0xMS4zIDUuMzIxLTQuNzA4LTEuNTkzLTcuMjgtNi41NTktNS43NDUtMTEuMDkyIDEuMDMxLTMuMDQ2IDMuNjU1LTUuMTIxIDYuNjk0LTUuNjdsMS42NDItMS45NEE0Ljg3IDQuODcgMCAwIDAgMTIuMDggMHptMy41MjggMS4wOTRhLjI4NC4yODQgMCAwIDAtLjEyMy4wMjRsLS4wMDQuMDAxYS4zMy4zMyAwIDAgMC0uMTA5LjA3MWMtLjE0NS4xNDItLjY1Ny44MjgtLjY1Ny44MjhMMTMuNiAzLjRsLTEuMyAxLjU4NS0yLjIzMiAyLjc3NnMtMS4wMjQgMS4yNzgtLjc5OCAyLjg1MWMuMjI2IDEuNTc0IDEuMzk2IDIuMzQgMi4zMDQgMi42NDguOTA3LjMwNyAyLjMwMi40MDggMy40MzgtLjcwNCAxLjEzNS0xLjExMiAxLjA5OC0yLjc1IDEuMDk4LTIuNzVsLS4wODctMy41Ni0uMDctMi4wNS0uMDQ3LTEuNzc1cy4wMS0uODU2LS4wMi0xLjA1N2EuMzMuMzMgMCAwIDAtLjAzNS0uMTA3bC0uMDA2LS4wMTItLjAwNy0uMDExYS4yNzcuMjc3IDAgMCAwLS4yMjktLjE0eiIvPjwvc3ZnPg==");
+        -webkit-mask: var(--mattermost-mask) center / contain no-repeat;
+        mask: var(--mattermost-mask) center / contain no-repeat;
+    }
+}
