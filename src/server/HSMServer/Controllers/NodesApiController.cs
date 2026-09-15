@@ -1,6 +1,5 @@
 using System;
 using HSMServer.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Authorization;
@@ -19,6 +18,9 @@ namespace HSMServer.Controllers
     // the evaluator authorizes both through the Product boundary. Sensors are NOT
     // addressable here — their node body is the sensor endpoint itself; a sensor id
     // in this route is an unknown node (plain 404).
+    //
+    // Since #1391 the read logic lives in SensorTreeReadService, shared with the
+    // MCP tools; this controller is the REST rendering of it.
     [ApiController]
     [ManagementApi]
     [Authorize(Policy = HsmApiTokenDefaults.ManagementPolicy)]
@@ -26,13 +28,11 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class NodesApiController : ControllerBase
     {
-        private readonly ITreeValuesCache _cache;
-        private readonly IApiTokenAuthorizationService _authorization;
+        private readonly SensorTreeReadService _reader;
 
-        public NodesApiController(ITreeValuesCache cache, IApiTokenAuthorizationService authorization)
+        public NodesApiController(SensorTreeReadService reader)
         {
-            _cache = cache;
-            _authorization = authorization;
+            _reader = reader;
         }
 
 
@@ -54,41 +54,8 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
-        public IActionResult GetNode(Guid id, int foldersPage = 1, int foldersPageSize = SensorTreeDtoMapper.MaxChildrenPerNode)
-        {
-            // Unknown id: the plain area 404, issued BEFORE the evaluator call —
-            // the area rule that keeps unknown and invisible indistinguishable
-            // without paying a security event for every random id.
-            if (!_cache.TryGetProduct(id, out var node) || node is null)
-                return ManagementApiErrors.NotFound();
-
-            // Sight is keyed on the node's ROOT product (ProductsRoles holds root
-            // ids; folder roles materialize per root) — authorizing the folder id
-            // itself would 404 a scoped owner whose sensors under that folder ARE
-            // listable via the root. Reads are never forbidden in the owner-mirror
-            // model (the read-only flag constrains writes); the Forbidden arm is
-            // unreachable and kept only so the evaluator's full decision surface
-            // maps to a response.
-            var decision = _authorization.AuthorizeRead(User, ApiTokenResource.Product(node.Root.Id));
-
-            // The folders list is the ONLY addressable surface for direct
-            // subfolders (the sensor search pages sensors, not folders), so it
-            // paginates like every area list — a node with more than 200 direct
-            // subfolders would otherwise strand folders 201..N unreachably
-            // (#1387 review, round 3). Shared clamps (the pagination ceiling
-            // equals the mapper's children ceiling).
-            (foldersPage, foldersPageSize) = ApiPagination.Normalize(foldersPage, foldersPageSize);
-
-            var totalPages = ApiPagination.TotalPagesOf(node.SubProducts.Count, foldersPageSize);
-            foldersPage = ApiPagination.ClampPage(foldersPage, totalPages);
-
-            return decision switch
-            {
-                ApiTokenAuthorization.Allowed => Ok(SensorTreeDtoMapper.ToNodeDto(node, foldersPage, foldersPageSize)),
-                ApiTokenAuthorization.Forbidden => ManagementApiErrors.Forbidden(
-                    "The token's owner cannot see this node."),
-                _ => ManagementApiErrors.NotFound(),
-            };
-        }
+        public IActionResult GetNode(Guid id, int foldersPage = 1,
+            int foldersPageSize = SensorTreeDtoMapper.MaxChildrenPerNode) =>
+            _reader.GetNode(id, User, foldersPage, foldersPageSize).ToActionResult();
     }
 }

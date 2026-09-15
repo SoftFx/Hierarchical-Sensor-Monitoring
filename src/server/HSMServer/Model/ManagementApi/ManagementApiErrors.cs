@@ -71,6 +71,18 @@ namespace HSMServer.Model.ManagementApi
                 StatusCode = StatusCodes.Status503ServiceUnavailable,
             };
 
+        // Renders the shared sensor-tree read service's failure (#1391) through
+        // the uniform contract — the REST half of the transport split; the MCP
+        // tools translate the same failure into tool error text instead.
+        public static IActionResult FromReadFailure(SensorTree.SensorTreeReadFailure failure) =>
+            failure.Outcome switch
+            {
+                SensorTree.SensorTreeReadOutcome.Forbidden => Forbidden(failure.Message),
+                SensorTree.SensorTreeReadOutcome.ValidationFailed => Validation(failure.Errors),
+                SensorTree.SensorTreeReadOutcome.Unavailable => Unavailable(failure.Message),
+                _ => NotFound(),
+            };
+
         // 400 with field-keyed details; an empty error map is not a validation failure.
         public static ObjectResult Validation(IDictionary<string, string[]> errors) =>
             new(new ManagementApiErrorDto

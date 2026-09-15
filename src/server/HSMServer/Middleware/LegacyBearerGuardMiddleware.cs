@@ -2,13 +2,15 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
+using HSMServer.Mcp;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
 
 namespace HSMServer.Middleware
 {
     // Fail-closed isolation guard (initiative step 3): an hsm_pat_ bearer credential sent
-    // to anything outside /api/v1 is rejected here, before MVC/Razor controller execution.
+    // to anything outside the token-authenticated routes (/api/v1 and, since #1391, /mcp)
+    // is rejected here, before MVC/Razor controller execution.
     // It performs no token lookup — the credential material only matters to the HsmApiToken
     // scheme — and answers a generic non-redirecting 401 so a legacy [Authorize] route can
     // never redirect it to the login page and a BaseController cast can never explode into
@@ -18,7 +20,7 @@ namespace HSMServer.Middleware
     {
         public Task InvokeAsync(HttpContext context)
         {
-            if (IsManagementAreaPath(context.Request.Path))
+            if (IsTokenRoutePath(context.Request.Path))
                 return next(context);
 
             if (ContainsHsmBearer(context.Request.Headers))
@@ -41,5 +43,20 @@ namespace HSMServer.Middleware
 
         internal static bool IsManagementAreaPath(PathString path) =>
             path.StartsWithSegments(HsmApiTokenDefaults.ManagementAreaPath, StringComparison.OrdinalIgnoreCase);
+
+        // /mcp is a token-authenticated route outside the /api/v1 AREA (no
+        // [ManagementApi] marker, JSON-RPC errors, SDK-owned handler — #1391),
+        // but it belongs to the same bearer credential family: the credential
+        // is expected there, not misplaced. The exemption is the ENDPOINT, not
+        // the prefix: MapMcp maps exactly this path, and anything else under
+        // /mcp is not a token route — a credential there is misplaced and gets
+        // the guard's 401 however the routing under the prefix evolves
+        // (#1392 review, round 5). Case-insensitive like the area arm above —
+        // endpoint routing matches path segments case-insensitively, so POST
+        // /MCP reaches the handler and must not look like a misplaced token
+        // here (#1392 review).
+        internal static bool IsTokenRoutePath(PathString path) =>
+            IsManagementAreaPath(path) ||
+            path.Equals((PathString)HsmMcp.EndpointPath, StringComparison.OrdinalIgnoreCase);
     }
 }

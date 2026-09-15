@@ -102,6 +102,7 @@ TypeScript 5.3 + Webpack 5:
 - `dashboards/` - server-owned dashboard behavior and data shaping.
 - `auth/` - authentication, access keys, users, permissions.
 - `management-api/` - the `/api/v1` REST resource controllers for non-interactive (bearer-token) clients; alert templates CRUD first (#1351).
+- `mcp/` - the read-only Model Context Protocol endpoint at `/mcp` (#1391): nine tools rendering the same read surface for MCP-native AI agents, same HsmApiToken credential.
 - `background-services/` - hosted services, queue workers, startup/shutdown.
 
 Create folders from `../_TEMPLATE_feature.md` as work lands.

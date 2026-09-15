@@ -27,7 +27,9 @@ using HSMServer.Folders;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.Migrations;
+using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Mcp;
 using HSMServer.Notifications;
 using HSMServer.Notifications.Chats;
 using HSMServer.ServerConfiguration;
@@ -64,6 +66,18 @@ namespace HSMServer.ServiceExtensions
             // per-request security events and the owner-mirroring evaluator (#1384).
             services.AddSingleton<IApiTokenSecurityEventSink, ApiTokenSecurityEventSink>();
             services.AddSingleton<IApiTokenAuthorizationService, ApiTokenAuthorizationService>();
+
+            // The shared sensor-tree read implementation (#1391): one instance of
+            // search/visibility/mapping behind both the REST controllers and the
+            // MCP tools. Scoped to match the per-request consumers (controllers
+            // and tool classes) that inject it; stateless over singletons.
+            services.AddScoped<SensorTreeReadService>();
+
+            // The MCP read-only adapter over the management API (#1391): server
+            // and tool wiring in one testable place (HsmMcpServiceCollectionExtensions);
+            // the endpoint mapping and its SitePort/bearer guards live with the
+            // pipeline configuration in this file and Program.cs.
+            services.AddHsmMcpServer();
 
             // Retention + abuse bounds (#1356, prerequisite of the step-4 management
             // endpoints): bounded cleanup of dead token rows/orphans/security events and
@@ -215,6 +229,12 @@ namespace HSMServer.ServiceExtensions
             // off every legacy route with a plain non-redirecting 401.
             applicationBuilder.UseMiddleware<ManagementApiGuardMiddleware>();
             applicationBuilder.UseMiddleware<LegacyBearerGuardMiddleware>();
+
+            // The MCP endpoint is SitePort-only like the whole token surface
+            // (#1391) — placed with the other guards, BEFORE authentication, so
+            // a probe on the SensorPort gets the uniform 404 and never a 401
+            // that confirms the endpoint exists.
+            applicationBuilder.UseMiddleware<McpSitePortOnlyMiddleware>();
 
             applicationBuilder.UseAuthentication();
             applicationBuilder.UseAuthorization();

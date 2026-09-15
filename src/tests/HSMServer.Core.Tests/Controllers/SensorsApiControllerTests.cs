@@ -73,7 +73,7 @@ namespace HSMServer.Core.Tests.Controllers
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
         private SensorsApiController CreateController() =>
-            new(_cache.Object, _authorization.Object)
+            new(new SensorTreeReadService(_cache.Object, _authorization.Object))
             {
                 ControllerContext = new ControllerContext
                 {
@@ -270,7 +270,9 @@ namespace HSMServer.Core.Tests.Controllers
             var result = Assert.IsType<ObjectResult>(CreateController().GetSensors(search: "x", searchMode: "glob"));
 
             Assert.Equal(400, result.StatusCode);
-            Assert.Contains("search", DetailsOf(ErrorOf(result)).Keys);
+            // The detail key names the FAILING parameter, so the client corrects
+            // searchMode, not the search text (#1392 review).
+            Assert.Contains("searchMode", DetailsOf(ErrorOf(result)).Keys);
         }
 
 
@@ -307,7 +309,7 @@ namespace HSMServer.Core.Tests.Controllers
             var result = Assert.IsType<ObjectResult>(CreateController().GetSensors(searchMode: "glob"));
 
             Assert.Equal(400, result.StatusCode);
-            Assert.Contains("search", DetailsOf(ErrorOf(result)).Keys);
+            Assert.Contains("searchMode", DetailsOf(ErrorOf(result)).Keys);
         }
 
 
@@ -635,10 +637,10 @@ namespace HSMServer.Core.Tests.Controllers
             Assert.Equal(TimeSpan.FromHours(24), defaulted.To - defaulted.From);
             Assert.Equal(DateTimeKind.Utc, defaulted.From.Kind);
             Assert.Equal(DateTimeKind.Utc, defaulted.To.Kind);
-            Assert.Equal(SensorsApiController.DefaultMaxPoints, defaulted.MaxPoints);
+            Assert.Equal(SensorTreeReadService.DefaultMaxPoints, defaulted.MaxPoints);
 
             var clamped = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 1_000_000)).Value as SensorHistoryDto;
-            Assert.Equal(SensorsApiController.MaxPointsLimit, clamped.MaxPoints);
+            Assert.Equal(SensorTreeReadService.MaxPointsLimit, clamped.MaxPoints);
         }
 
 
@@ -702,7 +704,7 @@ namespace HSMServer.Core.Tests.Controllers
             // newest-first read makes the newest-N selection a stream prefix,
             // #1389) and carries the IncludeTtl flag — OffTime markers are part
             // of the timeline (#1386).
-            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, to, SensorsApiController.DefaultMaxPoints + 1,
+            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, to, SensorTreeReadService.DefaultMaxPoints + 1,
                 It.Is<RequestOptions>(o => o.HasFlag(RequestOptions.IncludeTtl))), Times.Once);
         }
 
@@ -752,10 +754,10 @@ namespace HSMServer.Core.Tests.Controllers
 
             var history = Assert.IsType<OkObjectResult>(await CreateController().GetSensorHistory(sensor.Id, maxPoints: 5_000)).Value as SensorHistoryDto;
 
-            Assert.Equal(SensorsApiController.FileMaxPointsLimit, history.MaxPoints);
+            Assert.Equal(SensorTreeReadService.FileMaxPointsLimit, history.MaxPoints);
 
             _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, It.IsAny<DateTime>(), It.IsAny<DateTime>(),
-                SensorsApiController.FileMaxPointsLimit + 1, It.IsAny<RequestOptions>()), Times.Once);
+                SensorTreeReadService.FileMaxPointsLimit + 1, It.IsAny<RequestOptions>()), Times.Once);
         }
 
 

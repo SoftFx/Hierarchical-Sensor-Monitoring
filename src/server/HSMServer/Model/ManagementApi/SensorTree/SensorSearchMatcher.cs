@@ -44,7 +44,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             var mode = ResolveMode(searchMode);
             if (mode is null)
             {
-                errors = NewError($"Unknown search mode '{searchMode}'. Valid values: {ContainsMode}, {RegexMode}.");
+                errors = NewError("searchMode", $"Unknown search mode '{searchMode}'. Valid values: {ContainsMode}, {RegexMode}.");
                 return false;
             }
 
@@ -53,7 +53,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
             if (search.Length > MaxSearchLength)
             {
-                errors = NewError($"The search text is longer than {MaxSearchLength} characters.");
+                errors = NewError("search", $"The search text is longer than {MaxSearchLength} characters.");
                 return false;
             }
 
@@ -65,7 +65,7 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
             if (!TryCompileRegex(search, out var regex, out var error))
             {
-                errors = NewError(error);
+                errors = NewError("search", error);
                 return false;
             }
 
@@ -115,8 +115,11 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         }
 
 
-        private static IDictionary<string, string[]> NewError(string message) =>
-            new Dictionary<string, string[]> { ["search"] = [message] };
+        // Field-keyed for the uniform validation body; the key names the FAILING
+        // parameter — a searchMode problem keyed under 'search' sends an agent
+        // after the wrong argument on both transports (#1392 review).
+        private static IDictionary<string, string[]> NewError(string key, string message) =>
+            new Dictionary<string, string[]> { [key] = [message] };
 
 
         private static bool MatchesEverything(BaseSensorModel sensor) => true;
