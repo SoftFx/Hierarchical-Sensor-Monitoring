@@ -649,7 +649,7 @@
             an IActionResult (the shared read envelope of the management area).
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.ListTemplates(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.ListTemplates(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
             <summary>
             Templates visible to the token's owner, ordered by name then id,
             paginated with the area's shared clamps. An owner who sees nothing
@@ -663,7 +663,7 @@
             NotFound (the area's anti-enumeration rule).
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.ListSchedules(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32)">
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.ListSchedules(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
             <summary>
             All schedules, ordered by name then id, paginated with the area's
             shared clamps; each schedule's sensor list carries only paths the

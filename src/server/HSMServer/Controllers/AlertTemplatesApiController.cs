@@ -55,8 +55,10 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class AlertTemplatesApiController : ControllerBase
     {
-        public const int DefaultPageSize = 50;
-        public const int MaxPageSize = 200;
+        // The area's shared page-size constants (#1393 review): the reads run
+        // on ApiPagination inside AlertReadService — a private copy here is
+        // exactly the drift the helper exists to prevent.
+        public const int DefaultPageSize = ApiPagination.DefaultPageSize;
 
         // Size guard rails the web UI gets from its widgets; the API states them
         // explicitly. They bound the collection COUNTS and the name length only —
