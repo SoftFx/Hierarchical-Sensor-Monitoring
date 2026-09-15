@@ -1,6 +1,4 @@
 using System.Collections.Generic;
-using HSMServer.Model.ManagementApi;
-using Microsoft.AspNetCore.Mvc;
 
 namespace HSMServer.Model.ManagementApi.SensorTree
 {
@@ -66,17 +64,5 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         // reads, which answer different DTOs on the same failure.
         public static SensorTreeReadResult<T> FromFailure(SensorTreeReadFailure failure) =>
             new(default, failure);
-    }
-
-
-    // The MVC rendering of the envelope: success -> 200 with the DTO, failure ->
-    // the area's uniform error contract. The MCP tools translate the same
-    // envelope their own way and never go through here.
-    public static class SensorTreeReadResultMvcExtensions
-    {
-        public static IActionResult ToActionResult<T>(this SensorTreeReadResult<T> result) =>
-            result.Success
-                ? new OkObjectResult(result.Value)
-                : ManagementApiErrors.FromReadFailure(result.Failure);
     }
 }

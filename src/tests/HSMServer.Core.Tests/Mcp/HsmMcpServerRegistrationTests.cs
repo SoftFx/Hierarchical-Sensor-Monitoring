@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using HSMServer.Mcp;
+using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
@@ -104,6 +106,49 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Contains("\"sensors\"", envelope);
             Assert.Contains("\"totalFound\"", envelope);
             Assert.DoesNotContain("\"TotalFound\"", envelope);
+        }
+
+        [Fact]
+        public void ItemDtos_RenderTheSamePropertyKeys_OnMcpAndMvcJsonOptions()
+        {
+            // The parity claim needs pinning beyond CASING: DefaultIgnoreCondition
+            // decides whether a null lastValue/unit/status/parent appears as null
+            // or is OMITTED. Writing this pin (#1392 review, round 5) exposed the
+            // actual contract: the SDK's McpJsonUtilities.DefaultOptions set
+            // WhenWritingNull, MVC's Web defaults write explicit nulls — so an
+            // item DTO's null members are ABSENT on MCP and PRESENT-as-null on
+            // REST (absent ≡ null for any JSON consumer; the two options cannot
+            // be aligned without mutating the SDK-owned options the protocol
+            // envelope itself serializes through, or changing the shipped REST
+            // wire). Pin both key sets EXACTLY: an SDK default change, a DTO
+            // edit, or an MVC options change that shifts either shape fails
+            // here instead of silently diverging the surfaces.
+            var mvcOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+            {
+                NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals,
+            };
+
+            var sensor = new SensorDto { Id = Guid.NewGuid(), Path = "alpha/eth0" };
+
+            var mcpKeys = KeysOf(JsonSerializer.Serialize(sensor, McpJsonUtilities.DefaultOptions));
+            var mvcKeys = KeysOf(JsonSerializer.Serialize(sensor, mvcOptions));
+
+            // MCP: only the non-null members travel (WhenWritingNull).
+            Assert.Equal(["creationDate", "id", "path"], [.. mcpKeys.Order()]);
+
+            // REST: the full shape, null members included.
+            Assert.Equal(
+            [
+                "creationDate", "description", "enumOptions", "id", "lastUpdate",
+                "lastValue", "name", "parent", "path", "product", "state", "status", "type", "unit",
+            ], [.. mvcKeys.Order()]);
+        }
+
+        private static List<string> KeysOf(string json)
+        {
+            using var document = JsonDocument.Parse(json);
+
+            return [.. document.RootElement.EnumerateObject().Select(property => property.Name)];
         }
     }
 }

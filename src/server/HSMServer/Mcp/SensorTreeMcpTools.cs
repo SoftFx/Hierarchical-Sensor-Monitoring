@@ -39,15 +39,20 @@ namespace HSMServer.Mcp
         [McpServerTool(Name = "list_products", ReadOnly = true, Idempotent = true, OpenWorld = false)]
         [Description("Lists the root products visible to the token's owner — the discovery entry point of the sensor tree. Nested folders are not listed here; use get_node or find_sensors. Products have no narrowing dimension, so `page` walks beyond the limit.")]
         public McpProductsResult ListProducts(
-            [Description("Maximum products to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit,
-            [Description("1-based page when totalFound exceeds the limit.")] int page = 1)
+            [Description("Maximum products to return (1..200, default 20); the result echoes the effective limit, the served page and totalPages alongside totalFound.")] int limit = HsmMcp.DefaultLimit,
+            [Description("1-based page when totalFound exceeds the limit; clamped to the last page.")] int page = 1,
+            CancellationToken cancellationToken = default)
         {
-            var result = _reader.ListProducts(User, HsmMcp.NormalizePage(page), HsmMcp.NormalizeLimit(limit));
+            var result = _reader.ListProducts(User, HsmMcp.NormalizePage(page), HsmMcp.NormalizeLimit(limit),
+                cancellationToken);
 
             return new McpProductsResult
             {
                 Products = result.Items,
                 TotalFound = result.TotalCount,
+                Limit = result.PageSize,
+                Page = result.Page,
+                TotalPages = result.TotalPages,
             };
         }
 
@@ -72,26 +77,24 @@ namespace HSMServer.Mcp
             [Description("How the search text matches: 'contains' (default, case-insensitive substring) or 'regex' (.NET regular expression, case-insensitive, time-bounded).")] string searchMode = null,
             [Description("Optional node id (root product or folder) whose whole subtree is searched.")] Guid? productId = null,
             [Description("Optional sensor type name, e.g. 'Double' or 'IntegerBar'.")] string type = null,
-            [Description("Maximum sensors to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit,
-            [Description("1-based page when totalFound exceeds the limit — the last resort when matches cannot be narrowed further.")] int page = 1,
+            [Description("Maximum sensors to return (1..200, default 20); the result echoes the effective limit, the served page and totalPages alongside totalFound.")] int limit = HsmMcp.DefaultLimit,
+            [Description("1-based page when totalFound exceeds the limit — the last resort when matches cannot be narrowed further; clamped to the last page.")] int page = 1,
             CancellationToken cancellationToken = default)
         {
-            var result = _reader.FindSensors(productId, search, searchMode, type, HsmMcp.NormalizePage(page),
-                HsmMcp.NormalizeLimit(limit), User, cancellationToken);
-
-            var list = Unwrap(result);
+            // The page is mapped straight to the COMPACT summary — never through
+            // the full SensorDto, whose LastValue embeds the current payload
+            // (unbounded for String sensors); the compactness rule holds in the
+            // WORK, not only on the wire (#1392 review, round 5).
+            var list = Unwrap(_reader.FindSensors(productId, search, searchMode, type, HsmMcp.NormalizePage(page),
+                HsmMcp.NormalizeLimit(limit), User, ToSummary, cancellationToken));
 
             return new McpSensorsResult
             {
-                Sensors = [.. list.Items.Select(s => new McpSensorSummary
-                {
-                    Id = s.Id,
-                    Path = s.Path,
-                    Type = s.Type,
-                    Status = s.Status,
-                    Unit = s.Unit,
-                })],
+                Sensors = list.Items,
                 TotalFound = list.TotalCount,
+                Limit = list.PageSize,
+                Page = list.Page,
+                TotalPages = list.TotalPages,
             };
         }
 
@@ -128,6 +131,19 @@ namespace HSMServer.Mcp
         // The shared ambient-principal accessor (see McpToolContext); a property
         // so the tool bodies read like their REST twins' `User`.
         private ClaimsPrincipal User => McpToolContext.UserOf(_http);
+
+        // The compact projection find_sensors pages the cache models through
+        // (the mapper the shared service applies per page item). Unit resolution
+        // goes through the shared mapper helper so the summary and the full DTO
+        // can never disagree on it.
+        private static McpSensorSummary ToSummary(Core.Model.BaseSensorModel sensor) => new()
+        {
+            Id = sensor.Id,
+            Path = sensor.FullPath,
+            Type = sensor.Type.ToString(),
+            Status = sensor.Status?.Status.ToString(),
+            Unit = SensorTreeDtoMapper.UnitOf(sensor),
+        };
 
 
         // The shared read service's failure becomes a tool error (isError=true

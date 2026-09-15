@@ -50,6 +50,6 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public IActionResult GetProducts(int page = 1, int pageSize = ApiPagination.DefaultPageSize) =>
-            Ok(_reader.ListProducts(User, page, pageSize));
+            Ok(_reader.ListProducts(User, page, pageSize, HttpContext.RequestAborted));
     }
 }

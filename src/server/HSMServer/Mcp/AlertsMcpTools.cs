@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Schedule;
@@ -50,8 +51,9 @@ namespace HSMServer.Mcp
         [McpServerTool(Name = "list_alert_templates", ReadOnly = true, Idempotent = true, OpenWorld = false)]
         [Description("Lists alert templates visible to the token's owner, ordered by name. A template carries path patterns, policies (conditions) and destinations — enough to understand what alerts exist for which sensors. Templates have no narrowing dimension, so `page` walks beyond the limit.")]
         public McpAlertTemplatesResult ListAlertTemplates(
-            [Description("Maximum templates to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit,
-            [Description("1-based page when totalFound exceeds the limit.")] int page = 1)
+            [Description("Maximum templates to return (1..200, default 20); the result echoes the effective limit, the served page and totalPages alongside totalFound.")] int limit = HsmMcp.DefaultLimit,
+            [Description("1-based page when totalFound exceeds the limit; clamped to the last page.")] int page = 1,
+            CancellationToken cancellationToken = default)
         {
             var user = User;
 
@@ -67,21 +69,27 @@ namespace HSMServer.Mcp
                     : decisionByFolder[folderId] = _authorization.IsVisible(user, FolderResource(folderId));
 
             var visible = (_cache.GetAlertTemplateModels() ?? [])
-                .Where(template => IsListable(template.FolderId))
+                .Where(template =>
+                {
+                    // A disconnected caller must not keep the per-item evaluator
+                    // pass running (the sensor-tree scan's rule).
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    return IsListable(template.FolderId);
+                })
                 .OrderBy(template => template.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(template => template.Id)
                 .ToList();
 
+            var (pageItems, servedPage, pageSize, totalPages) = PageOf(visible, page, limit);
+
             return new McpAlertTemplatesResult
             {
-                // The REST paging helpers verbatim: ClampPage bounds the Skip
-                // arithmetic (an unchecked (page-1)*limit wraps int for huge
-                // pages and a NEGATIVE Skip silently returns the FIRST page
-                // labeled as page N — the exact hazard the REST twin guards
-                // against), and a page past the end clamps to the LAST page,
-                // unifying the four paging tools on one semantic (#1392 r4).
-                Templates = [.. PageOf(visible, page, limit).Select(AlertTemplateDtoMapper.ToDto)],
+                Templates = [.. pageItems.Select(AlertTemplateDtoMapper.ToDto)],
                 TotalFound = visible.Count,
+                Limit = pageSize,
+                Page = servedPage,
+                TotalPages = totalPages,
             };
         }
 
@@ -113,8 +121,9 @@ namespace HSMServer.Mcp
         [McpServerTool(Name = "list_alert_schedules", ReadOnly = true, Idempotent = true, OpenWorld = false)]
         [Description("Lists alert schedules (working-time windows that gate template policies), ordered by name; each schedule's sensor list carries only paths the token's owner may see. Schedules have no narrowing dimension, so `page` walks beyond the limit.")]
         public McpAlertSchedulesResult ListAlertSchedules(
-            [Description("Maximum schedules to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit,
-            [Description("1-based page when totalFound exceeds the limit.")] int page = 1)
+            [Description("Maximum schedules to return (1..200, default 20); the result echoes the effective limit, the served page and totalPages alongside totalFound.")] int limit = HsmMcp.DefaultLimit,
+            [Description("1-based page when totalFound exceeds the limit; clamped to the last page.")] int page = 1,
+            CancellationToken cancellationToken = default)
         {
             var user = User;
 
@@ -128,7 +137,9 @@ namespace HSMServer.Mcp
 
             // The paging the REST list already does — same reachability rule and
             // the same ClampPage-bounded slice as the templates list (#1392 r4).
-            var pageItems = PageOf(all, page, limit).ToList();
+            var (pageItems, servedPage, pageSize, totalPages) = PageOf(all, page, limit);
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             // The page's sensor references are resolved in ONE pass over the
             // sensor cache (the per-id lookup scans every sensor, so per-item
@@ -140,10 +151,18 @@ namespace HSMServer.Mcp
 
             return new McpAlertSchedulesResult
             {
-                Schedules = [.. pageItems.Select(schedule => ToDto(schedule,
-                    sensorsBySchedule.TryGetValue(schedule.Id, out var sensors) ? sensors : null,
-                    isProductVisible))],
+                Schedules = [.. pageItems.Select(schedule =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    return ToDto(schedule,
+                        sensorsBySchedule.TryGetValue(schedule.Id, out var sensors) ? sensors : null,
+                        isProductVisible);
+                })],
                 TotalFound = all.Count,
+                Limit = pageSize,
+                Page = servedPage,
+                TotalPages = totalPages,
             };
         }
 
@@ -186,13 +205,16 @@ namespace HSMServer.Mcp
         // The shared slice of both alert lists: REST's Normalize/ClampPage/
         // TotalPagesOf trio, so the Skip arithmetic can never wrap and a page
         // past the end returns the last page like every /api/v1 list (#1392 r4).
-        private static IEnumerable<T> PageOf<T>(List<T> ordered, int page, int limit)
+        // Returns the served page and its bounds too — the result envelope
+        // echoes the EFFECTIVE paging (a rewritten `limit` must be observable,
+        // #1392 r5).
+        private static (List<T> Items, int Page, int PageSize, int TotalPages) PageOf<T>(List<T> ordered, int page, int limit)
         {
             var pageSize = HsmMcp.NormalizeLimit(limit);
             var totalPages = ApiPagination.TotalPagesOf(ordered.Count, pageSize);
             var index = ApiPagination.ClampPage(HsmMcp.NormalizePage(page), totalPages);
 
-            return ordered.Skip((index - 1) * pageSize).Take(pageSize);
+            return ([.. ordered.Skip((index - 1) * pageSize).Take(pageSize)], index, pageSize, totalPages);
         }
 
         private static AlertScheduleDto ToDto(Core.Model.Policies.AlertSchedule schedule,

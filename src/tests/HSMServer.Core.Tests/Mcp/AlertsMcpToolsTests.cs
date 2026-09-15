@@ -107,6 +107,9 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(["alpha", "beta"], result.Templates.Select(t => t.Name));
             Assert.Equal(3, result.TotalFound);
+            Assert.Equal(2, result.Limit);
+            Assert.Equal(1, result.Page);
+            Assert.Equal(2, result.TotalPages);
         }
 
 
@@ -150,6 +153,9 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(["gamma"], result.Templates.Select(t => t.Name));
             Assert.Equal(3, result.TotalFound);
+            Assert.Equal(2, result.Limit);
+            Assert.Equal(2, result.Page);
+            Assert.Equal(2, result.TotalPages);
         }
 
 
@@ -170,6 +176,9 @@ namespace HSMServer.Core.Tests.Mcp
             // answers page 1 (["t0", "t1"]); with it, the last page.
             Assert.Equal(["t4"], result.Templates.Select(t => t.Name));
             Assert.Equal(5, result.TotalFound);
+            Assert.Equal(2, result.Limit);
+            Assert.Equal(3, result.Page);
+            Assert.Equal(3, result.TotalPages);
         }
 
 
@@ -258,6 +267,9 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(["s0", "s1"], result.Schedules.Select(s => s.Name));
             Assert.Equal(5, result.TotalFound);
+            Assert.Equal(2, result.Limit);
+            Assert.Equal(1, result.Page);
+            Assert.Equal(3, result.TotalPages);
         }
 
 
@@ -270,6 +282,9 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(["s2"], result.Schedules.Select(s => s.Name));
             Assert.Equal(3, result.TotalFound);
+            Assert.Equal(2, result.Limit);
+            Assert.Equal(2, result.Page);
+            Assert.Equal(2, result.TotalPages);
         }
 
 
@@ -284,6 +299,9 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(["s4"], result.Schedules.Select(s => s.Name));
             Assert.Equal(5, result.TotalFound);
+            Assert.Equal(2, result.Limit);
+            Assert.Equal(3, result.Page);
+            Assert.Equal(3, result.TotalPages);
         }
 
 

@@ -112,6 +112,24 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
 
 
         [Fact]
+        public async Task LegacyGuard_HsmBearerOnMcpSubPath_IsAMisplacedToken()
+        {
+            // The exemption is the ENDPOINT, not the /mcp prefix (#1392 review,
+            // round 5): MapMcp maps exactly /mcp, so nothing else under the
+            // prefix is a token route — a credential there is misplaced and gets
+            // the guard's 401 however routing under the prefix evolves, instead
+            // of resting on "no route will ever be added there".
+            var credential = ApiTokenMaterial.FormatToken(new string('A', 22), new string('B', 43));
+            var context = BuildContext("/mcp/health", SitePort, authorization: $"Bearer {credential}");
+
+            await new LegacyBearerGuardMiddleware(NextThatMarks).InvokeAsync(context);
+
+            Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+            Assert.False(context.Items.ContainsKey("reached"));
+        }
+
+
+        [Fact]
         public async Task McpSitePortGuard_OffSitePort_IsUniform404_BeforeAuthentication()
         {
             // The sensor port must not confirm the MCP endpoint exists: the guard

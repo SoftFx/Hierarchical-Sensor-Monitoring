@@ -416,10 +416,19 @@
             <summary>Result of the list_products tool.</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpProductsResult.Products">
-            <summary>The first `limit` visible root products, ordered by name.</summary>
+            <summary>The visible root products of the served page, ordered by name.</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpProductsResult.TotalFound">
             <summary>Total visible root products, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpProductsResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpProductsResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpProductsResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         </member>
         <member name="T:HSMServer.Mcp.McpSensorSummary">
             <summary>
@@ -444,29 +453,56 @@
             <summary>Result of the find_sensors tool.</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpSensorsResult.Sensors">
-            <summary>The first `limit` matching sensors, ordered by path.</summary>
+            <summary>The matching sensors of the served page, ordered by path.</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpSensorsResult.TotalFound">
             <summary>Total matching sensors, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorsResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorsResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpSensorsResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when nothing matches).</summary>
         </member>
         <member name="T:HSMServer.Mcp.McpAlertTemplatesResult">
             <summary>Result of the list_alert_templates tool.</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpAlertTemplatesResult.Templates">
-            <summary>The first `limit` visible templates, ordered by name.</summary>
+            <summary>The visible templates of the served page, ordered by name.</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpAlertTemplatesResult.TotalFound">
             <summary>Total visible templates, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAlertTemplatesResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAlertTemplatesResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAlertTemplatesResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         </member>
         <member name="T:HSMServer.Mcp.McpAlertSchedulesResult">
             <summary>Result of the list_alert_schedules tool.</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.Schedules">
-            <summary>The first `limit` schedules, ordered by name; sensor paths
+            <summary>The schedules of the served page, ordered by name; sensor paths
             are filtered to the token owner's sight.</summary>
         </member>
         <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.TotalFound">
             <summary>Total schedules, whatever the limit.</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.Limit">
+            <summary>The effective page size (the clamped `limit`).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.Page">
+            <summary>The 1-based page actually served (a page past the end serves the last page).</summary>
+        </member>
+        <member name="P:HSMServer.Mcp.McpAlertSchedulesResult.TotalPages">
+            <summary>Total page count at the effective limit (0 when the collection is empty).</summary>
         </member>
         <member name="T:HSMServer.Mcp.SensorTreeMcpTools">
             <summary>
@@ -1062,7 +1098,7 @@
             DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadFailure"/> back, never an IActionResult.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.ListProducts(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32)">
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.ListProducts(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
             <summary>
             Root products visible to the token's owner, ordered by name then id.
             An owner who sees nothing gets an empty list, not a failure: the list
@@ -1076,13 +1112,17 @@
             answer the SAME NotFound.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.FindSensors(System.Nullable{System.Guid},System.String,System.String,System.String,System.Int32,System.Int32,System.Security.Claims.ClaimsPrincipal,System.Threading.CancellationToken)">
+        <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.FindSensors``1(System.Nullable{System.Guid},System.String,System.String,System.String,System.Int32,System.Int32,System.Security.Claims.ClaimsPrincipal,System.Func{HSMServer.Core.Model.BaseSensorModel,``0},System.Threading.CancellationToken)">
             <summary>
             Search sensors, ordered by full path then id. Without parameters: every
             sensor visible to the token's owner. With <paramref name="product"/>:
             the subtree of that node (any product or folder id — unknown and
             invisible ids answer the uniform NotFound). The search text matches
-            name, description and path (OR).
+            name, description and path (OR). The <paramref name="mapper"/> decides
+            the item shape: REST pages the full <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorDto"/>, the MCP
+            find_sensors tool a compact summary — mapping the page items DIRECTLY
+            (instead of narrowing a heavy DTO afterwards) keeps a compact caller
+            from materializing current-value payloads it discards (#1392 review).
             </summary>
         </member>
         <member name="M:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadService.GetSensor(System.Guid,System.Security.Claims.ClaimsPrincipal)">

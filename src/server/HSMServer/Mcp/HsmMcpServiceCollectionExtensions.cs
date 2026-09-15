@@ -13,14 +13,9 @@ namespace HSMServer.Mcp
     {
         public static IServiceCollection AddHsmMcpServer(this IServiceCollection services)
         {
-            // Statelessly hosted Streamable HTTP: the tools are pure reads, so no
-            // session affinity is needed. The tools resolve the caller through
-            // the ambient HTTP context (McpToolContext), which holds only while
-            // every tools/call executes INLINE within its POST — the stateless
-            // mode. Set explicitly (the 2.2.0 default is stateless since the
-            // 2026-07-28 protocol revision, but an SDK default change would
-            // otherwise silently degrade every tool call); pinned by
-            // HsmMcpServerRegistrationTests.
+            // The tools resolve the caller through the ambient HTTP context
+            // (McpToolContext), which holds only while every tools/call executes
+            // INLINE within its POST — see the stateless pin below.
             services.AddHttpContextAccessor();
 
             return services.AddMcpServer(options =>
@@ -32,6 +27,11 @@ namespace HSMServer.Mcp
                         Version = ServerConfig.Version,
                     };
                 })
+                // Statelessly hosted Streamable HTTP: the tools are pure reads, so
+                // no session affinity is needed. Set explicitly (the 2.2.0 default
+                // is stateless since the 2026-07-28 protocol revision, but an SDK
+                // default change would otherwise silently degrade every tool
+                // call); pinned by HsmMcpServerRegistrationTests.
                 .WithHttpTransport(options => options.Stateless = true)
                 .WithTools<SensorTreeMcpTools>()
                 .WithTools<AlertsMcpTools>()

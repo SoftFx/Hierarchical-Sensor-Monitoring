@@ -20,7 +20,11 @@ namespace HSMServer.Mcp
         // be partitioned by search at all — so beyond the cap, `page` is the
         // only reachability (#1392 review, rounds 3-4). The paging tools share
         // the REST clamps (ApiPagination): a page past the end serves the LAST
-        // page, and the Skip arithmetic can never wrap int.
+        // page, and the Skip arithmetic can never wrap int. Because the clamps
+        // REWRITE the caller's limit silently, every list envelope echoes the
+        // effective `limit`, the `page` actually served and `totalPages` — the
+        // agent must divide by the limit the server applied, never the one it
+        // asked for (#1392 review, round 5).
         public const int DefaultLimit = 20;
         public const int MaxLimit = 200;
 

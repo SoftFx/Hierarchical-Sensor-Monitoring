@@ -63,7 +63,8 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// An owner who sees nothing gets an empty list, not a failure: the list
         /// carries no per-item secret, and emptiness discloses nothing.
         /// </summary>
-        public ApiPageDto<ProductDto> ListProducts(ClaimsPrincipal user, int page, int pageSize)
+        public ApiPageDto<ProductDto> ListProducts(ClaimsPrincipal user, int page, int pageSize,
+            CancellationToken cancellation)
         {
             (page, pageSize) = ApiPagination.Normalize(page, pageSize);
 
@@ -74,7 +75,15 @@ namespace HSMServer.Model.ManagementApi.SensorTree
             // boundary — the same predicate every sensor listing resolves
             // through.
             var all = _cache.GetProducts()
-                .Where(product => product.IsRoot && _authorization.IsVisible(user, ApiTokenResource.Product(product.Id)))
+                .Where(product =>
+                {
+                    // A disconnected caller must not keep the per-item evaluator
+                    // pass running (the FilterSensors rule — the evaluator
+                    // re-resolves caller + token on every product).
+                    cancellation.ThrowIfCancellationRequested();
+
+                    return product.IsRoot && _authorization.IsVisible(user, ApiTokenResource.Product(product.Id));
+                })
                 .OrderBy(product => product.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(product => product.Id)
                 .ToList();
@@ -143,10 +152,15 @@ namespace HSMServer.Model.ManagementApi.SensorTree
         /// sensor visible to the token's owner. With <paramref name="product"/>:
         /// the subtree of that node (any product or folder id — unknown and
         /// invisible ids answer the uniform NotFound). The search text matches
-        /// name, description and path (OR).
+        /// name, description and path (OR). The <paramref name="mapper"/> decides
+        /// the item shape: REST pages the full <see cref="SensorDto"/>, the MCP
+        /// find_sensors tool a compact summary — mapping the page items DIRECTLY
+        /// (instead of narrowing a heavy DTO afterwards) keeps a compact caller
+        /// from materializing current-value payloads it discards (#1392 review).
         /// </summary>
-        public SensorTreeReadResult<ApiPageDto<SensorDto>> FindSensors(Guid? product, string search, string searchMode,
-            string type, int page, int pageSize, ClaimsPrincipal user, CancellationToken cancellation)
+        public SensorTreeReadResult<ApiPageDto<TItem>> FindSensors<TItem>(Guid? product, string search, string searchMode,
+            string type, int page, int pageSize, ClaimsPrincipal user, Func<BaseSensorModel, TItem> mapper,
+            CancellationToken cancellation)
         {
             // The optional subtree filter: an unknown id is the plain area 404 (no
             // evaluator call), an invisible one the evaluator's 404 — the caller
@@ -159,18 +173,18 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                 if (!_cache.TryGetProduct(productId, out var node) || node is null ||
                     _authorization.AuthorizeRead(user, ApiTokenResource.Product(node.Root.Id)) != ApiTokenAuthorization.Allowed)
                 {
-                    return SensorTreeReadResult<ApiPageDto<SensorDto>>.Fail(SensorTreeReadOutcome.NotFound);
+                    return SensorTreeReadResult<ApiPageDto<TItem>>.Fail(SensorTreeReadOutcome.NotFound);
                 }
 
                 subtree = node;
             }
 
             if (!SensorSearchMatcher.TryBuild(search, searchMode, out var predicate, out var regexMode, out var searchErrors))
-                return SensorTreeReadResult<ApiPageDto<SensorDto>>.Fail(
+                return SensorTreeReadResult<ApiPageDto<TItem>>.Fail(
                     SensorTreeReadOutcome.ValidationFailed, errors: searchErrors);
 
             if (!TryResolveTypeFilter(type, out var typeFilter, out var typeErrors))
-                return SensorTreeReadResult<ApiPageDto<SensorDto>>.Fail(
+                return SensorTreeReadResult<ApiPageDto<TItem>>.Fail(
                     SensorTreeReadOutcome.ValidationFailed, errors: typeErrors);
 
             (page, pageSize) = ApiPagination.Normalize(page, pageSize);
@@ -193,15 +207,15 @@ namespace HSMServer.Model.ManagementApi.SensorTree
                         ? $"The search pattern is too complex to evaluate (per-match timeout {SensorSearchMatcher.RegexTimeoutMs} ms, evaluation budget {SearchBudgetMs} ms); simplify it or narrow the listing to a single product."
                         : "The search exceeded the evaluation budget; narrow it to a single product or a more specific text.";
 
-                return SensorTreeReadResult<ApiPageDto<SensorDto>>.Fail(SensorTreeReadOutcome.Unavailable, message: message);
+                return SensorTreeReadResult<ApiPageDto<TItem>>.Fail(SensorTreeReadOutcome.Unavailable, message: message);
             }
 
             var totalPages = ApiPagination.TotalPagesOf(all.Count, pageSize);
             page = ApiPagination.ClampPage(page, totalPages);
 
-            return SensorTreeReadResult<ApiPageDto<SensorDto>>.Ok(new ApiPageDto<SensorDto>
+            return SensorTreeReadResult<ApiPageDto<TItem>>.Ok(new ApiPageDto<TItem>
             {
-                Items = [.. all.Skip((page - 1) * pageSize).Take(pageSize).Select(SensorTreeDtoMapper.ToSensorDto)],
+                Items = [.. all.Skip((page - 1) * pageSize).Take(pageSize).Select(mapper)],
                 Page = page,
                 PageSize = pageSize,
                 TotalCount = all.Count,

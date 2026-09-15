@@ -172,7 +172,9 @@ namespace HSMServer.Model.ManagementApi.SensorTree
 
         // Unit precedence: the collector-declared unit of the value (any numeric
         // sensor can carry one), then the Rate display denominator; null otherwise.
-        private static string UnitOf(BaseSensorModel sensor)
+        // Public so a compact projection (the MCP find_sensors summary) resolves
+        // the SAME unit the full DTO would — a private copy could drift.
+        public static string UnitOf(BaseSensorModel sensor)
         {
             if (sensor.OriginalUnit is { } unit)
                 return unit.GetDisplayName();

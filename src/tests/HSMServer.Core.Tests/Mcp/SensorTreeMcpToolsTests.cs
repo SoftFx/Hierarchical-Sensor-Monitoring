@@ -115,6 +115,24 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Single(result.Products);
             Assert.Equal("alpha", result.Products[0].Name);
             Assert.Equal(2, result.TotalFound);
+            Assert.Equal(1, result.Limit);
+            Assert.Equal(1, result.Page);
+            Assert.Equal(2, result.TotalPages);
+        }
+
+
+        [Fact]
+        public void ListProducts_ClampedLimit_EchoesTheEffectivePaging()
+        {
+            // The clamps rewrite the caller's `limit` silently (0 → 20, >200 →
+            // 200), so the envelope must echo the EFFECTIVE paging: an agent
+            // dividing totalFound by the limit it ASKED for derives wrong pages
+            // with no observable mismatch (#1392 review, round 5).
+            var result = CreateTools().ListProducts(limit: 500);
+
+            Assert.Equal(HsmMcp.MaxLimit, result.Limit);
+            Assert.Equal(1, result.Page);
+            Assert.Equal(1, result.TotalPages);
         }
 
 
@@ -132,6 +150,9 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(["gamma"], result.Products.Select(p => p.Name));
             Assert.Equal(3, result.TotalFound);
+            Assert.Equal(2, result.Limit);
+            Assert.Equal(2, result.Page);
+            Assert.Equal(2, result.TotalPages);
         }
 
 
@@ -204,6 +225,9 @@ namespace HSMServer.Core.Tests.Mcp
             Assert.Equal("alpha/eth0", summary.Path);
             Assert.Equal("Double", summary.Type);
             Assert.Equal(1, result.TotalFound);
+            Assert.Equal(20, result.Limit);
+            Assert.Equal(1, result.Page);
+            Assert.Equal(1, result.TotalPages);
         }
 
 
@@ -222,6 +246,9 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(["alpha/disk_3"], result.Sensors.Select(s => s.Path));
             Assert.Equal(3, result.TotalFound);
+            Assert.Equal(2, result.Limit);
+            Assert.Equal(2, result.Page);
+            Assert.Equal(2, result.TotalPages);
         }
 
 
