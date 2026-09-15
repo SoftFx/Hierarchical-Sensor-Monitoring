@@ -1,13 +1,10 @@
 using System;
 using System.ComponentModel;
-using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
-using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.SensorTree;
 using Microsoft.AspNetCore.Http;
-using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace HSMServer.Mcp

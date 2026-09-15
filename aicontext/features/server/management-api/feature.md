@@ -90,7 +90,7 @@ The acceptance bar of the epic: an AI agent that starts from NOTHING but the Ope
 |---|---|
 | `src/server/HSMServer/Controllers/AlertTemplatesApiController.cs` | The first `/api/v1` resource controller; the conventions reference. Write paths (POST/PUT/DELETE) live here; the read paths render `AlertReadService` (#1393) |
 | `src/server/HSMServer/Controllers/AlertSchedulesApiController.cs` | Read-only schedules controller; the caller-wide global-resource gate — both actions render `AlertReadService` (#1393) |
-| `src/server/HSMServer/Model/ManagementApi/Alerts/AlertReadService.cs` | The alert read implementation (folder-sighted template list/get, the caller-wide schedules gate, sensor-path visibility filtering), shared with the MCP alert tools since #1393; reuses the sensor-tree read envelope |
+| `src/server/HSMServer/Model/ManagementApi/Alerts/AlertReadService.cs` | The alert read implementation (folder-sighted template list/get, the caller-wide schedules gate, sensor-path visibility filtering), shared with the MCP alert tools since #1393; reuses the sensor-tree-named read envelope (the area-wide one; renaming is #1398) |
 | `src/server/HSMServer/Controllers/ProductsApiController.cs` | Sensor-tree read surface (#1386): visible root products |
 | `src/server/HSMServer/Controllers/NodesApiController.cs` | Sensor-tree read surface (#1386): any node + direct children |
 | `src/server/HSMServer/Controllers/SensorsApiController.cs` | Sensor-tree read surface (#1386): recursive search, sensor item, newest-N history |

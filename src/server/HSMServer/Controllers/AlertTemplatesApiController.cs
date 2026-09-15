@@ -55,11 +55,6 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class AlertTemplatesApiController : ControllerBase
     {
-        // The area's shared page-size constants (#1393 review): the reads run
-        // on ApiPagination inside AlertReadService — a private copy here is
-        // exactly the drift the helper exists to prevent.
-        public const int DefaultPageSize = ApiPagination.DefaultPageSize;
-
         // Size guard rails the web UI gets from its widgets; the API states them
         // explicitly. They bound the collection COUNTS and the name length only —
         // individual strings (paths, message templates, target values) stay bounded
@@ -102,8 +97,8 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
-        public IActionResult GetTemplates(int page = 1, int pageSize = DefaultPageSize) =>
-            Ok(_reader.ListTemplates(User, page, pageSize));
+        public IActionResult GetTemplates(int page = 1, int pageSize = ApiPagination.DefaultPageSize) =>
+            Ok(_reader.ListTemplates(User, page, pageSize, HttpContext.RequestAborted));
 
         /// <summary>Get one template by id.</summary>
         /// <param name="id">Template id.</param>

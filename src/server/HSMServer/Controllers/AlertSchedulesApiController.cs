@@ -41,7 +41,6 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class AlertSchedulesApiController : ControllerBase
     {
-
         private readonly AlertReadService _reader;
 
         public AlertSchedulesApiController(AlertReadService reader)
@@ -64,7 +63,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
         public IActionResult GetSchedules(int page = 1, int pageSize = ApiPagination.DefaultPageSize) =>
-            _reader.ListSchedules(User, page, pageSize).ToActionResult();
+            _reader.ListSchedules(User, page, pageSize, HttpContext.RequestAborted).ToActionResult();
 
         /// <summary>Get one schedule by id (same caller-wide gate as the list).</summary>
         /// <param name="id">Schedule id.</param>

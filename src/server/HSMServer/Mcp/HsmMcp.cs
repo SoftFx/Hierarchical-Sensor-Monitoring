@@ -1,4 +1,5 @@
 using System;
+using HSMServer.Model.ManagementApi;
 
 namespace HSMServer.Mcp
 {
@@ -26,7 +27,13 @@ namespace HSMServer.Mcp
         // agent must divide by the limit the server applied, never the one it
         // asked for (#1392 review, round 5).
         public const int DefaultLimit = 20;
-        public const int MaxLimit = 200;
+
+        // Aliased, not coincidental (#1395 review): every shared read service
+        // re-clamps page sizes through ApiPagination, so an MCP limit above
+        // the area's ceiling would be silently re-clamped by a helper in
+        // another feature — the alias makes raising one without the other a
+        // compile error.
+        public const int MaxLimit = ApiPagination.MaxPageSize;
 
         // A tool result lands directly in the calling model's context window
         // (#1392 review), so the history tool defaults tighter than the REST

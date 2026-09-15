@@ -24,7 +24,11 @@ namespace HSMServer.Mcp
                     SensorTreeReadOutcome.ValidationFailed => failure.Errors is { Count: > 0 } errors
                         ? string.Join(" ", errors.Select(pair => $"{pair.Key}: {string.Join("; ", pair.Value)}"))
                         : "The request is invalid.",
-                    SensorTreeReadOutcome.Forbidden or SensorTreeReadOutcome.Unavailable => failure.Message,
+                    // The guard keeps the self-correction contract: a future
+                    // Fail(Forbidden) without a message must not produce an
+                    // EMPTY tool error (#1395 review).
+                    SensorTreeReadOutcome.Forbidden or SensorTreeReadOutcome.Unavailable =>
+                        failure.Message ?? "The request failed.",
                     _ => ManagementApiErrors.NotFoundMessage,
                 })
                 : result.Value;
