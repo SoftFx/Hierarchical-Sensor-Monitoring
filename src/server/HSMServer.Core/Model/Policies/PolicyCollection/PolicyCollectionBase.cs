@@ -89,6 +89,11 @@ namespace HSMServer.Core.Model.Policies
             var isTemplateInitiated = initiator == InitiatorInfo.AlertTemplate;
 
             var journalEntries = new List<(string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)>();
+            // Policies the editor's full-list semantics DROP (not in the update
+            // list, not template-owned) — journaled as removals after the lock
+            // (#1394): the drop used to vanish without a record, so an operator
+            // saw the TTL alert's creation entry and nothing about its end.
+            var droppedPolicies = new List<TTLPolicy>();
 
             lock (_ttlLock)
             {
@@ -133,6 +138,10 @@ namespace HSMServer.Core.Model.Policies
                         // so manual and other-template policies must be preserved.
                         newList.Add(policy);
                     }
+                    else
+                    {
+                        droppedPolicies.Add(policy);
+                    }
                 }
 
                 foreach (var update in newPolicyUpdates.Concat(updatesDict.Values))
@@ -152,6 +161,11 @@ namespace HSMServer.Core.Model.Policies
 
             foreach (var (oldValue, policy, update, isParent) in journalEntries)
                 CallJournal(update.Id, oldValue, policy.ToString(), update.Initiator, isParent);
+
+            // The removal records for the dropped entries — same shape
+            // RemovePolicy writes for regular policies (#1394).
+            foreach (var dropped in droppedPolicies)
+                CallJournal(dropped.Id, dropped.ToString(), string.Empty, initiator);
         }
 
 
@@ -178,18 +192,32 @@ namespace HSMServer.Core.Model.Policies
                 _ttlPolicies = [.._ttlPolicies, policy];
         }
 
-        internal void RemoveTTLPolicy(Guid id)
+        internal void RemoveTTLPolicy(Guid id, InitiatorInfo initiator = null)
         {
+            TTLPolicy removed = null;
+
             lock (_ttlLock)
             {
                 var newList = new List<TTLPolicy>(_ttlPolicies.Count);
                 foreach (var p in _ttlPolicies)
+                {
                     if (p.Id != id)
                         newList.Add(p);
+                    else
+                        removed = p;
+                }
 
-                if (newList.Count != _ttlPolicies.Count)
+                if (removed is not null)
                     _ttlPolicies = newList;
             }
+
+            // The removal record RemovePolicy writes for its regular policies
+            // (#1394): a TTL alert removed through a template prune/delete must
+            // leave the same journal trace — without it the removal vanished
+            // from the journal entirely, which is exactly how a template-derived
+            // alert could disappear with no record of why.
+            if (removed is not null && initiator is not null)
+                CallJournal(removed.Id, removed.ToString(), string.Empty, initiator);
         }
 
 

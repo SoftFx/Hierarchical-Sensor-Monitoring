@@ -18,6 +18,9 @@ As of issue #1159 the editor exposes a single "Add" entry point: Inactivity Peri
 
 ## Invariants
 
+- **Journal coverage of TTL-alert removals (#1394)**: every path that removes a TTL policy leaves the same journal record a regular-policy removal does — `RemoveTTLPolicy` (template delete and stale-prune, initiator `AlertTemplate`) and the manual editor's full-list drop in `UpdateTTLs` both write the "Alert" removal record (old value → empty). Previously a TTL alert could vanish with NO journal trace at all — the exact mechanism behind "alert disappeared, journal shows only the creation".
+- **Template apply failures surface, not swallow (#1394)**: `AddAlertTemplateAsync` returns `(false, error naming the products)` when the per-sensor apply hits a DB failure (the request carries the per-sensor error off the queue thread — `ApplyTemplateRequest.Error`), the same partial-failure contract `RemoveAlertTemplateAsync` gives. The REST POST/PUT answers 409; the template itself stays persisted and editable for retry.
+- **Orphan-only TTL removals persist (#1394)**: when a template edit removes TTL entries such that the orphan removal is the ONLY delta, the sensor is still persisted (the old condition skipped the write — the removal lived in memory and the alert RESURRECTED after a restart).
 - The `_Alerts.cshtml` editor partial renders only when the selected node is a `SensorInfoViewModel`. `FolderInfoViewModel` and `ProductInfoViewModel` no longer render it.
 - `HomeController.AddDataPolicy` and `HomeController.AddAlertAction` return `_emptyResult` for any entity id that is not in `_treeViewModel.Sensors`. Stale JS or direct POSTs against a product/folder id cannot create per-node policies.
 - `HomeController.UpdateProductInfo` no longer parses `DataAlerts`; only TTL, description, history, self-destroy, and default-chats propagate from the form.
@@ -120,6 +123,13 @@ Coverage for the product-owned policy cleanup lives in `src/tests/HSMServer.Core
 - `Cleanup_PreservesTtlPolicies_OnProduct`
 - `Cleanup_PreservesSensorPolicies`
 - `Cleanup_UpdatesProductEntityPoliciesList_WithSurvivingIds`
+
+Coverage for the #1394 journal/persist gaps lives in `src/tests/HSMServer.Core.Tests/TreeValuesCacheTests/TemplateAlertJournalTests.cs` (real cache + journal wiring over the concurrency fixture):
+
+- `RemoveTemplate_TtlPolicies_LeaveJournalRecords` — template delete journals the TTL removals (previously silent).
+- `UpdateTTLs_ManualDrop_LeavesJournalRecord` — the editor's full-list drop of a manual TTL leaves the removal record (previously silent).
+- `ApplyTemplate_OrphanOnlyTtlRemoval_IsPersisted` — an edit whose only delta is orphan TTL removal still persists the sensor (previously in-memory only; the alert resurrected after restart).
+- `AddTemplate_OnPartialApplyDbFailure_ReturnsPartialFailure` — a per-sensor apply DB failure returns `(false, products)` (previously logged-only success), and the non-failing product still gets its alert.
 
 Condition view model guards live in `src/tests/HSMServer.Core.Tests/ConditionViewModelTests/ConditionViewModelPropertiesTests.cs`:
 
