@@ -1726,9 +1726,15 @@ namespace HSMServer.Core.Cache
             _alertTemplates[alertTemplateModel.Id] = alertTemplateModel;
             _database.AddAlertTemplate(alertTemplateModel.ToEntity());
 
-            // Assigned inside the try; checked after it (an exception mid-loop
-            // still surfaces whatever failures were collected before it).
-            ConcurrentDictionary<Guid, string> applyFailures = null;
+            // Declared ABOVE the try so an exception mid-loop still surfaces
+            // whatever failures were collected before it (#1394 review: the
+            // assign-at-the-end-of-try shape dropped them instead). Captures
+            // per-sensor failures — a single DB error must not silently leave
+            // the template half-applied (#1394, the RemoveAlertTemplateAsync
+            // pattern): UpdatesQueue converts THROWN exceptions into
+            // TaskResult.FromError, while the apply path reports contained
+            // TryUpdateSensor failures through request.Error — both land here.
+            var failedProducts = new ConcurrentDictionary<Guid, string>();
 
             try
             {
@@ -1767,14 +1773,6 @@ namespace HSMServer.Core.Cache
                     }
                 }
 
-                // Capture per-sensor failures so a single DB error does not
-                // silently leave the template half-applied (#1394, the
-                // RemoveAlertTemplateAsync pattern): UpdatesQueue converts
-                // THROWN exceptions into TaskResult.FromError, while the apply
-                // path reports contained TryUpdateSensor failures through
-                // request.Error — both are collected here.
-                var failedProducts = new ConcurrentDictionary<Guid, string>();
-
                 // Each sensor's policies are mutated only on its own product queue thread. A sensor
                 // cannot appear in both sets because staleSensors excludes matchedSensors, so the
                 // two dispatch loops are independent.
@@ -1803,8 +1801,6 @@ namespace HSMServer.Core.Cache
                     if (!result.IsOk)
                         failedProducts.TryAdd(sensor.Root.Id, sensor.RootProductName);
                 });
-
-                applyFailures = failedProducts;
             }
             catch (OperationCanceledException)
             {
@@ -1819,9 +1815,9 @@ namespace HSMServer.Core.Cache
             // (#1394): a per-sensor apply failure must not read as success —
             // the template IS persisted and will keep retrying on edits, but
             // the caller needs to know some sensors did not get their alerts.
-            if (applyFailures is { IsEmpty: false })
+            if (failedProducts is { IsEmpty: false })
             {
-                var names = string.Join(", ", applyFailures.Values.OrderBy(n => n));
+                var names = string.Join(", ", failedProducts.Values.OrderBy(n => n));
                 var error = $"Failed to apply template to products: {names}";
                 _logger.Error($"Partial failure applying template {alertTemplateModel.Id}: {error}");
                 return (false, error);
