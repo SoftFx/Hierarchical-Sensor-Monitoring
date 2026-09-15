@@ -45,9 +45,13 @@ namespace HSMServer.Middleware
                 // /mcp speaks JSON-RPC, not the area's uniform contract: whatever
                 // escapes the SDK handler answers a JSON-RPC INTERNAL ERROR object
                 // so an MCP client can parse the failure and surface the trace id
-                // (#1392 review); /api keeps the uniform three-field body.
+                // (#1392 review); /api keeps the uniform three-field body. The
+                // content type is set explicitly — WriteAsync does not do it, and
+                // a content-type-dispatching client would discard the body (and
+                // the trace id with it) as unparseable (#1392 review, round 4).
                 if (IsMcpPath(context.Request.Path))
                 {
+                    context.Response.ContentType = "application/json";
                     await WriteJsonRpcInternalError(context, context.TraceIdentifier);
                     return;
                 }

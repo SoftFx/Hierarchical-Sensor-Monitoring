@@ -134,7 +134,12 @@ try
     // semantics, not the uniform JSON contract. SitePort-only and bearer-exempt
     // through the dedicated middlewares (see ApplicationServiceExtensions).
     app.MapMcp(HsmMcp.EndpointPath)
-       .RequireAuthorization(HsmApiTokenDefaults.ManagementPolicy);
+       .RequireAuthorization(HsmApiTokenDefaults.ManagementPolicy)
+       // The SDK maps minimal-API endpoints; without this they would surface as
+       // junk /mcp operations in the server's single OpenAPI document — the
+       // doc is the REST agents' self-describing entry point and /mcp is not
+       // theirs (#1392 review, round 4).
+       .ExcludeFromDescription();
 
     app.MapControllerRoute(
         name: "Account",

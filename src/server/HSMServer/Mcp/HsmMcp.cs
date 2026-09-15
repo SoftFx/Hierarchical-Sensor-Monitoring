@@ -13,12 +13,14 @@ namespace HSMServer.Mcp
 
         // Tool list convention (#1391): no pagination cursors — every list tool
         // takes a single `limit` (default 20, cap 200) and answers `totalFound`,
-        // so an agent knows whether to narrow without chasing pages. Where a
-        // list has NO narrowing dimension (products, alert templates and
-        // schedules — nothing to filter by), it also takes a `page`, mirroring
-        // get_node's foldersPage: beyond the cap, page is the only reachability
-        // (#1392 review). find_sensors stays cursorless on purpose — it has
-        // search/type/productId to narrow with.
+        // so an agent knows whether to narrow without chasing pages. Every list
+        // ALSO takes a `page` (mirroring get_node's foldersPage): narrowing is
+        // the preferred move, but it is not guaranteed — get_node's own sensors
+        // list caps at 200 without paging, and uniformly-named sensors cannot
+        // be partitioned by search at all — so beyond the cap, `page` is the
+        // only reachability (#1392 review, rounds 3-4). The paging tools share
+        // the REST clamps (ApiPagination): a page past the end serves the LAST
+        // page, and the Skip arithmetic can never wrap int.
         public const int DefaultLimit = 20;
         public const int MaxLimit = 200;
 

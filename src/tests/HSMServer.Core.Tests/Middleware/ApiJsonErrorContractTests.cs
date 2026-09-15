@@ -279,6 +279,7 @@ namespace HSMServer.Core.Tests.Middleware
             await new ApiExceptionJsonMiddleware(Throw).InvokeAsync(context);
 
             Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+            Assert.Equal("application/json", context.Response.ContentType);
 
             var root = (await BodyAsync(context)).RootElement;
 

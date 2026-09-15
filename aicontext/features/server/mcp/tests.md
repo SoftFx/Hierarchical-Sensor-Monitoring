@@ -18,6 +18,7 @@
 - `GetNode_UnknownId_IsToolError` — the shared area 404 constant.
 - `GetSensorHistory_ExplicitMaxPoints_IsCappedAtTheMcpCeiling` — a naive explicit 10000 clamps to the MCP ceiling 2000 before the shared service's REST rules (context-window bound, #1392 review r3).
 - `FindSensors_CompactShape_WithTotalFound` — the summary carries id/path/type/status; values are NOT embedded.
+- `FindSensors_PageWalksMatchesThatCannotBeNarrowed` — `page` as the last resort past the cap (get_node's sensors list caps at 200 unpaged; uniform names cannot be partitioned by search, #1392 r4).
 - `FindSensors_InvisibleSubtree_SilentlyAbsent` — per-root-product sight.
 - `FindSensors_UnknownProduct_IsToolError` — the uniform not-found text.
 - `FindSensors_InvalidSearchMode_FlattensFieldErrors` — field-keyed validation details flatten into the tool error text with keys preserved; the key names the FAILING parameter (`searchMode:`, not `search:`), so the agent corrects the right argument (#1392 review; the matcher keys the mode error under `searchMode` on both transports).
@@ -31,6 +32,7 @@
 `AlertsMcpToolsTests` — the alert tools over the thin providers:
 
 - `ListAlertTemplates_OrdersByName_ReturnsFirstLimitWithTotalFound`.
+- `ListAlertTemplates_HugePageNumber_ClampsToLastPage_NoOverflowWrap` / `ListAlertSchedules_HugePageNumber_...` — the REST clamp: an unchecked `(page−1)·limit` wraps int and a negative Skip serves page 1 as page N; the shared `ClampPage` slice serves the LAST page (#1392 r4).
 - `ListAlertTemplates_OutOfSightFolders_SilentlyAbsent`.
 - `ListAlertTemplates_MemoizesVisibility_PerDistinctFolder` — the evaluator is resolved once per distinct folder (Times.Exactly(2)).
 - `GetAlertTemplate_Visible_MapsDto`.
@@ -46,7 +48,7 @@ The tools take `IHttpContextAccessor` (ambient principal — behind `RequireAuth
 
 `ApiTokenRouteGuardsTests` (`src/tests/HSMServer.Core.Tests/Authentication/ApiTokens/`) pins the two MCP guards: the bearer pass-through is case-insensitive (`/mcp` and `/MCP` — endpoint routing matches segments case-insensitively, so a mixed-case POST must not read as a misplaced token), the off-SitePort uniform 404 fires before authentication, and the fail-closed policy check rejects a matched `/mcp` endpoint without `ManagementPolicy` or with `[AllowAnonymous]` while admitting the policy-carrying endpoint.
 
-`ApiJsonErrorContractTests` (`src/tests/HSMServer.Core.Tests/Middleware/`) additionally pins that an exception escaping the handler on `/mcp` answers the uniform JSON 500 with the trace id — never the Razor error page (#1392 review).
+`ApiJsonErrorContractTests` (`src/tests/HSMServer.Core.Tests/Middleware/`) additionally pins that an exception escaping the handler on `/mcp` answers the JSON-RPC error envelope (code -32603, `data.traceId`, `application/json` content type) — never the Razor error page (#1392 review, rounds 3-4).
 
 ## Regression — REST suites are the shared net
 
@@ -54,6 +56,6 @@ The three sensor-tree controller suites (`SensorsApiControllerTests`, `NodesApiC
 
 ## Not covered (deliberate)
 
-- The MCP wire layer (protocol-version validation, JSON-RPC envelope details) is the SDK's tested surface; `HsmMcpWireTests` covers the integration of OUR pieces with it (auth policy, guards, ambient principal, scope) and stops there.
-- `HsmMcpWireTests` assembles its own minimal host — it does not execute Program.cs itself, so the production pipeline's exact middleware ORDER around /mcp stays covered by `ApiTokenRouteGuardsTests` and the exception-contract tests, not by the wire test.
+- The MCP wire layer (protocol-version validation, JSON-RPC envelope details) is the SDK's tested surface; `HsmMcpWireTests` covers the integration of OUR pieces with it (auth policy, guards, ambient principal, scope, the isError failure hop) and stops there.
+- `HsmMcpWireTests` assembles its own minimal host — it does not execute Program.cs itself, so the production pipeline's exact middleware ORDER around /mcp stays pinned by `ManagementPipelineOrderTests` (McpSitePortOnlyMiddleware between the bearer guard and UseAuthentication — after UseRouting, because its fail-closed endpoint-family check reads `GetEndpoint()`), not by the wire test.
 - Alert-tool `page` tests pin the Skip/Take slicing on the tool path; the underlying visibility semantics are the controller suites' (mirrored code — see feature.md Known Issues for the recorded `AlertReadService` follow-up).

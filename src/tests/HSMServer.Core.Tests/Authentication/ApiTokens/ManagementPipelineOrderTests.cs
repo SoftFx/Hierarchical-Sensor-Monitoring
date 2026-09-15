@@ -47,6 +47,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 "UseRouting",
                 "ManagementApiGuardMiddleware",
                 "LegacyBearerGuardMiddleware",
+                // After UseRouting on purpose: the fail-closed endpoint-family
+                // check reads context.GetEndpoint(), which is null above
+                // UseRouting — moved earlier, the whole /mcp policy check
+                // silently no-ops (#1392 review, round 4).
+                "McpSitePortOnlyMiddleware",
                 "UseAuthentication",
                 "UseAuthorization",
                 "UserProcessorMiddleware",

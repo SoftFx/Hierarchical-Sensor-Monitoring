@@ -66,23 +66,24 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "find_sensors", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-        [Description("Searches sensors visible to the token's owner — the workhorse for 'analyze network problems in product X': pass search='network' (or a regex) and productId to scope to one product's subtree. Returns compact summaries ordered by path; get_sensor on an id embeds the current value. The search text matches name, description and path (OR).")]
+        [Description("Searches sensors visible to the token's owner — the workhorse for 'analyze network problems in product X': pass search='network' (or a regex) and productId to scope to one product's subtree. Returns compact summaries ordered by path; get_sensor on an id embeds the current value. The search text matches name, description and path (OR). Prefer narrowing (search/type/productId); `page` walks the result set when the matches cannot be partitioned (uniform names) — get_node's own sensors list caps at 200 without paging.")]
         public McpSensorsResult FindSensors(
             [Description("Optional search text (see searchMode).")] string search = null,
             [Description("How the search text matches: 'contains' (default, case-insensitive substring) or 'regex' (.NET regular expression, case-insensitive, time-bounded).")] string searchMode = null,
             [Description("Optional node id (root product or folder) whose whole subtree is searched.")] Guid? productId = null,
             [Description("Optional sensor type name, e.g. 'Double' or 'IntegerBar'.")] string type = null,
             [Description("Maximum sensors to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit,
+            [Description("1-based page when totalFound exceeds the limit — the last resort when matches cannot be narrowed further.")] int page = 1,
             CancellationToken cancellationToken = default)
         {
-            var result = _reader.FindSensors(productId, search, searchMode, type, page: 1,
-                pageSize: HsmMcp.NormalizeLimit(limit), User, cancellationToken);
+            var result = _reader.FindSensors(productId, search, searchMode, type, HsmMcp.NormalizePage(page),
+                HsmMcp.NormalizeLimit(limit), User, cancellationToken);
 
-            var page = Unwrap(result);
+            var list = Unwrap(result);
 
             return new McpSensorsResult
             {
-                Sensors = [.. page.Items.Select(s => new McpSensorSummary
+                Sensors = [.. list.Items.Select(s => new McpSensorSummary
                 {
                     Id = s.Id,
                     Path = s.Path,
@@ -90,7 +91,7 @@ namespace HSMServer.Mcp
                     Status = s.Status,
                     Unit = s.Unit,
                 })],
-                TotalFound = page.TotalCount,
+                TotalFound = list.TotalCount,
             };
         }
 

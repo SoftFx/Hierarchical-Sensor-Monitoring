@@ -10,6 +10,7 @@ using HSMServer.Core.Schedule;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Mcp;
 using HSMServer.Middleware;
+using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authentication;
@@ -141,6 +142,18 @@ namespace HSMServer.Core.Tests.Mcp
             var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text;
             Assert.Contains("alpha", text);
             Assert.Contains("totalFound", text);
+
+            // The failure hop: an expected tool error must reach the client as
+            // isError text carrying the exception's message (the agent
+            // self-correction design), with the anti-enumeration text intact —
+            // the SDK relays McpException.Message rather than redacting it
+            // (#1392 review, round 4).
+            var error = await client.CallToolAsync("get_sensor",
+                new Dictionary<string, object> { ["sensorId"] = Guid.NewGuid() });
+
+            Assert.True(error.IsError);
+            Assert.Contains(ManagementApiErrors.NotFoundMessage,
+                Assert.IsType<TextContentBlock>(Assert.Single(error.Content)).Text);
 
             _cache.Verify(c => c.GetProducts(), Times.AtLeastOnce);
         }

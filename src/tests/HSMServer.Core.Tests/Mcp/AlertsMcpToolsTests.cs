@@ -154,6 +154,26 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
+        public void ListAlertTemplates_HugePageNumber_ClampsToLastPage_NoOverflowWrap()
+        {
+            // The REST twin's hazard, verbatim: an unchecked (page-1)*limit
+            // wraps int for huge pages, a NEGATIVE Skip silently returns the
+            // FIRST page labeled as page N, and the agent double-counts. The
+            // shared ClampPage slice clamps to the LAST page instead (#1392 r4).
+            var folderA = Guid.NewGuid();
+            _templateStore.AddRange(Enumerable.Range(0, 5)
+                .Select(i => new AlertTemplateModel { Id = Guid.NewGuid(), Name = $"t{i}", FolderId = folderA }));
+
+            var result = CreateTools().ListAlertTemplates(limit: 2, page: 1_100_000_000);
+
+            // (1.1e9 - 1) * 2 > int.MaxValue — without the clamp this wraps and
+            // answers page 1 (["t0", "t1"]); with it, the last page.
+            Assert.Equal(["t4"], result.Templates.Select(t => t.Name));
+            Assert.Equal(5, result.TotalFound);
+        }
+
+
+        [Fact]
         public void ListAlertTemplates_MemoizesVisibility_PerDistinctFolder()
         {
             var folderA = Guid.NewGuid();
@@ -250,6 +270,20 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(["s2"], result.Schedules.Select(s => s.Name));
             Assert.Equal(3, result.TotalFound);
+        }
+
+
+        [Fact]
+        public void ListAlertSchedules_HugePageNumber_ClampsToLastPage_NoOverflowWrap()
+        {
+            // The same ClampPage pin as the templates list — the wrap would
+            // serve page 1 as page 1.1e9 (#1392 review, round 4).
+            _scheduleStore.AddRange(Enumerable.Range(0, 5).Select(i => BuildSchedule($"s{i}")));
+
+            var result = CreateTools().ListAlertSchedules(limit: 2, page: 1_100_000_000);
+
+            Assert.Equal(["s4"], result.Schedules.Select(s => s.Name));
+            Assert.Equal(5, result.TotalFound);
         }
 
 

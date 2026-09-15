@@ -74,13 +74,13 @@ namespace HSMServer.Mcp
 
             return new McpAlertTemplatesResult
             {
-                // The paging the REST list already does: templates offer nothing
-                // to narrow with, so beyond the cap `page` is the only
-                // reachability (#1392 review).
-                Templates = [.. visible
-                    .Skip((HsmMcp.NormalizePage(page) - 1) * HsmMcp.NormalizeLimit(limit))
-                    .Take(HsmMcp.NormalizeLimit(limit))
-                    .Select(AlertTemplateDtoMapper.ToDto)],
+                // The REST paging helpers verbatim: ClampPage bounds the Skip
+                // arithmetic (an unchecked (page-1)*limit wraps int for huge
+                // pages and a NEGATIVE Skip silently returns the FIRST page
+                // labeled as page N — the exact hazard the REST twin guards
+                // against), and a page past the end clamps to the LAST page,
+                // unifying the four paging tools on one semantic (#1392 r4).
+                Templates = [.. PageOf(visible, page, limit).Select(AlertTemplateDtoMapper.ToDto)],
                 TotalFound = visible.Count,
             };
         }
@@ -126,12 +126,9 @@ namespace HSMServer.Mcp
                 .ThenBy(schedule => schedule.Id)
                 .ToList();
 
-            // The paging the REST list already does — same reachability rule as
-            // the templates list (#1392 review).
-            var pageItems = all
-                .Skip((HsmMcp.NormalizePage(page) - 1) * HsmMcp.NormalizeLimit(limit))
-                .Take(HsmMcp.NormalizeLimit(limit))
-                .ToList();
+            // The paging the REST list already does — same reachability rule and
+            // the same ClampPage-bounded slice as the templates list (#1392 r4).
+            var pageItems = PageOf(all, page, limit).ToList();
 
             // The page's sensor references are resolved in ONE pass over the
             // sensor cache (the per-id lookup scans every sensor, so per-item
@@ -186,7 +183,19 @@ namespace HSMServer.Mcp
         private static ApiTokenResource FolderResource(Guid folderId) =>
             new(ApiTokenResourceKind.Folder, folderId);
 
-        private AlertScheduleDto ToDto(Core.Model.Policies.AlertSchedule schedule,
+        // The shared slice of both alert lists: REST's Normalize/ClampPage/
+        // TotalPagesOf trio, so the Skip arithmetic can never wrap and a page
+        // past the end returns the last page like every /api/v1 list (#1392 r4).
+        private static IEnumerable<T> PageOf<T>(List<T> ordered, int page, int limit)
+        {
+            var pageSize = HsmMcp.NormalizeLimit(limit);
+            var totalPages = ApiPagination.TotalPagesOf(ordered.Count, pageSize);
+            var index = ApiPagination.ClampPage(HsmMcp.NormalizePage(page), totalPages);
+
+            return ordered.Skip((index - 1) * pageSize).Take(pageSize);
+        }
+
+        private static AlertScheduleDto ToDto(Core.Model.Policies.AlertSchedule schedule,
             List<Core.Model.BaseSensorModel> sensors, Func<Guid, bool> isProductVisible)
         {
             // Sensor references filtered to the owner's sight — resolved exactly

@@ -208,6 +208,24 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
+        public void FindSensors_PageWalksMatchesThatCannotBeNarrowed()
+        {
+            // get_node's own sensors list caps at 200 without paging and
+            // uniformly-named sensors cannot be partitioned by search — `page`
+            // is the only guaranteed reachability past the cap, a last resort
+            // after narrowing (#1392 review, round 4).
+            AddSensor(_productA, "disk_1", "usage");
+            AddSensor(_productA, "disk_2", "usage");
+            AddSensor(_productA, "disk_3", "usage");
+
+            var result = CreateTools().FindSensors(search: "disk", limit: 2, page: 2);
+
+            Assert.Equal(["alpha/disk_3"], result.Sensors.Select(s => s.Path));
+            Assert.Equal(3, result.TotalFound);
+        }
+
+
+        [Fact]
         public void FindSensors_InvisibleSubtree_SilentlyAbsent()
         {
             AddSensor(_productA, "cpu", "load");
