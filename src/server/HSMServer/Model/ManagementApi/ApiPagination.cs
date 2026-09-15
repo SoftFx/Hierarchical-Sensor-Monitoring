@@ -4,9 +4,8 @@ namespace HSMServer.Model.ManagementApi
 {
     // The shared clamp of every /api/v1 list (#1387 review, round 4 — the
     // sequence was triplicated verbatim across the sensor-tree controllers,
-    // overflow comment included). The templates/schedules controllers still
-    // carry their own copies from before this helper existed; adopting it there
-    // is a follow-up, new area controllers must use this one.
+    // overflow comment included). Since #1393 the alert reads run through
+    // AlertReadService on these helpers too; new area surfaces must use them.
     public static class ApiPagination
     {
         public const int DefaultPageSize = 50;

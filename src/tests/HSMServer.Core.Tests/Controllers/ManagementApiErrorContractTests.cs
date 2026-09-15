@@ -12,6 +12,7 @@ using HSMServer.Core.Schedule;
 using HSMServer.Controllers;
 using HSMServer.Folders;
 using HSMServer.Model.ManagementApi;
+using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.AlertTemplates;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Http;
@@ -75,6 +76,7 @@ namespace HSMServer.Core.Tests.Controllers
 
         private AlertTemplatesApiController CreateTemplatesController() =>
             new(_cache.Object, _folders.Object, _chats.Object, _schedulesProvider.Object, _authorization.Object,
+                new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object),
                 NullLogger<AlertTemplatesApiController>.Instance)
             {
                 ControllerContext = new ControllerContext
@@ -84,7 +86,7 @@ namespace HSMServer.Core.Tests.Controllers
             };
 
         private AlertSchedulesApiController CreateSchedulesController() =>
-            new(_schedulesProvider.Object, _cache.Object, _authorization.Object)
+            new(new AlertReadService(_cache.Object, _schedulesProvider.Object, _authorization.Object))
             {
                 ControllerContext = new ControllerContext
                 {

@@ -13,6 +13,7 @@ using TestSensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFa
 using HSMServer.Mcp;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.AlertTemplates;
+using HSMServer.Model.ManagementApi.Alerts;
 using Microsoft.AspNetCore.Http;
 using Moq;
 using Xunit;
@@ -58,7 +59,7 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         private AlertsMcpTools CreateTools() =>
-            new(_cache.Object, _schedules.Object, _authorization.Object, AccessorOf());
+            new(new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object), AccessorOf());
 
         private static IHttpContextAccessor AccessorOf() =>
             new HttpContextAccessor

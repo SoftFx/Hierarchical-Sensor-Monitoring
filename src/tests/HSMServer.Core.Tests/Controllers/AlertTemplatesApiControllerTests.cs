@@ -19,6 +19,7 @@ using HSMServer.Folders;
 using HSMServer.Model.Folders;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertTemplates;
+using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -89,6 +90,7 @@ namespace HSMServer.Core.Tests.Controllers
 
         private AlertTemplatesApiController CreateController() =>
             new(_cache.Object, _folders.Object, _chats.Object, _schedules.Object, _authorization.Object,
+                new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object),
                 NullLogger<AlertTemplatesApiController>.Instance)
             {
                 ControllerContext = new ControllerContext
@@ -257,7 +259,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.NotNull(clamped);
             Assert.Equal(1, clamped.Page);
-            Assert.Equal(AlertTemplatesApiController.MaxPageSize, clamped.PageSize);
+            Assert.Equal(ApiPagination.MaxPageSize, clamped.PageSize);
             Assert.Equal(3, clamped.TotalCount);
         }
 

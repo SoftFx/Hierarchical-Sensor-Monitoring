@@ -66,7 +66,7 @@ namespace HSMServer.Mcp
             var result = _reader.GetNode(nodeId, User, foldersPage,
                 foldersPageSize: SensorTreeDtoMapper.MaxChildrenPerNode);
 
-            return Unwrap(result);
+            return McpToolErrors.Unwrap(result);
         }
 
 
@@ -85,8 +85,8 @@ namespace HSMServer.Mcp
             // the full SensorDto, whose LastValue embeds the current payload
             // (unbounded for String sensors); the compactness rule holds in the
             // WORK, not only on the wire (#1392 review, round 5).
-            var list = Unwrap(_reader.FindSensors(productId, search, searchMode, type, HsmMcp.NormalizePage(page),
-                HsmMcp.NormalizeLimit(limit), User, ToSummary, cancellationToken));
+            var list = McpToolErrors.Unwrap(_reader.FindSensors(productId, search, searchMode, type,
+                HsmMcp.NormalizePage(page), HsmMcp.NormalizeLimit(limit), User, ToSummary, cancellationToken));
 
             return new McpSensorsResult
             {
@@ -103,7 +103,7 @@ namespace HSMServer.Mcp
         [Description("Gets one sensor by id: metadata plus its current value (lastValue) — the only tool that embeds the value. Unknown and invisible ids answer the same error.")]
         public SensorDto GetSensor(
             [Description("Sensor id (from find_sensors or a node listing).")] Guid sensorId) =>
-            Unwrap(_reader.GetSensor(sensorId, User));
+            McpToolErrors.Unwrap(_reader.GetSensor(sensorId, User));
 
 
         [McpServerTool(Name = "get_sensor_history", ReadOnly = true, Idempotent = true, OpenWorld = false)]
@@ -124,7 +124,7 @@ namespace HSMServer.Mcp
             // to the list limits.
             maxPoints = Math.Clamp(maxPoints <= 0 ? HsmMcp.DefaultMaxPoints : maxPoints, 1, HsmMcp.HistoryMaxPointsLimit);
 
-            return Unwrap(await _reader.GetSensorHistoryAsync(sensorId, from, to, maxPoints, User, cancellationToken));
+            return McpToolErrors.Unwrap(await _reader.GetSensorHistoryAsync(sensorId, from, to, maxPoints, User, cancellationToken));
         }
 
 
@@ -144,25 +144,5 @@ namespace HSMServer.Mcp
             Status = sensor.Status?.Status.ToString(),
             Unit = SensorTreeDtoMapper.UnitOf(sensor),
         };
-
-
-        // The shared read service's failure becomes a tool error (isError=true
-        // with the message) — the MCP rendering of what REST answers with the
-        // uniform JSON error contract. Validation messages are flattened into
-        // one text (the field-keyed JSON details shape has no MCP equivalent an
-        // agent consumes better). The 404 text is the area's shared constant:
-        // unknown and invisible must answer the SAME string, and a private copy
-        // could drift from it silently.
-        private static T Unwrap<T>(SensorTreeReadResult<T> result) =>
-            result.Failure is { } failure
-                ? throw new McpException(failure.Outcome switch
-                {
-                    SensorTreeReadOutcome.ValidationFailed => failure.Errors is { Count: > 0 } errors
-                        ? string.Join(" ", errors.Select(pair => $"{pair.Key}: {string.Join("; ", pair.Value)}"))
-                        : "The request is invalid.",
-                    SensorTreeReadOutcome.Forbidden or SensorTreeReadOutcome.Unavailable => failure.Message,
-                    _ => ManagementApiErrors.NotFoundMessage,
-                })
-                : result.Value;
     }
 }

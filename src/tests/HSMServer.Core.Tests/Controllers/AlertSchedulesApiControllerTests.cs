@@ -12,6 +12,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Controllers;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertSchedules;
+using HSMServer.Model.ManagementApi.Alerts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -61,7 +62,7 @@ namespace HSMServer.Core.Tests.Controllers
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
         private AlertSchedulesApiController CreateController() =>
-            new(_schedules.Object, _cache.Object, _authorization.Object)
+            new(new AlertReadService(_cache.Object, _schedules.Object, _authorization.Object))
             {
                 ControllerContext = new ControllerContext
                 {
@@ -169,7 +170,7 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.NotNull(page);
             Assert.Equal(1, page.Page);
-            Assert.Equal(AlertSchedulesApiController.MaxPageSize, page.PageSize);
+            Assert.Equal(ApiPagination.MaxPageSize, page.PageSize);
             Assert.Equal(3, page.TotalCount);
         }
 

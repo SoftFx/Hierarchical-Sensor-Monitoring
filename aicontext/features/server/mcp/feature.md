@@ -9,7 +9,7 @@
 
 Issue #1391 exposes the sensor-tree + alert read surface (merged via #1387/#1390, epic #1347) through the Model Context Protocol, so an MCP-native agent discovers the same capabilities a REST client has without hand-writing HTTP. The server is hosted by HSMServer itself via the official `ModelContextProtocol` C# SDK (NuGet `ModelContextProtocol.AspNetCore` 2.2.0), Streamable HTTP transport, **stateless** sessions (the tools are pure reads; no session affinity needed). Nine read-only tools, snake_case, camelCase parameters; item tools return the REST DTOs verbatim (same types and camelCase keys on both transports; the SDK's serializer omits null members where REST writes explicit nulls — absent ≡ null for JSON consumers, pinned by a registration test), list tools carry a `limit` (default 20, cap 200) + `totalFound` envelope plus the **effective paging echo** (`limit`, the `page` actually served, `totalPages`) — the clamps rewrite the caller's `limit` silently, so the agent must divide by the limit the server applied, never the one it asked for — and **no pagination cursors** by design: an agent narrows instead of chasing pages. Every list tool also takes a `page` (clamp semantics as REST — a page past the end serves the LAST page, and the Skip arithmetic is ClampPage-bounded so a huge page number can never wrap int into "page 1 labeled as page N"): narrowing is preferred, but not guaranteed (get_node's sensors list caps at 200 unpaged; uniformly-named sensors cannot be partitioned by search), so `page` is the guaranteed reachability past the cap.
 
-The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the same implementation the REST controllers run on since #1391 (their suites are the regression net). Alert tools use the existing thin providers directly, mirroring the REST controllers' list/get logic. Expected failures surface as tool errors (`isError=true` with a text message — `McpException`), never as protocol-level crashes, so the calling agent can self-correct.
+The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the same implementation the REST controllers run on since #1391 (their suites are the regression net). The alert tools render `AlertReadService` the same way since #1393 — the visibility rules exist in one place, shared with the REST alert controllers. Expected failures surface as tool errors (`isError=true` with a text message — `McpException`), never as protocol-level crashes, so the calling agent can self-correct.
 
 ## Invariants
 
@@ -59,7 +59,7 @@ The sensor-tree tools are a thin rendering of `SensorTreeReadService` — the sa
 | `src/server/HSMServer/Mcp/HsmMcp.cs` | Endpoint path + list-limit constants (`/mcp`, 20/200) |
 | `src/server/HSMServer/Mcp/HsmMcpServiceCollectionExtensions.cs` | `AddHsmMcpServer()` — server + tool registration in one testable place |
 | `src/server/HSMServer/Mcp/SensorTreeMcpTools.cs` | The five sensor-tree tools — rendering of `SensorTreeReadService` |
-| `src/server/HSMServer/Mcp/AlertsMcpTools.cs` | The four alert tools — direct over the thin providers, mirroring the REST controllers |
+| `src/server/HSMServer/Mcp/AlertsMcpTools.cs` | The four alert tools — a thin rendering of `AlertReadService` (#1393) |
 | `src/server/HSMServer/Mcp/McpToolContext.cs` | The shared ambient-principal accessor behind `RequireAuthorization` |
 | `src/server/HSMServer/Mcp/McpToolResults.cs` | List envelopes + the compact `McpSensorSummary`; item DTOs are the REST ones |
 | `src/server/HSMServer/Middleware/McpSitePortOnlyMiddleware.cs` | Uniform 404 for `/mcp` off the SitePort, before authentication; fail-closed policy check on matched `/mcp` endpoints |
@@ -77,7 +77,7 @@ bearer token ──► McpSitePortOnlyMiddleware (SitePort check, uniform 404 ot
                   ──► tools/call ──► tool class (DI, scoped)
                        ├── SensorTreeMcpTools → SensorTreeReadService → ITreeValuesCache
                        │     failures → McpException → isError result (text message)
-                       └── AlertsMcpTools → IAlertScheduleProvider / ITreeValuesCache
+                       └── AlertsMcpTools → AlertReadService → IAlertScheduleProvider / ITreeValuesCache
                              (folder sight / caller-wide gate, as REST)
 ```
 
@@ -108,6 +108,6 @@ No UI. Operators provision the same API tokens as for REST (`/api/v1/api-tokens`
 ## Known Issues / Limitations
 
 - v1 is read-only (write tools are phase 2 of AI-agent access); no MCP resources/prompts primitives.
-- The alert tools mirror the REST controllers' list/get logic directly (the #1391 spec scoped the shared-service extraction to the sensor tree): the per-folder template sight, the schedules gate and the sensor-path visibility filter exist in two places. Recorded follow-up: extract an `AlertReadService` mirroring `SensorTreeReadService` before the alert read surface grows, so a future change to those visibility rules cannot drift between REST and MCP unreviewed (#1392 review).
+- ~~The alert tools mirror the REST controllers' list/get logic directly~~ — RESOLVED by #1393: both surfaces render `AlertReadService` (Model/ManagementApi/Alerts/), the visibility rules exist in one place.
 - No `Origin`-header validation (the MCP spec's DNS-rebinding defence for Streamable HTTP servers). Deliberate: the endpoint admits only the HsmApiToken bearer — a browser page can neither attach that credential nor satisfy `ManagementPolicy` with cookies — so the browser-based rebinding vector has no credential to ride. Revisit if a browser-reachable credential kind is ever admitted to `/mcp`.
 - No E2E/Playwright coverage yet; the wire-level MCP handshake (protocol headers, JSON-RPC envelope) is the SDK's tested surface, ours starts at the tool classes.

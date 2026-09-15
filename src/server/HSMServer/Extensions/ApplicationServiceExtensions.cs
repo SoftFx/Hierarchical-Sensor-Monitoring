@@ -27,6 +27,7 @@ using HSMServer.Folders;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.Migrations;
+using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Mcp;
@@ -72,6 +73,10 @@ namespace HSMServer.ServiceExtensions
             // MCP tools. Scoped to match the per-request consumers (controllers
             // and tool classes) that inject it; stateless over singletons.
             services.AddScoped<SensorTreeReadService>();
+
+            // The shared alert read implementation (#1393) — same shape: behind
+            // both the REST alert controllers and the MCP alert tools.
+            services.AddScoped<AlertReadService>();
 
             // The MCP read-only adapter over the management API (#1391): server
             // and tool wiring in one testable place (HsmMcpServiceCollectionExtensions);
