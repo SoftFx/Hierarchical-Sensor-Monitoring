@@ -50,6 +50,12 @@ namespace HSMServer.Core.Tests.Notifications
         {
             var html = ChatIcons.MattermostBrandIconHtml;
 
+            // Pins the full literal (PR #1397 review): the negative assertions below document
+            // the sanitizer-driven shape but cannot catch an unexpected attribute sneaking in.
+            Assert.Equal(
+                "<span class='mattermost-brand-icon' role='img' aria-label='Mattermost'></span>",
+                html);
+
             Assert.StartsWith("<span ", html);
             Assert.EndsWith("</span>", html);
             Assert.Contains("class='mattermost-brand-icon'", html);

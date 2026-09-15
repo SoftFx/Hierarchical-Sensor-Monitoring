@@ -27,9 +27,17 @@ namespace HSMServer.Extensions
         // carried via role='img' + <title>Mattermost</title>: at several render sites
         // (Configuration/_Chats, Product/_FolderAccordion, Shared/_DefaultChat) the brand icon
         // is the only thing telling which channel a chat uses. A <title> element would NOT
-        // work here — the sanitizer whitelists it only on a/img, so it would be stripped
-        // inside pickers while surviving at raw-render sites (inconsistent markup) — whereas
-        // role and aria-* are on the global whitelist and survive everywhere.
+        // work here — <title> is not a whitelisted tag at all (the whitelist covers the title
+        // *attribute*, and only on a/img), so a <title> child would be dropped by tag
+        // filtering inside pickers while surviving at raw-render sites (inconsistent markup)
+        // — whereas role and aria-* are on the global whitelist and survive everywhere.
+        //
+        // The two label-adjacent sites (the EditChat tab button and the _MattermostHelpModal
+        // heading) render the icon next to visible "Mattermost" text, so their computed
+        // accessible name doubles ("Mattermost Mattermost"). That duplication is accepted
+        // deliberately: it matches the pre-#1388 inline SVG, and avoiding it would take a
+        // second, aria-hidden variant of this constant — losing the single shared markup
+        // that keeps every render site in sync.
         //
         // The whole string must stay free of double quotes: ChatBrandIconsAndName returns
         // IHtmlContent, which Razor writes into data-content attributes RAW — a double
