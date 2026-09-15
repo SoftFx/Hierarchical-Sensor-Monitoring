@@ -39,18 +39,28 @@ namespace HSMServer.Core.Tests.Notifications
         // Only whitelisted tags and attributes survive the sanitizer: svg/path have no
         // whitelisted tag, and an inline style would re-introduce the per-instance base64
         // payload (~1.6 KB per icon occurrence in HTML/JSON). The span must carry nothing but
-        // the globally whitelisted class/aria attributes, with all styling in site.css
+        // the globally whitelisted class/role/aria attributes, with all styling in site.css
         // (.mattermost-brand-icon). svg/path are asserted explicitly — the literal shape
         // #1359 was about: the sanitizer deletes them silently, so nothing else would fail.
+        // role='img' + aria-label pin the accessible name (PR #1388 review finding: the
+        // removed inline SVG carried role='img' + <title>Mattermost</title>, and at several
+        // render sites the brand icon is the only channel indicator).
         [Fact]
         public void MattermostBrandIconHtml_ContainsOnlyWhitelistedTagAndAttributes()
         {
             var html = ChatIcons.MattermostBrandIconHtml;
 
+            // Pins the full literal (PR #1397 review): the negative assertions below document
+            // the sanitizer-driven shape but cannot catch an unexpected attribute sneaking in.
+            Assert.Equal(
+                "<span class='mattermost-brand-icon' role='img' aria-label='Mattermost'></span>",
+                html);
+
             Assert.StartsWith("<span ", html);
             Assert.EndsWith("</span>", html);
             Assert.Contains("class='mattermost-brand-icon'", html);
-            Assert.Contains("aria-hidden='true'", html);
+            Assert.Contains("role='img'", html);
+            Assert.Contains("aria-label='Mattermost'", html);
             Assert.DoesNotContain("style=", html);
             Assert.DoesNotContain("<svg", html);
             Assert.DoesNotContain("<path", html);

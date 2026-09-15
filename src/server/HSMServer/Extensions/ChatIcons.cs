@@ -16,19 +16,35 @@ namespace HSMServer.Extensions
         // from Simple Icons (CC0-1.0) as a CSS-masked <span>. Chat pickers pass icon markup
         // through bootstrap-select's `data-content` sanitizer, which keeps only whitelisted
         // tags AND attributes (bootstrap-select.js, DefaultWhitelist) — an inline <svg> has no
-        // whitelisted tag, so it is silently deleted. The span therefore carries only the
-        // globally whitelisted class/aria attributes, while all styling — the base64 mask,
+        // whitelisted tag, so it is silently deleted. The span therefore carries only globally
+        // whitelisted attributes — class, role, aria-* — while all styling — the base64 mask,
         // the em-sized box, the currentColor fill — lives in site.css under
         // .mattermost-brand-icon: the data URI ships once in the cached bundle instead of per
         // icon instance in HTML/JSON responses, and the icon still inherits font-size/color
         // just like the surrounding <i class='fab fa-...'> tags.
+        //
+        // role='img' + aria-label='Mattermost' keep the accessible name the removed inline SVG
+        // carried via role='img' + <title>Mattermost</title>: at several render sites
+        // (Configuration/_Chats, Product/_FolderAccordion, Shared/_DefaultChat) the brand icon
+        // is the only thing telling which channel a chat uses. A <title> element would NOT
+        // work here — <title> is not a whitelisted tag at all (the whitelist covers the title
+        // *attribute*, and only on a/img), so a <title> child would be dropped by tag
+        // filtering inside pickers while surviving at raw-render sites (inconsistent markup)
+        // — whereas role and aria-* are on the global whitelist and survive everywhere.
+        //
+        // The two label-adjacent sites (the EditChat tab button and the _MattermostHelpModal
+        // heading) render the icon next to visible "Mattermost" text, so their computed
+        // accessible name doubles ("Mattermost Mattermost"). That duplication is accepted
+        // deliberately: it matches the pre-#1388 inline SVG, and avoiding it would take a
+        // second, aria-hidden variant of this constant — losing the single shared markup
+        // that keeps every render site in sync.
         //
         // The whole string must stay free of double quotes: ChatBrandIconsAndName returns
         // IHtmlContent, which Razor writes into data-content attributes RAW — a double
         // quote would terminate the attribute mid-markup and leak the rest as stray
         // attributes. Pinned by ChatIconsTests.
         public const string MattermostBrandIconHtml =
-            "<span class='mattermost-brand-icon' aria-hidden='true'></span>";
+            "<span class='mattermost-brand-icon' role='img' aria-label='Mattermost'></span>";
 
 
         public static string ChatBrandIcon(this Chat chat)
