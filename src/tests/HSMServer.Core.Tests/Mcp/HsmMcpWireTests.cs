@@ -11,6 +11,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Mcp;
 using HSMServer.Middleware;
 using HSMServer.Model.ManagementApi;
+using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authentication;
@@ -221,6 +222,7 @@ namespace HSMServer.Core.Tests.Mcp
 
                         services.AddHsmMcpServer();
                         services.AddScoped<SensorTreeReadService>();
+                        services.AddScoped<AlertReadService>();
 
                         services.AddSingleton(_cache.Object);
                         services.AddSingleton(_authorization.Object);

@@ -405,11 +405,11 @@
         </member>
         <member name="T:HSMServer.Mcp.AlertsMcpTools">
             <summary>
-            The four alert tools of the read-only MCP surface (#1391): alert
-            templates and alert schedules as the REST surface serves them. Per the
-            #1391 design these tools use the existing thin providers directly (the
-            shared-service extraction is scoped to the sensor tree); the list/get
-            logic below mirrors AlertTemplatesApiController/AlertSchedulesApiController.
+            The four alert tools of the read-only MCP surface (#1391): templates and
+            schedules as the REST surface serves them — a thin rendering of
+            <see cref="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService"/> (#1393: the per-folder sight, the
+            caller-wide gate and the sensor-path filter had existed in two copies,
+            a security-relevant drift risk).
             </summary>
         </member>
         <member name="T:HSMServer.Mcp.McpProductsResult">
@@ -637,6 +637,45 @@
             Full paths of the sensors currently using the schedule — FILTERED to the
             products the token's owner can see, so a token never learns paths outside
             its owner's sight.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.ManagementApi.Alerts.AlertReadService">
+            <summary>
+            The single implementation of the alert read surface (#1393): templates
+            and schedules, list and item, with the visibility rules that decide what
+            a caller may see. Transport-agnostic — the REST controllers and the MCP
+            alert tools both call it; the caller supplies the token principal and
+            gets DTOs or a <see cref="T:HSMServer.Model.ManagementApi.SensorTree.SensorTreeReadResult`1"/> failure back, never
+            an IActionResult (the shared read envelope of the management area).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.ListTemplates(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Templates visible to the token's owner, ordered by name then id,
+            paginated with the area's shared clamps. An owner who sees nothing
+            gets an empty list: out-of-sight folders are simply not listed,
+            never a per-item failure.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.GetTemplate(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            One template by id. Unknown and invisible ids answer the SAME
+            NotFound (the area's anti-enumeration rule).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.ListSchedules(System.Security.Claims.ClaimsPrincipal,System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            All schedules, ordered by name then id, paginated with the area's
+            shared clamps; each schedule's sensor list carries only paths the
+            token's owner may see. Requires the caller-wide gate — an owner who
+            sees no boundary at all gets Forbidden for every id, and the
+            provider is never queried.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.ManagementApi.Alerts.AlertReadService.GetSchedule(System.Guid,System.Security.Claims.ClaimsPrincipal)">
+            <summary>
+            One schedule by id (same caller-wide gate as the list); its sensor
+            list carries only paths the token's owner may see.
             </summary>
         </member>
         <member name="T:HSMServer.Model.ManagementApi.AlertTemplates.AlertTemplateDto">

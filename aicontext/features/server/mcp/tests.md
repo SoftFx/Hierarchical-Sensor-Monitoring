@@ -30,7 +30,7 @@
 - `GetSensorHistory_NonPositiveMaxPoints_IsTheMcpDefault_NotTheRestFallback` — an explicit zero/negative `maxPoints` (a common agent rendering of "no preference") also normalizes to 200 BEFORE the shared service's REST fallback could turn it into 1000 (#1392 review).
 - `GetSensorHistory_FileSensorBusy_ReportsReadUnavailable` — busy file lock → `readUnavailable=true`, no points.
 
-`AlertsMcpToolsTests` — the alert tools over the thin providers:
+`AlertsMcpToolsTests` — the alert tools as renderings of `AlertReadService` (#1393; the service itself is pinned by the REST controller suites — the shared regression net, as with the sensor tree):
 
 - `ListAlertTemplates_OrdersByName_ReturnsFirstLimitWithTotalFound` / `ListAlertSchedules_ReturnsFirstLimitWithTotalFound` — the list contracts including the effective-paging echo (`limit`/`page`/`totalPages`, #1392 r5).
 - `ListAlertTemplates_PageServesBeyondTheLimit` / `ListAlertSchedules_PageServesBeyondTheLimit` — `page` walks past the cap, with the served page echoed.
@@ -60,4 +60,4 @@ The three sensor-tree controller suites (`SensorsApiControllerTests`, `NodesApiC
 
 - The MCP wire layer (protocol-version validation, JSON-RPC envelope details) is the SDK's tested surface; `HsmMcpWireTests` covers the integration of OUR pieces with it (auth policy, guards, ambient principal, scope, the isError failure hop) and stops there.
 - `HsmMcpWireTests` assembles its own minimal host — it does not execute Program.cs itself, so the production pipeline's exact middleware ORDER around /mcp stays pinned by `ManagementPipelineOrderTests` (McpSitePortOnlyMiddleware between the bearer guard and UseAuthentication — after UseRouting, because its fail-closed endpoint-family check reads `GetEndpoint()`), not by the wire test.
-- Alert-tool `page` tests pin the Skip/Take slicing on the tool path; the underlying visibility semantics are the controller suites' (mirrored code — see feature.md Known Issues for the recorded `AlertReadService` follow-up).
+- Alert-tool `page` tests pin the rendering on the tool path; the underlying slicing and visibility semantics are the shared `AlertReadService`'s — pinned once by the REST controller suites for both transports (#1393).

@@ -13,6 +13,8 @@ using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.ManagementApi;
 using HSMServer.Model.ManagementApi.AlertTemplates;
+using HSMServer.Model.ManagementApi.Alerts;
+using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Notifications.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -53,9 +55,6 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class AlertTemplatesApiController : ControllerBase
     {
-        public const int DefaultPageSize = 50;
-        public const int MaxPageSize = 200;
-
         // Size guard rails the web UI gets from its widgets; the API states them
         // explicitly. They bound the collection COUNTS and the name length only —
         // individual strings (paths, message templates, target values) stay bounded
@@ -69,17 +68,19 @@ namespace HSMServer.Controllers
         private readonly IChatsManager _chats;
         private readonly IAlertScheduleProvider _schedules;
         private readonly IApiTokenAuthorizationService _authorization;
+        private readonly AlertReadService _reader;
         private readonly ILogger<AlertTemplatesApiController> _logger;
 
         public AlertTemplatesApiController(ITreeValuesCache cache, IFolderManager folders,
             IChatsManager chats, IAlertScheduleProvider schedules, IApiTokenAuthorizationService authorization,
-            ILogger<AlertTemplatesApiController> logger)
+            AlertReadService reader, ILogger<AlertTemplatesApiController> logger)
         {
             _cache = cache;
             _folders = folders;
             _chats = chats;
             _schedules = schedules;
             _authorization = authorization;
+            _reader = reader;
             _logger = logger;
         }
 
@@ -96,46 +97,8 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
-        public IActionResult GetTemplates(int page = 1, int pageSize = DefaultPageSize)
-        {
-            page = Math.Max(page, 1);
-            pageSize = Math.Min(pageSize <= 0 ? DefaultPageSize : pageSize, MaxPageSize);
-
-            // The list predicate is the owner-sight half of the item read decision, so
-            // an item is listed exactly when GET {id} would answer it. Never
-            // 403-per-item: out-of-sight folders are simply not listed. The decision is
-            // memoized per DISTINCT folder (templates cluster into a handful of folders,
-            // and the evaluator re-resolves user + token on every call); IsVisible
-            // records nothing, unlike per-item authorization.
-            var decisionByFolder = new Dictionary<Guid, bool>();
-
-            bool IsListable(Guid folderId) =>
-                decisionByFolder.TryGetValue(folderId, out var listable)
-                    ? listable
-                    : decisionByFolder[folderId] = _authorization.IsVisible(User, FolderResource(folderId));
-
-            var visible = (_cache.GetAlertTemplateModels() ?? [])
-                .Where(t => IsListable(t.FolderId))
-                .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(t => t.Id)
-                .ToList();
-
-            var totalPages = visible.Count == 0 ? 0 : (int)Math.Ceiling(visible.Count / (double)pageSize);
-
-            // Clamp the page into [1, totalPages]: unchecked (page - 1) * pageSize
-            // would overflow int for huge page numbers, and a NEGATIVE Skip count
-            // silently returns the FIRST page labeled as page N.
-            page = Math.Min(page, Math.Max(totalPages, 1));
-
-            return Ok(new ApiPageDto<AlertTemplateDto>
-            {
-                Items = [.. visible.Skip((page - 1) * pageSize).Take(pageSize).Select(AlertTemplateDtoMapper.ToDto)],
-                Page = page,
-                PageSize = pageSize,
-                TotalCount = visible.Count,
-                TotalPages = totalPages,
-            });
-        }
+        public IActionResult GetTemplates(int page = 1, int pageSize = ApiPagination.DefaultPageSize) =>
+            Ok(_reader.ListTemplates(User, page, pageSize, HttpContext.RequestAborted));
 
         /// <summary>Get one template by id.</summary>
         /// <param name="id">Template id.</param>
@@ -145,17 +108,8 @@ namespace HSMServer.Controllers
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(ManagementApiErrorDto), StatusCodes.Status500InternalServerError)]
-        public IActionResult GetTemplate(Guid id)
-        {
-            var template = _cache.GetAlertTemplate(id);
-
-            if (template is null)
-                return ManagementApiErrors.NotFound();
-
-            var failure = AuthorizeFolder(write: false, template.FolderId);
-
-            return failure ?? Ok(AlertTemplateDtoMapper.ToDto(template));
-        }
+        public IActionResult GetTemplate(Guid id) =>
+            _reader.GetTemplate(id, User).ToActionResult();
 
         /// <summary>
         /// Create a template. A client-sent id is ignored (the server generates one);
