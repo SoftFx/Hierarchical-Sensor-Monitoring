@@ -1629,21 +1629,34 @@ namespace HSMServer.Core.Cache
             }
 
             // Remove orphaned policies (belong to this template but no longer matched).
+            var removedOrphans = false;
+
             foreach (var existing in sensor.Policies.Where(p => p.TemplateId == template.Id).ToList())
             {
                 if (!matchedSensorPolicyIds.Contains(existing.Id))
+                {
                     sensor.Policies.RemovePolicy(existing.Id, InitiatorInfo.AlertTemplate);
+                    removedOrphans = true;
+                }
             }
 
             foreach (var existing in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == template.Id).ToList())
             {
                 if (!matchedSensorTtlIds.Contains(existing.Id))
-                    sensor.Policies.RemoveTTLPolicy(existing.Id);
+                {
+                    sensor.Policies.RemoveTTLPolicy(existing.Id, InitiatorInfo.AlertTemplate);
+                    removedOrphans = true;
+                }
             }
 
-            // Persist changes: new/updated policies, or orphan removals
+            // Persist changes: new/updated policies, or orphan removals. The
+            // removedOrphans arm matters for the template-edit case where a TTL
+            // entry was recreated in the editor (a fresh TemplateAlertId orphans
+            // the old one): with no other delta the OLD condition was false, the
+            // removal lived only in memory, and the alert RESURRECTED after a
+            // restart (#1394).
             if (policyUpdates.Count > 0 || ttlPolicyUpdates.Count > 0 ||
-                matchedSensorPolicyIds.Count > 0 || matchedSensorTtlIds.Count > 0)
+                matchedSensorPolicyIds.Count > 0 || matchedSensorTtlIds.Count > 0 || removedOrphans)
             {
                 var update = new SensorUpdate()
                 {
@@ -1656,7 +1669,15 @@ namespace HSMServer.Core.Cache
                 TryUpdateSensor(update, out var error);
 
                 if (!string.IsNullOrEmpty(error))
-                    _logger.Error($"Failed to apply template {template.Id} to sensor {sensor.Id}: {error}");
+                {
+                    // Surfaced to the caller through the request (#1394): the
+                    // queue's TaskResult carries only THROWN exceptions, and
+                    // TryUpdateSensor catches the DB failure into this string —
+                    // without the channel the save reported success while the
+                    // alert existed only in memory until the next restart.
+                    request.Error = $"Failed to apply template {template.Id} to sensor {sensor.Id}: {error}";
+                    _logger.Error(request.Error);
+                }
             }
         }
 
@@ -1705,6 +1726,16 @@ namespace HSMServer.Core.Cache
             _alertTemplates[alertTemplateModel.Id] = alertTemplateModel;
             _database.AddAlertTemplate(alertTemplateModel.ToEntity());
 
+            // Declared ABOVE the try so an exception mid-loop still surfaces
+            // whatever failures were collected before it (#1394 review: the
+            // assign-at-the-end-of-try shape dropped them instead). Captures
+            // per-sensor failures — a single DB error must not silently leave
+            // the template half-applied (#1394, the RemoveAlertTemplateAsync
+            // pattern): UpdatesQueue converts THROWN exceptions into
+            // TaskResult.FromError, while the apply path reports contained
+            // TryUpdateSensor failures through request.Error — both land here.
+            var failedProducts = new ConcurrentDictionary<Guid, string>();
+
             try
             {
                 var matchedSensors = new HashSet<BaseSensorModel>();
@@ -1752,7 +1783,10 @@ namespace HSMServer.Core.Cache
                 }, async (sensor, ct) =>
                 {
                     var request = new ApplyTemplateRequest(sensor.Id, alertTemplateModel);
-                    await ProcessRequestAsync(sensor.Root.Id, request, ct);
+                    var result = await ProcessRequestAsync(sensor.Root.Id, request, ct);
+
+                    if (!result.IsOk || !string.IsNullOrEmpty(request.Error))
+                        failedProducts.TryAdd(sensor.Root.Id, sensor.RootProductName);
                 });
 
                 await Parallel.ForEachAsync(staleSensors, new ParallelOptions
@@ -1762,7 +1796,10 @@ namespace HSMServer.Core.Cache
                 }, async (sensor, ct) =>
                 {
                     var request = new RemoveTemplateFromSensorRequest(sensor.Id, alertTemplateModel.Id);
-                    await ProcessRequestAsync(sensor.Root.Id, request, ct);
+                    var result = await ProcessRequestAsync(sensor.Root.Id, request, ct);
+
+                    if (!result.IsOk)
+                        failedProducts.TryAdd(sensor.Root.Id, sensor.RootProductName);
                 });
             }
             catch (OperationCanceledException)
@@ -1772,6 +1809,18 @@ namespace HSMServer.Core.Cache
             catch (Exception ex)
             {
                 _logger.Error($"An error was occurred while adding alert template {alertTemplateModel}", ex);
+            }
+
+            // The partial-failure answer the DELETE side has always given
+            // (#1394): a per-sensor apply failure must not read as success —
+            // the template IS persisted and will keep retrying on edits, but
+            // the caller needs to know some sensors did not get their alerts.
+            if (failedProducts is { IsEmpty: false })
+            {
+                var names = string.Join(", ", failedProducts.Values.OrderBy(n => n));
+                var error = $"Failed to apply template to products: {names}";
+                _logger.Error($"Partial failure applying template {alertTemplateModel.Id}: {error}");
+                return (false, error);
             }
 
             return (true, null);
@@ -1870,7 +1919,7 @@ namespace HSMServer.Core.Cache
                 sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
 
             foreach (var ttl in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == request.TemplateId).ToList())
-                sensor.Policies.RemoveTTLPolicy(ttl.Id);
+                sensor.Policies.RemoveTTLPolicy(ttl.Id, InitiatorInfo.AlertTemplate);
 
             sensor.Revalidate();
 
