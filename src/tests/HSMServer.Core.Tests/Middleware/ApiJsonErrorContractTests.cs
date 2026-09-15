@@ -264,13 +264,14 @@ namespace HSMServer.Core.Tests.Middleware
         }
 
         [Fact]
-        public async Task ExceptionMiddleware_McpPath_IsUniformJson500WithTraceId()
+        public async Task ExceptionMiddleware_McpPath_IsJsonRpcInternalErrorWithTraceId()
         {
             // Whatever escapes the SDK's JSON-RPC handler on /mcp must reach a
-            // machine client as JSON, never the Razor /Error page — /mcp is the
-            // newest machine-only route, same HTML-off rule as /api (#1392
-            // review). The body is the JSON contract, not a JSON-RPC error
-            // envelope; that is still the parseable answer.
+            // machine client as JSON, never the Razor /Error page — and in the
+            // JSON-RPC error shape an MCP client can actually parse: code
+            // -32603 with the trace id in data (#1392 review, round 3). The id
+            // is null by necessity — the exception killed the request before
+            // the JSON-RPC layer could correlate it.
             var context = BuildContext(HsmMcp.EndpointPath);
 
             static Task Throw(HttpContext _) => throw new InvalidOperationException("boom");
@@ -281,8 +282,11 @@ namespace HSMServer.Core.Tests.Middleware
 
             var root = (await BodyAsync(context)).RootElement;
 
-            Assert.Equal(ManagementApiErrors.InternalErrorCode, root.GetProperty("error").GetString());
-            Assert.Equal(context.TraceIdentifier, root.GetProperty("details").GetProperty("traceId").GetString());
+            Assert.Equal("2.0", root.GetProperty("jsonrpc").GetString());
+            Assert.Null(root.GetProperty("id").GetString());
+            Assert.Equal(-32603, root.GetProperty("error").GetProperty("code").GetInt32());
+            Assert.Equal("Internal error", root.GetProperty("error").GetProperty("message").GetString());
+            Assert.Equal(context.TraceIdentifier, root.GetProperty("error").GetProperty("data").GetProperty("traceId").GetString());
             Assert.DoesNotContain("boom", root.GetRawText());
         }
 

@@ -42,17 +42,51 @@ namespace HSMServer.Middleware
                 context.Response.Headers.ContentLength = default;
                 context.Response.Headers.ContentType = default;
 
+                // /mcp speaks JSON-RPC, not the area's uniform contract: whatever
+                // escapes the SDK handler answers a JSON-RPC INTERNAL ERROR object
+                // so an MCP client can parse the failure and surface the trace id
+                // (#1392 review); /api keeps the uniform three-field body.
+                if (IsMcpPath(context.Request.Path))
+                {
+                    await WriteJsonRpcInternalError(context, context.TraceIdentifier);
+                    return;
+                }
+
                 await ManagementApiErrorResponses.WriteInternalError(context, context.TraceIdentifier);
             }
         }
 
+        // The JSON-RPC 2.0 error envelope (code -32603 "Internal error"). The id
+        // is null by necessity — the escaped exception killed the request before
+        // the JSON-RPC layer could correlate it; data.traceId ties the failure to
+        // the server log exactly like the uniform contract's details.traceId.
+        // Serialized through an anonymous shape (property names verbatim — no
+        // naming policy applies) so the escaping of the trace id is the
+        // serializer's, never hand-rolled.
+        private static Task WriteJsonRpcInternalError(HttpContext context, string traceId) =>
+            // No RequestAborted token, deliberately: writing to a dead connection
+            // must not replace the caught exception with a cancellation in the
+            // global handler's logging (same reasoning as the filter above).
+            context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = (string)null,
+                error = new
+                {
+                    code = -32603,
+                    message = "Internal error",
+                    data = new { traceId },
+                },
+            }));
+
         // Covers /api/v1 (management) and the sibling unauthenticated API families
         // (agent self-update, sensor data), plus the MCP endpoint — none of them
-        // may answer HTML. On /mcp the JSON contract is not a JSON-RPC error body,
-        // but it is the machine-readable answer where the alternative is the Razor
-        // page for whatever escaped the SDK handler (#1392 review).
+        // may answer HTML (#1392 review for the /mcp arm).
         private static bool IsApiPath(PathString path) =>
             path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) ||
+            IsMcpPath(path);
+
+        private static bool IsMcpPath(PathString path) =>
             path.StartsWithSegments(HsmMcp.EndpointPath, StringComparison.OrdinalIgnoreCase);
     }
 }

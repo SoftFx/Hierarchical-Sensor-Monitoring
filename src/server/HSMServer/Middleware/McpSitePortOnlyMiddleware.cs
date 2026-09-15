@@ -20,7 +20,13 @@ namespace HSMServer.Middleware
     // rule, so a future app.MapGet("/mcp/health", ...) is unreachable without
     // the credential, exactly like a route dropped under /api/v1 without the
     // metadata. Unmatched paths carry no endpoint and keep the framework's own
-    // 404.
+    // 404 — a DELIBERATE divergence from ManagementApiGuardMiddleware, which
+    // 404s unmatched area paths with the uniform body: /mcp has exactly one
+    // route, so an unmatched /mcp/** path confirms nothing about it, and the
+    // framework's bare 404 is indistinguishable enough (#1392 review, finding 6).
+    // For the same reason the bearer guard exempts the whole /mcp prefix: an
+    // hsm_pat_ credential on an unmatched /mcp/** path falls through to the
+    // bare 404 too, never a legacy route.
     public sealed class McpSitePortOnlyMiddleware(RequestDelegate next, HsmListenerBindings listeners)
     {
         public Task InvokeAsync(HttpContext context)

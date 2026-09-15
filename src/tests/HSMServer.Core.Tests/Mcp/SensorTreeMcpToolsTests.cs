@@ -119,6 +119,23 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
+        public void ListProducts_PageServesBeyondTheLimit()
+        {
+            // Products have nothing to narrow with, so `page` is the only
+            // reachability past the cap (#1392 review) — same rule as
+            // get_node's foldersPage.
+            var gamma = new Core.Model.ProductModel(EntitiesFactory.BuildProductEntity(name: "gamma") with { Id = Guid.NewGuid().ToString() });
+            SetupProduct(gamma.Id, gamma);
+            _cache.Setup(c => c.GetProducts()).Returns(new List<Core.Model.ProductModel> { _productA, _productB, gamma });
+
+            var result = CreateTools().ListProducts(limit: 2, page: 2);
+
+            Assert.Equal(["gamma"], result.Products.Select(p => p.Name));
+            Assert.Equal(3, result.TotalFound);
+        }
+
+
+        [Fact]
         public void ListProducts_InvisibleProduct_AbsentFromBothCounters()
         {
             _authorization.Setup(a => a.IsVisible(It.IsAny<ClaimsPrincipal>(),
@@ -324,6 +341,27 @@ namespace HSMServer.Core.Tests.Mcp
 
             _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, It.IsAny<DateTime>(),
                 HsmMcp.DefaultMaxPoints + 1, It.IsAny<RequestOptions>()), Times.Once);
+        }
+
+
+        [Fact]
+        public async Task GetSensorHistory_ExplicitMaxPoints_IsCappedAtTheMcpCeiling()
+        {
+            // The context-window argument that lowered the default also bounds
+            // the ceiling: a naive explicit 10000 (the REST twin's cap) must
+            // not drag an unbounded String payload into the model's context —
+            // the MCP ceiling is 2000 (#1392 review, round 3).
+            var sensor = AddSensor(_productA, "cpu", "load");
+            var from = new DateTime(2026, 9, 14, 0, 0, 0, DateTimeKind.Utc);
+
+            _cache.Setup(c => c.GetSensorValuesPage(sensor.Id, from, It.IsAny<DateTime>(),
+                    It.IsAny<int>(), It.IsAny<RequestOptions>()))
+                .Returns((Guid _, DateTime _, DateTime _, int _, RequestOptions _) => PagesOf([]));
+
+            await CreateTools().GetSensorHistoryAsync(sensor.Id, from, maxPoints: 10_000);
+
+            _cache.Verify(c => c.GetSensorValuesPage(sensor.Id, from, It.IsAny<DateTime>(),
+                HsmMcp.HistoryMaxPointsLimit + 1, It.IsAny<RequestOptions>()), Times.Once);
         }
 
 

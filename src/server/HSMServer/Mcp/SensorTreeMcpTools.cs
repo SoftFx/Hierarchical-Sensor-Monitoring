@@ -37,16 +37,17 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "list_products", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-        [Description("Lists the root products visible to the token's owner — the discovery entry point of the sensor tree. Nested folders are not listed here; use get_node or find_sensors.")]
+        [Description("Lists the root products visible to the token's owner — the discovery entry point of the sensor tree. Nested folders are not listed here; use get_node or find_sensors. Products have no narrowing dimension, so `page` walks beyond the limit.")]
         public McpProductsResult ListProducts(
-            [Description("Maximum products to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit)
+            [Description("Maximum products to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit,
+            [Description("1-based page when totalFound exceeds the limit.")] int page = 1)
         {
-            var page = _reader.ListProducts(User, page: 1, pageSize: HsmMcp.NormalizeLimit(limit));
+            var result = _reader.ListProducts(User, HsmMcp.NormalizePage(page), HsmMcp.NormalizeLimit(limit));
 
             return new McpProductsResult
             {
-                Products = page.Items,
-                TotalFound = page.TotalCount,
+                Products = result.Items,
+                TotalFound = result.TotalCount,
             };
         }
 
@@ -107,15 +108,17 @@ namespace HSMServer.Mcp
             [Description("Sensor id.")] Guid sensorId,
             [Description("Window start, UTC ISO 8601; default: to − 24 hours.")] DateTime? from = null,
             [Description("Window end, UTC ISO 8601; default: now.")] DateTime? to = null,
-            [Description("Point limit, 1..10000 (default 200 — the result feeds the model's context; 100 for File sensors).")] int maxPoints = HsmMcp.DefaultMaxPoints,
+            [Description("Point limit, 1..2000 (default 200 — the result feeds the model's context; 100 for File sensors). The REST twin allows up to 10000; the MCP ceiling is tighter by design.")] int maxPoints = HsmMcp.DefaultMaxPoints,
             CancellationToken cancellationToken = default)
         {
-            // Bind the MCP default BEFORE the shared service applies its REST
-            // fallback: an explicit non-positive maxPoints is a common agent
-            // rendering of "no preference" and must not surface the REST twin's
-            // 1000 into a model's context window (#1392 review) — the same
-            // normalization NormalizeLimit applies to the list limits.
-            maxPoints = maxPoints <= 0 ? HsmMcp.DefaultMaxPoints : maxPoints;
+            // Bind the MCP default and ceiling BEFORE the shared service applies
+            // its REST rules: an explicit non-positive maxPoints is a common
+            // agent rendering of "no preference" and must not surface the REST
+            // twin's 1000 into a model's context window, and a naive explicit
+            // 10000 must not drag a String sensor's unbounded per-point payloads
+            // in (#1392 review) — the same normalization NormalizeLimit applies
+            // to the list limits.
+            maxPoints = Math.Clamp(maxPoints <= 0 ? HsmMcp.DefaultMaxPoints : maxPoints, 1, HsmMcp.HistoryMaxPointsLimit);
 
             return Unwrap(await _reader.GetSensorHistoryAsync(sensorId, from, to, maxPoints, User, cancellationToken));
         }

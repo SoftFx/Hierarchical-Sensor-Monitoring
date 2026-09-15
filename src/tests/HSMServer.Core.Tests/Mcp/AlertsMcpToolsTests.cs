@@ -134,6 +134,26 @@ namespace HSMServer.Core.Tests.Mcp
 
 
         [Fact]
+        public void ListAlertTemplates_PageServesBeyondTheLimit()
+        {
+            // Templates have nothing to narrow with, so `page` is the only
+            // reachability past the cap (#1392 review, round 3).
+            var folderA = Guid.NewGuid();
+            _templateStore.AddRange(
+            [
+                new AlertTemplateModel { Id = Guid.NewGuid(), Name = "alpha", FolderId = folderA },
+                new AlertTemplateModel { Id = Guid.NewGuid(), Name = "beta", FolderId = folderA },
+                new AlertTemplateModel { Id = Guid.NewGuid(), Name = "gamma", FolderId = folderA },
+            ]);
+
+            var result = CreateTools().ListAlertTemplates(limit: 2, page: 2);
+
+            Assert.Equal(["gamma"], result.Templates.Select(t => t.Name));
+            Assert.Equal(3, result.TotalFound);
+        }
+
+
+        [Fact]
         public void ListAlertTemplates_MemoizesVisibility_PerDistinctFolder()
         {
             var folderA = Guid.NewGuid();
@@ -218,6 +238,18 @@ namespace HSMServer.Core.Tests.Mcp
 
             Assert.Equal(["s0", "s1"], result.Schedules.Select(s => s.Name));
             Assert.Equal(5, result.TotalFound);
+        }
+
+
+        [Fact]
+        public void ListAlertSchedules_PageServesBeyondTheLimit()
+        {
+            _scheduleStore.AddRange(Enumerable.Range(0, 3).Select(i => BuildSchedule($"s{i}")));
+
+            var result = CreateTools().ListAlertSchedules(limit: 2, page: 2);
+
+            Assert.Equal(["s2"], result.Schedules.Select(s => s.Name));
+            Assert.Equal(3, result.TotalFound);
         }
 
 

@@ -4,7 +4,7 @@
 
 ## Unit — `src/tests/HSMServer.Core.Tests/Mcp/`
 
-`SensorTreeMcpToolsTests` — the tool rendering of `SensorTreeReadService` (the service's own behavior is pinned by the REST controller suites — the shared regression net — so these tests pin only the tool contracts):
+`HsmMcpWireTests` — the wire-level smoke test over a minimal in-memory host (#1392 review, round 3): the REAL `MapMcp` + `RequireAuthorization(ManagementPolicy)`, `McpSitePortOnlyMiddleware`, the real `HsmApiToken` scheme (over mocked token/user managers) and `AddHsmMcpServer`'s registrations, driven by a real SDK `McpClient` (initialize → tools/list → tools/call). Closes the three load-bearing integration assumptions at once: the ambient principal flows (a `tools/call` returns data, not the `McpToolContext` backstop error), tool instances resolve in the REQUEST scope (the host runs in Development — ValidateScopes + ValidateOnBuild), and the guard reads the metadata `MapMcp` actually emits (a mismatch fail-closes to the uniform 404). Plus: no credential → the transport is rejected before any tool, and a valid credential on the SensorPort gets the uniform 404. No Kestrel/LevelDB/fixed listeners — the in-memory TestServer assembles only the pieces `AddHsmMcpServer` already groups.
 
 `HsmMcpServerRegistrationTests` — the wiring (#1391 review): `AddHsmMcpServer` surfaces EXACTLY the nine spec tools (the SDK builds their schemas at registration — a bad tool signature throws), the server identity, the pinned **stateless** HTTP transport (the ambient-principal flow of every tool depends on it), and the camelCase rendering of the tool result records under the SDK's `McpJsonUtilities.DefaultOptions` (Web defaults) — the parity pin that keeps MCP and REST JSON keys identical.
 
@@ -13,8 +13,10 @@
 - `NormalizeLimit_FallsBackAndCaps` — `limit` 0/negative → default 20; >200 → 200 (the theory also pins the in-range pass-through).
 - `ListProducts_ReturnsFirstLimit_WithTotalFound` — first `limit` items travel; `totalFound` carries the full count.
 - `ListProducts_InvisibleProduct_AbsentFromBothCounters` — owner sight holds on the tool path.
+- `ListProducts_PageServesBeyondTheLimit` — products have no narrowing dimension, so `page` walks past the cap (#1392 review r3).
 - `GetNode_ReturnsDirectChildren_AndPagesFolders` — >200 direct subfolders: page 1 caps at 200 with totals, `foldersPage: 2` serves the rest (folder ids stay reachable).
 - `GetNode_UnknownId_IsToolError` — the shared area 404 constant.
+- `GetSensorHistory_ExplicitMaxPoints_IsCappedAtTheMcpCeiling` — a naive explicit 10000 clamps to the MCP ceiling 2000 before the shared service's REST rules (context-window bound, #1392 review r3).
 - `FindSensors_CompactShape_WithTotalFound` — the summary carries id/path/type/status; values are NOT embedded.
 - `FindSensors_InvisibleSubtree_SilentlyAbsent` — per-root-product sight.
 - `FindSensors_UnknownProduct_IsToolError` — the uniform not-found text.
@@ -52,5 +54,6 @@ The three sensor-tree controller suites (`SensorsApiControllerTests`, `NodesApiC
 
 ## Not covered (deliberate)
 
-- The MCP wire layer (JSON-RPC envelope, protocol-version validation, stateless session handling) is the SDK's tested surface, not ours; a wire-level smoke test would re-test the transport. If drift is ever suspected, an E2E test against a booted server with a real `initialize`/`tools/list`/`tools/call` exchange is the follow-up.
-- The endpoint mapping's `RequireAuthorization` (routing configuration in Program.cs) has no dedicated wire-level test — but `McpSitePortOnlyMiddleware` structurally enforces the policy on every matched endpoint under `/mcp` (pinned in `ApiTokenRouteGuardsTests`), so a `MapMcp` that lost its `RequireAuthorization` answers the uniform 404 rather than opening the endpoint. A WebApplicationFactory-style test (401 without a credential, tool result with one) would need new in-proc host infrastructure — HSMServer boots LevelDB storages and dual fixed-port listeners, which the unit suites deliberately never do.
+- The MCP wire layer (protocol-version validation, JSON-RPC envelope details) is the SDK's tested surface; `HsmMcpWireTests` covers the integration of OUR pieces with it (auth policy, guards, ambient principal, scope) and stops there.
+- `HsmMcpWireTests` assembles its own minimal host — it does not execute Program.cs itself, so the production pipeline's exact middleware ORDER around /mcp stays covered by `ApiTokenRouteGuardsTests` and the exception-contract tests, not by the wire test.
+- Alert-tool `page` tests pin the Skip/Take slicing on the tool path; the underlying visibility semantics are the controller suites' (mirrored code — see feature.md Known Issues for the recorded `AlertReadService` follow-up).

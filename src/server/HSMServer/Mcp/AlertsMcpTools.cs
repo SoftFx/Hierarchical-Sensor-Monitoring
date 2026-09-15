@@ -48,9 +48,10 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "list_alert_templates", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-        [Description("Lists alert templates visible to the token's owner, ordered by name. A template carries path patterns, policies (conditions) and destinations — enough to understand what alerts exist for which sensors.")]
+        [Description("Lists alert templates visible to the token's owner, ordered by name. A template carries path patterns, policies (conditions) and destinations — enough to understand what alerts exist for which sensors. Templates have no narrowing dimension, so `page` walks beyond the limit.")]
         public McpAlertTemplatesResult ListAlertTemplates(
-            [Description("Maximum templates to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit)
+            [Description("Maximum templates to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit,
+            [Description("1-based page when totalFound exceeds the limit.")] int page = 1)
         {
             var user = User;
 
@@ -73,7 +74,13 @@ namespace HSMServer.Mcp
 
             return new McpAlertTemplatesResult
             {
-                Templates = [.. visible.Take(HsmMcp.NormalizeLimit(limit)).Select(AlertTemplateDtoMapper.ToDto)],
+                // The paging the REST list already does: templates offer nothing
+                // to narrow with, so beyond the cap `page` is the only
+                // reachability (#1392 review).
+                Templates = [.. visible
+                    .Skip((HsmMcp.NormalizePage(page) - 1) * HsmMcp.NormalizeLimit(limit))
+                    .Take(HsmMcp.NormalizeLimit(limit))
+                    .Select(AlertTemplateDtoMapper.ToDto)],
                 TotalFound = visible.Count,
             };
         }
@@ -104,9 +111,10 @@ namespace HSMServer.Mcp
 
 
         [McpServerTool(Name = "list_alert_schedules", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-        [Description("Lists alert schedules (working-time windows that gate template policies), ordered by name; each schedule's sensor list carries only paths the token's owner may see.")]
+        [Description("Lists alert schedules (working-time windows that gate template policies), ordered by name; each schedule's sensor list carries only paths the token's owner may see. Schedules have no narrowing dimension, so `page` walks beyond the limit.")]
         public McpAlertSchedulesResult ListAlertSchedules(
-            [Description("Maximum schedules to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit)
+            [Description("Maximum schedules to return (1..200, default 20); totalFound carries the full count.")] int limit = HsmMcp.DefaultLimit,
+            [Description("1-based page when totalFound exceeds the limit.")] int page = 1)
         {
             var user = User;
 
@@ -118,7 +126,12 @@ namespace HSMServer.Mcp
                 .ThenBy(schedule => schedule.Id)
                 .ToList();
 
-            var pageItems = all.Take(HsmMcp.NormalizeLimit(limit)).ToList();
+            // The paging the REST list already does — same reachability rule as
+            // the templates list (#1392 review).
+            var pageItems = all
+                .Skip((HsmMcp.NormalizePage(page) - 1) * HsmMcp.NormalizeLimit(limit))
+                .Take(HsmMcp.NormalizeLimit(limit))
+                .ToList();
 
             // The page's sensor references are resolved in ONE pass over the
             // sensor cache (the per-id lookup scans every sensor, so per-item
