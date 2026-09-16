@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
@@ -13,14 +14,16 @@ namespace HSMServer.BackgroundServices;
 // channel's sensor pair on THAT channel's first use — an unused token adds
 // no sensors, and a token that never touches /mcp grows no MCP sensors.
 //
-// Keyed by <owner-login>/<entityId>, NEVER the token name or the TokenId
-// (names collide and move on rename; the TokenId is the authentication
-// lookup key that management responses never disclose — see ADR-0006). The
-// Profile token card displays the EntityId, making the correlation a glance.
-// The per-token subtrees sit under a dedicated "By owner" segment so no
-// login can ever collide with the aggregate Authentication failures sensor;
-// sanitization is display-only — two logins may share a grouping segment,
-// the EntityIds keep the leaves unique (#1403 review, round 2).
+// Keyed by <owner-login>/<entityId>, NEVER the token name or the TokenId in
+// the TREE (names collide and move on rename; the TokenId is the
+// authentication lookup key that management responses never disclose — see
+// ADR-0006). The TokenId is kept in MEMORY only, as the liveness key for
+// the eviction sweep. The Profile token card displays the EntityId, making
+// the correlation a glance. The per-token subtrees sit under a dedicated
+// "By owner" segment so no login can ever collide with the aggregate
+// Authentication failures sensor; sanitization is display-only — two
+// logins may share a grouping segment, the EntityIds keep the leaves
+// unique (#1403 review, round 2).
 //
 // A sealed CLASS, not a record: it holds a lock and mutable sensor fields —
 // compiler-generated structural equality would be meaningless here.
@@ -49,18 +52,25 @@ public sealed class ApiTokenUsageNode : IDisposable
     private static readonly TimeSpan HistoryPeriod = TimeSpan.FromDays(7);
 
     private readonly IDataCollector _collector;
+
+    // The sanitized login and the ids, cached once at creation: the path is
+    // stable and the sweep needs the TokenId for liveness (#1403 review r3).
+    private readonly string _ownerLoginSegment;
+    private readonly Guid _entityId;
+    private readonly string _tokenId;
+
     private readonly string _prefix;
     private readonly string _tokenKey;
 
-    // For the eviction sweep (#1403 review, round 2): identifies which token
-    // record this subtree belongs to, so a revoked/rotated-away token's node
-    // can be found and disposed when the record is gone.
-    private readonly Guid _entityId;
-
     // One gate for both channels: each sensor must be created exactly once,
     // while AddValue itself is already thread-safe on the sensors (requests
-    // for one token arrive from concurrent connections).
+    // for one token arrive from concurrent connections). The same gate makes
+    // Dispose TERMINAL: after eviction, a racing caller holding the node
+    // reference must not resurrect the STOPPED sensors — their accumulated
+    // values would never be published, which is silent data loss.
     private readonly object _gate = new();
+
+    private bool _disposed;
 
     private IInstantValueSensor<double> _restRate;
     private IBarSensor<double> _restDuration;
@@ -68,16 +78,22 @@ public sealed class ApiTokenUsageNode : IDisposable
     private IBarSensor<double> _mcpDuration;
 
 
-    public ApiTokenUsageNode(IDataCollector collector, string ownerLogin, Guid entityId)
+    public ApiTokenUsageNode(IDataCollector collector, string ownerLogin, Guid entityId, string tokenId)
     {
         _collector = collector;
         _entityId = entityId;
-        _tokenKey = $"{ownerLogin}/{entityId:D}";
+        _tokenId = tokenId;
+        _ownerLoginSegment = SanitizeLogin(ownerLogin);
+        _tokenKey = $"{_ownerLoginSegment}/{entityId:D}";
         _prefix = $"{TokenUsageRoot}/{PerTokenSegment}/{_tokenKey}";
     }
 
 
     public Guid EntityId => _entityId;
+
+    // The eviction sweep's liveness key — IApiTokenManager.IsTokenLive's
+    // argument. Memory only; never rendered into the tree.
+    public string TokenId => _tokenId;
 
 
     public void AddRestRequest(double durationMs)
@@ -87,6 +103,9 @@ public sealed class ApiTokenUsageNode : IDisposable
 
         lock (_gate)
         {
+            if (_disposed)
+                return;
+
             rate = _restRate ??= CreateRateSensor(RestNode,
                 $"REST (/api/v1) requests authenticated by this token ({_tokenKey}).");
             duration = _restDuration ??= CreateDurationSensor(RestNode,
@@ -104,6 +123,9 @@ public sealed class ApiTokenUsageNode : IDisposable
 
         lock (_gate)
         {
+            if (_disposed)
+                return;
+
             rate = _mcpRate ??= CreateRateSensor(McpNode,
                 $"MCP (/mcp) requests authenticated by this token ({_tokenKey}).");
             duration = _mcpDuration ??= CreateDurationSensor(McpNode,
@@ -114,18 +136,30 @@ public sealed class ApiTokenUsageNode : IDisposable
         duration.AddValue(durationMs);
     }
 
-    // The retention story of a REVOKED token (#1403 review, round 2): rate
+    // The retention story of a DEAD token (#1403 review, round 2): rate
     // sensors are monitoring sensors — they post a 0 every minute forever and
     // therefore never go idle, so SelfDestroy alone can never retire the
-    // subtree. The registry's eviction sweep calls this when the token record
-    // is gone: disposing stops the send loops, the sensors go idle, and the
-    // server's self-destroy sweep removes them after the retention window.
+    // subtree. The registry's eviction sweep calls this when the token is no
+    // longer live: disposing stops the send loops, the sensors go idle, and
+    // the server's self-destroy sweep removes them after the retention
+    // window. TERMINAL (#1403 review, round 3): the collector never
+    // un-registers a disposed sensor (the path stays occupied and keeps
+    // consuming the collector's sensor budget), so re-creating sensors at
+    // the same path would hand back the STOPPED instances and silently drop
+    // every subsequent value — Add* refuses instead.
     public void Dispose()
     {
         lock (_gate)
         {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+
             // The factory interfaces do not carry ISensor, but the concrete
             // sensors implement it — Dispose stops the monitoring send loops.
+            // The assert catches a concrete type ever dropping IDisposable,
+            // which would turn the whole eviction mechanism into a silent no-op.
             DisposeSensor(_restRate);
             DisposeSensor(_restDuration);
             DisposeSensor(_mcpRate);
@@ -138,8 +172,31 @@ public sealed class ApiTokenUsageNode : IDisposable
         }
     }
 
-    private static void DisposeSensor(object sensor) =>
+    // A login is free-form text and becomes a PATH SEGMENT: anything that
+    // would split or corrupt the segment is collapsed to '_' — the tree
+    // must stay one level per intended level no matter what the login
+    // contains (#1402 acceptance). Owned HERE, at the type that builds the
+    // path: the invariant must hold for every caller of the node, not just
+    // today's middleware (#1403 review, round 3). A login collapsing to
+    // empty cannot happen through AddUser's validation, but a path like
+    // "API tokens//<id>" must never be built either.
+    internal static string SanitizeLogin(string login)
+    {
+        // A missing name must not NRE here either: the contract ("never
+        // an empty path segment") is total.
+        if (string.IsNullOrWhiteSpace(login))
+            return "_";
+
+        var sanitized = string.Join('_', login.Split('/', '\\')).Trim();
+
+        return sanitized.Length == 0 ? "_" : sanitized;
+    }
+
+    private static void DisposeSensor(object sensor)
+    {
+        Debug.Assert(sensor is null or IDisposable, "A concrete sensor type dropped IDisposable — eviction would be a silent no-op");
         (sensor as IDisposable)?.Dispose();
+    }
 
     private IInstantValueSensor<double> CreateRateSensor(string channelNode, string description) =>
         _collector.CreateRateSensor($"{_prefix}/{channelNode}/{RequestRateNode}", new RateSensorOptions

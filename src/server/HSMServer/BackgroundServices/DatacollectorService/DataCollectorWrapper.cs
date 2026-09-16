@@ -10,6 +10,7 @@ using HSMDataCollector.Core;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
+using HSMServer.Authentication;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
@@ -34,7 +35,7 @@ namespace HSMServer.BackgroundServices
         private readonly ITreeValuesCache _cache;
 
         // For the token-usage eviction sweep (#1403 review, round 2).
-        private readonly HSMServer.Authentication.IApiTokenManager _apiTokens;
+        private readonly IApiTokenManager _apiTokens;
 
         private readonly ProductModel _productModel;
 
@@ -68,7 +69,7 @@ namespace HSMServer.BackgroundServices
         internal MattermostChannelStatistics MattermostChannelStatistics { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter, HSMServer.Authentication.IApiTokenManager apiTokens)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter, IApiTokenManager apiTokens)
         {
             _logger = LogManager.GetLogger(GetType().Name);
 
@@ -185,7 +186,7 @@ namespace HSMServer.BackgroundServices
             // here — by the token RECORD's existence, which only this sweep
             // can observe (a revoked credential fails auth before any
             // middleware sees its id).
-            ApiTokenUsageSensors.EvictDeadTokens(_apiTokens.GetTokenByEntityId);
+            ApiTokenUsageSensors.EvictDeadTokens(_apiTokens.IsTokenLive);
         }
 
 

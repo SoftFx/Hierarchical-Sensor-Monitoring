@@ -49,6 +49,16 @@ namespace HSMServer.Middleware
 
         public async Task InvokeAsync(HttpContext context)
         {
+            // The cheapest gate first: with self-monitoring disabled the
+            // collector never publishes and nothing is ever evicted, so
+            // measurement would only burn lookups and register sensors into
+            // a dead pipeline (#1403 review, round 3).
+            if (!monitor.Enabled)
+            {
+                await next(context);
+                return;
+            }
+
             if (!ClassifyPath(context.Request.Path, out var isMcp))
             {
                 await next(context);
@@ -88,12 +98,12 @@ namespace HSMServer.Middleware
         {
             var durationMs = durationTicks * TicksToMilliseconds;
 
-            if (tokenIdentity is not null && TryResolve(tokenIdentity, out var login, out var entityId))
+            if (tokenIdentity is not null && TryResolve(tokenIdentity, out var tokenId, out var login, out var entityId))
             {
                 if (isMcp)
-                    monitor.AddMcpRequest(login, entityId, durationMs);
+                    monitor.AddMcpRequest(tokenId, login, entityId, durationMs);
                 else
-                    monitor.AddRestRequest(login, entityId, durationMs);
+                    monitor.AddRestRequest(tokenId, login, entityId, durationMs);
 
                 return;
             }
@@ -108,19 +118,23 @@ namespace HSMServer.Middleware
         }
 
 
-        // The principal stays minimal by design (#1402 grilling): login and
-        // EntityId are resolved per request from the authoritative stores —
-        // an O(1) lookup that also stays current across user renames.
-        private bool TryResolve(ClaimsIdentity identity, out string login, out string entityId)
+        // The principal stays minimal by design (#1402 grilling): login,
+        // EntityId and TokenId are resolved per request from the
+        // authoritative stores — index lookups that also stay current across
+        // user renames. The login crosses RAW (#1403 review r3): the node
+        // owns the path and sanitizes there, so the invariant holds for
+        // every caller, not just this one.
+        private bool TryResolve(ClaimsIdentity identity, out string tokenId, out string login, out Guid entityId)
         {
+            tokenId = null;
             login = null;
-            entityId = null;
+            entityId = Guid.Empty;
 
-            var tokenIdClaim = identity.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
-            if (tokenIdClaim is null)
+            tokenId = identity.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
+            if (tokenId is null)
                 return false;
 
-            var token = tokens.GetToken(tokenIdClaim);
+            var token = tokens.GetToken(tokenId);
 
             if (token is null)
                 return false; // revoked mid-request: authenticated, but nothing to attribute anymore
@@ -130,8 +144,8 @@ namespace HSMServer.Middleware
             if (owner is null)
                 return false; // deleted owner: same race, skip rather than mis-attribute
 
-            login = SanitizeLogin(owner.Name);
-            entityId = token.EntityId.ToString("D");
+            login = owner.Name;
+            entityId = token.EntityId;
 
             return true;
         }
@@ -153,23 +167,8 @@ namespace HSMServer.Middleware
                 Logger.Warn(ex, "API-token usage observation failed");
         }
 
-        // A login is free-form text and becomes a PATH SEGMENT: anything that
-        // would split or corrupt the segment is collapsed to '_' — the tree
-        // must stay one level per intended level no matter what the login
-        // contains (#1402 acceptance). A login collapsing to empty cannot
-        // happen through AddUser's validation, but a path like
-        // "API tokens//<id>" must never be built either.
-        internal static string SanitizeLogin(string login)
-        {
-            // A missing name must not NRE here either: the contract ("never
-            // an empty path segment") is total.
-            if (string.IsNullOrWhiteSpace(login))
-                return "_";
-
-            var sanitized = string.Join('_', login.Split('/', '\\')).Trim();
-
-            return sanitized.Length == 0 ? "_" : sanitized;
-        }
+        // (Login sanitization lives on ApiTokenUsageNode — the type that
+        // builds the path owns its shape, #1403 review r3.)
 
         // One classification pass: measured-or-not and the channel decide
         // together, so the route roots are matched exactly once per request.

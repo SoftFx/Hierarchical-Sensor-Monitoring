@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using HSMDatabase.AccessManager;
@@ -95,7 +96,9 @@ namespace HSMServer.ServiceExtensions
                     // The token-usage sensors registry lives inside the wrapper
                     // (one collector); the monitoring middleware depends on the
                     // interface so tests mock the surface, not a booted collector (#1402).
-                    .AddSingleton<IApiTokenUsageMonitor>(sp => sp.GetRequiredService<DataCollectorWrapper>().ApiTokenUsageSensors)
+                    .AddSingleton<IApiTokenUsageMonitor>(sp => new MonitoringGate(
+                        sp.GetRequiredService<IOptionsMonitor<MonitoringOptions>>(),
+                        sp.GetRequiredService<DataCollectorWrapper>().ApiTokenUsageSensors))
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<TelemetryCollector>()
                     .AddSingleton<BackupDatabaseService>()

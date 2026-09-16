@@ -35,6 +35,8 @@ namespace HSMServer.Core.Tests.Middleware
 
         public ApiTokenUsageMiddlewareTests()
         {
+            _monitor.Setup(m => m.Enabled).Returns(true);
+
             _tokens.Setup(t => t.GetToken(TokenId))
                 .Returns(new ApiTokenInfo { EntityId = _entityId, OwnerUserId = _ownerId });
 
@@ -61,6 +63,14 @@ namespace HSMServer.Core.Tests.Middleware
                 new Claim(HsmApiTokenClaims.TokenId, TokenId),
             ], HsmApiTokenDefaults.AuthenticationScheme));
 
+        // VerifyNoOtherCalls counts the Enabled getter as an unverified
+        // invocation — account for it, then assert nothing else was called.
+        private void VerifySilent()
+        {
+            _monitor.Verify(m => m.Enabled, Times.AtMostOnce);
+            _monitor.VerifyNoOtherCalls();
+        }
+
 
         [Fact]
         public async Task TokenRequest_OnApiV1_AttributesToTheToken()
@@ -69,8 +79,8 @@ namespace HSMServer.Core.Tests.Middleware
 
             await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
 
-            _monitor.Verify(m => m.AddRestRequest(_login, _entityId.ToString("D"), It.Is<double>(ms => ms >= 0)), Times.Once);
-            _monitor.Verify(m => m.AddMcpRequest(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<double>()), Times.Never);
+            _monitor.Verify(m => m.AddRestRequest(TokenId, _login, _entityId, It.Is<double>(ms => ms >= 0)), Times.Once);
+            _monitor.Verify(m => m.AddMcpRequest(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<double>()), Times.Never);
             _monitor.Verify(m => m.AddAuthenticationFailure(), Times.Never);
         }
 
@@ -94,7 +104,7 @@ namespace HSMServer.Core.Tests.Middleware
 
             await CreateMiddleware(ReplaceUser).InvokeAsync(context);
 
-            _monitor.Verify(m => m.AddRestRequest(_login, _entityId.ToString("D"), It.IsAny<double>()), Times.Once);
+            _monitor.Verify(m => m.AddRestRequest(TokenId, _login, _entityId, It.IsAny<double>()), Times.Once);
         }
 
 
@@ -105,8 +115,8 @@ namespace HSMServer.Core.Tests.Middleware
 
             await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
 
-            _monitor.Verify(m => m.AddMcpRequest(_login, _entityId.ToString("D"), It.IsAny<double>()), Times.Once);
-            _monitor.Verify(m => m.AddRestRequest(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<double>()), Times.Never);
+            _monitor.Verify(m => m.AddMcpRequest(TokenId, _login, _entityId, It.IsAny<double>()), Times.Once);
+            _monitor.Verify(m => m.AddRestRequest(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<double>()), Times.Never);
         }
 
 
@@ -122,7 +132,7 @@ namespace HSMServer.Core.Tests.Middleware
             await CreateMiddleware(_ => { reached = true; return Task.CompletedTask; }).InvokeAsync(context);
 
             Assert.True(reached);
-            _monitor.VerifyNoOtherCalls();
+            VerifySilent();
         }
 
 
@@ -135,7 +145,7 @@ namespace HSMServer.Core.Tests.Middleware
 
             await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
 
-            _monitor.Verify(m => m.AddMcpRequest(_login, _entityId.ToString("D"), It.IsAny<double>()), Times.Once);
+            _monitor.Verify(m => m.AddMcpRequest(TokenId, _login, _entityId, It.IsAny<double>()), Times.Once);
         }
 
 
@@ -149,7 +159,7 @@ namespace HSMServer.Core.Tests.Middleware
 
             await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
 
-            _monitor.Verify(m => m.AddRestRequest(_login, _entityId.ToString("D"), It.IsAny<double>()), Times.Once);
+            _monitor.Verify(m => m.AddRestRequest(TokenId, _login, _entityId, It.IsAny<double>()), Times.Once);
         }
 
 
@@ -161,7 +171,7 @@ namespace HSMServer.Core.Tests.Middleware
             await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
 
             _monitor.Verify(m => m.AddAuthenticationFailure(), Times.Once);
-            _monitor.Verify(m => m.AddRestRequest(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<double>()), Times.Never);
+            _monitor.Verify(m => m.AddRestRequest(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<double>()), Times.Never);
         }
 
 
@@ -175,7 +185,7 @@ namespace HSMServer.Core.Tests.Middleware
 
             await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
 
-            _monitor.VerifyNoOtherCalls();
+            VerifySilent();
         }
 
 
@@ -190,7 +200,7 @@ namespace HSMServer.Core.Tests.Middleware
 
             await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
 
-            _monitor.VerifyNoOtherCalls();
+            VerifySilent();
         }
 
 
@@ -206,7 +216,7 @@ namespace HSMServer.Core.Tests.Middleware
 
             await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
 
-            _monitor.VerifyNoOtherCalls();
+            VerifySilent();
         }
 
 
@@ -219,7 +229,7 @@ namespace HSMServer.Core.Tests.Middleware
             await CreateMiddleware(_ => { reached = true; return Task.CompletedTask; }).InvokeAsync(context);
 
             Assert.True(reached);
-            _monitor.VerifyNoOtherCalls();
+            VerifySilent();
         }
 
 
@@ -228,7 +238,7 @@ namespace HSMServer.Core.Tests.Middleware
         {
             // Metrics are best-effort by contract: a failure inside the
             // observation must not replace the outcome of a finished request.
-            _monitor.Setup(m => m.AddRestRequest(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<double>()))
+            _monitor.Setup(m => m.AddRestRequest(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<double>()))
                 .Throws(new InvalidOperationException("collector is down"));
 
             var context = Context("/api/v1/products", TokenPrincipal());
@@ -254,7 +264,7 @@ namespace HSMServer.Core.Tests.Middleware
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 CreateMiddleware(_ => throw new InvalidOperationException("handler failed")).InvokeAsync(context));
 
-            _monitor.Verify(m => m.AddRestRequest(_login, _entityId.ToString("D"), It.IsAny<double>()), Times.Once);
+            _monitor.Verify(m => m.AddRestRequest(TokenId, _login, _entityId, It.IsAny<double>()), Times.Once);
         }
 
 
@@ -267,6 +277,24 @@ namespace HSMServer.Core.Tests.Middleware
         [InlineData(null, "_")]             // a missing name keeps the contract total
         [InlineData("   ", "_")]
         public void SanitizeLogin_KeepsTheSegmentWhole(string login, string expected) =>
-            Assert.Equal(expected, ApiTokenUsageMiddleware.SanitizeLogin(login));
+            Assert.Equal(expected, HSMServer.BackgroundServices.ApiTokenUsageNode.SanitizeLogin(login));
+
+
+        [Fact]
+        public async Task MonitoringDisabled_PassesThroughUncounted()
+        {
+            // With self-monitoring off the collector never publishes and the
+            // sweep never runs — measurement would only burn lookups and
+            // register sensors into a dead pipeline (#1403 review r3).
+            _monitor.Setup(m => m.Enabled).Returns(false);
+
+            var context = Context("/api/v1/products", TokenPrincipal());
+            var reached = false;
+
+            await CreateMiddleware(_ => { reached = true; return Task.CompletedTask; }).InvokeAsync(context);
+
+            Assert.True(reached);
+            VerifySilent();
+        }
     }
 }

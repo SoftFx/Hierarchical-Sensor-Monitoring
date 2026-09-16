@@ -126,7 +126,7 @@
                 <div style="flex: 2; min-width: 0;">
                     <div class="fw-medium text-truncate">@token.Name</div>
                     <div class="text-secondary font-monospace" style="font-size: 0.72rem;"
-                         title="Monitoring id — the token usage tree key: Self-monitoring (HSM Server Monitoring) → API tokens → &lt;your login&gt; → this id">@token.EntityId</div>
+                         title="Monitoring id — the token usage tree key: Self-monitoring (HSM Server Monitoring) → API tokens → By owner → &lt;your login&gt; → this id">@token.EntityId</div>
                 </div>
                 <div style="flex: 1;">
                     <span class="access-badge @(token.ReadOnly ? "read-only" : "read-write")" title="@(token.ReadOnly ? "Read-only: every write operation is denied" : "Read and write, mirroring your rights")">@(token.ReadOnly ? "Read-only" : "Read / write")</span>
