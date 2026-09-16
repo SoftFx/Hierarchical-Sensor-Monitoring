@@ -48,9 +48,9 @@ public sealed record ApiTokenUsageNode
     private readonly object _gate = new();
 
     private IInstantValueSensor<double> _restRate;
-    private IInstantValueSensor<double> _restDuration;
+    private IBarSensor<double> _restDuration;
     private IInstantValueSensor<double> _mcpRate;
-    private IInstantValueSensor<double> _mcpDuration;
+    private IBarSensor<double> _mcpDuration;
 
 
     public ApiTokenUsageNode(IDataCollector collector, string ownerLogin, string entityId)
@@ -64,7 +64,7 @@ public sealed record ApiTokenUsageNode
     public void AddRestRequest(double durationMs)
     {
         IInstantValueSensor<double> rate;
-        IInstantValueSensor<double> duration;
+        IBarSensor<double> duration;
 
         lock (_gate)
         {
@@ -81,7 +81,7 @@ public sealed record ApiTokenUsageNode
     public void AddMcpRequest(double durationMs)
     {
         IInstantValueSensor<double> rate;
-        IInstantValueSensor<double> duration;
+        IBarSensor<double> duration;
 
         lock (_gate)
         {
@@ -105,8 +105,14 @@ public sealed record ApiTokenUsageNode
             Description = description,
         });
 
-    private IInstantValueSensor<double> CreateDurationSensor(string channelNode, string description) =>
-        _collector.CreateDoubleSensor($"{_prefix}/{channelNode}/{RequestDurationNode}", new InstantSensorOptions
+    // Durations are BARS (#1402 follow-up, user decision): the collector
+    // aggregates min/max/mean/count per bar period — one stored point per
+    // window however hot the token, and slow requests stay visible as the
+    // bar's max. The trade-off: exact per-request tails (percentile slicing
+    // over raw samples) are gone — find a single slow request by traceId in
+    // the logs once the token is identified.
+    private IBarSensor<double> CreateDurationSensor(string channelNode, string description) =>
+        _collector.CreateDoubleBarSensor($"{_prefix}/{channelNode}/{RequestDurationNode}", new BarSensorOptions
         {
             Alerts = [],
             EnableForGrafana = false,

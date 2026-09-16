@@ -32,7 +32,7 @@ Issue #1402 answers "which tokens are used, how much, and how slow" inside the e
 
 | Contract | Location | Notes |
 |---|---|---|
-| `HSM Server Monitoring/API tokens/<owner-login>/<entityId>/REST/{Request rate, Request duration}` | `ApiTokenUsageNode` | Rate sensor (req/sec) + per-request Double (ms) |
+| `HSM Server Monitoring/API tokens/<owner-login>/<entityId>/REST/{Request rate, Request duration}` | `ApiTokenUsageNode` | Rate sensor (req/sec) + Double BAR (ms): min/max/mean/count per bar window |
 | `…/MCP/{Request rate, Request duration}` | `ApiTokenUsageNode` | same shapes |
 | `API tokens/Authentication failures` | `ApiTokenUsageSensors` | Rate, aggregate, eager |
 | Profile token card | `Views/Profile/Index.cshtml` | EntityId displayed under the name (mono, secondary) |
@@ -69,7 +69,7 @@ The subtree itself — readable by anyone with access rights on the self-monitor
 
 ## Dependencies
 
-- Depends on: api-tokens feature (`IApiTokenManager`, the HsmApiToken scheme), `IUserManager`, the embedded `DataCollector` (`WebRequestNode` precedent). Per-request instant Double durations are a deliberate choice (#1402): every request is a discrete sample; aggregation into bars (the collector's bar factories, cf. `TreeValueCacheStatistics`) is a follow-up if volume ever demands it.
+- Depends on: api-tokens feature (`IApiTokenManager`, the HsmApiToken scheme), `IUserManager`, the embedded `DataCollector` (`WebRequestNode` precedent for the rate sensors, `CreateDoubleBarSensor` for the durations — the collector aggregates min/max/mean/count per bar window, so a hot token stores one point per window, and slow requests surface as the bar's max; exact per-request tails are the deliberate trade-off, traceId in the logs covers the single-request drill-down).
 - Used by: operators watching management-API performance.
 
 ## Tests
@@ -82,5 +82,5 @@ The subtree itself — readable by anyone with access rights on the self-monitor
 
 ## Known Issues / Limitations
 
-- Per-request Double durations can be voluminous for a hot token; `KeepHistory` (7 days) bounds the stored history. Aggregation into bars is a follow-up if it proves necessary.
+- Duration history is bar-aggregated (user decision, #1402 follow-up): the min/max/mean/count shape shows slow requests as the bar's max, but exact per-request tails (raw-sample percentile slicing) are gone — drill into a single slow request by traceId in the logs.
 - The registry keeps one dormant record per token seen since startup (revoked/renamed-away); it resets on restart.
