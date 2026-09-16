@@ -1628,35 +1628,58 @@ namespace HSMServer.Core.Cache
                 }
             }
 
-            // Remove orphaned policies (belong to this template but no longer matched).
-            var removedOrphans = false;
+            // Remove orphaned policies (belong to this template but no longer
+            // matched) — PERSIST FIRST, mutate memory only on success (the
+            // #1127 lesson RemoveTemplateFromSensor learned the hard way,
+            // applied to the apply path by #1396 review): if the write fails
+            // with the orphans already dropped from memory, a retry finds
+            // nothing to remove, the stale policies stay in the persisted
+            // entity, and the alert RESURRECTS after a restart — the exact
+            // #1394 symptom, now on the surfaced-error path.
+            var orphanPolicyIds = sensor.Policies
+                .Where(p => p.TemplateId == template.Id && !matchedSensorPolicyIds.Contains(p.Id))
+                .Select(p => p.Id)
+                .ToList();
+            var orphanTtlIds = sensor.Policies.TTLPolicies
+                .Where(t => t.TemplateId == template.Id && !matchedSensorTtlIds.Contains(t.Id))
+                .Select(t => t.Id)
+                .ToList();
 
-            foreach (var existing in sensor.Policies.Where(p => p.TemplateId == template.Id).ToList())
+            if (orphanPolicyIds.Count > 0 || orphanTtlIds.Count > 0)
             {
-                if (!matchedSensorPolicyIds.Contains(existing.Id))
+                var targetEntity = sensor.ToEntity();
+                var orphanPolicyIdStrings = orphanPolicyIds.Select(id => id.ToString()).ToHashSet();
+                var orphanTtlIdBytes = orphanTtlIds.Select(id => id.ToByteArray()).ToList();
+                targetEntity.Policies.RemoveAll(orphanPolicyIdStrings.Contains);
+                targetEntity.TTLPolicies.RemoveAll(p => orphanTtlIdBytes.Any(bytes => p.Id.SequenceEqual(bytes)));
+
+                try
                 {
-                    sensor.Policies.RemovePolicy(existing.Id, InitiatorInfo.AlertTemplate);
-                    removedOrphans = true;
+                    _database.UpdateSensor(targetEntity);
                 }
+                catch (Exception ex)
+                {
+                    // Memory untouched on purpose: the retry must still see the
+                    // orphans to target (#1396 review, finding 2).
+                    request.Error = $"Failed to apply template {template.Id} to sensor {sensor.Id}: {ex.Message}";
+                    _logger.Error(request.Error, ex);
+                    return;
+                }
+
+                foreach (var id in orphanPolicyIds)
+                    sensor.Policies.RemovePolicy(id, InitiatorInfo.AlertTemplate);
+
+                foreach (var id in orphanTtlIds)
+                    sensor.Policies.RemoveTTLPolicy(id, InitiatorInfo.AlertTemplate);
+
+                sensor.Revalidate();
+                SensorUpdateView(sensor);
             }
 
-            foreach (var existing in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == template.Id).ToList())
-            {
-                if (!matchedSensorTtlIds.Contains(existing.Id))
-                {
-                    sensor.Policies.RemoveTTLPolicy(existing.Id, InitiatorInfo.AlertTemplate);
-                    removedOrphans = true;
-                }
-            }
-
-            // Persist changes: new/updated policies, or orphan removals. The
-            // removedOrphans arm matters for the template-edit case where a TTL
-            // entry was recreated in the editor (a fresh TemplateAlertId orphans
-            // the old one): with no other delta the OLD condition was false, the
-            // removal lived only in memory, and the alert RESURRECTED after a
-            // restart (#1394).
+            // Persist new/updated policies (the orphan removal is already
+            // durable by here — it no longer needs an arm in this condition).
             if (policyUpdates.Count > 0 || ttlPolicyUpdates.Count > 0 ||
-                matchedSensorPolicyIds.Count > 0 || matchedSensorTtlIds.Count > 0 || removedOrphans)
+                matchedSensorPolicyIds.Count > 0 || matchedSensorTtlIds.Count > 0)
             {
                 var update = new SensorUpdate()
                 {
@@ -1666,17 +1689,21 @@ namespace HSMServer.Core.Cache
                     Initiator = InitiatorInfo.AlertTemplate
                 };
 
-                TryUpdateSensor(update, out var error);
-
-                if (!string.IsNullOrEmpty(error))
+                // Keyed to the RETURN VALUE, not the out string (#1396 review,
+                // finding 1): false means the sensor was gone or the DB write
+                // threw — the "not persisted" case this channel exists for.
+                // A non-empty error with `true` is per-policy VALIDATION noise
+                // (the DB write succeeded); escalating it would turn, e.g., an
+                // AnyType template's Value condition on a bar sensor into a
+                // PERMANENT 409 on every save while everything persisted.
+                if (!TryUpdateSensor(update, out var error))
                 {
-                    // Surfaced to the caller through the request (#1394): the
-                    // queue's TaskResult carries only THROWN exceptions, and
-                    // TryUpdateSensor catches the DB failure into this string —
-                    // without the channel the save reported success while the
-                    // alert existed only in memory until the next restart.
                     request.Error = $"Failed to apply template {template.Id} to sensor {sensor.Id}: {error}";
                     _logger.Error(request.Error);
+                }
+                else if (!string.IsNullOrEmpty(error))
+                {
+                    _logger.Error($"Template {template.Id} partially applied to sensor {sensor.Id}: {error}");
                 }
             }
         }
@@ -1809,6 +1836,11 @@ namespace HSMServer.Core.Cache
             catch (Exception ex)
             {
                 _logger.Error($"An error was occurred while adding alert template {alertTemplateModel}", ex);
+
+                // The reconcile itself failed (wildcard matching, the stale
+                // scan, or the dispatch) — reporting success here would be the
+                // swallow this PR removes (#1396 review, finding 3).
+                return (false, $"Failed to apply template: {ex.Message}");
             }
 
             // The partial-failure answer the DELETE side has always given

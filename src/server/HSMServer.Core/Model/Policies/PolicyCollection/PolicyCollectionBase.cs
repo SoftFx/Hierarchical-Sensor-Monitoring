@@ -192,7 +192,10 @@ namespace HSMServer.Core.Model.Policies
                 _ttlPolicies = [.._ttlPolicies, policy];
         }
 
-        internal void RemoveTTLPolicy(Guid id, InitiatorInfo initiator = null)
+        // The initiator is REQUIRED, deliberately (#1396 review): an optional
+        // default would let a future call site silently reintroduce the
+        // journal-less TTL removal this signature exists to prevent.
+        internal void RemoveTTLPolicy(Guid id, InitiatorInfo initiator)
         {
             TTLPolicy removed = null;
 
@@ -215,8 +218,10 @@ namespace HSMServer.Core.Model.Policies
             // (#1394): a TTL alert removed through a template prune/delete must
             // leave the same journal trace — without it the removal vanished
             // from the journal entirely, which is exactly how a template-derived
-            // alert could disappear with no record of why.
-            if (removed is not null && initiator is not null)
+            // alert could disappear with no record of why. The required
+            // initiator makes skipping the record a compile error, not a
+            // default (#1396 review).
+            if (removed is not null)
                 CallJournal(removed.Id, removed.ToString(), string.Empty, initiator);
         }
 
