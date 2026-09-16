@@ -130,7 +130,7 @@ namespace HSMServer.ServiceExtensions
                         "(AI agents, scripts): every operation requires the HsmApiToken bearer credential " +
                         "(see the HsmApiToken security scheme), and every error response — 400/401/403/404/409/500 — " +
                         "carries the uniform JSON body {\"error\": <machine-readable code>, \"message\": <human summary>, " +
-                        "\"details\": <field-keyed messages on 400s, traceId on 500s, else null>}. " +
+                        "\"details\": <field-keyed messages on 400s, traceId on 500s, resource pointers (templateId) on create 409s, else null>}. " +
                         "Management endpoints are served on the web-UI port only.",
                 });
 

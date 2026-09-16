@@ -3,12 +3,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMServer.Core.Cache;
-using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Tests.Infrastructure;
-using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
 using Xunit;
@@ -16,25 +14,15 @@ using Xunit;
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
     [Collection("Database collection")]
-    public class AlertTemplatePartialFailureTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
+    public class AlertTemplatePartialFailureTests : TemplateFailureTestsBase
     {
         private readonly TemplateConcurrencyFixture _fixture;
-        private Guid _failProductId = Guid.Empty;
 
 
         public AlertTemplatePartialFailureTests(TemplateConcurrencyFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture, addTestProduct: false)
+            : base(fixture, registerFixture)
         {
             _fixture = fixture;
-        }
-
-
-        protected override IDatabaseCore WrapDatabase(IDatabaseCore inner)
-        {
-            return new FailingDatabaseCore(inner, entity =>
-                _failProductId != Guid.Empty &&
-                Guid.TryParse(entity.ProductId, out var pid) &&
-                pid == _failProductId);
         }
 
 

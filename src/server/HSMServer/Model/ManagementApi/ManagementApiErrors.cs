@@ -65,6 +65,16 @@ namespace HSMServer.Model.ManagementApi
                 StatusCode = StatusCodes.Status409Conflict,
             };
 
+        // 409 whose resolution needs a server-side resource reference: details
+        // carries a resource pointer map (e.g. {"templateId": "<id>"} when the
+        // create-path partial-apply conflict leaves a persisted template the
+        // caller must PUT to fix — a re-POST would trip name uniqueness).
+        public static ObjectResult Conflict(string message, object details) =>
+            new(new ManagementApiErrorDto { Error = ConflictCode, Message = message, Details = details })
+            {
+                StatusCode = StatusCodes.Status409Conflict,
+            };
+
         public static ObjectResult Unavailable(string message) =>
             new(new ManagementApiErrorDto { Error = ServiceUnavailableCode, Message = message })
             {
