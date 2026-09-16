@@ -7,6 +7,7 @@
 The measurement middleware against a mocked `IApiTokenUsageMonitor` (the sensors registry lives inside the booted collector and is not unit-constructible):
 
 - `TokenRequest_OnApiV1_AttributesToTheToken` — login + EntityId, REST channel, no MCP, no failure.
+- `TokenIdentity_MaterializingDuringNext_AttributesToTheToken` — the REAL pipeline shape (#1402 review blocker pin): HsmApiToken is not the default scheme, the principal appears inside `next` (AuthorizationMiddleware replaces `context.User`); the observation-time resolution must see it.
 - `TokenRequest_OnMcp_UsesTheMcpChannel`.
 - `TokenRequest_PathIsCaseInsensitiveForTheChannel` — `/MCP` counts as MCP, agreeing with endpoint routing.
 - `TokenRequest_EveryStatusCodeCounts` — a 404 response still attributes (403/404/409 are work).

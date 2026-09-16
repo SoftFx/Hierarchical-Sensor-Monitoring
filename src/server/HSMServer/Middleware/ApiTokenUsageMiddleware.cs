@@ -15,30 +15,35 @@ namespace HSMServer.Middleware
     // best-effort by construction: nothing in this middleware may influence
     // the measured request except (negligible) timing cost.
     //
-    // Position: AFTER UseAuthentication (the token principal exists) but
-    // BEFORE UseAuthorization — a rejected request never reaches middleware
-    // registered after it, and the 401s ARE the auth-failure signal. The
-    // measured duration therefore includes authorization, which is honest:
-    // it is all server-side handling the caller waits for.
+    // Position: between UseAuthentication and UseAuthorization — a rejected
+    // request never reaches middleware registered after the authorization one,
+    // and the 401s ARE the auth-failure signal. The token identity is resolved
+    // AT OBSERVATION TIME (after next returned): HsmApiToken is deliberately
+    // not the default scheme, so UseAuthentication runs only the cookie
+    // default and the token principal materializes INSIDE UseAuthorization,
+    // which authenticates the policy's schemes and replaces context.User —
+    // capturing it before next() would always see null on the real pipeline
+    // (#1402 review). The measured duration includes authorization, which is
+    // honest: it is all server-side handling the caller waits for.
     public sealed class ApiTokenUsageMiddleware(RequestDelegate next, IApiTokenUsageMonitor monitor,
         IApiTokenManager tokens, IUserManager users)
     {
         private static readonly double TicksToMilliseconds = 1000.0 / Stopwatch.Frequency;
 
+        private static readonly NLog.Logger Logger = NLog.LogManager.GetCurrentClassLogger();
+
 
         public async Task InvokeAsync(HttpContext context)
         {
-            if (!IsMeasuredPath(context.Request.Path))
+            if (!ClassifyPath(context.Request.Path, out var isMcp))
             {
                 await next(context);
                 return;
             }
 
-            var isMcp = context.Request.Path.StartsWithSegments("/mcp", StringComparison.OrdinalIgnoreCase);
-            var tokenIdentity = FindTokenIdentity(context);
-
             // Resolved lazily AFTER the handler ran: the lookup is only worth
-            // its cost when there is a duration to attribute.
+            // its cost when there is a duration to attribute — and the token
+            // identity itself only exists by then (see the position comment).
             var startedAt = Stopwatch.GetTimestamp();
 
             try
@@ -49,14 +54,15 @@ namespace HSMServer.Middleware
             {
                 // Never let monitoring observations escape into the request's
                 // error handling — an exception here would replace the real
-                // outcome of a finished request.
+                // outcome of a finished request. Logged, not just swallowed:
+                // a dead collector must leave a trace (CLAUDE.md rule 8).
                 try
                 {
-                    Observe(context, tokenIdentity, isMcp, Stopwatch.GetTimestamp() - startedAt);
+                    Observe(context, FindTokenIdentity(context), isMcp, Stopwatch.GetTimestamp() - startedAt);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Swallowed deliberately: metrics must not break traffic.
+                    Logger.Warn(ex, "API-token usage observation failed");
                 }
             }
         }
@@ -128,12 +134,34 @@ namespace HSMServer.Middleware
         // A login is free-form text and becomes a PATH SEGMENT: anything that
         // would split or corrupt the segment is collapsed to '_' — the tree
         // must stay one level per intended level no matter what the login
-        // contains (#1402 acceptance).
-        internal static string SanitizeLogin(string login) =>
-            string.Join('_', login.Split('/', '\\')).Trim();
+        // contains (#1402 acceptance). A login collapsing to empty cannot
+        // happen through AddUser's validation, but a path like
+        // "API tokens//<id>" must never be built either.
+        internal static string SanitizeLogin(string login)
+        {
+            var sanitized = string.Join('_', login.Split('/', '\\')).Trim();
 
-        private static bool IsMeasuredPath(PathString path) =>
-            path.StartsWithSegments("/api/v1", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWithSegments("/mcp", StringComparison.OrdinalIgnoreCase);
+            return sanitized.Length == 0 ? "_" : sanitized;
+        }
+
+        // One classification pass: measured-or-not and the channel decide
+        // together, so the prefixes are matched exactly once per request.
+        private static bool ClassifyPath(PathString path, out bool isMcp)
+        {
+            if (path.StartsWithSegments("/api/v1", StringComparison.OrdinalIgnoreCase))
+            {
+                isMcp = false;
+                return true;
+            }
+
+            if (path.StartsWithSegments("/mcp", StringComparison.OrdinalIgnoreCase))
+            {
+                isMcp = true;
+                return true;
+            }
+
+            isMcp = false;
+            return false;
+        }
     }
 }

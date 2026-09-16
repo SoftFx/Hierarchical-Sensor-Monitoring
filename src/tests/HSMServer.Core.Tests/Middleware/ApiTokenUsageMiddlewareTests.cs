@@ -76,6 +76,29 @@ namespace HSMServer.Core.Tests.Middleware
 
 
         [Fact]
+        public async Task TokenIdentity_MaterializingDuringNext_AttributesToTheToken()
+        {
+            // The REAL pipeline shape (#1402 review blocker): HsmApiToken is
+            // not the default scheme, so the request starts with whatever
+            // UseAuthentication produced (nothing, for a bearer request) and
+            // the token principal materializes INSIDE next — Authorization-
+            // Middleware authenticates the policy's schemes and replaces
+            // context.User. Resolving at observation time must see it.
+            var context = Context("/api/v1/products");
+
+            Task ReplaceUser(HttpContext _)
+            {
+                context.User = TokenPrincipal();
+                return Task.CompletedTask;
+            }
+
+            await CreateMiddleware(ReplaceUser).InvokeAsync(context);
+
+            _monitor.Verify(m => m.AddRestRequest(_login, _entityId.ToString("D"), It.IsAny<double>()), Times.Once);
+        }
+
+
+        [Fact]
         public async Task TokenRequest_OnMcp_UsesTheMcpChannel()
         {
             var context = Context("/mcp", TokenPrincipal());
@@ -192,6 +215,7 @@ namespace HSMServer.Core.Tests.Middleware
         [InlineData("a\\b", "a_b")]
         [InlineData(" ops.user ", "ops.user")] // trimmed, not part of the identity
         [InlineData("ops.user", "ops.user")]
+        [InlineData("/", "_")]              // never an empty path segment
         public void SanitizeLogin_KeepsTheSegmentWhole(string login, string expected) =>
             Assert.Equal(expected, ApiTokenUsageMiddleware.SanitizeLogin(login));
     }

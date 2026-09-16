@@ -18,6 +18,10 @@ namespace HSMServer.BackgroundServices;
 // Profile token card displays the EntityId, making the correlation a glance.
 public sealed record ApiTokenUsageNode
 {
+    // The path root shared with the aggregate auth-failures sensor. Human-style
+    // like the sibling "Clients" node — this is the operator-facing tree.
+    public const string TokenUsageRoot = "API tokens";
+
     private const string RestNode = "REST";
     private const string McpNode = "MCP";
 
@@ -60,15 +64,6 @@ public sealed record ApiTokenUsageNode
             Description = $"Server-side handling time of one MCP (/mcp) request authenticated by this token ({ownerLogin}/{entityId}).",
         });
     }
-
-
-    // The path root shared with the aggregate auth-failures sensor. Human-style
-    // like the sibling "Clients" node — this is the operator-facing tree.
-    public const string TokenUsageRoot = "API tokens";
-
-    public string OwnerLogin { get; init; }
-
-    public string EntityId { get; init; }
 
 
     public void AddRestRequest(double durationMs)
