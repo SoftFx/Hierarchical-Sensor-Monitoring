@@ -727,7 +727,34 @@ namespace HSMServer.Core.Tests.Controllers
             var result = await CreateController().CreateTemplate(BuildDto());
 
             Assert.Equal(409, StatusCodeOf(result));
-            Assert.Contains("No products found", Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value).Message);
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            Assert.Contains("No products found", body.Message);
+            // Nothing was persisted, so there is no templateId to disclose.
+            Assert.Null(body.Details);
+        }
+
+
+        [Fact]
+        public async Task Create_PartialApplyFailure_409DisclosesPersistedTemplateId()
+        {
+            // The cache persists the template BEFORE reconciling, so a partial-apply
+            // 409 leaves a live resource behind. The conflict must disclose its id:
+            // the caller cannot re-POST (name-uniqueness 400) and cannot PUT an id
+            // it was never told about (#1396 review, finding 1).
+            _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
+                .Returns((AlertTemplateModel model, CancellationToken _) =>
+                {
+                    _store[model.Id] = model;
+                    return Task.FromResult((false, "failed to apply to some products"));
+                });
+
+            var result = await CreateController().CreateTemplate(BuildDto());
+
+            Assert.Equal(409, StatusCodeOf(result));
+            var body = Assert.IsType<ManagementApiErrorDto>(Assert.IsType<ObjectResult>(result).Value);
+            Assert.Equal(ManagementApiErrors.ConflictCode, body.Error);
+            var details = Assert.IsType<Dictionary<string, string>>(body.Details);
+            Assert.Equal(_store.Single().Key.ToString(), details["templateId"]);
         }
 
 

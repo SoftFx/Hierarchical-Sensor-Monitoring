@@ -2,12 +2,10 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
@@ -29,34 +27,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     //    the alert lived only in memory) and orphan-only TTL removals were not
     //    persisted (the alert resurrected after a restart).
     [Collection("Database collection")]
-    public class TemplateAlertJournalTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
+    public class TemplateAlertJournalTests : TemplateFailureTestsBase
     {
         private readonly TemplateConcurrencyFixture _fixture;
-        private Guid _failProductId = Guid.Empty;
-
-        // Entities the FailingDatabaseCore predicate saw — UpdateSensor consults
-        // it for every sensor write, so it doubles as an "UpdateSensor was
-        // called" recorder without a second wrapper class.
-        private readonly ConcurrentBag<string> _persistedProductIds = [];
 
 
         public TemplateAlertJournalTests(TemplateConcurrencyFixture fixture, DatabaseRegisterFixture registerFixture)
-            : base(fixture, registerFixture, addTestProduct: false)
+            : base(fixture, registerFixture)
         {
             _fixture = fixture;
-        }
-
-
-        protected override IDatabaseCore WrapDatabase(IDatabaseCore inner)
-        {
-            return new FailingDatabaseCore(inner, entity =>
-            {
-                _persistedProductIds.Add(entity.ProductId);
-
-                return _failProductId != Guid.Empty &&
-                       Guid.TryParse(entity.ProductId, out var pid) &&
-                       pid == _failProductId;
-            });
         }
 
 
@@ -145,7 +124,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.Single(sensor.Policies.TTLPolicies);
 
-            var records = await CaptureJournalAsync(() => Task.Run(() => sensor.Policies.UpdateTTLs([], initiator)));
+            // The operator's path, not the collection API (#1396 review,
+            // finding 4): the editor's "remove all TTLs" save is a
+            // SensorUpdate with an EMPTY TTL list, routed through the
+            // product queue and the BaseNodeModel gate
+            // (`update.TTLPolicies is not null` + ChangeTable CanChange)
+            // that can suppress the drop before UpdateTTLs is reached —
+            // mutating sensor.Policies directly would skip both.
+            var update = new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [],
+                Initiator = initiator,
+            };
+
+            var records = await CaptureJournalAsync(() => _valuesCache.UpdateSensorAsync(update));
 
             Assert.Empty(sensor.Policies.TTLPolicies);
             Assert.Contains(records, r => IsRemoval(r) && r.Key.Id == sensor.Id);

@@ -19,7 +19,7 @@ namespace HSMServer.Model.ManagementApi
         /// <summary>Human-readable summary; 404 bodies are generic by design (anti-enumeration).</summary>
         public string Message { get; init; }
 
-        /// <summary>Field-keyed validation messages ({"field": ["msg"]}) on 400s; {"traceId": "..."} on 500s; null otherwise.</summary>
+        /// <summary>Field-keyed validation messages ({"field": ["msg"]}) on 400s; {"traceId": "..."} on 500s; resource pointers (e.g. {"templateId": "..."}) on create-path 409s; null otherwise.</summary>
         public object Details { get; init; }
     }
 }

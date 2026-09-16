@@ -1647,11 +1647,17 @@ namespace HSMServer.Core.Cache
 
             if (orphanPolicyIds.Count > 0 || orphanTtlIds.Count > 0)
             {
+                // Two entity writes per sensor when the edit ALSO updates
+                // policies (this one + TryUpdateSensor's below) — deliberate,
+                // durability over write count: merging them would mean either
+                // mutating memory before this persist (reintroducing #1127's
+                // unretryable state) or folding the orphan removal into the
+                // update-only condition below (resurrecting #1394's skip).
                 var targetEntity = sensor.ToEntity();
                 var orphanPolicyIdStrings = orphanPolicyIds.Select(id => id.ToString()).ToHashSet();
-                var orphanTtlIdBytes = orphanTtlIds.Select(id => id.ToByteArray()).ToList();
+                var orphanTtlIdSet = orphanTtlIds.ToHashSet();
                 targetEntity.Policies.RemoveAll(orphanPolicyIdStrings.Contains);
-                targetEntity.TTLPolicies.RemoveAll(p => orphanTtlIdBytes.Any(bytes => p.Id.SequenceEqual(bytes)));
+                targetEntity.TTLPolicies.RemoveAll(p => p.Id is { Length: 16 } && orphanTtlIdSet.Contains(new Guid(p.Id)));
 
                 try
                 {
@@ -1703,6 +1709,11 @@ namespace HSMServer.Core.Cache
                 }
                 else if (!string.IsNullOrEmpty(error))
                 {
+                    // Not purely cosmetic noise: a REJECTED policy is never
+                    // created — not on the sensor, not in the DB — while the
+                    // save reports success; the #1394 symptom from validation
+                    // instead of a DB error. Surfacing it without failing the
+                    // persisted save is tracked by #1401.
                     _logger.Error($"Template {template.Id} partially applied to sensor {sensor.Id}: {error}");
                 }
             }
