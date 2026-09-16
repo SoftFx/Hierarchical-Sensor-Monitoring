@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
-using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMServer.BackgroundServices;
 

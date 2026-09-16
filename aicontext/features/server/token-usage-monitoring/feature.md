@@ -7,7 +7,7 @@
 
 ## Overview
 
-Issue #1402 answers "which tokens are used, how much, and how slow" inside the existing self-monitoring product (`HSM Server Monitoring`): a middleware measures every `/api/v1` + `/mcp` request and attributes it to the API token that authenticated it; the values flow through the embedded collector exactly like every other self-monitoring sensor. The path key is `<owner-login>/<entityId>` — deliberately NOT the token name (non-unique, mutable) and never the TokenId (the authentication lookup key management responses never disclose); `docs/adr/0001-token-usage-sensors-keyed-by-owner-and-entityid.md` records the trade-off, and the Profile token card displays the EntityId so the tree↔token correlation is a glance.
+Issue #1402 answers "which tokens are used, how much, and how slow" inside the existing self-monitoring product (`HSM Server Monitoring`): a middleware measures every `/api/v1` + `/mcp` request and attributes it to the API token that authenticated it; the values flow through the embedded collector exactly like every other self-monitoring sensor. The path key is `<owner-login>/<entityId>` — deliberately NOT the token name (non-unique, mutable) and never the TokenId (the authentication lookup key management responses never disclose); ADR-0006 (`docs/decisions/0006-token-usage-sensors-keyed-by-owner-and-entityid.md`) records the trade-off, and the Profile token card displays the EntityId so the tree↔token correlation is a glance.
 
 ## Invariants
 
@@ -16,7 +16,7 @@ Issue #1402 answers "which tokens are used, how much, and how slow" inside the e
 - **Authentication failures are aggregate-only**: a 401 on a measured path with no token identity ticks `API tokens/Authentication failures` — there is no token to attribute a bad credential to. Cookie-principal requests (the `/api/v1/api-tokens` family) are neither token usage nor auth failures.
 - **Measurement never breaks traffic**: the observation runs in `finally`, wrapped in its own try/catch — a dead collector costs the metrics, not the request. The measured duration is full server-side handling from after authentication to the response (authorization included — it is all the caller waits for).
 - **Pipeline position is load-bearing**: between `UseAuthentication` and `UseAuthorization` — a rejected request never reaches middleware registered after authorization, and the 401s are the failure signal. The token identity is resolved AT OBSERVATION TIME (after the handler): HsmApiToken is not the default scheme, so `UseAuthentication` runs only the cookie default and the token principal materializes INSIDE `UseAuthorization` (policy-scheme authentication replaces `context.User`) — capturing it before the handler would always see null (#1402 review). Pinned in `ManagementPipelineOrderTests` and `TokenIdentity_MaterializingDuringNext_AttributesToTheToken`.
-- **Lazy subtrees**: a token's node is created on its first use (an unused token adds no sensors); a revoked token's subtree goes silent and TTL cleans it; restarts lose nothing (stable paths, re-registration on next use).
+- **Lazy subtrees with bounded retention**: a token's node is created on the token's first use, and each channel's sensor pair on THAT channel's first use (an unused token — or an unused channel — adds no sensors). The sensors carry `SelfDestroy` (30 idle days) and `KeepHistory` (7 days), so a revoked or rotated-away token's subtree retires and its stored points are bounded instead of accumulating forever; restarts lose nothing (stable paths, re-registration on next use).
 - **No aggregates beyond the auth-failure counter** (user decision): no `_Total` nodes; per-endpoint breakdowns are a non-goal (find the endpoint by traceId once the token is identified).
 
 ## Primary Workflows
@@ -65,11 +65,11 @@ None of its own — sensors and history are the standard collector pipeline insi
 
 ## UI / Operator Visibility
 
-The subtree itself (admin-sight, like the whole self-monitoring product — no per-user filtering); the Profile token card shows the EntityId as the join key.
+The subtree itself — readable by anyone with access rights on the self-monitoring product (typically admins; no per-user filtering, same as the rest of that product — ADR-0006 acknowledges the login/entity-id disclosure to that audience); the Profile token card shows the EntityId as the join key.
 
 ## Dependencies
 
-- Depends on: api-tokens feature (`IApiTokenManager`, the HsmApiToken scheme), `IUserManager`, the embedded `DataCollector` (`WebRequestNode` precedent; no bar factory on `IDataCollector` — hence per-request Double durations).
+- Depends on: api-tokens feature (`IApiTokenManager`, the HsmApiToken scheme), `IUserManager`, the embedded `DataCollector` (`WebRequestNode` precedent). Per-request instant Double durations are a deliberate choice (#1402): every request is a discrete sample; aggregation into bars (the collector's bar factories, cf. `TreeValueCacheStatistics`) is a follow-up if volume ever demands it.
 - Used by: operators watching management-API performance.
 
 ## Tests
@@ -82,5 +82,5 @@ The subtree itself (admin-sight, like the whole self-monitoring product — no p
 
 ## Known Issues / Limitations
 
-- Per-request Double durations can be voluminous for a hot token; TTL bounds the history. Aggregation (bars) is a follow-up if it proves necessary — the embedded collector has no bar factory today.
+- Per-request Double durations can be voluminous for a hot token; `KeepHistory` (7 days) bounds the stored history. Aggregation into bars is a follow-up if it proves necessary.
 - The registry keeps one dormant record per token seen since startup (revoked/renamed-away); it resets on restart.

@@ -1,9 +1,12 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
+using HSMServer.Mcp;
 using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Middleware
@@ -28,9 +31,17 @@ namespace HSMServer.Middleware
     public sealed class ApiTokenUsageMiddleware(RequestDelegate next, IApiTokenUsageMonitor monitor,
         IApiTokenManager tokens, IUserManager users)
     {
+        // Sticky observation failures (a stopping collector, MaxSensors
+        // exceeded, a disposed registry) must not become one Warn per
+        // management request: the first occurrence logs at once, repeats at
+        // most once per interval (#1403 review).
+        private const long ObservationFailureLogIntervalMs = 60_000;
+
         private static readonly double TicksToMilliseconds = 1000.0 / Stopwatch.Frequency;
 
         private static readonly NLog.Logger Logger = NLog.LogManager.GetCurrentClassLogger();
+
+        private static long _lastObservationFailureLog;
 
 
         public async Task InvokeAsync(HttpContext context)
@@ -41,9 +52,6 @@ namespace HSMServer.Middleware
                 return;
             }
 
-            // Resolved lazily AFTER the handler ran: the lookup is only worth
-            // its cost when there is a duration to attribute — and the token
-            // identity itself only exists by then (see the position comment).
             var startedAt = Stopwatch.GetTimestamp();
 
             try
@@ -58,17 +66,21 @@ namespace HSMServer.Middleware
                 // a dead collector must leave a trace (CLAUDE.md rule 8).
                 try
                 {
+                    // Resolved lazily AFTER the handler ran: the lookup is
+                    // only worth its cost when there is a duration to
+                    // attribute — and the token identity itself only exists
+                    // by then (see the position comment).
                     Observe(context, FindTokenIdentity(context), isMcp, Stopwatch.GetTimestamp() - startedAt);
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn(ex, "API-token usage observation failed");
+                    LogObservationFailure(ex);
                 }
             }
         }
 
 
-        private void Observe(HttpContext context, System.Security.Claims.ClaimsIdentity tokenIdentity,
+        private void Observe(HttpContext context, ClaimsIdentity tokenIdentity,
             bool isMcp, long durationTicks)
         {
             var durationMs = durationTicks * TicksToMilliseconds;
@@ -96,12 +108,12 @@ namespace HSMServer.Middleware
         // The principal stays minimal by design (#1402 grilling): login and
         // EntityId are resolved per request from the authoritative stores —
         // an O(1) lookup that also stays current across user renames.
-        private bool TryResolve(System.Security.Claims.ClaimsIdentity identity, out string login, out string entityId)
+        private bool TryResolve(ClaimsIdentity identity, out string login, out string entityId)
         {
             login = null;
             entityId = null;
 
-            var tokenIdClaim = FindClaim(identity, HsmApiTokenClaims.TokenId);
+            var tokenIdClaim = identity.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
             if (tokenIdClaim is null)
                 return false;
 
@@ -122,14 +134,21 @@ namespace HSMServer.Middleware
         }
 
 
-        private static System.Security.Claims.ClaimsIdentity FindTokenIdentity(HttpContext context) =>
+        private static ClaimsIdentity FindTokenIdentity(HttpContext context) =>
             // The management policy admits exactly one HsmApiToken identity;
             // a cookie-only principal (the token lifecycle family) has none.
             context.User.Identities.FirstOrDefault(identity =>
                 identity.AuthenticationType == HsmApiTokenDefaults.AuthenticationScheme);
 
-        private static string FindClaim(System.Security.Claims.ClaimsIdentity identity, string claimType) =>
-            identity.Claims.FirstOrDefault(claim => claim.Type == claimType)?.Value;
+        private static void LogObservationFailure(Exception ex)
+        {
+            var now = Environment.TickCount64;
+            var last = Volatile.Read(ref _lastObservationFailureLog);
+
+            if (now - last >= ObservationFailureLogIntervalMs &&
+                Interlocked.CompareExchange(ref _lastObservationFailureLog, now, last) == last)
+                Logger.Warn(ex, "API-token usage observation failed");
+        }
 
         // A login is free-form text and becomes a PATH SEGMENT: anything that
         // would split or corrupt the segment is collapsed to '_' — the tree
@@ -139,22 +158,32 @@ namespace HSMServer.Middleware
         // "API tokens//<id>" must never be built either.
         internal static string SanitizeLogin(string login)
         {
+            // A missing name must not NRE here either: the contract ("never
+            // an empty path segment") is total.
+            if (string.IsNullOrWhiteSpace(login))
+                return "_";
+
             var sanitized = string.Join('_', login.Split('/', '\\')).Trim();
 
             return sanitized.Length == 0 ? "_" : sanitized;
         }
 
         // One classification pass: measured-or-not and the channel decide
-        // together, so the prefixes are matched exactly once per request.
+        // together, so the route roots are matched exactly once per request.
+        // The constants are the ones the guards already use — if either root
+        // ever moves, measurement moves with it instead of silently stopping.
         private static bool ClassifyPath(PathString path, out bool isMcp)
         {
-            if (path.StartsWithSegments("/api/v1", StringComparison.OrdinalIgnoreCase))
+            if (LegacyBearerGuardMiddleware.IsManagementAreaPath(path))
             {
                 isMcp = false;
                 return true;
             }
 
-            if (path.StartsWithSegments("/mcp", StringComparison.OrdinalIgnoreCase))
+            // The ENDPOINT, not the prefix — the same semantics as the bearer
+            // guard's exemption (#1392): MapMcp maps exactly this path, and
+            // anything else under /mcp is not token traffic.
+            if (path.Equals((PathString)HsmMcp.EndpointPath, StringComparison.OrdinalIgnoreCase))
             {
                 isMcp = true;
                 return true;

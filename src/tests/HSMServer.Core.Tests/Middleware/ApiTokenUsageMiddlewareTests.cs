@@ -111,6 +111,22 @@ namespace HSMServer.Core.Tests.Middleware
 
 
         [Fact]
+        public async Task McpPath_BeyondTheEndpoint_IsNotMeasured()
+        {
+            // /mcp is measured as the exact ENDPOINT, not the prefix — the
+            // same semantics as the bearer guard's exemption (#1392):
+            // anything else under /mcp is not token traffic.
+            var context = Context("/mcp/other", TokenPrincipal());
+            var reached = false;
+
+            await CreateMiddleware(_ => { reached = true; return Task.CompletedTask; }).InvokeAsync(context);
+
+            Assert.True(reached);
+            _monitor.VerifyNoOtherCalls();
+        }
+
+
+        [Fact]
         public async Task TokenRequest_PathIsCaseInsensitiveForTheChannel()
         {
             // Endpoint routing matches segments case-insensitively; the REST/MCP
@@ -210,12 +226,31 @@ namespace HSMServer.Core.Tests.Middleware
         }
 
 
+        [Fact]
+        public async Task NextThrows_ExceptionPropagatesAndStillAttributed()
+        {
+            // The other half of the finally contract: when the measured
+            // pipeline itself throws, the observation still runs AND the
+            // ORIGINAL exception leaves the middleware unchanged — a future
+            // refactor that moves Observe out of the finally (or wraps it in
+            // a catch) must fail here, not in production (#1403 review).
+            var context = Context("/api/v1/products", TokenPrincipal());
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                CreateMiddleware(_ => throw new InvalidOperationException("handler failed")).InvokeAsync(context));
+
+            _monitor.Verify(m => m.AddRestRequest(_login, _entityId.ToString("D"), It.IsAny<double>()), Times.Once);
+        }
+
+
         [Theory]
         [InlineData("a/b", "a_b")]          // separators would split the segment
         [InlineData("a\\b", "a_b")]
         [InlineData(" ops.user ", "ops.user")] // trimmed, not part of the identity
         [InlineData("ops.user", "ops.user")]
         [InlineData("/", "_")]              // never an empty path segment
+        [InlineData(null, "_")]             // a missing name keeps the contract total
+        [InlineData("   ", "_")]
         public void SanitizeLogin_KeepsTheSegmentWhole(string login, string expected) =>
             Assert.Equal(expected, ApiTokenUsageMiddleware.SanitizeLogin(login));
     }

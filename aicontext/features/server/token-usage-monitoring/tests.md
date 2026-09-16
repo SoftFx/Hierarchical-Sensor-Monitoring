@@ -9,6 +9,7 @@ The measurement middleware against a mocked `IApiTokenUsageMonitor` (the sensors
 - `TokenRequest_OnApiV1_AttributesToTheToken` — login + EntityId, REST channel, no MCP, no failure.
 - `TokenIdentity_MaterializingDuringNext_AttributesToTheToken` — the REAL pipeline shape (#1402 review blocker pin): HsmApiToken is not the default scheme, the principal appears inside `next` (AuthorizationMiddleware replaces `context.User`); the observation-time resolution must see it.
 - `TokenRequest_OnMcp_UsesTheMcpChannel`.
+- `McpPath_BeyondTheEndpoint_IsNotMeasured` — `/mcp` is the exact endpoint, not the prefix (the bearer guard's semantics); `/mcp/other` passes through uncounted.
 - `TokenRequest_PathIsCaseInsensitiveForTheChannel` — `/MCP` counts as MCP, agreeing with endpoint routing.
 - `TokenRequest_EveryStatusCodeCounts` — a 404 response still attributes (403/404/409 are work).
 - `NoToken_401_CountsAuthenticationFailureOnly`.
@@ -16,7 +17,8 @@ The measurement middleware against a mocked `IApiTokenUsageMonitor` (the sensors
 - `RevokedMidRequest_NoAttributionNoFailure` — the revocation race.
 - `UnmeasuredPath_PassesThroughUncounted`.
 - `SensorThrow_NeverBreaksTheRequest` — the never-break contract.
-- `SanitizeLogin` theory — separators collapse, whitespace trims; the tree stays one level per intended level.
+- `NextThrows_ExceptionPropagatesAndStillAttributed` — the finally contract's other half: a throwing `next` is still attributed, and the ORIGINAL exception propagates unchanged.
+- `SanitizeLogin` theory — separators collapse, whitespace trims, a missing name stays one `_` segment; the tree stays one level per intended level.
 
 `ManagementPipelineOrderTests` pins the middleware between `UseAuthentication` and `UseAuthorization` — the position is load-bearing (401 visibility).
 
