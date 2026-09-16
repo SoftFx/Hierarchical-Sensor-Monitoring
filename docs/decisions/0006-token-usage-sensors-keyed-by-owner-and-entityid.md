@@ -26,7 +26,7 @@ Two obvious keys are disqualified:
 
 ## Decision
 
-A token's usage sensors live under `API tokens/<owner-login>/<token-EntityId>/…`:
+A token's usage sensors live under `API tokens/By owner/<owner-login>/<token-EntityId>/…`:
 collision-free (logins and EntityIds are each unique) and stable across token renames.
 Rotation mints a fresh EntityId by design (ADR-0005: rotation is a pure credential swap),
 so a rotated-away subtree is a new identity rather than a move — it retires through the

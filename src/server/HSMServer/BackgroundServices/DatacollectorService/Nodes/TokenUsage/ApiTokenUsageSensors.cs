@@ -45,8 +45,31 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     public void AddAuthenticationFailure() => _authFailures.AddValue(1);
 
 
+    // The eviction half of retention (#1403 review, round 2): rate sensors
+    // are monitoring sensors posting a 0 every minute forever, so a dead
+    // token's subtree never goes IDLE and SelfDestroy alone cannot retire
+    // it. The periodic statistics sweep asks whether each node's token
+    // record still exists; a gone record (revocation, rotation, owner
+    // deletion) drops and DISPOSES the node — the send loops stop, the
+    // sensors go idle, and the server's self-destroy sweep removes them
+    // after the retention window. Requests cannot drive this: a revoked
+    // credential fails authentication before the middleware ever sees a
+    // token id, so nothing but the sweep observes the death.
+    public void EvictDeadTokens(Func<Guid, Authentication.ApiTokenInfo> tokenByEntityId)
+    {
+        foreach (var (key, node) in _nodes)
+        {
+            if (tokenByEntityId(node.EntityId) is not null)
+                continue;
+
+            if (_nodes.TryRemove(key, out var evicted))
+                evicted.Dispose();
+        }
+    }
+
+
     private ApiTokenUsageNode NodeFor(string ownerLogin, string entityId) =>
-        _nodes.GetOrAdd(KeyOf(ownerLogin, entityId), _ => new ApiTokenUsageNode(_collector, ownerLogin, entityId));
+        _nodes.GetOrAdd(KeyOf(ownerLogin, entityId), _ => new ApiTokenUsageNode(_collector, ownerLogin, Guid.Parse(entityId)));
 
     private static string KeyOf(string ownerLogin, string entityId) => $"{ownerLogin}\n{entityId}";
 }

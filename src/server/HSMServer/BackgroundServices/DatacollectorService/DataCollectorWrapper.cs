@@ -33,6 +33,9 @@ namespace HSMServer.BackgroundServices
 
         private readonly ITreeValuesCache _cache;
 
+        // For the token-usage eviction sweep (#1403 review, round 2).
+        private readonly HSMServer.Authentication.IApiTokenManager _apiTokens;
+
         private readonly ProductModel _productModel;
 
         private readonly NotificationsCenter _notificationsCenter;
@@ -65,11 +68,12 @@ namespace HSMServer.BackgroundServices
         internal MattermostChannelStatistics MattermostChannelStatistics { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter, HSMServer.Authentication.IApiTokenManager apiTokens)
         {
             _logger = LogManager.GetLogger(GetType().Name);
 
             _cache = cache;
+            _apiTokens = apiTokens;
             _key = GetSelfMonitoringKeyAsync(cache);
 
             _productModel = _cache.GetProductByName(SelfMonitoringProductName);
@@ -175,6 +179,13 @@ namespace HSMServer.BackgroundServices
             DbStatisticsSensors.SendInfo();
 
             TreeValueCacheStatistics.UpdateSensorsCount(_cache.SensorsCount);
+
+            // Token-usage retention (#1403 review, round 2): rate sensors
+            // never idle on their own, so a dead token's subtree is evicted
+            // here — by the token RECORD's existence, which only this sweep
+            // can observe (a revoked credential fails auth before any
+            // middleware sees its id).
+            ApiTokenUsageSensors.EvictDeadTokens(_apiTokens.GetTokenByEntityId);
         }
 
 

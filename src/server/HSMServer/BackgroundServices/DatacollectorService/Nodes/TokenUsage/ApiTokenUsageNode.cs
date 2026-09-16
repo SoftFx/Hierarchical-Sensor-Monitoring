@@ -7,23 +7,33 @@ using HSMSensorDataObjects.SensorRequests;
 namespace HSMServer.BackgroundServices;
 
 // The per-token node of the API-token usage monitoring (#1402): the request
-// rate and the per-request duration of management-API access authenticated by
-// ONE token, split REST (/api/v1) vs MCP (/mcp). Created lazily by
-// ApiTokenUsageSensors on the token's first use, and each channel's sensor
-// pair on THAT channel's first use — an unused token adds no sensors, and a
-// token that never touches /mcp grows no MCP sensors. A revoked or
-// rotated-away token's subtree retires on its own: SelfDestroy removes
-// sensors idle past the retention window (#1403 review).
+// rate and the bar-aggregated duration of management-API access
+// authenticated by ONE token, split REST (/api/v1) vs MCP (/mcp). Created
+// lazily by ApiTokenUsageSensors on the token's first use, and each
+// channel's sensor pair on THAT channel's first use — an unused token adds
+// no sensors, and a token that never touches /mcp grows no MCP sensors.
 //
 // Keyed by <owner-login>/<entityId>, NEVER the token name or the TokenId
-// (names collide and move on rename; the TokenId is the authentication lookup
-// key that management responses never disclose — see ADR-0006). The
+// (names collide and move on rename; the TokenId is the authentication
+// lookup key that management responses never disclose — see ADR-0006). The
 // Profile token card displays the EntityId, making the correlation a glance.
-public sealed record ApiTokenUsageNode
+// The per-token subtrees sit under a dedicated "By owner" segment so no
+// login can ever collide with the aggregate Authentication failures sensor;
+// sanitization is display-only — two logins may share a grouping segment,
+// the EntityIds keep the leaves unique (#1403 review, round 2).
+//
+// A sealed CLASS, not a record: it holds a lock and mutable sensor fields —
+// compiler-generated structural equality would be meaningless here.
+public sealed class ApiTokenUsageNode : IDisposable
 {
     // The path root shared with the aggregate auth-failures sensor. Human-style
     // like the sibling "Clients" node — this is the operator-facing tree.
     public const string TokenUsageRoot = "API tokens";
+
+    // Per-token subtrees live one level below the root, under a dedicated
+    // segment: no login — however sanitized — can collide with the aggregate
+    // sensor's name at the root level (#1403 review, round 2).
+    public const string PerTokenSegment = "By owner";
 
     private const string RestNode = "REST";
     private const string McpNode = "MCP";
@@ -42,6 +52,11 @@ public sealed record ApiTokenUsageNode
     private readonly string _prefix;
     private readonly string _tokenKey;
 
+    // For the eviction sweep (#1403 review, round 2): identifies which token
+    // record this subtree belongs to, so a revoked/rotated-away token's node
+    // can be found and disposed when the record is gone.
+    private readonly Guid _entityId;
+
     // One gate for both channels: each sensor must be created exactly once,
     // while AddValue itself is already thread-safe on the sensors (requests
     // for one token arrive from concurrent connections).
@@ -53,12 +68,16 @@ public sealed record ApiTokenUsageNode
     private IBarSensor<double> _mcpDuration;
 
 
-    public ApiTokenUsageNode(IDataCollector collector, string ownerLogin, string entityId)
+    public ApiTokenUsageNode(IDataCollector collector, string ownerLogin, Guid entityId)
     {
         _collector = collector;
-        _tokenKey = $"{ownerLogin}/{entityId}";
-        _prefix = $"{TokenUsageRoot}/{_tokenKey}";
+        _entityId = entityId;
+        _tokenKey = $"{ownerLogin}/{entityId:D}";
+        _prefix = $"{TokenUsageRoot}/{PerTokenSegment}/{_tokenKey}";
     }
+
+
+    public Guid EntityId => _entityId;
 
 
     public void AddRestRequest(double durationMs)
@@ -94,6 +113,33 @@ public sealed record ApiTokenUsageNode
         rate.AddValue(1);
         duration.AddValue(durationMs);
     }
+
+    // The retention story of a REVOKED token (#1403 review, round 2): rate
+    // sensors are monitoring sensors — they post a 0 every minute forever and
+    // therefore never go idle, so SelfDestroy alone can never retire the
+    // subtree. The registry's eviction sweep calls this when the token record
+    // is gone: disposing stops the send loops, the sensors go idle, and the
+    // server's self-destroy sweep removes them after the retention window.
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            // The factory interfaces do not carry ISensor, but the concrete
+            // sensors implement it — Dispose stops the monitoring send loops.
+            DisposeSensor(_restRate);
+            DisposeSensor(_restDuration);
+            DisposeSensor(_mcpRate);
+            DisposeSensor(_mcpDuration);
+
+            _restRate = null;
+            _restDuration = null;
+            _mcpRate = null;
+            _mcpDuration = null;
+        }
+    }
+
+    private static void DisposeSensor(object sensor) =>
+        (sensor as IDisposable)?.Dispose();
 
     private IInstantValueSensor<double> CreateRateSensor(string channelNode, string description) =>
         _collector.CreateRateSensor($"{_prefix}/{channelNode}/{RequestRateNode}", new RateSensorOptions

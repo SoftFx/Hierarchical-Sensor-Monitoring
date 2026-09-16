@@ -180,6 +180,21 @@ namespace HSMServer.Core.Tests.Middleware
 
 
         [Fact]
+        public async Task CookieFamily_401_NotATokenAuthFailure()
+        {
+            // An expired browser session on the reserved cookie-only family
+            // answers 401 (MyCookieAuthenticationEvents never redirects under
+            // /api/v1) — that is a COOKIE failure, not a token-credential
+            // one, and must not tick the aggregate counter (#1403 review r2).
+            var context = Context("/api/v1/api-tokens", statusCode: StatusCodes.Status401Unauthorized);
+
+            await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
+
+            _monitor.VerifyNoOtherCalls();
+        }
+
+
+        [Fact]
         public async Task RevokedMidRequest_NoAttributionNoFailure()
         {
             // The principal authenticated, but the token record is already gone

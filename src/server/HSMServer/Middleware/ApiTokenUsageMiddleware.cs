@@ -41,7 +41,10 @@ namespace HSMServer.Middleware
 
         private static readonly NLog.Logger Logger = NLog.LogManager.GetCurrentClassLogger();
 
-        private static long _lastObservationFailureLog;
+        // Seeded "an interval ago": on a host that booted less than the interval
+        // before the first failure — exactly the startup window where collector
+        // problems appear — zero-init would swallow that first trace (#1403 r2).
+        private static long _lastObservationFailureLog = -ObservationFailureLogIntervalMs;
 
 
         public async Task InvokeAsync(HttpContext context)
@@ -176,6 +179,16 @@ namespace HSMServer.Middleware
         {
             if (LegacyBearerGuardMiddleware.IsManagementAreaPath(path))
             {
+                // The reserved cookie-only family is not token traffic, and its
+                // 401s (an expired browser session) are not TOKEN credential
+                // failures either — MyCookieAuthenticationEvents answers 401
+                // for everything under /api/v1 (#1403 review, round 2).
+                if (ManagementApiGuardMiddleware.IsReservedCookieOnlyFamily(path))
+                {
+                    isMcp = false;
+                    return false;
+                }
+
                 isMcp = false;
                 return true;
             }
