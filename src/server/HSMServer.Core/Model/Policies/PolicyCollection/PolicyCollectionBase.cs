@@ -89,11 +89,18 @@ namespace HSMServer.Core.Model.Policies
             var isTemplateInitiated = initiator == InitiatorInfo.AlertTemplate;
 
             var journalEntries = new List<(string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)>();
-            // Policies the editor's full-list semantics DROP (not in the update
-            // list, not template-owned) — journaled as removals after the lock
-            // (#1394): the drop used to vanish without a record, so an operator
-            // saw the TTL alert's creation entry and nothing about its end.
+            // Policies the full-list semantics DROP (not in the update list,
+            // not template-owned) — journaled as removals after the lock
+            // (#1394): the drop used to vanish without a record.
             var droppedPolicies = new List<TTLPolicy>();
+            // Signatures of drops that no policy created by THIS call re-asserts.
+            // The collector registers its TTL alerts with empty ids on every
+            // reconnect, which reads as drop + recreate; such a content-equal
+            // pair is a re-assertion, not a removal, and must journal nothing —
+            // otherwise every collector restart blames itself for removing an
+            // alert that never went away (TTLPolicy.ToString() is id-free, so
+            // only a content-identical re-creation matches).
+            var unpairedDropSignatures = new HashSet<string>();
 
             lock (_ttlLock)
             {
@@ -141,6 +148,7 @@ namespace HSMServer.Core.Model.Policies
                     else
                     {
                         droppedPolicies.Add(policy);
+                        unpairedDropSignatures.Add(policy.ToString());
                     }
                 }
 
@@ -152,7 +160,11 @@ namespace HSMServer.Core.Model.Policies
                     if (!update.TTL.HasValue)
                         policy.SetTTLParent(TTLParentSource);
 
-                    journalEntries.Add((string.Empty, policy, update, false));
+                    // A re-asserted drop journals nothing: pair it off here so
+                    // the removal loop below skips it too.
+                    if (!unpairedDropSignatures.Remove(policy.ToString()))
+                        journalEntries.Add((string.Empty, policy, update, false));
+
                     newList.Add(policy);
                 }
 
@@ -165,7 +177,8 @@ namespace HSMServer.Core.Model.Policies
             // The removal records for the dropped entries — same shape
             // RemovePolicy writes for regular policies (#1394).
             foreach (var dropped in droppedPolicies)
-                CallJournal(dropped.Id, dropped.ToString(), string.Empty, initiator);
+                if (unpairedDropSignatures.Contains(dropped.ToString()))
+                    CallJournal(dropped.Id, dropped.ToString(), string.Empty, initiator);
         }
 
 
@@ -192,9 +205,9 @@ namespace HSMServer.Core.Model.Policies
                 _ttlPolicies = [.._ttlPolicies, policy];
         }
 
-        // The initiator is REQUIRED, deliberately (#1396 review): an optional
-        // default would let a future call site silently reintroduce the
-        // journal-less TTL removal this signature exists to prevent.
+        // The initiator is REQUIRED, deliberately: an optional default would
+        // let a future call site silently reintroduce the journal-less TTL
+        // removal this signature exists to prevent (#1394).
         internal void RemoveTTLPolicy(Guid id, InitiatorInfo initiator)
         {
             TTLPolicy removed = null;
@@ -214,13 +227,9 @@ namespace HSMServer.Core.Model.Policies
                     _ttlPolicies = newList;
             }
 
-            // The removal record RemovePolicy writes for its regular policies
-            // (#1394): a TTL alert removed through a template prune/delete must
-            // leave the same journal trace — without it the removal vanished
-            // from the journal entirely, which is exactly how a template-derived
-            // alert could disappear with no record of why. The required
-            // initiator makes skipping the record a compile error, not a
-            // default (#1396 review).
+            // Same removal record RemovePolicy writes for regular policies
+            // (#1394): a TTL removal must leave a journal trace, and the
+            // required initiator makes skipping it a compile error.
             if (removed is not null)
                 CallJournal(removed.Id, removed.ToString(), string.Empty, initiator);
         }

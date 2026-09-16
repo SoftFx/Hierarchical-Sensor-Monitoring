@@ -67,7 +67,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         // The stored entity is what a restart reloads — asserting against it
         // (not against "some UpdateSensor ran") pins the resurrect-after-restart
-        // bug directly (#1396 review, finding 5).
+        // bug directly.
         private bool StoredEntityCarriesTemplateTtl(BaseSensorModel sensor, Guid templateId) =>
             _databaseCoreManager.DatabaseCore.GetAllSensors()
                 .First(e => e.Id == sensor.Id.ToString())
@@ -124,8 +124,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.Single(sensor.Policies.TTLPolicies);
 
-            // The operator's path, not the collection API (#1396 review,
-            // finding 4): the editor's "remove all TTLs" save is a
+            // The operator's path, not the collection API: the editor's
+            // "remove all TTLs" save is a
             // SensorUpdate with an EMPTY TTL list, routed through the
             // product queue and the BaseNodeModel gate
             // (`update.TTLPolicies is not null` + ChangeTable CanChange)
@@ -142,6 +142,47 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.Empty(sensor.Policies.TTLPolicies);
             Assert.Contains(records, r => IsRemoval(r) && r.Key.Id == sensor.Id);
+        }
+
+
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task UpdateTTLs_ReassertedEquivalentPolicy_LeavesNoJournalRecord()
+        {
+            var sensorPath = "sensorTtlReassert";
+            await CreateSensor(sensorPath, _fixture.AccessKeyAId, _fixture.ProductAId);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensor));
+
+            var initiator = InitiatorInfo.AsUser("journal-test");
+            var ttlTicks = TimeSpan.FromMinutes(10).Ticks;
+
+            // The collector's registration shape: every TtlAlerts update
+            // carries Id = Guid.Empty (ApiConverters.Convert), so a reconnect
+            // drops the sensor's existing TTL policy and re-creates an
+            // identical one under a fresh id.
+            SensorUpdate BuildRegistration() => new()
+            {
+                Id = sensor.Id,
+                TTLPolicies = [new PolicyUpdate { Id = Guid.Empty, TTL = ttlTicks, Initiator = initiator }],
+                Initiator = initiator,
+            };
+
+            await _valuesCache.UpdateSensorAsync(BuildRegistration());
+            await Task.Delay(300);
+
+            var existing = Assert.Single(sensor.Policies.TTLPolicies);
+
+            var records = await CaptureJournalAsync(() => _valuesCache.UpdateSensorAsync(BuildRegistration()));
+
+            // The drop+recreate DID happen (fresh id) — but it is a
+            // re-assertion, not a removal: journaling either half of the
+            // pair would blame every collector reconnect for removing an
+            // alert that never went away.
+            var recreated = Assert.Single(sensor.Policies.TTLPolicies);
+            Assert.NotEqual(existing.Id, recreated.Id);
+            Assert.DoesNotContain(records, r => r.Key.Id == sensor.Id &&
+                                                r.PropertyName is "Alert" or "Alert (change by parent)");
         }
 
 
@@ -175,7 +216,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.DoesNotContain(sensor.Policies.TTLPolicies, p => p.TemplateId == template.Id);
 
             // Durable: the STORED ENTITY no longer carries the TTL policy —
-            // what a restart reloads is what the bug was about (#1396 review).
+            // what a restart reloads is what the bug was about.
             Assert.False(StoredEntityCarriesTemplateTtl(sensor, template.Id));
         }
 
@@ -201,8 +242,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // The orphan-persist write fails: the save must report the failure
             // AND leave memory untouched — a retry has to still see the orphan
             // to remove it. Mutating memory before the persist would strand
-            // the stale TTL in the entity forever (the #1127 lesson, applied
-            // to the apply path by #1396 review finding 2).
+            // the stale TTL in the entity forever (the #1127 lesson).
             _failProductId = _fixture.ProductAId;
 
             var (failed, error) = await _valuesCache.AddAlertTemplateAsync(emptied);

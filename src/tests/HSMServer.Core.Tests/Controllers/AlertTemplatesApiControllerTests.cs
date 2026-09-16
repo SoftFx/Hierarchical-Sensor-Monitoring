@@ -740,7 +740,7 @@ namespace HSMServer.Core.Tests.Controllers
             // The cache persists the template BEFORE reconciling, so a partial-apply
             // 409 leaves a live resource behind. The conflict must disclose its id:
             // the caller cannot re-POST (name-uniqueness 400) and cannot PUT an id
-            // it was never told about (#1396 review, finding 1).
+            // it was never told about.
             _cache.Setup(c => c.AddAlertTemplateAsync(It.IsAny<AlertTemplateModel>(), It.IsAny<CancellationToken>()))
                 .Returns((AlertTemplateModel model, CancellationToken _) =>
                 {

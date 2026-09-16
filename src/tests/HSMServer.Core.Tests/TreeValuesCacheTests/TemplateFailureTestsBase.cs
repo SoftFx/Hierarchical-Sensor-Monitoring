@@ -8,8 +8,8 @@ using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
     // Shared fail-injection harness for the template partial-failure suites
-    // (#1396 review: the per-suite copies had begun to drift). Both suites
-    // run on the same TemplateConcurrencyFixture physical database.
+    // (the per-suite copies had begun to drift). Both suites run on the same
+    // TemplateConcurrencyFixture physical database.
     public abstract class TemplateFailureTestsBase : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
     {
         protected Guid _failProductId = Guid.Empty;

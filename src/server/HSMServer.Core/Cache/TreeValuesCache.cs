@@ -1629,13 +1629,11 @@ namespace HSMServer.Core.Cache
             }
 
             // Remove orphaned policies (belong to this template but no longer
-            // matched) — PERSIST FIRST, mutate memory only on success (the
-            // #1127 lesson RemoveTemplateFromSensor learned the hard way,
-            // applied to the apply path by #1396 review): if the write fails
-            // with the orphans already dropped from memory, a retry finds
-            // nothing to remove, the stale policies stay in the persisted
-            // entity, and the alert RESURRECTS after a restart — the exact
-            // #1394 symptom, now on the surfaced-error path.
+            // matched) — PERSIST FIRST, mutate memory only on success (#1127):
+            // if the write fails with the orphans already dropped from memory,
+            // a retry finds nothing to remove, the stale policies stay in the
+            // persisted entity, and the alert RESURRECTS after a restart —
+            // the #1394 symptom, now on the surfaced-error path.
             var orphanPolicyIds = sensor.Policies
                 .Where(p => p.TemplateId == template.Id && !matchedSensorPolicyIds.Contains(p.Id))
                 .Select(p => p.Id)
@@ -1644,6 +1642,12 @@ namespace HSMServer.Core.Cache
                 .Where(t => t.TemplateId == template.Id && !matchedSensorTtlIds.Contains(t.Id))
                 .Select(t => t.Id)
                 .ToList();
+
+            // Whether the apply-update arm below will run (new/updated
+            // policies). Computed once so the orphan arm can skip its own
+            // sensor-row view push when TryUpdateSensor does it anyway.
+            var hasUpdateWork = policyUpdates.Count > 0 || ttlPolicyUpdates.Count > 0 ||
+                                matchedSensorPolicyIds.Count > 0 || matchedSensorTtlIds.Count > 0;
 
             if (orphanPolicyIds.Count > 0 || orphanTtlIds.Count > 0)
             {
@@ -1665,10 +1669,10 @@ namespace HSMServer.Core.Cache
                 }
                 catch (Exception ex)
                 {
-                    // Memory untouched on purpose: the retry must still see the
-                    // orphans to target (#1396 review, finding 2).
+                    // Memory untouched on purpose: the retry must still see
+                    // the orphans to target.
                     request.Error = $"Failed to apply template {template.Id} to sensor {sensor.Id}: {ex.Message}";
-                    _logger.Error(request.Error, ex);
+                    _logger.Error(ex, request.Error);
                     return;
                 }
 
@@ -1679,13 +1683,16 @@ namespace HSMServer.Core.Cache
                     sensor.Policies.RemoveTTLPolicy(id, InitiatorInfo.AlertTemplate);
 
                 sensor.Revalidate();
-                SensorUpdateView(sensor);
+
+                // TryUpdateSensor pushes the view itself when it runs; push
+                // here only when the update arm will not.
+                if (!hasUpdateWork)
+                    SensorUpdateView(sensor);
             }
 
             // Persist new/updated policies (the orphan removal is already
             // durable by here — it no longer needs an arm in this condition).
-            if (policyUpdates.Count > 0 || ttlPolicyUpdates.Count > 0 ||
-                matchedSensorPolicyIds.Count > 0 || matchedSensorTtlIds.Count > 0)
+            if (hasUpdateWork)
             {
                 var update = new SensorUpdate()
                 {
@@ -1695,13 +1702,13 @@ namespace HSMServer.Core.Cache
                     Initiator = InitiatorInfo.AlertTemplate
                 };
 
-                // Keyed to the RETURN VALUE, not the out string (#1396 review,
-                // finding 1): false means the sensor was gone or the DB write
-                // threw — the "not persisted" case this channel exists for.
-                // A non-empty error with `true` is per-policy VALIDATION noise
-                // (the DB write succeeded); escalating it would turn, e.g., an
-                // AnyType template's Value condition on a bar sensor into a
-                // PERMANENT 409 on every save while everything persisted.
+                // Keyed to the RETURN VALUE, not the out string: false means
+                // the sensor was gone or the DB write threw — the "not
+                // persisted" case this channel exists for. A non-empty error
+                // with `true` is per-policy VALIDATION noise (the DB write
+                // succeeded); escalating it would turn, e.g., an AnyType
+                // template's Value condition on a bar sensor into a PERMANENT
+                // 409 on every save while everything persisted.
                 if (!TryUpdateSensor(update, out var error))
                 {
                     request.Error = $"Failed to apply template {template.Id} to sensor {sensor.Id}: {error}";
@@ -1711,8 +1718,7 @@ namespace HSMServer.Core.Cache
                 {
                     // Not purely cosmetic noise: a REJECTED policy is never
                     // created — not on the sensor, not in the DB — while the
-                    // save reports success; the #1394 symptom from validation
-                    // instead of a DB error. Surfacing it without failing the
+                    // save reports success. Surfacing it without failing the
                     // persisted save is tracked by #1401.
                     _logger.Error($"Template {template.Id} partially applied to sensor {sensor.Id}: {error}");
                 }
@@ -1765,10 +1771,9 @@ namespace HSMServer.Core.Cache
             _database.AddAlertTemplate(alertTemplateModel.ToEntity());
 
             // Declared ABOVE the try so an exception mid-loop still surfaces
-            // whatever failures were collected before it (#1394 review: the
-            // assign-at-the-end-of-try shape dropped them instead). Captures
-            // per-sensor failures — a single DB error must not silently leave
-            // the template half-applied (#1394, the RemoveAlertTemplateAsync
+            // whatever failures were collected before it. Captures per-sensor
+            // failures — a single DB error must not silently leave the
+            // template half-applied (#1394, the RemoveAlertTemplateAsync
             // pattern): UpdatesQueue converts THROWN exceptions into
             // TaskResult.FromError, while the apply path reports contained
             // TryUpdateSensor failures through request.Error — both land here.
@@ -1846,12 +1851,15 @@ namespace HSMServer.Core.Cache
             }
             catch (Exception ex)
             {
-                _logger.Error($"An error was occurred while adding alert template {alertTemplateModel}", ex);
+                _logger.Error(ex, $"An error was occurred while adding alert template {alertTemplateModel}");
 
                 // The reconcile itself failed (wildcard matching, the stale
                 // scan, or the dispatch) — reporting success here would be the
-                // swallow this PR removes (#1396 review, finding 3).
-                return (false, $"Failed to apply template: {ex.Message}");
+                // swallow this PR removes. FIXED message: it flows into the
+                // management-API 409 body, which keeps internals (DB paths,
+                // key names, type details) out of responses — the exception
+                // stays in the log line above.
+                return (false, "Failed to apply the template to the folder's sensors; see server logs.");
             }
 
             // The partial-failure answer the DELETE side has always given

@@ -202,11 +202,11 @@ namespace HSMServer.Controllers
                 // The apply failure does NOT roll back the template (retry
                 // semantics), so a create-path 409 can leave a live resource
                 // the caller was never told the id of — and a plain re-POST
-                // would trip the name-uniqueness 400 (#1396 review, finding
-                // 1). Disclose the created id so the caller can fix the
-                // template up via PUT. The pre-persist "no products" conflict
-                // leaves nothing behind: the cache lookup returns null there
-                // (the id is freshly generated, so no false positive).
+                // would trip the name-uniqueness 400. Disclose the created id
+                // so the caller can fix the template up via PUT. The
+                // pre-persist "no products" conflict leaves nothing behind:
+                // the cache lookup returns null there (the id is freshly
+                // generated, so no false positive).
                 return _cache.GetAlertTemplate(model.Id) is null
                     ? ManagementApiErrors.Conflict(error)
                     : ManagementApiErrors.Conflict(error, new Dictionary<string, string> { ["templateId"] = model.Id.ToString() });
