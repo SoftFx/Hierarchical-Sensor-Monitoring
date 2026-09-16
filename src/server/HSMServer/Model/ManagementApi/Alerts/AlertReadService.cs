@@ -148,7 +148,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
             // nothing about any concrete id.
             if (!_authorization.CanSeeAnyBoundary(user))
                 return SensorTreeReadResult<ApiPageDto<AlertScheduleDto>>.Fail(
-                    SensorTreeReadOutcome.Forbidden, message: "The token's owner cannot see any product or folder.");
+                    SensorTreeReadOutcome.Forbidden, message: NoBoundarySightMessage);
 
             (page, pageSize) = ApiPagination.Normalize(page, pageSize);
 
@@ -199,7 +199,7 @@ namespace HSMServer.Model.ManagementApi.Alerts
         {
             if (!_authorization.CanSeeAnyBoundary(user))
                 return SensorTreeReadResult<AlertScheduleDto>.Fail(
-                    SensorTreeReadOutcome.Forbidden, message: "The token's owner cannot see any product or folder.");
+                    SensorTreeReadOutcome.Forbidden, message: NoBoundarySightMessage);
 
             var schedule = _schedules.GetSchedule(id);
 
@@ -210,6 +210,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 _cache.GetSensorsByAlertSchedule(id), _authorization.MemoizedProductVisibility(user)));
         }
 
+
+        // The caller-wide gate's 403 body — the list and the item answers must
+        // stay the same string, single-sourced (#1395 review): the code this
+        // service replaced had one Denied() helper for exactly that reason.
+        private const string NoBoundarySightMessage = "The token's owner cannot see any product or folder.";
 
         private static ApiTokenResource FolderResource(Guid folderId) =>
             new(ApiTokenResourceKind.Folder, folderId);
