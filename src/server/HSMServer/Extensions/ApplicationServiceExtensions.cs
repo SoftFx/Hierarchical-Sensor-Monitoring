@@ -92,6 +92,10 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton<ApiTokenRetentionCleaner>();
 
             services.AddSingleton<DataCollectorWrapper>()
+                    // The token-usage sensors registry lives inside the wrapper
+                    // (one collector); the monitoring middleware depends on the
+                    // interface so tests mock the surface, not a booted collector (#1402).
+                    .AddSingleton<IApiTokenUsageMonitor>(sp => sp.GetRequiredService<DataCollectorWrapper>().ApiTokenUsageSensors)
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<TelemetryCollector>()
                     .AddSingleton<BackupDatabaseService>()
@@ -242,6 +246,13 @@ namespace HSMServer.ServiceExtensions
             applicationBuilder.UseMiddleware<McpSitePortOnlyMiddleware>();
 
             applicationBuilder.UseAuthentication();
+
+            // Token-usage monitoring (#1402), between authentication and
+            // authorization on purpose: a rejected request never reaches
+            // middleware registered after the authorization one, and the 401s
+            // ARE the auth-failure signal it counts.
+            applicationBuilder.UseMiddleware<ApiTokenUsageMiddleware>();
+
             applicationBuilder.UseAuthorization();
 
             applicationBuilder.UseMiddleware<TelemetryMiddleware>();

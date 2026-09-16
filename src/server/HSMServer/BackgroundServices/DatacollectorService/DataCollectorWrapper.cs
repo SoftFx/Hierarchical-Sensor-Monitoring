@@ -48,6 +48,10 @@ namespace HSMServer.BackgroundServices
 
         internal ClientStatisticsSensors WebRequestsSensors { get; }
 
+        // Per-token usage monitoring of the management API (#1402): request
+        // rate + duration per (owner login, token EntityId), REST and MCP.
+        internal ApiTokenUsageSensors ApiTokenUsageSensors { get; }
+
         internal DatabaseSensorsSize DbSizeSensors { get; }
 
         internal BackupSensors BackupSensors { get; }
@@ -93,6 +97,7 @@ namespace HSMServer.BackgroundServices
             DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config, optionsMonitor);
             DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
+            ApiTokenUsageSensors = new ApiTokenUsageSensors(_collector);
             BackupSensors = new BackupSensors(_collector);
             TreeValueCacheStatistics = new TreeValueChacheStatistics(_collector);
             TelegramBotStatistics = new TelegramBotStatistics(_collector);
