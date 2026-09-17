@@ -49,17 +49,19 @@ namespace HSMServer.Middleware
 
         public async Task InvokeAsync(HttpContext context)
         {
-            // The cheapest gate first: with self-monitoring disabled the
-            // collector never publishes and nothing is ever evicted, so
-            // measurement would only burn lookups and register sensors into
-            // a dead pipeline (#1403 review, round 3).
-            if (!monitor.Enabled)
+            // Path classification first — two segment compares, cheaper than
+            // the options read behind Enabled, and it runs for EVERY request
+            // on both ports (the high-volume sensor-data API included).
+            if (!ClassifyPath(context.Request.Path, out var isMcp))
             {
                 await next(context);
                 return;
             }
 
-            if (!ClassifyPath(context.Request.Path, out var isMcp))
+            // With self-monitoring disabled the collector never publishes and
+            // nothing is ever evicted, so measurement would only burn lookups
+            // and register sensors into a dead pipeline.
+            if (!monitor.Enabled)
             {
                 await next(context);
                 return;
@@ -126,7 +128,6 @@ namespace HSMServer.Middleware
         // every caller, not just this one.
         private bool TryResolve(ClaimsIdentity identity, out string tokenId, out string login, out Guid entityId)
         {
-            tokenId = null;
             login = null;
             entityId = Guid.Empty;
 
@@ -151,11 +152,18 @@ namespace HSMServer.Middleware
         }
 
 
-        private static ClaimsIdentity FindTokenIdentity(HttpContext context) =>
+        private static ClaimsIdentity FindTokenIdentity(HttpContext context)
+        {
             // The management policy admits exactly one HsmApiToken identity;
             // a cookie-only principal (the token lifecycle family) has none.
-            context.User.Identities.FirstOrDefault(identity =>
-                identity.AuthenticationType == HsmApiTokenDefaults.AuthenticationScheme);
+            // A plain loop, not FirstOrDefault: this runs per measured
+            // request, and the LINQ enumerator is a per-request allocation.
+            foreach (var identity in context.User.Identities)
+                if (identity.AuthenticationType == HsmApiTokenDefaults.AuthenticationScheme)
+                    return identity;
+
+            return null;
+        }
 
         private static void LogObservationFailure(Exception ex)
         {
@@ -173,7 +181,9 @@ namespace HSMServer.Middleware
         // One classification pass: measured-or-not and the channel decide
         // together, so the route roots are matched exactly once per request.
         // The constants are the ones the guards already use — if either root
-        // ever moves, measurement moves with it instead of silently stopping.
+        // ever moves, measurement moves with it instead of silently stopping
+        // (keep in sync with LegacyBearerGuardMiddleware.IsTokenRoutePath:
+        // same predicate, plus the REST/MCP split).
         private static bool ClassifyPath(PathString path, out bool isMcp)
         {
             if (LegacyBearerGuardMiddleware.IsManagementAreaPath(path))

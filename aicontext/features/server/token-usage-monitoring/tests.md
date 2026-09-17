@@ -22,7 +22,15 @@ The measurement middleware against a mocked `IApiTokenUsageMonitor` (the sensors
 
 `ManagementPipelineOrderTests` pins the middleware between `UseAuthentication` and `UseAuthorization` — the position is load-bearing (401 visibility).
 
+## Unit — `src/tests/HSMServer.Core.Tests/BackgroundServices/ApiTokenUsageSensorsTests.cs`
+
+The eviction state machine against a mocked `IDataCollector` (the created sensor mocks carry `IDisposable` exactly like the concrete monitoring sensors — this suite is where the round-5 no-op-re-disposal regression lives and is caught):
+
+- `Evict_EveryLaterSweep_RestopsTheTombstonedSensors` — the anti-resurrection contract: evict + every later sweep re-stops the tombstoned INSTANCES (the node's terminal `_disposed` guard must not gate the sweep's stop).
+- `EvictedToken_IsNeverRecreated` — the occupied-path guard: a straggler value for a tombstoned token is dropped (logged), never rebuilt into the dead instances.
+- `LiveToken_IsNeverEvicted`.
+
 ## Not covered (deliberate)
 
-- The sensors registry itself (`ApiTokenUsageSensors`/`ApiTokenUsageNode`) — it is a thin composition over the collector's sensor factories, exercised end-to-end by a running server; unit-testing it would mock the collector into tautology.
+- The real collector's storage/dedup behaviour (occupied paths, restart re-initialization) — the unit suite pins the registry's side of the contract with mocks; the collector side is its own library's tests plus a running server.
 - E2E: a live request producing a visible subtree — a Playwright/manual check for the acceptance walkthrough; no local harness boots the collector + server together today.
