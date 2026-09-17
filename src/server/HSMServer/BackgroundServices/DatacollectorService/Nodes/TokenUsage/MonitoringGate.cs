@@ -14,11 +14,11 @@ internal sealed class MonitoringGate(IOptionsMonitor<MonitoringOptions> options,
 {
     public bool Enabled => options.CurrentValue.IsMonitoringEnabled;
 
-    public void AddRestRequest(string tokenId, string ownerLogin, Guid entityId, double durationMs) =>
-        inner.AddRestRequest(tokenId, ownerLogin, entityId, durationMs);
+    public void AddRestRequest(string ownerLogin, Guid entityId, double durationMs) =>
+        inner.AddRestRequest(ownerLogin, entityId, durationMs);
 
-    public void AddMcpRequest(string tokenId, string ownerLogin, Guid entityId, double durationMs) =>
-        inner.AddMcpRequest(tokenId, ownerLogin, entityId, durationMs);
+    public void AddMcpRequest(string ownerLogin, Guid entityId, double durationMs) =>
+        inner.AddMcpRequest(ownerLogin, entityId, durationMs);
 
     public void AddAuthenticationFailure() => inner.AddAuthenticationFailure();
 }

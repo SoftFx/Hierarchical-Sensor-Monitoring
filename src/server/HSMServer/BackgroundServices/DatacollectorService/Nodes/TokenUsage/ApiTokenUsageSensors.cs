@@ -51,9 +51,9 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     public bool Enabled => true;
 
 
-    public void AddRestRequest(string tokenId, string ownerLogin, Guid entityId, double durationMs)
+    public void AddRestRequest(string ownerLogin, Guid entityId, double durationMs)
     {
-        var node = NodeFor(tokenId, ownerLogin, entityId);
+        var node = NodeFor(ownerLogin, entityId);
 
         if (node is null)
         {
@@ -64,9 +64,9 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
         node.AddRestRequest(durationMs);
     }
 
-    public void AddMcpRequest(string tokenId, string ownerLogin, Guid entityId, double durationMs)
+    public void AddMcpRequest(string ownerLogin, Guid entityId, double durationMs)
     {
-        var node = NodeFor(tokenId, ownerLogin, entityId);
+        var node = NodeFor(ownerLogin, entityId);
 
         if (node is null)
         {
@@ -83,9 +83,10 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     // The eviction half of retention: rate sensors are monitoring sensors
     // posting a 0 every minute forever, so a dead token's subtree never goes
     // IDLE and SelfDestroy alone cannot retire it. The periodic sweep asks
-    // IApiTokenManager's IsTokenLive — the sanctioned liveness predicate,
-    // covering plain revocation, rotation AND the generation-invalidated
-    // window. A dead token moves to the TOMBSTONES and its sensors are
+    // the COMPOSED liveness predicate (TokenUsageLiveness: record live AND
+    // owner still exists — IsTokenLive alone never consults the owner, and
+    // owner deletion invalidates the credential without touching the token
+    // row). A dead token moves to the TOMBSTONES and its sensors are
     // stopped; the server's self-destroy sweep then retires the idle
     // sensors after the retention window.
     //
@@ -104,19 +105,19 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     // never frees the paths, so an expired tombstone would re-open the
     // occupied-path hole, not close a leak (the map is bounded by the
     // tokens ever used and resets on restart).
-    public void EvictDeadTokens(Func<string, bool> tokenIsLive)
+    public void EvictDeadTokens(Func<Guid, bool> tokenIsLive)
     {
         foreach (var (key, node) in _nodes)
         {
             try
             {
-                if (tokenIsLive(node.TokenId))
+                if (tokenIsLive(key))
                     continue;
 
                 if (_nodes.TryRemove(key, out var evicted))
                 {
                     _tombstones.TryAdd(key, evicted);
-                    evicted.Dispose();
+                    evicted.Evict();
                 }
             }
             catch (Exception ex)
@@ -139,7 +140,7 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     }
 
 
-    private ApiTokenUsageNode NodeFor(string tokenId, string ownerLogin, Guid entityId)
+    private ApiTokenUsageNode NodeFor(string ownerLogin, Guid entityId)
     {
         if (_tombstones.ContainsKey(entityId))
             return null;
@@ -148,8 +149,8 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
         // path (where ~all traffic lands) allocation-free.
         var node = _nodes.GetOrAdd(
             entityId,
-            static (id, arg) => new ApiTokenUsageNode(arg.Collector, arg.OwnerLogin, id, arg.TokenId),
-            (Collector: _collector, OwnerLogin: ownerLogin, TokenId: tokenId));
+            static (id, arg) => new ApiTokenUsageNode(arg.Collector, arg.OwnerLogin, id),
+            (Collector: _collector, OwnerLogin: ownerLogin));
 
         // The eviction race: the sweep can tombstone this id between the
         // check above and the GetOrAdd — the fresh node landed on the
@@ -158,7 +159,7 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
         // remove the fresh node, stop it, and report the drop (#1403 r5).
         if (_tombstones.ContainsKey(entityId) && _nodes.TryRemove(entityId, out var raced))
         {
-            raced.Dispose();
+            raced.Evict();
             return null;
         }
 

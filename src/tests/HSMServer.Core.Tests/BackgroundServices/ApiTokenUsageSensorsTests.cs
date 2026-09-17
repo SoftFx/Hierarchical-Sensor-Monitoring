@@ -64,7 +64,7 @@ namespace HSMServer.Core.Tests.BackgroundServices
             var sensors = CreateSensors();
             var entityId = Guid.NewGuid();
 
-            sensors.AddRestRequest("tid", "ops.user", entityId, 1.0);
+            sensors.AddRestRequest("ops.user", entityId, 1.0);
             sensors.EvictDeadTokens(_ => false); // evict + first stop
             sensors.EvictDeadTokens(_ => false); // anti-resurrection pass
             sensors.EvictDeadTokens(_ => false); // and again
@@ -89,10 +89,10 @@ namespace HSMServer.Core.Tests.BackgroundServices
             var sensors = CreateSensors();
             var entityId = Guid.NewGuid();
 
-            sensors.AddRestRequest("tid", "ops.user", entityId, 1.0);
+            sensors.AddRestRequest("ops.user", entityId, 1.0);
             sensors.EvictDeadTokens(_ => false);
 
-            sensors.AddRestRequest("tid", "ops.user", entityId, 1.0); // straggler: dropped, not rebuilt
+            sensors.AddRestRequest("ops.user", entityId, 1.0); // straggler: dropped, not rebuilt
 
             // Exactly one creation of each PER-TOKEN sensor (the eager
             // aggregate counter aside — it shares the rate factory).
@@ -107,13 +107,80 @@ namespace HSMServer.Core.Tests.BackgroundServices
             var sensors = CreateSensors();
             var entityId = Guid.NewGuid();
 
-            sensors.AddMcpRequest("tid", "ops.user", entityId, 1.0);
+            sensors.AddMcpRequest("ops.user", entityId, 1.0);
             sensors.EvictDeadTokens(_ => true); // everyone live
 
             foreach (var (rate, duration) in PerTokenSensors())
             {
                 (rate ?? duration).Verify(d => d.Dispose(), Times.Never);
             }
+        }
+
+
+        // A REST-only token evicts and re-sweeps cleanly: the MCP pair was
+        // never created, so the never-used channels must not fire the
+        // not-IDisposable diagnostic (a null sensor is nothing to stop) and
+        // the used channel's sensors are still re-stopped every sweep.
+        [Fact]
+        public void SingleChannelToken_EvictsCleanly_OnlyTheUsedChannelHasSensors()
+        {
+            var sensors = CreateSensors();
+            var entityId = Guid.NewGuid();
+
+            sensors.AddRestRequest("ops.user", entityId, 1.0); // REST only
+            sensors.EvictDeadTokens(_ => false);
+            sensors.EvictDeadTokens(_ => false);
+
+            // Only two sensors were ever created (the REST pair); the MCP
+            // pair must not appear even now.
+            Assert.Equal(2, PerTokenSensors().Count(pair => pair.Rate is not null || pair.Duration is not null));
+
+            foreach (var (rate, duration) in PerTokenSensors())
+                (rate ?? duration).Verify(d => d.Dispose(), Times.Exactly(3)); // evict + same-sweep + next sweep
+        }
+    }
+
+
+    // The eviction sweep's composed liveness predicate (#1403 review, round 6):
+    // IsTokenLive alone says nothing about the OWNER — deleting a user
+    // invalidates the credential without touching the token row, which would
+    // leave an immortal subtree under a deleted login. The composition is
+    // pinned directly against mocks.
+    public class TokenUsageLivenessTests
+    {
+        [Fact]
+        public void LiveTokenWithDeletedOwner_IsDead()
+        {
+            var entityId = Guid.NewGuid();
+            var ownerId = Guid.NewGuid();
+
+            var tokens = new Mock<HSMServer.Authentication.IApiTokenManager>();
+            tokens.Setup(t => t.IsTokenLiveByEntityId(entityId)).Returns(true);
+            tokens.Setup(t => t.GetTokenByEntityId(entityId))
+                .Returns(new HSMServer.Authentication.ApiTokenInfo { EntityId = entityId, OwnerUserId = ownerId });
+
+            var users = new Mock<HSMServer.Authentication.IUserManager>();
+            users.Setup(u => u[ownerId]).Returns((HSMServer.Model.Authentication.User)null); // deleted
+
+            Assert.False(TokenUsageLiveness.Compose(tokens.Object, users.Object)(entityId));
+        }
+
+
+        [Fact]
+        public void LiveTokenWithExistingOwner_IsLive()
+        {
+            var entityId = Guid.NewGuid();
+            var ownerId = Guid.NewGuid();
+
+            var tokens = new Mock<HSMServer.Authentication.IApiTokenManager>();
+            tokens.Setup(t => t.IsTokenLiveByEntityId(entityId)).Returns(true);
+            tokens.Setup(t => t.GetTokenByEntityId(entityId))
+                .Returns(new HSMServer.Authentication.ApiTokenInfo { EntityId = entityId, OwnerUserId = ownerId });
+
+            var users = new Mock<HSMServer.Authentication.IUserManager>();
+            users.Setup(u => u[ownerId]).Returns(new HSMServer.Model.Authentication.User("ops.user"));
+
+            Assert.True(TokenUsageLiveness.Compose(tokens.Object, users.Object)(entityId));
         }
     }
 }

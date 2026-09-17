@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
@@ -100,12 +99,12 @@ namespace HSMServer.Middleware
         {
             var durationMs = durationTicks * TicksToMilliseconds;
 
-            if (tokenIdentity is not null && TryResolve(tokenIdentity, out var tokenId, out var login, out var entityId))
+            if (tokenIdentity is not null && TryResolve(tokenIdentity, out var login, out var entityId))
             {
                 if (isMcp)
-                    monitor.AddMcpRequest(tokenId, login, entityId, durationMs);
+                    monitor.AddMcpRequest(login, entityId, durationMs);
                 else
-                    monitor.AddRestRequest(tokenId, login, entityId, durationMs);
+                    monitor.AddRestRequest(login, entityId, durationMs);
 
                 return;
             }
@@ -120,33 +119,35 @@ namespace HSMServer.Middleware
         }
 
 
-        // The principal stays minimal by design (#1402 grilling): login,
-        // EntityId and TokenId are resolved per request from the
-        // authoritative stores — index lookups that also stay current across
-        // user renames. The login crosses RAW (#1403 review r3): the node
-        // owns the path and sanitizes there, so the invariant holds for
-        // every caller, not just this one.
-        private bool TryResolve(ClaimsIdentity identity, out string tokenId, out string login, out Guid entityId)
+        // The principal stays minimal by design (#1402 grilling): the owner
+        // id comes from the claims, the login and the EntityId from the
+        // stores — narrow lookups, no ApiTokenInfo projection on the request
+        // path (#1403 r6). The login crosses RAW (#1403 r3): the node owns
+        // the path and sanitizes there, so the invariant holds for every
+        // caller, not just this one.
+        private bool TryResolve(ClaimsIdentity identity, out string login, out Guid entityId)
         {
             login = null;
             entityId = Guid.Empty;
 
-            tokenId = identity.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
+            var tokenId = identity.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
             if (tokenId is null)
                 return false;
 
-            var token = tokens.GetToken(tokenId);
+            if (!tokens.TryGetEntityId(tokenId, out entityId))
+                return false; // purged mid-request: authenticated earlier, but the record is gone — nothing to attribute
 
-            if (token is null)
-                return false; // revoked mid-request: authenticated, but nothing to attribute anymore
+            var ownerClaim = identity.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
 
-            var owner = users[token.OwnerUserId];
+            if (!Guid.TryParse(ownerClaim, out var ownerId))
+                return false;
+
+            var owner = users[ownerId];
 
             if (owner is null)
-                return false; // deleted owner: same race, skip rather than mis-attribute
+                return false; // deleted owner: skip rather than mis-attribute
 
             login = owner.Name;
-            entityId = token.EntityId;
 
             return true;
         }

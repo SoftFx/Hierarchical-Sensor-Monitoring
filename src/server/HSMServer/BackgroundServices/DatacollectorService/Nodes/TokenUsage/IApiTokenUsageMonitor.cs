@@ -6,9 +6,10 @@ namespace HSMServer.BackgroundServices;
 // the sensors registry behind it lives inside DataCollectorWrapper; the
 // interface keeps the middleware unit-testable against a mock instead of a
 // booted collector. The entityId is a Guid end-to-end (no string
-// round-trip to parse on the request path); the tokenId is the LIVENESS
-// key for the eviction sweep — kept in node memory only, never in the
-// tree (ADR-0006).
+// round-trip to parse on the request path) and is the ONLY token
+// identifier on the surface — the public lifecycle identity; the TokenId
+// (the authentication lookup key) never crosses it (ADR-0006: the sweep
+// resolves liveness by EntityId through IApiTokenManager).
 public interface IApiTokenUsageMonitor
 {
     // False when self-monitoring is disabled (MonitoringOptions): the
@@ -16,9 +17,9 @@ public interface IApiTokenUsageMonitor
     // registration into a collector that will never publish (#1403 r3).
     bool Enabled { get; }
 
-    void AddRestRequest(string tokenId, string ownerLogin, Guid entityId, double durationMs);
+    void AddRestRequest(string ownerLogin, Guid entityId, double durationMs);
 
-    void AddMcpRequest(string tokenId, string ownerLogin, Guid entityId, double durationMs);
+    void AddMcpRequest(string ownerLogin, Guid entityId, double durationMs);
 
     void AddAuthenticationFailure();
 }

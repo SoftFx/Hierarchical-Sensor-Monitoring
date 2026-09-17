@@ -37,6 +37,10 @@ namespace HSMServer.BackgroundServices
         // For the token-usage eviction sweep (#1403 review, round 2).
         private readonly IApiTokenManager _apiTokens;
 
+        // The owner-existence half of the sweep's composed liveness
+        // predicate (#1403 review, round 6).
+        private readonly IUserManager _users;
+
         private readonly ProductModel _productModel;
 
         private readonly NotificationsCenter _notificationsCenter;
@@ -69,12 +73,13 @@ namespace HSMServer.BackgroundServices
         internal MattermostChannelStatistics MattermostChannelStatistics { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter, IApiTokenManager apiTokens)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter, IApiTokenManager apiTokens, IUserManager users)
         {
             _logger = LogManager.GetLogger(GetType().Name);
 
             _cache = cache;
             _apiTokens = apiTokens;
+            _users = users;
             _key = GetSelfMonitoringKeyAsync(cache);
 
             _productModel = _cache.GetProductByName(SelfMonitoringProductName);
@@ -181,12 +186,13 @@ namespace HSMServer.BackgroundServices
 
             TreeValueCacheStatistics.UpdateSensorsCount(_cache.SensorsCount);
 
-            // Token-usage retention (#1403 review, round 2): rate sensors
-            // never idle on their own, so a dead token's subtree is evicted
-            // here — by the token RECORD's existence, which only this sweep
-            // can observe (a revoked credential fails auth before any
-            // middleware sees its id).
-            ApiTokenUsageSensors.EvictDeadTokens(_apiTokens.IsTokenLive);
+            // Token-usage retention: rate sensors never idle on their own,
+            // so a dead token's subtree is evicted here. The predicate is
+            // COMPOSED (#1403 review, round 6): IsTokenLive alone says
+            // nothing about the owner, and owner deletion invalidates the
+            // credential without touching the token row — the sweep composes
+            // the same way authentication does.
+            ApiTokenUsageSensors.EvictDeadTokens(TokenUsageLiveness.Compose(_apiTokens, _users));
         }
 
 

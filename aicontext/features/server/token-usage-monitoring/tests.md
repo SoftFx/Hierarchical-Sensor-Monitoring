@@ -14,6 +14,10 @@ The measurement middleware against a mocked `IApiTokenUsageMonitor` (the sensors
 - `TokenRequest_EveryStatusCodeCounts` — a 404 response still attributes (403/404/409 are work).
 - `NoToken_401_CountsAuthenticationFailureOnly`.
 - `CookiePrincipal_200_NothingCounted` — the cookie-only token-lifecycle family is neither usage nor failure.
+- `CookieFamily_401_NotATokenAuthFailure` — the reserved family's cookie 401s never tick the aggregate counter.
+- `TokenIdentity_With401_AttributesUsage_NoAuthFailureTick` — a resolved identity with a 401 is still usage; the aggregate counter is for tokenLESS failures only.
+- `PurgedMidRequest_NoAttributionNoFailure` — the retention-purge race attributes nothing.
+- `MonitoringDisabled_PassesThroughUncounted` — the Enabled gate.
 - `RevokedMidRequest_NoAttributionNoFailure` — the revocation race.
 - `UnmeasuredPath_PassesThroughUncounted`.
 - `SensorThrow_NeverBreaksTheRequest` — the never-break contract.
@@ -28,7 +32,10 @@ The eviction state machine against a mocked `IDataCollector` (the created sensor
 
 - `Evict_EveryLaterSweep_RestopsTheTombstonedSensors` — the anti-resurrection contract: evict + every later sweep re-stops the tombstoned INSTANCES (the node's terminal `_disposed` guard must not gate the sweep's stop).
 - `EvictedToken_IsNeverRecreated` — the occupied-path guard: a straggler value for a tombstoned token is dropped (logged), never rebuilt into the dead instances.
+- `SingleChannelToken_EvictsCleanly_OnlyTheUsedChannelHasSensors` — a REST-only token's never-used MCP pair must not fire the not-IDisposable diagnostic on any sweep.
 - `LiveToken_IsNeverEvicted`.
+
+`TokenUsageLivenessTests` — the composed eviction predicate: `LiveTokenWithDeletedOwner_IsDead` (owner deletion invalidates the credential without touching the row — IsTokenLive alone would keep the subtree immortal) and `LiveTokenWithExistingOwner_IsLive`.
 
 ## Not covered (deliberate)
 

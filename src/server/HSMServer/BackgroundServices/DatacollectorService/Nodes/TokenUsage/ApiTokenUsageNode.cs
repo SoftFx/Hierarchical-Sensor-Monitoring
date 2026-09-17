@@ -51,7 +51,6 @@ public sealed class ApiTokenUsageNode
     private static readonly TimeSpan HistoryPeriod = TimeSpan.FromDays(7);
 
     private readonly IDataCollector _collector;
-    private readonly string _tokenId;
     private readonly string _tokenKey;
     private readonly string _prefix;
 
@@ -73,20 +72,15 @@ public sealed class ApiTokenUsageNode
     private IBarSensor<double> _mcpDuration;
 
 
-    public ApiTokenUsageNode(IDataCollector collector, string ownerLogin, Guid entityId, string tokenId)
+    public ApiTokenUsageNode(IDataCollector collector, string ownerLogin, Guid entityId)
     {
         _collector = collector;
-        _tokenId = tokenId;
 
         var loginSegment = SanitizeLogin(ownerLogin);
         _tokenKey = $"{loginSegment}/{entityId:D}";
         _prefix = $"{TokenUsageRoot}/{PerTokenSegment}/{_tokenKey}";
     }
 
-
-    // The eviction sweep's liveness key — IApiTokenManager.IsTokenLive's
-    // argument. Memory only; never rendered into the tree.
-    public string TokenId => _tokenId;
 
     // The log/display key (login/entityId) — carries no TokenId, so logs
     // widen nothing.
@@ -134,8 +128,11 @@ public sealed class ApiTokenUsageNode
     }
 
     // Terminal for Add* (see _gate), and the FIRST stop of the sensors. The
-    // sensor references survive so the sweep can re-stop them later.
-    public void Dispose()
+    // sensor references survive so the sweep can re-stop them later. Named
+    // Evict, not Dispose, deliberately: the node is NOT IDisposable — it
+    // releases nothing (references survive on purpose), and CLAUDE.md's
+    // disposal rule must not be misapplied to it.
+    public void Evict()
     {
         lock (_gate)
         {
@@ -191,9 +188,15 @@ public sealed class ApiTokenUsageNode
     // no-op, so the miss is logged, not just asserted away in Debug builds.
     private static void StopSensor(object sensor)
     {
+        // A never-used channel has no sensors — nothing to stop, and the
+        // not-IDisposable diagnostic below must stay reserved for the real
+        // regression it exists to catch.
+        if (sensor is null)
+            return;
+
         if (sensor is not IDisposable disposable)
         {
-            Logger.Warn("A token-usage sensor instance is not IDisposable — eviction cannot stop it ({0})", sensor?.GetType().Name);
+            Logger.Warn("A token-usage sensor instance is not IDisposable — eviction cannot stop it ({0})", sensor.GetType().Name);
             return;
         }
 
