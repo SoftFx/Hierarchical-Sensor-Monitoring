@@ -294,15 +294,27 @@ namespace HSMServer.Core.Tests.Middleware
 
 
         [Theory]
-        [InlineData("a/b", "a_b")]          // separators would split the segment
+        [InlineData("a/b", "a_b")]
         [InlineData("a\\b", "a_b")]
-        [InlineData(" ops.user ", "ops.user")] // trimmed, not part of the identity
+        [InlineData(" ops.user ", "ops.user")] // trim first, then whitelist — the edges go
         [InlineData("ops.user", "ops.user")]
+        [InlineData("ops user", "ops_user")]   // space is outside the username charset
         [InlineData("/", "_")]              // never an empty path segment
         [InlineData(null, "_")]             // a missing name keeps the contract total
         [InlineData("   ", "_")]
         public void SanitizeLogin_KeepsTheSegmentWhole(string login, string expected) =>
             Assert.Equal(expected, HSMServer.BackgroundServices.ApiTokenUsageNode.SanitizeLogin(login));
+
+
+        [Fact]
+        public void SanitizeLogin_ControlCharacters_CannotForgeLogLines()
+        {
+            // The username validator's regex is UNANCHORED — a login merely
+            // containing one allowed character passes, so "ci\r\nWARN fake"
+            // is a legal login. Every control character collapses before the
+            // login reaches a path segment, a log line or a description.
+            Assert.Equal("ci__WARN_fake", HSMServer.BackgroundServices.ApiTokenUsageNode.SanitizeLogin("ci\r\nWARN fake"));
+        }
 
 
         [Fact]

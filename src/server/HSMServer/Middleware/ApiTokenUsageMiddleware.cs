@@ -46,17 +46,20 @@ namespace HSMServer.Middleware
         private static long _lastObservationFailureLog = -ObservationFailureLogIntervalMs;
 
 
-        public async Task InvokeAsync(HttpContext context)
+        // Non-async on purpose: the sibling guards' pattern — the pass-through
+        // path (everything outside /api/v1 + /mcp, i.e. the high-volume
+        // sensor-data port) tail-calls next without allocating a state
+        // machine; only measured requests pay for the async machinery.
+        public Task InvokeAsync(HttpContext context)
         {
-            // Path classification first — two segment compares, cheaper than
-            // the options read behind Enabled, and it runs for EVERY request
-            // on both ports (the high-volume sensor-data API included).
             if (!ClassifyPath(context.Request.Path, out var isMcp))
-            {
-                await next(context);
-                return;
-            }
+                return next(context);
 
+            return MeasureAsync(context, isMcp);
+        }
+
+        private async Task MeasureAsync(HttpContext context, bool isMcp)
+        {
             // With self-monitoring disabled the collector never publishes and
             // nothing is ever evicted, so measurement would only burn lookups
             // and register sensors into a dead pipeline.

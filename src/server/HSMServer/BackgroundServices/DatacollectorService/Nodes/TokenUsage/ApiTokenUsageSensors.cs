@@ -55,26 +55,16 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     {
         var node = NodeFor(ownerLogin, entityId);
 
-        if (node is null)
-        {
+        if (node?.AddRestRequest(durationMs) != true)
             LogDroppedValues(entityId);
-            return;
-        }
-
-        node.AddRestRequest(durationMs);
     }
 
     public void AddMcpRequest(string ownerLogin, Guid entityId, double durationMs)
     {
         var node = NodeFor(ownerLogin, entityId);
 
-        if (node is null)
-        {
+        if (node?.AddMcpRequest(durationMs) != true)
             LogDroppedValues(entityId);
-            return;
-        }
-
-        node.AddMcpRequest(durationMs);
     }
 
     public void AddAuthenticationFailure() => _authFailures.AddValue(1);
@@ -118,6 +108,9 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
                 {
                     _tombstones.TryAdd(key, evicted);
                     evicted.Evict();
+                    // Tombstoning is irreversible for the process lifetime —
+                    // the step is auditable at Info, not just the Warn on failure.
+                    Logger.Info("API-token usage subtree evicted (token dead): {0}", evicted.TokenKey);
                 }
             }
             catch (Exception ex)
@@ -166,12 +159,24 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
         return node;
     }
 
+    // A collector restart invalidates every cached sensor instance: one
+    // registered during the stopping phase is returned INERT and would be
+    // cached forever by the node's ??= (permanent silent loss for that
+    // token/channel). Clearing the LIVE nodes lets each rebuild on its next
+    // request; the tombstones stay — the occupied paths survive the restart.
+    public void ResetLiveNodes()
+    {
+        foreach (var (key, node) in _nodes)
+            if (_nodes.TryRemove(key, out var removed))
+                removed.Evict();
+    }
+
     // CLAUDE.md invariant 8: dropped values leave a trace — once per dead
     // token, not once per dropped request (a revoked credential fails
     // authentication, so at most in-flight stragglers reach this path).
     private void LogDroppedValues(Guid entityId)
     {
         if (_dropLogOnce.TryAdd(entityId, 0))
-            Logger.Warn("Dropping token-usage values for tombstoned token {0}", entityId);
+            Logger.Warn("Dropping token-usage values for dead token {0}", entityId);
     }
 }

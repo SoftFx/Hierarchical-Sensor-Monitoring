@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
@@ -87,7 +88,9 @@ public sealed class ApiTokenUsageNode
     internal string TokenKey => _tokenKey;
 
 
-    public void AddRestRequest(double durationMs)
+    // False = the value was dropped (the node is evicted): the caller logs
+    // it once per token (invariant 8 — no silent loss).
+    public bool AddRestRequest(double durationMs)
     {
         IInstantValueSensor<double> rate;
         IBarSensor<double> duration;
@@ -95,7 +98,7 @@ public sealed class ApiTokenUsageNode
         lock (_gate)
         {
             if (_disposed)
-                return;
+                return false;
 
             rate = _restRate ??= CreateRateSensor(RestNode,
                 $"REST (/api/v1) requests authenticated by this token ({_tokenKey}).");
@@ -105,9 +108,11 @@ public sealed class ApiTokenUsageNode
 
         rate.AddValue(1);
         duration.AddValue(durationMs);
+
+        return true;
     }
 
-    public void AddMcpRequest(double durationMs)
+    public bool AddMcpRequest(double durationMs)
     {
         IInstantValueSensor<double> rate;
         IBarSensor<double> duration;
@@ -115,7 +120,7 @@ public sealed class ApiTokenUsageNode
         lock (_gate)
         {
             if (_disposed)
-                return;
+                return false;
 
             rate = _mcpRate ??= CreateRateSensor(McpNode,
                 $"MCP (/mcp) requests authenticated by this token ({_tokenKey}).");
@@ -125,6 +130,8 @@ public sealed class ApiTokenUsageNode
 
         rate.AddValue(1);
         duration.AddValue(durationMs);
+
+        return true;
     }
 
     // Terminal for Add* (see _gate), and the FIRST stop of the sensors. The
@@ -140,8 +147,12 @@ public sealed class ApiTokenUsageNode
                 return;
 
             _disposed = true;
-            StopSensors();
         }
+
+        // Stopping runs OUTSIDE _gate: SensorBase.Dispose is sync-over-async
+        // and can wait for an in-flight scheduled run — request threads take
+        // the same lock and must not be blocked by an eviction.
+        StopSensors();
     }
 
     // Unconditional re-stop of the sensor instances — the anti-resurrection
@@ -150,36 +161,45 @@ public sealed class ApiTokenUsageNode
     // every registered sensor) restarts their send loops. The sensor-level
     // stop is genuinely idempotent, so every sweep re-runs this over the
     // tombstones and kills any resurrection within one tick. Note this is
-    // NOT Dispose: no _disposed early-return — that guard is what would
-    // turn the sweep into a no-op.
+    // NOT Evict: no _disposed early-return — that guard is what would turn
+    // the sweep into a no-op.
     public void StopSensors()
     {
+        IInstantValueSensor<double> restRate, mcpRate;
+        IBarSensor<double> restDuration, mcpDuration;
+
         lock (_gate)
         {
-            StopSensor(_restRate);
-            StopSensor(_restDuration);
-            StopSensor(_mcpRate);
-            StopSensor(_mcpDuration);
+            restRate = _restRate;
+            restDuration = _restDuration;
+            mcpRate = _mcpRate;
+            mcpDuration = _mcpDuration;
         }
+
+        StopSensor(restRate);
+        StopSensor(restDuration);
+        StopSensor(mcpRate);
+        StopSensor(mcpDuration);
     }
 
-    // A login is free-form text and becomes a PATH SEGMENT: anything that
-    // would split or corrupt the segment is collapsed to '_' — the tree
-    // must stay one level per intended level no matter what the login
-    // contains. Owned HERE, at the type that builds the path: the invariant
-    // must hold for every caller of the node. A login collapsing to empty
-    // cannot happen through AddUser's validation, but a path like
-    // "API tokens//<id>" must never be built either.
+    // A login is free-form text and becomes a PATH SEGMENT (and reaches log
+    // lines and sensor descriptions): everything outside the username
+    // charset collapses to '_' — separators would split the segment, control
+    // characters would forge log lines (the username validator's regex is
+    // unanchored, so a login merely CONTAINING an allowed character passes).
+    // Owned HERE, at the type that builds the path: the invariant must hold
+    // for every caller of the node.
     internal static string SanitizeLogin(string login)
     {
-        // A missing name must not NRE here either: the contract ("never
-        // an empty path segment") is total.
         if (string.IsNullOrWhiteSpace(login))
             return "_";
 
-        var sanitized = string.Join('_', login.Split('/', '\\')).Trim();
+        var sanitized = new string(login.Trim().Select(Whitelist).ToArray());
 
         return sanitized.Length == 0 ? "_" : sanitized;
+
+        static char Whitelist(char c) =>
+            char.IsLetterOrDigit(c) || "_.@+-".Contains(c) ? c : '_';
     }
 
     // The factory interfaces do not carry ISensor, but the concrete sensors

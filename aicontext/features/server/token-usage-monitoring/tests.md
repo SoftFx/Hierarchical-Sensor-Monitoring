@@ -18,7 +18,6 @@ The measurement middleware against a mocked `IApiTokenUsageMonitor` (the sensors
 - `TokenIdentity_With401_AttributesUsage_NoAuthFailureTick` — a resolved identity with a 401 is still usage; the aggregate counter is for tokenLESS failures only.
 - `PurgedMidRequest_NoAttributionNoFailure` — the retention-purge race attributes nothing.
 - `MonitoringDisabled_PassesThroughUncounted` — the Enabled gate.
-- `RevokedMidRequest_NoAttributionNoFailure` — the revocation race.
 - `UnmeasuredPath_PassesThroughUncounted`.
 - `SensorThrow_NeverBreaksTheRequest` — the never-break contract.
 - `NextThrows_ExceptionPropagatesAndStillAttributed` — the finally contract's other half: a throwing `next` is still attributed, and the ORIGINAL exception propagates unchanged.

@@ -168,9 +168,23 @@ namespace HSMServer.BackgroundServices
             _collector?.Dispose();
         }
 
-        internal Task Start() => _collector.Start();
+        internal async Task Start()
+        {
+            await _collector.Start();
 
-        internal Task Stop() => _collector.Stop();
+            // A sensor registered while the collector was STOPPING is handed
+            // back inert (the storage logs and returns a disposed instance
+            // rather than throwing) — the node's ??= would cache it forever.
+            // A restart clears the live nodes (tombstones stay: the occupied
+            // paths survive); each token's node rebuilds on its next request.
+            ApiTokenUsageSensors.ResetLiveNodes();
+        }
+
+        internal async Task Stop()
+        {
+            await _collector.Stop();
+            ApiTokenUsageSensors.ResetLiveNodes();
+        }
 
 
         internal void UpdateStatictics()
