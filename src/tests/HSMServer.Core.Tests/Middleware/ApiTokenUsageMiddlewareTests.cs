@@ -178,8 +178,12 @@ namespace HSMServer.Core.Tests.Middleware
         [Fact]
         public async Task CookiePrincipal_200_NothingCounted()
         {
-            // The /api/v1/api-tokens family authenticates through cookies —
-            // not token usage, not a token auth failure.
+            // The reserved /api/v1/api-tokens family is excluded from
+            // measurement BY PATH (#1403 r2): whatever principal it carries,
+            // it is cookie traffic, not token usage. (On a NON-reserved
+            // endpoint a cookie principal cannot reach a 200 — authorization
+            // replaces it with the failed token-scheme authentication and
+            // answers 401, which the aggregate-counter test covers.)
             var cookieUser = new ClaimsPrincipal(new ClaimsIdentity("Cookies"));
             var context = Context("/api/v1/api-tokens", cookieUser);
 

@@ -56,7 +56,6 @@ public sealed class ApiTokenUsageNode : IDisposable
     // The sanitized login and the ids, cached once at creation: the path is
     // stable and the sweep needs the TokenId for liveness (#1403 review r3).
     private readonly string _ownerLoginSegment;
-    private readonly Guid _entityId;
     private readonly string _tokenId;
 
     private readonly string _prefix;
@@ -81,7 +80,6 @@ public sealed class ApiTokenUsageNode : IDisposable
     public ApiTokenUsageNode(IDataCollector collector, string ownerLogin, Guid entityId, string tokenId)
     {
         _collector = collector;
-        _entityId = entityId;
         _tokenId = tokenId;
         _ownerLoginSegment = SanitizeLogin(ownerLogin);
         _tokenKey = $"{_ownerLoginSegment}/{entityId:D}";
@@ -89,11 +87,18 @@ public sealed class ApiTokenUsageNode : IDisposable
     }
 
 
-    public Guid EntityId => _entityId;
-
     // The eviction sweep's liveness key — IApiTokenManager.IsTokenLive's
     // argument. Memory only; never rendered into the tree.
     public string TokenId => _tokenId;
+
+    // The sanitized grouping segment the node was built under: the registry
+    // compares it against the CURRENT resolution to detect a user rename
+    // (#1403 review, round 4).
+    internal string OwnerLoginSegment => _ownerLoginSegment;
+
+    // The log/display key (login/entityId) — carries no TokenId, so logs
+    // widen nothing (#1403 review, round 4).
+    internal string TokenKey => _tokenKey;
 
 
     public void AddRestRequest(double durationMs)
