@@ -134,11 +134,12 @@ public sealed class ApiTokenUsageNode
         return true;
     }
 
-    // Terminal for Add* (see _gate), and the FIRST stop of the sensors. The
-    // sensor references survive so the sweep can re-stop them later. Named
-    // Evict, not Dispose, deliberately: the node is NOT IDisposable — it
-    // releases nothing (references survive on purpose), and CLAUDE.md's
-    // disposal rule must not be misapplied to it.
+    // Terminal for Add* (see _gate), and the FIRST stop of the sensors —
+    // FLUSHING the partial bar (a token evicted seconds after serving
+    // traffic keeps its last samples). Named Evict, not Dispose,
+    // deliberately: the node is NOT IDisposable — it releases nothing
+    // (references survive on purpose), and CLAUDE.md's disposal rule must
+    // not be misapplied to it.
     public void Evict()
     {
         lock (_gate)
@@ -149,10 +150,24 @@ public sealed class ApiTokenUsageNode
             _disposed = true;
         }
 
-        // Stopping runs OUTSIDE _gate: SensorBase.Dispose is sync-over-async
+        // Stopping runs OUTSIDE _gate: the sensor stops are sync-over-async
         // and can wait for an in-flight scheduled run — request threads take
         // the same lock and must not be blocked by an eviction.
-        StopSensors();
+        IInstantValueSensor<double> restRate, mcpRate;
+        IBarSensor<double> restDuration, mcpDuration;
+
+        lock (_gate)
+        {
+            restRate = _restRate;
+            restDuration = _restDuration;
+            mcpRate = _mcpRate;
+            mcpDuration = _mcpDuration;
+        }
+
+        StopSensor(restRate, flush: true);
+        StopSensor(restDuration, flush: true);
+        StopSensor(mcpRate, flush: true);
+        StopSensor(mcpDuration, flush: true);
     }
 
     // Unconditional re-stop of the sensor instances — the anti-resurrection
@@ -162,7 +177,8 @@ public sealed class ApiTokenUsageNode
     // stop is genuinely idempotent, so every sweep re-runs this over the
     // tombstones and kills any resurrection within one tick. Note this is
     // NOT Evict: no _disposed early-return — that guard is what would turn
-    // the sweep into a no-op.
+    // the sweep into a no-op. No flush here: anything to flush was flushed
+    // by the Evict that preceded the tombstoning.
     public void StopSensors()
     {
         IInstantValueSensor<double> restRate, mcpRate;
@@ -176,10 +192,10 @@ public sealed class ApiTokenUsageNode
             mcpDuration = _mcpDuration;
         }
 
-        StopSensor(restRate);
-        StopSensor(restDuration);
-        StopSensor(mcpRate);
-        StopSensor(mcpDuration);
+        StopSensor(restRate, flush: false);
+        StopSensor(restDuration, flush: false);
+        StopSensor(mcpRate, flush: false);
+        StopSensor(mcpDuration, flush: false);
     }
 
     // A login is free-form text and becomes a PATH SEGMENT (and reaches log
@@ -203,24 +219,35 @@ public sealed class ApiTokenUsageNode
     }
 
     // The factory interfaces do not carry ISensor, but the concrete sensors
-    // implement it — Dispose stops the monitoring send loops. A concrete
-    // type ever dropping IDisposable would turn eviction into a silent
-    // no-op, so the miss is logged, not just asserted away in Debug builds.
-    private static void StopSensor(object sensor)
+    // implement it. FLUSH ON THE FIRST STOP: the collector distinguishes
+    // StopAsync (flushes the partial bar — "otherwise everything accumulated
+    // since the last CloseTime is lost") from Dispose (no flush), and an
+    // evicted token may have been serving traffic seconds earlier — its last
+    // bar period of duration samples must not be discarded silently. The
+    // anti-resurrection re-stops (tombstone passes) use Dispose: by then
+    // there is nothing left to flush. A concrete type dropping BOTH shapes
+    // would turn eviction into a silent no-op, so the miss is logged.
+    private void StopSensor(object sensor, bool flush)
     {
         // A never-used channel has no sensors — nothing to stop, and the
-        // not-IDisposable diagnostic below must stay reserved for the real
+        // not-stoppable diagnostic below must stay reserved for the real
         // regression it exists to catch.
         if (sensor is null)
             return;
 
-        if (sensor is not IDisposable disposable)
+        if (flush && sensor is HSMDataCollector.DefaultSensors.ISensor stoppable)
         {
-            Logger.Warn("A token-usage sensor instance is not IDisposable — eviction cannot stop it ({0})", sensor.GetType().Name);
+            stoppable.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
             return;
         }
 
-        disposable.Dispose();
+        if (sensor is IDisposable disposable)
+        {
+            disposable.Dispose();
+            return;
+        }
+
+        Logger.Warn("A token-usage sensor instance is neither ISensor nor IDisposable — eviction cannot stop it ({0})", sensor.GetType().Name);
     }
 
     private IInstantValueSensor<double> CreateRateSensor(string channelNode, string description) =>

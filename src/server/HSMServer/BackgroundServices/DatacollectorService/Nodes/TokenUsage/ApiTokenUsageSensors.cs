@@ -45,10 +45,12 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
         });
     }
 
-    // The registry itself has no off switch: the Enabled gate lives on the
-    // adapter the DI composition wraps around this instance (the flag is
-    // the live MonitoringOptions value, which the wrapper owns).
-    public bool Enabled => true;
+    // NOT the gate: the Enabled the middleware reads lives on the DI
+    // adapter (MonitoringGate, the live MonitoringOptions value). This one
+    // exists only because the interface requires it on the raw registry —
+    // reading it here would always measure. The gate belongs to whoever
+    // owns the collector lifecycle.
+    public bool Enabled => throw new NotSupportedException("The gate lives on MonitoringGate; the raw registry is always on.");
 
 
     public void AddRestRequest(string ownerLogin, Guid entityId, double durationMs)
@@ -166,7 +168,7 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     // request; the tombstones stay — the occupied paths survive the restart.
     public void ResetLiveNodes()
     {
-        foreach (var (key, node) in _nodes)
+        foreach (var (key, _) in _nodes)
             if (_nodes.TryRemove(key, out var removed))
                 removed.Evict();
     }

@@ -138,6 +138,31 @@ namespace HSMServer.Core.Tests.BackgroundServices
             foreach (var (rate, duration) in PerTokenSensors())
                 (rate ?? duration).Verify(d => d.Dispose(), Times.Exactly(3)); // evict + same-sweep + next sweep
         }
+
+
+        // The collector-restart heal (#1403 review, round 8): the reset clears
+        // the LIVE nodes so each rebuilds on its next request — and the reset
+        // must NOT tombstone: a tombstoned id would be refused forever, which
+        // is the eviction semantics, not the restart semantics.
+        [Fact]
+        public void ResetLiveNodes_ClearsWithoutTombstoning_TheTokenRebuilds()
+        {
+            var sensors = CreateSensors();
+            var entityId = Guid.NewGuid();
+
+            sensors.AddRestRequest("ops.user", entityId, 1.0);
+            sensors.ResetLiveNodes();
+
+            // The rebuild succeeds — the id was NOT tombstoned.
+            sensors.AddRestRequest("ops.user", entityId, 2.0);
+
+            // Two distinct nodes were created (the restart semantics), each
+            // with its own REST rate sensor: the rebuilt node got a fresh
+            // instance, not a cached dead one.
+            _collector.Verify(
+                c => c.CreateRateSensor(It.Is<string>(p => p.Contains("/REST/Request rate")), It.IsAny<RateSensorOptions>()),
+                Times.Exactly(2));
+        }
     }
 
 
