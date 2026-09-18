@@ -390,6 +390,8 @@ namespace HSMDatabase.DatabaseWorkCore
             return policies;
         }
 
+        public PolicyEntity GetPolicy(Guid id) => _environmentDatabase.GetPolicy(id.ToByteArray());
+
         #endregion
 
         #region Folders

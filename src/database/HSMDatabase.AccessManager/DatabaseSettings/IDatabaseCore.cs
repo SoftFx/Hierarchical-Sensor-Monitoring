@@ -144,6 +144,13 @@ namespace HSMServer.Core.DataLayer
 
         #region Policies
         List<PolicyEntity> GetAllPolicies();
+
+        // Direct row fetch by id, bypassing the global policy-id index — the
+        // boot path's self-heal arm (#1407): a row whose index entry was lost
+        // to a concurrent-index race is invisible to GetAllPolicies but still
+        // referenced by the sensor entity, and this reads it back.
+        PolicyEntity GetPolicy(Guid id);
+
         void AddPolicy(PolicyEntity policy);
         void UpdatePolicy(PolicyEntity policy);
         void RemovePolicy(Guid id);

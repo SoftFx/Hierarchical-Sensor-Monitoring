@@ -433,16 +433,36 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region Policies
 
+        // Serializes the read-modify-write on the single policy-id index key
+        // (#1407): template applies run concurrently on per-product queue
+        // threads, and two interleaved read-append-put cycles lose one side's
+        // id forever. The lock guarantees the INDEX LIST is never
+        // lost-updated; the policy ROW writes stay outside it (their own
+        // keys, no shared read-modify-write) — a row racing a removal can
+        // still resurrect outside the index, and the boot heal (#1407)
+        // absorbs exactly that class. The membership cache makes the common
+        // case — a re-apply re-adding an existing id — O(1) with NO index
+        // rewrite (the serialized round trip is O(N) over every policy id in
+        // the installation, and template re-applies hit it per sensor).
+        private readonly object _policyIdsLock = new();
+        private HashSet<Guid> _policyIdsCache;
+
         public void AddPolicyIdToList(Guid policyId)
         {
             try
             {
-                var policyIds = GetAllPoliciesIds();
+                lock (_policyIdsLock)
+                {
+                    _policyIdsCache ??= [.. GetAllPoliciesIds().Select(g => new Guid(g))];
 
-                if (!policyIds.Select(g => new Guid(g)).Contains(policyId))
+                    if (!_policyIdsCache.Add(policyId))
+                        return;
+
+                    var policyIds = GetAllPoliciesIds();
                     policyIds.Add(policyId.ToByteArray());
 
-                _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+                    _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+                }
             }
             catch (Exception e)
             {
@@ -468,17 +488,36 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                var policyIds = GetAllPoliciesIds();
+                lock (_policyIdsLock)
+                {
+                    _policyIdsCache ??= [.. GetAllPoliciesIds().Select(g => new Guid(g))];
 
-                for (int i = 0; i < policyIds.Count; i++)
-                    if (new Guid(policyIds[i]) == policyId)
+                    if (!_policyIdsCache.Remove(policyId))
                     {
-                        policyIds.RemoveAt(i);
-                        break;
+                        // Not indexed — skip the unchanged O(N) rewrite, but
+                        // still drop any stray row.
+                        _database.Delete(policyId.ToByteArray());
+                        return;
                     }
 
-                _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
-                _database.Delete(policyId.ToByteArray());
+                    var policyIds = GetAllPoliciesIds();
+
+                    for (int i = 0; i < policyIds.Count; i++)
+                        if (new Guid(policyIds[i]) == policyId)
+                        {
+                            policyIds.RemoveAt(i);
+                            break;
+                        }
+
+                    _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+
+                    // The row delete stays INSIDE the lock so the index and
+                    // the delete serialize against each other for THIS id;
+                    // cross-id half-states (a concurrent add's row write
+                    // outside the lock) are the heal's domain, see the
+                    // _policyIdsLock comment.
+                    _database.Delete(policyId.ToByteArray());
+                }
             }
             catch (Exception e)
             {

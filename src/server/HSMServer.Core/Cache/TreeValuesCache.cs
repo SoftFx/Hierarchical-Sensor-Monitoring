@@ -78,6 +78,10 @@ namespace HSMServer.Core.Cache
 
         private const int LogSampleSize = 10;
 
+        // Cap on orphaned policy ids listed in the #1407 boot Warn: the first
+        // boot after that fix plausibly sees many stale references at once.
+        private const int MaxLoggedOrphanIds = 50;
+
         // Per-sweep cap on FAILING history-load retries (#1344): a whole-database outage latches
         // many sensors at once, and each retry is an inline LevelDB read in this serial loop
         // that throws while the database is still broken. Capped-out sensors stamp nothing, so
@@ -2251,7 +2255,11 @@ namespace HSMServer.Core.Cache
             var productEntities = RequestProducts();
             ApplyProducts(productEntities);
             CleanupProductOwnedPolicies(productEntities);
-            ApplySensors(RequestSensors(), RequestPolicies());
+
+            var sensorEntities = RequestSensors();
+            var policyDictionary = RequestPolicies();
+            HealPolicyDictionary(sensorEntities, policyDictionary);
+            ApplySensors(sensorEntities, policyDictionary);
 
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _database.GetAccessKeys();
@@ -2339,6 +2347,31 @@ namespace HSMServer.Core.Cache
             }
 
             return result;
+        }
+
+        // The boot path's self-heal over the policy-id index (#1407): rows
+        // whose index entry was lost to the (now locked) concurrent-index race
+        // are pulled back by the sensor entities' own references. Healing is
+        // read-only for the database — the index is left as-is and every boot
+        // heals again (two lookups per orphan), so no boot-path writes and no
+        // new persistence-ordering concerns.
+        private void HealPolicyDictionary(
+            List<SensorEntity> sensorEntities,
+            Dictionary<string, PolicyEntity> policies)
+        {
+            var (healed, unresolved) = PolicyIndexHealer.Heal(sensorEntities, policies, _database.GetPolicy);
+
+            if (healed > 0)
+                _logger.Info($"Policy index self-heal: {healed} orphaned policy row(s) recovered from sensor references (#1407)");
+
+            // A reference that resolves to NO row anywhere is a true orphan —
+            // the load skips it as before, but no longer invisibly: this Warn
+            // is the difference between "alert vanished without a trace" and
+            // a diagnosable line in the boot log. The list is capped because
+            // the first boot after this change plausibly sees many stale
+            // references at once.
+            if (unresolved.Count > 0)
+                _logger.Warn($"Sensor entities reference {unresolved.Count} policy id(s) with no stored row (first {Math.Min(unresolved.Count, MaxLoggedOrphanIds)}: {string.Join(", ", unresolved.Take(MaxLoggedOrphanIds))})");
         }
 
         private void ApplyProducts(List<ProductEntity> productEntities)
