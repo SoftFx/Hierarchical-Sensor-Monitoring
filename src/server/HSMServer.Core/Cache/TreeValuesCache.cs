@@ -2251,7 +2251,11 @@ namespace HSMServer.Core.Cache
             var productEntities = RequestProducts();
             ApplyProducts(productEntities);
             CleanupProductOwnedPolicies(productEntities);
-            ApplySensors(RequestSensors(), RequestPolicies());
+
+            var sensorEntities = RequestSensors();
+            var policyDictionary = RequestPolicies();
+            HealPolicyDictionary(sensorEntities, policyDictionary);
+            ApplySensors(sensorEntities, policyDictionary);
 
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _database.GetAccessKeys();
@@ -2339,6 +2343,29 @@ namespace HSMServer.Core.Cache
             }
 
             return result;
+        }
+
+        // The boot path's self-heal over the policy-id index (#1407): rows
+        // whose index entry was lost to the (now locked) concurrent-index race
+        // are pulled back by the sensor entities' own references. Healing is
+        // read-only for the database — the index is left as-is and every boot
+        // heals again (two lookups per orphan), so no boot-path writes and no
+        // new persistence-ordering concerns.
+        private void HealPolicyDictionary(
+            List<HSMDatabase.AccessManager.DatabaseEntities.SensorEntity> sensorEntities,
+            Dictionary<string, PolicyEntity> policies)
+        {
+            var (healed, unresolved) = PolicyIndexHealer.Heal(sensorEntities, policies, _database.GetPolicy);
+
+            if (healed > 0)
+                _logger.Info($"Policy index self-heal: {healed} orphaned policy row(s) recovered from sensor references (#1407)");
+
+            // A reference that resolves to NO row anywhere is a true orphan —
+            // the load skips it as before, but no longer invisibly: this Warn
+            // is the difference between "alert vanished without a trace" and
+            // a diagnosable line in the boot log.
+            if (unresolved is { Count: > 0 })
+                _logger.Warn($"Sensor entities reference {unresolved.Count} policy id(s) with no stored row: {string.Join(", ", unresolved)}");
         }
 
         private void ApplyProducts(List<ProductEntity> productEntities)

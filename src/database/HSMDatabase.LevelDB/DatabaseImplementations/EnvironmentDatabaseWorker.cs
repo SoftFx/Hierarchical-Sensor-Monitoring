@@ -433,16 +433,29 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region Policies
 
+        // Serializes the read-modify-write on the single policy-id index key
+        // (#1407): template applies run concurrently on per-product queue
+        // threads, and two interleaved read-append-put cycles lose one side's
+        // id forever — the row lands under its own key, but the index never
+        // lists it, and the boot path (GetAllPolicies walks the INDEX) then
+        // silently skips the sensor's reference: a template alert that lives
+        // in memory until the next restart and vanishes without a trace. All
+        // writers are in-process, so a process-local lock closes the race.
+        private readonly object _policyIdsLock = new();
+
         public void AddPolicyIdToList(Guid policyId)
         {
             try
             {
-                var policyIds = GetAllPoliciesIds();
+                lock (_policyIdsLock)
+                {
+                    var policyIds = GetAllPoliciesIds();
 
-                if (!policyIds.Select(g => new Guid(g)).Contains(policyId))
-                    policyIds.Add(policyId.ToByteArray());
+                    if (!policyIds.Select(g => new Guid(g)).Contains(policyId))
+                        policyIds.Add(policyId.ToByteArray());
 
-                _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+                    _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+                }
             }
             catch (Exception e)
             {
@@ -468,17 +481,24 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                var policyIds = GetAllPoliciesIds();
+                lock (_policyIdsLock)
+                {
+                    var policyIds = GetAllPoliciesIds();
 
-                for (int i = 0; i < policyIds.Count; i++)
-                    if (new Guid(policyIds[i]) == policyId)
-                    {
-                        policyIds.RemoveAt(i);
-                        break;
-                    }
+                    for (int i = 0; i < policyIds.Count; i++)
+                        if (new Guid(policyIds[i]) == policyId)
+                        {
+                            policyIds.RemoveAt(i);
+                            break;
+                        }
 
-                _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
-                _database.Delete(policyId.ToByteArray());
+                    _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+
+                    // The row delete stays INSIDE the lock: an add racing this
+                    // removal must never observe the id still listed while the
+                    // row is already gone (or the reverse half-state).
+                    _database.Delete(policyId.ToByteArray());
+                }
             }
             catch (Exception e)
             {
