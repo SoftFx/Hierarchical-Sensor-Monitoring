@@ -29,7 +29,7 @@ namespace HSMServer.Core.Tests.Cache
                 [sensor], policies, id => id == new Guid(orphanRow.Id) ? orphanRow : null);
 
             Assert.Equal(1, healed);
-            Assert.Null(unresolved);
+            Assert.Empty(unresolved);
             Assert.True(policies.ContainsKey(new Guid(orphanRow.Id).ToString()));
             Assert.Same(orphanRow, policies[new Guid(orphanRow.Id).ToString()]);
         }
@@ -63,7 +63,7 @@ namespace HSMServer.Core.Tests.Cache
                 [sensor], policies, _ => { fetched = true; return row; });
 
             Assert.Equal(0, healed);
-            Assert.Null(unresolved);
+            Assert.Empty(unresolved);
             Assert.False(fetched);
             Assert.Single(policies);
         }
@@ -89,7 +89,7 @@ namespace HSMServer.Core.Tests.Cache
                 });
 
             Assert.Equal(1, healed);
-            Assert.Null(unresolved);
+            Assert.Empty(unresolved);
             Assert.Equal(1, fetches);
             Assert.Single(policies);
         }
@@ -109,8 +109,50 @@ namespace HSMServer.Core.Tests.Cache
                 [sensor], policies, _ => { fetched = true; return null; });
 
             Assert.Equal(0, healed);
-            Assert.Null(unresolved);
+            Assert.Empty(unresolved);
             Assert.False(fetched);
+        }
+
+
+        [Fact]
+        public void NonCanonicalReferenceFormat_HealsUnderTheRawKey()
+        {
+            // The consumer (ApplyPolicies) looks the row up by the RAW
+            // reference string, so the heal keys by it too — a normalized
+            // key would "heal" into a lookup the consumer still misses (the
+            // invisible-loss class this fix exists to end).
+            var orphanRow = BuildRow();
+            var rawReference = new Guid(orphanRow.Id).ToString("D").ToUpperInvariant();
+            var sensor = BuildSensor(rawReference);
+            var policies = new Dictionary<string, PolicyEntity>();
+
+            var (healed, unresolved) = PolicyIndexHealer.Heal(
+                [sensor], policies, id => id == new Guid(orphanRow.Id) ? orphanRow : null);
+
+            Assert.Equal(1, healed);
+            Assert.Empty(unresolved);
+            Assert.True(policies.ContainsKey(rawReference));
+            Assert.Same(orphanRow, policies[rawReference]);
+        }
+
+
+        [Fact]
+        public void DuplicateDeadReferences_ReportedOnceAndFetchedOnce()
+        {
+            // Many sensors can share one dead id: one unresolved entry, one
+            // fetch — the boot Warn counts DISTINCT ids.
+            var deadId = Guid.NewGuid();
+            var sensorA = BuildSensor(deadId.ToString());
+            var sensorB = BuildSensor(deadId.ToString());
+            var fetches = 0;
+
+            var (healed, unresolved) = PolicyIndexHealer.Heal(
+                [sensorA, sensorB], new Dictionary<string, PolicyEntity>(),
+                _ => { fetches++; return null; });
+
+            Assert.Equal(0, healed);
+            Assert.Equal([deadId], unresolved);
+            Assert.Equal(1, fetches);
         }
 
 
@@ -120,12 +162,12 @@ namespace HSMServer.Core.Tests.Cache
             var (healed, unresolved) = PolicyIndexHealer.Heal(null, new Dictionary<string, PolicyEntity>(), _ => null);
 
             Assert.Equal(0, healed);
-            Assert.Null(unresolved);
+            Assert.Empty(unresolved);
 
             (healed, unresolved) = PolicyIndexHealer.Heal([BuildSensor(null)], new Dictionary<string, PolicyEntity>(), _ => null);
 
             Assert.Equal(0, healed);
-            Assert.Null(unresolved);
+            Assert.Empty(unresolved);
         }
 
 

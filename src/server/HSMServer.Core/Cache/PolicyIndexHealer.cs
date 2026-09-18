@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Cache
@@ -23,37 +24,46 @@ namespace HSMServer.Core.Cache
     {
         // Mutates `policies` in place: every sensor-referenced id that is
         // missing from the dictionary but resolves to a row is added. Returns
-        // the healed count and the ids that reference NOTHING (true orphans —
-        // row gone, reference dangling; the caller logs them, the load skips
-        // them as before, but no longer invisibly).
+        // the healed count and the DISTINCT ids that reference NOTHING (true
+        // orphans — row gone, reference dangling; the caller logs them, the
+        // load skips them as before, but no longer invisibly).
         public static (int Healed, List<Guid> Unresolved) Heal(
             List<SensorEntity> sensorEntities,
             Dictionary<string, PolicyEntity> policies,
             Func<Guid, PolicyEntity> fetchRow)
         {
             var healed = 0;
-            List<Guid> unresolved = null;
+            HashSet<Guid> unresolved = null;
 
             foreach (var entity in sensorEntities ?? [])
             {
                 foreach (var idText in entity.Policies ?? [])
                 {
-                    // The reference format is the same Guid.ToString() the
-                    // dictionary keys use; an unparseable reference is
-                    // pre-existing corruption, not this heal's concern.
+                    // Unparseable reference: pre-existing corruption, not this
+                    // heal's concern — left exactly as the load would see it.
                     if (!Guid.TryParse(idText, out var id))
                         continue;
 
-                    var key = id.ToString();
+                    // Keyed by the RAW reference, the exact string the load's
+                    // consumer (ApplyPolicies) looks up — a differently
+                    // formatted id from a migration or an import would make a
+                    // normalized key "heal" into a lookup the consumer still
+                    // misses, resurrecting the invisible-loss class this fix
+                    // exists to end.
+                    if (policies.ContainsKey(idText))
+                        continue;
 
-                    if (policies.ContainsKey(key))
+                    // Known-dead from an earlier reference: no repeat fetch,
+                    // one unresolved entry — many sensors can share one dead
+                    // id, and the boot Warn counts DISTINCT ids.
+                    if (unresolved?.Contains(id) ?? false)
                         continue;
 
                     var row = fetchRow(id);
 
                     if (row is not null)
                     {
-                        policies.Add(key, row);
+                        policies.Add(idText, row);
                         healed++;
                     }
                     else
@@ -61,7 +71,7 @@ namespace HSMServer.Core.Cache
                 }
             }
 
-            return (healed, unresolved);
+            return (healed, unresolved?.ToList() ?? []);
         }
     }
 }

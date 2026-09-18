@@ -38,13 +38,17 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
         var allIds = Enumerable.Range(0, ThreadCount * IdsPerThread).Select(_ => Guid.NewGuid()).ToList();
         var start = new Barrier(ThreadCount);
 
-        var threads = Enumerable.Range(0, ThreadCount).Select(t => Task.Run(() =>
+        // LongRunning: dedicated threads, not the thread pool — on a small
+        // CI agent pool injection (roughly a thread per 500 ms) delays the
+        // barrier release and shrinks the very overlap this test exists to
+        // create.
+        var threads = Enumerable.Range(0, ThreadCount).Select(t => Task.Factory.StartNew(() =>
         {
             start.SignalAndWait();
 
             foreach (var id in allIds.Skip(t * IdsPerThread).Take(IdsPerThread))
                 _databaseCoreManager.DatabaseCore.AddPolicy(BuildEntity(id));
-        })).ToArray();
+        }, TaskCreationOptions.LongRunning)).ToArray();
 
         Task.WaitAll(threads);
 
@@ -56,9 +60,17 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
     }
 
 
-    // The mirror arm: concurrent add + remove must leave a consistent pair
-    // (the removed id gone from the index, the added id present) — the lock
-    // covers RemovePolicy's read-modify-write as well.
+    // The mirror arm: a concurrent remover must not cost the adder its ids —
+    // the lost-update window pre-fix ran in BOTH directions (a remover whose
+    // read predated the adder's put restored the removed ids to the index
+    // while dropping the added ones). The assertion reads through
+    // GetAllPolicies, which DROPS ids whose row fetch returns null, so the
+    // removedIds check cannot distinguish "gone from the index" from "row
+    // gone, index state unknown" — it pins only that a removed id never
+    // resurfaces as a live policy. The removed-from-the-index property
+    // itself is not observable through IDatabaseCore (the raw index is
+    // private to the LevelDB worker) and rests on the same lock the
+    // addedIds assertion does regress.
     [Fact]
     public void AddPolicy_RacingRemovePolicy_LeavesConsistentIndex()
     {
@@ -72,19 +84,19 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
 
         var barrier = new Barrier(2);
 
-        var adder = Task.Run(() =>
+        var adder = Task.Factory.StartNew(() =>
         {
             barrier.SignalAndWait();
             foreach (var id in addedIds)
                 _databaseCoreManager.DatabaseCore.AddPolicy(BuildEntity(id));
-        });
+        }, TaskCreationOptions.LongRunning);
 
-        var remover = Task.Run(() =>
+        var remover = Task.Factory.StartNew(() =>
         {
             barrier.SignalAndWait();
             foreach (var id in removedIds)
                 _databaseCoreManager.DatabaseCore.RemovePolicy(id);
-        });
+        }, TaskCreationOptions.LongRunning);
 
         Task.WaitAll(adder, remover);
 
@@ -135,7 +147,7 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
 }
 
 
-public class PolicyIdsIndexRaceFixture : HSMServer.Core.Tests.MonitoringCoreTests.Fixture.DatabaseFixture
+public class PolicyIdsIndexRaceFixture : DatabaseFixture
 {
     protected override string DatabaseFolder => nameof(PolicyIdsIndexRaceTests);
 }

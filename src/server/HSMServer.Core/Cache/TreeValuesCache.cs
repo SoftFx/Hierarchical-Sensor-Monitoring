@@ -78,6 +78,10 @@ namespace HSMServer.Core.Cache
 
         private const int LogSampleSize = 10;
 
+        // Cap on orphaned policy ids listed in the #1407 boot Warn: the first
+        // boot after that fix plausibly sees many stale references at once.
+        private const int MaxLoggedOrphanIds = 50;
+
         // Per-sweep cap on FAILING history-load retries (#1344): a whole-database outage latches
         // many sensors at once, and each retry is an inline LevelDB read in this serial loop
         // that throws while the database is still broken. Capped-out sensors stamp nothing, so
@@ -2352,7 +2356,7 @@ namespace HSMServer.Core.Cache
         // heals again (two lookups per orphan), so no boot-path writes and no
         // new persistence-ordering concerns.
         private void HealPolicyDictionary(
-            List<HSMDatabase.AccessManager.DatabaseEntities.SensorEntity> sensorEntities,
+            List<SensorEntity> sensorEntities,
             Dictionary<string, PolicyEntity> policies)
         {
             var (healed, unresolved) = PolicyIndexHealer.Heal(sensorEntities, policies, _database.GetPolicy);
@@ -2363,9 +2367,11 @@ namespace HSMServer.Core.Cache
             // A reference that resolves to NO row anywhere is a true orphan —
             // the load skips it as before, but no longer invisibly: this Warn
             // is the difference between "alert vanished without a trace" and
-            // a diagnosable line in the boot log.
-            if (unresolved is { Count: > 0 })
-                _logger.Warn($"Sensor entities reference {unresolved.Count} policy id(s) with no stored row: {string.Join(", ", unresolved)}");
+            // a diagnosable line in the boot log. The list is capped because
+            // the first boot after this change plausibly sees many stale
+            // references at once.
+            if (unresolved.Count > 0)
+                _logger.Warn($"Sensor entities reference {unresolved.Count} policy id(s) with no stored row (first {Math.Min(unresolved.Count, MaxLoggedOrphanIds)}: {string.Join(", ", unresolved.Take(MaxLoggedOrphanIds))})");
         }
 
         private void ApplyProducts(List<ProductEntity> productEntities)
