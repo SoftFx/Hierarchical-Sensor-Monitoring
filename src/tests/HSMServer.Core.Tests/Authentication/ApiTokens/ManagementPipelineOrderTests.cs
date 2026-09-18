@@ -53,6 +53,11 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
                 // silently no-ops (#1392 review, round 4).
                 "McpSitePortOnlyMiddleware",
                 "UseAuthentication",
+                // Token-usage monitoring between authentication and
+                // authorization on purpose (#1402): a rejected request never
+                // reaches middleware registered after the authorization one,
+                // and the 401s are the auth-failure signal it counts.
+                "ApiTokenUsageMiddleware",
                 "UseAuthorization",
                 "UserProcessorMiddleware",
             ];

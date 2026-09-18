@@ -623,6 +623,21 @@ namespace HSMServer.Authentication
                 GlobalRevocationGeneration, GetOwnerRevocationGeneration(token.OwnerUserId));
         }
 
+        public bool IsTokenLiveByEntityId(Guid entityId) =>
+            _tokenIdByEntityId.TryGetValue(entityId, out var tokenId) && IsTokenLive(tokenId);
+
+        public bool TryGetEntityId(string tokenId, out Guid entityId)
+        {
+            if (GetEntity(tokenId) is { } token)
+            {
+                entityId = token.EntityId;
+                return true;
+            }
+
+            entityId = Guid.Empty;
+            return false;
+        }
+
         // Durable half of last-used coalescing, on the flush timer. Each token's
         // read-modify-write runs under _stateLock so it serializes with lifecycle
         // mutations: a flushed timestamp can never overwrite a revocation written

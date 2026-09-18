@@ -27,7 +27,9 @@ namespace HSMServer.Middleware
     {
         // The sole v1 route family that authorizes through the cookie scheme (token
         // lifecycle, step 4). Keep in sync with the step-4 controller's route root.
-        private const string CookieOnlyRouteRoot = "/api/v1/api-tokens";
+        // Internal: sibling middleware (token-usage measurement) excludes the
+        // family by the same constant — cookie traffic is not token traffic.
+        internal const string CookieOnlyRouteRoot = "/api/v1/api-tokens";
 
 
         public Task InvokeAsync(HttpContext context)
@@ -67,7 +69,7 @@ namespace HSMServer.Middleware
             return next(context);
         }
 
-        private static bool IsReservedCookieOnlyFamily(PathString path) =>
+        internal static bool IsReservedCookieOnlyFamily(PathString path) =>
             path.StartsWithSegments(CookieOnlyRouteRoot, System.StringComparison.OrdinalIgnoreCase);
 
         // Internal for McpSitePortOnlyMiddleware (#1392 review): the /mcp

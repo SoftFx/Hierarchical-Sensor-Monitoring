@@ -70,6 +70,16 @@ namespace HSMServer.Authentication
         // only sanctioned way to judge a record's liveness from its id.
         bool IsTokenLive(string tokenId);
 
+        // The same liveness rule resolved from the PUBLIC identity (the lifecycle id the
+        // management surfaces expose): for token-usage monitoring, which keys its state by
+        // EntityId and must not thread the TokenId through its own surfaces.
+        bool IsTokenLiveByEntityId(Guid entityId);
+
+        // The narrow attribution projection for token-usage monitoring: resolves the
+        // EntityId for a TokenId WITHOUT materializing the full ApiTokenInfo projection
+        // (the owner id is already on the principal's claims; nothing else is needed).
+        bool TryGetEntityId(string tokenId, out Guid entityId);
+
         // Creates a token with the fixed power profile of #1384: a full mirror of the
         // owner's rights, minus every write operation when readOnly. Persists first;
         // publishes to the authentication index only after the write. fullToken carries

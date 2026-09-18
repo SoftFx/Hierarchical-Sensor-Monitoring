@@ -10,6 +10,7 @@ using HSMDataCollector.Core;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
+using HSMServer.Authentication;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
@@ -33,6 +34,13 @@ namespace HSMServer.BackgroundServices
 
         private readonly ITreeValuesCache _cache;
 
+        // For the token-usage eviction sweep (#1403 review).
+        private readonly IApiTokenManager _apiTokens;
+
+        // The owner-existence half of the sweep's composed liveness
+        // predicate (#1403 review).
+        private readonly IUserManager _users;
+
         private readonly ProductModel _productModel;
 
         private readonly NotificationsCenter _notificationsCenter;
@@ -48,6 +56,10 @@ namespace HSMServer.BackgroundServices
 
         internal ClientStatisticsSensors WebRequestsSensors { get; }
 
+        // Per-token usage monitoring of the management API (#1402): request
+        // rate + duration per (owner login, token EntityId), REST and MCP.
+        internal ApiTokenUsageSensors ApiTokenUsageSensors { get; }
+
         internal DatabaseSensorsSize DbSizeSensors { get; }
 
         internal BackupSensors BackupSensors { get; }
@@ -61,11 +73,13 @@ namespace HSMServer.BackgroundServices
         internal MattermostChannelStatistics MattermostChannelStatistics { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter, IApiTokenManager apiTokens, IUserManager users)
         {
             _logger = LogManager.GetLogger(GetType().Name);
 
             _cache = cache;
+            _apiTokens = apiTokens;
+            _users = users;
             _key = GetSelfMonitoringKeyAsync(cache);
 
             _productModel = _cache.GetProductByName(SelfMonitoringProductName);
@@ -93,6 +107,7 @@ namespace HSMServer.BackgroundServices
             DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config, optionsMonitor);
             DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
+            ApiTokenUsageSensors = new ApiTokenUsageSensors(_collector);
             BackupSensors = new BackupSensors(_collector);
             TreeValueCacheStatistics = new TreeValueChacheStatistics(_collector);
             TelegramBotStatistics = new TelegramBotStatistics(_collector);
@@ -153,9 +168,27 @@ namespace HSMServer.BackgroundServices
             _collector?.Dispose();
         }
 
-        internal Task Start() => _collector.Start();
+        internal async Task Start()
+        {
+            // BEFORE the collector's own start: the reset disposes the cached
+            // sensor instances, and the collector's InitAsync sweep then
+            // re-initializes every still-REGISTERED one — so the nodes that
+            // rebuild on the next request are handed LIVE instances. Resetting
+            // after the start would poison the rebuilt nodes with the
+            // disposed instances the storage's path dedup hands back.
+            // (Nodes created while the collector was STOPPING hold inert
+            // instances — clearing them is the heal; the occupied paths
+            // survive either way.)
+            ApiTokenUsageSensors.ResetLiveNodes();
 
-        internal Task Stop() => _collector.Stop();
+            await _collector.Start();
+        }
+
+        internal async Task Stop()
+        {
+            await _collector.Stop();
+            ApiTokenUsageSensors.ResetLiveNodes();
+        }
 
 
         internal void UpdateStatictics()
@@ -170,6 +203,14 @@ namespace HSMServer.BackgroundServices
             DbStatisticsSensors.SendInfo();
 
             TreeValueCacheStatistics.UpdateSensorsCount(_cache.SensorsCount);
+
+            // Token-usage retention: rate sensors never idle on their own,
+            // so a dead token's subtree is evicted here. The predicate is
+            // COMPOSED (#1403 review): IsTokenLive alone says
+            // nothing about the owner, and owner deletion invalidates the
+            // credential without touching the token row — the sweep composes
+            // the same way authentication does.
+            ApiTokenUsageSensors.EvictDeadTokens(TokenUsageLiveness.Compose(_apiTokens, _users));
         }
 
 

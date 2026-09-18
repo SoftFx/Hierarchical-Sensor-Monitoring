@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using HSMDatabase.AccessManager;
@@ -92,6 +93,16 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton<ApiTokenRetentionCleaner>();
 
             services.AddSingleton<DataCollectorWrapper>()
+                    // The token-usage sensors registry lives inside the wrapper
+                    // (one collector); the monitoring middleware depends on the
+                    // GATE interface (Enabled lives only there — the raw registry
+                    // has no gate to expose) so tests mock the surface, not a
+                    // booted collector (#1402, #1403 review).
+                    .AddSingleton<MonitoringGate>(sp => new MonitoringGate(
+                        sp.GetRequiredService<IOptionsMonitor<MonitoringOptions>>(),
+                        sp.GetRequiredService<DataCollectorWrapper>().ApiTokenUsageSensors))
+                    .AddSingleton<IApiTokenUsageMonitor>(sp => sp.GetRequiredService<MonitoringGate>())
+                    .AddSingleton<IApiTokenUsageGate>(sp => sp.GetRequiredService<MonitoringGate>())
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<TelemetryCollector>()
                     .AddSingleton<BackupDatabaseService>()
@@ -242,6 +253,13 @@ namespace HSMServer.ServiceExtensions
             applicationBuilder.UseMiddleware<McpSitePortOnlyMiddleware>();
 
             applicationBuilder.UseAuthentication();
+
+            // Token-usage monitoring (#1402), between authentication and
+            // authorization on purpose: a rejected request never reaches
+            // middleware registered after the authorization one, and the 401s
+            // ARE the auth-failure signal it counts.
+            applicationBuilder.UseMiddleware<ApiTokenUsageMiddleware>();
+
             applicationBuilder.UseAuthorization();
 
             applicationBuilder.UseMiddleware<TelemetryMiddleware>();
