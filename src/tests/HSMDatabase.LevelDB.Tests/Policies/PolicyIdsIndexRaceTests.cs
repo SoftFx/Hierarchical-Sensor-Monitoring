@@ -98,19 +98,27 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
 
 
     // The self-heal seam the boot path uses (#1407): GetPolicy reads the row
-    // by id DIRECTLY, bypassing the index — a row whose index entry was lost
-    // pre-fix is still reachable through the sensor entity's reference.
+    // by id DIRECTLY, never through the index. DatabaseCore's add/remove both
+    // go through the index, so this test cannot stage a true index-orphaned
+    // row through the public interface — what it pins is the fetch's
+    // index-independence (the property the heal's row recovery relies on);
+    // the orphan scenario itself is pinned by PolicyIndexHealerTests with a
+    // row the index-driven dictionary never had.
     [Fact]
-    public void GetPolicy_RowWithoutIndexEntry_IsReadableByDirectId()
+    public void GetPolicy_ByDirectId_AnswersRegardlessOfIndexState()
     {
         var id = Guid.NewGuid();
 
         _databaseCoreManager.DatabaseCore.AddPolicy(BuildEntity(id));
         _databaseCoreManager.DatabaseCore.RemovePolicy(id); // index entry + row gone
-        _databaseCoreManager.DatabaseCore.AddPolicy(BuildEntity(id)); // row + index again
 
-        // The direct fetch answers regardless of the index state — the
-        // property the heal relies on.
+        // The row is gone too (RemovePolicy deletes both) — the direct fetch
+        // answers null, not an index-driven skip; after a re-add it answers
+        // the row whatever the index holds.
+        Assert.Null(_databaseCoreManager.DatabaseCore.GetPolicy(id));
+
+        _databaseCoreManager.DatabaseCore.AddPolicy(BuildEntity(id));
+
         Assert.NotNull(_databaseCoreManager.DatabaseCore.GetPolicy(id));
         Assert.Equal(id, new Guid(_databaseCoreManager.DatabaseCore.GetPolicy(id).Id));
     }

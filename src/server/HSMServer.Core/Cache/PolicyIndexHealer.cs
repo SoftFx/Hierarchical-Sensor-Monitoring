@@ -14,6 +14,11 @@ namespace HSMServer.Core.Cache
     // without a journal trace. This healer walks the ENTITIES' references and
     // pulls rows the index missed directly by id — existing orphaned rows
     // recover on the first boot after the fix, no repair tooling needed.
+    //
+    // SENSOR entities only, deliberately: PRODUCT entities also carry legacy
+    // regular-policy references, but those are dead at runtime and pruned by
+    // the startup migration (CleanupProductOwnedPolicies — see the
+    // alerts/feature.md invariant) — healing them would fight the pruning.
     internal static class PolicyIndexHealer
     {
         // Mutates `policies` in place: every sensor-referenced id that is
