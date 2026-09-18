@@ -142,28 +142,28 @@ public sealed class ApiTokenUsageNode
     // not be misapplied to it.
     public void Evict()
     {
+        IInstantValueSensor<double> restRate, mcpRate;
+        IBarSensor<double> restDuration, mcpDuration;
+
+        // One lock: set the terminal flag AND snapshot the four fields —
+        // once _disposed is set no writer can touch them again (Add*
+        // early-returns), so a second lock would guard nothing.
         lock (_gate)
         {
             if (_disposed)
                 return;
 
             _disposed = true;
-        }
 
-        // Stopping runs OUTSIDE _gate: the sensor stops are sync-over-async
-        // and can wait for an in-flight scheduled run — request threads take
-        // the same lock and must not be blocked by an eviction.
-        IInstantValueSensor<double> restRate, mcpRate;
-        IBarSensor<double> restDuration, mcpDuration;
-
-        lock (_gate)
-        {
             restRate = _restRate;
             restDuration = _restDuration;
             mcpRate = _mcpRate;
             mcpDuration = _mcpDuration;
         }
 
+        // Stopping runs OUTSIDE _gate: the sensor stops are sync-over-async
+        // and can wait for an in-flight scheduled run — request threads take
+        // the same lock and must not be blocked by an eviction.
         StopSensor(restRate, flush: true);
         StopSensor(restDuration, flush: true);
         StopSensor(mcpRate, flush: true);
@@ -203,6 +203,8 @@ public sealed class ApiTokenUsageNode
     // charset collapses to '_' — separators would split the segment, control
     // characters would forge log lines (the username validator's regex is
     // unanchored, so a login merely CONTAINING an allowed character passes).
+    // "." and ".." are creatable under that same unanchored regex but must
+    // not become the segment — the traversal-shaped forms collapse whole.
     // Owned HERE, at the type that builds the path: the invariant must hold
     // for every caller of the node.
     internal static string SanitizeLogin(string login)
@@ -212,7 +214,7 @@ public sealed class ApiTokenUsageNode
 
         var sanitized = new string(login.Trim().Select(Whitelist).ToArray());
 
-        return sanitized.Length == 0 ? "_" : sanitized;
+        return sanitized.Length == 0 || sanitized.Trim('.').Length == 0 ? "_" : sanitized;
 
         static char Whitelist(char c) =>
             char.IsLetterOrDigit(c) || "_.@+-".Contains(c) ? c : '_';
@@ -223,10 +225,18 @@ public sealed class ApiTokenUsageNode
     // StopAsync (flushes the partial bar — "otherwise everything accumulated
     // since the last CloseTime is lost") from Dispose (no flush), and an
     // evicted token may have been serving traffic seconds earlier — its last
-    // bar period of duration samples must not be discarded silently. The
-    // anti-resurrection re-stops (tombstone passes) use Dispose: by then
-    // there is nothing left to flush. A concrete type dropping BOTH shapes
-    // would turn eviction into a silent no-op, so the miss is logged.
+    // bar period of duration samples must not be discarded silently.
+    //
+    // The distinction is REAL for the BAR sensors only:
+    // BarMonitoringSensorBase overrides both shapes. The rate sensors
+    // inherit MonitoringSensorBase, whose DisposeAsyncCore simply calls
+    // StopAsync — for them flush:true and flush:false are the SAME call, and
+    // the count accumulated since the last tick is discarded on eviction
+    // either way (accepted: one partial post period of an evicted token's
+    // rate). Do not build on a rate-sensor flush guarantee that is not
+    // there. The anti-resurrection re-stops (tombstone passes) use Dispose:
+    // by then there is nothing left to flush. A concrete type dropping BOTH
+    // shapes would turn eviction into a silent no-op, so the miss is logged.
     private void StopSensor(object sensor, bool flush)
     {
         // A never-used channel has no sensors — nothing to stop, and the

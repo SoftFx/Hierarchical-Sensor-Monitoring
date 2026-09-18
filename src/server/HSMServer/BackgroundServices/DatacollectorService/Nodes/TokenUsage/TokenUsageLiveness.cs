@@ -3,7 +3,7 @@ using HSMServer.Authentication;
 
 namespace HSMServer.BackgroundServices;
 
-// The eviction sweep's liveness predicate (#1403 review, round 6):
+// The eviction sweep's liveness predicate (#1403 review):
 // IsTokenLive is the sanctioned RECORD-liveness rule (revocation, rotation,
 // generations) but says nothing about the OWNER — and owner deletion
 // invalidates the credential (the auth handler rejects it) without touching

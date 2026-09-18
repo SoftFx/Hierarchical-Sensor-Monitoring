@@ -12,7 +12,7 @@ using Xunit;
 namespace HSMServer.Core.Tests.BackgroundServices
 {
     // The eviction state machine of the token-usage monitoring (#1403
-    // review, round 5: it is not a "thin composition" — finding 1 lived
+    // review: not a "thin composition" — the re-disposal regression lived
     // here, and this suite with a fake collector catches that class
     // directly). The collector is mocked; the created sensor mocks carry
     // IDisposable exactly like the concrete monitoring sensors do.
@@ -52,8 +52,8 @@ namespace HSMServer.Core.Tests.BackgroundServices
             _created.Where(pair => pair.Key.Contains("/By owner/")).Select(pair => pair.Value);
 
 
-        // #1403 review round 5, finding 1 — the regression that shipped in
-        // round 4: re-disposing a tombstone was a no-op (the node's _disposed
+        // #1403 review — the regression an earlier iteration of this PR
+        // shipped: re-disposing a tombstone was a no-op (the node's _disposed
         // guard returned early and the sensor references were gone), so a
         // collector restart (the self-monitoring toggle) resurrected the dead
         // token's senders forever. The sweep's anti-resurrection pass must
@@ -140,7 +140,7 @@ namespace HSMServer.Core.Tests.BackgroundServices
         }
 
 
-        // The collector-restart heal (#1403 review, round 8): the reset clears
+        // The collector-restart heal (#1403 review): the reset clears
         // the LIVE nodes so each rebuilds on its next request — and the reset
         // must NOT tombstone: a tombstoned id would be refused forever, which
         // is the eviction semantics, not the restart semantics.
@@ -166,7 +166,7 @@ namespace HSMServer.Core.Tests.BackgroundServices
     }
 
 
-    // The eviction sweep's composed liveness predicate (#1403 review, round 6):
+    // The eviction sweep's composed liveness predicate (#1403 review):
     // IsTokenLive alone says nothing about the OWNER — deleting a user
     // invalidates the credential without touching the token row, which would
     // leave an immortal subtree under a deleted login. The composition is

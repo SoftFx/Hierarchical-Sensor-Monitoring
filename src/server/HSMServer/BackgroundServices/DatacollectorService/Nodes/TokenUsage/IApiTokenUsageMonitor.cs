@@ -12,14 +12,24 @@ namespace HSMServer.BackgroundServices;
 // resolves liveness by EntityId through IApiTokenManager).
 public interface IApiTokenUsageMonitor
 {
-    // False when self-monitoring is disabled (MonitoringOptions): the
-    // middleware skips measurement entirely — no lookups, no sensor
-    // registration into a collector that will never publish (#1403 r3).
-    bool Enabled { get; }
-
     void AddRestRequest(string ownerLogin, Guid entityId, double durationMs);
 
     void AddMcpRequest(string ownerLogin, Guid entityId, double durationMs);
 
     void AddAuthenticationFailure();
+}
+
+// The gate half, split from the add-surface (#1403 review): the raw
+// registry (ApiTokenUsageSensors) implements only IApiTokenUsageMonitor —
+// it has no gate to expose (it is always on; the gate belongs to whoever
+// owns the collector lifecycle). Keeping Enabled off the add-surface
+// makes the compiler route every Enabled reader to the adapter
+// (MonitoringGate, the live MonitoringOptions value) instead of relying
+// on a runtime throw from the registry.
+public interface IApiTokenUsageGate : IApiTokenUsageMonitor
+{
+    // False when self-monitoring is disabled (MonitoringOptions): the
+    // middleware skips measurement entirely — no lookups, no sensor
+    // registration into a collector that will never publish (#1403).
+    bool Enabled { get; }
 }

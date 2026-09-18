@@ -18,7 +18,7 @@ namespace HSMServer.Core.Tests.Middleware
     // (owner login + EntityId, never the TokenId or the name), the REST/MCP
     // split, the 401-only auth-failure aggregate, and the never-break rule
     // for the measured request. The sensors surface is mocked via
-    // IApiTokenUsageMonitor — the registry itself lives inside the booted
+    // IApiTokenUsageGate — the registry itself lives inside the booted
     // collector and is exercised by the E2E surface.
     public class ApiTokenUsageMiddlewareTests
     {
@@ -26,7 +26,7 @@ namespace HSMServer.Core.Tests.Middleware
 
         private delegate void TryGetEntityIdCallback(string tokenId, out Guid entityId);
 
-        private readonly Mock<IApiTokenUsageMonitor> _monitor = new();
+        private readonly Mock<IApiTokenUsageGate> _monitor = new();
         private readonly Mock<IApiTokenManager> _tokens = new();
         private readonly Mock<IUserManager> _users = new();
 
@@ -200,7 +200,7 @@ namespace HSMServer.Core.Tests.Middleware
         public async Task CookiePrincipal_200_NothingCounted()
         {
             // The reserved /api/v1/api-tokens family is excluded from
-            // measurement BY PATH (#1403 r2): whatever principal it carries,
+            // measurement BY PATH (#1403 review): whatever principal it carries,
             // it is cookie traffic, not token usage. (On a NON-reserved
             // endpoint a cookie principal cannot reach a 200 — authorization
             // replaces it with the failed token-scheme authentication and
@@ -220,7 +220,7 @@ namespace HSMServer.Core.Tests.Middleware
             // An expired browser session on the reserved cookie-only family
             // answers 401 (MyCookieAuthenticationEvents never redirects under
             // /api/v1) — that is a COOKIE failure, not a token-credential
-            // one, and must not tick the aggregate counter (#1403 review r2).
+            // one, and must not tick the aggregate counter (#1403 review).
             var context = Context("/api/v1/api-tokens", statusCode: StatusCodes.Status401Unauthorized);
 
             await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
@@ -238,6 +238,58 @@ namespace HSMServer.Core.Tests.Middleware
             _tokens.Setup(t => t.TryGetEntityId(TokenId, out It.Ref<Guid>.IsAny)).Returns(false);
 
             var context = Context("/api/v1/products", TokenPrincipal());
+
+            await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
+
+            VerifySilent();
+        }
+
+
+        // The shouldn't-happen resolution failures (#1403 review): each
+        // attributes nothing (no mis-attribution) and ticks no failure —
+        // and each leaves a throttled warn the middleware tests cannot
+        // assert (NLog), so the behavioral pin is "silent" here.
+        [Fact]
+        public async Task OwnerDeletedMidRequest_NoAttributionNoFailure()
+        {
+            _users.Setup(u => u[_ownerId]).Returns((User)null);
+
+            var context = Context("/api/v1/products", TokenPrincipal());
+
+            await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
+
+            VerifySilent();
+        }
+
+
+        [Fact]
+        public async Task MalformedOwnerClaim_NoAttributionNoFailure()
+        {
+            var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(HsmApiTokenClaims.OwnerUserId, "not-a-guid"),
+                new Claim(HsmApiTokenClaims.TokenId, TokenId),
+            ], HsmApiTokenDefaults.AuthenticationScheme));
+
+            var context = Context("/api/v1/products", principal);
+
+            await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
+
+            VerifySilent();
+        }
+
+
+        [Fact]
+        public async Task AuthenticatedIdentityWithoutTokenIdClaim_NoAttributionNoFailure()
+        {
+            // Handler drift: a scheme identity that authenticated but carries
+            // no TokenId claim has nothing to resolve — and is not a 401, so
+            // no failure tick either.
+            var principal = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(HsmApiTokenClaims.OwnerUserId, _ownerId.ToString())],
+                HsmApiTokenDefaults.AuthenticationScheme));
+
+            var context = Context("/api/v1/products", principal);
 
             await CreateMiddleware(_ => Task.CompletedTask).InvokeAsync(context);
 
@@ -302,6 +354,10 @@ namespace HSMServer.Core.Tests.Middleware
         [InlineData("/", "_")]              // never an empty path segment
         [InlineData(null, "_")]             // a missing name keeps the contract total
         [InlineData("   ", "_")]
+        [InlineData(".", "_")]              // creatable under the unanchored username
+        [InlineData("..", "_")]             // regex, but never a traversal-shaped segment
+        [InlineData("...", "_")]
+        [InlineData(".hidden", ".hidden")]  // dots INSIDE the segment stay — only the all-dot forms collapse
         public void SanitizeLogin_KeepsTheSegmentWhole(string login, string expected) =>
             Assert.Equal(expected, HSMServer.BackgroundServices.ApiTokenUsageNode.SanitizeLogin(login));
 
@@ -322,7 +378,7 @@ namespace HSMServer.Core.Tests.Middleware
         {
             // With self-monitoring off the collector never publishes and the
             // sweep never runs — measurement would only burn lookups and
-            // register sensors into a dead pipeline (#1403 review r3).
+            // register sensors into a dead pipeline (#1403 review).
             _monitor.Setup(m => m.Enabled).Returns(false);
 
             var context = Context("/api/v1/products", TokenPrincipal());

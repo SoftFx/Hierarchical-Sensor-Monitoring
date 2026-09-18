@@ -27,13 +27,14 @@ namespace HSMServer.Middleware
     // capturing it before next() would always see null on the real pipeline
     // (#1402 review). The measured duration includes authorization, which is
     // honest: it is all server-side handling the caller waits for.
-    public sealed class ApiTokenUsageMiddleware(RequestDelegate next, IApiTokenUsageMonitor monitor,
+    public sealed class ApiTokenUsageMiddleware(RequestDelegate next, IApiTokenUsageGate monitor,
         IApiTokenManager tokens, IUserManager users)
     {
         // Sticky observation failures (a stopping collector, MaxSensors
-        // exceeded, a disposed registry) must not become one Warn per
-        // management request: the first occurrence logs at once, repeats at
-        // most once per interval (#1403 review).
+        // exceeded, a disposed registry, an unresolvable token identity)
+        // must not become one Warn per management request: the first
+        // occurrence logs at once, repeats at most once per interval
+        // (#1403 review).
         private const long ObservationFailureLogIntervalMs = 60_000;
 
         private static readonly double TicksToMilliseconds = 1000.0 / Stopwatch.Frequency;
@@ -42,7 +43,8 @@ namespace HSMServer.Middleware
 
         // Seeded "an interval ago": on a host that booted less than the interval
         // before the first failure — exactly the startup window where collector
-        // problems appear — zero-init would swallow that first trace (#1403 r2).
+        // problems appear — zero-init would swallow that first trace (#1403
+        // review).
         private static long _lastObservationFailureLog = -ObservationFailureLogIntervalMs;
 
 
@@ -91,7 +93,7 @@ namespace HSMServer.Middleware
                 }
                 catch (Exception ex)
                 {
-                    LogObservationFailure(ex);
+                    LogObservationFailure("API-token usage observation failed", ex);
                 }
             }
         }
@@ -102,14 +104,31 @@ namespace HSMServer.Middleware
         {
             var durationMs = durationTicks * TicksToMilliseconds;
 
-            if (tokenIdentity is not null && TryResolve(tokenIdentity, out var login, out var entityId))
+            if (tokenIdentity is not null)
             {
-                if (isMcp)
-                    monitor.AddMcpRequest(login, entityId, durationMs);
-                else
-                    monitor.AddRestRequest(login, entityId, durationMs);
+                var outcome = TryResolve(tokenIdentity, out var login, out var entityId);
 
-                return;
+                if (outcome is TokenResolution.Resolved)
+                {
+                    if (isMcp)
+                        monitor.AddMcpRequest(login, entityId, durationMs);
+                    else
+                        monitor.AddRestRequest(login, entityId, durationMs);
+
+                    return;
+                }
+
+                // The purge race is the one documented-benign miss (the
+                // principal authenticated, the retention cleaner removed the
+                // record since — nothing to attribute, no trace needed).
+                // Every other unresolvable state is a "shouldn't happen"
+                // (handler drift, a malformed claim, an owner deleted
+                // mid-flight) that would otherwise silently stop usage
+                // recording for the token — invariant 8 needs the trace,
+                // throttled like every other observation failure (#1403
+                // review).
+                if (outcome is not TokenResolution.PurgedMidRequest)
+                    LogObservationFailure($"API-token usage attribution skipped ({outcome}): the token's requests stop being counted until the state clears");
             }
 
             // No token identity and the challenge answered 401: the credential
@@ -122,37 +141,51 @@ namespace HSMServer.Middleware
         }
 
 
+        // Why a token identity on a measured path did not attribute (#1403
+        // review): Resolved is the happy path; PurgedMidRequest is the
+        // documented retention race (silent); the rest are shouldn't-happen
+        // states that each leave a throttled trace.
+        private enum TokenResolution
+        {
+            Resolved,
+            PurgedMidRequest,
+            MissingTokenIdClaim,
+            MalformedOwnerClaim,
+            OwnerDeleted,
+        }
+
+
         // The principal stays minimal by design (#1402 grilling): the owner
         // id comes from the claims, the login and the EntityId from the
         // stores — narrow lookups, no ApiTokenInfo projection on the request
-        // path (#1403 r6). The login crosses RAW (#1403 r3): the node owns
+        // path (#1403 review). The login crosses RAW: the node owns
         // the path and sanitizes there, so the invariant holds for every
         // caller, not just this one.
-        private bool TryResolve(ClaimsIdentity identity, out string login, out Guid entityId)
+        private TokenResolution TryResolve(ClaimsIdentity identity, out string login, out Guid entityId)
         {
             login = null;
             entityId = Guid.Empty;
 
             var tokenId = identity.FindFirst(HsmApiTokenClaims.TokenId)?.Value;
             if (tokenId is null)
-                return false;
+                return TokenResolution.MissingTokenIdClaim;
 
             if (!tokens.TryGetEntityId(tokenId, out entityId))
-                return false; // purged mid-request: authenticated earlier, but the record is gone — nothing to attribute
+                return TokenResolution.PurgedMidRequest; // authenticated earlier, but the record is gone — nothing to attribute
 
             var ownerClaim = identity.FindFirst(HsmApiTokenClaims.OwnerUserId)?.Value;
 
             if (!Guid.TryParse(ownerClaim, out var ownerId))
-                return false;
+                return TokenResolution.MalformedOwnerClaim;
 
             var owner = users[ownerId];
 
             if (owner is null)
-                return false; // deleted owner: skip rather than mis-attribute
+                return TokenResolution.OwnerDeleted; // skip rather than mis-attribute
 
             login = owner.Name;
 
-            return true;
+            return TokenResolution.Resolved;
         }
 
 
@@ -169,18 +202,18 @@ namespace HSMServer.Middleware
             return null;
         }
 
-        private static void LogObservationFailure(Exception ex)
+        private static void LogObservationFailure(string message, Exception ex = null)
         {
             var now = Environment.TickCount64;
             var last = Volatile.Read(ref _lastObservationFailureLog);
 
             if (now - last >= ObservationFailureLogIntervalMs &&
                 Interlocked.CompareExchange(ref _lastObservationFailureLog, now, last) == last)
-                Logger.Warn(ex, "API-token usage observation failed");
+                Logger.Warn(ex, message);
         }
 
         // (Login sanitization lives on ApiTokenUsageNode — the type that
-        // builds the path owns its shape, #1403 review r3.)
+        // builds the path owns its shape, #1403 review.)
 
         // One classification pass: measured-or-not and the channel decide
         // together, so the route roots are matched exactly once per request.
@@ -195,7 +228,7 @@ namespace HSMServer.Middleware
                 // The reserved cookie-only family is not token traffic, and its
                 // 401s (an expired browser session) are not TOKEN credential
                 // failures either — MyCookieAuthenticationEvents answers 401
-                // for everything under /api/v1 (#1403 review, round 2).
+                // for everything under /api/v1 (#1403 review).
                 if (ManagementApiGuardMiddleware.IsReservedCookieOnlyFamily(path))
                 {
                     isMcp = false;

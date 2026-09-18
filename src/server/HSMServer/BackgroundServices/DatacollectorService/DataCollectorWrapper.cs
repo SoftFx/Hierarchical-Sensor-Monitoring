@@ -34,11 +34,11 @@ namespace HSMServer.BackgroundServices
 
         private readonly ITreeValuesCache _cache;
 
-        // For the token-usage eviction sweep (#1403 review, round 2).
+        // For the token-usage eviction sweep (#1403 review).
         private readonly IApiTokenManager _apiTokens;
 
         // The owner-existence half of the sweep's composed liveness
-        // predicate (#1403 review, round 6).
+        // predicate (#1403 review).
         private readonly IUserManager _users;
 
         private readonly ProductModel _productModel;
@@ -206,7 +206,7 @@ namespace HSMServer.BackgroundServices
 
             // Token-usage retention: rate sensors never idle on their own,
             // so a dead token's subtree is evicted here. The predicate is
-            // COMPOSED (#1403 review, round 6): IsTokenLive alone says
+            // COMPOSED (#1403 review): IsTokenLive alone says
             // nothing about the owner, and owner deletion invalidates the
             // credential without touching the token row — the sweep composes
             // the same way authentication does.

@@ -19,7 +19,8 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     private readonly ConcurrentDictionary<Guid, ApiTokenUsageNode> _nodes = new();
     private readonly ConcurrentDictionary<Guid, ApiTokenUsageNode> _tombstones = new();
 
-    // One "values dropped" trace per dead token, not per dropped request.
+    // One "values dropped" trace per token per eviction epoch (cleared on
+    // the collector-restart reset), not per dropped request.
     private readonly ConcurrentDictionary<Guid, byte> _dropLogOnce = new();
 
     private readonly IDataCollector _collector;
@@ -45,12 +46,11 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
         });
     }
 
-    // NOT the gate: the Enabled the middleware reads lives on the DI
-    // adapter (MonitoringGate, the live MonitoringOptions value). This one
-    // exists only because the interface requires it on the raw registry —
-    // reading it here would always measure. The gate belongs to whoever
-    // owns the collector lifecycle.
-    public bool Enabled => throw new NotSupportedException("The gate lives on MonitoringGate; the raw registry is always on.");
+    // No Enabled here, deliberately: the gate lives on the DI adapter
+    // (MonitoringGate, the live MonitoringOptions value) — the raw registry
+    // is always on, so it implements only the add-surface. The gate half of
+    // the interface (IApiTokenUsageGate) routes every Enabled reader to the
+    // adapter at compile time.
 
 
     public void AddRestRequest(string ownerLogin, Guid entityId, double durationMs)
@@ -89,14 +89,22 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     // stop is idempotent), killing any resurrection within one tick, and
     // NodeFor refuses a tombstoned id: a fresh node built on the occupied
     // path would get the DEAD sensors back from the storage's path dedup
-    // and silently drop every value. Disposal on eviction is UNCONDITIONAL
-    // once the node is out of _nodes — the tombstone insert is bookkeeping
-    // and must never gate the stop (a lost insert must not strand a live
-    // node). Per-node isolation, predicate included: one throw retries next
-    // tick. The tombstones live for the process lifetime: the collector
-    // never frees the paths, so an expired tombstone would re-open the
-    // occupied-path hole, not close a leak (the map is bounded by the
-    // tokens ever used and resets on restart).
+    // and silently drop every value.
+    //
+    // ORDERING: the tombstone claim goes in BEFORE the node leaves _nodes.
+    // Remove-first would leave a window where the id is in NEITHER map, and
+    // a concurrent NodeFor's GetOrAdd landing there returns a fresh node
+    // (its post-check sees no tombstone yet) that then sits in _nodes for a
+    // tombstoned id — poisoned by the storage's path dedup, silently
+    // dropping every value. Claim-first makes NodeFor's post-check always
+    // observe the tombstone and lose the race deliberately. Disposal on
+    // eviction stays UNCONDITIONAL once the node is out of _nodes — the
+    // claim (which can lose only to an already-present tombstone) is still
+    // bookkeeping and never gates the stop. Per-node isolation, predicate
+    // included: one throw retries next tick. The tombstones live for the
+    // process lifetime: the collector never frees the paths, so an expired
+    // tombstone would re-open the occupied-path hole, not close a leak
+    // (the map is bounded by the tokens ever used and resets on restart).
     public void EvictDeadTokens(Func<Guid, bool> tokenIsLive)
     {
         foreach (var (key, node) in _nodes)
@@ -106,9 +114,11 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
                 if (tokenIsLive(key))
                     continue;
 
+                // Claim the id FIRST — see ORDERING above.
+                _tombstones.TryAdd(key, node);
+
                 if (_nodes.TryRemove(key, out var evicted))
                 {
-                    _tombstones.TryAdd(key, evicted);
                     evicted.Evict();
                     // Tombstoning is irreversible for the process lifetime —
                     // the step is auditable at Info, not just the Warn on failure.
@@ -151,7 +161,10 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
         // check above and the GetOrAdd — the fresh node landed on the
         // OCCUPIED path and every value through it would be silently
         // dropped by the storage's dedup. Lose the race deliberately:
-        // remove the fresh node, stop it, and report the drop (#1403 r5).
+        // remove the fresh node, stop it, and report the drop (#1403
+        // review). The sweep's claim-first ordering guarantees this
+        // post-check always observes a tombstone claimed before the node
+        // left _nodes.
         if (_tombstones.ContainsKey(entityId) && _nodes.TryRemove(entityId, out var raced))
         {
             raced.Evict();
@@ -166,19 +179,30 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     // cached forever by the node's ??= (permanent silent loss for that
     // token/channel). Clearing the LIVE nodes lets each rebuild on its next
     // request; the tombstones stay — the occupied paths survive the restart.
+    // The drop-log memory is cleared with them: a request racing the restart
+    // can observe the (now evicted) node and plant a drop trace the restart
+    // made moot — leaving it would permanently mute the once-per-token warn
+    // for the NEXT genuine drop (#1403 review).
     public void ResetLiveNodes()
     {
         foreach (var (key, _) in _nodes)
             if (_nodes.TryRemove(key, out var removed))
+            {
                 removed.Evict();
+                _dropLogOnce.TryRemove(key, out _);
+            }
     }
 
-    // CLAUDE.md invariant 8: dropped values leave a trace — once per dead
-    // token, not once per dropped request (a revoked credential fails
-    // authentication, so at most in-flight stragglers reach this path).
+    // CLAUDE.md invariant 8: dropped values leave a trace — once per token
+    // per eviction epoch, not once per dropped request. The wording covers
+    // both causes of a refused value: a dead token's straggler (a revoked
+    // credential fails authentication, so at most in-flight requests reach
+    // this path) and an in-flight request holding a node a collector
+    // restart just reset — the token is not dead in that case (#1403
+    // review).
     private void LogDroppedValues(Guid entityId)
     {
         if (_dropLogOnce.TryAdd(entityId, 0))
-            Logger.Warn("Dropping token-usage values for dead token {0}", entityId);
+            Logger.Warn("Dropping token-usage values for token {0} (node evicted: dead token or collector restart)", entityId);
     }
 }

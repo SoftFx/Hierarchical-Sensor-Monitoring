@@ -4,7 +4,7 @@
 
 ## Unit — `src/tests/HSMServer.Core.Tests/Middleware/ApiTokenUsageMiddlewareTests.cs`
 
-The measurement middleware against a mocked `IApiTokenUsageMonitor` (the sensors registry lives inside the booted collector and is not unit-constructible):
+The measurement middleware against a mocked `IApiTokenUsageGate` (the sensors registry lives inside the booted collector and is not unit-constructible):
 
 - `TokenRequest_OnApiV1_AttributesToTheToken` — login + EntityId, REST channel, no MCP, no failure.
 - `TokenIdentity_MaterializingDuringNext_AttributesToTheToken` — the REAL pipeline shape (#1402 review blocker pin): HsmApiToken is not the default scheme, the principal appears inside `next` (AuthorizationMiddleware replaces `context.User`); the observation-time resolution must see it.
@@ -17,11 +17,12 @@ The measurement middleware against a mocked `IApiTokenUsageMonitor` (the sensors
 - `CookieFamily_401_NotATokenAuthFailure` — the reserved family's cookie 401s never tick the aggregate counter.
 - `TokenIdentity_With401_AttributesUsage_NoAuthFailureTick` — a resolved identity with a 401 is still usage; the aggregate counter is for tokenLESS failures only.
 - `PurgedMidRequest_NoAttributionNoFailure` — the retention-purge race attributes nothing.
+- `OwnerDeletedMidRequest_NoAttributionNoFailure` / `MalformedOwnerClaim_...` / `AuthenticatedIdentityWithoutTokenIdClaim_...` — the shouldn't-happen resolution failures (#1403 review): no attribution, no failure tick; each also leaves a throttled warn the unit suite cannot assert (NLog), so the behavioral pin is silence.
 - `MonitoringDisabled_PassesThroughUncounted` — the Enabled gate.
 - `UnmeasuredPath_PassesThroughUncounted`.
 - `SensorThrow_NeverBreaksTheRequest` — the never-break contract.
 - `NextThrows_ExceptionPropagatesAndStillAttributed` — the finally contract's other half: a throwing `next` is still attributed, and the ORIGINAL exception propagates unchanged.
-- `SanitizeLogin` theory — separators collapse, whitespace trims, a missing name stays one `_` segment; the tree stays one level per intended level.
+- `SanitizeLogin` theory — separators collapse, whitespace trims, a missing name stays one `_` segment, and the all-dots forms (`.`, `..`, creatable logins under the unanchored username regex) collapse whole; the tree stays one level per intended level.
 
 `ManagementPipelineOrderTests` pins the middleware between `UseAuthentication` and `UseAuthorization` — the position is load-bearing (401 visibility).
 
@@ -33,6 +34,7 @@ The eviction state machine against a mocked `IDataCollector` (the created sensor
 - `EvictedToken_IsNeverRecreated` — the occupied-path guard: a straggler value for a tombstoned token is dropped (logged), never rebuilt into the dead instances.
 - `SingleChannelToken_EvictsCleanly_OnlyTheUsedChannelHasSensors` — a REST-only token's never-used MCP pair must not fire the not-IDisposable diagnostic on any sweep.
 - `LiveToken_IsNeverEvicted`.
+- `ResetLiveNodes_ClearsWithoutTombstoning_TheTokenRebuilds` — the collector-restart heal: the reset clears the LIVE nodes without tombstoning, so every token rebuilds with fresh sensor instances on its next request.
 
 `TokenUsageLivenessTests` — the composed eviction predicate: `LiveTokenWithDeletedOwner_IsDead` (owner deletion invalidates the credential without touching the row — IsTokenLive alone would keep the subtree immortal) and `LiveTokenWithExistingOwner_IsLive`.
 
