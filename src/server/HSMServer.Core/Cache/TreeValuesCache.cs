@@ -2963,7 +2963,7 @@ namespace HSMServer.Core.Cache
 
                 foreach (var ttl in sensor.Policies.TTLPolicies)
                 {
-                    if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
+                    if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime, _alertScheduleProvider))
                         SendNotification(sensor.Id, ttl.GetNotification(true));
                 }
             }

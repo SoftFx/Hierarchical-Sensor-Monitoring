@@ -1,4 +1,5 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Schedule;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using System;
@@ -129,7 +130,12 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool HasTimeout(DateTime? time) => IsActive && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
-        internal bool ResendNotification(DateTime? time)
+        // The schedule provider arrives as a parameter (the policy owns no
+        // provider — the collection and the cache do; CheckSensorsTimeout is
+        // the sole caller and holds the shared instance). Fail-open inherited
+        // from IsWorkingTime: an unknown schedule id reads as in-window, the
+        // same fallback the expiry gate applies (#1405).
+        internal bool ResendNotification(DateTime? time, IAlertScheduleProvider scheduleProvider)
         {
             if (!HasTimeout(time))
                 return false;
@@ -137,10 +143,39 @@ namespace HSMServer.Core.Model.Policies
             if(!Schedule.IsActive)
                 return false;
 
+            // Outside the alert's schedule window the repeat is CANCELLED,
+            // not paused (#1405): the notification state resets, so a window
+            // open with a still-stale value fires a FRESH alert (the null
+            // timestamp makes the next in-window evaluation send at once)
+            // instead of resuming yesterday's cadence. A scheduled policy
+            // goes silent in a mixed sensor while its schedule-less siblings
+            // keep their own rules — the cancellation is per-policy because
+            // the schedule is per-alert (OffTime, by contrast, is
+            // sensor-wide and must never be fabricated here). MANDATORY with
+            // the #1404 evaluation-time expiry gate: that gate resolves the
+            // sensor out-of-window, GetNotification(false) nulls the
+            // timestamp, and the `!HasValue` arm below would otherwise send
+            // on EVERY sweep tick outside the window.
+            if (ScheduleId.HasValue && !scheduleProvider.IsWorkingTime(ScheduleId.Value, DateTime.UtcNow))
+            {
+                CancelNotification();
+                return false;
+            }
+
             if (!_lastTTLNotificationTime.HasValue)
                 return true;
 
             return DateTime.UtcNow - _lastTTLNotificationTime >= Schedule.GetShiftTime();
+        }
+
+        // The per-policy half of GetNotification(false): resets the repeat
+        // clock and the counter without going through the sensor-level
+        // transition (which is what sends resolution notifications — a
+        // per-policy window close must stay silent, #1405).
+        internal void CancelNotification()
+        {
+            _lastTTLNotificationTime = null;
+            _notifyCount = 0;
         }
 
         internal PolicyResult GetNotification(bool timeout)
