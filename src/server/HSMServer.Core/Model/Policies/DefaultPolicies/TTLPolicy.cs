@@ -156,7 +156,7 @@ namespace HSMServer.Core.Model.Policies
             // sensor out-of-window, GetNotification(false) nulls the
             // timestamp, and the `!HasValue` arm below would otherwise send
             // on EVERY sweep tick outside the window.
-            if (ScheduleId.HasValue && !scheduleProvider.IsWorkingTime(ScheduleId.Value, DateTime.UtcNow))
+            if (IsOutsideSchedule(scheduleProvider))
             {
                 CancelNotification();
                 return false;
@@ -167,6 +167,12 @@ namespace HSMServer.Core.Model.Policies
 
             return DateTime.UtcNow - _lastTTLNotificationTime >= Schedule.GetShiftTime();
         }
+
+        // The shared out-of-window decision of the two gates (#1404 expiry,
+        // #1405 repeat cancellation): one home for the fail-open semantics
+        // (a null ScheduleId reads as in-window).
+        internal bool IsOutsideSchedule(IAlertScheduleProvider scheduleProvider) =>
+            ScheduleId.HasValue && !scheduleProvider.IsWorkingTime(ScheduleId.Value, DateTime.UtcNow);
 
         // The per-policy half of GetNotification(false): resets the repeat
         // clock and the counter without going through the sensor-level
@@ -188,8 +194,7 @@ namespace HSMServer.Core.Model.Policies
                 return PolicyResult;
             }
 
-            _lastTTLNotificationTime =  null;
-            _notifyCount = 0;
+            CancelNotification();
 
             return Ok;
         }

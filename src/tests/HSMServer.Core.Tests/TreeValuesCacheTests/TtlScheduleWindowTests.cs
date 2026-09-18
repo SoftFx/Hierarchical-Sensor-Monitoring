@@ -38,13 +38,17 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         // the OLD gate (value time) passed — the incident's shape.
         private readonly DateTime _staleInSessionTime = DateTime.UtcNow.AddHours(-8);
 
-        private bool _isWorkingTime = true;
+        // The answer for "now" (evaluation calls). The STALE timestamp always
+        // reads in-window — this is the discriminator the incident demands: a
+        // value-time gate passes (pre-fix behavior), an evaluation-time gate
+        // does not. A mock that ignored the timestamp would pass both.
+        private bool _isWorkingTimeNow = true;
 
         public TtlScheduleWindowTests()
         {
             _scheduleProvider
                 .Setup(p => p.IsWorkingTime(ScheduleId, It.IsAny<DateTime>()))
-                .Returns((Guid _, DateTime time) => _isWorkingTime);
+                .Returns((Guid _, DateTime time) => time == _staleInSessionTime || _isWorkingTimeNow);
 
             _collection = new SensorPolicyCollection<IntegerValue, IntegerPolicy>(_scheduleProvider.Object);
 
@@ -75,7 +79,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _collection.AddTTLPolicy(new PolicyUpdate(policy) { TTL = entity.TTL, ScheduleId = scheduleId });
 
             // Re-fetch: the collection stores its own instance.
-            return (TTLPolicy)_collection.TTLPolicies.ReadToEndFirstMatch(p => p.ScheduleId == scheduleId);
+            return (TTLPolicy)_collection.TTLPolicies.FirstMatchOrDefault(p => p.ScheduleId == scheduleId);
         }
 
         private IntegerValue StaleValue() => new()
@@ -93,13 +97,22 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             AddTtlPolicy(ScheduleId);
 
-            _isWorkingTime = false; // now is outside the trading session
+            _isWorkingTimeNow = false; // now is outside the trading session
+
+            // The incident's discriminator: the provider reads the STALE
+            // timestamp as in-window, so a value-time gate (the pre-fix
+            // code) would expire the sensor here. The evaluation-time gate
+            // must not — and the expiry decision must not reach the
+            // sensor-level transition arm either (no notification, no
+            // timeout marker): SensorExpired carries false (resolution),
+            // never true.
+            var fired = false;
+            _collection.SensorExpired += (_, timeout) => fired |= timeout;
 
             var expired = _collection.SensorTimeout(StaleValue());
 
-            // The incident: the stale value's timestamp IS in-session; the
-            // evaluation-time gate must not let it fire.
             Assert.False(expired);
+            Assert.False(fired);
         }
 
         [Fact]
@@ -107,7 +120,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             AddTtlPolicy(ScheduleId);
 
-            _isWorkingTime = true; // window open, quotes still missing
+            _isWorkingTimeNow = true; // window open, quotes still missing
 
             Assert.True(_collection.SensorTimeout(StaleValue()));
         }
@@ -117,7 +130,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             AddTtlPolicy(scheduleId: null); // schedule-less: no gate at all
 
-            _isWorkingTime = false;
+            _isWorkingTimeNow = false;
 
             Assert.True(_collection.SensorTimeout(StaleValue()));
         }
@@ -128,7 +141,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             AddTtlPolicy(ScheduleId);
             AddTtlPolicy(scheduleId: null);
 
-            _isWorkingTime = false;
+            _isWorkingTimeNow = false;
 
             // The sensor-level state follows the schedule-less policy (any
             // timeout) — the scheduled one merely stops contributing.
@@ -144,13 +157,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var ttl = AddTtlPolicy(ScheduleId);
             ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-10)); // mid-session send happened
 
-            _isWorkingTime = false;
+            _isWorkingTimeNow = false;
 
+            // Silent; the CANCELLATION (state reset) is asserted behaviorally
+            // by ResendNotification_CancellationIsReal_WindowOpenFiresFresh —
+            // the clock is private.
             Assert.False(ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
-
-            // CANCELLED, not paused: the repeat clock is gone — the next
-            // in-window evaluation sees "never sent".
-            ttl.InitLastTtlTime(DateTime.UtcNow); // cannot read the private clock; assert via behavior below
         }
 
         [Fact]
@@ -159,10 +171,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var ttl = AddTtlPolicy(ScheduleId);
             ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-1)); // sent a minute ago (interval: 5 min)
 
-            _isWorkingTime = false;
+            _isWorkingTimeNow = false;
             ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object); // cancels
 
-            _isWorkingTime = true; // window opens
+            _isWorkingTimeNow = true; // window opens
 
             // A PAUSE would still be inside the 5-min interval (last send a
             // minute ago) and stay silent; a CANCELLATION has no clock and
@@ -176,7 +188,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var ttl = AddTtlPolicy(ScheduleId);
             ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-1)); // a minute ago — inside the interval
 
-            _isWorkingTime = true;
+            _isWorkingTimeNow = true;
 
             Assert.False(ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
         }
@@ -187,7 +199,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var ttl = AddTtlPolicy(scheduleId: null);
             ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-1)); // inside the interval
 
-            _isWorkingTime = false;
+            _isWorkingTimeNow = false;
 
             // Schedule-less policies never hit the window arm — the interval
             // decision alone answers (here: too soon).
@@ -196,6 +208,39 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-10));
 
             Assert.True(ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
+        }
+
+
+        [Fact]
+        public void ResendNotification_FreshValueAtWindowOpen_DoesNotFire()
+        {
+            var ttl = AddTtlPolicy(ScheduleId);
+
+            _isWorkingTimeNow = true; // window open…
+
+            // …but quotes resumed overnight: the value is fresh, HasTimeout is
+            // false — the data decides, not the timer (#1405's "may not fire").
+            Assert.False(ttl.ResendNotification(DateTime.UtcNow.AddSeconds(-5), _scheduleProvider.Object));
+        }
+
+
+        [Fact]
+        public void ResendNotification_MixedSensor_OutOfWindow_ScheduledSilent_SchedulelessKeepsCadence()
+        {
+            var scheduled = AddTtlPolicy(ScheduleId);
+            var scheduleLess = AddTtlPolicy(scheduleId: null);
+
+            // Both sent recently → both inside their repeat intervals.
+            scheduled.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-10));
+            scheduleLess.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-10));
+
+            _isWorkingTimeNow = false;
+
+            // The scheduled policy is CANCELLED (silent, state reset); the
+            // schedule-less sibling keeps its cadence — the interval has
+            // elapsed, so it fires.
+            Assert.False(scheduled.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
+            Assert.True(scheduleLess.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
         }
 
 
@@ -210,7 +255,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // #1404 gate's transition) — GetNotification(false) nulls the
             // repeat clock, which is exactly the state the zombie exploits.
             ttl.GetNotification(true);
-            _isWorkingTime = false;
+            _isWorkingTimeNow = false;
             ttl.GetNotification(false);
 
             // WITHOUT the window arm this returns true on every sweep tick
@@ -221,7 +266,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
     internal static class PolicyEnumerationExtensions
     {
-        public static TTLPolicy ReadToEndFirstMatch(this IReadOnlyList<TTLPolicy> policies, Func<TTLPolicy, bool> match) =>
+        public static TTLPolicy FirstMatchOrDefault(this IReadOnlyList<TTLPolicy> policies, Func<TTLPolicy, bool> match) =>
             policies.FirstOrDefault(match);
     }
 }

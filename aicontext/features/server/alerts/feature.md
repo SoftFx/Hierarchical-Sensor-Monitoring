@@ -113,10 +113,10 @@ Operator selects sensor -> per-sensor _Alerts.cshtml editor -> UpdateSensorInfo 
 
 ## Tests
 
-Coverage for the schedule-window semantics (#1404 + #1405) lives in `src/tests/HSMServer.Core.Tests/TreeValuesCacheTests/TtlScheduleWindowTests.cs` (mocked schedule provider; the stale in-session value is the incident's shape):
+Coverage for the schedule-window semantics (#1404 + #1405) lives in `src/tests/HSMServer.Core.Tests/TreeValuesCacheTests/TtlScheduleWindowTests.cs` (mocked schedule provider that DISCRIMINATES on the timestamp — the stale in-session value always reads in-window, so a value-time gate passes where the evaluation-time gate must not; the incident's exact shape):
 
-- Expiry: out-of-window-now does not expire / in-window-now expires / no schedule expires regardless / mixed sensor — scheduled silent, schedule-less fires.
-- Repeats: out-of-window silent + cancels; cancellation is REAL (window open fires fresh despite the 1-minute-old send — a pause would still be inside the 5-minute interval); in-window interval held; schedule-less never cancelled.
+- Expiry: out-of-window-now does not expire AND fires no sensor-level expiry transition (`SensorExpired` never carries true — no notification, no timeout marker) / in-window-now expires / no schedule expires regardless / mixed sensor — scheduled silent, schedule-less fires.
+- Repeats: out-of-window silent + cancels; cancellation is REAL (window open fires fresh despite the 1-minute-old send — a pause would still be inside the 5-minute interval); in-window interval held; schedule-less never cancelled; FRESH value at window open does not fire (the data decides); mixed resend — scheduled silent while the schedule-less sibling keeps its cadence.
 - The zombie pin: after the sensor resolves out-of-window (`GetNotification(false)` nulls the repeat clock), the resend stays silent — the two gates' mandatory pairing.
 
 Coverage for the mixed-type path validation lives in `src/tests/HSMServer.Core.Tests/Controllers/AlertTemplatesControllerTests.cs`:

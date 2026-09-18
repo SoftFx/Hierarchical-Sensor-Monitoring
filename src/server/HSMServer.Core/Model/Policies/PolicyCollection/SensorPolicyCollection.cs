@@ -121,17 +121,16 @@ namespace HSMServer.Core.Model.Policies
                 if (ttlPolicy is null || ttlPolicy.IsDisabled)
                     continue;
 
-                bool schedulePassed = true;
-
                 // Evaluation time, not the value's timestamp (#1404): a stale
                 // in-session last value passes the old gate even when "now" is
                 // outside the session — the exact restart incident. Gating at
                 // UtcNow also resolves the sensor on the first out-of-window
                 // sweep (SetExpiredSnapshot fires on the TRANSITION), so a
                 // session close without OffTime ends the alert instead of
-                // leaving it firing into the night.
-                if (ttlPolicy.ScheduleId.HasValue)
-                    schedulePassed = _scheduleProvider.IsWorkingTime(ttlPolicy.ScheduleId.Value, DateTime.UtcNow);
+                // leaving it firing into the night. The shared predicate with
+                // the repeat-cancellation gate (#1405): one home for the
+                // fail-open semantics.
+                var schedulePassed = !ttlPolicy.IsOutsideSchedule(_scheduleProvider);
 
                 if (!schedulePassed)
                     continue;
