@@ -207,6 +207,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         public List<PolicyEntity> GetAllPolicies() => _inner.GetAllPolicies();
 
         public PolicyEntity GetPolicy(Guid id) => _inner.GetPolicy(id);
+        public bool TryGetPolicy(Guid id, out PolicyEntity entity) => _inner.TryGetPolicy(id, out entity);
         public void AddPolicy(PolicyEntity policy) => _inner.AddPolicy(policy);
         public void UpdatePolicy(PolicyEntity policy) => _inner.UpdatePolicy(policy);
         public void RemovePolicy(Guid id) => _inner.RemovePolicy(id);

@@ -25,11 +25,12 @@ namespace HSMServer.Core.Tests.Cache
                 [new Guid(indexedRow.Id).ToString()] = indexedRow,
             };
 
-            var (healed, unresolved) = PolicyIndexHealer.Heal(
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(
                 [sensor], policies, id => id == new Guid(orphanRow.Id) ? orphanRow : null);
 
             Assert.Equal(1, healed);
             Assert.Empty(unresolved);
+            Assert.Empty(unread);
             Assert.True(policies.ContainsKey(new Guid(orphanRow.Id).ToString()));
             Assert.Same(orphanRow, policies[new Guid(orphanRow.Id).ToString()]);
         }
@@ -42,11 +43,31 @@ namespace HSMServer.Core.Tests.Cache
             var sensor = BuildSensor(deadId.ToString());
             var policies = new Dictionary<string, PolicyEntity>();
 
-            var (healed, unresolved) = PolicyIndexHealer.Heal(
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(
                 [sensor], policies, _ => null);
 
             Assert.Equal(0, healed);
             Assert.Equal([deadId], unresolved);
+            Assert.Empty(unread);
+            Assert.Empty(policies);
+        }
+
+
+        [Fact]
+        public void ReferencedId_RowUnreadable_IsUnreadNotUnresolved()
+        {
+            // A read failure is not an orphan verdict: the id lands in Unread,
+            // the caller reports "could not read" and the next boot retries.
+            var id = Guid.NewGuid();
+            var sensor = BuildSensor(id.ToString());
+            var policies = new Dictionary<string, PolicyEntity>();
+
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(
+                [sensor], policies, _ => throw new InvalidOperationException("disk on fire"));
+
+            Assert.Equal(0, healed);
+            Assert.Empty(unresolved);
+            Assert.Equal([id], unread);
             Assert.Empty(policies);
         }
 
@@ -59,11 +80,12 @@ namespace HSMServer.Core.Tests.Cache
             var policies = new Dictionary<string, PolicyEntity> { [new Guid(row.Id).ToString()] = row };
             var fetched = false;
 
-            var (healed, unresolved) = PolicyIndexHealer.Heal(
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(
                 [sensor], policies, _ => { fetched = true; return row; });
 
             Assert.Equal(0, healed);
             Assert.Empty(unresolved);
+            Assert.Empty(unread);
             Assert.False(fetched);
             Assert.Single(policies);
         }
@@ -80,7 +102,7 @@ namespace HSMServer.Core.Tests.Cache
             var policies = new Dictionary<string, PolicyEntity>();
             var fetches = 0;
 
-            var (healed, unresolved) = PolicyIndexHealer.Heal(
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(
                 [sensorA, sensorB], policies,
                 id =>
                 {
@@ -90,27 +112,30 @@ namespace HSMServer.Core.Tests.Cache
 
             Assert.Equal(1, healed);
             Assert.Empty(unresolved);
+            Assert.Empty(unread);
             Assert.Equal(1, fetches);
             Assert.Single(policies);
         }
 
 
         [Fact]
-        public void UnparseableReference_IsSkippedSilently()
+        public void DuplicateDeadReferences_ReportedOnceAndFetchedOnce()
         {
-            // Pre-existing corruption, not this heal's concern: the reference
-            // is neither healed nor unresolved — left exactly as the load
-            // would have seen it.
-            var sensor = BuildSensor("not-a-guid");
-            var policies = new Dictionary<string, PolicyEntity>();
-            var fetched = false;
+            // Many sensors can share one dead id: one unresolved entry, one
+            // fetch — the boot Warn counts DISTINCT ids.
+            var deadId = Guid.NewGuid();
+            var sensorA = BuildSensor(deadId.ToString());
+            var sensorB = BuildSensor(deadId.ToString());
+            var fetches = 0;
 
-            var (healed, unresolved) = PolicyIndexHealer.Heal(
-                [sensor], policies, _ => { fetched = true; return null; });
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(
+                [sensorA, sensorB], new Dictionary<string, PolicyEntity>(),
+                _ => { fetches++; return null; });
 
             Assert.Equal(0, healed);
-            Assert.Empty(unresolved);
-            Assert.False(fetched);
+            Assert.Equal([deadId], unresolved);
+            Assert.Empty(unread);
+            Assert.Equal(1, fetches);
         }
 
 
@@ -126,48 +151,86 @@ namespace HSMServer.Core.Tests.Cache
             var sensor = BuildSensor(rawReference);
             var policies = new Dictionary<string, PolicyEntity>();
 
-            var (healed, unresolved) = PolicyIndexHealer.Heal(
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(
                 [sensor], policies, id => id == new Guid(orphanRow.Id) ? orphanRow : null);
 
             Assert.Equal(1, healed);
             Assert.Empty(unresolved);
+            Assert.Empty(unread);
             Assert.True(policies.ContainsKey(rawReference));
             Assert.Same(orphanRow, policies[rawReference]);
         }
 
 
         [Fact]
-        public void DuplicateDeadReferences_ReportedOnceAndFetchedOnce()
+        public void NonCanonicalReference_RowIndexedUnderNormalizedKey_GainsRawAliasWithoutHeal()
         {
-            // Many sensors can share one dead id: one unresolved entry, one
-            // fetch — the boot Warn counts DISTINCT ids.
-            var deadId = Guid.NewGuid();
-            var sensorA = BuildSensor(deadId.ToString());
-            var sensorB = BuildSensor(deadId.ToString());
-            var fetches = 0;
+            // A non-canonical reference whose row IS indexed (under the
+            // normalized key the load builds) is not "missing": it gets the
+            // raw-key alias the consumer's lookup needs — no fetch, no heal
+            // count, so it does not re-"heal" on every boot.
+            var row = BuildRow();
+            var normalizedKey = new Guid(row.Id).ToString();
+            var rawReference = normalizedKey.ToUpperInvariant();
+            var sensor = BuildSensor(rawReference);
+            var policies = new Dictionary<string, PolicyEntity> { [normalizedKey] = row };
+            var fetched = false;
 
-            var (healed, unresolved) = PolicyIndexHealer.Heal(
-                [sensorA, sensorB], new Dictionary<string, PolicyEntity>(),
-                _ => { fetches++; return null; });
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(
+                [sensor], policies, _ => { fetched = true; return row; });
 
             Assert.Equal(0, healed);
-            Assert.Equal([deadId], unresolved);
-            Assert.Equal(1, fetches);
+            Assert.Empty(unresolved);
+            Assert.Empty(unread);
+            Assert.False(fetched);
+            Assert.Same(row, policies[normalizedKey]);
+            Assert.Same(row, policies[rawReference]);
+            Assert.Equal(2, policies.Count);
+        }
+
+
+        [Fact]
+        public void UnparseableReference_IsSkippedSilently()
+        {
+            // Pre-existing corruption, not this heal's concern: the reference
+            // is neither healed nor unresolved — left exactly as the load
+            // would have seen it.
+            var sensor = BuildSensor("not-a-guid");
+            var policies = new Dictionary<string, PolicyEntity>();
+            var fetched = false;
+
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(
+                [sensor], policies, _ => { fetched = true; return null; });
+
+            Assert.Equal(0, healed);
+            Assert.Empty(unresolved);
+            Assert.Empty(unread);
+            Assert.False(fetched);
         }
 
 
         [Fact]
         public void NullEntityAndNullReferences_AreTolerated()
         {
-            var (healed, unresolved) = PolicyIndexHealer.Heal(null, new Dictionary<string, PolicyEntity>(), _ => null);
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(null, new Dictionary<string, PolicyEntity>(), _ => null);
 
             Assert.Equal(0, healed);
             Assert.Empty(unresolved);
+            Assert.Empty(unread);
 
-            (healed, unresolved) = PolicyIndexHealer.Heal([BuildSensor(null)], new Dictionary<string, PolicyEntity>(), _ => null);
+            (healed, unresolved, unread) = PolicyIndexHealer.Heal([BuildSensor(null)], new Dictionary<string, PolicyEntity>(), _ => null);
 
             Assert.Equal(0, healed);
             Assert.Empty(unresolved);
+            Assert.Empty(unread);
+
+            // A null ELEMENT matches the defensiveness of the container
+            // guards; the load's own path filters nulls, so it cannot occur.
+            (healed, unresolved, unread) = PolicyIndexHealer.Heal([null, BuildSensor(null)], new Dictionary<string, PolicyEntity>(), _ => null);
+
+            Assert.Equal(0, healed);
+            Assert.Empty(unresolved);
+            Assert.Empty(unread);
         }
 
 

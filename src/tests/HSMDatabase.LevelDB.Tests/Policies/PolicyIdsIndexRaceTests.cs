@@ -18,11 +18,13 @@ namespace HSMDatabase.LevelDB.Tests.Policies;
 // the boot path (GetAllPolicies walks the INDEX) never saw it, silently
 // skipping the sensor's reference. The production incident: a template alert
 // that lived in memory until the next restart and vanished without a trace.
-[Collection("Database collection")]
 public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceFixture>, IClassFixture<DatabaseRegisterFixture>
 {
     private const int ThreadCount = 8;
     private const int IdsPerThread = 25;
+
+    // A stuck lock must fail the suite, not hang the CI agent.
+    private static readonly TimeSpan ConcurrencyTimeout = TimeSpan.FromMinutes(1);
 
 
     public PolicyIdsIndexRaceTests(PolicyIdsIndexRaceFixture fixture, DatabaseRegisterFixture registerFixture)
@@ -36,7 +38,7 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
     public void AddPolicy_ConcurrentWriters_AllIdsIndexed()
     {
         var allIds = Enumerable.Range(0, ThreadCount * IdsPerThread).Select(_ => Guid.NewGuid()).ToList();
-        var start = new Barrier(ThreadCount);
+        using var start = new Barrier(ThreadCount);
 
         // LongRunning: dedicated threads, not the thread pool — on a small
         // CI agent pool injection (roughly a thread per 500 ms) delays the
@@ -50,7 +52,7 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
                 _databaseCoreManager.DatabaseCore.AddPolicy(BuildEntity(id));
         }, TaskCreationOptions.LongRunning)).ToArray();
 
-        Task.WaitAll(threads);
+        Assert.True(Task.WaitAll(threads, ConcurrencyTimeout), "Concurrent AddPolicy did not finish in time — the index lock looks stuck");
 
         var indexed = _databaseCoreManager.DatabaseCore.GetAllPolicies()
             .Select(p => new Guid(p.Id))
@@ -82,7 +84,7 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
             return id;
         }).ToList();
 
-        var barrier = new Barrier(2);
+        using var barrier = new Barrier(2);
 
         var adder = Task.Factory.StartNew(() =>
         {
@@ -98,7 +100,7 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
                 _databaseCoreManager.DatabaseCore.RemovePolicy(id);
         }, TaskCreationOptions.LongRunning);
 
-        Task.WaitAll(adder, remover);
+        Assert.True(Task.WaitAll([adder, remover], ConcurrencyTimeout), "Concurrent add-vs-remove did not finish in time — the index lock looks stuck");
 
         var indexed = _databaseCoreManager.DatabaseCore.GetAllPolicies()
             .Select(p => new Guid(p.Id))
@@ -115,7 +117,9 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
     // row through the public interface — what it pins is the fetch's
     // index-independence (the property the heal's row recovery relies on);
     // the orphan scenario itself is pinned by PolicyIndexHealerTests with a
-    // row the index-driven dictionary never had.
+    // row the index-driven dictionary never had. TryGetPolicy carries the
+    // same index-independence plus the absent/unreadable split the heal's
+    // diagnosis depends on.
     [Fact]
     public void GetPolicy_ByDirectId_AnswersRegardlessOfIndexState()
     {
@@ -128,11 +132,15 @@ public class PolicyIdsIndexRaceTests : DatabaseCoreTestsBase<PolicyIdsIndexRaceF
         // answers null, not an index-driven skip; after a re-add it answers
         // the row whatever the index holds.
         Assert.Null(_databaseCoreManager.DatabaseCore.GetPolicy(id));
+        Assert.False(_databaseCoreManager.DatabaseCore.TryGetPolicy(id, out var absent));
+        Assert.Null(absent);
 
         _databaseCoreManager.DatabaseCore.AddPolicy(BuildEntity(id));
 
         Assert.NotNull(_databaseCoreManager.DatabaseCore.GetPolicy(id));
         Assert.Equal(id, new Guid(_databaseCoreManager.DatabaseCore.GetPolicy(id).Id));
+        Assert.True(_databaseCoreManager.DatabaseCore.TryGetPolicy(id, out var present));
+        Assert.Equal(id, new Guid(present.Id));
     }
 
 

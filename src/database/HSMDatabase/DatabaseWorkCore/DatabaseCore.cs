@@ -392,6 +392,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public PolicyEntity GetPolicy(Guid id) => _environmentDatabase.GetPolicy(id.ToByteArray());
 
+        public bool TryGetPolicy(Guid id, out PolicyEntity entity) => _environmentDatabase.TryGetPolicy(id.ToByteArray(), out entity);
+
         #endregion
 
         #region Folders

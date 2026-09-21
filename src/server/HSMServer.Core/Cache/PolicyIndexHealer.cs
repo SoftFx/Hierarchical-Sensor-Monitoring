@@ -24,19 +24,26 @@ namespace HSMServer.Core.Cache
     {
         // Mutates `policies` in place: every sensor-referenced id that is
         // missing from the dictionary but resolves to a row is added. Returns
-        // the healed count and the DISTINCT ids that reference NOTHING (true
+        // the healed count, the DISTINCT ids that reference NOTHING (true
         // orphans — row gone, reference dangling; the caller logs them, the
-        // load skips them as before, but no longer invisibly).
-        public static (int Healed, List<Guid> Unresolved) Heal(
+        // load skips them as before, but no longer invisibly), and the ids
+        // whose row could not be READ (fetchRow threw): a read failure is
+        // not an orphan verdict — the caller reports it separately and the
+        // next boot retries.
+        public static (int Healed, List<Guid> Unresolved, List<Guid> Unread) Heal(
             List<SensorEntity> sensorEntities,
             Dictionary<string, PolicyEntity> policies,
             Func<Guid, PolicyEntity> fetchRow)
         {
             var healed = 0;
             HashSet<Guid> unresolved = null;
+            HashSet<Guid> unread = null;
 
             foreach (var entity in sensorEntities ?? [])
             {
+                if (entity is null)
+                    continue;
+
                 foreach (var idText in entity.Policies ?? [])
                 {
                     // Unparseable reference: pre-existing corruption, not this
@@ -44,14 +51,21 @@ namespace HSMServer.Core.Cache
                     if (!Guid.TryParse(idText, out var id))
                         continue;
 
-                    // Keyed by the RAW reference, the exact string the load's
-                    // consumer (ApplyPolicies) looks up — a differently
-                    // formatted id from a migration or an import would make a
-                    // normalized key "heal" into a lookup the consumer still
-                    // misses, resurrecting the invisible-loss class this fix
-                    // exists to end.
-                    if (policies.ContainsKey(idText))
+                    // The guard checks BOTH keys. The dictionary's keys are
+                    // the normalized Guid.ToString() the index load builds;
+                    // the consumer (ApplyPolicies) looks the entry up by the
+                    // RAW reference. A non-canonical reference whose row is
+                    // indexed under the normalized form is not "missing" —
+                    // it gets the raw-key alias for the consumer's lookup
+                    // (no fetch, no healed count) instead of being re-healed
+                    // on every boot.
+                    if (policies.TryGetValue(idText, out var known) || policies.TryGetValue(id.ToString(), out known))
+                    {
+                        if (!policies.ContainsKey(idText))
+                            policies[idText] = known;
+
                         continue;
+                    }
 
                     // Known-dead from an earlier reference: no repeat fetch,
                     // one unresolved entry — many sensors can share one dead
@@ -59,10 +73,23 @@ namespace HSMServer.Core.Cache
                     if (unresolved?.Contains(id) ?? false)
                         continue;
 
-                    var row = fetchRow(id);
+                    PolicyEntity row;
+
+                    try
+                    {
+                        row = fetchRow(id);
+                    }
+                    catch (Exception)
+                    {
+                        (unread ??= []).Add(id);
+                        continue;
+                    }
 
                     if (row is not null)
                     {
+                        // Inserted under the RAW reference — the exact string
+                        // the consumer looks up; a normalized key would
+                        // "heal" into a lookup the consumer still misses.
                         policies.Add(idText, row);
                         healed++;
                     }
@@ -71,7 +98,7 @@ namespace HSMServer.Core.Cache
                 }
             }
 
-            return (healed, unresolved?.ToList() ?? []);
+            return (healed, unresolved?.ToList() ?? [], unread?.ToList() ?? []);
         }
     }
 }

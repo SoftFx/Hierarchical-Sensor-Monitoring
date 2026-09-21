@@ -2359,10 +2359,16 @@ namespace HSMServer.Core.Cache
             List<SensorEntity> sensorEntities,
             Dictionary<string, PolicyEntity> policies)
         {
-            var (healed, unresolved) = PolicyIndexHealer.Heal(sensorEntities, policies, _database.GetPolicy);
+            // The fetch distinguishes "absent" from "unreadable": a read
+            // failure throws here and lands in the Unread bucket instead of
+            // being misreported as a true orphan on the diagnosis path.
+            var (healed, unresolved, unread) = PolicyIndexHealer.Heal(sensorEntities, policies, FetchPolicyRowOrThrow);
 
             if (healed > 0)
                 _logger.Info($"Policy index self-heal: {healed} orphaned policy row(s) recovered from sensor references (#1407)");
+
+            if (unread.Count > 0)
+                _logger.Error($"Policy index self-heal could not READ {unread.Count} referenced policy row(s) (first {Math.Min(unread.Count, MaxLoggedOrphanIds)}: {string.Join(", ", unread.Take(MaxLoggedOrphanIds))}) — not treated as orphans, retried on the next boot");
 
             // A reference that resolves to NO row anywhere is a true orphan —
             // the load skips it as before, but no longer invisibly: this Warn
@@ -2372,6 +2378,24 @@ namespace HSMServer.Core.Cache
             // references at once.
             if (unresolved.Count > 0)
                 _logger.Warn($"Sensor entities reference {unresolved.Count} policy id(s) with no stored row (first {Math.Min(unresolved.Count, MaxLoggedOrphanIds)}: {string.Join(", ", unresolved.Take(MaxLoggedOrphanIds))})");
+        }
+
+        // The healer buckets a throwing fetch as Unread (not an orphan
+        // verdict); this wrapper keeps the underlying IO cause — which the
+        // pure healer does not log — in the boot log next to the id.
+        private PolicyEntity FetchPolicyRowOrThrow(Guid id)
+        {
+            try
+            {
+                return _database.TryGetPolicy(id, out var row)
+                    ? row
+                    : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read policy row {id}");
+                throw;
+            }
         }
 
         private void ApplyProducts(List<ProductEntity> productEntities)

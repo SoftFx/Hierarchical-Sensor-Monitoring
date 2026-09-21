@@ -440,12 +440,42 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // lost-updated; the policy ROW writes stay outside it (their own
         // keys, no shared read-modify-write) — a row racing a removal can
         // still resurrect outside the index, and the boot heal (#1407)
-        // absorbs exactly that class. The membership cache makes the common
-        // case — a re-apply re-adding an existing id — O(1) with NO index
-        // rewrite (the serialized round trip is O(N) over every policy id in
-        // the installation, and template re-applies hit it per sensor).
+        // absorbs exactly that class.
+        //
+        // The membership cache mirrors the durable index under the same lock
+        // with a strict discipline: seeded only from a read that can FAIL
+        // LOUDLY (GetListOfBytes swallows read errors into an empty list —
+        // seeding from it would freeze a wrong cache for the process
+        // lifetime), and mutated only AFTER the durable write succeeds. So a
+        // failed Put leaves the cache untouched and the next call retries,
+        // and the write payload can be built FROM the cache — a re-apply
+        // re-adding an existing id is O(1) with no round trip at all, and a
+        // genuinely new id costs one serialize + Put instead of a full
+        // read-deserialize-serialize-write cycle.
         private readonly object _policyIdsLock = new();
         private HashSet<Guid> _policyIdsCache;
+
+        private bool TrySeedPolicyIdsCache()
+        {
+            try
+            {
+                // An absent key is a genuinely EMPTY index; anything else
+                // that goes wrong must throw so the cache is left null and
+                // retried on the next mutation — never seeded with a guess.
+                _policyIdsCache = _database.TryRead(_policyIdsKey, out var bytes)
+                    ? [.. JsonSerializer.Deserialize<List<byte[]>>(bytes).Select(g => new Guid(g))]
+                    : new HashSet<Guid>();
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                _policyIdsCache = null;
+                _logger.Error(e, "Failed to read the policy-id index; the membership cache is not seeded and will be retried on the next mutation");
+
+                return false;
+            }
+        }
 
         public void AddPolicyIdToList(Guid policyId)
         {
@@ -453,15 +483,22 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 lock (_policyIdsLock)
                 {
-                    _policyIdsCache ??= [.. GetAllPoliciesIds().Select(g => new Guid(g))];
-
-                    if (!_policyIdsCache.Add(policyId))
+                    if (_policyIdsCache is null && !TrySeedPolicyIdsCache())
                         return;
 
-                    var policyIds = GetAllPoliciesIds();
+                    if (_policyIdsCache.Contains(policyId))
+                        return;
+
+                    var policyIds = new List<byte[]>(_policyIdsCache.Count + 1);
+
+                    foreach (var id in _policyIdsCache)
+                        policyIds.Add(id.ToByteArray());
+
                     policyIds.Add(policyId.ToByteArray());
 
                     _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+
+                    _policyIdsCache.Add(policyId); // durable write first, cache second
                 }
             }
             catch (Exception e)
@@ -490,24 +527,21 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 lock (_policyIdsLock)
                 {
-                    _policyIdsCache ??= [.. GetAllPoliciesIds().Select(g => new Guid(g))];
+                    if (_policyIdsCache is null && !TrySeedPolicyIdsCache())
+                        return;
 
-                    if (!_policyIdsCache.Remove(policyId))
+                    if (!_policyIdsCache.Contains(policyId))
                     {
-                        // Not indexed — skip the unchanged O(N) rewrite, but
+                        // Not indexed — skip the unchanged rewrite, but
                         // still drop any stray row.
                         _database.Delete(policyId.ToByteArray());
                         return;
                     }
 
-                    var policyIds = GetAllPoliciesIds();
-
-                    for (int i = 0; i < policyIds.Count; i++)
-                        if (new Guid(policyIds[i]) == policyId)
-                        {
-                            policyIds.RemoveAt(i);
-                            break;
-                        }
+                    // Rebuilt from the cache, which collapses any duplicate
+                    // entries the index accumulated historically — a removal
+                    // drops EVERY copy, so duplicates stay cleanable.
+                    var policyIds = _policyIdsCache.Where(id => id != policyId).Select(id => id.ToByteArray()).ToList();
 
                     _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
 
@@ -517,6 +551,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                     // outside the lock) are the heal's domain, see the
                     // _policyIdsLock comment.
                     _database.Delete(policyId.ToByteArray());
+
+                    _policyIdsCache.Remove(policyId); // durable write first, cache second
                 }
             }
             catch (Exception e)
@@ -537,10 +573,28 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to read info for policy {policyId}");
+                _logger.Error(e, $"Failed to read info for policy {new Guid(policyId)}");
             }
 
             return null;
+        }
+
+        // Unlike GetPolicy, distinguishes "no row under this id" (false)
+        // from "the row could not be read" (throw): the boot heal (#1407)
+        // must not report a read failure as a true orphan — a transient IO
+        // error would otherwise produce a confidently wrong diagnosis on
+        // the very path added for diagnosis.
+        public bool TryGetPolicy(byte[] policyId, out PolicyEntity entity)
+        {
+            if (!_database.TryRead(policyId, out byte[] value))
+            {
+                entity = null;
+                return false;
+            }
+
+            entity = JsonSerializer.Deserialize<PolicyEntity>(value);
+
+            return entity is not null;
         }
 
         #endregion

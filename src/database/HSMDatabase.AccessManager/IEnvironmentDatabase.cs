@@ -105,6 +105,7 @@ namespace HSMDatabase.AccessManager
 
         List<byte[]> GetAllPoliciesIds();
         PolicyEntity GetPolicy(byte[] policyId);
+        bool TryGetPolicy(byte[] policyId, out PolicyEntity entity);
         void AddPolicyIdToList(Guid policyId);
         void AddPolicy(PolicyEntity policy);
         void RemovePolicy(Guid policyId);

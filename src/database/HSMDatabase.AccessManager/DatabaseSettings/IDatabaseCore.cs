@@ -151,6 +151,12 @@ namespace HSMServer.Core.DataLayer
         // referenced by the sensor entity, and this reads it back.
         PolicyEntity GetPolicy(Guid id);
 
+        // The same fetch with "absent" and "unreadable" told apart: false
+        // means no row under the id, a throw means the row could not be
+        // read. The self-heal must not mistake a read failure for a true
+        // orphan (#1407).
+        bool TryGetPolicy(Guid id, out PolicyEntity entity);
+
         void AddPolicy(PolicyEntity policy);
         void UpdatePolicy(PolicyEntity policy);
         void RemovePolicy(Guid id);
