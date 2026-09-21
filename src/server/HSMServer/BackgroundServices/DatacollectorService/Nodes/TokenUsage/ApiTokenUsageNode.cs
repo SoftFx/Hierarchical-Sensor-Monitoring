@@ -25,7 +25,9 @@ namespace HSMServer.BackgroundServices;
 //
 // A sealed CLASS, not a record: it holds a lock and mutable sensor fields —
 // compiler-generated structural equality would be meaningless here.
-public sealed class ApiTokenUsageNode
+// Internal like every other type of the feature: the registry is the only
+// consumer (the test suite reaches it through InternalsVisibleTo).
+internal sealed class ApiTokenUsageNode
 {
     private static readonly NLog.Logger Logger = NLog.LogManager.GetCurrentClassLogger();
 
@@ -55,12 +57,20 @@ public sealed class ApiTokenUsageNode
     private readonly string _tokenKey;
     private readonly string _prefix;
 
-    // One gate for both channels: each sensor must be created exactly once,
-    // while AddValue itself is already thread-safe on the sensors (requests
-    // for one token arrive from concurrent connections). The same gate makes
-    // Dispose TERMINAL for Add*: after eviction, a racing caller holding the
-    // node reference must not resurrect the STOPPED sensors — their
-    // accumulated values would never be published, which is silent loss.
+    // One gate for both channels, covering the WHOLE Add* body — creation
+    // AND the two value adds: each sensor must be created exactly once, and
+    // the gate makes eviction TERMINAL for Add* in the strong sense — a
+    // racing caller holding the node reference must never add into STOPPED
+    // sensors (the value would accumulate unpublishable, which is silent
+    // loss). Running the adds inside the gate closes that window completely:
+    // an add either finishes before the eviction's stop (which flushes it)
+    // or is refused by _disposed and traced by the caller. The adds are
+    // in-memory accumulations on the sensors (an Interlocked sum for the
+    // rate sensor, a short internal lock for the bar) with no I/O, so the
+    // hold is microseconds (#1403 review). The eviction's sensor stops stay
+    // OUTSIDE the gate, deliberately: they are sync-over-async and can wait
+    // for an in-flight scheduled run, and request threads must not be
+    // blocked by an eviction.
     private readonly object _gate = new();
 
     private bool _disposed;
@@ -92,44 +102,40 @@ public sealed class ApiTokenUsageNode
     // it once per token (invariant 8 — no silent loss).
     public bool AddRestRequest(double durationMs)
     {
-        IInstantValueSensor<double> rate;
-        IBarSensor<double> duration;
-
         lock (_gate)
         {
             if (_disposed)
                 return false;
 
-            rate = _restRate ??= CreateRateSensor(RestNode,
+            var rate = _restRate ??= CreateRateSensor(RestNode,
                 $"REST (/api/v1) requests authenticated by this token ({_tokenKey}).");
-            duration = _restDuration ??= CreateDurationSensor(RestNode,
+            var duration = _restDuration ??= CreateDurationSensor(RestNode,
                 $"Server-side handling time of one REST (/api/v1) request authenticated by this token ({_tokenKey}).");
-        }
 
-        rate.AddValue(1);
-        duration.AddValue(durationMs);
+            // Inside the gate (see _gate): no add can land on stopped sensors.
+            rate.AddValue(1);
+            duration.AddValue(durationMs);
+        }
 
         return true;
     }
 
     public bool AddMcpRequest(double durationMs)
     {
-        IInstantValueSensor<double> rate;
-        IBarSensor<double> duration;
-
         lock (_gate)
         {
             if (_disposed)
                 return false;
 
-            rate = _mcpRate ??= CreateRateSensor(McpNode,
+            var rate = _mcpRate ??= CreateRateSensor(McpNode,
                 $"MCP (/mcp) requests authenticated by this token ({_tokenKey}).");
-            duration = _mcpDuration ??= CreateDurationSensor(McpNode,
+            var duration = _mcpDuration ??= CreateDurationSensor(McpNode,
                 $"Server-side handling time of one MCP (/mcp) request authenticated by this token ({_tokenKey}).");
-        }
 
-        rate.AddValue(1);
-        duration.AddValue(durationMs);
+            // Inside the gate (see _gate): no add can land on stopped sensors.
+            rate.AddValue(1);
+            duration.AddValue(durationMs);
+        }
 
         return true;
     }
@@ -285,5 +291,17 @@ public sealed class ApiTokenUsageNode
             KeepHistory = HistoryPeriod,
             SelfDestroy = RetentionPeriod,
             Description = description,
+
+            // The three numbers that decide this sensor's granularity and
+            // volume, set EXPLICITLY (they happen to equal today's
+            // BarSensorOptions defaults): they are the numbers the feature
+            // doc's volume math reasons about, and a future collector release
+            // changing the defaults would silently re-profile this feature
+            // (#1403 review). A 5-minute aggregation window, a 5-second bar
+            // tick, and a partial-bar post every 15 seconds while the token
+            // is active; the sibling rate sensors post every 1 minute.
+            BarPeriod = TimeSpan.FromMinutes(5),
+            BarTickPeriod = TimeSpan.FromSeconds(5),
+            PostDataPeriod = TimeSpan.FromSeconds(15),
         });
 }

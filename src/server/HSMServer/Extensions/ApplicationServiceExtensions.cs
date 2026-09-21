@@ -94,14 +94,18 @@ namespace HSMServer.ServiceExtensions
 
             services.AddSingleton<DataCollectorWrapper>()
                     // The token-usage sensors registry lives inside the wrapper
-                    // (one collector); the monitoring middleware depends on the
-                    // GATE interface (Enabled lives only there — the raw registry
-                    // has no gate to expose) so tests mock the surface, not a
-                    // booted collector (#1402, #1403 review).
+                    // (one collector); only the GATE interface is published to
+                    // DI — the monitoring middleware depends on it (Enabled
+                    // lives only there — the raw registry has no gate to
+                    // expose, so tests mock the surface, not a booted
+                    // collector), and the adapter takes the raw registry
+                    // through its factory, so the add-surface interface is
+                    // never resolved: registering it would publish the GATED
+                    // object under the un-gated type and undo the compile-time
+                    // routing the split exists for (#1402, #1403 review).
                     .AddSingleton<MonitoringGate>(sp => new MonitoringGate(
                         sp.GetRequiredService<IOptionsMonitor<MonitoringOptions>>(),
                         sp.GetRequiredService<DataCollectorWrapper>().ApiTokenUsageSensors))
-                    .AddSingleton<IApiTokenUsageMonitor>(sp => sp.GetRequiredService<MonitoringGate>())
                     .AddSingleton<IApiTokenUsageGate>(sp => sp.GetRequiredService<MonitoringGate>())
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<TelemetryCollector>()

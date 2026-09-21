@@ -2,11 +2,12 @@ using System;
 
 namespace HSMServer.BackgroundServices;
 
-// The monitoring surface the measurement middleware depends on (#1402) —
-// the sensors registry behind it lives inside DataCollectorWrapper; the
-// interface keeps the middleware unit-testable against a mock instead of a
-// booted collector. The entityId is a Guid end-to-end (no string
-// round-trip to parse on the request path) and is the ONLY token
+// The add-surface of the API-token usage monitoring (#1402) — the sensors
+// registry behind it lives inside DataCollectorWrapper, and the measurement
+// middleware consumes it through the gate half below (the only half DI
+// publishes), which keeps the middleware unit-testable against a mock
+// instead of a booted collector. The entityId is a Guid end-to-end (no
+// string round-trip to parse on the request path) and is the ONLY token
 // identifier on the surface — the public lifecycle identity; the TokenId
 // (the authentication lookup key) never crosses it (ADR-0006: the sweep
 // resolves liveness by EntityId through IApiTokenManager).

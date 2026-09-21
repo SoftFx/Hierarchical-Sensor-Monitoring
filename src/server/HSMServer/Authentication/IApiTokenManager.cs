@@ -75,6 +75,12 @@ namespace HSMServer.Authentication
         // EntityId and must not thread the TokenId through its own surfaces.
         bool IsTokenLiveByEntityId(Guid entityId);
 
+        // The narrow owner projection for the token-usage eviction sweep: the same
+        // liveness rule as IsTokenLiveByEntityId PLUS the owner id, resolved in ONE
+        // index walk — no ApiTokenInfo projection is materialized (the sweep runs over
+        // every monitored token on every tick; same narrowness rule as TryGetEntityId).
+        bool TryGetLiveOwner(Guid entityId, out Guid ownerUserId);
+
         // The narrow attribution projection for token-usage monitoring: resolves the
         // EntityId for a TokenId WITHOUT materializing the full ApiTokenInfo projection
         // (the owner id is already on the principal's claims; nothing else is needed).

@@ -28,15 +28,15 @@ The measurement middleware against a mocked `IApiTokenUsageGate` (the sensors re
 
 ## Unit — `src/tests/HSMServer.Core.Tests/BackgroundServices/ApiTokenUsageSensorsTests.cs`
 
-The eviction state machine against a mocked `IDataCollector` (the created sensor mocks carry `IDisposable` exactly like the concrete monitoring sensors — this suite is where the round-5 no-op-re-disposal regression lives and is caught):
+The eviction state machine against a mocked `IDataCollector` (the created sensor mocks carry BOTH stop shapes exactly like the concrete monitoring sensors — `IDisposable` AND the collector's `ISensor.StopAsync` (the flushing stop), so the eviction's flush branch is exercised, not just the Dispose fallback — this suite is where the round-5 no-op-re-disposal regression lives and is caught):
 
-- `Evict_EveryLaterSweep_RestopsTheTombstonedSensors` — the anti-resurrection contract: evict + every later sweep re-stops the tombstoned INSTANCES (the node's terminal `_disposed` guard must not gate the sweep's stop).
+- `Evict_EveryLaterSweep_RestopsTheTombstonedSensors` — the anti-resurrection contract with the flush split pinned explicitly: the eviction's own stop is EXACTLY ONE `StopAsync` (the partial-bar flush), every later sweep's re-stop goes through `Dispose` (the node's terminal `_disposed` guard must not gate the sweep's stop).
 - `EvictedToken_IsNeverRecreated` — the occupied-path guard: a straggler value for a tombstoned token is dropped (logged), never rebuilt into the dead instances.
-- `SingleChannelToken_EvictsCleanly_OnlyTheUsedChannelHasSensors` — a REST-only token's never-used MCP pair must not fire the not-IDisposable diagnostic on any sweep.
-- `LiveToken_IsNeverEvicted`.
+- `SingleChannelToken_EvictsCleanly_OnlyTheUsedChannelHasSensors` — a REST-only token's never-used MCP pair must not fire the not-stoppable diagnostic on any sweep (same StopAsync/Dispose split).
+- `LiveToken_IsNeverEvicted` (neither stop shape fires).
 - `ResetLiveNodes_ClearsWithoutTombstoning_TheTokenRebuilds` — the collector-restart heal: the reset clears the LIVE nodes without tombstoning, so every token rebuilds with fresh sensor instances on its next request.
 
-`TokenUsageLivenessTests` — the composed eviction predicate: `LiveTokenWithDeletedOwner_IsDead` (owner deletion invalidates the credential without touching the row — IsTokenLive alone would keep the subtree immortal) and `LiveTokenWithExistingOwner_IsLive`.
+`TokenUsageLivenessTests` — the composed eviction predicate: `LiveTokenWithDeletedOwner_IsDead` (owner deletion invalidates the credential without touching the row — IsTokenLive alone would keep the subtree immortal), `LiveTokenWithExistingOwner_IsLive`, and `UnhealthyGenerationState_TheSweepAbstains_EvenForDeadRecords` (an unproven global boot state is not per-token death; tombstoning is irreversible, so the sweep abstains).
 
 ## Not covered (deliberate)
 

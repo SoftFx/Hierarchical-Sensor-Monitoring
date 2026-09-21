@@ -6,6 +6,7 @@ using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.BackgroundServices;
 using System.Linq;
+using System.Threading.Tasks;
 using Moq;
 using Xunit;
 
@@ -15,32 +16,42 @@ namespace HSMServer.Core.Tests.BackgroundServices
     // review: not a "thin composition" — the re-disposal regression lived
     // here, and this suite with a fake collector catches that class
     // directly). The collector is mocked; the created sensor mocks carry
-    // IDisposable exactly like the concrete monitoring sensors do.
+    // BOTH stop shapes exactly like the concrete monitoring sensors do —
+    // IDisposable (the discarding stop) and the collector's ISensor with
+    // StopAsync (the FLUSHING stop) — so the eviction's flush branch is
+    // exercised, not just the Dispose fallback (#1403 review).
     public class ApiTokenUsageSensorsTests
     {
         private readonly Mock<IDataCollector> _collector = new();
-        private readonly ConcurrentDictionary<string, (Mock<IDisposable> Rate, Mock<IDisposable> Duration)> _created = new();
+        private readonly ConcurrentDictionary<string, SensorMocks> _created = new();
+
+        // Both stop surfaces of one sensor double: Dispose is the
+        // anti-resurrection re-stop, StopAsync is the eviction's flush.
+        private sealed record SensorMocks(Mock<IDisposable> Disposable, Mock<HSMDataCollector.DefaultSensors.ISensor> Stoppable);
 
 
         public ApiTokenUsageSensorsTests()
         {
             _collector.Setup(c => c.CreateRateSensor(It.IsAny<string>(), It.IsAny<RateSensorOptions>()))
-                .Returns((string path, RateSensorOptions _) =>
-                {
-                    var sensor = new Mock<IMonitoringRateSensor>();
-                    var disposable = sensor.As<IDisposable>();
-                    _created[$"rate:{path}"] = (disposable, null);
-                    return sensor.Object;
-                });
+                .Returns((string path, RateSensorOptions _) => Arm(new Mock<IMonitoringRateSensor>(), path).Object);
 
             _collector.Setup(c => c.CreateDoubleBarSensor(It.IsAny<string>(), It.IsAny<BarSensorOptions>()))
-                .Returns((string path, BarSensorOptions _) =>
-                {
-                    var sensor = new Mock<IBarSensor<double>>();
-                    var disposable = sensor.As<IDisposable>();
-                    _created[$"bar:{path}"] = (null, disposable);
-                    return sensor.Object;
-                });
+                .Returns((string path, BarSensorOptions _) => Arm(new Mock<IBarSensor<double>>(), path).Object);
+        }
+
+
+        // The concrete monitoring sensors implement both IDisposable and the
+        // collector's ISensor (whose StopAsync FLUSHES the partial bar); the
+        // factory interfaces carry neither, so the doubles bolt both on.
+        private Mock<T> Arm<T>(Mock<T> sensor, string path) where T : class
+        {
+            var mocks = new SensorMocks(sensor.As<IDisposable>(), sensor.As<HSMDataCollector.DefaultSensors.ISensor>());
+
+            mocks.Stoppable.Setup(s => s.StopAsync()).Returns(default(ValueTask));
+
+            _created[path] = mocks;
+
+            return sensor;
         }
 
 
@@ -48,7 +59,7 @@ namespace HSMServer.Core.Tests.BackgroundServices
 
         // Only the per-token sensors (under "By owner") — the aggregate
         // auth-failures counter shares the factories and is permanent.
-        private IEnumerable<(Mock<IDisposable> Rate, Mock<IDisposable> Duration)> PerTokenSensors() =>
+        private IEnumerable<SensorMocks> PerTokenSensors() =>
             _created.Where(pair => pair.Key.Contains("/By owner/")).Select(pair => pair.Value);
 
 
@@ -57,7 +68,8 @@ namespace HSMServer.Core.Tests.BackgroundServices
         // guard returned early and the sensor references were gone), so a
         // collector restart (the self-monitoring toggle) resurrected the dead
         // token's senders forever. The sweep's anti-resurrection pass must
-        // re-STOP the instances on every tick.
+        // re-STOP the instances on every tick — via Dispose, while the
+        // eviction's OWN stop is exactly one flushing StopAsync.
         [Fact]
         public void Evict_EveryLaterSweep_RestopsTheTombstonedSensors()
         {
@@ -65,17 +77,22 @@ namespace HSMServer.Core.Tests.BackgroundServices
             var entityId = Guid.NewGuid();
 
             sensors.AddRestRequest("ops.user", entityId, 1.0);
-            sensors.EvictDeadTokens(_ => false); // evict + first stop
+            sensors.EvictDeadTokens(_ => false); // evict + flush stop
             sensors.EvictDeadTokens(_ => false); // anti-resurrection pass
             sensors.EvictDeadTokens(_ => false); // and again
 
             // Per-token sensors only — the eager aggregate counter (also
-            // created through the rate factory) is never disposed.
-            foreach (var (rate, duration) in PerTokenSensors())
+            // created through the rate factory) is never stopped.
+            foreach (var mocks in PerTokenSensors())
             {
-                // 4 = the evict-stop, the same sweep's tombstone pass, and
-                // the two later sweeps' anti-resurrection passes.
-                (rate ?? duration).Verify(d => d.Dispose(), Times.Exactly(4));
+                // The eviction flushes: StopAsync exactly ONCE — a token
+                // evicted seconds after serving traffic keeps its last bar
+                // period of duration samples.
+                mocks.Stoppable.Verify(s => s.StopAsync(), Times.Exactly(1));
+
+                // 3 = the same sweep's tombstone pass and the two later
+                // sweeps' anti-resurrection passes (nothing left to flush).
+                mocks.Disposable.Verify(d => d.Dispose(), Times.Exactly(3));
             }
         }
 
@@ -110,16 +127,17 @@ namespace HSMServer.Core.Tests.BackgroundServices
             sensors.AddMcpRequest("ops.user", entityId, 1.0);
             sensors.EvictDeadTokens(_ => true); // everyone live
 
-            foreach (var (rate, duration) in PerTokenSensors())
+            foreach (var mocks in PerTokenSensors())
             {
-                (rate ?? duration).Verify(d => d.Dispose(), Times.Never);
+                mocks.Disposable.Verify(d => d.Dispose(), Times.Never);
+                mocks.Stoppable.Verify(s => s.StopAsync(), Times.Never);
             }
         }
 
 
         // A REST-only token evicts and re-sweeps cleanly: the MCP pair was
         // never created, so the never-used channels must not fire the
-        // not-IDisposable diagnostic (a null sensor is nothing to stop) and
+        // not-stoppable diagnostic (a null sensor is nothing to stop) and
         // the used channel's sensors are still re-stopped every sweep.
         [Fact]
         public void SingleChannelToken_EvictsCleanly_OnlyTheUsedChannelHasSensors()
@@ -133,10 +151,13 @@ namespace HSMServer.Core.Tests.BackgroundServices
 
             // Only two sensors were ever created (the REST pair); the MCP
             // pair must not appear even now.
-            Assert.Equal(2, PerTokenSensors().Count(pair => pair.Rate is not null || pair.Duration is not null));
+            Assert.Equal(2, PerTokenSensors().Count());
 
-            foreach (var (rate, duration) in PerTokenSensors())
-                (rate ?? duration).Verify(d => d.Dispose(), Times.Exactly(3)); // evict + same-sweep + next sweep
+            foreach (var mocks in PerTokenSensors())
+            {
+                mocks.Stoppable.Verify(s => s.StopAsync(), Times.Exactly(1)); // the eviction flush
+                mocks.Disposable.Verify(d => d.Dispose(), Times.Exactly(2)); // same-sweep + next sweep
+            }
         }
 
 
@@ -170,20 +191,31 @@ namespace HSMServer.Core.Tests.BackgroundServices
     // IsTokenLive alone says nothing about the OWNER — deleting a user
     // invalidates the credential without touching the token row, which would
     // leave an immortal subtree under a deleted login. The composition is
-    // pinned directly against mocks.
+    // pinned directly against mocks; the owner rides the single
+    // TryGetLiveOwner lookup (no ApiTokenInfo projection on the sweep path).
     public class TokenUsageLivenessTests
     {
+        private delegate void TryGetLiveOwnerCallback(Guid entityId, out Guid ownerUserId);
+
+
+        private static Mock<HSMServer.Authentication.IApiTokenManager> HealthyTokensWithLiveOwner(Guid entityId, Guid ownerId)
+        {
+            var tokens = new Mock<HSMServer.Authentication.IApiTokenManager>();
+            tokens.Setup(t => t.IsGenerationStateHealthy).Returns(true);
+            tokens.Setup(t => t.TryGetLiveOwner(entityId, out It.Ref<Guid>.IsAny))
+                .Callback(new TryGetLiveOwnerCallback((Guid _, out Guid owner) => owner = ownerId))
+                .Returns(true);
+            return tokens;
+        }
+
+
         [Fact]
         public void LiveTokenWithDeletedOwner_IsDead()
         {
             var entityId = Guid.NewGuid();
             var ownerId = Guid.NewGuid();
 
-            var tokens = new Mock<HSMServer.Authentication.IApiTokenManager>();
-            tokens.Setup(t => t.IsTokenLiveByEntityId(entityId)).Returns(true);
-            tokens.Setup(t => t.GetTokenByEntityId(entityId))
-                .Returns(new HSMServer.Authentication.ApiTokenInfo { EntityId = entityId, OwnerUserId = ownerId });
-
+            var tokens = HealthyTokensWithLiveOwner(entityId, ownerId);
             var users = new Mock<HSMServer.Authentication.IUserManager>();
             users.Setup(u => u[ownerId]).Returns((HSMServer.Model.Authentication.User)null); // deleted
 
@@ -197,13 +229,29 @@ namespace HSMServer.Core.Tests.BackgroundServices
             var entityId = Guid.NewGuid();
             var ownerId = Guid.NewGuid();
 
-            var tokens = new Mock<HSMServer.Authentication.IApiTokenManager>();
-            tokens.Setup(t => t.IsTokenLiveByEntityId(entityId)).Returns(true);
-            tokens.Setup(t => t.GetTokenByEntityId(entityId))
-                .Returns(new HSMServer.Authentication.ApiTokenInfo { EntityId = entityId, OwnerUserId = ownerId });
-
+            var tokens = HealthyTokensWithLiveOwner(entityId, ownerId);
             var users = new Mock<HSMServer.Authentication.IUserManager>();
             users.Setup(u => u[ownerId]).Returns(new HSMServer.Model.Authentication.User("ops.user"));
+
+            Assert.True(TokenUsageLiveness.Compose(tokens.Object, users.Object)(entityId));
+        }
+
+
+        // While the boot state is unproven the index answers "not live" for
+        // EVERY token, and a tombstone is irreversible for the process
+        // lifetime — the sweep must ABSTAIN rather than read a global
+        // can't-tell as per-token death (#1403 review; unreachable today:
+        // Initialize runs once, before the collector starts).
+        [Fact]
+        public void UnhealthyGenerationState_TheSweepAbstains_EvenForDeadRecords()
+        {
+            var entityId = Guid.NewGuid();
+
+            var tokens = new Mock<HSMServer.Authentication.IApiTokenManager>();
+            tokens.Setup(t => t.IsGenerationStateHealthy).Returns(false);
+            tokens.Setup(t => t.TryGetLiveOwner(entityId, out It.Ref<Guid>.IsAny)).Returns(false);
+
+            var users = new Mock<HSMServer.Authentication.IUserManager>();
 
             Assert.True(TokenUsageLiveness.Compose(tokens.Object, users.Object)(entityId));
         }

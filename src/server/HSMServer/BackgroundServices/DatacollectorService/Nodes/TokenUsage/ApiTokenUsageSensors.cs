@@ -105,6 +105,10 @@ internal sealed class ApiTokenUsageSensors : IApiTokenUsageMonitor
     // process lifetime: the collector never frees the paths, so an expired
     // tombstone would re-open the occupied-path hole, not close a leak
     // (the map is bounded by the tokens ever used and resets on restart).
+    // The re-stop pass therefore costs O(tombstones) per tick, forever, on
+    // the statistics thread — each stop is a cheap no-op on an unscheduled
+    // handle, so it stays trivial at any realistic token count, but the cost
+    // grows with tokens-ever-used, not with live tokens (#1403 review).
     public void EvictDeadTokens(Func<Guid, bool> tokenIsLive)
     {
         foreach (var (key, node) in _nodes)
