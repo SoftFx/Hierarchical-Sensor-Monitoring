@@ -206,7 +206,7 @@ namespace HSMServer.ServiceExtensions
 
             webHostBuilder.ConfigureKestrel(options =>
             {
-                var kestrelListenAction = KestrelListenOptions(config.ServerCertificate);
+                var kestrelListenAction = KestrelListenOptions(config.Kestrel, config.ServerCertificate);
 
                 options.Listen(IPAddress.Any, listeners.SensorPort, kestrelListenAction);
                 options.Listen(IPAddress.Any, listeners.SitePort, kestrelListenAction);
@@ -219,13 +219,21 @@ namespace HSMServer.ServiceExtensions
             return webHostBuilder;
         }
 
-        public static IApplicationBuilder ConfigureMiddleware(this IApplicationBuilder applicationBuilder, bool isDevelopment)
+        public static IApplicationBuilder ConfigureMiddleware(this IApplicationBuilder applicationBuilder, bool isDevelopment, KestrelConfig kestrel)
         {
+            // Plain-HTTP mode (#1411) sits behind a TLS-terminating proxy: restore the
+            // client's scheme and address first, so everything below (cookies, agent
+            // bundle address, token audit IPs) sees the https request the client made.
+            if (!kestrel.UseHttps)
+                applicationBuilder.UseForwardedHeaders(kestrel.BuildForwardedHeadersOptions());
+
             if (isDevelopment)
                 applicationBuilder.UseDeveloperExceptionPage();
             else
             {
-                applicationBuilder.UseHsts();
+                if (kestrel.UseHttps)
+                    applicationBuilder.UseHsts();
+
                 applicationBuilder.UseExceptionHandler("/Error");
             }
 
@@ -237,7 +245,8 @@ namespace HSMServer.ServiceExtensions
 
             applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
 
-            applicationBuilder.UseHttpsRedirection();
+            if (kestrel.UseHttps)
+                applicationBuilder.UseHttpsRedirection();
 
             applicationBuilder.UseStaticFiles();
 
@@ -294,14 +303,21 @@ namespace HSMServer.ServiceExtensions
                     await storage.Initialize();
         }
 
-        private static Action<ListenOptions> KestrelListenOptions(ServerCertificateConfig config) =>
+        private static Action<ListenOptions> KestrelListenOptions(KestrelConfig kestrel, ServerCertificateConfig certificate) =>
             options =>
             {
+                if (!kestrel.UseHttps)
+                {
+                    // HTTP/2 without TLS needs prior knowledge, which proxies do not use.
+                    options.Protocols = HttpProtocols.Http1;
+                    return;
+                }
+
                 options.Protocols = HttpProtocols.Http1AndHttp2;
                 options.UseHttps(portOptions =>
                 {
                     portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                    portOptions.ServerCertificate = config.Certificate;
+                    portOptions.ServerCertificate = certificate.Certificate;
                 });
             };
 

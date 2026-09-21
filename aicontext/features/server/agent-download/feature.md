@@ -55,7 +55,9 @@ the resolver drops it rather than bake a misleading address. IPv6 literals stay 
 scheme default (`:443` survives —
 detected from the raw authority, not `Uri.IsDefaultPort`); only an absent port falls back to the
 configured `Kestrel.SensorPort`. Behind Docker/NAT the server cannot infer its external address, so this
-setting exists; when blank it falls back to the request host + the Sensor port. `AgentConfig.AllowUntrustedCertificate`
+setting exists; when blank it falls back to the request host + the Sensor port. In plain-HTTP mode behind a
+TLS-terminating proxy (`Kestrel.UseHttps: false`, #1411) the fallback scheme is the client's `https`, restored
+from `X-Forwarded-Proto` of a trusted proxy, and not the proxy-to-server `http`. `AgentConfig.AllowUntrustedCertificate`
 is baked into the bundle's `server.allowUntrustedCertificate` (for self-hosted / self-signed servers).
 The result is written into the bundle's `config.json`, which the agent maps onto `CollectorOptions`.
 
