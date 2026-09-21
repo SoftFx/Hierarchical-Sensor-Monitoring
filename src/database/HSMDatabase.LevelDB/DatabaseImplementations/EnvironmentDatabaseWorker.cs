@@ -446,7 +446,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // with a strict discipline: seeded only from a read that can FAIL
         // LOUDLY (GetListOfBytes swallows read errors into an empty list —
         // seeding from it would freeze a wrong cache for the process
-        // lifetime), and mutated only AFTER the durable write succeeds. So a
+        // lifetime), and mutated only AFTER the durable index write it
+        // mirrors succeeds — in RemovePolicy deliberately AHEAD of the row
+        // delete, so a failed delete cannot desynchronize the mirror. So a
         // failed Put leaves the cache untouched and the next call retries,
         // and the write payload can be built FROM the cache — a re-apply
         // re-adding an existing id is O(1) with no round trip at all, and a
@@ -545,14 +547,22 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
                     _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
 
+                    // Mirrors the index Put that just succeeded — durable
+                    // write first, cache second — and deliberately PRECEDES
+                    // the row delete: a failed delete must leave a stray row
+                    // with no index entry (a state the boot heal absorbs),
+                    // not a cache that still holds an id the durable index
+                    // just lost — that desync would make the next AddPolicy
+                    // of this id skip the index Put and write a row
+                    // GetAllPolicies never returns.
+                    _policyIdsCache.Remove(policyId);
+
                     // The row delete stays INSIDE the lock so the index and
                     // the delete serialize against each other for THIS id;
                     // cross-id half-states (a concurrent add's row write
                     // outside the lock) are the heal's domain, see the
                     // _policyIdsLock comment.
                     _database.Delete(policyId.ToByteArray());
-
-                    _policyIdsCache.Remove(policyId); // durable write first, cache second
                 }
             }
             catch (Exception e)
