@@ -115,6 +115,11 @@ namespace HSMServer.Core.Cache
 
         Task RemoveChatsFromPoliciesAsync(Guid folderId, List<Guid> chats, InitiatorInfo initiator);
 
+        // #1409: null out ScheduleId on every policy that references the given
+        // schedule, so a deleted schedule leaves schedule-less policies instead
+        // of dangling ids (fail-open + a repeated missing-id error log).
+        Task DetachAlertScheduleFromPoliciesAsync(Guid scheduleId);
+
         List<AlertTemplateModel> GetAlertTemplateModels();
 
         Task<(bool Success, string Error)> AddAlertTemplateAsync(AlertTemplateModel model, CancellationToken tocken = default);

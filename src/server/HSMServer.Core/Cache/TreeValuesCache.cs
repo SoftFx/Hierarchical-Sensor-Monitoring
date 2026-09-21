@@ -1417,6 +1417,58 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        // #1409: a schedule being deleted must not leave dangling ScheduleIds on
+        // policies — they fail open at evaluation (#1405) and log a missing-id
+        // error on every lookup. Mirror RemoveChatsFromPoliciesAsync: collect
+        // every product branch, dispatch to each entity's own queue thread.
+        public async Task DetachAlertScheduleFromPoliciesAsync(Guid scheduleId)
+        {
+            var initiator = InitiatorInfo.AsSystemForce("DetachAlertSchedule");
+
+            var branchProducts = new List<ProductModel>();
+            var branchSensors = new List<BaseSensorModel>();
+
+            foreach (var rootProduct in GetProducts())
+                CollectBranch(rootProduct, branchProducts, branchSensors);
+
+            var productTasks = branchProducts
+                .Where(p => p.Policies.TTLPolicies.Any(t => t.ScheduleId == scheduleId))
+                .Select(product => Task.Run(async () =>
+                {
+                    // Full-list semantics: re-assert EVERY TTL policy of the
+                    // product, patching only the matching ScheduleId.
+                    var productTtlUpdates = product.Policies.TTLPolicies
+                        .Select(ttl => DetachFromSchedule(ttl, scheduleId, initiator))
+                        .ToList();
+
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        TTLPolicies = productTtlUpdates,
+                        Initiator = initiator,
+                    };
+
+                    // Route to the ROOT product's queue — see the comment in
+                    // RemoveChatsFromPoliciesAsync for why dispatching to a
+                    // sub-product's own queue would race with admin edits.
+                    await ProcessRequestAsync(product.Root.Id, update);
+                }));
+
+            var sensorTasks = branchSensors
+                .Where(sensor => sensor.Policies.TTLPolicies.Any(t => t.ScheduleId == scheduleId) ||
+                                 sensor.Policies.Any(policy => policy.ScheduleId == scheduleId))
+                .Select(sensor => ProcessRequestAsync(sensor.Root.Id, new DetachAlertScheduleFromSensorRequest(sensor.Id, scheduleId, initiator)));
+
+            try
+            {
+                await Task.WhenAll(productTasks.Concat(sensorTasks));
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"An error was occurred while detaching alert schedule {scheduleId} from policies", ex);
+            }
+        }
+
         private static void CollectBranch(ProductModel product, List<ProductModel> products, List<BaseSensorModel> sensors)
         {
             products.Add(product);
@@ -1478,6 +1530,48 @@ namespace HSMServer.Core.Cache
             TryUpdateSensor(update, out _);
         }
 
+
+        // #1409: null out ScheduleId on the sensor's policies that point at the
+        // schedule being deleted, so the persisted policy degrades to schedule-less
+        // semantics instead of keeping a dangling id. Full-list semantics like
+        // RemoveChatsFromSensor: the update re-asserts EVERY policy of the sensor,
+        // patching only the matching ScheduleId — a partial list would drop the rest.
+        private void DetachAlertScheduleFromSensor(DetachAlertScheduleFromSensorRequest request)
+        {
+            if (!TryGetSensorById(request.SensorId, out var sensor))
+                return;
+
+            List<PolicyUpdate> sensorTtlUpdates = null;
+            if (sensor.Policies.TTLPolicies.Any(t => t.ScheduleId == request.ScheduleId))
+            {
+                sensorTtlUpdates = new List<PolicyUpdate>(sensor.Policies.TTLPolicies.Count);
+
+                foreach (var ttl in sensor.Policies.TTLPolicies)
+                    sensorTtlUpdates.Add(DetachFromSchedule(ttl, request.ScheduleId, request.Initiator));
+            }
+
+            List<PolicyUpdate> policiesUpdate = null;
+            if (sensor.Policies.Any(p => p.ScheduleId == request.ScheduleId))
+            {
+                policiesUpdate = new List<PolicyUpdate>(sensor.Policies.Count());
+
+                foreach (var policy in sensor.Policies)
+                    policiesUpdate.Add(DetachFromSchedule(policy, request.ScheduleId, request.Initiator));
+            }
+
+            if (policiesUpdate is null && sensorTtlUpdates is null)
+                return;
+
+            var update = new SensorUpdate
+            {
+                Id = sensor.Id,
+                Policies = policiesUpdate,
+                TTLPolicies = sensorTtlUpdates,
+                Initiator = request.Initiator,
+            };
+
+            TryUpdateSensor(update, out _);
+        }
 
         public AlertTemplateModel GetAlertTemplate(Guid id)
         {
@@ -1992,6 +2086,13 @@ namespace HSMServer.Core.Cache
                 .Select(c => $"{c.Property}:{c.Operation}:{c.Target}"));
         }
 
+        // #1409: full copy of the policy with the deleted schedule's reference
+        // nulled — the copy keeps every other field (the full-list update
+        // semantics re-assert the whole policy), so a ScheduleId bound to a
+        // DIFFERENT schedule rides through unchanged.
+        private static PolicyUpdate DetachFromSchedule(Policy policy, Guid scheduleId, InitiatorInfo initiator) =>
+            new(policy, initiator) { ScheduleId = policy.ScheduleId == scheduleId ? null : policy.ScheduleId };
+
         private static bool TryGetPolicyUpdate(Policy policy, HashSet<Guid> chats, InitiatorInfo initiator,
             out PolicyUpdate update)
         {
@@ -2151,6 +2252,9 @@ namespace HSMServer.Core.Cache
                     break;
                 case RemoveChatsFromSensorRequest request:
                     RemoveChatsFromSensor(request);
+                    break;
+                case DetachAlertScheduleFromSensorRequest request:
+                    DetachAlertScheduleFromSensor(request);
                     break;
                 case ClearHistoryRequest request:
                     ClearSensorHistory(request);

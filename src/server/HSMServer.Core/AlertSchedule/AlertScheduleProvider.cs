@@ -40,6 +40,12 @@ namespace HSMServer.Core.Schedule
 
         private readonly Dictionary<Guid, CacheEntry> _cache = new();
 
+        // Dangling schedule ids fail open (#1405) but are REPORTED once per id
+        // per process (#1409): the TTL gates call IsWorkingTime per scheduled
+        // policy per sweep, so a deleted schedule referenced by a sensor park
+        // used to produce one ERROR line per policy per sweep.
+        private readonly HashSet<Guid> _reportedMissingSchedules = new();
+
         private readonly object _lock = new object();
 
         private readonly Timer _cleanupTimer;
@@ -122,7 +128,8 @@ namespace HSMServer.Core.Schedule
                 }
                 else
                 {
-                    _logger.Error($"Alert Schedule with id = {id} was not found.");
+                    ReportMissingSchedule(id);
+
                     return true;
                 }
             }
@@ -151,10 +158,18 @@ namespace HSMServer.Core.Schedule
                 }
                 else
                 {
-                    _logger.Error($"Alert Schedule with id = {id} was not found.");
+                    ReportMissingSchedule(id);
+
                     return true;
                 }
             }
+        }
+
+        // Must be called under _lock only.
+        private void ReportMissingSchedule(Guid id)
+        {
+            if (_reportedMissingSchedules.Add(id))
+                _logger.Error($"Alert Schedule with id = {id} was not found.");
         }
 
         public void DeleteSchedule(Guid id)
@@ -187,6 +202,10 @@ namespace HSMServer.Core.Schedule
         {
             lock (_lock)
             {
+                // The id has a live schedule again — a later disappearance is
+                // a new event and must be reported afresh (#1409).
+                _reportedMissingSchedules.Remove(schedule.Id);
+
                 if (_cache.TryGetValue(schedule.Id, out var cacheEntry))
                 {
                     cacheEntry.Schedule = schedule;

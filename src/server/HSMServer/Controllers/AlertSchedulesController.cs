@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -56,8 +57,15 @@ namespace HSMServer.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Remove(Guid id)
+        public async Task<IActionResult> Remove(Guid id)
         {
+            // Detach FIRST (#1409), before the schedule id disappears: the
+            // detach is best-effort (internal failures are logged there, the
+            // deletion proceeds), but this ordering minimizes the crash window
+            // — if the process dies between the two calls, the schedule still
+            // exists and the operator's Remove retry re-runs the detach.
+            await _cache.DetachAlertScheduleFromPoliciesAsync(id);
+
             _scheduleProvider.DeleteSchedule(id);
 
             return RedirectToAction("Index");
