@@ -19,6 +19,10 @@ namespace HSMServer.Core.Tests.Schedule
     // sweep, so one deleted schedule over a sensor park amplified into an
     // ERROR line per policy per sweep. The missing-id report must fire once
     // per id per process, and a re-saved schedule must re-arm it.
+    // Pinned into the serialized DB collection because the class swaps the
+    // process-global NLog configuration for its lifetime; without the pin it
+    // would run in parallel with other collections' logging.
+    [Collection("Database collection")]
     public sealed class AlertScheduleProviderMissingIdLoggingTests : IDisposable
     {
         private readonly MemoryTarget _memory = new() { Layout = "${message}" };

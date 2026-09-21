@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using HSMCommon.Model;
@@ -42,7 +43,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var survivorId = Guid.NewGuid();
 
             var sensorPath = "sensorScheduleDetach";
-            await AddTemplateWithScheduledPolicies(sensorPath, deletedId, survivorId);
+            await AddTemplateWithScheduledPolicies([$"*/{sensorPath}"], deletedId, survivorId);
             await CreateSensor(sensorPath);
 
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensor));
@@ -71,9 +72,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var storedTtlDeleted = storedSensor.TTLPolicies.First(p => new Guid(p.Id) == ttlDeleted.Id);
             Assert.Empty(storedTtlDeleted.ScheduleId);
+            // #1409: the detach must not drop the explicit TTL interval —
+            // a null TTL in full-list semantics is an explicit FromParent reset,
+            // so without re-asserting TTL every inactivity alert silently reverts.
+            Assert.Equal(TimeSpan.FromMinutes(5).Ticks, storedTtlDeleted.TTL);
 
             var storedTtlSurvivor = storedSensor.TTLPolicies.First(p => new Guid(p.Id) == ttlSurvivor.Id);
             Assert.Equal(survivorId.ToByteArray(), storedTtlSurvivor.ScheduleId);
+            Assert.Equal(TimeSpan.FromMinutes(6).Ticks, storedTtlSurvivor.TTL);
         }
 
 
@@ -120,9 +126,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var storedProduct = _databaseCoreManager.DatabaseCore.GetProduct(_fixture.ProductAId.ToString());
             var storedDeleted = storedProduct.TTLPolicies.First(p => new Guid(p.Id) == ttlDeleted.Id);
             Assert.Empty(storedDeleted.ScheduleId);
+            Assert.Equal(TimeSpan.FromMinutes(5).Ticks, storedDeleted.TTL);
 
             var storedSurvivor = storedProduct.TTLPolicies.First(p => new Guid(p.Id) == ttlSurvivor.Id);
             Assert.Equal(survivorId.ToByteArray(), storedSurvivor.ScheduleId);
+            Assert.Equal(TimeSpan.FromMinutes(5).Ticks, storedSurvivor.TTL);
         }
 
 
@@ -168,7 +176,59 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        private async Task AddTemplateWithScheduledPolicies(string sensorPath, Guid deletedId, Guid survivorId)
+        // #1409: templates are a THIRD owner of ScheduleId (Policies and
+        // TtlEntries). A template surviving the detach with the dangling id
+        // re-mints it on every new matching sensor (AddSensor -> apply) and
+        // re-attaches it on the next template save, so the detach must clear
+        // template policies too — in memory AND in the stored entity.
+        [Fact]
+        [Trait("Category", "Alert schedules")]
+        public async Task Detach_ClearsTemplatePolicies_Persists_AndStopsReMinting()
+        {
+            var deletedId = Guid.NewGuid();
+            var survivorId = Guid.NewGuid();
+
+            var firstPath = "sensorDetachTemplateFirst";
+            var secondPath = "sensorDetachTemplateSecond";
+
+            var template = await AddTemplateWithScheduledPolicies([$"*/{firstPath}", $"*/{secondPath}"], deletedId, survivorId);
+            await CreateSensor(firstPath);
+
+            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+
+            // In-memory template: the dangling id is gone, the other schedule's
+            // binding and the TTL intervals survive.
+            var cached = _valuesCache.GetAlertTemplate(template.Id);
+            Assert.NotNull(cached);
+            Assert.All(cached.Policies, p => Assert.Null(p.ScheduleId));
+            Assert.Contains(cached.TtlEntries, e => e.Policy.ScheduleId is null && e.Interval.Ticks == TimeSpan.FromMinutes(5).Ticks);
+            Assert.Contains(cached.TtlEntries, e => e.Policy.ScheduleId == survivorId && e.Interval.Ticks == TimeSpan.FromMinutes(6).Ticks);
+
+            // Stored template: a restart must not reload the dangling id, and
+            // the TTL intervals must ride through the template persist too.
+            var storedTemplate = _databaseCoreManager.DatabaseCore.GetAllAlertTemplates()
+                .First(t => new Guid(t.Id) == template.Id);
+
+            Assert.All(storedTemplate.Policies, p => Assert.Empty(p.ScheduleId));
+            Assert.Contains(storedTemplate.TTLPolicies,
+                p => p.ScheduleId.Length == 0 && p.TTL == TimeSpan.FromMinutes(5).Ticks);
+            Assert.Contains(storedTemplate.TTLPolicies,
+                p => p.ScheduleId.SequenceEqual(survivorId.ToByteArray()) && p.TTL == TimeSpan.FromMinutes(6).Ticks);
+
+            // A sensor arriving AFTER the detach gets template policies with no
+            // dangling schedule (and keeps the other schedule's binding).
+            await CreateSensor(secondPath);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, secondPath, out var lateSensor));
+
+            Assert.DoesNotContain(lateSensor.Policies, p => p.ScheduleId == deletedId);
+            Assert.DoesNotContain(lateSensor.Policies.TTLPolicies, t => t.ScheduleId == deletedId);
+            Assert.Contains(lateSensor.Policies.TTLPolicies,
+                t => t.ScheduleId is null && t.TTLInterval.Ticks == TimeSpan.FromMinutes(5).Ticks);
+            Assert.Contains(lateSensor.Policies.TTLPolicies, t => t.ScheduleId == survivorId);
+        }
+
+
+        private async Task<AlertTemplateModel> AddTemplateWithScheduledPolicies(IReadOnlyList<string> paths, Guid deletedId, Guid survivorId)
         {
             var ttlDeletedSetting = new TimeIntervalSettingProperty();
             ttlDeletedSetting.TrySetValue(new TimeIntervalModel(TimeSpan.FromMinutes(5).Ticks));
@@ -194,7 +254,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Name = $"Detach template {Guid.NewGuid():N}",
                 FolderId = _fixture.FolderId,
                 SensorType = (byte)SensorType.Integer,
-                Paths = [$"*/{sensorPath}"],
+                Paths = [.. paths],
                 Policies = [regular],
                 TtlEntries =
                 [
@@ -206,6 +266,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
             Assert.True(addOk, $"Failed to add template: {addError}");
+
+            return template;
         }
 
         private async Task CreateSensor(string path)

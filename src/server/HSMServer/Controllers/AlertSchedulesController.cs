@@ -59,6 +59,12 @@ namespace HSMServer.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Remove(Guid id)
         {
+            // Existence guard BEFORE the detach: the detach walks the whole
+            // tree, so a Remove posted with a random/unknown id must not pay
+            // for that walk (DeleteSchedule alone would be a no-op) (#1409).
+            if (_scheduleProvider.GetSchedule(id) is null)
+                return RedirectToAction("Index");
+
             // Detach FIRST (#1409), before the schedule id disappears: the
             // detach is best-effort (internal failures are logged there, the
             // deletion proceeds), but this ordering minimizes the crash window

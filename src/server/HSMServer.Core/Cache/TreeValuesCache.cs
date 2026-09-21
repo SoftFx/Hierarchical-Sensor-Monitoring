@@ -1421,15 +1421,21 @@ namespace HSMServer.Core.Cache
         // policies — they fail open at evaluation (#1405) and log a missing-id
         // error on every lookup. Mirror RemoveChatsFromPoliciesAsync: collect
         // every product branch, dispatch to each entity's own queue thread.
+        // Alert templates are a THIRD owner of ScheduleId (Policies and
+        // TtlEntries) and are detached in the same pass — otherwise a template
+        // surviving with the dangling id re-mints it on every matching sensor
+        // (AddSensor -> ApplyTemplateToSensor) and re-attaches it on the next
+        // template save, so the fix would not hold for template-created policies.
         public async Task DetachAlertScheduleFromPoliciesAsync(Guid scheduleId)
         {
             var initiator = InitiatorInfo.AsSystemForce("DetachAlertSchedule");
 
+            DetachAlertScheduleFromTemplates(scheduleId);
+
             var branchProducts = new List<ProductModel>();
-            var branchSensors = new List<BaseSensorModel>();
 
             foreach (var rootProduct in GetProducts())
-                CollectBranch(rootProduct, branchProducts, branchSensors);
+                CollectProducts(rootProduct, branchProducts);
 
             var productTasks = branchProducts
                 .Where(p => p.Policies.TTLPolicies.Any(t => t.ScheduleId == scheduleId))
@@ -1454,9 +1460,10 @@ namespace HSMServer.Core.Cache
                     await ProcessRequestAsync(product.Root.Id, update);
                 }));
 
-            var sensorTasks = branchSensors
-                .Where(sensor => sensor.Policies.TTLPolicies.Any(t => t.ScheduleId == scheduleId) ||
-                                 sensor.Policies.Any(policy => policy.ScheduleId == scheduleId))
+            // The sensor arm reuses the shared helper: same predicate, but it
+            // walks the sensor registry instead of materializing the whole
+            // product tree just to filter it.
+            var sensorTasks = GetSensorsByAlertSchedule(scheduleId)
                 .Select(sensor => ProcessRequestAsync(sensor.Root.Id, new DetachAlertScheduleFromSensorRequest(sensor.Id, scheduleId, initiator)));
 
             try
@@ -1465,7 +1472,59 @@ namespace HSMServer.Core.Cache
             }
             catch (Exception ex)
             {
-                _logger.Error($"An error was occurred while detaching alert schedule {scheduleId} from policies", ex);
+                // After `await`, Task.WhenAll surfaces only the FIRST inner
+                // exception; walk them all so per-entity failures are not
+                // silently dropped (#1409).
+                IReadOnlyList<Exception> innerExceptions =
+                    ex is AggregateException aggregate ? aggregate.InnerExceptions : [ex];
+
+                foreach (var inner in innerExceptions)
+                    _logger.Error($"An error was occurred while detaching alert schedule {scheduleId} from policies", inner);
+            }
+        }
+
+        // #1409: templates are not queue-serialized (AddAlertTemplateAsync mutates
+        // _alertTemplates on the caller thread the same way), so the in-place
+        // nulling below follows the same serialization as every other template
+        // mutation; ScheduleId is a single reference-typed field write.
+        private void DetachAlertScheduleFromTemplates(Guid scheduleId)
+        {
+            foreach (var template in _alertTemplates.Values)
+            {
+                var changed = false;
+
+                foreach (var policy in template.Policies ?? Enumerable.Empty<Policy>())
+                {
+                    if (policy.ScheduleId != scheduleId)
+                        continue;
+
+                    policy.ScheduleId = null;
+                    changed = true;
+                }
+
+                foreach (var entry in template.TtlEntries ?? Enumerable.Empty<TtlEntry>())
+                {
+                    if (entry.Policy.ScheduleId != scheduleId)
+                        continue;
+
+                    entry.Policy.ScheduleId = null;
+                    changed = true;
+                }
+
+                if (!changed)
+                    continue;
+
+                try
+                {
+                    // Same persistence path AddAlertTemplateAsync uses: an
+                    // idempotent upsert — the id-list add no-ops for an existing
+                    // template, the entity Put overwrites it.
+                    _database.AddAlertTemplate(template.ToEntity());
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occurred while detaching alert schedule {scheduleId} from alert template {template.Id}", ex);
+                }
             }
         }
 
@@ -1478,6 +1537,16 @@ namespace HSMServer.Core.Cache
 
             foreach (var (_, subProduct) in product.SubProducts)
                 CollectBranch(subProduct, products, sensors);
+        }
+
+        // Products-only variant of CollectBranch for callers whose sensor arm
+        // goes through the sensor registry instead (GetSensorsByAlertSchedule).
+        private static void CollectProducts(ProductModel product, List<ProductModel> products)
+        {
+            products.Add(product);
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                CollectProducts(subProduct, products);
         }
 
         private void RemoveChatsFromSensor(RemoveChatsFromSensorRequest request)
@@ -1570,7 +1639,11 @@ namespace HSMServer.Core.Cache
                 Initiator = request.Initiator,
             };
 
-            TryUpdateSensor(update, out _);
+            // Unlike a dispatched SensorUpdate (whose failure the queue handler
+            // logs), this direct call would otherwise drop the error silently —
+            // the dangling id would stay in storage with no trace (#1409).
+            if (!TryUpdateSensor(update, out var error))
+                _logger.Error($"Detach of schedule {request.ScheduleId} from sensor {request.SensorId} failed: {error}");
         }
 
         public AlertTemplateModel GetAlertTemplate(Guid id)
@@ -2090,8 +2163,20 @@ namespace HSMServer.Core.Cache
         // nulled — the copy keeps every other field (the full-list update
         // semantics re-assert the whole policy), so a ScheduleId bound to a
         // DIFFERENT schedule rides through unchanged.
+        // TTL must be re-asserted EXPLICITLY: the copy ctor cannot copy it
+        // (base Policy has none), and in full-list semantics a null TTL is an
+        // explicit reset — TTLPolicy.FullUpdate maps null to FromParent, so
+        // without this line every TTL policy on an affected entity would
+        // silently lose its explicit interval. The FromParent case sends null
+        // on purpose (stays FromParent); an explicit None/Never (== long.MaxValue
+        // ticks) also degrades to FromParent — the same choice ApplyTemplateToSensor
+        // makes, and not reachable through the editors (ForTimeout has no None).
         private static PolicyUpdate DetachFromSchedule(Policy policy, Guid scheduleId, InitiatorInfo initiator) =>
-            new(policy, initiator) { ScheduleId = policy.ScheduleId == scheduleId ? null : policy.ScheduleId };
+            new(policy, initiator)
+            {
+                ScheduleId = policy.ScheduleId == scheduleId ? null : policy.ScheduleId,
+                TTL = policy is TTLPolicy { IsTTLFromParent: false } ttl ? ttl.TTLTicks : null,
+            };
 
         private static bool TryGetPolicyUpdate(Policy policy, HashSet<Guid> chats, InitiatorInfo initiator,
             out PolicyUpdate update)
