@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -76,10 +75,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             };
 
             var policy = new TTLPolicy(_sensor, entity);
-            _collection.AddTTLPolicy(new PolicyUpdate(policy) { TTL = entity.TTL, ScheduleId = scheduleId });
+            // TTL is the one field the PolicyUpdate copy constructor does not
+            // carry; ScheduleId it copies from the policy (built from the
+            // same scheduleId above).
+            _collection.AddTTLPolicy(new PolicyUpdate(policy) { TTL = entity.TTL });
 
-            // Re-fetch: the collection stores its own instance.
-            return (TTLPolicy)_collection.TTLPolicies.FirstMatchOrDefault(p => p.ScheduleId == scheduleId);
+            // Re-fetch: AddTTLPolicy builds and stores its OWN instance.
+            return _collection.TTLPolicies.FirstOrDefault(p => p.ScheduleId == scheduleId);
         }
 
         private IntegerValue StaleValue() => new()
@@ -101,18 +103,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             // The incident's discriminator: the provider reads the STALE
             // timestamp as in-window, so a value-time gate (the pre-fix
-            // code) would expire the sensor here. The evaluation-time gate
-            // must not — and the expiry decision must not reach the
-            // sensor-level transition arm either (no notification, no
-            // timeout marker): SensorExpired carries false (resolution),
-            // never true.
-            var fired = false;
-            _collection.SensorExpired += (_, timeout) => fired |= timeout;
-
-            var expired = _collection.SensorTimeout(StaleValue());
-
-            Assert.False(expired);
-            Assert.False(fired);
+            // code) would expire the sensor here; the evaluation-time gate
+            // must not. What this asserts is the expiry DECISION only — the
+            // sensor-level transition side effects (notification, timeout
+            // marker) live in TreeValuesCache.SetExpiredSnapshot and are
+            // covered by TtlScheduleWindowIntegrationTests on the real cache.
+            Assert.False(_collection.SensorTimeout(StaleValue()));
         }
 
         [Fact]
@@ -152,27 +148,16 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         // === Repeat cancellation (#1405) ===
 
         [Fact]
-        public void ResendNotification_OutOfWindow_SilentAndCancels()
-        {
-            var ttl = AddTtlPolicy(ScheduleId);
-            ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-10)); // mid-session send happened
-
-            _isWorkingTimeNow = false;
-
-            // Silent; the CANCELLATION (state reset) is asserted behaviorally
-            // by ResendNotification_CancellationIsReal_WindowOpenFiresFresh —
-            // the clock is private.
-            Assert.False(ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
-        }
-
-        [Fact]
         public void ResendNotification_CancellationIsReal_WindowOpenFiresFresh()
         {
             var ttl = AddTtlPolicy(ScheduleId);
             ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-1)); // sent a minute ago (interval: 5 min)
 
             _isWorkingTimeNow = false;
-            ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object); // cancels
+
+            // Out-of-window: SILENT — and the state reset is real, asserted
+            // by the second half below (the clock itself is private).
+            Assert.False(ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
 
             _isWorkingTimeNow = true; // window opens
 
@@ -262,11 +247,5 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // (the "never sent" arm sees the nulled clock). With it: silent.
             Assert.False(ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
         }
-    }
-
-    internal static class PolicyEnumerationExtensions
-    {
-        public static TTLPolicy FirstMatchOrDefault(this IReadOnlyList<TTLPolicy> policies, Func<TTLPolicy, bool> match) =>
-            policies.FirstOrDefault(match);
     }
 }

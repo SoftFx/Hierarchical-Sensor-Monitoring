@@ -2988,7 +2988,28 @@ namespace HSMServer.Core.Cache
 
                 var ttlSnapshot = sensor.Policies.TTLPolicies;
                 foreach (var ttl in ttlSnapshot)
+                {
+                    // The fire arm carries the same schedule gate as the expiry
+                    // decision itself: in a mixed sensor a schedule-less policy
+                    // can flip the sensor while "now" is outside the scheduled
+                    // policy's window, and the transition must not leak that
+                    // policy's alert out-of-window. Routed through
+                    // CancelNotification (state reset), not a bare skip — a
+                    // stale repeat clock would resume yesterday's cadence at
+                    // window open instead of firing fresh (#1405). The
+                    // resolution arm (timeout == false) is deliberately NOT
+                    // gated: GetNotification(false) performs the same reset and
+                    // sends the recovery — out-of-window recoveries resolve
+                    // too, the accepted residual documented in
+                    // aicontext/features/server/alerts/feature.md (#1404).
+                    if (timeout && ttl.IsOutsideSchedule(_alertScheduleProvider))
+                    {
+                        ttl.CancelNotification();
+                        continue;
+                    }
+
                     SendNotification(sensor.Id, ttl.GetNotification(timeout));
+                }
             }
 
             SensorUpdateView(sensor);

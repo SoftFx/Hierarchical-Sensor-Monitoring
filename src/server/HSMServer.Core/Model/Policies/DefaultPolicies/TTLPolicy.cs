@@ -1,7 +1,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Schedule;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
+using HSMServer.Core.Schedule;
 using System;
 using System.Linq;
 using System.Text;
@@ -131,10 +131,27 @@ namespace HSMServer.Core.Model.Policies
         internal bool HasTimeout(DateTime? time) => IsActive && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
         // The schedule provider arrives as a parameter (the policy owns no
-        // provider — the collection and the cache do; CheckSensorsTimeout is
-        // the sole caller and holds the shared instance). Fail-open inherited
-        // from IsWorkingTime: an unknown schedule id reads as in-window, the
-        // same fallback the expiry gate applies (#1405).
+        // provider — the collection and the cache do; the maintenance sweep
+        // is the caller here and holds the shared instance). Fail-open
+        // inherited from IsWorkingTime: an unknown schedule id reads as
+        // in-window, the same fallback the expiry gate applies (#1405).
+        //
+        // The schedule gates differ ON PURPOSE between the two policy kinds:
+        // the regular data-policy gate in SensorPolicyCollection keeps
+        // VALUE-TIME semantics (the value IS the event there — an old value
+        // arriving out-of-window must be judged by its own timestamp), while
+        // the TTL gates (#1404 expiry, #1405 repeat) use EVALUATION time — a
+        // stale in-session value must not fire when "now" is outside the
+        // window. Do not "unify" them: either choice re-breaks #1404.
+        //
+        // Tolerated race: this method reads _lastTTLNotificationTime and, via
+        // CancelNotification, writes it back with no lock — the state pair
+        // (_lastTTLNotificationTime, _notifyCount) is already written from
+        // two threads (the sweep via SetExpiredSnapshot, the API thread via
+        // TryAddValue -> SensorTimeout). Worst case a value arriving while the
+        // sweep is inside this method costs ONE duplicate notification; the
+        // unsynchronized read-modify-write is the established trade-off here
+        // (cf. the #1296 notes in BaseSensorModelT), not an oversight.
         internal bool ResendNotification(DateTime? time, IAlertScheduleProvider scheduleProvider)
         {
             if (!HasTimeout(time))
