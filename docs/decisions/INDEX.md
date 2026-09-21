@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-> Owner: shared | Last reviewed: 2026-05-28 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-09-16 | Canonical: yes
 
 Use ADRs for durable decisions that future maintainers will ask about.
 
@@ -20,4 +20,5 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0003 | Accepted | [HsmApiToken is an isolated, non-default scheme behind a fail-closed /api/v1 area](0003-hsm-api-token-scheme-isolation.md) | 2026-09-01 |
 | 0004 | Superseded by ADR-0005 | [No-expiration API tokens are the issuance default](0004-no-expiration-tokens-default.md) | 2026-09-09 |
 | 0005 | Accepted | [An API token is an eternal owner mirror with a read-only flag](0005-api-token-owner-mirror.md) | 2026-09-10 |
+| 0006 | Accepted | [Token usage sensors are keyed by owner login + token EntityId](0006-token-usage-sensors-keyed-by-owner-and-entityid.md) | 2026-09-16 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |
