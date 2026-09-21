@@ -136,76 +136,61 @@ namespace HSMServer.Core.Model.Policies
         // inherited from IsWorkingTime: an unknown schedule id reads as
         // in-window, the same fallback the expiry gate applies (#1405).
         //
-        // The schedule gates differ ON PURPOSE between the two policy kinds:
-        // the regular data-policy gate in SensorPolicyCollection keeps
-        // VALUE-TIME semantics (the value IS the event there — an old value
-        // arriving out-of-window must be judged by its own timestamp), while
-        // the TTL gates (#1404 expiry, #1405 repeat) use EVALUATION time — a
-        // stale in-session value must not fire when "now" is outside the
-        // window. Do not "unify" them: either choice re-breaks #1404.
+        // The schedule gates deliberately differ between the two policy kinds
+        // (TTL gates evaluate at UtcNow, data-policy gates at the value's
+        // own timestamp) — the reasoning and the "do not unify" rule live in
+        // aicontext/features/server/alerts/feature.md (#1404).
         //
-        // Tolerated race: this method reads _lastTTLNotificationTime and, via
-        // CancelNotification, writes it back with no lock — the state pair
-        // (_lastTTLNotificationTime, _notifyCount) is already written from
-        // two threads (the sweep via SetExpiredSnapshot, the API thread via
-        // TryAddValue -> SensorTimeout). Worst case a value arriving while the
-        // sweep is inside this method costs ONE duplicate notification; the
-        // unsynchronized read-modify-write is the established trade-off here
-        // (cf. the #1296 notes in BaseSensorModelT), not an oversight.
-        internal bool ResendNotification(DateTime? time, IAlertScheduleProvider scheduleProvider)
+        // Not side-effect-free: the out-of-window arm cancels the
+        // notification state. The state pair (_lastTTLNotificationTime,
+        // _notifyCount) is written from two threads without a lock — the
+        // tolerated trade-off (worst case one duplicate notification);
+        // details: aicontext/features/server/alerts/feature.md (#1405).
+        internal bool TryResendNotification(DateTime? time, IAlertScheduleProvider scheduleProvider)
         {
             if (!HasTimeout(time))
                 return false;
 
-            // Outside the alert's schedule window the repeat is CANCELLED,
-            // not paused (#1405): the notification state resets, so a window
-            // open with a still-stale value fires a FRESH alert (the null
-            // timestamp makes the next in-window evaluation send at once)
-            // instead of resuming yesterday's cadence. A scheduled policy
-            // goes silent in a mixed sensor while its schedule-less siblings
-            // keep their own rules — the cancellation is per-policy because
-            // the schedule is per-alert (OffTime, by contrast, is
-            // sensor-wide and must never be fabricated here). MANDATORY with
-            // the #1404 evaluation-time expiry gate: that gate resolves the
-            // sensor out-of-window, GetNotification(false) nulls the
-            // timestamp, and the `!HasValue` arm below would otherwise send
-            // on EVERY sweep tick outside the window. The arm also answers
-            // FIRST, before the repeat-mode gate: it is the only home of the
-            // out-of-window reset, and every repeat mode must pass through
-            // it on the way to the never-sent arm below.
+            // Outside the window the repeat is CANCELLED, not paused (#1405):
+            // the state reset makes the next in-window evaluation deliver at
+            // once (fresh), instead of resuming yesterday's cadence.
             if (IsOutsideSchedule(scheduleProvider))
             {
                 CancelNotification();
                 return false;
             }
 
-            // A null timestamp means "not delivered in this window": the
-            // out-of-window transition cancelled the alert (a schedule-less
-            // sibling flipped a mixed sensor while this policy's window was
-            // shut), or a resolve reset it. That delivery must happen at the
-            // first in-window sweep — for EVERY repeat mode, hence BEFORE
-            // the IsActive gate: Immediately (the DEFAULT mode) leaves
-            // Schedule.IsActive false, and on the mixed-sensor shape there
-            // is no second sensor transition at window open (the sensor is
-            // already expired), so this arm is the only delivery path left —
-            // gating it on the repeat mode lost the alert forever while the
-            // UI kept showing it active (PR #1406 round 2, finding 1).
-            if (!_lastTTLNotificationTime.HasValue)
+            // Never-sent bypass, SCHEDULED policies only (#1405): the null
+            // clock is produced only by the cancellation above or a
+            // resolution — the fresh delivery at window open must outrank
+            // the repeat-mode gate, or the DEFAULT mode (Immediately, whose
+            // Schedule.IsActive is false) loses the alert forever on the
+            // mixed-sensor shape. Schedule-less policies keep the master
+            // order (the repeat-mode gate first): their null clock pairs
+            // with a resolved sensor, and the re-expiry transition re-arms
+            // it before this loop runs.
+            if (ScheduleId.HasValue && !_lastTTLNotificationTime.HasValue)
                 return true;
 
-            // The repeat cadence governs only alerts already delivered in
-            // this window; Immediately never repeats by design.
             if (!Schedule.IsActive)
                 return false;
+
+            if (!_lastTTLNotificationTime.HasValue)
+                return true;
 
             return DateTime.UtcNow - _lastTTLNotificationTime >= Schedule.GetShiftTime();
         }
 
         // The shared out-of-window decision of the two gates (#1404 expiry,
         // #1405 repeat cancellation): one home for the fail-open semantics
-        // (a null ScheduleId reads as in-window).
+        // (a null ScheduleId reads as in-window). Callers that already own an
+        // evaluation instant pass it explicitly, so a decision and the gates
+        // keyed on it cannot disagree across a minute/window boundary (#1404).
         internal bool IsOutsideSchedule(IAlertScheduleProvider scheduleProvider) =>
-            ScheduleId.HasValue && !scheduleProvider.IsWorkingTime(ScheduleId.Value, DateTime.UtcNow);
+            IsOutsideSchedule(scheduleProvider, DateTime.UtcNow);
+
+        internal bool IsOutsideSchedule(IAlertScheduleProvider scheduleProvider, DateTime evaluationTime) =>
+            ScheduleId.HasValue && !scheduleProvider.IsWorkingTime(ScheduleId.Value, evaluationTime);
 
         // The per-policy half of GetNotification(false): resets the repeat
         // clock and the counter without going through the sensor-level

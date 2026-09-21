@@ -184,7 +184,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             sensor.ReceivedNewValue += _ => receivedNewValue = true;
 
             var expiredFired = false;
-            sensor.Policies.SensorExpired += (_, _) => expiredFired = true;
+            sensor.Policies.SensorExpired += (_, _, _, _) => expiredFired = true;
 
             var destroyed = sensor.ShouldDestroy();
 
@@ -401,7 +401,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(sensor.HistoryLoadFailed, "test premise: the lazy load failed");
 
             var expiredFired = false;
-            sensor.Policies.SensorExpired += (_, _) => expiredFired = true;
+            sensor.Policies.SensorExpired += (_, _, _, _) => expiredFired = true;
 
             sensor.RetryFailedHistoryLoad(DateTime.UtcNow.AddHours(2));
 

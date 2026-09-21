@@ -2958,20 +2958,28 @@ namespace HSMServer.Core.Cache
                 return;
 
             foreach (var sensor in product.GetAllSensors())
-            {
-                var timeout = sensor.CheckTimeout();
+                RunSensorTimeoutStep(sensor);
+        }
 
-                foreach (var ttl in sensor.Policies.TTLPolicies)
-                {
-                    if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime, _alertScheduleProvider))
-                        SendNotification(sensor.Id, ttl.GetNotification(true));
-                }
+        // The maintenance sweep's per-sensor step: the transition half
+        // (CheckTimeout -> SensorExpired -> SetExpiredSnapshot, which sends on
+        // the transition) plus the resend half for values still timed out
+        // while the sensor is already expired. Internal, not private, so the
+        // tests exercise the shipped step instead of a hand-copy of it.
+        internal void RunSensorTimeoutStep(BaseSensorModel sensor)
+        {
+            _ = sensor.CheckTimeout();
+
+            foreach (var ttl in sensor.Policies.TTLPolicies)
+            {
+                if (sensor.HasData && ttl.TryResendNotification(sensor.LastValue.LastUpdateTime, _alertScheduleProvider))
+                    SendNotification(sensor.Id, ttl.GetNotification(true));
             }
         }
 
         // May run while the sensor holds its initialization lock (#1296), so nothing below — the
         // notification path included — may block. Reasoning: aicontext/features/server/overview.md.
-        private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
+        private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout, DateTime evaluationTime, BaseValue evaluatedValue)
         {
             if (sensor.IsExpired != timeout)
             {
@@ -2989,20 +2997,25 @@ namespace HSMServer.Core.Cache
                 var ttlSnapshot = sensor.Policies.TTLPolicies;
                 foreach (var ttl in ttlSnapshot)
                 {
-                    // The fire arm carries the same schedule gate as the expiry
-                    // decision itself: in a mixed sensor a schedule-less policy
-                    // can flip the sensor while "now" is outside the scheduled
-                    // policy's window, and the transition must not leak that
-                    // policy's alert out-of-window. Routed through
-                    // CancelNotification (state reset), not a bare skip — a
-                    // stale repeat clock would resume yesterday's cadence at
-                    // window open instead of firing fresh (#1405). The
-                    // resolution arm (timeout == false) is deliberately NOT
-                    // gated: GetNotification(false) performs the same reset and
-                    // sends the recovery — out-of-window recoveries resolve
-                    // too, the accepted residual documented in
-                    // aicontext/features/server/alerts/feature.md (#1404).
-                    if (timeout && ttl.IsOutsideSchedule(_alertScheduleProvider))
+                    // The transition's schedule gate, evaluated at the SAME
+                    // instant as the expiry decision that raised it: the
+                    // AddAlert decision in SensorTimeout and this send must
+                    // not diverge across a minute/window boundary (#1404).
+                    //
+                    // Out-of-window on either arm -> CANCEL silently (state
+                    // reset, no send — #1405): the FIRE arm must not leak a
+                    // mixed sensor's scheduled alert outside its window, and
+                    // a WINDOW-CAUSED resolution (out-of-window while the
+                    // evaluated value is still stale — its TTL is up, so the
+                    // sensor did not recover) must not send a false
+                    // "recovered" Ok at every session close for a
+                    // still-silent sensor; both fire FRESH at the next
+                    // window open. A GENUINE recovery (fresh value, the TTL
+                    // no longer up) fails the staleness check and still
+                    // sends the Ok out-of-window. Durable rules:
+                    // aicontext/features/server/alerts/feature.md.
+                    if (ttl.IsOutsideSchedule(_alertScheduleProvider, evaluationTime) &&
+                        (timeout || ttl.HasTimeout(evaluatedValue?.LastUpdateTime)))
                     {
                         ttl.CancelNotification();
                         continue;
