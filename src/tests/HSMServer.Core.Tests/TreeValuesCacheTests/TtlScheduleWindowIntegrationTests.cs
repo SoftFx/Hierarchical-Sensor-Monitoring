@@ -73,6 +73,45 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // === The mixed sensor + the DEFAULT repeat mode: delivery at window open ===
+
+        [Fact]
+        public async Task WindowOpens_MixedSensor_ImmediatelyRepeat_ScheduledPolicyFiresFresh()
+        {
+            var scheduleId = Guid.NewGuid();
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: false));
+
+            var sensor = await CreateSensorWithStaleValueAsync("ttlMixedImmediately", TimeSpan.FromMinutes(15));
+
+            var scheduled = AddTtlPolicy(sensor, scheduleId, TimeSpan.FromMinutes(5));
+            var scheduleLess = AddTtlPolicy(sensor, scheduleId: null, TimeSpan.FromMinutes(5));
+
+            // The DEFAULT repeat mode (Immediately) — AddTtlPolicy passes no
+            // PolicySchedule, so RepeatMode defaults: Schedule.IsActive is
+            // false, the exact shape of PR #1406 round 2 finding 1. The
+            // repeat-CADENCE gate must not own the FIRST delivery.
+            Assert.False(scheduled.Schedule.IsActive);
+
+            // Out-of-window: the schedule-less policy flips the sensor, the
+            // scheduled one is cancelled at the transition (never sent).
+            Assert.True(sensor.CheckTimeout());
+            Assert.Equal(-1, scheduled.RetryCount);
+            Assert.Equal(0, scheduleLess.RetryCount);
+
+            // The window opens with the value STILL stale. The sensor is
+            // already expired, so no second transition exists to deliver
+            // through — the sweep's resend step is the only path left, and
+            // it must fire the cancelled alert FRESH for every repeat mode,
+            // the default included (otherwise the alert is lost forever
+            // while the UI keeps showing it active).
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
+
+            RunResendSweepStep(sensor);
+
+            Assert.Equal(0, scheduled.RetryCount); // fired at window open — not lost
+        }
+
+
         // === The in-window transition + the resolve-on-fresh-data reset ===
 
         [Fact]
@@ -137,6 +176,22 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(sensor.HasData);
 
             return sensor;
+        }
+
+        // CheckSensorsTimeout's per-sensor body, reproduced call-for-call:
+        // the method itself is private and timer-driven (StateUpdatePeriod,
+        // behind a 2-minute start delay), unreachable deterministically from
+        // a test. The transition half is sensor.CheckTimeout() — the sibling
+        // tests' step; this half owns re-delivery when no transition fires
+        // (the sensor already expired), which is exactly the window-open
+        // shape the test above needs.
+        private void RunResendSweepStep(BaseSensorModel sensor)
+        {
+            _ = sensor.CheckTimeout(); // no transition while already expired
+
+            foreach (var ttl in sensor.Policies.TTLPolicies)
+                if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime, _alertScheduleProvider))
+                    ttl.GetNotification(true); // SendNotification's payload step; RetryCount is the observable
         }
 
         private static TTLPolicy AddTtlPolicy(BaseSensorModel sensor, Guid? scheduleId, TimeSpan ttl)

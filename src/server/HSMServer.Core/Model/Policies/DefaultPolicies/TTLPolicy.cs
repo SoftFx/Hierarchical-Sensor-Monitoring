@@ -157,9 +157,6 @@ namespace HSMServer.Core.Model.Policies
             if (!HasTimeout(time))
                 return false;
 
-            if(!Schedule.IsActive)
-                return false;
-
             // Outside the alert's schedule window the repeat is CANCELLED,
             // not paused (#1405): the notification state resets, so a window
             // open with a still-stale value fires a FRESH alert (the null
@@ -172,15 +169,34 @@ namespace HSMServer.Core.Model.Policies
             // the #1404 evaluation-time expiry gate: that gate resolves the
             // sensor out-of-window, GetNotification(false) nulls the
             // timestamp, and the `!HasValue` arm below would otherwise send
-            // on EVERY sweep tick outside the window.
+            // on EVERY sweep tick outside the window. The arm also answers
+            // FIRST, before the repeat-mode gate: it is the only home of the
+            // out-of-window reset, and every repeat mode must pass through
+            // it on the way to the never-sent arm below.
             if (IsOutsideSchedule(scheduleProvider))
             {
                 CancelNotification();
                 return false;
             }
 
+            // A null timestamp means "not delivered in this window": the
+            // out-of-window transition cancelled the alert (a schedule-less
+            // sibling flipped a mixed sensor while this policy's window was
+            // shut), or a resolve reset it. That delivery must happen at the
+            // first in-window sweep — for EVERY repeat mode, hence BEFORE
+            // the IsActive gate: Immediately (the DEFAULT mode) leaves
+            // Schedule.IsActive false, and on the mixed-sensor shape there
+            // is no second sensor transition at window open (the sensor is
+            // already expired), so this arm is the only delivery path left —
+            // gating it on the repeat mode lost the alert forever while the
+            // UI kept showing it active (PR #1406 round 2, finding 1).
             if (!_lastTTLNotificationTime.HasValue)
                 return true;
+
+            // The repeat cadence governs only alerts already delivered in
+            // this window; Immediately never repeats by design.
+            if (!Schedule.IsActive)
+                return false;
 
             return DateTime.UtcNow - _lastTTLNotificationTime >= Schedule.GetShiftTime();
         }

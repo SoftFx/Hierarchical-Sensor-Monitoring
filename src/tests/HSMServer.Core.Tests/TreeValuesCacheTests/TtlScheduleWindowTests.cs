@@ -57,7 +57,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        private TTLPolicy AddTtlPolicy(Guid? scheduleId = null, TimeSpan? ttl = null)
+        private TTLPolicy AddTtlPolicy(Guid? scheduleId = null, TimeSpan? ttl = null,
+                                       AlertRepeatMode repeatMode = AlertRepeatMode.FiveMinutes)
         {
             // The same minimal entity shape the sibling fixtures use: Apply()
             // requires Id and a non-null Destination/Schedule.
@@ -68,10 +69,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 ScheduleId = scheduleId?.ToByteArray() ?? [],
                 Conditions = [],
                 Destination = new PolicyDestinationEntity { IsNotInitialized = true },
-                // FiveMinutes: the production incident's repeat shape — the
-                // default (Immediately) makes Schedule.IsActive false and the
-                // repeat arm unreachable.
-                Schedule = new PolicyScheduleEntity { RepeateMode = (byte)AlertRepeatMode.FiveMinutes },
+                // FiveMinutes: the production incident's repeat shape. The
+                // default (Immediately) makes Schedule.IsActive false — the
+                // repeat-CADENCE gate — while the never-sent delivery arm
+                // must stay reachable for it (see the Immediately tests).
+                Schedule = new PolicyScheduleEntity { RepeateMode = (byte)repeatMode },
             };
 
             var policy = new TTLPolicy(_sensor, entity);
@@ -164,6 +166,32 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // A PAUSE would still be inside the 5-min interval (last send a
             // minute ago) and stay silent; a CANCELLATION has no clock and
             // fires at once.
+            Assert.True(ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
+        }
+
+        [Fact]
+        public void ResendNotification_ImmediatelyRepeat_WindowOpenFiresTheCancelledAlert()
+        {
+            // The DEFAULT repeat mode (Immediately): Schedule.IsActive is
+            // false — the repeat-CADENCE gate — and the first delivery must
+            // not live behind it. On a mixed sensor flipped out-of-window by
+            // a schedule-less sibling the transition gate cancels this
+            // policy, and at window open there is no second transition (the
+            // sensor is already expired): the resend arm is the ONLY
+            // delivery path left (PR #1406 round 2, finding 1).
+            var ttl = AddTtlPolicy(ScheduleId, repeatMode: AlertRepeatMode.Immediately);
+            ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-1)); // delivered a minute ago
+
+            _isWorkingTimeNow = false;
+
+            // Out-of-window: silent, and the cancellation is real — the
+            // Immediately sibling of the test above.
+            Assert.False(ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
+
+            _isWorkingTimeNow = true; // the window opens
+
+            // The cancelled alert fires at once: the null clock outranks the
+            // repeat-mode gate, or the alert is lost forever on this shape.
             Assert.True(ttl.ResendNotification(_staleInSessionTime, _scheduleProvider.Object));
         }
 
