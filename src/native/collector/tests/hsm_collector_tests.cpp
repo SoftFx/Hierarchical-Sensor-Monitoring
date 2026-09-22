@@ -434,6 +434,44 @@ namespace
         return payload.substr(value_start, end - value_start);
     }
 
+    // "<prefix>: dd/MM/yyyy HH:mm:ss" — the lifecycle-marker comment shape managed
+    // ProductVersionSensor renders with SensorBase.DefaultTimeFormat (#1433). Only the layout is
+    // pinned; the instant itself is wall-clock and never compared across implementations.
+    bool IsTimeMarkerComment(const std::string& comment, const std::string& prefix)
+    {
+        const std::string head = prefix + ": ";
+        if (comment.size() != head.size() + 19 || comment.compare(0, head.size(), head) != 0)
+            return false;
+
+        const std::string layout = "dd/MM/yyyy HH:mm:ss";
+        for (size_t i = 0; i < layout.size(); ++i)
+        {
+            const char actual = comment[head.size() + i];
+            const bool digit_expected = layout[i] != '/' && layout[i] != ':' && layout[i] != ' ';
+
+            if (digit_expected ? (actual < '0' || actual > '9') : actual != layout[i])
+                return false;
+        }
+
+        return true;
+    }
+
+    // Every captured payload whose text contains `path_fragment`, in delivery order.
+    std::vector<std::string> PayloadsForPath(hsm_collector_t* collector, const std::string& path_fragment)
+    {
+        std::vector<std::string> matches;
+        const auto count = hsm_collector_sent_count(collector);
+
+        for (size_t index = 0; index < count; ++index)
+        {
+            auto payload = SentJson(collector, index);
+            if (payload.find(path_fragment) != std::string::npos)
+                matches.push_back(std::move(payload));
+        }
+
+        return matches;
+    }
+
     std::vector<std::string> SplitBy(const std::string& text, char separator)
     {
         std::vector<std::string> parts;
@@ -944,6 +982,14 @@ namespace
                 hsm_collector_add_default_sensor(state.collector.value, DefaultSensorIdFromName(step[1]), &params, &sensor.value) == HSM_RESULT_OK,
                 "add_default_sensor failed");
             state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "add_collector_monitoring_sensors")
+        {
+            Require(
+                hsm_collector_add_collector_monitoring_sensors(state.collector.value) == HSM_RESULT_OK,
+                "add_collector_monitoring_sensors failed");
             return;
         }
 
@@ -1828,6 +1874,32 @@ namespace
             const auto payload = SentJson(state.collector.value, static_cast<size_t>(ToInt(step[1])));
             const auto comment = CommentFromPayload(payload);
             Require(comment.size() == static_cast<size_t>(ToInt(step[2])), "comment length did not match");
+            return;
+        }
+
+        if (action == "expect_time_marker_comments")
+        {
+            Require(step.size() >= 3, "expect_time_marker_comments requires a prefix and a count");
+            const auto& prefix = step[1];
+            const auto expected = static_cast<size_t>(ToInt(step[2]));
+            const auto count = hsm_collector_sent_count(state.collector.value);
+
+            size_t matched = 0;
+            for (size_t index = 0; index < count; ++index)
+            {
+                const auto comment = CommentFromPayload(SentJson(state.collector.value, index));
+                if (comment.rfind(prefix + ": ", 0) != 0)
+                    continue;
+
+                Require(
+                    IsTimeMarkerComment(comment, prefix),
+                    ("marker comment is not '" + prefix + ": dd/MM/yyyy HH:mm:ss': " + comment).c_str());
+                ++matched;
+            }
+
+            Require(
+                matched == expected,
+                ("expected " + step[2] + " '" + prefix + ":' marker comment(s), got " + std::to_string(matched)).c_str());
             return;
         }
 
@@ -4098,6 +4170,83 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
     }
 
+    // A collector whose heartbeat/dispatch period outlives the test: exactly one Service alive beat
+    // per run (the one posted immediately on Start), and everything queued is delivered by the stop
+    // drain. Lets the marker tests below count posts without sleeping on wall-clock ticks.
+    CollectorHandle CreateMarkerCollector()
+    {
+        auto options = TestOptions();
+        options.package_collect_period_ms = 60000;
+        return CreateCollector(options);
+    }
+
+    // The heartbeat opens a collector's life with `false` — the start marker managed CollectorAlive
+    // posts from its first tick — and reports `true` from every later beat. The flag lives on the
+    // sensor in managed, so a Stop/Start cycle does NOT re-arm it (#1433).
+    void NativeServiceAliveMarksTheFirstBeat()
+    {
+        auto collector = CreateMarkerCollector();
+
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "add collector monitoring sensors failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        auto beats = PayloadsForPath(collector.value, "/Service alive\"");
+        Require(beats.size() == 1, "the first run must post exactly one Service alive beat");
+        Contains(beats[0], "\"Value\":false");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "restart failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "second stop failed");
+
+        beats = PayloadsForPath(collector.value, "/Service alive\"");
+        Require(beats.size() == 2, "the restart must post exactly one more Service alive beat");
+        Contains(beats[1], "\"Value\":true");
+    }
+
+    // ".module/Collector version" marks BOTH ends of every run: a "Start: dd/MM/yyyy HH:mm:ss"
+    // comment on Start and a "Stop: dd/MM/yyyy HH:mm:ss" comment on Stop, exactly like managed
+    // ProductVersionSensor.StartAsync/StopAsync. The Start instant is the sensor's creation time and
+    // is replayed unchanged by a restart; the Stop instant is the moment of the stop (#1433).
+    void NativeVersionSensorMarksStartAndStop()
+    {
+        auto collector = CreateMarkerCollector();
+
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "add collector monitoring sensors failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        auto versions = PayloadsForPath(collector.value, "/Collector version\"");
+        Require(versions.size() == 2, "a run must post the collector version on Start and on Stop");
+
+        const auto start_comment = CommentFromPayload(versions[0]);
+        const auto stop_comment = CommentFromPayload(versions[1]);
+
+        Require(
+            IsTimeMarkerComment(start_comment, "Start"),
+            ("Start comment must be 'Start: dd/MM/yyyy HH:mm:ss', got: " + start_comment).c_str());
+        Require(
+            IsTimeMarkerComment(stop_comment, "Stop"),
+            ("Stop comment must be 'Stop: dd/MM/yyyy HH:mm:ss', got: " + stop_comment).c_str());
+
+        Contains(versions[0], HSM_COLLECTOR_VERSION_STRING);
+        Contains(versions[1], HSM_COLLECTOR_VERSION_STRING);
+
+        // A restart replays the pair, and the Start instant is the one stamped at registration.
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "restart failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "second stop failed");
+
+        versions = PayloadsForPath(collector.value, "/Collector version\"");
+        Require(versions.size() == 4, "a restart must post the Start/Stop pair again");
+        Require(CommentFromPayload(versions[2]) == start_comment, "the restart must replay the original Start instant");
+        Require(IsTimeMarkerComment(CommentFromPayload(versions[3]), "Stop"), "the second Stop comment lost its shape");
+    }
+
     void NativeSchedulerOnErrorIsolatesThrowingCallback()
     {
         auto collector = CreateCollector();
@@ -6241,6 +6390,10 @@ namespace
 #endif
             { "native_collector_self_monitoring_emits",
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
+            { "native_service_alive_marks_the_first_beat",
+              [](const std::string&) { NativeServiceAliveMarksTheFirstBeat(); } },
+            { "native_version_sensor_marks_start_and_stop",
+              [](const std::string&) { NativeVersionSensorMarksStartAndStop(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_rate_options_parity", [](const std::string&) { NativeRateOptionsParity(); } },
@@ -6360,6 +6513,7 @@ namespace
             { "conformance_top_cpu_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_network_speed_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_unix_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_module_markers_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };
