@@ -3,6 +3,7 @@
 > Owner: server | Last reviewed: 2026-07-21 | Canonical: yes
 > Scope: The admin-only server endpoint + UI that hand an operator a ready-to-run, per-product HSM Agent
 > bundle (epic #1167, W6/W7). The agent product itself (the C++ Windows service) is `agent/feature.md`.
+> The Linux sibling (**Download Linux probe**, `.tar.gz` + `install.sh`, #1424) is `../linux-probe-download/feature.md`.
 
 ---
 
