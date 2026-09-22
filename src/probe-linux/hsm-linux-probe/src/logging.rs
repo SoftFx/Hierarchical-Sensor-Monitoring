@@ -12,8 +12,56 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use hsm_collector::LogLevel;
 
+/// Probe log level. A superset of the collector's three levels: the probe also needs `Warn` for
+/// conditions that are not failures but must not hide at `info` (e.g. values dropped at stop).
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum Level {
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl Level {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Level::Debug => "DEBUG",
+            Level::Info => "INFO",
+            Level::Warn => "WARN",
+            Level::Error => "ERROR",
+        }
+    }
+}
+
+impl From<LogLevel> for Level {
+    fn from(level: LogLevel) -> Self {
+        match level {
+            LogLevel::Debug => Level::Debug,
+            LogLevel::Info => Level::Info,
+            LogLevel::Error => Level::Error,
+        }
+    }
+}
+
+/// The level at which a collector message is written.
+///
+/// Normally the collector's own level. One exception, for root CLAUDE.md rule #8 (no silent data
+/// loss): the native collector reports values discarded by its bounded stop drain at `debug`
+/// ("Collector stop dropped N pending value(s): …"), which a production `info` log never shows.
+/// A non-zero count is data loss and is raised to `Warn`.
+pub fn collector_message_level(level: LogLevel, message: &str) -> Level {
+    const DROPPED_AT_STOP: &str = "Collector stop dropped ";
+    if let Some(rest) = message.strip_prefix(DROPPED_AT_STOP) {
+        let count: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        if count.parse::<u64>().is_ok_and(|dropped| dropped > 0) {
+            return Level::Warn.max(level.into());
+        }
+    }
+    level.into()
+}
+
 pub struct Logger {
-    min_level: LogLevel,
+    min_level: Level,
     file: Option<Mutex<LogFile>>,
 }
 
@@ -29,7 +77,7 @@ impl Logger {
     /// Create a logger. A file sink is added when `directory` is given and can be opened; a
     /// failure there is reported to stderr and downgraded to stderr-only logging, because losing
     /// the log file must not stop the probe from monitoring.
-    pub fn new(min_level: LogLevel, directory: Option<&Path>) -> Self {
+    pub fn new(min_level: Level, directory: Option<&Path>) -> Self {
         let file = directory.and_then(|dir| {
             let date = utc_date(now_unix_seconds());
             match open_log_file(dir, &date) {
@@ -41,7 +89,7 @@ impl Logger {
                 Err(error) => {
                     eprintln!(
                         "{}| cannot open the log file in {}: {error}",
-                        prefix(LogLevel::Error),
+                        prefix(Level::Error),
                         dir.display()
                     );
                     None
@@ -51,7 +99,7 @@ impl Logger {
         Self { min_level, file }
     }
 
-    pub fn log(&self, level: LogLevel, message: &str) {
+    pub fn log(&self, level: Level, message: &str) {
         if level < self.min_level {
             return;
         }
@@ -70,25 +118,30 @@ impl Logger {
     }
 
     pub fn debug(&self, message: impl AsRef<str>) {
-        self.log(LogLevel::Debug, message.as_ref());
+        self.log(Level::Debug, message.as_ref());
     }
 
     pub fn info(&self, message: impl AsRef<str>) {
-        self.log(LogLevel::Info, message.as_ref());
+        self.log(Level::Info, message.as_ref());
+    }
+
+    pub fn warn(&self, message: impl AsRef<str>) {
+        self.log(Level::Warn, message.as_ref());
     }
 
     pub fn error(&self, message: impl AsRef<str>) {
-        self.log(LogLevel::Error, message.as_ref());
+        self.log(Level::Error, message.as_ref());
     }
 }
 
 /// Parse a configured level name. Validation happens in the config layer; anything unexpected here
 /// falls back to `Info` rather than silencing the probe.
-pub fn parse_level(name: &str) -> LogLevel {
+pub fn parse_level(name: &str) -> Level {
     match name.to_ascii_lowercase().as_str() {
-        "debug" => LogLevel::Debug,
-        "error" => LogLevel::Error,
-        _ => LogLevel::Info,
+        "debug" => Level::Debug,
+        "warn" => Level::Warn,
+        "error" => Level::Error,
+        _ => Level::Info,
     }
 }
 
@@ -120,7 +173,7 @@ fn open_log_file(directory: &Path, date: &str) -> std::io::Result<File> {
         .open(directory.join(log_file_name(date)))
 }
 
-fn prefix(level: LogLevel) -> String {
+fn prefix(level: Level) -> String {
     format!("{}|{}", utc_timestamp(now_unix_seconds()), level.as_str())
 }
 
@@ -141,6 +194,15 @@ fn utc_timestamp(unix_seconds: i64) -> String {
         (seconds_of_day / 60) % 60,
         seconds_of_day % 60
     )
+}
+
+/// `yyyy-MM-ddTHH:mm:ssZ` for now — the collector's own ISO form for a whole second.
+pub fn utc_iso8601_now() -> String {
+    utc_iso8601(now_unix_seconds())
+}
+
+fn utc_iso8601(unix_seconds: i64) -> String {
+    format!("{}Z", utc_timestamp(unix_seconds).replacen(' ', "T", 1))
 }
 
 fn utc_date(unix_seconds: i64) -> String {
@@ -208,10 +270,54 @@ mod tests {
     }
 
     #[test]
+    fn formats_iso8601() {
+        assert_eq!(utc_iso8601(0), "1970-01-01T00:00:00Z");
+        assert_eq!(utc_iso8601(1_709_164_800), "2024-02-29T00:00:00Z");
+    }
+
+    #[test]
     fn level_names_map_to_levels() {
-        assert_eq!(parse_level("debug"), LogLevel::Debug);
-        assert_eq!(parse_level("INFO"), LogLevel::Info);
-        assert_eq!(parse_level("Error"), LogLevel::Error);
-        assert_eq!(parse_level("nonsense"), LogLevel::Info);
+        assert_eq!(parse_level("debug"), Level::Debug);
+        assert_eq!(parse_level("INFO"), Level::Info);
+        assert_eq!(parse_level("warn"), Level::Warn);
+        assert_eq!(parse_level("Error"), Level::Error);
+        assert_eq!(parse_level("nonsense"), Level::Info);
+    }
+
+    #[test]
+    fn values_dropped_at_stop_are_raised_to_warn() {
+        // The exact text the native collector emits at debug on a bounded stop drain.
+        let dropped = "Collector stop dropped 34 pending value(s): transport unavailable.";
+        assert_eq!(
+            collector_message_level(LogLevel::Debug, dropped),
+            Level::Warn
+        );
+        assert_eq!(
+            collector_message_level(LogLevel::Info, dropped),
+            Level::Warn
+        );
+        // Never downgraded: an error stays an error.
+        assert_eq!(
+            collector_message_level(LogLevel::Error, dropped),
+            Level::Error
+        );
+    }
+
+    #[test]
+    fn nothing_dropped_or_other_messages_keep_the_collector_level() {
+        let none = "Collector stop dropped 0 pending value(s): transport unavailable.";
+        assert_eq!(collector_message_level(LogLevel::Debug, none), Level::Debug);
+        assert_eq!(
+            collector_message_level(LogLevel::Debug, "Collector stop dropped x"),
+            Level::Debug
+        );
+        assert_eq!(
+            collector_message_level(LogLevel::Info, "DataCollector -> Stopped"),
+            Level::Info
+        );
+        assert_eq!(
+            collector_message_level(LogLevel::Error, "Failed to send 9 value(s)"),
+            Level::Error
+        );
     }
 }

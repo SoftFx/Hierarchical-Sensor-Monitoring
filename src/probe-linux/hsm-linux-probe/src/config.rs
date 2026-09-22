@@ -34,6 +34,10 @@ pub struct HsmConfig {
     pub address: String,
     pub port: u16,
     /// Path to the file holding the product access key. The key itself is never stored here.
+    ///
+    /// A relative path is resolved against systemd's `$CREDENTIALS_DIRECTORY` (the
+    /// `LoadCredential=` drop), so the config does not hardcode the unit name; an absolute path is
+    /// used as is. See `secret::resolve_key_path`.
     pub access_key_file: PathBuf,
     #[serde(default)]
     pub computer_name: String,
@@ -61,7 +65,7 @@ pub struct LoggingConfig {
     /// Directory for the rolling probe log. `None` logs to stderr only (journal capture).
     #[serde(default)]
     pub directory: Option<PathBuf>,
-    /// `debug`, `info` or `error`.
+    /// `debug`, `info`, `warn` or `error`.
     #[serde(default = "default_log_level")]
     pub level: String,
 }
@@ -167,10 +171,10 @@ impl Config {
             }
         }
         match self.logging.level.to_ascii_lowercase().as_str() {
-            "debug" | "info" | "error" => {}
+            "debug" | "info" | "warn" | "error" => {}
             other => {
                 return Err(ConfigError::invalid(format!(
-                    "logging.level must be debug, info or error (got '{other}')"
+                    "logging.level must be debug, info, warn or error (got '{other}')"
                 )))
             }
         }

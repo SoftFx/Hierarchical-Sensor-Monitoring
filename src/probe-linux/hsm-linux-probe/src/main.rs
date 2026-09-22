@@ -20,7 +20,6 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use config::{Config, DEFAULT_CONFIG_PATH};
-use hsm_collector::LogLevel;
 use logging::Logger;
 
 const USAGE: &str = "\
@@ -81,7 +80,7 @@ fn run(config_path: PathBuf) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(error) => {
-            logger.log(LogLevel::Error, &format!("fatal: {error}"));
+            logger.error(format!("fatal: {error}"));
             ExitCode::FAILURE
         }
     }

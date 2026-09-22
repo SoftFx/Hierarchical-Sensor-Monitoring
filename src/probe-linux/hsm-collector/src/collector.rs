@@ -14,7 +14,29 @@ use crate::options::{
 };
 use crate::sensor::{
     BoolSensor, DoubleBarSensor, DoubleSensor, EnumSensor, IntSensor, RawSensor, StringSensor,
+    VersionSensor,
 };
+
+/// The built-in sensors a host registers one by one (see [`Collector::add_default_sensor`]).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DefaultSensor {
+    /// `.module/Process <name>/Process CPU`
+    ProcessCpu,
+    /// `.module/Process <name>/Process memory`
+    ProcessMemory,
+    /// `.module/Process <name>/Process thread count`
+    ProcessThreadCount,
+}
+
+impl DefaultSensor {
+    fn as_raw(self) -> sys::hsm_default_sensor_t {
+        match self {
+            DefaultSensor::ProcessCpu => sys::HSM_DEFAULT_PROCESS_CPU,
+            DefaultSensor::ProcessMemory => sys::HSM_DEFAULT_PROCESS_MEMORY,
+            DefaultSensor::ProcessThreadCount => sys::HSM_DEFAULT_PROCESS_THREAD_COUNT,
+        }
+    }
+}
 
 /// Whether this build bound the Linux metric-source factory (#1414). See
 /// [`Collector::install_linux_metric_sources`].
@@ -195,6 +217,83 @@ impl Collector {
         self.check("add module sensors", unsafe {
             sys::hsm_collector_add_all_module_sensors(self.handle, as_ptr(&version))
         })
+    }
+
+    /// Register `.module/Service alive`, `Collector version` and `Collector errors` — the module
+    /// group without the process sensors and the product version, which a host that knows its own
+    /// process name registers individually (see [`Collector::add_default_sensor`]).
+    pub fn add_collector_monitoring_sensors(&self) -> Result<()> {
+        let _guard = self.lock();
+        // SAFETY: valid handle.
+        self.check("add collector monitoring sensors", unsafe {
+            sys::hsm_collector_add_collector_monitoring_sensors(self.handle)
+        })
+    }
+
+    /// Register one built-in sensor. For the process sensors, `process_name` fills the
+    /// `Process <name>` node exactly as the managed `ProcessCollectionPrototypes` does with
+    /// `Process.GetCurrentProcess().ProcessName`; `None` keeps the collector's `process` fallback.
+    ///
+    /// The group helpers (`add_all_module_sensors`, …) cannot carry a name and always register
+    /// the fallback, which is why a host that knows its name registers these one by one.
+    pub fn add_default_sensor(&self, id: DefaultSensor, process_name: Option<&str>) -> Result<()> {
+        let name = optional_cstring("process_name", process_name)?;
+        // SAFETY: returns a plain value struct.
+        let mut params = unsafe { sys::hsm_default_sensor_params_default() };
+        params.process_name = as_ptr(&name);
+
+        let _guard = self.lock();
+        // SAFETY: valid handle; `params` and the name outlive the call; a NULL out_sensor means the
+        // collector keeps the only reference (no handle to release).
+        self.check("add default sensor", unsafe {
+            sys::hsm_collector_add_default_sensor(
+                self.handle,
+                id.as_raw(),
+                &params,
+                ptr::null_mut(),
+            )
+        })
+    }
+
+    /// Register `.module/Version` and return its handle so the host can post its own version.
+    ///
+    /// The collector only emits that value itself from inside `add_all_module_sensors`, which a
+    /// host registering its process sensors individually does not call.
+    pub fn product_version_sensor(&self) -> Result<VersionSensor<'_>> {
+        let mut handle = ptr::null_mut();
+        let _guard = self.lock();
+        // SAFETY: valid handle; NULL params take the defaults.
+        let code = unsafe {
+            sys::hsm_collector_add_default_sensor(
+                self.handle,
+                sys::HSM_DEFAULT_PRODUCT_VERSION,
+                ptr::null(),
+                &mut handle,
+            )
+        };
+        self.check("add product version sensor", code)?;
+        // SAFETY: the ABI returned OK, so the handle is live.
+        Ok(VersionSensor(unsafe { RawSensor::from_raw(handle) }))
+    }
+
+    /// The canonical registration JSON of every sensor registered so far, in registration order.
+    /// This is exactly what the collector sends to `/commands` at Start.
+    pub fn registrations(&self) -> Vec<String> {
+        let _guard = self.lock();
+        // SAFETY: valid handle; every returned pointer is collector-owned text copied out while
+        // the lock prevents a concurrent registration from invalidating it.
+        unsafe {
+            let count = sys::hsm_collector_registration_count(self.handle);
+            (0..count)
+                .filter_map(|index| {
+                    let mut json = ptr::null();
+                    let code =
+                        sys::hsm_collector_get_registration_json(self.handle, index, &mut json);
+                    (code == sys::HSM_RESULT_OK && !json.is_null())
+                        .then(|| CStr::from_ptr(json).to_string_lossy().into_owned())
+                })
+                .collect()
+        }
     }
 
     /// Register the host default-sensor catalog. Values only flow once a metric-source factory is

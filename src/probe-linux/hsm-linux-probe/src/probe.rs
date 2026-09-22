@@ -9,12 +9,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hsm_collector::{
-    Collector, CollectorOptions, EnumOption, EnumSensor, Error as CollectorError, LogLevel,
-    SensorOptions, SensorStatus, LINUX_METRIC_SOURCES_AVAILABLE,
+    Collector, CollectorOptions, DefaultSensor, EnumOption, EnumSensor, Error as CollectorError,
+    LogLevel, SensorOptions, SensorStatus, VersionSensor, LINUX_METRIC_SOURCES_AVAILABLE,
 };
 
 use crate::config::Config;
-use crate::logging::Logger;
+use crate::logging::{self, Logger};
 use crate::procfs;
 use crate::secret::{self, Secret};
 use crate::shutdown;
@@ -72,6 +72,15 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
     let collector = build_collector(config, Arc::clone(&logger))?;
 
     register_default_sensors(&collector, &logger);
+    let process_name = procfs::current_process_name();
+    match &process_name {
+        Some(name) => logger.info(format!(
+            "process sensors register under '.module/Process {name}'"
+        )),
+        None => logger
+            .warn("cannot read /proc/self/comm; the process node falls back to 'Process process'"),
+    }
+    let product_version = register_module_sensors(&collector, process_name.as_deref(), &logger);
 
     // TTLs are derived from the sampling periods so a reconfigured period cannot leave a sensor
     // permanently expired: 3x the period for the fast source (the §4.2 value at the default 60 s),
@@ -128,6 +137,11 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
     ));
 
     collector.start()?;
+
+    // After Start: the collector drops a value posted before it can accept data.
+    if let Some(sensor) = &product_version {
+        post_product_version(sensor, &logger);
+    }
 
     // Both sources fire immediately on start, then on their own period.
     let mut next_load = Instant::now();
@@ -237,11 +251,16 @@ fn build_collector(
     config: &Config,
     logger: Arc<Logger>,
 ) -> Result<Collector, Box<dyn std::error::Error>> {
-    let key = Secret::read_from_file(&config.hsm.access_key_file)?;
-    if secret::is_world_or_group_readable(&config.hsm.access_key_file) == Some(true) {
-        logger.error(format!(
-            "the access-key file {} is readable beyond its owner; tighten it to 0400",
-            config.hsm.access_key_file.display()
+    let key_path = secret::resolve_key_path(
+        &config.hsm.access_key_file,
+        std::env::var_os("CREDENTIALS_DIRECTORY").as_deref(),
+    )?;
+    let key = Secret::read_from_file(&key_path)?;
+    if secret::is_readable_beyond_owner(&key_path) == Some(true) {
+        logger.warn(format!(
+            "the access-key file {} is readable beyond its owner; tighten it to 0400 \
+             (or place it with LoadCredential=)",
+            key_path.display()
         ));
     }
 
@@ -264,7 +283,7 @@ fn build_collector(
 
     let log_sink = Arc::clone(&logger);
     collector.set_logger(move |level: LogLevel, message: &str| {
-        log_sink.log(level, message);
+        log_sink.log(logging::collector_message_level(level, message), message);
     })?;
 
     collector.use_http_transport()?;
@@ -296,18 +315,175 @@ fn register_default_sensors(collector: &Collector, logger: &Logger) {
             "skipping the host catalog registration while the Linux metric sources are unavailable",
         );
     }
+}
 
-    if let Err(error) = collector.add_all_module_sensors(Some(PROBE_VERSION)) {
-        logger.error(format!("cannot register the module sensors: {error}"));
+/// Register the module group — process sensors, collector self-sensors, queue diagnostics and the
+/// product version — and return the product-version handle for [`post_product_version`].
+///
+/// Deliberately not `add_all_module_sensors`: that group helper cannot carry a process name, so
+/// the collector names the node with its `Process process` placeholder. The managed collector names
+/// it `Process <ProcessName>` (`ProcessCollectionPrototypes`), so the probe registers the process
+/// sensors one by one with the name .NET would use. `Process ThreadPool thread count` is left out
+/// on purpose, as in `src/agent`: it is a CLR concept a native process can only report as 0.
+fn register_module_sensors<'c>(
+    collector: &'c Collector,
+    process_name: Option<&str>,
+    logger: &Logger,
+) -> Option<VersionSensor<'c>> {
+    for sensor in [
+        DefaultSensor::ProcessCpu,
+        DefaultSensor::ProcessMemory,
+        DefaultSensor::ProcessThreadCount,
+    ] {
+        if let Err(error) = collector.add_default_sensor(sensor, process_name) {
+            logger.error(format!("cannot register {sensor:?}: {error}"));
+        }
+    }
+    if let Err(error) = collector.add_collector_monitoring_sensors() {
+        logger.error(format!(
+            "cannot register the collector self-sensors: {error}"
+        ));
     }
     if let Err(error) = collector.add_all_queue_diagnostic_sensors() {
         logger.error(format!("cannot register the queue diagnostics: {error}"));
     }
+    match collector.product_version_sensor() {
+        Ok(sensor) => Some(sensor),
+        Err(error) => {
+            logger.error(format!(
+                "cannot register the product version sensor: {error}"
+            ));
+            None
+        }
+    }
+}
+
+/// Post the probe's version once, with the start time, as the collector's own
+/// `add_all_module_sensors` does for a host (managed `ProductVersionSensor.StartAsync`).
+fn post_product_version(sensor: &VersionSensor<'_>, logger: &Logger) {
+    let (major, minor, build, revision) = parse_version(PROBE_VERSION);
+    let comment = format!("Start: {}", logging::utc_iso8601_now());
+    if let Err(error) = sensor.add_with(
+        major,
+        minor,
+        build,
+        revision,
+        SensorStatus::Ok,
+        Some(&comment),
+    ) {
+        logger.error(format!("cannot post the product version: {error}"));
+    }
+}
+
+/// `major.minor[.build[.revision]]`, mirroring the collector's `ParseVersionString`: leading
+/// numeric components only, missing major/minor read as 0, missing build/revision as absent.
+fn parse_version(text: &str) -> (i32, i32, Option<i32>, Option<i32>) {
+    let mut parts = text
+        .split('.')
+        .map_while(|part| part.parse::<i32>().ok())
+        .take(4);
+    (
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+        parts.next(),
+        parts.next(),
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logging::Level;
+
+    /// The registration text the collector sends to `/commands` for the module group, with the
+    /// computer/module prefixes the trial host uses.
+    fn module_registrations(process_name: Option<&str>) -> Vec<String> {
+        let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
+        options.allow_plaintext_transport = true;
+        options.computer_name = Some("garage-server".into());
+        options.module = Some("LinuxProbe".into());
+        let collector = Collector::new(&options).expect("create");
+        let logger = Logger::new(Level::Error, None);
+
+        let version = register_module_sensors(&collector, process_name, &logger);
+        assert!(
+            version.is_some(),
+            "the product version sensor must register"
+        );
+        // The collector records the registration payloads at Start — the /commands batch. No
+        // transport is installed, so the in-memory sender receives it and nothing leaves the test.
+        collector.start().expect("start");
+        let registrations = collector.registrations();
+        collector.stop().expect("stop");
+        assert!(
+            !registrations.is_empty(),
+            "Start must record the registrations"
+        );
+        registrations
+    }
+
+    fn registered_paths(registrations: &[String]) -> Vec<String> {
+        registrations
+            .iter()
+            .filter_map(|json| {
+                let start = json.find("\"Path\":\"")? + "\"Path\":\"".len();
+                let end = json[start..].find('"')? + start;
+                Some(json[start..end].to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_process_node_is_named_after_the_probe_binary() {
+        // The trial host showed "Process process/…": the group helper's placeholder. This pins
+        // the node the managed collector would produce for a process named hsm-linux-probe.
+        let paths = registered_paths(&module_registrations(Some("hsm-linux-probe")));
+        for sensor in ["Process CPU", "Process memory", "Process thread count"] {
+            let expected =
+                format!("garage-server/LinuxProbe/.module/Process hsm-linux-probe/{sensor}");
+            assert!(
+                paths.iter().any(|path| path == &expected),
+                "missing {expected} in {paths:#?}"
+            );
+        }
+        assert!(
+            paths.iter().all(|path| !path.contains("Process process")),
+            "the placeholder node must not be registered: {paths:#?}"
+        );
+        assert!(
+            paths.iter().all(|path| !path.contains("ThreadPool")),
+            "a native process has no CLR thread pool: {paths:#?}"
+        );
+    }
+
+    #[test]
+    fn the_rest_of_the_module_group_is_still_registered() {
+        let paths = registered_paths(&module_registrations(Some("hsm-linux-probe")));
+        for sensor in [
+            ".module/Service alive",
+            ".module/Collector version",
+            ".module/Version",
+        ] {
+            assert!(
+                paths.iter().any(|path| path.ends_with(sensor)),
+                "missing {sensor} in {paths:#?}"
+            );
+        }
+        assert!(
+            paths
+                .iter()
+                .any(|path| path.contains(".module/Collector queue stats/")),
+            "missing the queue diagnostics in {paths:#?}"
+        );
+    }
+
+    #[test]
+    fn versions_parse_like_the_collector() {
+        assert_eq!(parse_version("0.1.0"), (0, 1, Some(0), None));
+        assert_eq!(parse_version("1.2.3.4"), (1, 2, Some(3), Some(4)));
+        assert_eq!(parse_version("7"), (7, 0, None, None));
+        assert_eq!(parse_version(""), (0, 0, None, None));
+    }
 
     #[test]
     fn source_status_keys_are_the_registered_enum_options() {

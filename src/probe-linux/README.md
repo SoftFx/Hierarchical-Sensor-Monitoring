@@ -24,6 +24,13 @@ In this slice that means exactly two probe-added sources:
 
 Docker, disk and backup sources are workstreams #1416/#1417 and are deliberately absent.
 
+The collector's module group is registered sensor by sensor rather than through
+`add_all_module_sensors`, because that helper cannot carry a process name and would name the node
+`Process process`. The probe passes the name .NET's `Process.ProcessName` yields on Linux (`comm`,
+un-truncated from `argv[0]` at the 15-byte limit), so the node reads
+`.module/Process hsm-linux-probe/…` exactly as the managed collector would name it.
+`Process ThreadPool thread count` is omitted, as in `src/agent` — a native process has no CLR pool.
+
 ## Crate layout
 
 ```
@@ -104,9 +111,16 @@ The CI lane `.github/workflows/probe-linux.yml` runs exactly that on `ubuntu-lat
 Placeholders only — **no secrets**:
 
 * `hsm.accessKeyFile` names the file holding the product access key (`CanSendSensorData` only, never
-  a master key). Under systemd that is the `LoadCredential=` drop at
-  `/run/credentials/hsm-linux-probe.service/access-key`. The probe reads it at startup, warns if it
-  is readable beyond its owner, and wipes its in-process copies once the collector has taken it.
+  a master key). A **relative** name (the skeleton's `"access-key"`) is a systemd credential and
+  resolves against `$CREDENTIALS_DIRECTORY`, the directory `LoadCredential=` fills — so the config
+  never hardcodes `/run/credentials/<unit>/`; without that variable a relative name is an error. An
+  absolute path is used as is. The probe reads the key at startup and wipes its in-process copies
+  once the collector has taken it.
+* It warns if the key is readable beyond its owner. The check evaluates the POSIX ACL, not just the
+  mode bits: systemd hands a credential to a non-root `User=` as a root-owned `0400` file plus a
+  named-user ACL entry for the service, which makes `stat` report `0440` (the ACL mask shows in the
+  group bits) although no group can read it. That case passes; a genuinely group- or
+  world-readable key, or one readable by another named user or group, still warns.
 * `hsm.address` must be `https://…`. Plaintext is rejected by config validation, and the wrapper
   deliberately does not expose the ABI's `allow_untrusted_server_certificate` flag — it disables
   both peer and hostname verification, which §4.1/§4.3 ban. Trust a private CA by installing it
@@ -122,6 +136,11 @@ hsm-linux-probe --version    # probe version + the linked collector version
 `SIGTERM` (systemd stop/restart) and `SIGINT` request a graceful stop: the sampling loop exits
 within 200 ms and the collector drains with its own bounded stop, so a host restart is never held
 up. An overrun of `shutdownTimeoutSec` is logged; `TimeoutStopSec` in the unit is the backstop.
+Values the bounded drain discards are reported at `WARN` (the collector emits that line at
+`debug`; the probe raises a non-zero count, since it is data loss — root rule #8).
+
+Log levels are `debug`, `info`, `warn`, `error`. Timestamps and the daily file roll are UTC, like
+the collector's own file logger, so the two line up; the journal adds local time on its own.
 
 `packaging/hsm-linux-probe.service` carries the §4.3 hardening (`NoNewPrivileges`,
 `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `StateDirectory`, empty capability bounding

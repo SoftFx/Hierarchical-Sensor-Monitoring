@@ -176,3 +176,39 @@ impl DoubleBarSensor<'_> {
         }
     }
 }
+
+/// `Version` sensor (e.g. `.module/Version`).
+#[derive(Debug)]
+pub struct VersionSensor<'c>(pub(crate) RawSensor<'c>);
+
+impl VersionSensor<'_> {
+    /// Post `major.minor[.build[.revision]]`; pass `None` for an absent trailing component.
+    pub fn add_with(
+        &self,
+        major: i32,
+        minor: i32,
+        build: Option<i32>,
+        revision: Option<i32>,
+        status: SensorStatus,
+        comment: Option<&str>,
+    ) -> Result<()> {
+        let comment = comment_cstring(comment)?;
+        // SAFETY: handle live for `&self`; the comment outlives the call. -1 is the ABI's "absent".
+        let code = unsafe {
+            sys::hsm_sensor_add_version(
+                self.0.as_ptr(),
+                major,
+                minor,
+                build.unwrap_or(-1),
+                revision.unwrap_or(-1),
+                status.as_raw(),
+                comment_ptr(&comment),
+            )
+        };
+        if code == sys::HSM_RESULT_OK {
+            Ok(())
+        } else {
+            Err(Error::from_code("add version value", code, String::new()))
+        }
+    }
+}

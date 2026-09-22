@@ -20,12 +20,14 @@ mod error;
 mod options;
 mod sensor;
 
-pub use collector::{Collector, LINUX_METRIC_SOURCES_AVAILABLE};
+pub use collector::{Collector, DefaultSensor, LINUX_METRIC_SOURCES_AVAILABLE};
 pub use error::{Error, Result};
 pub use options::{
     CollectorOptions, CollectorStatus, EnumOption, LogLevel, SensorOptions, SensorStatus,
 };
-pub use sensor::{BoolSensor, DoubleBarSensor, DoubleSensor, EnumSensor, IntSensor, StringSensor};
+pub use sensor::{
+    BoolSensor, DoubleBarSensor, DoubleSensor, EnumSensor, IntSensor, StringSensor, VersionSensor,
+};
 
 /// The linked collector library's packed version (`MAJOR * 10000 + MINOR * 100 + PATCH`).
 pub fn library_version() -> i32 {

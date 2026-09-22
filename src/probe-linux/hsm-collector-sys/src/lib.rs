@@ -140,6 +140,26 @@ pub struct hsm_enum_option_t {
     pub description: *const c_char,
 }
 
+/// Built-in sensor ids (`hsm_default_sensor_t`) — only the ones the probe registers individually.
+pub type hsm_default_sensor_t = i32;
+pub const HSM_DEFAULT_PROCESS_CPU: hsm_default_sensor_t = 0;
+pub const HSM_DEFAULT_PROCESS_MEMORY: hsm_default_sensor_t = 1;
+pub const HSM_DEFAULT_PROCESS_THREAD_COUNT: hsm_default_sensor_t = 2;
+pub const HSM_DEFAULT_PRODUCT_VERSION: hsm_default_sensor_t = 63;
+
+/// Mirrors `hsm_default_sensor_params_t`. Start from [`hsm_default_sensor_params_default`].
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct hsm_default_sensor_params_t {
+    /// The `{proc}` segment: the node becomes `Process <process_name>`; NULL => "process".
+    pub process_name: *const c_char,
+    pub disk_letter: *const c_char,
+    pub interface_name: *const c_char,
+    pub service_name: *const c_char,
+    pub is_host_service: std::os::raw::c_int,
+    pub product_version: *const c_char,
+}
+
 /// Log sink callback. The collector wraps it swallow-all, but a Rust panic unwinding into C++ is
 /// undefined behavior regardless — every implementation must be wrapped in `catch_unwind`.
 pub type hsm_log_callback_t = Option<
@@ -192,6 +212,32 @@ extern "C" {
     pub fn hsm_collector_add_all_computer_sensors(collector: *mut hsm_collector_t) -> hsm_result_t;
     pub fn hsm_collector_add_all_queue_diagnostic_sensors(
         collector: *mut hsm_collector_t,
+    ) -> hsm_result_t;
+    /// `.module/Service alive`, `Collector version`, `Collector errors` — the module group minus
+    /// the process sensors and the product version, so a host can register those itself with a
+    /// real process name.
+    pub fn hsm_collector_add_collector_monitoring_sensors(
+        collector: *mut hsm_collector_t,
+    ) -> hsm_result_t;
+
+    /// Params pre-filled with the documented defaults (every field NULL/sentinel).
+    pub fn hsm_default_sensor_params_default() -> hsm_default_sensor_params_t;
+    /// Register one built-in sensor. `params` may be NULL; `out_sensor` may be NULL. Idempotent by
+    /// path: registering the same resolved path twice returns the existing sensor.
+    pub fn hsm_collector_add_default_sensor(
+        collector: *mut hsm_collector_t,
+        id: hsm_default_sensor_t,
+        params: *const hsm_default_sensor_params_t,
+        out_sensor: *mut *mut hsm_sensor_t,
+    ) -> hsm_result_t;
+
+    /// Number of recorded registration payloads (one per registered sensor).
+    pub fn hsm_collector_registration_count(collector: *const hsm_collector_t) -> usize;
+    /// The canonical registration JSON at `index`; the text is owned by the collector.
+    pub fn hsm_collector_get_registration_json(
+        collector: *const hsm_collector_t,
+        index: usize,
+        out_json: *mut *const c_char,
     ) -> hsm_result_t;
 
     pub fn hsm_collector_create_int_sensor(
@@ -279,6 +325,16 @@ extern "C" {
         comment: *const c_char,
     ) -> hsm_result_t;
     pub fn hsm_sensor_add_bar_double(sensor: *mut hsm_sensor_t, value: f64) -> hsm_result_t;
+    /// Version value: pass -1 for an absent build/revision component.
+    pub fn hsm_sensor_add_version(
+        sensor: *mut hsm_sensor_t,
+        major: i32,
+        minor: i32,
+        build: i32,
+        revision: i32,
+        status: hsm_sensor_status_t,
+        comment: *const c_char,
+    ) -> hsm_result_t;
 
     /// Last error text recorded on the collector. Valid until the next failing call on the same
     /// collector; never NULL.
@@ -331,6 +387,13 @@ mod layout_tests {
         // i32+pad | ptr | i32+pad | ptr
         assert_eq!(size_of::<hsm_enum_option_t>(), 32);
         assert_eq!(align_of::<hsm_enum_option_t>(), 8);
+    }
+
+    #[test]
+    fn default_sensor_params_layout_matches_the_c_struct() {
+        // 4×ptr = 32 | int @32 (+4 pad) | ptr @40
+        assert_eq!(size_of::<hsm_default_sensor_params_t>(), 48);
+        assert_eq!(align_of::<hsm_default_sensor_params_t>(), 8);
     }
 
     #[test]
