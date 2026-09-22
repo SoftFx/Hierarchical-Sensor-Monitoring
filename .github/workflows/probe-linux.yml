@@ -1,0 +1,75 @@
+name: Linux probe
+
+# Builds and tests the Rust Linux probe (src/probe-linux, epic #1413 workstream #1415).
+#
+# The probe hosts the in-tree native collector through its C ABI, so the lane installs a C++
+# toolchain, CMake and libcurl headers first; hsm-collector-sys/build.rs runs the CMake build
+# itself (HSM_COLLECTOR_HTTP=ON, the same switch src/agent uses) as part of `cargo build`.
+#
+# Linux is the probe's only supported target, so there is no matrix.
+
+on:
+  push:
+    branches: [master, develop]
+    paths:
+      - 'src/probe-linux/**'
+      - 'src/native/collector/**'
+      - '.github/workflows/probe-linux.yml'
+  pull_request:
+    # ready_for_review is required so the lane runs when a draft is marked ready (marking ready
+    # does not emit a synchronize event).
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/probe-linux/**'
+      - 'src/native/collector/**'
+      - '.github/workflows/probe-linux.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: src/probe-linux
+
+jobs:
+  probe-linux:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      # A build failure in the probe is never worth a cryptic linker message.
+      RUST_BACKTRACE: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libcurl4-openssl-dev pkg-config
+
+      # The ubuntu-latest image ships rustup; pin the components this lane needs rather than
+      # assuming the preinstalled profile carries them.
+      - name: Set up the Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+          rustc --version && cargo --version
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Test
+        run: cargo test --locked
+
+      # The #1414 feature gate must stay a real, reviewable switch rather than dead text: this
+      # proves the gated declaration and its call site still compile. It deliberately stops at
+      # `cargo check` (no link step) — the symbol itself does not exist until #1414 lands.
+      - name: Check the #1414 feature gate compiles
+        run: cargo check -p hsm-linux-probe --features linux-default-sensors --locked

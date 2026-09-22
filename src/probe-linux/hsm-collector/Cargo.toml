@@ -1,0 +1,16 @@
+[package]
+name = "hsm-collector"
+description = "Safe RAII wrapper over the HSM native collector's C ABI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# Forwarded to hsm-collector-sys; see that crate's TODO(#1414).
+linux-default-sensors = ["hsm-collector-sys/linux-default-sensors"]
+
+[dependencies]
+hsm-collector-sys = { workspace = true }

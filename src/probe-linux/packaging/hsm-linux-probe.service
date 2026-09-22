@@ -1,0 +1,79 @@
+# Sample systemd unit for hsm-linux-probe (initiative docs/initiatives/linux-docker-probe.md §4.3, §5).
+#
+# Reference hardening, not yet an installed artifact: the .deb that ships it is workstream #1418.
+# Install manually for now:
+#   useradd --system --no-create-home --shell /usr/sbin/nologin hsm-probe
+#   install -m 0644 hsm-linux-probe.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now hsm-linux-probe
+#
+# The access key is NEVER in this file, in the config file, or in argv. Place it once as a
+# root-owned 0400 file (/etc/hsm-linux-probe/access-key); LoadCredential= exposes it at
+# /run/credentials/hsm-linux-probe.service/access-key, readable only by this unit, and the config
+# file's hsm.accessKeyFile points there.
+
+[Unit]
+Description=HSM Linux host probe
+Documentation=https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/src/probe-linux/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/hsm-linux-probe --config /etc/hsm-linux-probe/config.json
+Restart=always
+RestartSec=10s
+# The probe exits on SIGTERM after a bounded collector drain; this is the backstop.
+TimeoutStopSec=20s
+
+User=hsm-probe
+Group=hsm-probe
+# Docker Engine API access arrives with the Docker source (#1416). The socket is root-equivalent,
+# so it is granted only once a source actually needs it — not pre-emptively.
+# SupplementaryGroups=docker
+
+# Writable state (restart counters, OOM latches, last-seen backup result) under
+# /var/lib/hsm-linux-probe, created and owned by systemd. ProtectSystem=strict leaves the rest of
+# the filesystem read-only, so these two directories are the probe's entire write surface.
+StateDirectory=hsm-linux-probe
+StateDirectoryMode=0700
+LogsDirectory=hsm-linux-probe
+LogsDirectoryMode=0750
+
+LoadCredential=access-key:/etc/hsm-linux-probe/access-key
+
+# --- Hardening (§4.3) ---------------------------------------------------------------------------
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+# Hides other processes' /proc entries. /proc/loadavg and /proc/cpuinfo stay readable — do NOT add
+# ProcSubset=pid, which would hide exactly the files this probe samples.
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# The probe never listens; it only makes outbound HTTPS connections to the HSM server.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# --- Resource budget (§5) -----------------------------------------------------------------------
+# Steady-state RSS is expected at 5-20 MiB. Raise to 128M only if a soak run says otherwise.
+MemoryMax=64M
+CPUQuota=5%
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

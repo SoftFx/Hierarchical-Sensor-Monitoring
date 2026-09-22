@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = ["hsm-collector-sys", "hsm-collector", "hsm-linux-probe"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+license = "MIT"
+repository = "https://github.com/SoftFx/Hierarchical-Sensor-Monitoring"
+
+[workspace.dependencies]
+hsm-collector-sys = { path = "hsm-collector-sys", version = "0.1.0" }
+hsm-collector = { path = "hsm-collector", version = "0.1.0" }
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+# A long-running daemon on a 4-core host: optimize for size/locality, and keep panics
+# unwinding because every FFI callback boundary relies on catch_unwind to contain them.
+opt-level = 2
+panic = "unwind"
+strip = "debuginfo"
