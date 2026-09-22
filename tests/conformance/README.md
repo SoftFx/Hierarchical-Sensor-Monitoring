@@ -216,7 +216,7 @@ in **all** drivers in the same PR (or an explicit unsupported marker, below).
   pair it with timing-immune invariants (`expect_bar_count_total`,
   alignment/monotonicity) rather than exact payload layouts where possible.
 - Bar-alignment assertions only with periods that divide the 0001→1970 epoch
-  offset (100/200/500/1000/2000/60000/3600000 ms) — .NET aligns in ticks,
+  offset (100/200/500/1000/2000/60000/3600000/86400000 ms) — .NET aligns in ticks,
   native in unix ms; they agree only there.
 - Cross-language doubles: assert via `expect_bar_field` (tolerant) or pin
   binary-exact decimals (0.5/1.5/2.5); never assert long decimal tails as text.

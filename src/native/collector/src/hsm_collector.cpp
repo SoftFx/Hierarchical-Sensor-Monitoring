@@ -723,9 +723,12 @@ namespace
         // advanced). Cheap and lock-free against the worker — just nudges the wait.
         void Wake()
         {
-            // The flag makes a Wake that lands while the loop is computing (not yet waiting) count:
-            // the wait predicate sees it instead of sleeping out kMaxWaitMs. It is not taken under
-            // mutex_ because callers may hold the collector lock, which the loop takes under mutex_.
+            // The flag makes a Wake that lands while the loop is computing its next due time (the
+            // wide window: it walks every sensor) count — the wait predicate sees it instead of
+            // sleeping out kMaxWaitMs. It is NOT stored under mutex_, because callers may hold the
+            // collector lock, which the loop takes under mutex_ (lock-order inversion); so a Wake in
+            // the narrow gap between the predicate check and the block can still be lost, bounded by
+            // kMaxWaitMs as before.
             wake_requested_.store(true);
             cv_.notify_all();
         }
@@ -758,6 +761,8 @@ namespace
                     wait_ms = std::min<int64_t>(due - now, kMaxWaitMs);
 
                 cv_.wait_for(lock, std::chrono::milliseconds(wait_ms), [this] { return stop_ || wake_requested_.load(); });
+                // Clearing may swallow a Wake that lands right now; harmless, the loop re-reads the
+                // clock and the due time immediately. Do not turn this into a spin on the flag.
                 wake_requested_.store(false);
             }
         }
@@ -5451,10 +5456,12 @@ namespace
             if (sample_due)
             {
                 const int64_t wall_ms = SystemNowMs();
-                if (bar_.close_ms < wall_ms)
+                // Runs on the collector's own scheduler thread, so the collector is alive; the guard
+                // only keeps a teardown race from rolling a bar nobody can publish.
+                if (collector && bar_.close_ms < wall_ms)
                 {
                     if (bar_.count > 0)
-                        closed_json = collector ? collector->OutgoingBarJson(bar_, path_) : MonitoringBarJson(bar_, path_);
+                        closed_json = collector->OutgoingBarJson(bar_, path_);
 
                     bar_.Init(wall_ms);
                 }
@@ -5463,7 +5470,7 @@ namespace
 
         // Publish the closed bar outside the sensor lock (the collector takes sensor locks while
         // holding its own), ahead of any partial of the new window this call returns.
-        if (!closed_json.empty() && collector)
+        if (!closed_json.empty())
             collector->EnqueueIfRunning(std::move(closed_json));
 
         if (sample_due)
@@ -5517,7 +5524,8 @@ namespace
         out_json = collector ? collector->OutgoingBarJson(bar_, path_) : MonitoringBarJson(bar_, path_);
 
         // Roll after a successful flush so a stop -> restart -> stop cycle never resends the bar.
-        bar_.Init(UnixTimeMilliseconds());
+        // Through the clock seam: a metric-driven bar's window is anchored on it too (#1428).
+        bar_.Init(SystemNowMs());
         return true;
     }
 

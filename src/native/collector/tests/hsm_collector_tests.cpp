@@ -3592,7 +3592,9 @@ namespace
 
     // Real-time bar-shape check for the live platform factories (#1428): every Total CPU payload is a
     // partial of an aligned 5-min bar, and posts inside one window share its OpenTime. Waits for
-    // `posts` Total CPU payloads (15 s apart) — set HSM_LIVE_BAR_POSTS=21 to watch a whole window.
+    // `posts` Total CPU payloads (15 s apart) — set HSM_LIVE_BAR_POSTS=22 to watch past a whole window.
+    // Clamped to >= 3: two posts may straddle a window boundary and share no OpenTime; three span 30 s,
+    // so at most one boundary, and some window holds two of them.
     void RequireLiveTotalCpuPartialPosts(hsm_collector_t* collector)
     {
         int posts = 3;
@@ -3601,12 +3603,12 @@ namespace
         size_t env_len = 0;
         if (_dupenv_s(&env, &env_len, "HSM_LIVE_BAR_POSTS") == 0 && env != nullptr)
         {
-            posts = (std::max)(2, std::atoi(env));
+            posts = (std::max)(3, std::atoi(env));
             std::free(env);
         }
 #else
         if (const char* env = std::getenv("HSM_LIVE_BAR_POSTS"))
-            posts = (std::max)(2, std::atoi(env));
+            posts = (std::max)(3, std::atoi(env));
 #endif
 
         const auto count_cpu = [&](std::vector<std::string>& out) {

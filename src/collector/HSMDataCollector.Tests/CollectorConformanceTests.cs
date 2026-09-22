@@ -605,15 +605,14 @@ namespace HSMDataCollector.Tests
                     // sample every BarTickPeriod into a BarPeriod bar, post a partial every PostDataPeriod) with a
                     // driver-owned source whose n-th sample is n, registered like the default prototypes are.
                     var dataProcessor = GetDataProcessor(state.Collector);
-                    var collectorOptions = GetCollectorOptions(state.Collector);
                     var sampledOptions = new BarSensorOptions
                     {
                         BarPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))),
                         BarTickPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(2))),
                         PostDataPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(3))),
                         Precision = int.Parse(step.Arg(4)),
-                        ComputerName = collectorOptions.ComputerName,
-                        Module = collectorOptions.Module,
+                        ComputerName = state.Collector.ComputerName,
+                        Module = state.Collector.Module,
                         Path = step.Arg(0),
                         Type = SensorType.DoubleBarSensor,
                         DataProcessor = dataProcessor,
@@ -960,15 +959,14 @@ namespace HSMDataCollector.Tests
             }
         }
 
-        private static DataProcessor GetDataProcessor(DataCollector collector) =>
-            (DataProcessor)typeof(DataCollector)
-                .GetField("_dataProcessor", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-                .GetValue(collector);
-
-        private static CollectorOptions GetCollectorOptions(DataCollector collector) =>
-            (CollectorOptions)typeof(DataCollector)
-                .GetField("_options", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-                .GetValue(collector);
+        // Same private-field seam the other collector tests use (PerformanceCounterIsolationTests & co.);
+        // a rename fails here with a message instead of an opaque NullReferenceException.
+        private static DataProcessor GetDataProcessor(DataCollector collector)
+        {
+            var field = typeof(DataCollector).GetField("_dataProcessor", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("DataCollector._dataProcessor not found (renamed?) — update the conformance driver's sampled-bar seam.");
+            return (DataProcessor)field.GetValue(collector);
+        }
 
         // create_sampled_double_bar_sensor (#1428): a CollectableBarMonitoringSensorBase — the base of
         // every managed default bar (UnixTotalCpu, WindowsSensorBase, …) — whose n-th sample is n.

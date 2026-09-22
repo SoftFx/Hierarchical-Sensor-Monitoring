@@ -539,7 +539,9 @@ ms (100/200/500/1000/2000/60000/3600000 all do), so tick-space (C#) and
 unix-ms (C++) alignment agree.
 
 Out of conformance scope by decision: periodic partial-bar posting
-(`PostDataPeriod`; fixtures pin the post period inert), retry-older-than-head
+(`PostDataPeriod`; fixtures pin the post period inert — superseded by #1428 for
+sampled/metric-driven bars: `bar_sampled_partial_contract.hsmtest` runs in both
+drivers), retry-older-than-head
 (#1090 — not orchestrable through the action protocol, stays managed-only in
 `QueueMirrorConsistencyTests`), dispose-without-stop drop semantics (the mock
 sender cannot distinguish graceful vs terminal flush).
