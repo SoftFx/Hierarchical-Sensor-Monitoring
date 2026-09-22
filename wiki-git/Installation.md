@@ -23,11 +23,13 @@ curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/
 
 Use this file as is. Do not write your own compose file or put a different proxy in front: the HSM side of the setup depends on exactly this Caddy configuration.
 
-**2. Tell Caddy the server address.** Create a file named `.env` next to `docker-compose.yml`. It is required: without it every `docker compose` command (`up`, `down`, `logs`, `pull`) stops with an error, so keep the file next to the compose file.
+**2. Tell Caddy the server address.** Create a file named `.env` next to `docker-compose.yml`. It is required: without it every `docker compose` command (`up`, `down`, `logs`, `pull`) stops with an error, so keep the file next to the compose file. If it is lost, you can still stop the stack with `HSM_DOMAIN=x docker compose down`.
 
-```bash
+```dotenv
 HSM_DOMAIN=hsm.example.com
 ```
+
+Write a bare host name or IP address only: no `https://`, no port, no trailing slash.
 
 What you put there decides which certificate Caddy uses:
 
@@ -85,7 +87,7 @@ services:
       - ./DatabasesBackups:/app/DatabasesBackups
 
   caddy:
-    image: 'caddy:2'
+    image: 'caddy:2.11.4'   # pinned: other-address clients rely on default_sni/fallback_sni; re-verify on bump
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -100,6 +102,7 @@ services:
         target: /etc/caddy/Caddyfile
     volumes:
       - ./CaddyData:/data                      # ACME account + certificates; keep it across updates
+      - ./Logs/caddy:/var/log/caddy            # access log with real client IPs (HSM sees only caddy's)
 
 configs:
   caddyfile:
@@ -115,12 +118,22 @@ configs:
               tls_insecure_skip_verify
           }
       }
+      (hsm_access_log) {
+          log {
+              output file /var/log/caddy/access.log {
+                  roll_size 50MiB
+                  roll_keep 10
+              }
+          }
+      }
       ${HSM_DOMAIN}, ${HSM_DOMAIN}:44333 {
+          import hsm_access_log
           reverse_proxy https://app:44333 {
               import hsm_upstream
           }
       }
       ${HSM_DOMAIN}:44330 {
+          import hsm_access_log
           reverse_proxy https://app:44330 {
               import hsm_upstream
           }
@@ -129,11 +142,13 @@ configs:
       # agent bundles keep working. The certificate does not match such a name, so those
       # clients need "allow untrusted certificate", as with the old self-signed setup.
       https://:443, https://:44333 {
+          import hsm_access_log
           reverse_proxy https://app:44333 {
               import hsm_upstream
           }
       }
       https://:44330 {
+          import hsm_access_log
           reverse_proxy https://app:44330 {
               import hsm_upstream
           }
@@ -149,8 +164,10 @@ What must stay as it is, if you ever adapt it:
 | `tls_insecure_skip_verify` | HSM still serves HTTPS with its own self-signed certificate; Caddy connects to it inside the compose network without checking it. |
 | `default_sni` / `fallback_sni` and the `https://:443`, `https://:44333`, `https://:44330` sites | Clients that reach the server by IP or by another name keep working. They receive the `HSM_DOMAIN` certificate, which does not match the name they use, so they need "allow untrusted certificate". |
 | Public ports `44330` and `44333` | Collectors and agents connect to `https://<host>:44330`; downloaded agent bundles use this port. |
-| Ports `80` and `443` | Let's Encrypt checks the domain through them. |
+| Ports `80` and `443` | Required when `HSM_DOMAIN` is a public DNS name: Let's Encrypt checks the domain through them. With an IP address or `tls internal` you can remove both lines; the web UI is then available on `44333` only. |
 | `./CaddyData:/data` | Keeps certificates across updates; without it Caddy requests new ones on every restart and hits Let's Encrypt rate limits. |
+| `./Logs/caddy` access log | HSM sees every request as coming from Caddy, so this log (`Logs/caddy/access.log`) is where the real client IP addresses are recorded. |
+| `caddy:2.11.4` (pinned version) | Clients on other addresses depend on how Caddy picks a certificate; a new Caddy version is taken deliberately, after checking that behavior again. |
 
 ### Internal DNS name (not reachable from the internet)
 
@@ -171,7 +188,10 @@ Either way the certificate comes from Caddy's own certificate authority, which c
 
 Nothing changes on the HSM side: it keeps its data, settings and own certificate.
 
-**Before you stop the old stack**, check that ports `80` and `443` are free on the host. If they are taken, the new stack fails to start after the old one is already down.
+**Before you stop the old stack**, check ports `80` and `443`:
+
+- **They must be free on the host.** If they are taken, the new stack fails to start after the old one is already down.
+- **They become open to the network.** Docker publishes ports past host firewalls such as `ufw`, so a host that exposed only `44330`/`44333` now also answers on `80` and `443`. If `HSM_DOMAIN` is an IP address, or the server must not be reachable on these ports, remove the `80:80` and `443:443` lines from the `caddy` service before starting. Let's Encrypt then cannot work, and Caddy uses its own certificate.
 
 Then replace your `docker-compose.yml` with the reference one, create the `.env` file (step 2 above), and restart:
 
@@ -260,6 +280,7 @@ Always mount these directories. Without them, **all data is lost** when the cont
 | `./Logs` | `/app/Logs` | Application logs |
 | `./Config` | `/app/Config` | `appsettings.json`, TLS certificates |
 | `./CaddyData` | `/data` (caddy) | Caddy's certificates and Let's Encrypt account (compose only) |
+| `./Logs/caddy` | `/var/log/caddy` (caddy) | Access log with real client IP addresses (compose only) |
 | `./Databases` | `/app/Databases` | All sensor data (LevelDB) |
 | `./DatabasesBackups` | `/app/DatabasesBackups` | Automatic database backups |
 
@@ -273,8 +294,8 @@ Always mount these directories. Without them, **all data is lost** when the cont
 |---|---|---|
 | `44330` | HTTPS | Sensor data ingestion — used by DataCollector and REST API |
 | `44333` | HTTPS | Web UI |
-| `443` | HTTPS | Web UI on the standard port (compose only) |
-| `80` | HTTP | Let's Encrypt domain check and redirect to HTTPS (compose only) |
+| `443` | HTTPS | Web UI on the standard port (compose only; can be removed for IP-address setups) |
+| `80` | HTTP | Let's Encrypt domain check and redirect to HTTPS (compose only; can be removed for IP-address setups) |
 
 With Docker Compose, HSM is reachable only through Caddy, and Caddy publishes these ports. Keep `44330` and `44333`: downloaded agent bundles point at port `44330`. If you must use other host ports, change the left side of the mapping in the `caddy` service and set **Agent connection URL** (Configuration → Agent) to the new Sensor API address, e.g. `https://hsm.example.com:44331`.
 

@@ -165,9 +165,11 @@ CMakeUserPresets.json
 /Logs/
 /Config/
 /CaddyData/
-/.env
 /Databases/
 /DatabasesBackups/
+
+# docker-compose.yml settings (HSM_DOMAIN), machine-local
+/.env
 
 # Local override for scripts/local-docker-build.ps1 — pins image tag, machine-local
 docker-compose.local.yml

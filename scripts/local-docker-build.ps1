@@ -170,7 +170,7 @@ try {
     }
 
     # --- Ensure volume mount dirs exist (otherwise Docker creates them as root) ---
-    foreach ($vol in @("Logs", "Config", "Databases", "DatabasesBackups", "CaddyData")) {
+    foreach ($vol in @("Logs", "Config", "Databases", "DatabasesBackups", "CaddyData", "Logs/caddy")) {
         New-Item -ItemType Directory -Force -Path (Join-Path $repoRoot $vol) | Out-Null
     }
 
@@ -187,9 +187,15 @@ services:
       - '127.0.0.1:44333:44333'
 "@ | Set-Content -Path $overridePath -Encoding utf8
 
+    # The `!override` tag above needs Docker Compose v2.24.4+.
+    $composeVersion = [version]((docker compose version --short) -replace '^v', '' -replace '[^0-9.].*$', '')
+    if ($composeVersion -lt [version]"2.24.4") { throw "Docker Compose v2.24.4+ is required (found $composeVersion)." }
+
     # docker-compose.yml requires HSM_DOMAIN; a local run is https://localhost with Caddy's
-    # internal CA, published on loopback only. The `!override` tag needs Docker Compose v2.24.4+.
-    if (-not $env:HSM_DOMAIN) { $env:HSM_DOMAIN = "localhost" }
+    # internal CA, published on loopback only. Set for the compose calls below only, so it
+    # does not leak into the caller's session and shadow a repo-root .env later.
+    $hadDomain = [bool]$env:HSM_DOMAIN
+    if (-not $hadDomain) { $env:HSM_DOMAIN = "localhost" }
 
     # --- Stop any existing project containers, then start fresh ---
     Write-Host "Stopping any existing hsm-server container..."
@@ -197,7 +203,9 @@ services:
 
     Write-Host "Starting container..."
     docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
-    if ($LASTEXITCODE -ne 0) { throw "docker compose up failed." }
+    $upExit = $LASTEXITCODE
+    if (-not $hadDomain) { Remove-Item Env:HSM_DOMAIN }
+    if ($upExit -ne 0) { throw "docker compose up failed." }
 
     Write-Host ""
     Write-Host "HSM Server is running:" -ForegroundColor Green
