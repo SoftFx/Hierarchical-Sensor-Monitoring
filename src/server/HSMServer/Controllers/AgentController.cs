@@ -4,6 +4,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Model.Agent;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -84,6 +85,62 @@ namespace HSMServer.Controllers
             _logger.Info($"{CurrentUser?.Name} downloaded the HSM Agent bundle for product '{product.DisplayName}' ({productId}).");
 
             return File(zip, "application/zip", $"hsm-agent-{Sanitize(product.DisplayName)}.zip");
+        }
+
+
+        /// <summary>
+        /// Per-product Linux probe download (#1424): a .tar.gz with the byte-identical released .deb, a
+        /// generated config.json (no key inside), the key in its own file, the server's public CA chain
+        /// when this server terminates TLS itself, and install.sh/uninstall.sh. Same guard, key selection
+        /// and address resolution as the Windows <see cref="Installer"/>.
+        /// </summary>
+        [HttpGet("linux-installer")]
+        [AuthorizeIsAdmin]
+        public IActionResult LinuxInstaller(Guid productId)
+        {
+            if (!_cache.TryGetProduct(productId, out var product))
+                return NotFound("Product not found.");
+
+            var key = AgentKeySelector.Select(product);
+            if (key is null)
+                return BadRequest("This product has no usable access key. Create one with send-data permission first.");
+
+            if (string.IsNullOrEmpty(_environment.WebRootPath))
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
+
+            string packageName;
+            byte[] package;
+            try
+            {
+                var stagingDir = Path.Combine(_environment.WebRootPath, LinuxProbeInstallerBundle.StagingFolder);
+                packageName = LinuxProbeInstallerBundle.SelectStagedPackage(Directory.EnumerateFiles(stagingDir));
+                if (packageName is null)
+                    return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
+
+                package = System.IO.File.ReadAllBytes(Path.Combine(stagingDir, packageName));
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or IOException)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
+            }
+
+            var (address, port) = AgentConnectionResolver.Resolve(
+                _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
+
+            var addressError = LinuxProbeInstallerBundle.ValidateServerAddress(address);
+            if (addressError is not null)
+                return BadRequest(addressError);
+
+            // A TLS handshake feature on this connection means Kestrel itself terminated TLS with its own
+            // certificate; behind a TLS-terminating proxy it is absent and no CA file is shipped.
+            var serverCa = LinuxProbeServerCa.Resolve(
+                HttpContext.Features.Get<ITlsHandshakeFeature>() is not null, () => _config.ServerCertificate.CertificateSource);
+
+            var bundle = LinuxProbeInstallerBundle.BuildTarGz(packageName, package, new LinuxProbeBundleOptions(address, port, key.Id.ToString(), serverCa));
+
+            _logger.Info($"{CurrentUser?.Name} downloaded the HSM Linux probe bundle for product '{product.DisplayName}' ({productId}).");
+
+            return File(bundle, "application/gzip", LinuxProbeInstallerBundle.BundleFileName(Sanitize(product.DisplayName)));
         }
 
 
