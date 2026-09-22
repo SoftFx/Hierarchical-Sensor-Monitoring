@@ -10,24 +10,79 @@ Architecture and rationale: [`docs/initiatives/linux-docker-probe.md`](../../doc
 
 **The probe implements no sensor the collector already has.** Metric acquisition lives in the
 shared collector, conformance-locked against the managed one (root `CLAUDE.md` rules #9/#10); a
-probe-local reimplementation would be a permanent semantic/wire divergence. The probe only adds
-signals that exist in *no* collector today, and even those go through the collector's public sensor
-API, so wire format, queuing, batching, retry and TLS are always the library's.
+probe-local reimplementation would be a permanent semantic/wire divergence.
 
-In this slice that means exactly two probe-added sources:
-
-| Sensor | Type | Source | Period | TTL |
-|---|---|---|---|---|
-| `CPU/Load average {1m,5m,15m}` | Double ×3 | `/proc/loadavg` | 60 s | 3 × period |
-| `CPU/Logical cores` | Int | `/proc/cpuinfo` | daily (also on start) | 2 × period |
-| `Probe/Sources/{loadavg,logical-cores} status` | Enum {ok, degraded, failed} | probe-internal | with its source | as its source |
-
-Docker, disk and backup sources are workstreams #1416/#1417 and are deliberately absent.
+**Phase 1 — parity first.** The probe registers exactly the sensor set the managed HSMDataCollector
+registers on Linux (`UnixSensorsCollection.AddAllDefaultSensors`: computer set + module set) and
+nothing of its own. Probe-only signals — Docker (#1416), disks and backups (#1417) — come later, and
+will go through the collector's public sensor API so wire format, queuing, batching, retry and TLS
+stay the library's.
 
 The process node name is fixed as `.module/Process process`, the same as HsmAgent, so alert
 templates apply across hosts — do not rename it. As in `src/agent`, the process sensors are
 registered one by one and `Process ThreadPool thread count` is omitted (a native process has no
 CLR pool); the probe posts `.module/Version` itself since the module group helper is not used.
+
+## Parity contract
+
+The registered set is pinned by `probe::tests::the_registered_set_is_exactly_the_managed_unix_default_set`
+(the exact path list; the computer set is asserted when built with `linux-default-sensors`).
+
+**How this table was produced.** Both collectors ran for 330 s in Linux containers against the same
+fake Sensor API, and every `/commands` registration and `/list` value was captured and diffed:
+the managed collector from `src/collector` via `collector.Unix.AddAllDefaultSensors(new Version(0,1,0))`
+on .NET 8; the probe via `probe::tests::parity_capture` (an `#[ignore]`d audit test — rerun it with
+`HSM_PARITY_ADDRESS`/`HSM_PARITY_PORT` set) linked against the #1414 collector (`4889f3f`,
+collector 0.7.0) with `linux-default-sensors` on — the build the garage-server trial ran.
+
+**Registration is byte-identical** for all 15 shared paths: `SensorType`, `OriginalUnit`,
+`DisplayUnit`, `TTLs`, `KeepHistory`, `SelfDestroy`, `Statistics`, `AggregateData`, `EnableGrafana`,
+`IsSingletonSensor`, `DefaultAlertsOptions`, `EnumOptions`, `Alerts` and `TtlAlerts` all match.
+(`Description` is outside the byte contract by design — the managed text interpolates machine data.)
+The registration carries no bar period, post period or tick; those columns are what the captured
+values show. Every divergence is in value delivery.
+
+Paths are relative to `<computer>/` (`.computer/…`) or `<computer>/<module>/` (`.module/…`).
+TTL is "none" for every sensor except `Service alive`, which carries the inactivity alert.
+
+| Sensor | Type · unit | Alerts / KeepHistory (both sides) | Bars / posting: managed → native | Live value: managed / native | Status |
+|---|---|---|---|---|---|
+| `.computer/Total CPU` | DoubleBar · % | EMA mean > 50 | 5-min bar, partial post every ~15 s (3 samples / 15 s) → 15-s bars (4 samples each), posted every ~20 s | yes / yes | **Known gap #1428** |
+| `.computer/Free RAM memory` | DoubleBar · MB | EMA mean < 2 | as Total CPU | yes / yes | **Known gap #1428** |
+| `.computer/Disks monitoring/Free space on disk` | Double · MB | EMA value ≤ 20480 → Error | every 5 min → every 5 min | yes / yes (values agree) | Parity |
+| `.computer/Disks monitoring/Free space on disk prediction` | TimeSpan | — | every 5 min → — | yes (`00:00:00`) / **no** | **Known gap #1426** |
+| `.module/Process process/Process CPU` | DoubleBar · % | — | as Total CPU | yes / yes | Intentional path (#1429); **#1428** |
+| `.module/Process process/Process memory` | DoubleBar · MB | EMA mean > 30720 | as Total CPU | yes / yes | Intentional path (#1429); **#1428** |
+| `.module/Process process/Process thread count` | DoubleBar | EMA mean > 2000 | as Total CPU | yes / yes | Intentional path (#1429); **#1428** |
+| `.module/Process <name>/ThreadPool thread count` | DoubleBar | EMA mean > 2000 | managed only | yes / not registered | **Intentional** — no CLR pool in a native process |
+| `.module/Service alive` | Bool | TTL inactivity alert → Error · 180 d | every ~15 s → every ~15 s | first `False`, then `True` / `True` from the first post | **Finding F3** |
+| `.module/Collector version` | Version | 5 y | on Start and Stop → on Start | `3.5.0.0`, `Start:`/`Stop: dd/MM/yyyy HH:mm:ss` / `0.7.0`, `Start: <ISO-8601>` only | Value: intentional (independent collector version); **F4** comment/Stop; **F1** |
+| `.module/Collector errors` | String | — | on error → on error | none / none (clean run) | Parity |
+| `.module/Collector queue stats/Items count in package` | IntBar · count | — | 5-min bar, partial post every ~15 s → one post per 5-min bar, at its close | yes / only after 5 min | **Finding F2** |
+| `.module/Collector queue stats/Package content size` | DoubleBar · MB | — | as Items count | yes / only after 5 min | **Finding F2** |
+| `.module/Collector queue stats/Package process time` | DoubleBar · s | — | as Items count | yes / only after 5 min | **Finding F2** |
+| `.module/Collector queue stats/Queue overflow` | IntBar · count | — | on overflow → on overflow | none / none (no overflow) | Parity |
+| `.module/Version` | Version | 5 y | on Start and Stop → on Start and Stop (probe-posted) | `0.1.0`, `Start:`/`Stop: dd/MM/yyyy HH:mm:ss` / same format; the Stop post is lost to **F1** | Probe matches managed; **F1** |
+
+**Findings that need collector work** (not fixable in the probe):
+
+- **F1 — High.** The stop drain never delivers on a real transport. `StopWorker()` calls
+  `http_transport_->Cancel()` to unblock a hung send; the flag stays set, so the `DrainQueueOnStop()`
+  that follows sends through a cancelled transport ("Operation was aborted by an application
+  callback") and drops everything: the stop-flushed partial bars, last-value snapshots and anything
+  posted just before Stop (e.g. the `Version`/`Collector version` `Stop:` values). Observed on a
+  healthy server: `Collector stop dropped 6 pending value(s)`. Every restart loses data (rule #8), and
+  the #1107 "flush partial bar on Stop" contract does not hold over HTTP. The conformance corpus
+  cannot see it: it runs on the in-memory sender. Present on master too.
+- **F2 — Medium, #1428 family.** Non-metric bars (queue stats) keep the 5-min window but get no
+  periodic partial post, so they surface only once per 5 min; the managed collector posts the
+  running partial every ~15 s. Different symptom from the metric bars in #1428 (which shortened the
+  window instead) — the #1428 fix should cover both.
+- **F3 — Low.** `Service alive`: the managed `CollectorAlive` posts `False` on its first tick as a
+  start marker, then `True`; the native heartbeat posts `True` from the first post.
+- **F4 — Low.** `Collector version` comment: the native collector writes `Start: <ISO-8601>` and no
+  `Stop:` value; managed writes `Start:`/`Stop: dd/MM/yyyy HH:mm:ss`. (The version *value* differs by
+  design: the native collector reports its own independent version.)
 
 ## Crate layout
 
@@ -35,7 +90,7 @@ CLR pool); the probe posts `.module/Version` itself since the module group helpe
 src/probe-linux/
   hsm-collector-sys/   raw FFI declarations for the ABI subset the probe uses + the CMake build
   hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, log sink
-  hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, the two sources
+  hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, sensor registration
   packaging/           systemd unit sample + config skeleton
 ```
 
@@ -68,7 +123,7 @@ The wrapper crate exists to make these mechanical rather than remembered:
 ## The #1414 feature gate
 
 `hsm_collector_install_linux_metric_sources` — the entry point that makes the collector's default
-host catalog (Total CPU, Free RAM, free disk, process counters) produce live values on Linux — is
+host catalog (Total CPU, Free RAM, free disk, process sensors) produce live values on Linux — is
 added by workstream 1 (#1414) and **does not exist in master's collector**. So:
 
 * the declaration lives behind the cargo feature `linux-default-sensors`, **off by default**;
@@ -85,7 +140,7 @@ it the default here).
 ## Platform support
 
 **Linux is the only supported target.** OS-specific code is `cfg`-gated so the pure parts (config
-parsing, `/proc` parsers, log formatting) compile and test anywhere, but the probe is built, tested
+parsing, log formatting, the key-permission logic) compile and test anywhere, but the probe is built, tested
 and shipped for Linux only; the integration test is `#[cfg(target_os = "linux")]`.
 
 ## Building and testing
@@ -131,7 +186,7 @@ hsm-linux-probe --config /etc/hsm-linux-probe/config.json
 hsm-linux-probe --version    # probe version + the linked collector version
 ```
 
-`SIGTERM` (systemd stop/restart) and `SIGINT` request a graceful stop: the sampling loop exits
+`SIGTERM` (systemd stop/restart) and `SIGINT` request a graceful stop: the main thread notices
 within 200 ms and the collector drains with its own bounded stop, so a host restart is never held
 up. An overrun of `shutdownTimeoutSec` is logged; `TimeoutStopSec` in the unit is the backstop.
 Values the bounded drain discards are reported at `WARN` (the collector emits that line at

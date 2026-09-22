@@ -1,119 +1,37 @@
-//! Collector wiring and the sampling loop.
+//! Collector wiring and lifecycle.
 //!
 //! The lifecycle order mirrors `src/agent/src/agent_runtime.cpp`, the other native host of this
 //! collector: build options -> install the log sink -> select the transport -> install the metric
-//! sources -> register sensors -> start. Everything after that is the collector's job; the probe
-//! only feeds it the signals that exist in no collector (initiative §4.2).
+//! sources -> register sensors -> start.
+//!
+//! In this phase the probe registers exactly the sensor set the managed HSMDataCollector registers
+//! on Linux (`UnixSensorsCollection.AddAllDefaultSensors`) and nothing of its own; the parity
+//! contract is the table in `src/probe-linux/README.md`. Probe-only sources (Docker, disks,
+//! backups) come in later workstreams.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hsm_collector::{
-    Collector, CollectorOptions, DefaultSensor, EnumOption, EnumSensor, Error as CollectorError,
-    LogLevel, SensorOptions, SensorStatus, VersionSensor, LINUX_METRIC_SOURCES_AVAILABLE,
+    Collector, CollectorOptions, DefaultSensor, Error as CollectorError, LogLevel, SensorStatus,
+    VersionSensor, LINUX_METRIC_SOURCES_AVAILABLE,
 };
 
 use crate::config::Config;
 use crate::logging::{self, Logger};
-use crate::procfs;
 use crate::secret::{self, Secret};
 use crate::shutdown;
 
 /// Version reported as the probe's own `.module/Version` sensor.
 pub const PROBE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// How often the loop wakes to re-check the stop flag. Bounds the SIGTERM response time.
+/// How often the main thread wakes to re-check the stop flag. Bounds the SIGTERM response time.
 const TICK: Duration = Duration::from_millis(200);
-
-const LOAD_AVERAGE_1M: &str = "CPU/Load average 1m";
-const LOAD_AVERAGE_5M: &str = "CPU/Load average 5m";
-const LOAD_AVERAGE_15M: &str = "CPU/Load average 15m";
-const LOGICAL_CORES: &str = "CPU/Logical cores";
-const LOADAVG_SOURCE_STATUS: &str = "Probe/Sources/loadavg status";
-const CORES_SOURCE_STATUS: &str = "Probe/Sources/logical-cores status";
-
-/// Per-source health, made visible so a failing source is never indistinguishable from a quiet one
-/// (initiative §4, "failure isolation made visible").
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SourceStatus {
-    Ok = 0,
-    /// Partial data. Registered now so the option set is stable for the sources that will report
-    /// it (Docker, #1416); neither source in this slice can be partially healthy.
-    Degraded = 1,
-    Failed = 2,
-}
-
-fn source_status_options() -> Vec<EnumOption> {
-    vec![
-        EnumOption::new(SourceStatus::Ok as i32, "ok"),
-        EnumOption::new(SourceStatus::Degraded as i32, "degraded"),
-        EnumOption::new(SourceStatus::Failed as i32, "failed"),
-    ]
-}
-
-fn post_source_status(
-    sensor: &EnumSensor<'_>,
-    status: SourceStatus,
-    comment: Option<&str>,
-    logger: &Logger,
-) {
-    let sensor_status = match status {
-        SourceStatus::Ok => SensorStatus::Ok,
-        SourceStatus::Degraded => SensorStatus::Warning,
-        SourceStatus::Failed => SensorStatus::Error,
-    };
-    if let Err(error) = sensor.add_with(status as i32, sensor_status, comment) {
-        logger.error(format!("cannot post a source status: {error}"));
-    }
-}
 
 /// Build, start and run the probe until a stop is requested.
 pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::error::Error>> {
     let collector = build_collector(config, Arc::clone(&logger))?;
-
-    register_default_sensors(&collector, &logger);
-    let product_version = register_module_sensors(&collector, &logger);
-
-    // TTLs are derived from the sampling periods so a reconfigured period cannot leave a sensor
-    // permanently expired: 3x the period for the fast source (the §4.2 value at the default 60 s),
-    // 2x for the daily one (48 h at the default).
-    let load_ttl = config.load_average_period() * 3;
-    let cores_ttl = config.logical_cores_period() * 2;
-
-    let load_1m = collector.double_sensor(
-        LOAD_AVERAGE_1M,
-        &SensorOptions::default()
-            .with_ttl(load_ttl)
-            .with_description("1-minute kernel load average from /proc/loadavg."),
-    )?;
-    let load_5m = collector.double_sensor(
-        LOAD_AVERAGE_5M,
-        &SensorOptions::default()
-            .with_ttl(load_ttl)
-            .with_description("5-minute kernel load average from /proc/loadavg."),
-    )?;
-    let load_15m = collector.double_sensor(
-        LOAD_AVERAGE_15M,
-        &SensorOptions::default()
-            .with_ttl(load_ttl)
-            .with_description("15-minute kernel load average from /proc/loadavg."),
-    )?;
-    let cores = collector.int_sensor(
-        LOGICAL_CORES,
-        &SensorOptions::default()
-            .with_ttl(cores_ttl)
-            .with_description("Logical CPUs the host exposes, counted from /proc/cpuinfo."),
-    )?;
-    let loadavg_status = collector.enum_sensor(
-        LOADAVG_SOURCE_STATUS,
-        Some("Health of the probe's /proc/loadavg source."),
-        &source_status_options(),
-    )?;
-    let cores_status = collector.enum_sensor(
-        CORES_SOURCE_STATUS,
-        Some("Health of the probe's /proc/cpuinfo source."),
-        &source_status_options(),
-    )?;
+    let product_version = register_sensors(&collector, &logger);
 
     logger.info(format!(
         "starting: collector {} -> {}:{} (module '{}', computer '{}')",
@@ -132,90 +50,18 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
 
     // After Start: the collector drops a value posted before it can accept data.
     if let Some(sensor) = &product_version {
-        post_product_version(sensor, &logger);
+        post_product_version(sensor, VersionEvent::Start, &logger);
     }
 
-    // Both sources fire immediately on start, then on their own period.
-    let mut next_load = Instant::now();
-    let mut next_cores = Instant::now();
-
+    // Sampling, queuing and sending are the collector's own threads; the main thread only waits.
     while !shutdown::is_requested() {
-        let now = Instant::now();
+        std::thread::sleep(TICK);
+    }
 
-        if now >= next_load {
-            match procfs::read_loadavg() {
-                Ok(load) => {
-                    let mut failures = Vec::new();
-                    for (sensor, value, name) in [
-                        (&load_1m, load.one, LOAD_AVERAGE_1M),
-                        (&load_5m, load.five, LOAD_AVERAGE_5M),
-                        (&load_15m, load.fifteen, LOAD_AVERAGE_15M),
-                    ] {
-                        if let Err(error) = sensor.add(value) {
-                            failures.push(format!("{name}: {error}"));
-                        }
-                    }
-                    if failures.is_empty() {
-                        logger.debug(format!(
-                            "load average {:.2} {:.2} {:.2}",
-                            load.one, load.five, load.fifteen
-                        ));
-                        post_source_status(&loadavg_status, SourceStatus::Ok, None, &logger);
-                    } else {
-                        let detail = failures.join("; ");
-                        logger.error(format!("cannot post load averages: {detail}"));
-                        post_source_status(
-                            &loadavg_status,
-                            SourceStatus::Failed,
-                            Some(&detail),
-                            &logger,
-                        );
-                    }
-                }
-                Err(error) => {
-                    // Skip the value entirely: a substitute zero would read as an idle host.
-                    let detail = error.to_string();
-                    logger.error(format!("load average source failed: {detail}"));
-                    post_source_status(
-                        &loadavg_status,
-                        SourceStatus::Failed,
-                        Some(&detail),
-                        &logger,
-                    );
-                }
-            }
-            next_load = now + config.load_average_period();
-        }
-
-        if now >= next_cores {
-            match procfs::read_logical_cores() {
-                Ok(count) => {
-                    if let Err(error) = cores.add(count) {
-                        let detail = error.to_string();
-                        logger.error(format!("cannot post the logical core count: {detail}"));
-                        post_source_status(
-                            &cores_status,
-                            SourceStatus::Failed,
-                            Some(&detail),
-                            &logger,
-                        );
-                    } else {
-                        post_source_status(&cores_status, SourceStatus::Ok, None, &logger);
-                    }
-                }
-                Err(error) => {
-                    let detail = error.to_string();
-                    logger.error(format!("logical core source failed: {detail}"));
-                    post_source_status(&cores_status, SourceStatus::Failed, Some(&detail), &logger);
-                }
-            }
-            next_cores = now + config.logical_cores_period();
-        }
-
-        let until_next = next_load
-            .min(next_cores)
-            .saturating_duration_since(Instant::now());
-        std::thread::sleep(TICK.min(until_next).max(Duration::from_millis(1)));
+    // Before Stop, so the value is still accepted and goes out with the stop drain — as the
+    // managed ProductVersionSensor.StopAsync does.
+    if let Some(sensor) = &product_version {
+        post_product_version(sensor, VersionEvent::Stop, &logger);
     }
 
     logger.info("stop requested; draining the collector");
@@ -282,16 +128,22 @@ fn build_collector(
     Ok(collector)
 }
 
-/// Enable the collector's own catalog: the platform-free module sensors always, and the host
-/// catalog only when this build can actually feed it live values.
-fn register_default_sensors(collector: &Collector, logger: &Logger) {
+/// Register the managed Unix default set (`AddAllDefaultSensors` = computer set + module set) and
+/// return the product-version handle for [`post_product_version`].
+fn register_sensors<'c>(collector: &'c Collector, logger: &Logger) -> Option<VersionSensor<'c>> {
+    register_computer_sensors(collector, logger);
+    register_module_sensors(collector, logger)
+}
+
+/// The computer set (managed `AddAllComputerSensors`: system + disk), live only when this build can
+/// feed it values.
+fn register_computer_sensors(collector: &Collector, logger: &Logger) {
     match collector.install_linux_metric_sources() {
         Ok(()) => logger.info("Linux metric sources installed; the default host catalog is live"),
         Err(CollectorError::Unsupported { .. }) => logger.error(
             "the collector's Linux metric sources are unavailable (built without the \
              'linux-default-sensors' feature — see #1414): the default host catalog \
-             (Total CPU, Free RAM, free disk, process counters) will NOT be reported; \
-             the probe continues with its own sensors only",
+             (Total CPU, Free RAM, free disk) will NOT be reported",
         ),
         Err(error) => logger.error(format!("cannot install the Linux metric sources: {error}")),
     }
@@ -309,15 +161,15 @@ fn register_default_sensors(collector: &Collector, logger: &Logger) {
     }
 }
 
-/// Register the module group — process sensors, collector self-sensors, queue diagnostics and the
-/// product version — and return the product-version handle for [`post_product_version`].
+/// The module set (managed `AddAllModuleSensors`): process sensors, collector self-sensors, queue
+/// diagnostics and the product version.
 ///
 /// Registered one by one exactly as `src/agent` does, rather than through `add_all_module_sensors`:
 /// that group also registers `Process ThreadPool thread count`, a CLR concept a native process can
 /// only report as 0. The process node is left at the collector's fixed `Process process` name (no
 /// process name passed) — deliberately the same path on every native host, so one HSM alert
-/// template on `.module/Process process/…` applies to all of them. Do not name it per process.
-/// Because the group helper is not called, the probe posts `.module/Version` itself.
+/// template on `.module/Process process/…` applies to all of them (#1429). Do not name it per
+/// process. Because the group helper is not called, the probe posts `.module/Version` itself.
 fn register_module_sensors<'c>(
     collector: &'c Collector,
     logger: &Logger,
@@ -350,11 +202,27 @@ fn register_module_sensors<'c>(
     }
 }
 
-/// Post the probe's version once, with the start time, as the collector's own
-/// `add_all_module_sensors` does for a host (managed `ProductVersionSensor.StartAsync`).
-fn post_product_version(sensor: &VersionSensor<'_>, logger: &Logger) {
+/// When `.module/Version` is posted: the managed `ProductVersionSensor` posts on both.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum VersionEvent {
+    Start,
+    Stop,
+}
+
+/// The `.module/Version` comment exactly as the managed `ProductVersionSensor` writes it:
+/// `Start: dd/MM/yyyy HH:mm:ss` / `Stop: …` (UTC, `SensorBase.DefaultTimeFormat`).
+fn version_comment(event: VersionEvent, timestamp: &str) -> String {
+    match event {
+        VersionEvent::Start => format!("Start: {timestamp}"),
+        VersionEvent::Stop => format!("Stop: {timestamp}"),
+    }
+}
+
+/// Post the probe's version with a start or stop comment, mirroring the managed
+/// `ProductVersionSensor.StartAsync`/`StopAsync`.
+fn post_product_version(sensor: &VersionSensor<'_>, event: VersionEvent, logger: &Logger) {
     let (major, minor, build, revision) = parse_version(PROBE_VERSION);
-    let comment = format!("Start: {}", logging::utc_iso8601_now());
+    let comment = version_comment(event, &logging::managed_timestamp_now());
     if let Err(error) = sensor.add_with(
         major,
         minor,
@@ -387,42 +255,77 @@ mod tests {
     use super::*;
     use crate::logging::Level;
 
-    /// The registration text the collector sends to `/commands` for the module group, with the
-    /// computer/module prefixes the trial host uses.
-    fn module_registrations() -> Vec<String> {
-        let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
+    fn test_collector(port: u16) -> Collector {
+        let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", port);
         options.allow_plaintext_transport = true;
         options.computer_name = Some("garage-server".into());
         options.module = Some("LinuxProbe".into());
-        let collector = Collector::new(&options).expect("create");
-        let logger = Logger::new(Level::Error, None);
+        Collector::new(&options).expect("create")
+    }
 
-        let version = register_module_sensors(&collector, &logger);
+    /// The paths the probe registers, read back from the payloads the collector records at Start
+    /// — the `/commands` registration batch. No transport is installed, so the in-memory sender
+    /// receives it and nothing leaves the test.
+    fn registered_paths() -> Vec<String> {
+        let collector = test_collector(1);
+        let logger = Logger::new(Level::Error, None);
+        let version = register_sensors(&collector, &logger);
         assert!(
             version.is_some(),
             "the product version sensor must register"
         );
-        // The collector records the registration payloads at Start — the /commands batch. No
-        // transport is installed, so the in-memory sender receives it and nothing leaves the test.
         collector.start().expect("start");
         let registrations = collector.registrations();
         collector.stop().expect("stop");
-        assert!(
-            !registrations.is_empty(),
-            "Start must record the registrations"
-        );
-        registrations
-    }
 
-    fn registered_paths(registrations: &[String]) -> Vec<String> {
-        registrations
+        let mut paths: Vec<String> = registrations
             .iter()
             .filter_map(|json| {
                 let start = json.find("\"Path\":\"")? + "\"Path\":\"".len();
                 let end = json[start..].find('"')? + start;
                 Some(json[start..end].to_string())
             })
-            .collect()
+            .collect();
+        paths.sort();
+        paths
+    }
+
+    /// The module set: managed `AddAllModuleSensors` minus `Process ThreadPool thread count`.
+    const MODULE_SET: &[&str] = &[
+        "garage-server/LinuxProbe/.module/Collector errors",
+        "garage-server/LinuxProbe/.module/Collector queue stats/Items count in package",
+        "garage-server/LinuxProbe/.module/Collector queue stats/Package content size",
+        "garage-server/LinuxProbe/.module/Collector queue stats/Package process time",
+        "garage-server/LinuxProbe/.module/Collector queue stats/Queue overflow",
+        "garage-server/LinuxProbe/.module/Collector version",
+        "garage-server/LinuxProbe/.module/Process process/Process CPU",
+        "garage-server/LinuxProbe/.module/Process process/Process memory",
+        "garage-server/LinuxProbe/.module/Process process/Process thread count",
+        "garage-server/LinuxProbe/.module/Service alive",
+        "garage-server/LinuxProbe/.module/Version",
+    ];
+
+    /// The computer set (managed `AddAllComputerSensors` on Unix), registered only when the build
+    /// has the Linux metric sources (#1414).
+    #[cfg(feature = "linux-default-sensors")]
+    const COMPUTER_SET: &[&str] = &[
+        "garage-server/.computer/Disks monitoring/Free space on disk",
+        "garage-server/.computer/Disks monitoring/Free space on disk prediction",
+        "garage-server/.computer/Free RAM memory",
+        "garage-server/.computer/Total CPU",
+    ];
+
+    #[test]
+    fn the_registered_set_is_exactly_the_managed_unix_default_set() {
+        // The parity contract (README table): nothing more, nothing less. A probe-only sensor, or a
+        // managed sensor the probe stops registering, fails here.
+        #[allow(unused_mut)]
+        let mut expected: Vec<&str> = MODULE_SET.to_vec();
+        #[cfg(feature = "linux-default-sensors")]
+        expected.extend_from_slice(COMPUTER_SET);
+        expected.sort_unstable();
+
+        assert_eq!(registered_paths(), expected);
     }
 
     #[test]
@@ -430,7 +333,7 @@ mod tests {
         // By design (#1429 closed as such): every native host — HsmAgent and this probe — registers
         // the same fixed ".module/Process process" node, so one HSM alert template on that path
         // applies to all of them. A per-process name would silently detach hosts from it.
-        let paths = registered_paths(&module_registrations());
+        let paths = registered_paths();
         for sensor in ["Process CPU", "Process memory", "Process thread count"] {
             let expected = format!("garage-server/LinuxProbe/.module/Process process/{sensor}");
             assert!(
@@ -452,23 +355,16 @@ mod tests {
     }
 
     #[test]
-    fn the_rest_of_the_module_group_is_still_registered() {
-        let paths = registered_paths(&module_registrations());
-        for sensor in [
-            ".module/Service alive",
-            ".module/Collector version",
-            ".module/Version",
-        ] {
-            assert!(
-                paths.iter().any(|path| path.ends_with(sensor)),
-                "missing {sensor} in {paths:#?}"
-            );
-        }
-        assert!(
-            paths
-                .iter()
-                .any(|path| path.contains(".module/Collector queue stats/")),
-            "missing the queue diagnostics in {paths:#?}"
+    fn version_comments_match_the_managed_product_version_sensor() {
+        // Captured from the managed collector on Linux: "Start: 22/09/2026 14:45:12" and
+        // "Stop: 22/09/2026 14:51:04".
+        assert_eq!(
+            version_comment(VersionEvent::Start, "22/09/2026 14:45:12"),
+            "Start: 22/09/2026 14:45:12"
+        );
+        assert_eq!(
+            version_comment(VersionEvent::Stop, "22/09/2026 14:51:04"),
+            "Stop: 22/09/2026 14:51:04"
         );
     }
 
@@ -480,23 +376,48 @@ mod tests {
         assert_eq!(parse_version(""), (0, 0, None, None));
     }
 
+    /// Parity-audit capture, not part of the normal suite: runs the probe's exact registration
+    /// against a fake Sensor API so its `/commands` and `/list` traffic can be diffed against the
+    /// managed collector's (README "Parity contract"). Run with
+    /// `HSM_PARITY_ADDRESS=http://<host> HSM_PARITY_PORT=<port> HSM_PARITY_SECONDS=<n>
+    /// cargo test --features linux-default-sensors -- --ignored parity_capture`.
     #[test]
-    fn source_status_keys_are_the_registered_enum_options() {
-        let options = source_status_options();
-        assert_eq!(options.len(), 3);
-        assert_eq!(options[0].key, SourceStatus::Ok as i32);
-        assert_eq!(options[0].value, "ok");
-        assert_eq!(options[1].key, SourceStatus::Degraded as i32);
-        assert_eq!(options[2].key, SourceStatus::Failed as i32);
-        assert_eq!(options[2].value, "failed");
-    }
+    #[ignore = "audit tool: needs a capture server on HSM_PARITY_PORT"]
+    fn parity_capture() {
+        let port: u16 = std::env::var("HSM_PARITY_PORT")
+            .expect("HSM_PARITY_PORT")
+            .parse()
+            .expect("port");
+        let seconds: u64 = std::env::var("HSM_PARITY_SECONDS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(70);
 
-    #[test]
-    fn sensor_paths_are_stable() {
-        // The tree shape is an operator-visible contract (alert templates hang off these paths),
-        // so a rename must be a deliberate edit here.
-        assert_eq!(LOAD_AVERAGE_1M, "CPU/Load average 1m");
-        assert_eq!(LOGICAL_CORES, "CPU/Logical cores");
-        assert_eq!(LOADAVG_SOURCE_STATUS, "Probe/Sources/loadavg status");
+        let address =
+            std::env::var("HSM_PARITY_ADDRESS").unwrap_or_else(|_| "http://127.0.0.1".into());
+        let mut options = CollectorOptions::new("native-parity-key", address, port);
+        options.allow_plaintext_transport = true;
+        options.computer_name = Some("garage-server".into());
+        options.module = Some("LinuxProbe".into());
+        let collector = Collector::new(&options).expect("create");
+        let logger = Arc::new(Logger::new(Level::Debug, None));
+        let sink = Arc::clone(&logger);
+        collector
+            .set_logger(move |level, message| {
+                sink.log(logging::collector_message_level(level, message), message)
+            })
+            .expect("logger");
+        collector.use_http_transport().expect("transport");
+
+        let version = register_sensors(&collector, &logger);
+        collector.start().expect("start");
+        if let Some(sensor) = &version {
+            post_product_version(sensor, VersionEvent::Start, &logger);
+        }
+        std::thread::sleep(Duration::from_secs(seconds));
+        if let Some(sensor) = &version {
+            post_product_version(sensor, VersionEvent::Stop, &logger);
+        }
+        collector.stop().expect("stop");
     }
 }

@@ -2,16 +2,15 @@
 //!
 //! The probe is plumbing, not a sensor library: metric acquisition that HSM already has lives in
 //! the shared native collector (`src/native/collector`), which this process hosts through its
-//! stable C ABI. Only signals that exist in no collector are implemented here (initiative
-//! `docs/initiatives/linux-docker-probe.md` §4.2) — in this slice, the kernel load averages and
-//! the host's logical CPU count.
+//! stable C ABI. In this phase it registers exactly the sensor set the managed HSMDataCollector
+//! registers on Linux and nothing of its own (parity contract: `src/probe-linux/README.md`);
+//! probe-only signals (initiative `docs/initiatives/linux-docker-probe.md` §4.2) come later.
 //!
 //! Linux is the only supported platform; see `src/probe-linux/README.md`.
 
 mod config;
 mod logging;
 mod probe;
-mod procfs;
 mod secret;
 mod shutdown;
 

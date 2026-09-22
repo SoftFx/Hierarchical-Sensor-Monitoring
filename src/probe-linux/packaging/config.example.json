@@ -8,10 +8,6 @@
     "packageCollectPeriodSec": 15,
     "requestTimeoutSec": 30
   },
-  "sampling": {
-    "loadAveragePeriodSec": 60,
-    "logicalCoresPeriodSec": 86400
-  },
   "logging": {
     "directory": "/var/log/hsm-linux-probe",
     "level": "info"

@@ -117,10 +117,6 @@ impl Logger {
         }
     }
 
-    pub fn debug(&self, message: impl AsRef<str>) {
-        self.log(Level::Debug, message.as_ref());
-    }
-
     pub fn info(&self, message: impl AsRef<str>) {
         self.log(Level::Info, message.as_ref());
     }
@@ -196,13 +192,21 @@ fn utc_timestamp(unix_seconds: i64) -> String {
     )
 }
 
-/// `yyyy-MM-ddTHH:mm:ssZ` for now — the collector's own ISO form for a whole second.
-pub fn utc_iso8601_now() -> String {
-    utc_iso8601(now_unix_seconds())
+/// Now, in the managed `SensorBase.DefaultTimeFormat` (`dd/MM/yyyy HH:mm:ss`, UTC) — the form the
+/// managed `ProductVersionSensor` writes into its `Start:`/`Stop:` comments.
+pub fn managed_timestamp_now() -> String {
+    managed_timestamp(now_unix_seconds())
 }
 
-fn utc_iso8601(unix_seconds: i64) -> String {
-    format!("{}Z", utc_timestamp(unix_seconds).replacen(' ', "T", 1))
+fn managed_timestamp(unix_seconds: i64) -> String {
+    let (year, month, day) = civil_from_unix_days(unix_seconds.div_euclid(86_400));
+    let seconds_of_day = unix_seconds.rem_euclid(86_400);
+    format!(
+        "{day:02}/{month:02}/{year:04} {:02}:{:02}:{:02}",
+        seconds_of_day / 3600,
+        (seconds_of_day / 60) % 60,
+        seconds_of_day % 60
+    )
 }
 
 fn utc_date(unix_seconds: i64) -> String {
@@ -270,9 +274,11 @@ mod tests {
     }
 
     #[test]
-    fn formats_iso8601() {
-        assert_eq!(utc_iso8601(0), "1970-01-01T00:00:00Z");
-        assert_eq!(utc_iso8601(1_709_164_800), "2024-02-29T00:00:00Z");
+    fn formats_the_managed_version_comment_timestamp() {
+        // The managed capture showed "Start: 22/09/2026 14:45:12" for the same kind of instant.
+        assert_eq!(managed_timestamp(0), "01/01/1970 00:00:00");
+        assert_eq!(managed_timestamp(1_709_164_800), "29/02/2024 00:00:00");
+        assert_eq!(managed_timestamp(1_790_430_307), "26/09/2026 13:45:07");
     }
 
     #[test]

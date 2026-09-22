@@ -3,6 +3,9 @@
 //! Secrets never live here. The access key is read at startup from the file named by
 //! `hsm.accessKeyFile` — under systemd that is the `LoadCredential=` drop in
 //! `/run/credentials/hsm-linux-probe.service/`, root-owned and 0400 (initiative §4.3).
+//!
+//! Unknown keys are ignored, so a config written for an older probe keeps loading — e.g. the
+//! `sampling` section, which configured probe-only sensors removed in the parity phase.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -17,8 +20,6 @@ pub const DEFAULT_CONFIG_PATH: &str = "/etc/hsm-linux-probe/config.json";
 #[serde(rename_all = "camelCase")]
 pub struct Config {
     pub hsm: HsmConfig,
-    #[serde(default)]
-    pub sampling: SamplingConfig,
     #[serde(default)]
     pub logging: LoggingConfig,
     /// Upper bound on the graceful stop. The collector's own drain is bounded too; this is the
@@ -52,15 +53,6 @@ pub struct HsmConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SamplingConfig {
-    #[serde(default = "default_load_average_period_sec")]
-    pub load_average_period_sec: u64,
-    #[serde(default = "default_logical_cores_period_sec")]
-    pub logical_cores_period_sec: u64,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct LoggingConfig {
     /// Directory for the rolling probe log. `None` logs to stderr only (journal capture).
     #[serde(default)]
@@ -68,15 +60,6 @@ pub struct LoggingConfig {
     /// `debug`, `info`, `warn` or `error`.
     #[serde(default = "default_log_level")]
     pub level: String,
-}
-
-impl Default for SamplingConfig {
-    fn default() -> Self {
-        Self {
-            load_average_period_sec: default_load_average_period_sec(),
-            logical_cores_period_sec: default_logical_cores_period_sec(),
-        }
-    }
 }
 
 impl Default for LoggingConfig {
@@ -96,12 +79,6 @@ fn default_package_collect_period_sec() -> u64 {
 }
 fn default_request_timeout_sec() -> u64 {
     30
-}
-fn default_load_average_period_sec() -> u64 {
-    60
-}
-fn default_logical_cores_period_sec() -> u64 {
-    86_400
 }
 fn default_shutdown_timeout_sec() -> u64 {
     10
@@ -154,14 +131,6 @@ impl Config {
                 self.hsm.package_collect_period_sec,
             ),
             ("hsm.requestTimeoutSec", self.hsm.request_timeout_sec),
-            (
-                "sampling.loadAveragePeriodSec",
-                self.sampling.load_average_period_sec,
-            ),
-            (
-                "sampling.logicalCoresPeriodSec",
-                self.sampling.logical_cores_period_sec,
-            ),
             ("shutdownTimeoutSec", self.shutdown_timeout_sec),
         ] {
             if value == 0 {
@@ -179,14 +148,6 @@ impl Config {
             }
         }
         Ok(())
-    }
-
-    pub fn load_average_period(&self) -> Duration {
-        Duration::from_secs(self.sampling.load_average_period_sec)
-    }
-
-    pub fn logical_cores_period(&self) -> Duration {
-        Duration::from_secs(self.sampling.logical_cores_period_sec)
     }
 
     pub fn shutdown_timeout(&self) -> Duration {
@@ -238,7 +199,6 @@ mod tests {
             "packageCollectPeriodSec": 15,
             "requestTimeoutSec": 30
         },
-        "sampling": { "loadAveragePeriodSec": 60, "logicalCoresPeriodSec": 86400 },
         "logging": { "directory": "/var/log/hsm-linux-probe", "level": "info" },
         "shutdownTimeoutSec": 10
     }"#;
@@ -262,8 +222,6 @@ mod tests {
         );
         assert_eq!(config.hsm.computer_name, "garage-server");
         assert_eq!(config.hsm.module, "LinuxProbe");
-        assert_eq!(config.load_average_period(), Duration::from_secs(60));
-        assert_eq!(config.logical_cores_period(), Duration::from_secs(86_400));
         assert_eq!(
             config.logging.directory,
             Some(PathBuf::from("/var/log/hsm-linux-probe"))
@@ -278,8 +236,6 @@ mod tests {
         assert_eq!(config.hsm.computer_name, "");
         assert_eq!(config.hsm.package_collect_period_sec, 15);
         assert_eq!(config.hsm.request_timeout_sec, 30);
-        assert_eq!(config.sampling.load_average_period_sec, 60);
-        assert_eq!(config.sampling.logical_cores_period_sec, 86_400);
         assert_eq!(config.logging.level, "info");
         assert_eq!(config.logging.directory, None);
         assert_eq!(config.shutdown_timeout_sec, 10);
@@ -292,6 +248,19 @@ mod tests {
         let example = include_str!("../../packaging/config.example.json");
         let config = Config::parse(example).expect("the packaged example must parse");
         assert!(config.hsm.address.starts_with("https://"));
+    }
+
+    #[test]
+    fn a_config_from_the_earlier_probe_still_loads() {
+        // The `sampling` section configured probe-only sensors removed in the parity phase. A
+        // deployed config that still carries it must keep loading, not stop the service.
+        let old = r#"{
+            "hsm": { "address": "https://garage.lan", "port": 44330, "accessKeyFile": "access-key" },
+            "sampling": { "loadAveragePeriodSec": 60, "logicalCoresPeriodSec": 86400 },
+            "shutdownTimeoutSec": 10
+        }"#;
+        let config = Config::parse(old).expect("an old config must still parse");
+        assert_eq!(config.hsm.port, 44330);
     }
 
     #[test]
@@ -334,8 +303,6 @@ mod tests {
             r#"{ "hsm": { "address": "https://g", "port": 0, "accessKeyFile": "/k" } }"#,
             r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k",
                  "packageCollectPeriodSec": 0 } }"#,
-            r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
-                 "sampling": { "loadAveragePeriodSec": 0 } }"#,
             r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
                  "shutdownTimeoutSec": 0 }"#,
         ] {
