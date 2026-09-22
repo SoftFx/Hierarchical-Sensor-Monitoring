@@ -194,12 +194,14 @@ services:
 "@ | Set-Content -Path $overridePath -Encoding utf8
 
 
-    # docker-compose.yml requires HSM_DOMAIN; a local run is https://localhost with Caddy's
+    # docker-compose.yml requires HSM_DOMAIN and HSM_CERTIFICATE; a local run is https://localhost with Caddy's
     # internal CA, published on loopback only. Set for the compose calls below only, so it
     # does not leak into the caller's session and shadow a repo-root .env later. While they
     # run it also takes precedence over a repo-root .env (shell beats .env in Compose).
     $script:origHsmDomain = $env:HSM_DOMAIN
+    $script:origHsmCertificate = $env:HSM_CERTIFICATE
     if (-not $env:HSM_DOMAIN) { $env:HSM_DOMAIN = "localhost" }
+    if (-not $env:HSM_CERTIFICATE) { $env:HSM_CERTIFICATE = "self-signed" }
 
     # --- Stop any existing project containers, then start fresh ---
     Write-Host "Stopping any existing hsm-server container..."
@@ -214,13 +216,14 @@ services:
     Write-Host "  Web UI:      https://localhost:44333"
     Write-Host "  Sensor API:  https://localhost:44330"
     Write-Host "  Logs:        $repoRoot\Logs"
-    Write-Host "  Stop:        `$env:HSM_DOMAIN='localhost'; docker compose -f docker-compose.yml -f docker-compose.local.yml down"
-    Write-Host "  Proxy logs:  `$env:HSM_DOMAIN='localhost'; docker compose -f docker-compose.yml -f docker-compose.local.yml logs -f caddy"
+    Write-Host "  Stop:        `$env:HSM_DOMAIN='localhost'; `$env:HSM_CERTIFICATE='self-signed'; docker compose -f docker-compose.yml -f docker-compose.local.yml down"
+    Write-Host "  Proxy logs:  `$env:HSM_DOMAIN='localhost'; `$env:HSM_CERTIFICATE='self-signed'; docker compose -f docker-compose.yml -f docker-compose.local.yml logs -f caddy"
 }
 finally {
     # HSM_DOMAIN was set for the compose calls only: restore the caller's value on every path.
     if (Test-Path variable:script:origHsmDomain) {
         if ($null -eq $script:origHsmDomain) { Remove-Item Env:HSM_DOMAIN -ErrorAction Ignore } else { $env:HSM_DOMAIN = $script:origHsmDomain }
+        if ($null -eq $script:origHsmCertificate) { Remove-Item Env:HSM_CERTIFICATE -ErrorAction Ignore } else { $env:HSM_CERTIFICATE = $script:origHsmCertificate }
     }
 
     if (-not $StayOnBranch -and $origBranch -and $origBranch -ne $Branch) {
