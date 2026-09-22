@@ -117,8 +117,10 @@ namespace HSMServer.Core.Cache
 
         // #1409: null out ScheduleId on every policy that references the given
         // schedule, so a deleted schedule leaves schedule-less policies instead
-        // of dangling ids (fail-open + a repeated missing-id error log).
-        Task DetachAlertScheduleFromPoliciesAsync(Guid scheduleId);
+        // of dangling ids (fail-open + a repeated missing-id error log). The
+        // token stops the dispatch of further detach work (already-queued
+        // chunks still complete).
+        Task DetachAlertScheduleFromPoliciesAsync(Guid scheduleId, CancellationToken token = default);
 
         List<AlertTemplateModel> GetAlertTemplateModels();
 

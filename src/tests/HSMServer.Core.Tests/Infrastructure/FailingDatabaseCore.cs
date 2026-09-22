@@ -230,17 +230,17 @@ namespace HSMServer.Core.Tests.Infrastructure
         public List<AlertTemplateEntity> GetAllAlertTemplates() => _inner.GetAllAlertTemplates();
         public void AddAlertTemplate(AlertTemplateEntity policy) => _inner.AddAlertTemplate(policy);
 
-        // Optional injection point for alert template write failures, used to
+        // Optional injection point for alert template update failures, used to
         // verify the persist-first detach ordering (#1409): a failed write must
         // leave the in-memory template untouched so the retry re-runs the detach.
-        internal Func<AlertTemplateEntity, bool> ShouldFailAlertTemplateWrite { get; set; }
+        internal Func<AlertTemplateEntity, bool> ShouldFailAlertTemplateUpdate { get; set; }
 
-        public void WriteAlertTemplate(AlertTemplateEntity entity)
+        public void UpdateAlertTemplate(AlertTemplateEntity entity)
         {
-            if (ShouldFailAlertTemplateWrite?.Invoke(entity) == true)
-                throw new InvalidOperationException("Simulated DB failure for alert template write");
+            if (ShouldFailAlertTemplateUpdate?.Invoke(entity) == true)
+                throw new InvalidOperationException("Simulated DB failure for alert template update");
 
-            _inner.WriteAlertTemplate(entity);
+            _inner.UpdateAlertTemplate(entity);
         }
 
         public void RemoveAlertTemplate(Guid id) => _inner.RemoveAlertTemplate(id);

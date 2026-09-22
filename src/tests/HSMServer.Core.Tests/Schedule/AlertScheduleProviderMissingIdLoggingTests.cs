@@ -13,23 +13,18 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.Schedule
 {
-    // #1409: a dangling ScheduleId (a schedule deleted while policies still
-    // reference it) fails open by design (#1405), but every IsWorkingTime call
-    // logged an ERROR — and the TTL gates call it per scheduled policy per
-    // sweep, so one deleted schedule over a sensor park amplified into an
-    // ERROR line per policy per sweep. The missing-id report must fire once
-    // per id per process, and a re-saved schedule must re-arm it.
-    //
-    // The class swaps the process-global NLog configuration for its lifetime.
-    // Pinned into this collection because xUnit serializes tests WITHIN a
-    // collection (it does NOT stop other collections running in parallel):
-    // the pin confines the swap's blast radius to collections other than
-    // "Database collection". The real mitigations are the Guid-filtered
-    // assertions (foreign lines landing in the MemoryTarget cannot flake
-    // them) and the config restore in Dispose. Residual, accepted: while
-    // this class runs, tests in parallel collections emit their log lines
-    // into this MemoryTarget instead of their intended targets.
-    [Collection("Database collection")]
+    // This collection runs EXCLUSIVELY (DisableParallelization): the class
+    // swaps the process-global NLog configuration for its lifetime, so any
+    // parallel collection would both lose its own log targets and append
+    // into this MemoryTarget cross-thread. Exclusive running removes both
+    // hazards; the lock around Logs snapshot/clear is belt-and-braces for
+    // anything the provider still dispatches asynchronously.
+    [CollectionDefinition("NLog isolated", DisableParallelization = true)]
+    public sealed class AlertScheduleNLogIsolatedCollection
+    {
+    }
+
+    [Collection("NLog isolated")]
     public sealed class AlertScheduleProviderMissingIdLoggingTests : IDisposable
     {
         private readonly MemoryTarget _memory = new() { Layout = "${message}" };
@@ -53,8 +48,14 @@ namespace HSMServer.Core.Tests.Schedule
         }
 
 
+        // #1409: a dangling ScheduleId (a schedule deleted while policies still
+        // reference it) fails open by design (#1405), but every IsWorkingTime
+        // call logged an ERROR — and the TTL gates call it per scheduled policy
+        // per sweep, so one deleted schedule over a sensor park amplified into
+        // an ERROR line per policy per sweep. The missing-id report fires at
+        // most once per id per interval; a re-saved schedule re-arms it.
         [Fact]
-        public void MissingSchedule_FailsOpen_AndLogsOncePerId()
+        public void MissingSchedule_FailsOpen_AndLogsOncePerIdPerInterval()
         {
             using var provider = CreateProvider();
 
@@ -75,6 +76,32 @@ namespace HSMServer.Core.Tests.Schedule
             Assert.Equal(1, CountReports(otherId));
         }
 
+        // The throttle is time-based, not once-per-process (#1409): a
+        // persistent integrity problem must stay periodically visible, so
+        // after the interval the same id is reported again.
+        [Fact]
+        public void MissingSchedule_IsReportedAgain_AfterIntervalElapses()
+        {
+            using var provider = CreateProvider();
+            provider.MissingScheduleReportInterval = TimeSpan.FromMilliseconds(50);
+
+            var id = Guid.NewGuid();
+
+            Assert.True(provider.IsWorkingTime(id, DateTime.UtcNow));
+            Assert.Equal(1, CountReports(id));
+
+            // Inside the window: still muted.
+            provider.MissingScheduleReportInterval = TimeSpan.FromMinutes(30);
+            Assert.True(provider.IsWorkingTime(id, DateTime.UtcNow));
+            Assert.Equal(1, CountReports(id));
+
+            // Window elapsed: reported again.
+            provider.MissingScheduleReportInterval = TimeSpan.FromMilliseconds(50);
+            System.Threading.Thread.Sleep(100);
+            Assert.True(provider.IsWorkingTime(id, DateTime.UtcNow));
+            Assert.Equal(2, CountReports(id));
+        }
+
         [Fact]
         public void DeletedThenReSavedSchedule_LogsAgain()
         {
@@ -83,11 +110,12 @@ namespace HSMServer.Core.Tests.Schedule
             var id = Guid.NewGuid();
             Assert.True(provider.IsWorkingTime(id, DateTime.UtcNow));
 
-            _memory.Logs.Clear();
+            ClearLogs();
 
             // A schedule living under the id again (save) and disappearing
-            // once more (delete) is a NEW disappearance — the once-per-id
-            // report must not stay muted for the rest of the process.
+            // once more (delete) is a NEW disappearance — SaveSchedule re-arms
+            // the report immediately, without waiting out the interval.
+            provider.MissingScheduleReportInterval = TimeSpan.FromHours(1);
             provider.SaveSchedule(new AlertSchedule { Id = id, Name = "re-saved", Timezone = "UTC", Schedule = "daySchedules: []" });
             provider.DeleteSchedule(id);
 
@@ -96,7 +124,17 @@ namespace HSMServer.Core.Tests.Schedule
             Assert.Equal(1, CountReports(id));
         }
 
-        private int CountReports(Guid id) =>
-            _memory.Logs.Count(message => message.Contains(id.ToString()));
+
+        private int CountReports(Guid id) => SnapshotLogs().Count(message => message.Contains(id.ToString()));
+
+        // NLog 6 backs MemoryTarget.Logs with its internally-synchronized
+        // ThreadSafeList (not List<string>, and not an ICollection — no
+        // SyncRoot to take): enumeration holds the target's write lock, so a
+        // single ToArray pass cannot observe a torn or concurrent append.
+        // Combined with the exclusive collection this makes both the asserts
+        // and the Clear deterministic.
+        private string[] SnapshotLogs() => [.. _memory.Logs];
+
+        private void ClearLogs() => _memory.Logs.Clear();
     }
 }

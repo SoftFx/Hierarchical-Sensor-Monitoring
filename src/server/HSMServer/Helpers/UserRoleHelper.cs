@@ -40,6 +40,14 @@ namespace HSMServer.Helpers
             return user.IsAdmin;
         }
 
+        // Alert schedules are global cross-folder objects and Remove triggers
+        // a tree-wide policy rewrite (#1409) — the page is admin-only, matching
+        // the [AuthorizeIsAdmin] on AlertSchedulesController.
+        public static bool IsAlertSchedulesPageAllowed(User user)
+        {
+            return user.IsAdmin;
+        }
+
         public static bool IsManager(User user)
         {
             return user.ProductsRoles.Any(x => x.Item2 == ProductRoleEnum.ProductManager);

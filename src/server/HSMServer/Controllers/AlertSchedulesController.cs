@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using HSMServer.ApiObjectsConverters;
+using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Core.DataLayer;
 using HSMServer.Model.AlertSchedule;
@@ -18,6 +19,12 @@ using HSMServer.Core.Cache;
 namespace HSMServer.Controllers
 {
     [Authorize]
+    // #1409: schedules are global cross-folder objects, and Remove is a
+    // tree-wide force rewrite of every policy bound to the schedule — the
+    // same admin-only profile as ConfigurationController and
+    // ApiTokensAdminController. The nav entry is guarded to match
+    // (UserRoleHelper.IsAlertSchedulesPageAllowed).
+    [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class AlertSchedulesController : BaseController
     {
@@ -78,7 +85,10 @@ namespace HSMServer.Controllers
             // deletion proceeds), but this ordering minimizes the crash window
             // — if the process dies between the two calls, the schedule still
             // exists and the operator's Remove retry re-runs the detach.
-            await _cache.DetachAlertScheduleFromPoliciesAsync(id);
+            // RequestAborted lets a browser-side timeout stop the dispatch of
+            // further detach work instead of leaving the operator with no
+            // feedback while it continues.
+            await _cache.DetachAlertScheduleFromPoliciesAsync(id, HttpContext.RequestAborted);
 
             _scheduleProvider.DeleteSchedule(id);
 

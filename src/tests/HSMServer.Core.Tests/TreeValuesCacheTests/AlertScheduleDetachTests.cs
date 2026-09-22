@@ -312,6 +312,72 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(TimeSpan.FromMinutes(7).Ticks, handMade.TTLTicks);
         }
 
+        // #1409 review round 3: ownership stamping is scoped to the detach via
+        // PolicyUpdate.PreserveChangeOwnership, NOT via a rendered-content
+        // compare on the shared path. Policy.ToString() drops Destination and
+        // Schedule entirely when Template is empty, so a chat-only edit on a
+        // template-cleared TTL alert changes no rendered content — under the
+        // compare it never took ownership and a later template apply could
+        // overwrite the operator's edit. With the flag, every NON-detach
+        // full-list update stamps its targeted policies, so the chat-only
+        // edit transfers ownership again.
+        [Fact]
+        [Trait("Category", "Alert schedules")]
+        public async Task ChatOnlyEdit_OnTemplateClearedTtlPolicy_TransfersOwnership()
+        {
+            var user = InitiatorInfo.AsUser("operator");
+            var system = InitiatorInfo.AsSystemForce("setup");
+
+            var sensorPath = "sensorDetachChatOnlyOwnership";
+            await CreateSensor(sensorPath);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensor));
+
+            var attach = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [TtlUpdate(TimeSpan.FromMinutes(5).Ticks, initiator: system)],
+                Initiator = system,
+            });
+            Assert.True(attach.IsOk, attach.Error);
+
+            var ttl = Assert.Single(sensor.Policies.TTLPolicies);
+
+            // Re-assert under the system initiator so the policy carries a
+            // recorded System owner (creation with an empty id stamps nothing).
+            var stamp = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [TtlUpdate(TimeSpan.FromMinutes(5).Ticks, system, id: ttl.Id)],
+                Initiator = system,
+            });
+            Assert.True(stamp.IsOk, stamp.Error);
+            Assert.Equal(InitiatorType.System, sensor.ChangeTable.TtlPolicies[ttl.Id.ToString()].Initiator.Type);
+
+            // Chat-only edit by the user: same TTL (re-asserted), Template
+            // stays cleared, Destination gains a chat — nothing rendered
+            // changes, and the edit must still take ownership.
+            var edit = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies =
+                [
+                    new PolicyUpdate
+                    {
+                        Id = ttl.Id,
+                        TTL = TimeSpan.FromMinutes(5).Ticks,
+                        Destination = new PolicyDestinationUpdate(new Dictionary<Guid, string> { [Guid.NewGuid()] = "ops chat" }),
+                        Initiator = user,
+                        ConfirmationPeriod = 0,
+                        Conditions = [],
+                    },
+                ],
+                Initiator = user,
+            });
+            Assert.True(edit.IsOk, edit.Error);
+
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[ttl.Id.ToString()].Initiator.Type);
+        }
+
         // #1409 review: template detaches are PERSIST-FIRST — the detached
         // entity is written through the failure-propagating path BEFORE the
         // in-memory template is touched, so a failed write leaves the ids in
@@ -326,7 +392,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template = await AddTemplateWithScheduledPolicies([$"*/{sensorPath}"], deletedId, survivorId: Guid.NewGuid());
             await CreateSensor(sensorPath);
 
-            _failingDatabase.ShouldFailAlertTemplateWrite = _ => true;
+            _failingDatabase.ShouldFailAlertTemplateUpdate = _ => true;
 
             await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
 
@@ -340,7 +406,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 .First(t => new Guid(t.Id) == template.Id);
             Assert.Contains(storedTemplate.TTLPolicies, p => p.ScheduleId.SequenceEqual(deletedId.ToByteArray()));
 
-            _failingDatabase.ShouldFailAlertTemplateWrite = null;
+            _failingDatabase.ShouldFailAlertTemplateUpdate = null;
 
             await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
 

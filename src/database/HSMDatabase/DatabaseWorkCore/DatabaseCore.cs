@@ -734,9 +734,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.AddAlertTemplate(entity);
         }
 
-        public void UpdateAlertTemplate(AlertTemplateEntity entity) => _environmentDatabase.AddAlertTemplate(entity);
-
-        public void WriteAlertTemplate(AlertTemplateEntity entity) => _environmentDatabase.WriteAlertTemplate(entity);
+        public void UpdateAlertTemplate(AlertTemplateEntity entity) => _environmentDatabase.UpdateAlertTemplate(entity);
 
         public void RemoveAlertTemplate(Guid id) => _environmentDatabase.RemoveAlertTemplate(id.ToByteArray());
 

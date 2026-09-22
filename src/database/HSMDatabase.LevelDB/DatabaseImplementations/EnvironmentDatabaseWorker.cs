@@ -756,7 +756,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         // through this member: a silently dropped write would leave the
         // stored entity with a dangling schedule id while memory moves on,
         // and the id would resurrect after a restart.
-        public void WriteAlertTemplate(AlertTemplateEntity entity) =>
+        public void UpdateAlertTemplate(AlertTemplateEntity entity) =>
             _database.Put(entity.Id, JsonSerializer.SerializeToUtf8Bytes(entity, _options));
 
         public void RemoveAlertTemplate(byte[] id)

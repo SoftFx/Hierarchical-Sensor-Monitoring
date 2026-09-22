@@ -40,11 +40,13 @@ namespace HSMServer.Core.Schedule
 
         private readonly Dictionary<Guid, CacheEntry> _cache = new();
 
-        // Dangling schedule ids fail open (#1405) but are REPORTED once per id
-        // per process (#1409): the TTL gates call IsWorkingTime per scheduled
-        // policy per sweep, so a deleted schedule referenced by a sensor park
-        // used to produce one ERROR line per policy per sweep.
-        private readonly HashSet<Guid> _reportedMissingSchedules = new();
+        // Dangling schedule ids fail open (#1405) but are REPORTED at most
+        // once per id per interval (#1409): the TTL gates call IsWorkingTime
+        // per scheduled policy per sweep, so a deleted schedule referenced by
+        // a sensor park used to produce one ERROR line per policy per sweep.
+        // The interval keeps the problem periodically visible (it can persist
+        // for the process lifetime) instead of muting it after the first hit.
+        private readonly Dictionary<Guid, DateTime> _missingScheduleReportedAt = new();
 
         private readonly object _lock = new object();
 
@@ -165,11 +167,23 @@ namespace HSMServer.Core.Schedule
             }
         }
 
+        // Time-based throttle for the missing-id report: once per id per
+        // interval, re-armed immediately by SaveSchedule. Internal-settable so
+        // tests can shrink it to milliseconds.
+        internal TimeSpan MissingScheduleReportInterval { get; set; } = TimeSpan.FromHours(1);
+
         // Must be called under _lock only.
         private void ReportMissingSchedule(Guid id)
         {
-            if (_reportedMissingSchedules.Add(id))
-                _logger.Error($"Alert Schedule with id = {id} was not found.");
+            var now = DateTime.UtcNow;
+
+            if (_missingScheduleReportedAt.TryGetValue(id, out var reportedAt) &&
+                now - reportedAt < MissingScheduleReportInterval)
+                return;
+
+            _missingScheduleReportedAt[id] = now;
+
+            _logger.Error($"Alert Schedule with id = {id} was not found.");
         }
 
         public void DeleteSchedule(Guid id)
@@ -203,8 +217,9 @@ namespace HSMServer.Core.Schedule
             lock (_lock)
             {
                 // The id has a live schedule again — a later disappearance is
-                // a new event and must be reported afresh (#1409).
-                _reportedMissingSchedules.Remove(schedule.Id);
+                // a new event and must be reported afresh, without waiting out
+                // the throttle interval (#1409).
+                _missingScheduleReportedAt.Remove(schedule.Id);
 
                 if (_cache.TryGetValue(schedule.Id, out var cacheEntry))
                 {
