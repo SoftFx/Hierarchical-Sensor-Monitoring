@@ -45,10 +45,24 @@ public class KestrelConfig
         return entries.Select(entry => entry?.Trim()).Where(entry => !string.IsNullOrEmpty(entry)).ToArray();
     }
 
-    public static bool SettingsFileHasTrustedProxies(IConfigurationRoot configuration) =>
-        configuration.Providers.OfType<FileConfigurationProvider>()
-            .Any(provider => provider.GetChildKeys([], TrustedProxiesKey).Any()
-                || provider.TryGet(TrustedProxiesKey, out var value) && !string.IsNullOrWhiteSpace(value));
+    // The ignored settings-file value, for the startup error (null when there is none).
+    public static string FindTrustedProxiesInSettingsFile(IConfigurationRoot configuration)
+    {
+        foreach (var provider in configuration.Providers.OfType<FileConfigurationProvider>())
+        {
+            var values = provider.GetChildKeys([], TrustedProxiesKey).Distinct()
+                .Select(child => provider.TryGet($"{TrustedProxiesKey}:{child}", out var value) ? value : null)
+                .ToList();
+
+            if (provider.TryGet(TrustedProxiesKey, out var scalar) && !string.IsNullOrWhiteSpace(scalar))
+                values.Add(scalar);
+
+            if (values.Count > 0)
+                return string.Join(", ", values);
+        }
+
+        return null;
+    }
 
 
     public void Validate()

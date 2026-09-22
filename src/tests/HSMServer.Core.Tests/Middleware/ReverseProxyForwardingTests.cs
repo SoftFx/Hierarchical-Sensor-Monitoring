@@ -178,10 +178,10 @@ namespace HSMServer.Core.Tests.Middleware
         }
 
         [Theory]
-        [InlineData("{ \"Kestrel\": { \"SitePort\": 44333, \"TrustedProxies\": [ \"10.1.0.0/24\" ] } }", true)]
-        [InlineData("{ \"Kestrel\": { \"SitePort\": 44333, \"TrustedProxies\": \"10.1.0.0/24\" } }", true)]
-        [InlineData("{ \"Kestrel\": { \"SitePort\": 44333 } }", false)]
-        public void SettingsFileHasTrustedProxies_DetectsTheIgnoredFileValue(string json, bool expected)
+        [InlineData("{ \"Kestrel\": { \"SitePort\": 44333, \"TrustedProxies\": [ \"10.1.0.0/24\" ] } }", "10.1.0.0/24")]
+        [InlineData("{ \"Kestrel\": { \"SitePort\": 44333, \"TrustedProxies\": \"10.1.0.0/24\" } }", "10.1.0.0/24")]
+        [InlineData("{ \"Kestrel\": { \"SitePort\": 44333 } }", null)]
+        public void FindTrustedProxiesInSettingsFile_ReportsTheIgnoredFileValue(string json, string expected)
         {
             var path = Path.Combine(Path.GetTempPath(), $"hsm-trusted-proxies-{Guid.NewGuid():N}.json");
             File.WriteAllText(path, json);
@@ -190,7 +190,7 @@ namespace HSMServer.Core.Tests.Middleware
             {
                 var configuration = new ConfigurationBuilder().AddJsonFile(path).Build();
 
-                Assert.Equal(expected, KestrelConfig.SettingsFileHasTrustedProxies(configuration));
+                Assert.Equal(expected, KestrelConfig.FindTrustedProxiesInSettingsFile(configuration));
             }
             finally
             {
@@ -213,6 +213,8 @@ namespace HSMServer.Core.Tests.Middleware
         [InlineData("10.0.0.0/33")]
         [InlineData("10.0.0.0/abc")]
         [InlineData("10.0.0.0/8/1")]
+        [InlineData("192.168")]    // IPAddress.TryParse shorthand for 0.0.192.168
+        [InlineData("10/8")]
         [InlineData("")]
         public void Validate_RejectsMalformedEntry(string entry)
         {

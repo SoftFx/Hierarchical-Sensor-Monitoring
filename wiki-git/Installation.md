@@ -29,7 +29,7 @@ Do not write your own compose file or put a different proxy in front: the HSM si
 HSM_DOMAIN=hsm.example.com
 ```
 
-Write a bare host name or IP address only: no `https://`, no port, no trailing slash.
+Write a bare host name or IP address only: no `https://`, no port, no trailing slash. Use a dedicated name such as `hsm.example.com`, not your organization's main domain: once the server has a trusted certificate, browsers are told to use HTTPS for that name **and all its subdomains** for a month, and this cannot be undone remotely.
 
 What you put there decides which certificate Caddy uses:
 
@@ -135,6 +135,10 @@ configs:
   caddyfile:
     content: |
       {
+          # HTTP/3 would be advertised (Alt-Svc) on UDP ports that are not published.
+          servers {
+              protocols h1 h2
+          }
           # Clients that reach this host by IP (no SNI) or by another name get the
           # HSM_DOMAIN certificate instead of a refused handshake.
           default_sni ${HSM_DOMAIN:?Set HSM_DOMAIN in .env next to docker-compose.yml - see the comment at the top}
@@ -144,6 +148,8 @@ configs:
           transport http {
               tls_insecure_skip_verify
           }
+          # Wait for HSM while it starts (database load) instead of answering 502.
+          lb_try_duration 30s
       }
       ${HSM_DOMAIN}, ${HSM_DOMAIN}:44333 {
           reverse_proxy https://app:44333 {

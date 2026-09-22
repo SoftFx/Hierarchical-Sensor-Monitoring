@@ -126,8 +126,9 @@ try
 
     ForwardedHeadersOptions forwardedHeaders = null;
 
-    if (serverConfig.TrustedProxiesIgnoredInSettingsFile)
-        logger.Warn($"{KestrelConfig.TrustedProxiesKey} in {ServerConfig.ConfigName} is ignored: it is deployment-owned and read from the environment only (Kestrel__TrustedProxies=...), because the settings file is rewritten on every start.");
+    if (serverConfig.TrustedProxiesIgnoredInSettingsFile is { } ignoredProxies)
+        logger.Error($"{KestrelConfig.TrustedProxiesKey} = [{ignoredProxies}] in {ServerConfig.ConfigName} is IGNORED and has been removed from the file: " +
+                     "it is read from the environment only (Kestrel__TrustedProxies=...), because the settings file is rewritten on every start.");
 
     if (serverConfig.Kestrel.TrustedProxies.Length > 0)
     {

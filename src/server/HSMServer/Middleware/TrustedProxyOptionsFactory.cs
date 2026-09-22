@@ -97,7 +97,10 @@ namespace HSMServer.Middleware
             prefix = null;
             var parts = (entry ?? string.Empty).Trim().Split('/');
 
-            if (parts.Length > 2 || !IPAddress.TryParse(parts[0], out address))
+            // IPAddress.TryParse also takes shorthands ("192.168" is 0.0.192.168): a truncated
+            // entry must fail validation, not register an address that never matches.
+            if (parts.Length > 2 || !IPAddress.TryParse(parts[0], out address)
+                || address.AddressFamily == AddressFamily.InterNetwork && parts[0].Split('.').Length != 4)
             {
                 address = null;
                 return false;

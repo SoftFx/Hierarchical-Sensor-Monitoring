@@ -73,10 +73,13 @@ namespace HSMServer.Middleware.Telemetry
             if (!_cache.TryGetRootProduct(apiKey.ProductId, out var product, out error))
                 return false;
 
-            if (TryGetRemoteIP(context, out var remoteIp))
-                _cache.SetLastKeyUsage(apiKeyId, remoteIp);
-            else
+            if (!TryGetRemoteIP(context, out var remoteIp))
+            {
+                error = "Cannot determine the client address";
                 return false;
+            }
+
+            _cache.SetLastKeyUsage(apiKeyId, remoteIp);
 
             info = new PublicApiRequestInfo()
             {
