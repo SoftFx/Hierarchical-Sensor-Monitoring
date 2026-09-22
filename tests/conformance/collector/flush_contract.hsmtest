@@ -11,6 +11,10 @@
 # - Shutdown boundedness: when the transport hangs, Stop must still return quickly and DROP the
 #   pending data (including a flushed partial bar) — the collector must never block the host's
 #   restart; losing data at shutdown is the accepted trade-off.
+# - Both drivers run this on their in-memory sender, so the delivery pinned here is the QUEUE
+#   contract. Whether the same values survive a REAL HTTP send at stop is transport-level and
+#   belongs to the native HTTP tests (native_http_stop_* — see #1432, where the native stop drain
+#   sent every value through a still-cancelled libcurl transport and delivered none of them).
 
 stop_flushes_all_pending_before_returning|create_collector_with_limits|20000|50|60000
 stop_flushes_all_pending_before_returning|create_int_sensor|contract/flush/all

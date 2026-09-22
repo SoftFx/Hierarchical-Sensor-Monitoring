@@ -2694,9 +2694,11 @@ namespace
             for (auto& json : flushed)
                 Enqueue(std::move(json));
 
-            // Phase 3: stop the dispatcher and drain everything still queued. A send failure
-            // during this bounded flush drops the remainder (the graceful stop must not hang
-            // on a dead transport) — same contract as the C# stop flush.
+            // Phase 3: stop the dispatcher and drain everything still queued. Against a reachable
+            // server the drain DELIVERS it (the flushed partial bars, the last values, anything
+            // posted just before Stop); a send failure or an exhausted stop budget drops the
+            // remainder (the graceful stop must not hang on a dead transport) — same contract as
+            // the C# stop flush.
             StopWorker();
             DrainQueueOnStop();
 
@@ -4496,12 +4498,8 @@ namespace
                 send_cancelled_ = false;
             }
 
-#if defined(HSM_COLLECTOR_HTTP)
-            // Re-arm the transport's cancellation so sends after a restart are not aborted by a
-            // Cancel() left set from the previous Stop.
-            if (http_transport_)
-                http_transport_->ResetCancel();
-#endif
+            // No transport ResetCancel here: StopWorker re-arms it right after the join, so a
+            // restart's registration POST (sent BEFORE this runs) is never aborted (#1432).
 
             {
                 std::lock_guard<std::mutex> guard(queue_mutex_);
@@ -4573,7 +4571,7 @@ namespace
 
 #if defined(HSM_COLLECTOR_HTTP)
             // Abort an in-flight POST so a worker blocked in libcurl wakes up (the send fails, the
-            // batch re-enqueues, the stop drain drops it) and the join below stays bounded. The
+            // batch re-enqueues, the stop drain retries it) and the join below stays bounded. The
             // xfer-abort reads a lock-free atomic, so this is safe without the hang/queue locks.
             if (http_transport_)
                 http_transport_->Cancel();
@@ -4588,6 +4586,18 @@ namespace
 
             if (worker_.joinable())
                 worker_.join();
+
+#if defined(HSM_COLLECTOR_HTTP)
+            // #1432: the cancel is scoped to the join above, so re-arm the transport as soon as the
+            // worker is gone. A sticky cancel flag made everything sent afterwards fail before it
+            // left the process — the stop drain (partial bars, last values, the ".module/Version"
+            // Stop: post) and, on a restart, the registration batch Start POSTs before StartWorker.
+            // Nothing else can be mid-request here: the samplers that register at runtime are
+            // stopped before StopWorker, and Stop/Dispose are serialized by op_mutex_, so the only
+            // transport user left is the stop drain on this thread.
+            if (http_transport_)
+                http_transport_->ResetCancel();
+#endif
         }
 
         void WorkerLoop()
@@ -4609,8 +4619,34 @@ namespace
             }
         }
 
+        // Bounded stop-flush budget, mirroring the managed DataProcessor: clamp(RequestTimeout,
+        // 1 s, 5 s). A graceful stop must never hold its host's shutdown hostage to a hung
+        // transport, so the drain gets at most this much wall-clock time in total — but, against a
+        // healthy server, that is far more than it needs and the data is delivered (#1432).
+        int64_t StopDrainBudgetMs() const
+        {
+            const int64_t timeout = request_timeout_ms_;
+            return (std::max<int64_t>)(1000, (std::min<int64_t>)(timeout, 5000));
+        }
+
         void DrainQueueOnStop()
         {
+            // The deadline is written here and read by HttpSendBatch on this same (stop) thread:
+            // the worker is already joined, the samplers are stopped, and op_mutex_ serializes
+            // Stop/Dispose, so no other thread sends while the drain runs.
+            struct DrainWindow
+            {
+                NativeCollector& owner;
+                explicit DrainWindow(NativeCollector& collector)
+                    : owner(collector)
+                {
+                    owner.stop_drain_deadline_ = std::chrono::steady_clock::now() +
+                                                 std::chrono::milliseconds(owner.StopDrainBudgetMs());
+                    owner.stop_drain_active_ = true;
+                }
+                ~DrainWindow() { owner.stop_drain_active_ = false; }
+            } drain_window(*this);
+
             size_t dropped = 0;
             {
                 std::unique_lock<std::mutex> lock(queue_mutex_);
@@ -4623,7 +4659,8 @@ namespace
             // Debug breadcrumb (logged outside the queue lock so a slow sink cannot stall shutdown).
             if (dropped > 0)
                 LogMessage(HSM_LOG_LEVEL_DEBUG,
-                           "Collector stop dropped " + std::to_string(dropped) + " pending value(s): transport unavailable.");
+                           "Collector stop dropped " + std::to_string(dropped) +
+                               " pending value(s): send failed within the bounded stop flush.");
         }
 
         // Pops and sends batches of up to max_values_in_package_ until the queue is empty or a
@@ -4742,7 +4779,22 @@ namespace
             for (const auto& [hdr_name, hdr_value] : extra_request_headers_)
                 headers.push_back({ hdr_name, hdr_value });
 
-            const auto response = http_transport_->Post(endpoints_.List(), body, headers);
+            // On the stop drain each send gets only what is left of the stop budget, so a hung
+            // server costs the host at most that budget instead of the full request timeout. A
+            // spent budget drops the batch without even opening a connection (#1432).
+            int64_t timeout_ms = request_timeout_ms_;
+            if (stop_drain_active_)
+            {
+                const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                           stop_drain_deadline_ - std::chrono::steady_clock::now())
+                                           .count();
+                if (remaining <= 0)
+                    return false;
+
+                timeout_ms = (std::min<int64_t>)(timeout_ms, remaining);
+            }
+
+            const auto response = http_transport_->Post(endpoints_.List(), body, headers, timeout_ms);
 
             // Dispatch any X-Hsm-Directive headers the server included in the response.
             if (directive_callback_ != nullptr && response.IsSuccess())
@@ -4820,6 +4872,12 @@ namespace
         bool dispatch_kick_ = false;
         std::thread worker_;
         std::atomic<int32_t> fail_next_{ 0 };
+
+        // Bounded stop drain (#1432). Written by the stop thread before the drain and read by the
+        // send path during it; the worker is joined by then and only starts again after these are
+        // cleared (thread creation/join carry the happens-before), so no lock is needed.
+        bool stop_drain_active_ = false;
+        std::chrono::steady_clock::time_point stop_drain_deadline_{};
 
         // Collector self-monitoring (#1198 follow-up): wires VALUES for the registered-but-empty
         // ".module/Service alive" heartbeat and the ".module/Collector queue stats" sensors. Handles

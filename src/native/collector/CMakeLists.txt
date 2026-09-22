@@ -274,6 +274,16 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_registration_failure_logs_status
         COMMAND hsm_collector_tests native_http_registration_failure_logs_status
     )
+    # #1432: the stop drain delivers on the real transport, stays bounded, and survives a restart.
+    add_test(NAME native_http_stop_drain_delivers_to_healthy_server
+        COMMAND hsm_collector_tests native_http_stop_drain_delivers_to_healthy_server
+    )
+    add_test(NAME native_http_stop_is_bounded_against_hung_server
+        COMMAND hsm_collector_tests native_http_stop_is_bounded_against_hung_server
+    )
+    add_test(NAME native_http_stop_start_stop_delivers
+        COMMAND hsm_collector_tests native_http_stop_start_stop_delivers
+    )
 endif()
 
 add_test(NAME native_invalid_argument_clears_out_params

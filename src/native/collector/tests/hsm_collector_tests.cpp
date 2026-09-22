@@ -4503,6 +4503,136 @@ namespace
         for (const auto& entry : logs)
             Require(entry.second.find("on Start") == std::string::npos, "the stale 'on Start' label must be gone");
     }
+
+    // --- #1432: the stop drain on the real HTTP transport ---
+
+    using StopDrainLogs = std::vector<std::pair<hsm_log_level_t, std::string>>;
+
+    // Plaintext options against a local recording server. A long collect period keeps the worker
+    // idle, so every value added while running reaches the server ONLY through the stop drain.
+    hsm_collector_options_t StopDrainOptions(int port, int32_t collect_period_ms)
+    {
+        hsm_collector_options_t options{};
+        options.access_key = "drain-key";
+        options.server_address = "http://127.0.0.1";
+        options.port = port;
+        options.client_name = "drain-client";
+        options.allow_plaintext_transport = true;
+        options.max_values_in_package = 50;
+        options.package_collect_period_ms = collect_period_ms;
+        return options;
+    }
+
+    void CaptureStopDrainLogs(hsm_collector_t* collector, StopDrainLogs& logs)
+    {
+        hsm_collector_set_logger(
+            collector,
+            [](hsm_log_level_t level, const char* message, void* user_data) {
+                static_cast<StopDrainLogs*>(user_data)->emplace_back(level, message);
+            },
+            &logs);
+    }
+
+    bool ServerReceivedValue(const hsm::test::HttpRecordingServer& server, int value)
+    {
+        const std::string needle = "\"Value\":" + std::to_string(value) + ",";
+        for (const auto& request : server.Requests())
+            if (request.path == "/api/sensors/list" && request.body.find(needle) != std::string::npos)
+                return true;
+        return false;
+    }
+
+    void RequireNoStopDrop(const StopDrainLogs& logs)
+    {
+        for (const auto& entry : logs)
+            Require(entry.second.find("Collector stop dropped") == std::string::npos,
+                    ("a healthy server must not see a stop drop: " + entry.second).c_str());
+    }
+
+    // Values queued at Stop must reach a healthy server: the Cancel() that interrupts a hung
+    // in-flight send must not leave the transport cancelled for the drain that follows.
+    void NativeHttpStopDrainDeliversToHealthyServer()
+    {
+        hsm::test::HttpRecordingServer server;
+        StopDrainLogs logs;
+
+        CollectorHandle collector = CreateCollector(StopDrainOptions(server.Port(), 60000));
+        CaptureStopDrainLogs(collector.value, logs);
+        hsm_collector_test_install_http_sender(collector.value);
+        SensorHandle sensor = CreateIntSensor(collector.value, "drain/int");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        for (int value = 101; value <= 105; ++value)
+            Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        Require(server.CountPath("/api/sensors/list") == 0, "the idle worker must not have sent yet (drain-only delivery)");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        for (int value = 101; value <= 105; ++value)
+            Require(ServerReceivedValue(server, value), ("the stop drain must deliver value " + std::to_string(value)).c_str());
+        RequireNoStopDrop(logs);
+    }
+
+    // A server that accepts the POST and never answers must not hold Stop past the bounded budget:
+    // the in-flight send is cancelled, and the drain's retry of it is capped at the stop-flush
+    // budget (min(max(RequestTimeout, 1 s), 5 s) — managed DataProcessor parity), not the 30 s
+    // request timeout.
+    void NativeHttpStopIsBoundedAgainstHungServer()
+    {
+        hsm::test::HttpRecordingServer server("/api/sensors/list");
+
+        CollectorHandle collector = CreateCollector(StopDrainOptions(server.Port(), 20));
+        hsm_collector_test_install_http_sender(collector.value);
+        SensorHandle sensor = CreateIntSensor(collector.value, "drain/int");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_sensor_add_int(sensor.value, 7, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int value failed");
+
+        // Barrier: the worker's POST is in flight against the hung server.
+        for (int i = 0; i < 400 && server.CountPath("/api/sensors/list") == 0; ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        Require(server.CountPath("/api/sensors/list") >= 1, "the worker must have a POST in flight");
+
+        const auto started = std::chrono::steady_clock::now();
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+        const auto elapsed_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+
+        // 5 s drain budget + libcurl's abort latency (the xfer callback runs about once a second
+        // while idle) + CI slack; far below the 30 s request timeout an unbounded drain would take.
+        Require(elapsed_ms < 9000, ("Stop against a hung server must stay bounded, took " + std::to_string(elapsed_ms) + " ms").c_str());
+    }
+
+    // Stop -> Start -> Stop: each drain delivers, and the restart's /commands registration is not
+    // sent through a transport still cancelled by the previous Stop.
+    void NativeHttpStopStartStopDelivers()
+    {
+        hsm::test::HttpRecordingServer server;
+        StopDrainLogs logs;
+
+        CollectorHandle collector = CreateCollector(StopDrainOptions(server.Port(), 60000));
+        CaptureStopDrainLogs(collector.value, logs);
+        hsm_collector_test_install_http_sender(collector.value);
+        SensorHandle sensor = CreateIntSensor(collector.value, "drain/int");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "first start failed");
+        Require(hsm_sensor_add_int(sensor.value, 201, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add 201 failed");
+        Require(hsm_sensor_add_int(sensor.value, 202, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add 202 failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "first stop failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "second start failed");
+        Require(hsm_sensor_add_int(sensor.value, 203, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add 203 failed");
+        Require(hsm_sensor_add_int(sensor.value, 204, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add 204 failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "second stop failed");
+
+        for (const auto& entry : logs)
+            Require(entry.second.find("Failed to register") == std::string::npos,
+                    ("the restart registration must not fail: " + entry.second).c_str());
+        Require(server.CountPath("/api/sensors/commands") == 2, "both Starts must register on the server");
+        for (int value = 201; value <= 204; ++value)
+            Require(ServerReceivedValue(server, value), ("each stop drain must deliver value " + std::to_string(value)).c_str());
+        RequireNoStopDrop(logs);
+    }
 #endif
 
     void NativeWireTimeSpanAndVersionMatchNet()
@@ -6067,6 +6197,9 @@ namespace
             { "native_http_live_send_posts_to_capture_server", [](const std::string&) { NativeHttpLiveSendPostsToCaptureServer(); } },
             { "native_http_registers_sensors_on_start", [](const std::string&) { NativeHttpRegistersSensorsOnStart(); } },
             { "native_http_registration_failure_logs_status", [](const std::string&) { NativeHttpRegistrationFailureLogsStatus(); } },
+            { "native_http_stop_drain_delivers_to_healthy_server", [](const std::string&) { NativeHttpStopDrainDeliversToHealthyServer(); } },
+            { "native_http_stop_is_bounded_against_hung_server", [](const std::string&) { NativeHttpStopIsBoundedAgainstHungServer(); } },
+            { "native_http_stop_start_stop_delivers", [](const std::string&) { NativeHttpStopStartStopDelivers(); } },
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },

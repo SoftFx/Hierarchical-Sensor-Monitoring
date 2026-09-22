@@ -160,6 +160,17 @@ namespace hsm::http
         return Perform(url, headers, timeout_ms_, verify_peer_, cancelled_, /*is_post=*/true, json_body);
     }
 
+    HttpResponse HttpTransport::Post(
+        const std::string& url,
+        const std::string& json_body,
+        const std::vector<HttpHeader>& headers,
+        int64_t timeout_ms)
+    {
+        // A zero/negative timeout means "no timeout" to libcurl, which is the opposite of what a
+        // spent budget asks for — clamp to 1 ms so the request fails fast instead of hanging.
+        return Perform(url, headers, timeout_ms > 0 ? timeout_ms : 1, verify_peer_, cancelled_, /*is_post=*/true, json_body);
+    }
+
     HttpResponse HttpTransport::Get(const std::string& url, const std::vector<HttpHeader>& headers)
     {
         return Perform(url, headers, timeout_ms_, verify_peer_, cancelled_, /*is_post=*/false, std::string{});

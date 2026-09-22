@@ -31,8 +31,10 @@ namespace hsm::http
     };
 
     // One transport per collector. Each call uses its own libcurl easy handle, so concurrent calls
-    // are safe. Cancel() aborts in-flight transfers (the CancelPendingRequests primitive); a fresh
-    // ResetCancel() re-arms it for subsequent sends without tearing the transport down.
+    // are safe. Cancel() aborts in-flight transfers (the CancelPendingRequests primitive) AND every
+    // send started while it is set, so the caller must ResetCancel() once the threads it wanted to
+    // interrupt have quiesced — otherwise later sends (the stop drain, a restart's registration)
+    // are aborted before they leave the process (#1432).
     class HttpTransport
     {
     public:
@@ -43,6 +45,13 @@ namespace hsm::http
         HttpTransport& operator=(const HttpTransport&) = delete;
 
         HttpResponse Post(const std::string& url, const std::string& json_body, const std::vector<HttpHeader>& headers);
+        // Same POST with a per-request timeout instead of the transport default — the bounded stop
+        // drain gives each send only what is left of its budget (#1432).
+        HttpResponse Post(
+            const std::string& url,
+            const std::string& json_body,
+            const std::vector<HttpHeader>& headers,
+            int64_t timeout_ms);
         HttpResponse Get(const std::string& url, const std::vector<HttpHeader>& headers);
 
         void Cancel();
