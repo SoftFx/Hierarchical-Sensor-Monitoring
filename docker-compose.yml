@@ -21,6 +21,13 @@ services:
     restart: unless-stopped
     user: '0'
     # No ports: HSM is reachable only through caddy.
+    healthcheck:
+      # Kestrel opens its ports only after the database has loaded, so an open port means ready.
+      test: ['CMD', 'bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/44330']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10m                        # a large database can take minutes to load
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy,
       # so HSM records the real client IP (token audit, invalid-attempt limiter, key telemetry).
@@ -36,7 +43,8 @@ services:
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
-      - app
+      app:
+        condition: service_healthy             # start serving only once HSM is ready
     ports:
       - '80:80'         # ACME HTTP challenge + redirect to https
       - '443:443'       # Web UI on the standard port
@@ -61,6 +69,15 @@ configs:
           default_sni ${HSM_DOMAIN:?Set HSM_DOMAIN in .env next to docker-compose.yml - see the comment at the top}
           fallback_sni ${HSM_DOMAIN}
       }
+      (hsm_tls) {
+          # Let's Encrypt first; if it cannot issue (DNS not ready, port 80 blocked), fall back to
+          # Caddy's own certificate instead of refusing every connection. Internal certificates
+          # live 12 hours, so Let's Encrypt is retried on each renewal.
+          tls {
+              issuer acme
+              issuer internal
+          }
+      }
       (hsm_upstream) {
           transport http {
               tls_insecure_skip_verify
@@ -69,11 +86,13 @@ configs:
           lb_try_duration 30s
       }
       ${HSM_DOMAIN}, ${HSM_DOMAIN}:44333 {
+          import hsm_tls
           reverse_proxy https://app:44333 {
               import hsm_upstream
           }
       }
       ${HSM_DOMAIN}:44330 {
+          import hsm_tls
           reverse_proxy https://app:44330 {
               import hsm_upstream
           }
