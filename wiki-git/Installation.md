@@ -31,7 +31,13 @@ curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/
 
 Do not write your own compose file or put a different proxy in front: the HSM side of the setup depends on exactly this Caddy configuration. The edits described on this page (removing ports `80`/`443`, an e-mail for Let's Encrypt) are fine.
 
-**2. Create the settings file.** Create a file named `.env` next to `docker-compose.yml` with two lines:
+**2. Create the settings file.** Download the commented template next to `docker-compose.yml`, save it as `.env`, and edit its two values:
+
+```bash
+curl -o .env https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/.env.example
+```
+
+After editing, the values look like this (the template explains both modes in its comments):
 
 ```dotenv
 HSM_DOMAIN=hsm.example.com
@@ -129,15 +135,25 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 # Caddy terminates TLS for clients and obtains/renews the certificate by itself. HSM keeps
 # serving HTTPS with its own (self-signed by default) certificate, reachable only inside the
 # compose network; Caddy connects to it without verifying that certificate.
-# Two settings in a `.env` file next to this one (or in the shell); compose refuses to start
-# without them:
-#   HSM_DOMAIN=hsm.example.com       the address clients use (DNS name or IP address)
-#   HSM_CERTIFICATE=letsencrypt      certificate from Let's Encrypt (public DNS name pointing here,
-#                                    port 80 reachable from the internet); nothing else is tried
-#   HSM_CERTIFICATE=self-signed      Caddy's own certificate (IP address, internal network, or
-#                                    while Let's Encrypt is unavailable)
-# Switching = edit .env and run `docker compose up -d`. Collectors and agents keep using
-# https://<HSM_DOMAIN>:44330. To run without Caddy, use docker-compose.direct.yml instead.
+# SETTINGS: two values in a `.env` file next to this one; compose refuses to start without them.
+# Start from the commented template: `cp .env.example .env`, then edit it.
+#
+#   HSM_DOMAIN       the address clients use: a bare DNS name or IP address
+#                    (no https://, no port). Examples: hsm.example.com, 10.0.0.5
+#
+#   HSM_CERTIFICATE  which certificate clients get, one of two modes:
+#     letsencrypt    trusted certificate from Let's Encrypt, obtained at start and renewed ~30 days
+#                    before expiry. Needs a public DNS name pointing here and ports 80/443 open to
+#                    the internet. If Let's Encrypt fails there is NO certificate (see
+#                    `docker logs hsm-caddy`); nothing switches by itself. A failed renewal keeps
+#                    the current certificate until it expires while Caddy retries.
+#     self-signed    Caddy's own certificate; always works. Browsers warn, collectors/agents need
+#                    "allow untrusted certificate". For an IP address, an internal network, or
+#                    while Let's Encrypt is unavailable.
+#
+# SWITCHING: edit .env and run `docker compose up -d` (Caddy is recreated; HSM data is untouched).
+# WITHOUT CADDY (HSM's own certificate, as before): use docker-compose.direct.yml instead.
+# Collectors and agents always connect to https://<HSM_DOMAIN>:44330.
 #
 # The image is published by CI (server-build.yml). To run a build from local sources instead,
 # publish it to this exact tag first:
