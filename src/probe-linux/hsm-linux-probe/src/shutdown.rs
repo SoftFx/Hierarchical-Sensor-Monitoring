@@ -24,7 +24,9 @@ fn install_unix() {
     // every field the platform defines has a defined value.
     unsafe {
         let mut action: libc::sigaction = std::mem::zeroed();
-        action.sa_sigaction = handle_signal as usize;
+        // Via a pointer, not a direct fn-item-to-integer cast: `sa_sigaction` is a machine address
+        // and the two-step cast is what the compiler wants to see spelled out.
+        action.sa_sigaction = handle_signal as *const () as usize;
         action.sa_flags = libc::SA_RESTART;
         libc::sigemptyset(&mut action.sa_mask);
         libc::sigaction(libc::SIGTERM, &action, std::ptr::null_mut());

@@ -5,7 +5,8 @@ members = ["hsm-collector-sys", "hsm-collector", "hsm-linux-probe"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.74"
+# Verified against 1.83 (the floor) and current stable; the lockfile format needs >= 1.78.
+rust-version = "1.83"
 license = "MIT"
 repository = "https://github.com/SoftFx/Hierarchical-Sensor-Monitoring"
 

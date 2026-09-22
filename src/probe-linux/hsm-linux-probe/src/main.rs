@@ -129,7 +129,7 @@ mod tests {
     fn defaults_to_the_packaged_config_path() {
         let command = parse(&[]).expect("parse");
         assert!(
-            matches!(command, Command::Run { config_path } if config_path == PathBuf::from(DEFAULT_CONFIG_PATH))
+            matches!(command, Command::Run { config_path } if config_path == std::path::Path::new(DEFAULT_CONFIG_PATH))
         );
     }
 
@@ -142,7 +142,7 @@ mod tests {
         ] {
             let command = parse(&args).expect("parse");
             assert!(
-                matches!(command, Command::Run { config_path } if config_path == PathBuf::from("/tmp/a.json"))
+                matches!(command, Command::Run { config_path } if config_path == std::path::Path::new("/tmp/a.json"))
             );
         }
     }
