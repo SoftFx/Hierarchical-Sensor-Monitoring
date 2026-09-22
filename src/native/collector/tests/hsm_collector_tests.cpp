@@ -3332,7 +3332,7 @@ namespace
         Contains(payload, "\"Mean\":42"); // every sample read 42
         Contains(payload, "\"Min\":42");
         Contains(payload, "\"Max\":42");
-        Contains(payload, "\"Count\":2"); // both samples aggregated into the one in-progress bar
+        Contains(payload, "\"Count\":1"); // the Start read only primed the source; the +5 s read is the first sample
         Require(
             std::stoll(NumberFieldFromPayload(payload, "CloseTimeMs")) - std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs")) == 300000,
             "a default bar spans the catalog bar period (5 min), not the post period");
@@ -3454,10 +3454,11 @@ namespace
     // Drives a manual-clock Total CPU bar through one whole 5-min window and into the next, one
     // scheduler event at a time (a 5 s sample or a 15 s post), and returns the collector for asserts.
     // Expected values are derived from managed BarMonitoringSensorBase, step by step:
-    //   start at W+1 s: sample 1 (immediate first tick), bar [W, W+5 min)
-    //   post at W+15 s·j (j = 1..19): partial, OpenTime W, Count 3j (samples at W+1 s+5 s·k)
-    //   post at W+300 s: CloseTime == now is NOT past (strict <), so the old bar posts again, Count 60
-    //   sample at W+301 s: CloseTime < now -> the closed bar is published (Count 60) and a new bar
+    //   start at W+1 s: read 1 only primes the source (managed collect loop starts one tick later),
+    //   bar [W, W+5 min)
+    //   post at W+15 s·j (j = 1..19): partial, OpenTime W, Count 3j-1 (samples 2.. at W+6 s+5 s·k)
+    //   post at W+300 s: CloseTime == now is NOT past (strict <), so the old bar posts again, Count 59
+    //   sample at W+301 s: CloseTime < now -> the closed bar is published (Count 59) and a new bar
     //   [W+5 min, W+10 min) opens with sample 61
     //   post at W+315 s: partial of the new bar, Count 3 (61..63)
     void WalkMetricBarThroughOneWindow(hsm_collector_t* collector, CountingMetricState& counting, int64_t until_offset_ms)
@@ -3524,7 +3525,7 @@ namespace
         {
             RequireMetricBarPayload(
                 SentJson(collector.value, static_cast<size_t>(j - 1)),
-                { kBarWindowStartMs, 3 * j, 1.0, 3.0 * j },
+                { kBarWindowStartMs, 3 * j - 1, 2.0, 3.0 * j },
                 "partial post inside the first window");
         }
 
@@ -3558,11 +3559,11 @@ namespace
         {
             RequireMetricBarPayload(
                 SentJson(collector.value, static_cast<size_t>(j - 1)),
-                { kBarWindowStartMs, 3 * j, 1.0, 3.0 * j },
+                { kBarWindowStartMs, 3 * j - 1, 2.0, 3.0 * j },
                 "partial post inside the first window");
         }
-        RequireMetricBarPayload(SentJson(collector.value, 19), { kBarWindowStartMs, 60, 1.0, 60.0 }, "post at the boundary instant");
-        RequireMetricBarPayload(SentJson(collector.value, 20), { kBarWindowStartMs, 60, 1.0, 60.0 }, "closed bar published by the roll");
+        RequireMetricBarPayload(SentJson(collector.value, 19), { kBarWindowStartMs, 59, 2.0, 60.0 }, "post at the boundary instant");
+        RequireMetricBarPayload(SentJson(collector.value, 20), { kBarWindowStartMs, 59, 2.0, 60.0 }, "closed bar published by the roll");
         RequireMetricBarPayload(
             SentJson(collector.value, 21), { kBarWindowStartMs + 300000, 3, 61.0, 63.0 }, "first partial of the next window");
 
@@ -3587,22 +3588,25 @@ namespace
             "add Free RAM default sensor failed");
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
 
-        Require(WaitForAtomicAtLeast(counting.reads, 1, 2000), "the first sample should fire on Start");
+        // Read 1 at Start only primes the source (managed: first sample one BarTickPeriod after Start).
+        Require(WaitForAtomicAtLeast(counting.reads, 1, 2000), "the priming read should fire on Start");
         hsm_collector_test_advance_clock_ms(collector.value, 5000);
-        Require(WaitForAtomicAtLeast(counting.reads, 2, 2000), "the second sample should fire at +5 s");
+        Require(WaitForAtomicAtLeast(counting.reads, 2, 2000), "the first sample should fire at +5 s");
         Require(hsm_collector_sent_count(collector.value) == 0, "no post before the first aligned 15 s post time");
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
         Require(hsm_collector_sent_count(collector.value) == 1, "Stop must flush the partial bar exactly once");
-        RequireMetricBarPayload(SentJson(collector.value, 0), { kBarWindowStartMs, 2, 1.0, 2.0 }, "stop flush");
+        RequireMetricBarPayload(SentJson(collector.value, 0), { kBarWindowStartMs, 1, 2.0, 2.0 }, "stop flush");
 
         // Restart in the same window: the bar was re-opened empty, so the next flush carries only the
-        // new run's sample, not the two already flushed.
+        // new run's sample (read 4; read 3 primed the rebound source), not the one already flushed.
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "restart failed");
-        Require(WaitForAtomicAtLeast(counting.reads, 3, 2000), "the restart should sample immediately");
+        Require(WaitForAtomicAtLeast(counting.reads, 3, 2000), "the restart should prime immediately");
+        hsm_collector_test_advance_clock_ms(collector.value, 5000);
+        Require(WaitForAtomicAtLeast(counting.reads, 4, 2000), "the restart's first sample should fire at +5 s");
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "second stop failed");
         Require(hsm_collector_sent_count(collector.value) == 2, "the second stop flushes the second run only");
-        RequireMetricBarPayload(SentJson(collector.value, 1), { kBarWindowStartMs, 1, 3.0, 3.0 }, "second stop flush");
+        RequireMetricBarPayload(SentJson(collector.value, 1), { kBarWindowStartMs, 1, 4.0, 4.0 }, "second stop flush");
 
         hsm_sensor_release(sensor);
     }

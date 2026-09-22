@@ -2314,6 +2314,8 @@ namespace
         bool is_metric_candidate_ = false;                // eligible: a value type that a metric source can drive
         bool is_metric_driven_ = false;                   // a source was bound at Start -> periodic reads
         bool is_partial_posting_ = false;                 // a push-fed built-in bar on the partial-post schedule
+        bool metric_prime_pending_ = false;               // the Start tick's read only primes the source (not a sample)
+        bool partial_send_in_progress_ = false;           // a partial snapshot is between capture and enqueue (mutex_)
         int64_t metric_post_period_ms_ = 0;               // post cadence (catalog post_period for default sensors)
         int64_t metric_bar_tick_ms_ = kMetricBarSampleMs; // bar sample cadence (managed BarTickPeriod)
         int64_t metric_emit_period_ms_ = 0;               // partial-bar post cadence / value post cadence once bound
@@ -5119,7 +5121,10 @@ namespace
             // Through the clock seam (real wall clock in production), like the built-in bar schedule
             // that shares this bar (#1428).
             const auto now_ms = SystemNowMs();
-            if (bar_.close_ms < now_ms)
+            // A partial of this bar is being enqueued (TryBuildMetricBarJson): defer the roll, as
+            // managed CheckCurrentBar does when TrySendValue returns false — the value joins the
+            // closing bar and the next tick publishes it closed, after the partial.
+            if (bar_.close_ms < now_ms && !partial_send_in_progress_)
             {
                 if (bar_.count > 0)
                     closed_json = collector->OutgoingBarJson(bar_, path_);
@@ -5287,9 +5292,15 @@ namespace
 
             // Partial posts are aligned to wall-clock multiples of the post period, and the first one
             // is a full period away when Start lands exactly on a multiple (managed
-            // BarTimeHelper.GetTimerDueTime). The sample tick keeps the immediate first read above.
+            // BarTimeHelper.GetTimerDueTime).
             const int64_t post = metric_emit_period_ms_ > 0 ? metric_emit_period_ms_ : 15000;
             metric_next_post_ms_ = next_post_ms_ + (post - ((wall_ms % post) + post) % post);
+
+            // The tick at Start only PRIMES a metric source: its value is discarded, so the first
+            // sample lands one BarTickPeriod after Start as in managed (collect loop delay ==
+            // BarTickPeriod) — a gauge (Free RAM, process memory, disk bars) gets no extra sample,
+            // and a delta source (Total CPU) seeds its baseline exactly when managed does at Init.
+            metric_prime_pending_ = is_metric_driven_;
         }
 
         PublishNextDueHintLocked();
@@ -5524,22 +5535,41 @@ namespace
         if (sample_due && metric_source_)
         {
             double value = 0.0;
-            if (ReadMetricSource(value, collector) == HSM_METRIC_READ_OK)
+            const bool prime = metric_prime_pending_;
+            metric_prime_pending_ = false;
+            if (ReadMetricSource(value, collector) == HSM_METRIC_READ_OK && !prime)
             {
                 std::lock_guard<std::mutex> guard(mutex_);
                 bar_.AddValue(value);
             }
         }
 
-        if (!post_due)
+        if (!post_due || !collector)
             return false;
 
-        std::lock_guard<std::mutex> guard(mutex_);
-        if (bar_.count <= 0)
-            return false;
+        // Snapshot + enqueue under a send-in-progress flag (managed _sendValueInProgress): while it is
+        // set, roll-on-add (AccumulateBar) on a push-fed bar defers its roll, so a closed bar can never
+        // be enqueued ahead of this older partial of the same window — the server keeps the LAST post
+        // per OpenTime, and an out-of-order stale partial would drop values. The enqueue runs outside
+        // the sensor lock (the collector takes sensor locks while holding its own).
+        std::string partial_json;
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (bar_.count <= 0)
+                return false;
 
-        out_json = collector ? collector->OutgoingBarJson(bar_, path_) : MonitoringBarJson(bar_, path_);
-        return true;
+            partial_json = collector->OutgoingBarJson(bar_, path_);
+            partial_send_in_progress_ = true;
+        }
+
+        collector->EnqueueIfRunning(std::move(partial_json));
+
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            partial_send_in_progress_ = false;
+        }
+        (void)out_json; // published above, not through the caller
+        return false;
     }
 
     bool NativeSensor::IsPeriodic() const

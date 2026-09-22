@@ -262,10 +262,11 @@ managed `BarSensorOptions` defaults every default-bar prototype inherits:
 | Step | Managed | Native (collector ≥ 0.7.1) |
 |---|---|---|
 | Bar window | `BarPeriod` 5 min; `OpenTime = floor(UtcNow / BarPeriod) · BarPeriod`, `CloseTime = OpenTime + BarPeriod` (wall clock) | `kDefaultBarPeriodMs` (the sensor's registered bar period), same alignment in unix ms (5 min divides the 0001→1970 offset, so both land on the same instants) |
-| Sample tick | `BarTickPeriod` 5 s from Start (collect loop); each tick first rolls the bar if `CloseTime < now` (strict), then reads the source and adds the sample | `kMetricBarSampleMs` 5 s; same roll-then-sample order; the first tick fires at Start (a source with a first-read baseline, e.g. Total CPU, posts nothing on it) |
+| Sample tick | `BarTickPeriod` 5 s from Start (collect loop); each tick first rolls the bar if `CloseTime < now` (strict), then reads the source and adds the sample | `kMetricBarSampleMs` 5 s; same roll-then-sample order. The tick at Start only primes the source (its value is discarded), so the first sample lands one tick after Start as in managed: gauges (Free RAM, process memory, disk bars) get no extra sample, and Total CPU seeds its delta baseline when managed does at construction |
 | Partial post | every `PostDataPeriod` (catalog 15 s), first at the next wall-clock multiple of it (a full period when Start is exactly on one); posts a copy of the in-progress bar, nothing when it is empty | same cadence and alignment (`post_period_ms` of the catalog row) |
 | Window boundary | the post falling on the boundary instant still carries the old bar (`CloseTime == now` is not past); the next sample tick publishes the closed bar again and opens the next window | identical |
 | Stop | flushes a non-empty partial bar, then opens a fresh one (no resend on stop → start → stop) | identical (`TryFlushBarJson`) |
+| Snapshot vs roll | `_sendValueInProgress`: a roll attempted while a partial is being sent is deferred (no newer closed bar can overtake the older partial) | `partial_send_in_progress_`: roll-on-add defers while a partial is between snapshot and enqueue; the next tick rolls |
 | Rounding | `Complete()` on a copy: double → `Math.Round(v, Precision=2, AwayFromZero)`; int → mean only | same serializer as the public bars |
 
 Every post of one window therefore carries the SAME `OpenTime`/`CloseTime` while `Count`, `Min`,

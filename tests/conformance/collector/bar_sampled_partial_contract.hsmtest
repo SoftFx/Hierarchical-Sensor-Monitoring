@@ -35,8 +35,7 @@ sampled_bar_partial_posts_share_open_time|expect_bar_posts_sharing_open_time_at_
 sampled_bar_partial_posts_share_open_time|expect_distinct_bar_open_times_at_least|2
 
 # Post period and window are one day, both aligned to day boundaries, so the next post / roll is AT
-# MOST a day away: the only payload is the Stop flush of the partial bar, holding the source's first
-# sample — unless the 0.4 s run straddles UTC midnight (~1 in 200 000 runs). 86400000 divides the
+# MOST a day away: the only payload is the Stop flush of the partial bar — unless the 0.4 s run straddles UTC midnight (~1 in 200 000 runs). 86400000 divides the
 # 0001->1970 offset (719 162 days), so .NET-tick and unix-ms alignment agree.
 sampled_bar_stop_flushes_partial|create_collector
 sampled_bar_stop_flushes_partial|create_sampled_double_bar_sensor|contract/sampled/flush|86400000|100|86400000|2
@@ -45,8 +44,6 @@ sampled_bar_stop_flushes_partial|sleep_ms|400
 sampled_bar_stop_flushes_partial|stop
 sampled_bar_stop_flushes_partial|expect_sent_count|1
 sampled_bar_stop_flushes_partial|expect_bar_field|0|type|5
-sampled_bar_stop_flushes_partial|expect_bar_field|0|first|1
-sampled_bar_stop_flushes_partial|expect_bar_field|0|min|1
 sampled_bar_stop_flushes_partial|expect_bar_open_close_aligned|0|86400000
 
 # Push-fed built-in bars (the queue diagnostics `.module/Collector queue stats/...` and the network
