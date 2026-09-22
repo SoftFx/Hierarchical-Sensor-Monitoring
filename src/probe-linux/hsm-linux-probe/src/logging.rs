@@ -14,7 +14,15 @@ use hsm_collector::LogLevel;
 
 pub struct Logger {
     min_level: LogLevel,
-    file: Option<Mutex<File>>,
+    file: Option<Mutex<LogFile>>,
+}
+
+/// The open log file together with the UTC date it was opened for, so the daemon can roll instead
+/// of growing one file for as long as it runs.
+struct LogFile {
+    directory: std::path::PathBuf,
+    date: String,
+    handle: File,
 }
 
 impl Logger {
@@ -22,15 +30,22 @@ impl Logger {
     /// failure there is reported to stderr and downgraded to stderr-only logging, because losing
     /// the log file must not stop the probe from monitoring.
     pub fn new(min_level: LogLevel, directory: Option<&Path>) -> Self {
-        let file = directory.and_then(|dir| match open_log_file(dir) {
-            Ok(file) => Some(Mutex::new(file)),
-            Err(error) => {
-                eprintln!(
-                    "{}| cannot open the log file in {}: {error}",
-                    prefix(LogLevel::Error),
-                    dir.display()
-                );
-                None
+        let file = directory.and_then(|dir| {
+            let date = utc_date(now_unix_seconds());
+            match open_log_file(dir, &date) {
+                Ok(handle) => Some(Mutex::new(LogFile {
+                    directory: dir.to_path_buf(),
+                    date,
+                    handle,
+                })),
+                Err(error) => {
+                    eprintln!(
+                        "{}| cannot open the log file in {}: {error}",
+                        prefix(LogLevel::Error),
+                        dir.display()
+                    );
+                    None
+                }
             }
         });
         Self { min_level, file }
@@ -40,15 +55,17 @@ impl Logger {
         if level < self.min_level {
             return;
         }
-        let line = format!("{}| {message}", prefix(level));
+        let now = now_unix_seconds();
+        let line = format!("{}|{}| {message}", utc_timestamp(now), level.as_str());
         eprintln!("{line}");
 
         if let Some(file) = &self.file {
             let mut file = file.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            file.roll_if_needed(&utc_date(now));
             // A write failure is not worth crashing a monitoring daemon over, and re-logging it
             // here would recurse.
-            let _ = writeln!(file, "{line}");
-            let _ = file.flush();
+            let _ = writeln!(file.handle, "{line}");
+            let _ = file.handle.flush();
         }
     }
 
@@ -75,15 +92,32 @@ pub fn parse_level(name: &str) -> LogLevel {
     }
 }
 
-fn open_log_file(directory: &Path) -> std::io::Result<File> {
+impl LogFile {
+    /// Reopen for a new UTC date. A failed reopen keeps the previous handle: still writing to
+    /// yesterday's file beats losing the log entirely.
+    fn roll_if_needed(&mut self, today: &str) {
+        if self.date == today {
+            return;
+        }
+        if let Ok(handle) = open_log_file(&self.directory, today) {
+            self.handle = handle;
+            self.date = today.to_string();
+        }
+    }
+}
+
+/// File name for a given UTC date. Mirrors the collector's own rolling file logger, which names
+/// its files by UTC date so the two sit side by side in the same directory listing.
+fn log_file_name(date: &str) -> String {
+    format!("hsm-linux-probe_{date}.log")
+}
+
+fn open_log_file(directory: &Path, date: &str) -> std::io::Result<File> {
     std::fs::create_dir_all(directory)?;
     OpenOptions::new()
         .create(true)
         .append(true)
-        .open(directory.join(format!(
-            "hsm-linux-probe_{}.log",
-            utc_date(now_unix_seconds())
-        )))
+        .open(directory.join(log_file_name(date)))
 }
 
 fn prefix(level: LogLevel) -> String {
@@ -146,6 +180,31 @@ mod tests {
         assert_eq!(utc_timestamp(1_790_430_307), "2026-09-26 13:45:07");
         assert_eq!(utc_timestamp(1_709_164_800), "2024-02-29 00:00:00");
         assert_eq!(utc_timestamp(946_684_799), "1999-12-31 23:59:59");
+    }
+
+    #[test]
+    fn the_log_file_rolls_when_the_utc_date_changes() {
+        // A daemon that runs for months must not write one unbounded file.
+        let directory = std::env::temp_dir().join(format!(
+            "hsm-probe-log-test-{}-{}",
+            std::process::id(),
+            now_unix_seconds()
+        ));
+        let mut file = LogFile {
+            directory: directory.clone(),
+            date: "2026-09-22".to_string(),
+            handle: open_log_file(&directory, "2026-09-22").expect("open"),
+        };
+
+        file.roll_if_needed("2026-09-22");
+        assert_eq!(file.date, "2026-09-22", "the same date must not reopen");
+
+        file.roll_if_needed("2026-09-23");
+        assert_eq!(file.date, "2026-09-23");
+        assert!(directory.join(log_file_name("2026-09-22")).exists());
+        assert!(directory.join(log_file_name("2026-09-23")).exists());
+
+        let _ = std::fs::remove_dir_all(&directory);
     }
 
     #[test]
