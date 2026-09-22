@@ -2397,8 +2397,9 @@ namespace
         // HSM server accepts them. Registrations are POSTed to /commands at Start (PostRegistrationsWire).
         // Install before Start, same one-way contract as SetClock — the worker thread only reads
         // sender_/send_wire_ after Start, so the swap needs no lock. One transport per collector;
-        // Cancel()/ResetCancel() are wired into Stop/StartWorker so a Stop aborts an in-flight POST
-        // (the CancelPendingRequests primitive) and a restart re-arms it.
+        // StopWorker Cancel()s an in-flight POST (the CancelPendingRequests primitive) and
+        // ResetCancel()s right after the join, so the cancel never outlives the stop of the worker
+        // it was meant to interrupt (#1432).
         void UseHttpTransport()
         {
             http_transport_ = std::make_unique<hsm::http::HttpTransport>(
