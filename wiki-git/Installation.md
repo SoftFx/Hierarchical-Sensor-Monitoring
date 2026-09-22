@@ -247,7 +247,9 @@ Always mount these directories. Without them, **all data is lost** when the cont
 | `443` | HTTPS | Web UI on the standard port (compose only) |
 | `80` | HTTP | Let's Encrypt domain check and redirect to HTTPS (compose only) |
 
-With Docker Compose, HSM is reachable only through Caddy, and Caddy publishes these ports. To use other host ports, change the left side of the mapping in the `caddy` service. For `docker run`, change the mapping and `Config/appsettings.json`:
+With Docker Compose, HSM is reachable only through Caddy, and Caddy publishes these ports. Keep `44330` and `44333`: downloaded agent bundles point at port `44330`. If you must use other host ports, change the left side of the mapping in the `caddy` service and set **Agent connection URL** (Configuration → Agent) to the new Sensor API address, e.g. `https://hsm.example.com:44331`.
+
+For `docker run`, change the mapping and `Config/appsettings.json`:
 
 ```yaml
 ports:
