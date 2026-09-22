@@ -18,7 +18,7 @@ extern "C"
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
 #define HSM_COLLECTOR_VERSION_MINOR 7
-#define HSM_COLLECTOR_VERSION_PATCH 2
+#define HSM_COLLECTOR_VERSION_PATCH 3
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -493,8 +493,10 @@ typedef struct hsm_default_sensor_params_t
     const char* product_version; /* The connected application's version. In
                                     hsm_collector_add_all_module_sensors it both gates WHETHER the
                                     product-version sensor registers (NULL/empty => skip) and is parsed
-                                    + emitted as the sensor's value ("M.m[.b[.r]]") with a "Start: <utc>"
-                                    comment. Ignored by hsm_collector_add_default_sensor (no emission
+                                    + emitted as the sensor's value ("M.m[.b[.r]]") with a
+                                    "Start: dd/MM/yyyy HH:mm:ss" comment on every Start and a
+                                    "Stop: dd/MM/yyyy HH:mm:ss" comment on every Stop (UTC).
+                                    Ignored by hsm_collector_add_default_sensor (no emission
                                     there). */
 } hsm_default_sensor_params_t;
 
