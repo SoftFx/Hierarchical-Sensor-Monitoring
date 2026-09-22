@@ -26,6 +26,7 @@
 #include <sys/statvfs.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <chrono>
 #include <fstream>
 #include <iterator>
@@ -70,13 +71,16 @@ namespace hsm
             // ---- Total CPU ------------------------------------------------------------------
             struct TotalCpuSource
             {
-                // Seeded at construction so the first collected bar measures usage since the source
-                // was created, not since boot (UnixTotalCpu's constructor does exactly this). The
-                // first scheduled read follows the seed within milliseconds; unlike process CPU this
-                // needs no minimum-interval guard: an unchanged total yields no value, and any
-                // nonzero delta is a ratio of jiffies clamped to 0..100 — at worst one noisy sample
-                // inside the first bar, never an out-of-range one.
-                ProcStatCpuUsage usage{ ReadWholeFile(kProcStatPath) };
+                // Deliberately NOT seeded at construction: the FIRST scheduled read seeds the
+                // baseline and posts nothing, so the first value covers one full sample period.
+                // UnixTotalCpu seeds in its constructor, but its first GetBarData() comes a full bar
+                // tick later. Here the factory binds during Start and the first read fires within
+                // milliseconds, so a construction seed would make the first sample a sub-millisecond
+                // window in which a single jiffy reads as 0% or 100% — a spike the managed sensor never
+                // produces and one that can trip the built-in EmaMean > 50 warning on every restart.
+                // Seeding on the first read reproduces the managed timing: first value = usage over
+                // [first tick, next tick].
+                ProcStatCpuUsage usage{ std::string() };
             };
 
             hsm_metric_read_t TotalCpuRead(void* user_data, double* out_value)
@@ -121,12 +125,16 @@ namespace hsm
                 if (statvfs(kRootMount, &stats) != 0)
                     return HSM_METRIC_READ_ERROR;
 
-                // DriveInfo.AvailableFreeSpace on Linux is f_bavail * f_frsize (space available to an
-                // unprivileged process), and UnixDiskInfo reports
+                // DriveInfo.AvailableFreeSpace is computed by .NET's native PAL
+                // (SystemNative_GetSpaceInfoForMountPoint, src/native/libs/System.Native/pal_mount.c)
+                // as f_bsize * f_bavail — f_bsize, NOT f_frsize, in both its statfs and statvfs
+                // branches. glibc's statvfs.f_bsize is statfs.f_bsize, so the same product is
+                // reproduced here; using f_frsize would diverge on any filesystem whose fragment and
+                // block sizes differ. UnixDiskInfo then reports
                 // (AvailableFreeSpace / 1024).KilobytesToMegabytes() — two INTEGER divisions, so the
                 // value is whole megabytes with kB granularity lost. Reproduced exactly here.
                 const auto available_bytes = static_cast<std::uint64_t>(stats.f_bavail) *
-                                             static_cast<std::uint64_t>(stats.f_frsize);
+                                             static_cast<std::uint64_t>(stats.f_bsize);
                 const std::uint64_t available_mb = (available_bytes / 1024u) / 1024u;
 
                 *out_value = static_cast<double>(available_mb);
@@ -142,8 +150,10 @@ namespace hsm
                     Prime();
                 }
 
-                // Seeds the baseline at construction so the first scheduled read already yields a
-                // percentage (UnixProcessCpu seeds _startCpuUsage/_startTime in its constructor).
+                // Seeds the baseline at construction, as UnixProcessCpu does in its constructor. The
+                // first scheduled read then follows within milliseconds and is rejected by
+                // ProcessCpuUsage's one-clock-tick minimum interval; the baseline moves to that read,
+                // so the first POSTED value covers a full sample period, as the managed one does.
                 void Prime()
                 {
                     const auto stat = ParseProcSelfStat(ReadWholeFile(kProcSelfStatPath));
@@ -206,17 +216,21 @@ namespace hsm
                 if (dir == nullptr)
                     return HSM_METRIC_READ_NO_VALUE;
 
+                // readdir returns NULL both at end-of-directory and on error; only errno tells them
+                // apart. A failure part-way through must not post a partial count as a real one.
                 double threads = 0.0;
+                errno = 0;
                 while (const dirent* entry = ::readdir(dir))
                 {
                     const std::string name(entry->d_name);
-                    if (name == "." || name == "..")
-                        continue;
-                    threads += 1.0;
+                    if (name != "." && name != "..")
+                        threads += 1.0;
+                    errno = 0;
                 }
+                const int read_error = errno;
                 ::closedir(dir);
 
-                if (threads <= 0.0)
+                if (read_error != 0 || threads <= 0.0)
                     return HSM_METRIC_READ_NO_VALUE;
 
                 *out_value = threads;
@@ -250,6 +264,29 @@ namespace hsm
                 return 1;
             }
 
+            // Exception barrier for a read callback. The seam contract (hsm_collector.h) is that
+            // callbacks never throw across the C boundary and the core does not catch around them, but
+            // these readers allocate (whole-file reads, dirent names) and can raise std::bad_alloc.
+            // Anything thrown becomes "no value this tick" — the same outcome as an unreadable file —
+            // so a transient allocation failure can neither escape into the scheduler nor recreate the
+            // source (root rule #6: callback exceptions must never crash the host).
+            template <hsm_metric_read_t (*Read)(void*, double*)>
+            hsm_metric_read_t Guarded(void* user_data, double* out_value) noexcept
+            {
+                try
+                {
+                    return Read(user_data, out_value);
+                }
+                catch (...)
+                {
+                    return HSM_METRIC_READ_NO_VALUE;
+                }
+            }
+
+            int CreateSource(
+                const std::string& name, hsm_metric_read_fn* out_read, hsm_metric_dispose_fn* out_dispose,
+                void** out_source_user_data);
+
         } // namespace
 
         int LinuxMetricSourceFactory(
@@ -259,40 +296,61 @@ namespace hsm
             if (sensor_path == nullptr || out_read == nullptr || out_dispose == nullptr || out_source_user_data == nullptr)
                 return 0;
 
-            const std::string name = SensorName(sensor_path);
-
-            // ---- System ----
-            if (Contains(name, "Total CPU"))
-                return Finish(new TotalCpuSource(), &TotalCpuRead, &TotalCpuDispose, out_read, out_dispose, out_source_user_data);
-            if (Contains(name, "Free RAM"))
-                return Finish(nullptr, &FreeRamRead, &NoOpDispose, out_read, out_dispose, out_source_user_data);
-
-            // ---- Disk ----
-            // EXACT match on the Unix row's name, not a "Free space on" prefix. FreeDiskRead always
-            // reads the root mount, so a prefix match would also claim a letter-bearing Windows row
-            // ("Free space on D disk" — still registerable here via add_default_sensor with a
-            // disk_letter) and report the ROOT filesystem's space under a label that names another
-            // volume, firing that sensor's alert off the wrong disk. The Windows factory refuses the
-            // same thing for the same reason ("reporting a different drive's space than the sensor
-            // name claims is the worst failure for monitoring"), so a letter-bearing row falls
-            // through to registration-only here: empty-but-honest beats populated-but-wrong. The
-            // prediction sensor is a TimeSpan and is declined by the same exact match.
-            if (name == "Free space on disk")
-                return Finish(nullptr, &FreeDiskRead, &NoOpDispose, out_read, out_dispose, out_source_user_data);
-
-            // ---- Process (this process) ----
-            if (Contains(name, "Process CPU"))
-                return Finish(new ProcessCpuSource(), &ProcessCpuRead, &ProcessCpuDispose, out_read, out_dispose, out_source_user_data);
-            if (Contains(name, "Process memory"))
-                return Finish(nullptr, &ProcessMemoryRead, &NoOpDispose, out_read, out_dispose, out_source_user_data);
-            if (Contains(name, "Process thread count"))
-                return Finish(nullptr, &ProcessThreadCountRead, &NoOpDispose, out_read, out_dispose, out_source_user_data);
-
-            // "ThreadPool thread count" is a .NET runtime metric with no native equivalent, and the
-            // Windows-only sensors (event logs, service status, network speed, top-CPU, OS info) are
-            // explicitly out of scope here — all stay registration-only.
-            return 0;
+            // Same barrier for the factory itself (it allocates the name and the stateful sources):
+            // an exception declines the binding — the sensor stays registration-only — with clean
+            // out-params, rather than unwinding through the C ABI.
+            try
+            {
+                return CreateSource(SensorName(sensor_path), out_read, out_dispose, out_source_user_data);
+            }
+            catch (...)
+            {
+                *out_read = nullptr;
+                *out_dispose = nullptr;
+                *out_source_user_data = nullptr;
+                return 0;
+            }
         }
+
+        namespace
+        {
+            int CreateSource(
+                const std::string& name, hsm_metric_read_fn* out_read, hsm_metric_dispose_fn* out_dispose,
+                void** out_source_user_data)
+            {
+                // ---- System ----
+                if (Contains(name, "Total CPU"))
+                    return Finish(new TotalCpuSource(), &Guarded<TotalCpuRead>, &TotalCpuDispose, out_read, out_dispose, out_source_user_data);
+                if (Contains(name, "Free RAM"))
+                    return Finish(nullptr, &Guarded<FreeRamRead>, &NoOpDispose, out_read, out_dispose, out_source_user_data);
+
+                // ---- Disk ----
+                // EXACT match on the Unix row's name, not a "Free space on" prefix. FreeDiskRead always
+                // reads the root mount, so a prefix match would also claim a letter-bearing Windows row
+                // ("Free space on D disk" — still registerable here via add_default_sensor with a
+                // disk_letter) and report the ROOT filesystem's space under a label that names another
+                // volume, firing that sensor's alert off the wrong disk. The Windows factory refuses the
+                // same thing for the same reason ("reporting a different drive's space than the sensor
+                // name claims is the worst failure for monitoring"), so a letter-bearing row falls
+                // through to registration-only here: empty-but-honest beats populated-but-wrong. The
+                // prediction sensor is a TimeSpan and is declined by the same exact match.
+                if (name == "Free space on disk")
+                    return Finish(nullptr, &Guarded<FreeDiskRead>, &NoOpDispose, out_read, out_dispose, out_source_user_data);
+
+                // ---- Process (this process) ----
+                if (Contains(name, "Process CPU"))
+                    return Finish(new ProcessCpuSource(), &Guarded<ProcessCpuRead>, &ProcessCpuDispose, out_read, out_dispose, out_source_user_data);
+                if (Contains(name, "Process memory"))
+                    return Finish(nullptr, &Guarded<ProcessMemoryRead>, &NoOpDispose, out_read, out_dispose, out_source_user_data);
+                if (Contains(name, "Process thread count"))
+                    return Finish(nullptr, &Guarded<ProcessThreadCountRead>, &NoOpDispose, out_read, out_dispose, out_source_user_data);
+
+                // "ThreadPool thread count" is a .NET runtime metric with no native equivalent, and the
+                // Windows-only sensors (event logs, service status, network speed, top-CPU, OS info) are
+                // explicitly out of scope here — all stay registration-only.
+                return 0;
+            }
+        } // namespace
 
     } // namespace platform
 } // namespace hsm

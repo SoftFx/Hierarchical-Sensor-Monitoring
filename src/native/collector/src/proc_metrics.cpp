@@ -37,8 +37,11 @@ namespace hsm::collector
         }
 
         // Equivalent of long.TryParse(text, NumberStyles.Integer, InvariantCulture): an optional
-        // leading sign followed by decimal digits, nothing else. Overflow is a parse failure (the
-        // managed TryParse returns false), so a corrupt line is skipped rather than mis-read.
+        // leading sign followed by decimal digits, nothing else. Overflow is a parse failure. That is
+        // exact for /proc/meminfo (ProcMeminfo uses long.TryParse). ProcStat uses double.TryParse,
+        // which would ACCEPT a field above INT64_MAX; the native parser rejects it instead. The
+        // difference is unreachable with real jiffy counters (2^63 jiffies is ~2.9 billion years at
+        // 100 Hz), so one integer parser serves both files.
         bool TryParseInteger(const std::string& text, std::int64_t& value)
         {
             if (text.empty())

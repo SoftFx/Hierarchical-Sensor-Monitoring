@@ -202,7 +202,11 @@ managed Unix sensor reads, running the mirrored algorithm (rule #10 — one sens
 mechanism). Dispatch is on the sensor NAME (last path segment), as on Windows. The free-disk reader
 binds ONLY the exact letter-less name `Free space on disk`: a letter-bearing Windows row (still
 registerable on Linux via `add_default_sensor` + `disk_letter`) stays registration-only instead of
-reporting the root mount under a label naming another volume. Process CPU skips a sample whose
+reporting the root mount under a label naming another volume. Total CPU seeds its baseline on the
+FIRST scheduled read (posting nothing), not at source construction: the factory binds during Start and
+the first read follows within milliseconds, where a single jiffy would read as 0% or 100% and could
+trip the built-in EmaMean > 50 warning — seeding on the first read reproduces the managed timing (first
+value one full sample period after start). Process CPU skips a sample whose
 interval is shorter than one clock tick (`utime`/`stime` are tick-quantized; the factory primes the
 baseline during Start and the first read follows within milliseconds, which would otherwise read as
 hundreds of percent — a spike the managed sensor, sampling a full bar tick after its constructor,
@@ -212,7 +216,7 @@ never produces).
 |---|---|---|
 | `Total CPU` | `/proc/stat` aggregate line, busy% by delta | `UnixTotalCpu` + `ProcStatCpuUsage` |
 | `Free RAM memory` | `/proc/meminfo` `MemAvailable` (kB / 1024.0 → MB, double division) | `UnixFreeRamMemory` + `ProcMeminfo.ParseAvailableKb` |
-| `Free space on disk` | `statvfs("/")`, `f_bavail * f_frsize`, then two integer divides → whole MB | `UnixFreeDiskSpace` + `UnixDiskInfo` (`DriveInfo("/")` is statvfs underneath) |
+| `Free space on disk` | `statvfs("/")`, `f_bavail * f_bsize`, then two integer divides → whole MB | `UnixFreeDiskSpace` + `UnixDiskInfo` (`DriveInfo.AvailableFreeSpace` = `f_bsize * f_bavail` in .NET's `pal_mount.c`; `f_bsize`, not `f_frsize`) |
 | `Process CPU` | `/proc/self/stat` `utime+stime` delta / wall delta × 100 | `UnixProcessCpu` (.NET reads the same fields) |
 | `Process memory` | `/proc/self/stat` `rss` pages × page size, integer divide → MB | `UnixProcessMemory` (`WorkingSet64`) |
 | `Process thread count` | `/proc/self/task` entry count | `UnixProcessThreadCount` (`Process.Threads`) |
@@ -264,4 +268,13 @@ extensions).
 ## Known Issues / Limitations
 
 - Unix surface is a strict subset of Windows (see gaps above).
+- **Native (Linux and Windows): a failing disk read is invisible on the server.** A failed
+  `statvfs` / `GetDiskFreeSpaceExW` returns `READ_ERROR`; the collector recreates the source (logged,
+  deduplicated) but posts nothing, and the row's TTL is infinite. The managed `FreeDiskSpaceBase`
+  instead posts `0` with `SensorStatus.Error` and the exception message. This is a limitation of the
+  metric seam (a read outcome cannot carry a status/comment); a status-carrying read outcome is the
+  follow-up.
+- **Native: `Free space on disk prediction` has no live value** (the seam is double-valued, the sensor a
+  TimeSpan), whereas the managed `UnixFreeDiskSpacePrediction` does emit values on Linux. Registration
+  is at parity; the value path is the #1099 prediction-EMA follow-up.
 - Disk prediction speed is a simple EMA; bursty deletes/writes distort the estimate until the average converges.
