@@ -144,21 +144,16 @@ namespace hsm
             // ---- Process CPU ----------------------------------------------------------------
             struct ProcessCpuSource
             {
+                // Deliberately NOT primed at construction (same reasoning as TotalCpuSource): the
+                // factory binds during Start and the first scheduled read follows after an arbitrary
+                // few-to-tens of milliseconds, where a single quantized tick would read as tens or
+                // hundreds of percent. The FIRST read seeds the baseline and posts nothing, so the
+                // first posted value covers one full sample period — the managed timing, where
+                // UnixProcessCpu's first GetBarData() comes a full bar tick after its constructor.
+                // ProcessCpuUsage's one-tick minimum interval stays as a second line of defense.
                 ProcessCpuSource()
                     : usage(static_cast<double>(::sysconf(_SC_CLK_TCK)))
                 {
-                    Prime();
-                }
-
-                // Seeds the baseline at construction, as UnixProcessCpu does in its constructor. The
-                // first scheduled read then follows within milliseconds and is rejected by
-                // ProcessCpuUsage's one-clock-tick minimum interval; the baseline moves to that read,
-                // so the first POSTED value covers a full sample period, as the managed one does.
-                void Prime()
-                {
-                    const auto stat = ParseProcSelfStat(ReadWholeFile(kProcSelfStatPath));
-                    if (stat.has_value())
-                        (void)usage.NextCpuPercent(stat->utime_ticks + stat->stime_ticks, SteadyClockMilliseconds());
                 }
 
                 ProcessCpuUsage usage;

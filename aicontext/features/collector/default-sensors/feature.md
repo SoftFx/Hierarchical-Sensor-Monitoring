@@ -206,11 +206,11 @@ reporting the root mount under a label naming another volume. Total CPU seeds it
 FIRST scheduled read (posting nothing), not at source construction: the factory binds during Start and
 the first read follows within milliseconds, where a single jiffy would read as 0% or 100% and could
 trip the built-in EmaMean > 50 warning — seeding on the first read reproduces the managed timing (first
-value one full sample period after start). Process CPU skips a sample whose
-interval is shorter than one clock tick (`utime`/`stime` are tick-quantized; the factory primes the
-baseline during Start and the first read follows within milliseconds, which would otherwise read as
-hundreds of percent — a spike the managed sensor, sampling a full bar tick after its constructor,
-never produces).
+value one full sample period after start). Process CPU likewise seeds on its first read, and
+additionally skips any sample whose
+interval is shorter than one clock tick (`utime`/`stime` are tick-quantized, so a sub-tick window
+would read as hundreds of percent — a spike the managed sensor, sampling a full bar tick after its
+constructor, never produces).
 
 | Native source | OS truth | Managed reference mirrored |
 |---|---|---|

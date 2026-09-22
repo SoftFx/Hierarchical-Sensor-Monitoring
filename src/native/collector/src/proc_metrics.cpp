@@ -282,10 +282,11 @@ namespace hsm::collector
 
         // The interval must be at least one clock tick. The managed sensor never sees a shorter one
         // (CollectableBarMonitoringSensorBase samples a full bar tick after the constructor seeds the
-        // baseline), but the native source is primed by the factory during Start and its first
-        // scheduled read fires milliseconds later — and utime/stime are QUANTIZED to whole ticks, so a
-        // single tick landing in a 2 ms window would read as 500%. Below one tick the ratio carries no
-        // information, so the sample is skipped rather than posted as a nonsense spike.
+        // baseline). The Linux source seeds on its first scheduled read for the same reason, and this
+        // guard is the second line of defense for any caller that samples back-to-back: utime/stime
+        // are QUANTIZED to whole ticks, so a single tick landing in a 2 ms window would read as 500%.
+        // Below one tick the ratio carries no information, so the sample is skipped rather than
+        // posted as a nonsense spike.
         const std::int64_t elapsed_ms = wall_clock_ms - previous_wall;
         const double min_interval_ms = 1000.0 / ticks_per_second_;
         if (elapsed_ms <= 0 || static_cast<double>(elapsed_ms) < min_interval_ms)
