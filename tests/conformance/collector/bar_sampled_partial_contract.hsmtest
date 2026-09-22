@@ -1,0 +1,48 @@
+# HSM collector conformance v1 — sampled bar partial-post contract (#1428). Wall-clock fixture.
+# Format: case|action|arg1|arg2|...
+# Actions introduced here:
+# create_sampled_double_bar_sensor|path|bar_period_ms|bar_tick_ms|post_period_ms|precision
+#   A DoubleBar whose samples come from a driver-owned source (the n-th sample is n), taken every
+#   bar_tick_ms into a bar of bar_period_ms, with a partial of the in-progress bar posted every
+#   post_period_ms. This is the machinery behind the metric-driven default bars (Total CPU, Free RAM,
+#   Process CPU/memory/threads — managed BarMonitoringSensorBase via CollectableBarMonitoringSensorBase;
+#   native metric-source binding) with fixture-sized periods; the catalog runs 5 min / 5 s / 15 s.
+# expect_bar_open_times_nondecreasing
+# expect_partial_bars_accumulate
+#   Payloads sharing an OpenTime are snapshots of one bar: same CloseTime and First, Count never
+#   shrinking in delivery order.
+# expect_bar_posts_sharing_open_time_at_least|min
+# expect_distinct_bar_open_times_at_least|min
+# Contract notes:
+# - Partial posts keep the bar's OpenTime until the window closes; the server overwrites same-OpenTime
+#   partials and persists one bar per bar period (not one per post).
+# - The window is aligned to multiples of the bar period; a new OpenTime appears after the boundary.
+# - Stop flushes the in-progress partial bar.
+# - Periods divide the 0001->1970 epoch offset (README "Determinism"), and every assertion is a
+#   timing-immune invariant: the exact number of samples per post depends on scheduler jitter.
+
+# 4.6 s over 2 s windows with 0.5 s posts: at least one window is covered end to end, so at least
+# three posts (at +0.5 s, +1 s, +1.5 s) share its OpenTime, and at least two windows appear.
+sampled_bar_partial_posts_share_open_time|create_collector
+sampled_bar_partial_posts_share_open_time|create_sampled_double_bar_sensor|contract/sampled/partial|2000|100|500|2
+sampled_bar_partial_posts_share_open_time|start
+sampled_bar_partial_posts_share_open_time|sleep_ms|4600
+sampled_bar_partial_posts_share_open_time|stop
+sampled_bar_partial_posts_share_open_time|expect_all_bars_aligned|2000
+sampled_bar_partial_posts_share_open_time|expect_bar_open_times_nondecreasing
+sampled_bar_partial_posts_share_open_time|expect_partial_bars_accumulate
+sampled_bar_partial_posts_share_open_time|expect_bar_posts_sharing_open_time_at_least|3
+sampled_bar_partial_posts_share_open_time|expect_distinct_bar_open_times_at_least|2
+
+# With the post period and the window both an hour away, the only payload is the Stop flush of the
+# partial bar, holding the source's first sample.
+sampled_bar_stop_flushes_partial|create_collector
+sampled_bar_stop_flushes_partial|create_sampled_double_bar_sensor|contract/sampled/flush|3600000|100|3600000|2
+sampled_bar_stop_flushes_partial|start
+sampled_bar_stop_flushes_partial|sleep_ms|400
+sampled_bar_stop_flushes_partial|stop
+sampled_bar_stop_flushes_partial|expect_sent_count|1
+sampled_bar_stop_flushes_partial|expect_bar_field|0|type|5
+sampled_bar_stop_flushes_partial|expect_bar_field|0|first|1
+sampled_bar_stop_flushes_partial|expect_bar_field|0|min|1
+sampled_bar_stop_flushes_partial|expect_bar_open_close_aligned|0|3600000

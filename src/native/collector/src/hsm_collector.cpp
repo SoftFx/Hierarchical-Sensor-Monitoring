@@ -723,6 +723,10 @@ namespace
         // advanced). Cheap and lock-free against the worker — just nudges the wait.
         void Wake()
         {
+            // The flag makes a Wake that lands while the loop is computing (not yet waiting) count:
+            // the wait predicate sees it instead of sleeping out kMaxWaitMs. It is not taken under
+            // mutex_ because callers may hold the collector lock, which the loop takes under mutex_.
+            wake_requested_.store(true);
             cv_.notify_all();
         }
 
@@ -753,7 +757,8 @@ namespace
                 if (due < (std::numeric_limits<int64_t>::max)())
                     wait_ms = std::min<int64_t>(due - now, kMaxWaitMs);
 
-                cv_.wait_for(lock, std::chrono::milliseconds(wait_ms), [this] { return stop_; });
+                cv_.wait_for(lock, std::chrono::milliseconds(wait_ms), [this] { return stop_ || wake_requested_.load(); });
+                wake_requested_.store(false);
             }
         }
 
@@ -761,6 +766,7 @@ namespace
         std::function<int64_t()> next_due_ms_;
         std::function<void()> action_;
 
+        std::atomic<bool> wake_requested_{ false };
         std::mutex mutex_;
         std::condition_variable cv_;
         std::thread worker_;
@@ -1319,9 +1325,10 @@ namespace
         int64_t keep_history_ms; // 0 => KeepHistory null
         bool ttl_never;          // TTLs = [Int64.MaxValue]
         int64_t ttl_ms;          // explicit TTL (0 => none); ignored when ttl_never or a TTL alert is present
-        // Scheduling/routing scaffolding — NOT consumed yet (the live-value follow-up): bar sensors
-        // register with the fixed kDefaultBarPeriodMs, and priority routing is not wired. Kept on the
-        // row so the follow-up has the per-sensor values in one place.
+        // Scheduling/routing: post_period_ms drives a metric-bound sensor's post cadence (for a bar,
+        // the partial-bar post — managed PostDataPeriod). Every default bar shares the managed
+        // BarSensorOptions window/tick (kDefaultBarPeriodMs / kMetricBarSampleMs), so those are not
+        // per-row. Priority routing is not wired yet.
         bool is_priority;        // queue diagnostics (collector-internal routing, not a wire field)
         int64_t post_period_ms;  // scheduled post period (not a wire field)
         const char* description; // short deterministic line (not byte-pinned)
@@ -1332,9 +1339,9 @@ namespace
     constexpr int64_t kDefaultBarPeriodMs = 300000; // 5 min
     constexpr int32_t kDefaultBarPrecision = 2;
 
-    // Metric-driven bar sub-sampling (#1164): a DoubleBar/IntBar default sensor reads its bound
-    // metric source at this cadence and emits an aggregated bar each post period, so the bar carries
-    // real Min/Max/Mean/Count instead of a single instantaneous sample (managed BarTickPeriod).
+    // Metric-driven bar sampling (#1164, #1428): a DoubleBar/IntBar default sensor reads its bound
+    // metric source at this cadence (managed BarTickPeriod) into a bar of kDefaultBarPeriodMs
+    // (BarPeriod), and posts a partial snapshot of that bar every catalog post period (PostDataPeriod).
     constexpr int64_t kMetricBarSampleMs = 5000; // 5 s
 
     // KeepHistory windows in ms (managed TimeSpan.FromDays(n)); *10000 -> ticks on the wire.
@@ -2159,13 +2166,14 @@ namespace
         const std::string& Path() const { return path_; }
 
         // Mark this sensor as eligible for metric-source binding at Start (a value type whose live
-        // values come from a PDH/WMI/plugin reader). post_period_ms is the post cadence; precision is
-        // the bar-payload rounding for DoubleBar/IntBar sensors.
-        void MarkMetricCandidate(int64_t post_period_ms, int32_t precision)
+        // values come from a PDH/WMI/plugin reader). post_period_ms is the post cadence; for a
+        // DoubleBar/IntBar sensor bar_tick_ms is the sample cadence (managed BarTickPeriod) and the
+        // bar window is the sensor's own bar period (managed BarPeriod).
+        void MarkMetricCandidate(int64_t post_period_ms, int64_t bar_tick_ms = kMetricBarSampleMs)
         {
             is_metric_candidate_ = true;
             metric_post_period_ms_ = post_period_ms;
-            metric_bar_precision_ = precision;
+            metric_bar_tick_ms_ = bar_tick_ms;
         }
 
         bool IsMetricCandidate() const { return is_metric_candidate_ && !is_metric_driven_; }
@@ -2178,29 +2186,30 @@ namespace
             metric_source_ = std::move(source);
             is_metric_driven_ = true;
             is_periodic_ = true;
-            metric_bar_open_ = false;
 
-            const int64_t emit = metric_post_period_ms_ > 0 ? metric_post_period_ms_ : 15000;
-            metric_emit_period_ms_ = emit;
-            if (type_ == HSM_SENSOR_TYPE_DOUBLE_BAR || type_ == HSM_SENSOR_TYPE_INT_BAR)
+            const int64_t post = metric_post_period_ms_ > 0 ? metric_post_period_ms_ : 15000;
+            metric_emit_period_ms_ = post;
+            if (IsMetricBar())
             {
-                // Bar sensors sample at a sub-period tick and aggregate into one bar per emit window,
-                // so the bar carries real Min/Max/Mean/Count. The scheduler fires at the sample tick;
-                // the metric branch gates the actual emit on the window. Never finer than the window.
-                post_period_ms_ = (std::min)(emit, kMetricBarSampleMs);
+                // Mirrors managed BarMonitoringSensorBase (#1428): two independent cadences over ONE
+                // bar of the sensor's bar period. The scheduler's own period is the sample tick
+                // (BarTickPeriod); the partial post (PostDataPeriod) keeps its own due time in
+                // metric_next_post_ms_. Each post publishes a snapshot of the in-progress bar with a
+                // stable OpenTime, so the server stores one bar per bar period, not one per post.
+                post_period_ms_ = metric_bar_tick_ms_ > 0 ? metric_bar_tick_ms_ : kMetricBarSampleMs;
             }
             else
             {
                 // Value sensors (free disk, network): read + post once per period.
-                post_period_ms_ = emit;
+                post_period_ms_ = post;
             }
         }
 
-        // Dispose the bound source on Stop (managed dispose-on-stop); a restart rebinds.
+        // Dispose the bound source on Stop (managed dispose-on-stop); a restart rebinds. The bar
+        // itself is kept: the Stop path flushes it as the final partial (TryFlushBarJson).
         void ResetMetricSource()
         {
             metric_source_.reset();
-            metric_bar_open_ = false;
             if (is_metric_driven_)
             {
                 is_metric_driven_ = false;
@@ -2212,6 +2221,23 @@ namespace
         hsm_result_t AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment);
 
         int64_t SteadyNowMs() const { return clock_ ? clock_->SteadyNowMs() : SteadyMilliseconds(); }
+
+        // Wall clock for metric-bar window alignment, read through the same seam as the scheduler so
+        // a manual test clock drives bar OpenTime/CloseTime deterministically.
+        int64_t SystemNowMs() const { return clock_ ? clock_->SystemNowMs() : UnixTimeMilliseconds(); }
+
+        // A bound DoubleBar/IntBar default sensor: sampled into bar_ and posted as partial bars.
+        bool IsMetricBar() const { return is_bar_ && (type_ == HSM_SENSOR_TYPE_DOUBLE_BAR || type_ == HSM_SENSOR_TYPE_INT_BAR); }
+
+        // Caller holds mutex_. The scheduler hint is the earlier of the two metric-bar cadences.
+        void PublishNextDueHintLocked()
+        {
+            const bool two_cadences = is_metric_driven_ && IsMetricBar();
+            next_post_hint_.store(two_cadences ? (std::min)(next_post_ms_, metric_next_post_ms_) : next_post_ms_);
+        }
+
+        bool TryBuildMetricBarJson(std::string& out_json, const std::shared_ptr<NativeCollector>& collector);
+        hsm_metric_read_t ReadMetricSource(double& value, const std::shared_ptr<NativeCollector>& collector);
 
         template <typename Accumulate>
         hsm_result_t AccumulateBar(Accumulate&& accumulate);
@@ -2254,11 +2280,9 @@ namespace
         bool is_metric_candidate_ = false;   // eligible: a value type that a metric source can drive
         bool is_metric_driven_ = false;      // a source was bound at Start -> periodic reads
         int64_t metric_post_period_ms_ = 0;  // post cadence (catalog post_period for default sensors)
-        int32_t metric_bar_precision_ = 2;   // bar-payload rounding for DoubleBar/IntBar metric sensors
-        int64_t metric_emit_period_ms_ = 0;  // bar emit window / value post cadence once bound
-        int64_t metric_bar_open_steady_ = 0; // steady ms the in-flight accumulation bar opened
-        bool metric_bar_open_ = false;       // a DoubleBar/IntBar metric bar is mid-accumulation
-        MonitoringBar metric_bar_;           // accumulation bar for metric-driven DoubleBar/IntBar
+        int64_t metric_bar_tick_ms_ = kMetricBarSampleMs; // bar sample cadence (managed BarTickPeriod)
+        int64_t metric_emit_period_ms_ = 0;  // partial-bar post cadence / value post cadence once bound
+        int64_t metric_next_post_ms_ = 0;    // steady due time of the next partial-bar post (bars only)
         std::unique_ptr<MetricSource> metric_source_;
 
         // File sensor identity.
@@ -3062,7 +3086,7 @@ namespace
                 (def->type == HSM_SENSOR_TYPE_DOUBLE_BAR || def->type == HSM_SENSOR_TYPE_INT_BAR ||
                  def->type == HSM_SENSOR_TYPE_DOUBLE || def->type == HSM_SENSOR_TYPE_INT))
             {
-                out_sensor->MarkMetricCandidate(def->post_period_ms, kDefaultBarPrecision);
+                out_sensor->MarkMetricCandidate(def->post_period_ms, kMetricBarSampleMs);
             }
 
             return rc;
@@ -5198,8 +5222,26 @@ namespace
         // Immediate first post on (re)start; the rate baseline resets so the first sample of a
         // new run does not divide by the stopped gap (mirrors C# MonitoringRateSensor.InitAsync).
         next_post_ms_ = SteadyNowMs();
-        next_post_hint_.store(next_post_ms_);
         rate_has_prev_ = false;
+
+        if (is_metric_driven_ && IsMetricBar())
+        {
+            const int64_t wall_ms = SystemNowMs();
+
+            // An empty bar is re-anchored to the current window (managed builds it at construction;
+            // an empty stale bar would only roll without a post at the first tick, so this is the
+            // same observable state, and it keeps the window on the injectable clock).
+            if (bar_.count == 0)
+                bar_.Init(wall_ms);
+
+            // Partial posts are aligned to wall-clock multiples of the post period, and the first one
+            // is a full period away when Start lands exactly on a multiple (managed
+            // BarTimeHelper.GetTimerDueTime). The sample tick keeps the immediate first read above.
+            const int64_t post = metric_emit_period_ms_ > 0 ? metric_emit_period_ms_ : 15000;
+            metric_next_post_ms_ = next_post_ms_ + (post - ((wall_ms % post) + post) % post);
+        }
+
+        PublishNextDueHintLocked();
     }
 
     bool NativeSensor::TryBuildPeriodicJson(std::string& out_json)
@@ -5214,6 +5256,10 @@ namespace
             return collector ? collector->OutgoingValueJson(path_, t, v, s, c)
                              : NativeCollector::BuildValueJson(path_, t, v, s, c);
         };
+
+        // Metric-bound DoubleBar/IntBar default sensor: its own two-cadence schedule (#1428).
+        if (is_metric_driven_ && IsMetricBar())
+            return TryBuildMetricBarJson(out_json, collector);
 
         // The sensor lock covers only the due-check and the mutable-state snapshot. User
         // callbacks run OUTSIDE it: a callback that re-enters the same sensor (AddRate /
@@ -5278,67 +5324,16 @@ namespace
 
         // Metric-source-driven default/value sensor (#1164): read the bound reader OUTSIDE the lock
         // (it may do PDH/WMI/network IO). The source + the metric/periodic state are touched only by the
-        // scheduler thread after Start, so no lock is needed. DoubleBar/IntBar sensors sample at a
-        // sub-period tick and emit ONE aggregated bar per post window (real Min/Max/Mean/Count);
-        // Double/Int post one value per period. NO_VALUE skips this tick; ERROR disposes + recreates the
-        // source (managed recreate-on-error) and is logged — and if the factory declines to rebuild, the
-        // sensor stops driving rather than silently posting nothing for the rest of the run.
+        // scheduler thread after Start, so no lock is needed. Double/Int post one value per period (the
+        // DoubleBar/IntBar sensors took the TryBuildMetricBarJson branch above). NO_VALUE skips this
+        // tick; ERROR disposes + recreates the source (managed recreate-on-error) and is logged — and if
+        // the factory declines to rebuild, the sensor stops driving rather than silently posting nothing
+        // for the rest of the run.
         if (is_metric_driven_)
         {
             double value = 0.0;
-            const auto outcome = metric_source_ ? metric_source_->ReadInto(value) : HSM_METRIC_READ_NO_VALUE;
-
-            if (outcome == HSM_METRIC_READ_ERROR)
-            {
-                metric_source_.reset();
-                metric_bar_open_ = false;
-                if (collector)
-                    metric_source_ = collector->CreateMetricSource(path_);
-
-                if (collector && metric_source_)
-                {
-                    collector->LogMetricSourceError(path_, /*recreated=*/true);
-                }
-                else
-                {
-                    // The factory declined to rebuild (or the collector is gone): stop driving this
-                    // sensor so it can't loop on NO_VALUE forever, and make the stall loud.
-                    if (collector)
-                        collector->LogMetricSourceError(path_, /*recreated=*/false);
-                    is_metric_driven_ = false;
-                    is_periodic_ = false;
-                    next_post_hint_.store((std::numeric_limits<int64_t>::max)());
-                }
+            if (ReadMetricSource(value, collector) != HSM_METRIC_READ_OK)
                 return false;
-            }
-
-            if (outcome != HSM_METRIC_READ_OK)
-                return false;
-
-            if (type_ == HSM_SENSOR_TYPE_DOUBLE_BAR || type_ == HSM_SENSOR_TYPE_INT_BAR)
-            {
-                const int64_t now_steady = SteadyNowMs();
-                if (!metric_bar_open_)
-                {
-                    metric_bar_.is_int = (type_ == HSM_SENSOR_TYPE_INT_BAR);
-                    metric_bar_.precision = metric_bar_precision_;
-                    metric_bar_.period_ms = metric_emit_period_ms_ > 0 ? metric_emit_period_ms_ : 1;
-                    metric_bar_.Init(UnixTimeMilliseconds());
-                    metric_bar_open_steady_ = now_steady;
-                    metric_bar_open_ = true;
-                }
-                metric_bar_.AddValue(value);
-
-                // Emit once the window has elapsed (or the next sample would overshoot it); the next
-                // tick opens a fresh bar.
-                if (now_steady - metric_bar_open_steady_ + post_period_ms_ > metric_emit_period_ms_)
-                {
-                    out_json = collector ? collector->OutgoingBarJson(metric_bar_, path_) : MonitoringBarJson(metric_bar_, path_);
-                    metric_bar_open_ = false;
-                    return true;
-                }
-                return false; // still accumulating this window
-            }
 
             if (type_ == HSM_SENSOR_TYPE_INT)
             {
@@ -5371,6 +5366,125 @@ namespace
         }
 
         return false;
+    }
+
+    // Scheduler thread only. Reads the bound source; ERROR disposes + recreates it (managed
+    // recreate-on-error, logged), and a declined recreate parks the sensor (no longer periodic).
+    hsm_metric_read_t NativeSensor::ReadMetricSource(double& value, const std::shared_ptr<NativeCollector>& collector)
+    {
+        const auto outcome = metric_source_ ? metric_source_->ReadInto(value) : HSM_METRIC_READ_NO_VALUE;
+        if (outcome != HSM_METRIC_READ_ERROR)
+            return outcome;
+
+        metric_source_.reset();
+        if (collector)
+            metric_source_ = collector->CreateMetricSource(path_);
+
+        if (collector && metric_source_)
+        {
+            collector->LogMetricSourceError(path_, /*recreated=*/true);
+        }
+        else
+        {
+            // The factory declined to rebuild (or the collector is gone): stop driving this sensor
+            // so it can't loop on NO_VALUE forever, and make the stall loud. A metric bar keeps its
+            // accumulated samples; the Stop path flushes them.
+            if (collector)
+                collector->LogMetricSourceError(path_, /*recreated=*/false);
+            std::lock_guard<std::mutex> guard(mutex_);
+            is_metric_driven_ = false;
+            is_periodic_ = false;
+            next_post_hint_.store((std::numeric_limits<int64_t>::max)());
+        }
+        return outcome;
+    }
+
+    // Metric-bound DoubleBar/IntBar default sensor (#1428) — a transcription of managed
+    // BarMonitoringSensorBase + CollectableBarMonitoringSensorBase:
+    //  - sample tick (BarTickPeriod, post_period_ms_ here; first tick immediately on Start): if the
+    //    bar's CloseTime has passed, publish the closed bar and open a fresh one aligned to
+    //    floor(now / BarPeriod) (CheckCurrentBar + BuildNewBar), THEN read the source and add the
+    //    sample (GetBarData -> AddValue). The roll happens even when the read yields nothing.
+    //  - partial post (PostDataPeriod, metric_emit_period_ms_; aligned to wall-clock multiples of it):
+    //    publish a snapshot of the in-progress bar — same OpenTime/CloseTime every post of the window,
+    //    Count/Min/Max/Mean/Last growing. An empty bar posts nothing (GetValue returns null).
+    //  - Stop flushes the non-empty bar once more (TryFlushBarJson), then re-opens it.
+    // The server overwrites same-OpenTime partials and persists a bar only when a new OpenTime
+    // arrives, so this stores one bar per BarPeriod instead of one per post.
+    bool NativeSensor::TryBuildMetricBarJson(std::string& out_json, const std::shared_ptr<NativeCollector>& collector)
+    {
+        bool sample_due = false;
+        bool post_due = false;
+        std::string closed_json;
+
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+
+            const auto now_ms = SteadyNowMs();
+            sample_due = now_ms >= next_post_ms_;
+            post_due = now_ms >= metric_next_post_ms_;
+            if (!sample_due && !post_due)
+                return false;
+
+            // Fixed-rate cadences from their anchors; a skipped stretch (slow worker, virtual-clock
+            // jump) fires once and resumes on the grid — no backlog (managed fixed-rate schedule).
+            // Both periods are positive (BindMetricSource / ResetPeriodicBaseline fall back to the
+            // defaults), the guards only keep a corrupt value from spinning under the sensor lock.
+            if (sample_due)
+            {
+                const int64_t tick = post_period_ms_ > 0 ? post_period_ms_ : kMetricBarSampleMs;
+                do
+                    next_post_ms_ += tick;
+                while (next_post_ms_ <= now_ms);
+            }
+
+            if (post_due)
+            {
+                const int64_t post = metric_emit_period_ms_ > 0 ? metric_emit_period_ms_ : 15000;
+                do
+                    metric_next_post_ms_ += post;
+                while (metric_next_post_ms_ <= now_ms);
+            }
+
+            PublishNextDueHintLocked();
+
+            if (sample_due)
+            {
+                const int64_t wall_ms = SystemNowMs();
+                if (bar_.close_ms < wall_ms)
+                {
+                    if (bar_.count > 0)
+                        closed_json = collector ? collector->OutgoingBarJson(bar_, path_) : MonitoringBarJson(bar_, path_);
+
+                    bar_.Init(wall_ms);
+                }
+            }
+        }
+
+        // Publish the closed bar outside the sensor lock (the collector takes sensor locks while
+        // holding its own), ahead of any partial of the new window this call returns.
+        if (!closed_json.empty() && collector)
+            collector->EnqueueIfRunning(std::move(closed_json));
+
+        if (sample_due)
+        {
+            double value = 0.0;
+            if (ReadMetricSource(value, collector) == HSM_METRIC_READ_OK)
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                bar_.AddValue(value);
+            }
+        }
+
+        if (!post_due)
+            return false;
+
+        std::lock_guard<std::mutex> guard(mutex_);
+        if (bar_.count <= 0)
+            return false;
+
+        out_json = collector ? collector->OutgoingBarJson(bar_, path_) : MonitoringBarJson(bar_, path_);
+        return true;
     }
 
     bool NativeSensor::IsPeriodic() const
@@ -5857,7 +5971,7 @@ hsm_result_t hsm_collector_create_metric_double_sensor(
 
     const auto result = CreateSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE, false, std::string{}, out_sensor);
     if (result == HSM_RESULT_OK && out_sensor != nullptr && *out_sensor != nullptr)
-        (*out_sensor)->impl->MarkMetricCandidate(post_period_ms, 2);
+        (*out_sensor)->impl->MarkMetricCandidate(post_period_ms);
     return result;
 }
 
@@ -7287,4 +7401,34 @@ extern "C" int32_t hsm_collector_test_drive_metric_source(
     if (collector == nullptr || sensor_path == nullptr || max_reads < 0)
         return 0;
     return collector->impl->TestDriveMetricSource(sensor_path, max_reads, out_values, out_recreated);
+}
+
+// Test hook (#1428), deliberately NOT in the public header: a DoubleBar/IntBar sensor driven by the
+// installed metric-source factory exactly like a default bar sensor (sample tick -> bar window ->
+// partial posts), but with explicit short periods so the conformance corpus can observe the
+// partial-post contract in real time. The catalog sensors use 5 min / 5 s / 15 s, which no
+// wall-clock fixture can wait out. is_int selects IntBar (precision ignored) vs DoubleBar.
+extern "C" hsm_result_t hsm_collector_test_create_sampled_bar_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int32_t is_int,
+    int64_t bar_period_ms,
+    int64_t bar_tick_ms,
+    int64_t post_period_ms,
+    int32_t precision,
+    hsm_sensor_t** out_sensor)
+{
+    if (bar_tick_ms <= 0 || post_period_ms <= 0)
+    {
+        if (out_sensor != nullptr)
+            *out_sensor = nullptr;
+        return HSM_RESULT_INVALID_ARGUMENT;
+    }
+
+    const auto result = CreateBarSensor(
+        collector, path, is_int != 0 ? HSM_SENSOR_TYPE_INT_BAR : HSM_SENSOR_TYPE_DOUBLE_BAR,
+        bar_period_ms, post_period_ms, is_int != 0 ? 0 : precision, out_sensor);
+    if (result == HSM_RESULT_OK && out_sensor != nullptr && *out_sensor != nullptr)
+        (*out_sensor)->impl->MarkMetricCandidate(post_period_ms, bar_tick_ms);
+    return result;
 }

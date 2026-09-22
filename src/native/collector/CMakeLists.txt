@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.7.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.7.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -352,6 +352,10 @@ set(NATIVE_REGRESSION_TESTS
     native_metric_source_seam_lifecycle
     native_metric_source_drives_default_bar_sensor
     native_metric_source_drives_custom_double_sensor
+    # #1428: metric-driven default bars post partials of a 5-min bar (manual clock, managed-derived values).
+    native_metric_bar_partial_posts_keep_open_time
+    native_metric_bar_rolls_over_at_window_boundary
+    native_metric_bar_flushes_partial_on_stop
     # native_windows_metric_sources_produce_live_value is registered below (Windows only).
     native_prototype_merge_pins_identity_overrides_metadata
     native_http_endpoint_routing_matches_net
@@ -464,6 +468,7 @@ add_conformance_test(conformance_bar_int_contract bar_int_contract.hsmtest)
 add_conformance_test(conformance_bar_double_contract bar_double_contract.hsmtest)
 add_conformance_test(conformance_bar_partial_contract bar_partial_contract.hsmtest)
 add_conformance_test(conformance_bar_rollover_contract bar_rollover_contract.hsmtest)
+add_conformance_test(conformance_bar_sampled_partial_contract bar_sampled_partial_contract.hsmtest)
 add_conformance_test(conformance_bar_options_contract bar_options_contract.hsmtest)
 add_conformance_test(conformance_queue_overflow_contract queue_overflow_contract.hsmtest)
 add_conformance_test(conformance_sender_retry_contract sender_retry_contract.hsmtest)
@@ -501,6 +506,7 @@ function(add_meta_conformance_test fixture)
 endfunction()
 
 add_meta_conformance_test(meta_bar_field_wrong_mean.hsmtest)
+add_meta_conformance_test(meta_bar_posts_sharing_open_time_unreachable.hsmtest)
 add_meta_conformance_test(meta_each_value_once_missing.hsmtest)
 add_meta_conformance_test(meta_eventually_value_above_unreachable.hsmtest)
 add_meta_conformance_test(meta_no_new_payloads_but_arriving.hsmtest)
