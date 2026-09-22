@@ -143,9 +143,13 @@ namespace HSMServer.Core.Tests
             Assert.Contains("apt-get update", script);
 
             // The extracted key is cleaned up on every exit once it is installed, not only on success.
+            // Armed before the key is copied, so even a failing copy cleans up.
             var trap = script.IndexOf("trap '", System.StringComparison.Ordinal);
-            Assert.True(trap > script.IndexOf("install -m 0400", System.StringComparison.Ordinal));
-            Assert.True(trap < script.IndexOf("apt-get", System.StringComparison.Ordinal));
+            Assert.True(trap > 0);
+            Assert.True(trap < script.IndexOf("install -m 0400", System.StringComparison.Ordinal));
+
+            // A computerName substitution that matched nothing fails loudly instead of installing "auto".
+            Assert.Contains("could not set computerName", script);
 
             // The key is only moved as a file: never printed or read into a variable.
             Assert.DoesNotContain("cat access-key", script);
@@ -179,6 +183,24 @@ namespace HSMServer.Core.Tests
         public void BundleFileName_FollowsTheProductName()
         {
             Assert.Equal("hsm-linux-probe-garage.tar.gz", LinuxProbeInstallerBundle.BundleFileName("garage"));
+        }
+
+        [Theory]
+        [InlineData("Prod (EU);poweroff", "Prod_EU_poweroff")]
+        [InlineData("a && rm -rf *", "a_rm_-rf")]
+        [InlineData("Garage server", "Garage_server")]
+        [InlineData("--help", "help")]
+        [InlineData("..", "product")]
+        [InlineData("#;&*()", "product")]
+        [InlineData("", "product")]
+        [InlineData(null, "product")]
+        [InlineData("v1.2_rc-3", "v1.2_rc-3")]
+        public void BundleFolderName_IsShellSafe(string productName, string expectedSuffix)
+        {
+            var folder = LinuxProbeInstallerBundle.BundleFolderName(productName);
+
+            Assert.Equal("hsm-linux-probe-" + expectedSuffix, folder);
+            Assert.Matches("^[A-Za-z0-9._-]+$", folder);
         }
 
 

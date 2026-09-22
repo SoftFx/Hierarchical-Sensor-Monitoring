@@ -6,8 +6,14 @@ namespace HSMServer.Model.Agent
 {
     public enum LinuxProbeCaDecision
     {
-        /// <summary>No server-ca.pem: a proxy terminates TLS, or there is nothing to export.</summary>
+        /// <summary>No server-ca.pem: a proxy terminates TLS, so the certificate clients see is the proxy's.</summary>
         Omit,
+
+        /// <summary>
+        /// No server-ca.pem because the server's own certificate could not be read. The download still
+        /// works, but the caller must say so: a probe only connects if that certificate is already trusted.
+        /// </summary>
+        OmitUnreadable,
 
         /// <summary>Ship the server's own certificate as server-ca.pem.</summary>
         Include,
@@ -38,7 +44,7 @@ namespace HSMServer.Model.Agent
         /// Pure decision. Behind a TLS-terminating proxy (plain-HTTP mode, Caddy + Let's Encrypt) the
         /// certificate clients see is the proxy's and is already publicly trusted: nothing ships. When the
         /// server terminates TLS itself, its certificate ships unless it is the bundled default (refused)
-        /// or cannot be read (omitted; the download still works).
+        /// or cannot be read (omitted and reported; the download still works).
         /// </summary>
         public static LinuxProbeCaDecision Decide(bool serverTerminatesTls, bool isBundledDefault, bool hasCertificate)
         {
@@ -48,7 +54,7 @@ namespace HSMServer.Model.Agent
             if (isBundledDefault)
                 return LinuxProbeCaDecision.RefuseBundledDefault;
 
-            return hasCertificate ? LinuxProbeCaDecision.Include : LinuxProbeCaDecision.Omit;
+            return hasCertificate ? LinuxProbeCaDecision.Include : LinuxProbeCaDecision.OmitUnreadable;
         }
 
         /// <summary>

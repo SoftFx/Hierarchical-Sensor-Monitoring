@@ -24,7 +24,10 @@ proxy logs and process args (§4.3).
 ## Bundle contents
 
 Every entry sits in one top-level folder `hsm-linux-probe-<product>/`, so extracting never scatters files
-(a key included) into the current directory or mixes two products' bundles.
+(a key included) into the current directory or mixes two products' bundles. `<product>` is
+`LinuxProbeInstallerBundle.ShellSafeName`: product names allow `; & * ( ) #`, and the folder is typed into a
+root shell, so anything outside `[A-Za-z0-9._-]` becomes `_` (runs collapsed, leading `.`/`-`/`_` dropped,
+empty → `product`). The download file name uses the same form.
 
 | Entry | Mode | Content |
 |---|---|---|
@@ -51,6 +54,10 @@ compressed).
   with 400 and a pointer to Configuration → Agent → *Agent connection URL*, instead of a bundle that never
   connects.
 - **Not staged ⇒ 503** with a clear message (no web root, no `wwwroot/probe/`, no `.deb`, or more than one).
+  This is checked first, so an out-of-the-box server (no release pinned, default certificate) reports the
+  missing package, not the certificate.
+- **Never cacheable.** The response carries a bearer credential: `AgentController` is
+  `[ResponseCache(NoStore = true, Location = None)]`, as `ProductController` already is.
 
 ## TLS: when `server-ca.pem` ships
 
@@ -68,8 +75,23 @@ compressed).
   first. Windows solves the same case with the process-scoped `allowUntrustedCertificate`, which the probe
   deliberately does not have.
 - **Omit** behind a TLS-terminating proxy (plain-HTTP mode + Caddy/Let's Encrypt, #1411): no TLS on the
-  Kestrel connection, and the proxy's certificate is already publicly trusted. Also omit when the
-  certificate cannot be read (the download still succeeds).
+  Kestrel connection, and the proxy's certificate is already publicly trusted.
+- **Omit, reported** when the certificate cannot be read: the download still succeeds, and the server logs a
+  warning that the probe will only connect if that certificate is already trusted on its host.
+
+**Known limit: the signal is the admin's connection, not the probe's.** The download arrives on the site
+port; the probe connects to the sensor port at the resolved address. Today both are Kestrel listeners with
+the same certificate, so they agree. They can disagree in split deployments, and the result is then wrong:
+
+| Deployment | Result | Should be |
+|---|---|---|
+| Proxy terminates TLS for the UI only; the sensor port is exposed directly with a self-signed cert | Omit (probe cannot verify) | Include |
+| Proxy re-encrypts to Kestrel, which still serves the bundled default | 400 | Omit |
+| Proxy re-encrypts to Kestrel with an internal-name cert | Include (unused anchor on the host) | Omit |
+
+The fix is an explicit admin choice (or a probe of the resolved address). It is deferred until #1411's
+plain-HTTP mode lands and settles which topologies HSM supports. Until then, an operator in the first case can
+copy the server's certificate to `/usr/local/share/ca-certificates/` by hand.
 
 Deciding from the connection rather than from a config flag keeps the rule correct both before and after
 the plain-HTTP mode of #1411 is enabled, with no coupling to that setting.
@@ -79,9 +101,11 @@ the plain-HTTP mode of #1411 is enabled, with no coupling to that setting.
 install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` expected next to it):
 
 1. Places `config.json` in `/etc/hsm-linux-probe/` **only if none exists** (or with `--force-config`),
-   replacing `"computerName": "auto"` with the host's short name (see *Gap*). Places the key if the bundle
+   replacing `"computerName": "auto"` with the host's short name (see *Gap*); if the substitution matched
+   nothing it stops instead of installing `"auto"` (every host would collapse onto one node). Places the key if the bundle
    still has it; a re-run after the key was consumed keeps the installed one.
-   Once the key is placed, an `EXIT` trap shreds the extracted copy on every exit path, failures included.
+   An `EXIT` trap, armed just before the key is copied, shreds the extracted copy on every exit path, a
+   failing copy included.
 2. `apt-get update`, then `apt-get install -y ./hsm-linux-probe_*.deb` (+ `ca-certificates` when a CA ships) with
    `--force-confold`, so the config written in step 1 wins over the package's placeholder conffile.
    Config and key go in **before** the package so the unit's first start already finds them.
@@ -138,6 +162,26 @@ The staged `.deb` is gitignored (`wwwroot/probe/.gitignore`). Shipping a newer p
 `install.sh`/`uninstall.sh` were also checked with shellcheck and smoke-run in a systemd `debian:13`
 container against a throwaway dummy `.deb` (fresh install from an empty apt index, non-root refusal, key
 shredded after a failed install, re-run idempotency, `--force-config`, uninstall twice) when #1424 landed; that run is manual, not a CI lane.
+
+## Contract with the probe package (#1415 / #1418)
+
+`src/probe-linux/` is not on master yet (PR #1420), so nothing in the build catches a rename on the probe
+side: the bundle would install cleanly and never send a value. These must move in lockstep with the probe, and
+be re-verified before the first non-empty `probe-release.txt`:
+
+| Symbol | Here | Probe side |
+|---|---|---|
+| Package name `hsm-linux-probe`, asset `hsm-linux-probe_<ver>_<arch>.deb` + `.deb.sha256` | install/uninstall scripts, staging, guards | `.deb` build (#1418) |
+| Unit `hsm-linux-probe.service` | `install.sh` / `uninstall.sh` | `packaging/hsm-linux-probe.service` |
+| `LoadCredential=access-key:/etc/hsm-linux-probe/access-key` → `/run/credentials/hsm-linux-probe.service/access-key` | `AccessKeyCredentialPath`, `install.sh` | the unit |
+| Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile/computerName/module` | `BuildConfigJson` | `config.rs` |
+| Module `LinuxProbe` | `ModuleName` | `config.rs` default |
+| https-only address | `ValidateServerAddress` | `config.rs` validation |
+
+**Not yet verified on a real host.** The `debian:13` smoke test ran against a dummy `.deb`. In that Docker
+Desktop container, systemd applied no per-unit mount namespacing, so `LoadCredential=` never materialized
+and the test pointed the dummy at the installed key directly. The credential hand-off to the `hsm-probe`
+user must be checked on a real Debian host before the pin is set.
 
 ## Out of scope (follow-up)
 

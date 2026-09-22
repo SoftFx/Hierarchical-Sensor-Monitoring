@@ -46,7 +46,8 @@ if [ ! -f "$sha_file" ]; then
   exit 1
 fi
 
-expected="$(cut -d' ' -f1 "$sha_file")"
+# Tolerate CRLF and upper-case hex in the published checksum file (same as local-docker-build.ps1).
+expected="$(tr -d '\r' < "$sha_file" | head -n 1 | awk '{print tolower($1)}')"
 actual="$(sha256sum "$deb" | cut -d' ' -f1)"
 if [ "$expected" != "$actual" ]; then
   echo "::error::sha256 mismatch for probe-v$pin: release says $expected, downloaded file is $actual"

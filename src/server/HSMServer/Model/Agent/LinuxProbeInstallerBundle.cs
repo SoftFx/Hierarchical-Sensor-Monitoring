@@ -66,14 +66,35 @@ namespace HSMServer.Model.Agent
 
 
         /// <summary>
-        /// The one top-level directory every entry sits in (the caller passes an already sanitized product
-        /// name), so extracting never scatters files, a key included, into the current directory or mixes
-        /// two products' bundles.
+        /// The one top-level directory every entry sits in, so extracting never scatters files, a key
+        /// included, into the current directory or mixes two products' bundles.
         /// </summary>
-        public static string BundleFolderName(string sanitizedProductName) => $"hsm-linux-probe-{sanitizedProductName}";
+        public static string BundleFolderName(string productName) => $"hsm-linux-probe-{ShellSafeName(productName)}";
 
-        /// <summary>Download file name for a product (the caller passes an already sanitized product name).</summary>
-        public static string BundleFileName(string sanitizedProductName) => BundleFolderName(sanitizedProductName) + ".tar.gz";
+        /// <summary>Download file name for a product.</summary>
+        public static string BundleFileName(string productName) => BundleFolderName(productName) + ".tar.gz";
+
+        /// <summary>
+        /// The product name as it may appear in the folder the operator types into a root shell
+        /// (<c>sudo ./hsm-linux-probe-&lt;product&gt;/install.sh</c>). Product names allow ; &amp; * ( ) #,
+        /// so everything outside [A-Za-z0-9._-] becomes '_', runs collapse, leading '.'/'-' go (no hidden
+        /// folder, no option-like token), and an empty result falls back to "product".
+        /// </summary>
+        public static string ShellSafeName(string productName)
+        {
+            var builder = new StringBuilder();
+            foreach (var c in (productName ?? string.Empty).Trim())
+            {
+                var safe = (c is >= 'a' and <= 'z') || (c is >= 'A' and <= 'Z') || (c is >= '0' and <= '9') || c is '.' or '_' or '-';
+                var next = safe ? c : '_';
+                if (next == '_' && builder.Length > 0 && builder[^1] == '_')
+                    continue;
+                builder.Append(next);
+            }
+
+            var name = builder.ToString().TrimStart('.', '-', '_').TrimEnd('_');
+            return name.Length == 0 ? "product" : name;
+        }
 
         /// <summary>
         /// Picks the staged package among the file names in wwwroot/probe/. Staging clears the folder
@@ -184,6 +205,11 @@ namespace HSMServer.Model.Agent
                 "  esac",
                 "  config_tmp=$(mktemp)",
                 "  sed \"s/\\\"computerName\\\": \\\"" + AutoComputerName + "\\\"/\\\"computerName\\\": \\\"$host\\\"/\" " + ConfigName + " > \"$config_tmp\"",
+                "  if ! grep -q \"\\\"computerName\\\": \\\"$host\\\"\" \"$config_tmp\"; then",
+                "    rm -f \"$config_tmp\"",
+                "    echo \"ERROR: could not set computerName in " + ConfigName + "; edit it by hand and re-run.\" >&2",
+                "    exit 1",
+                "  fi",
                 "  install -m 0644 -o root -g root \"$config_tmp\" \"$CONFIG_DIR/" + ConfigName + "\"",
                 "  rm -f \"$config_tmp\"",
                 "  echo \"Config installed to $CONFIG_DIR/" + ConfigName + " (computer name: $host).\"",
@@ -192,9 +218,9 @@ namespace HSMServer.Model.Agent
                 "fi",
                 "",
                 "if [ -f " + KeyName + " ]; then",
-                "  install -m 0400 -o root -g root " + KeyName + " \"$CONFIG_DIR/" + KeyName + "\"",
                 "  # From here on the installed copy is the only one that should remain, whatever fails later.",
                 "  trap 'if [ -f " + KeyName + " ]; then shred -u " + KeyName + " 2>/dev/null || rm -f " + KeyName + "; fi' EXIT",
+                "  install -m 0400 -o root -g root " + KeyName + " \"$CONFIG_DIR/" + KeyName + "\"",
                 "  echo \"Access key installed to $CONFIG_DIR/" + KeyName + " (root:root 0400).\"",
                 "else",
                 "  echo \"Keeping the existing access key in $CONFIG_DIR/" + KeyName + ".\"",

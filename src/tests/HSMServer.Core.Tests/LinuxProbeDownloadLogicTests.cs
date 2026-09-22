@@ -59,7 +59,7 @@ namespace HSMServer.Core.Tests
         [Theory]
         [InlineData(true, false, true, LinuxProbeCaDecision.Include)]              // Kestrel serves a configured certificate
         [InlineData(true, true, true, LinuxProbeCaDecision.RefuseBundledDefault)]  // the repo's default: its key is public
-        [InlineData(true, false, false, LinuxProbeCaDecision.Omit)]                // nothing exportable
+        [InlineData(true, false, false, LinuxProbeCaDecision.OmitUnreadable)]      // nothing exportable: reported
         [InlineData(false, false, true, LinuxProbeCaDecision.Omit)]                // behind a TLS-terminating proxy
         [InlineData(false, true, true, LinuxProbeCaDecision.Omit)]                 // proxy in front of a default-cert Kestrel
         public void ServerCa_Decision(bool serverTerminatesTls, bool isBundledDefault, bool hasCertificate, LinuxProbeCaDecision expected)
@@ -113,7 +113,7 @@ namespace HSMServer.Core.Tests
         {
             var (decision, pem) = LinuxProbeServerCa.Resolve(true, () => (Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.pfx"), null, false));
 
-            Assert.Equal(LinuxProbeCaDecision.Omit, decision);
+            Assert.Equal(LinuxProbeCaDecision.OmitUnreadable, decision);
             Assert.Null(pem);
         }
 
@@ -244,12 +244,53 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void LinuxInstaller_RefusesTheBundledDefaultCertificate()
         {
-            // Name empty: Kestrel falls back to the bundled default.server.pfx, whose private key is public.
-            var controller = CreateController(Path.GetTempPath(), out var productId, certificate: new ServerCertificateConfig(), tls: true);
+            var webRoot = Directory.CreateTempSubdirectory("hsm-probe-test-").FullName;
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(webRoot, "probe"));
+                File.WriteAllBytes(Path.Combine(webRoot, "probe", "hsm-linux-probe_0.1.0_amd64.deb"), new byte[] { 1 });
 
-            var result = Assert.IsType<BadRequestObjectResult>(controller.LinuxInstaller(productId));
+                // Name empty: Kestrel falls back to the bundled default.server.pfx, whose private key is public.
+                var controller = CreateController(webRoot, out var productId, certificate: new ServerCertificateConfig(), tls: true);
 
-            Assert.Equal(LinuxProbeServerCa.BundledDefaultMessage, result.Value);
+                var result = Assert.IsType<BadRequestObjectResult>(controller.LinuxInstaller(productId));
+
+                Assert.Equal(LinuxProbeServerCa.BundledDefaultMessage, result.Value);
+            }
+            finally
+            {
+                Directory.Delete(webRoot, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void LinuxInstaller_ReportsNotStaged_BeforeTheCertificate()
+        {
+            // An out-of-the-box server has both "no package" and "default certificate": the package is the
+            // real blocker, so it is what the admin hears about first.
+            var webRoot = Directory.CreateTempSubdirectory("hsm-probe-test-").FullName;
+            try
+            {
+                var controller = CreateController(webRoot, out var productId, certificate: new ServerCertificateConfig(), tls: true);
+
+                var result = Assert.IsType<ObjectResult>(controller.LinuxInstaller(productId));
+
+                Assert.Equal(StatusCodes.Status503ServiceUnavailable, result.StatusCode);
+            }
+            finally
+            {
+                Directory.Delete(webRoot, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void LinuxInstaller_IsNeverCacheable()
+        {
+            var attribute = (ResponseCacheAttribute)typeof(AgentController)
+                .GetCustomAttributes(typeof(ResponseCacheAttribute), inherit: true).Single();
+
+            Assert.True(attribute.NoStore);
+            Assert.Equal(ResponseCacheLocation.None, attribute.Location);
         }
 
         [Fact]

@@ -27,6 +27,7 @@ namespace HSMServer.Controllers
     /// </summary>
     [Authorize]
     [Route("api/[controller]")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class AgentController : BaseController
     {
         private static readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
@@ -105,6 +106,25 @@ namespace HSMServer.Controllers
             if (key is null)
                 return BadRequest("This product has no usable access key. Create one with send-data permission first.");
 
+            // Cheapest and most basic blocker first: a server without a staged package (the state until the
+            // first probe-v* release) answers 503 before anything else is looked at.
+            if (string.IsNullOrEmpty(_environment.WebRootPath))
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
+
+            var stagingDir = Path.Combine(_environment.WebRootPath, LinuxProbeInstallerBundle.StagingFolder);
+            string packageName;
+            try
+            {
+                packageName = LinuxProbeInstallerBundle.SelectStagedPackage(Directory.EnumerateFiles(stagingDir));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                packageName = null;
+            }
+
+            if (packageName is null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
+
             var (address, port) = AgentConnectionResolver.Resolve(
                 _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
 
@@ -118,19 +138,12 @@ namespace HSMServer.Controllers
                 HttpContext.Features.Get<ITlsHandshakeFeature>() is not null, () => _config.ServerCertificate.CertificateSource);
             if (caDecision == LinuxProbeCaDecision.RefuseBundledDefault)
                 return BadRequest(LinuxProbeServerCa.BundledDefaultMessage);
+            if (caDecision == LinuxProbeCaDecision.OmitUnreadable)
+                _logger.Warn($"Linux probe bundle for product '{product.DisplayName}' ({productId}) ships without server-ca.pem: the server certificate could not be read, so a probe will only connect if that certificate is already trusted on its host.");
 
-            if (string.IsNullOrEmpty(_environment.WebRootPath))
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
-
-            string packageName;
             byte[] package;
             try
             {
-                var stagingDir = Path.Combine(_environment.WebRootPath, LinuxProbeInstallerBundle.StagingFolder);
-                packageName = LinuxProbeInstallerBundle.SelectStagedPackage(Directory.EnumerateFiles(stagingDir));
-                if (packageName is null)
-                    return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
-
                 package = System.IO.File.ReadAllBytes(Path.Combine(stagingDir, packageName));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -138,14 +151,13 @@ namespace HSMServer.Controllers
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
             }
 
-            var productName = Sanitize(product.DisplayName);
             var bundle = LinuxProbeInstallerBundle.BuildTarGz(
-                LinuxProbeInstallerBundle.BundleFolderName(productName), packageName, package,
+                LinuxProbeInstallerBundle.BundleFolderName(product.DisplayName), packageName, package,
                 new LinuxProbeBundleOptions(address, port, key.Id.ToString(), serverCa));
 
             _logger.Info($"{CurrentUser?.Name} downloaded the HSM Linux probe bundle for product '{product.DisplayName}' ({productId}).");
 
-            return File(bundle, "application/gzip", LinuxProbeInstallerBundle.BundleFileName(productName));
+            return File(bundle, "application/gzip", LinuxProbeInstallerBundle.BundleFileName(product.DisplayName));
         }
 
 
