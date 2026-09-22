@@ -124,7 +124,23 @@ try
 
     await app.Services.InitStorages();
 
-    app.ConfigureMiddleware(app.Environment.IsDevelopment());
+    ForwardedHeadersOptions forwardedHeaders = null;
+
+    if (serverConfig.TrustedProxiesIgnoredInSettingsFile is { } ignoredProxies)
+        logger.Error($"{KestrelConfig.TrustedProxiesKey} = [{ignoredProxies}] in {ServerConfig.ConfigName} is IGNORED and has been removed from the file: " +
+                     "it is read from the environment only (Kestrel__TrustedProxies=...), because the settings file is rewritten on every start.");
+
+    if (serverConfig.Kestrel.TrustedProxies.Length > 0)
+        forwardedHeaders = TrustedProxyOptionsFactory.Build(serverConfig.Kestrel.TrustedProxies);
+
+    if (forwardedHeaders is not null)
+        logger.Info($"Client IP is taken from X-Forwarded-For only for connections from: {TrustedProxyOptionsFactory.Describe(forwardedHeaders)}");
+    else if (serverConfig.Kestrel.TrustedProxies.Length > 0)
+        logger.Warn($"Kestrel.TrustedProxies [{string.Join(", ", serverConfig.Kestrel.TrustedProxies)}] resolved to no address: forwarded headers are DISABLED, client IPs are the connecting peer's.");
+    else
+        logger.Info("Kestrel.TrustedProxies is empty: client IPs are the connecting peer's (no proxy trusted).");
+
+    app.ConfigureMiddleware(app.Environment.IsDevelopment(), forwardedHeaders);
 
     app.MapControllers();
 
