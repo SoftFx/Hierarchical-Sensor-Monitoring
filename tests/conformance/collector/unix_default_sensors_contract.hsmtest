@@ -52,10 +52,10 @@ unix_free_disk_space_prediction_registers|expect_registration_contains|0|"Sensor
 unix_free_disk_space_prediction_registers|expect_registration_contains|0|"Statistics":0,
 unix_free_disk_space_prediction_registers|expect_registration_contains|0|"Alerts":[]
 
-# The Unix computer set is exactly these four sensors — the composition
-# UnixSensorsCollection.AddAllComputerSensors produces (system + disk), and the composition the
-# native add_all_computer_sensors produces when built for Linux. The Windows OS-info, event-log and
-# network-connection nodes are deliberately absent: they can never produce a value on a Unix host.
+# The four sensors of the Unix computer set (UnixSensorsCollection.AddAllComputerSensors = system +
+# disk) register side by side without colliding. This case registers them BY ID, so it pins the
+# members and their coexistence, NOT the group helper's composition — that is guarded natively by
+# native_default_sensor_group_composition (no group verb exists in the DSL today).
 unix_computer_set_is_system_plus_disk|create_collector
 unix_computer_set_is_system_plus_disk|add_default_sensor|total_cpu
 unix_computer_set_is_system_plus_disk|add_default_sensor|free_ram

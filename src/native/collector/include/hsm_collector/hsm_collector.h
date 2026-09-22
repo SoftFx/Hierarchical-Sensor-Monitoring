@@ -517,7 +517,12 @@ hsm_result_t hsm_collector_add_default_sensor(
      are NOT registered there: they could never produce a value on Linux and would only add
      permanently empty sensors to the server tree.
    - Everywhere else the composition is unchanged: the five Windows disk sensors, plus
-     windows-info and network in add_all_computer_sensors.
+     windows-info and network in add_all_computer_sensors. The guard is deliberately __linux__,
+     not "not Windows": Linux is the only non-Windows platform with live readers and a CI lane;
+     other Unixes keep their previous composition until they get the same treatment.
+   Semantic note for consumers: this is a behavior change of these two group helpers on Linux
+   between 0.6.x and 0.7.0 (the ABI itself is unchanged) — a Linux host upgrading across 0.7.0
+   registers a different, smaller computer sensor set.
    add_windows_info_monitoring_sensors / add_all_network_sensors stay callable on any platform (the
    registration payload is platform-agnostic text) — they are simply not part of the Linux
    all-computer set. */

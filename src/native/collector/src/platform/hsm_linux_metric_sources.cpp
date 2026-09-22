@@ -71,7 +71,11 @@ namespace hsm
             struct TotalCpuSource
             {
                 // Seeded at construction so the first collected bar measures usage since the source
-                // was created, not since boot (UnixTotalCpu's constructor does exactly this).
+                // was created, not since boot (UnixTotalCpu's constructor does exactly this). The
+                // first scheduled read follows the seed within milliseconds; unlike process CPU this
+                // needs no minimum-interval guard: an unchanged total yields no value, and any
+                // nonzero delta is a ratio of jiffies clamped to 0..100 — at worst one noisy sample
+                // inside the first bar, never an out-of-range one.
                 ProcStatCpuUsage usage{ ReadWholeFile(kProcStatPath) };
             };
 
@@ -233,14 +237,17 @@ namespace hsm
                 return slash == std::string::npos ? path : path.substr(slash + 1);
             }
 
-            bool Finish(
+            // Publishes a source through the factory's out-params and returns the factory's "bound"
+            // result (1). A stateless source passes nullptr as `source` — the seam only requires a
+            // non-null read callback.
+            int Finish(
                 void* source, hsm_metric_read_fn read, hsm_metric_dispose_fn dispose, hsm_metric_read_fn* out_read,
                 hsm_metric_dispose_fn* out_dispose, void** out_source_user_data)
             {
                 *out_read = read;
                 *out_dispose = dispose;
                 *out_source_user_data = source;
-                return true;
+                return 1;
             }
 
         } // namespace
@@ -256,21 +263,30 @@ namespace hsm
 
             // ---- System ----
             if (Contains(name, "Total CPU"))
-                return Finish(new TotalCpuSource(), &TotalCpuRead, &TotalCpuDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
+                return Finish(new TotalCpuSource(), &TotalCpuRead, &TotalCpuDispose, out_read, out_dispose, out_source_user_data);
             if (Contains(name, "Free RAM"))
-                return Finish(nullptr, &FreeRamRead, &NoOpDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
+                return Finish(nullptr, &FreeRamRead, &NoOpDispose, out_read, out_dispose, out_source_user_data);
 
-            // ---- Disk (the Unix sensor is the root mount; the prediction sensor is a TimeSpan) ----
-            if (Contains(name, "Free space on") && !Contains(name, "prediction"))
-                return Finish(nullptr, &FreeDiskRead, &NoOpDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
+            // ---- Disk ----
+            // EXACT match on the Unix row's name, not a "Free space on" prefix. FreeDiskRead always
+            // reads the root mount, so a prefix match would also claim a letter-bearing Windows row
+            // ("Free space on D disk" — still registerable here via add_default_sensor with a
+            // disk_letter) and report the ROOT filesystem's space under a label that names another
+            // volume, firing that sensor's alert off the wrong disk. The Windows factory refuses the
+            // same thing for the same reason ("reporting a different drive's space than the sensor
+            // name claims is the worst failure for monitoring"), so a letter-bearing row falls
+            // through to registration-only here: empty-but-honest beats populated-but-wrong. The
+            // prediction sensor is a TimeSpan and is declined by the same exact match.
+            if (name == "Free space on disk")
+                return Finish(nullptr, &FreeDiskRead, &NoOpDispose, out_read, out_dispose, out_source_user_data);
 
             // ---- Process (this process) ----
             if (Contains(name, "Process CPU"))
-                return Finish(new ProcessCpuSource(), &ProcessCpuRead, &ProcessCpuDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
+                return Finish(new ProcessCpuSource(), &ProcessCpuRead, &ProcessCpuDispose, out_read, out_dispose, out_source_user_data);
             if (Contains(name, "Process memory"))
-                return Finish(nullptr, &ProcessMemoryRead, &NoOpDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
+                return Finish(nullptr, &ProcessMemoryRead, &NoOpDispose, out_read, out_dispose, out_source_user_data);
             if (Contains(name, "Process thread count"))
-                return Finish(nullptr, &ProcessThreadCountRead, &NoOpDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
+                return Finish(nullptr, &ProcessThreadCountRead, &NoOpDispose, out_read, out_dispose, out_source_user_data);
 
             // "ThreadPool thread count" is a .NET runtime metric with no native equivalent, and the
             // Windows-only sensors (event logs, service status, network speed, top-CPU, OS info) are

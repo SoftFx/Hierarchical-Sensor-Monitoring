@@ -438,6 +438,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(NAME native_linux_process_metrics_produce_live_value
         COMMAND hsm_collector_tests native_linux_process_metrics_produce_live_value
     )
+    add_test(NAME native_linux_free_disk_binds_only_the_unix_row
+        COMMAND hsm_collector_tests native_linux_free_disk_binds_only_the_unix_row
+    )
 endif()
 
 function(add_conformance_test name fixture)

@@ -5,7 +5,6 @@
 #include "proc_metrics.hpp"
 
 #include <algorithm>
-#include <cstdlib>
 #include <vector>
 
 namespace hsm::collector
@@ -70,7 +69,13 @@ namespace hsm::collector
                 magnitude = magnitude * 10u + digit;
             }
 
-            value = negative ? -static_cast<std::int64_t>(magnitude) : static_cast<std::int64_t>(magnitude);
+            // INT64_MIN is spelled out rather than negated: `-static_cast<int64_t>(2^63)` is
+            // signed-overflow UB (the UBSan lane traps it), and an unsigned round-trip would be
+            // merely implementation-defined in C++17. Every other magnitude negates normally.
+            if (negative && magnitude == static_cast<std::uint64_t>(INT64_MAX) + 1u)
+                value = INT64_MIN;
+            else
+                value = negative ? -static_cast<std::int64_t>(magnitude) : static_cast<std::int64_t>(magnitude);
             return true;
         }
 
@@ -223,13 +228,17 @@ namespace hsm::collector
         constexpr std::size_t kStimeIndex = 12; // field 15
         constexpr std::size_t kRssIndex = 21;   // field 24
 
-        // The comm field (field 2) is parenthesized and may itself contain spaces and parentheses,
-        // so the scan starts after the LAST ')' — the same rule the kernel documents.
-        const auto close = stat_content.rfind(')');
-        if (close == std::string::npos || close + 1 >= stat_content.size())
+        // The comm field (field 2) is parenthesized and may itself contain spaces and parentheses, so
+        // the scan starts after the LAST ')' — the same rule the kernel documents. Restrict to the
+        // FIRST LINE before that search: if the buffer ever carried a trailing line containing a ')',
+        // the "last ')'" would land in the wrong line and shift every field offset silently, which is
+        // exactly the mis-report the rule exists to prevent.
+        const std::string line = FirstLine(stat_content);
+        const auto close = line.rfind(')');
+        if (close == std::string::npos || close + 1 >= line.size())
             return std::nullopt;
 
-        const auto fields = SplitFields(FirstLine(stat_content.substr(close + 1)));
+        const auto fields = SplitFields(line.substr(close + 1));
         if (fields.size() <= kRssIndex)
             return std::nullopt;
 
@@ -268,9 +277,16 @@ namespace hsm::collector
         if (!had_previous)
             return std::nullopt; // baseline sample, mirroring UnixProcessCpu's constructor seeding
 
+        // The interval must be at least one clock tick. The managed sensor never sees a shorter one
+        // (CollectableBarMonitoringSensorBase samples a full bar tick after the constructor seeds the
+        // baseline), but the native source is primed by the factory during Start and its first
+        // scheduled read fires milliseconds later — and utime/stime are QUANTIZED to whole ticks, so a
+        // single tick landing in a 2 ms window would read as 500%. Below one tick the ratio carries no
+        // information, so the sample is skipped rather than posted as a nonsense spike.
         const std::int64_t elapsed_ms = wall_clock_ms - previous_wall;
-        if (elapsed_ms <= 0)
-            return std::nullopt; // managed would divide by zero; the collector rejects the result anyway
+        const double min_interval_ms = 1000.0 / ticks_per_second_;
+        if (elapsed_ms <= 0 || static_cast<double>(elapsed_ms) < min_interval_ms)
+            return std::nullopt;
 
         // A process's cumulative CPU time cannot decrease, so this cannot trigger in practice — it
         // is guarded only so an unsigned wrap can never manufacture an astronomical percentage.

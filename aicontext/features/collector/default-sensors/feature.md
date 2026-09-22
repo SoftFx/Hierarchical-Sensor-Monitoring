@@ -199,7 +199,14 @@ production default factory is a no-op; two ready-made factories ship with the li
 
 `InstallLinuxMetricSources()` binds the Unix catalog's value-typed sensors to the SAME OS truth the
 managed Unix sensor reads, running the mirrored algorithm (rule #10 — one sensor, one acquisition
-mechanism). Dispatch is on the sensor NAME (last path segment), as on Windows.
+mechanism). Dispatch is on the sensor NAME (last path segment), as on Windows. The free-disk reader
+binds ONLY the exact letter-less name `Free space on disk`: a letter-bearing Windows row (still
+registerable on Linux via `add_default_sensor` + `disk_letter`) stays registration-only instead of
+reporting the root mount under a label naming another volume. Process CPU skips a sample whose
+interval is shorter than one clock tick (`utime`/`stime` are tick-quantized; the factory primes the
+baseline during Start and the first read follows within milliseconds, which would otherwise read as
+hundreds of percent — a spike the managed sensor, sampling a full bar tick after its constructor,
+never produces).
 
 | Native source | OS truth | Managed reference mirrored |
 |---|---|---|

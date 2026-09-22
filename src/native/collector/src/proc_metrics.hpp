@@ -84,8 +84,12 @@ namespace hsm::collector
         /// @param clock_ticks_per_second sysconf(_SC_CLK_TCK) — how many stat ticks make a second.
         explicit ProcessCpuUsage(double clock_ticks_per_second);
 
-        /// Feeds one sample. Returns std::nullopt for the first sample (baseline only) and when no
-        /// wall time elapsed since the previous one (a division by zero otherwise).
+        /// Feeds one sample. Returns std::nullopt for the first sample (baseline only) and when the
+        /// interval since the previous one is shorter than one clock tick — utime/stime are
+        /// quantized to whole ticks, so a sub-tick window cannot express a meaningful ratio (a
+        /// single tick landing in a 2 ms window would read as 500%). The managed sensor never sees
+        /// such an interval, because its first sample comes a full bar tick after the constructor
+        /// seeds the baseline.
         std::optional<double> NextCpuPercent(std::uint64_t cpu_ticks, std::int64_t wall_clock_ms);
 
     private:

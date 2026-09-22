@@ -3477,7 +3477,35 @@ namespace
         hsm_sensor_release(disk);
     }
 
-    // #1414: the process sensors bind to THIS process's /proc/self files and emit real bars.
+    // #1414 review finding: the Linux free-disk reader always reads the ROOT mount, so it must bind
+    // ONLY the letter-less Unix row. A letter-bearing Windows row ("Free space on D disk") is still
+    // registerable here via add_default_sensor, and must stay registration-only rather than report
+    // the root filesystem under a label naming another volume. The prediction row is a TimeSpan and
+    // is declined too. Driven through the factory seam, so the binding decision itself is asserted.
+    void NativeLinuxFreeDiskBindsOnlyTheUnixRow()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_linux_metric_sources(collector.value) == HSM_RESULT_OK,
+            "installing Linux metric sources should succeed on Linux");
+
+        double values[2] = { 0.0, 0.0 };
+        int32_t recreated = 0;
+        Require(
+            hsm_collector_test_drive_metric_source(collector.value, "host/.computer/Disks monitoring/Free space on disk", 2, values, &recreated) == 2,
+            "the letter-less Unix free-disk row must bind to statvfs and read twice");
+        Require(values[0] >= 0.0 && values[0] == std::floor(values[0]), "free disk space must be whole megabytes (managed integer truncation)");
+
+        Require(
+            hsm_collector_test_drive_metric_source(collector.value, "host/.computer/Disks monitoring/Free space on D disk", 2, values, &recreated) == 0,
+            "a letter-bearing Windows row must be declined, not bound to the root mount");
+        Require(
+            hsm_collector_test_drive_metric_source(collector.value, "host/.computer/Disks monitoring/Free space on disk prediction", 2, values, &recreated) == 0,
+            "the TimeSpan prediction row must be declined by the double-valued seam");
+    }
+
+    // #1414: all three process sensors bind to THIS process's /proc/self files and emit real bars —
+    // CPU (stat utime+stime delta), memory (stat rss x page size) and thread count (task/ entries).
     void NativeLinuxProcessMetricsProduceLiveValue()
     {
         auto collector = CreateCollector();
@@ -3485,23 +3513,59 @@ namespace
             hsm_collector_install_linux_metric_sources(collector.value) == HSM_RESULT_OK,
             "installing Linux metric sources should succeed on Linux");
 
+        hsm_sensor_t* cpu = nullptr;
+        hsm_sensor_t* memory = nullptr;
         hsm_sensor_t* threads = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_PROCESS_CPU, nullptr, &cpu) == HSM_RESULT_OK,
+            "add Process CPU default sensor failed");
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_PROCESS_MEMORY, nullptr, &memory) == HSM_RESULT_OK,
+            "add Process memory default sensor failed");
         Require(
             hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_PROCESS_THREAD_COUNT, nullptr, &threads) == HSM_RESULT_OK,
             "add Process thread count default sensor failed");
 
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
         Require(
-            WaitForSentCountAtLeast(collector.value, 1, 40000),
-            "the /proc/self/task reader should drive a live thread-count post");
+            WaitForSentCountAtLeast(collector.value, 3, 40000),
+            "the /proc/self readers should drive live CPU, memory and thread-count posts");
 
-        const auto payload = SentJson(collector.value, 0);
-        Contains(payload, "\"Type\":5"); // DoubleBar
-        // A running collector always has at least its own threads alive, so the count is positive —
-        // guarding against a reader that "succeeds" with 0.
-        Require(payload.find("\"Min\":0,") == std::string::npos, "the live thread count must be positive");
+        bool saw_cpu = false;
+        bool saw_memory = false;
+        bool saw_threads = false;
+        const auto count = hsm_collector_sent_count(collector.value);
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            const auto payload = SentJson(collector.value, i);
+            if (payload.find("/Process CPU\"") != std::string::npos)
+            {
+                Contains(payload, "\"Type\":5"); // DoubleBar
+                saw_cpu = true;
+            }
+            else if (payload.find("/Process memory\"") != std::string::npos)
+            {
+                Contains(payload, "\"Type\":5");
+                // A live process has a nonzero RSS: guard against a reader that "succeeds" with 0 MB.
+                Require(payload.find("\"Max\":0,") == std::string::npos, "the live process RSS must be positive");
+                saw_memory = true;
+            }
+            else if (payload.find("/Process thread count\"") != std::string::npos)
+            {
+                Contains(payload, "\"Type\":5");
+                // A running collector always has at least its own threads alive.
+                Require(payload.find("\"Min\":0,") == std::string::npos, "the live thread count must be positive");
+                saw_threads = true;
+            }
+        }
+
+        Require(saw_cpu, "Process CPU must produce a live bar from /proc/self/stat");
+        Require(saw_memory, "Process memory must produce a live bar from /proc/self/stat rss");
+        Require(saw_threads, "Process thread count must produce a live bar from /proc/self/task");
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(cpu);
+        hsm_sensor_release(memory);
         hsm_sensor_release(threads);
     }
 #endif // __linux__
@@ -5268,11 +5332,14 @@ namespace
 
     // ---- Linux /proc parsers (#1414) ------------------------------------------------------------
     // Algorithm-equivalence fixtures for the Linux metric sources. Rule #10 requires the native and
-    // managed sensors to read the same OS truth AND run a mirrored algorithm; the SAMPLE TEXT AND
-    // EXPECTED NUMBERS below are copied verbatim from the managed reference suite
-    // (src/collector/HSMDataCollector.Tests/ProcParsersTests.cs), so the two implementations are
-    // asserted against the same fixture values. A divergence in either collector turns one of these
-    // red. Portable: pure functions over sample text, so they run on every CI lane, not only Linux.
+    // managed sensors to read the same OS truth AND run a mirrored algorithm. For the proc_stat_* and
+    // proc_meminfo_* cases the SAMPLE TEXT AND EXPECTED NUMBERS are copied verbatim from the managed
+    // reference suite (src/collector/HSMDataCollector.Tests/ProcParsersTests.cs), so the two
+    // implementations are asserted against the same fixture values. The proc_self_stat_* and
+    // process_cpu_usage_* cases have NO managed counterpart (the managed sensors read those fields
+    // through System.Diagnostics.Process), so they pin the native side against the documented
+    // /proc/<pid>/stat layout and the UnixProcessCpu formula instead. Portable: pure functions over
+    // sample text, so they run on every CI lane, not only Linux.
 
     void RequireProcDouble(const std::optional<double>& actual, double expected, const char* message)
     {
@@ -5440,6 +5507,14 @@ namespace
 
         // A zero-length interval would divide by zero: post nothing instead.
         Require(!usage.NextCpuPercent(300, 3000).has_value(), "a zero elapsed interval must post nothing");
+
+        // A sub-tick interval (2 ms against a 10 ms tick) cannot express a meaningful ratio: one
+        // quantized tick would read as 500%. The factory primes the baseline during Start and the
+        // first read follows within milliseconds, so this is the case that must post nothing.
+        hsm::collector::ProcessCpuUsage primed(100.0);
+        (void)primed.NextCpuPercent(0, 5000);
+        Require(!primed.NextCpuPercent(1, 5002).has_value(), "a sub-tick interval must post nothing, not 500%");
+        RequireProcDouble(primed.NextCpuPercent(51, 6002), 50.0, "the next full interval posts normally");
     }
 
     // A user/agent can raise the built-in Total CPU sensor to Error (on top of its default Warning) by
@@ -5527,6 +5602,8 @@ namespace
               [](const std::string&) { NativeLinuxMetricSourcesProduceLiveValue(); } },
             { "native_linux_process_metrics_produce_live_value",
               [](const std::string&) { NativeLinuxProcessMetricsProduceLiveValue(); } },
+            { "native_linux_free_disk_binds_only_the_unix_row",
+              [](const std::string&) { NativeLinuxFreeDiskBindsOnlyTheUnixRow(); } },
 #endif
             { "native_collector_self_monitoring_emits",
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
