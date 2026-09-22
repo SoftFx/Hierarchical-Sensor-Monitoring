@@ -48,3 +48,37 @@ sampled_bar_stop_flushes_partial|expect_bar_field|0|type|5
 sampled_bar_stop_flushes_partial|expect_bar_field|0|first|1
 sampled_bar_stop_flushes_partial|expect_bar_field|0|min|1
 sampled_bar_stop_flushes_partial|expect_bar_open_close_aligned|0|86400000
+
+# Push-fed built-in bars (the queue diagnostics `.module/Collector queue stats/...` and the network
+# speed bars; managed PublicBarMonitoringSensor): values arrive by add_bar_int, and the bar still
+# posts partials on the post grid with a stable OpenTime, Count accumulating.
+# create_int_bar_sensor_with_partial_posts|path|bar_period_ms|bar_tick_ms|post_period_ms
+push_bar_partial_posts_share_open_time|create_collector
+push_bar_partial_posts_share_open_time|create_int_bar_sensor_with_partial_posts|contract/push/partial|86400000|100|500
+push_bar_partial_posts_share_open_time|start
+push_bar_partial_posts_share_open_time|add_bar_int|0|1
+push_bar_partial_posts_share_open_time|add_bar_int|0|2
+push_bar_partial_posts_share_open_time|sleep_ms|1200
+push_bar_partial_posts_share_open_time|add_bar_int|0|3
+push_bar_partial_posts_share_open_time|sleep_ms|1200
+push_bar_partial_posts_share_open_time|stop
+push_bar_partial_posts_share_open_time|expect_bar_open_times_nondecreasing
+push_bar_partial_posts_share_open_time|expect_partial_bars_accumulate
+push_bar_partial_posts_share_open_time|expect_bar_posts_sharing_open_time_at_least|3
+push_bar_partial_posts_share_open_time|expect_bar_field|0|first|1
+push_bar_partial_posts_share_open_time|expect_bar_field|-1|count|3
+push_bar_partial_posts_share_open_time|expect_bar_open_close_aligned|0|86400000
+
+# The tick rolls a closed push-fed bar and publishes it with NO further value (managed CheckCurrentBar
+# on the collect tick) — before Stop; the fresh bar stays empty, so Stop adds nothing.
+push_bar_tick_rolls_closed_bar|create_collector
+push_bar_tick_rolls_closed_bar|create_int_bar_sensor_with_partial_posts|contract/push/roll|2000|100|86400000
+push_bar_tick_rolls_closed_bar|start
+push_bar_tick_rolls_closed_bar|add_bar_int|0|1
+push_bar_tick_rolls_closed_bar|add_bar_int|0|2
+push_bar_tick_rolls_closed_bar|sleep_ms|2600
+push_bar_tick_rolls_closed_bar|expect_sent_count|1
+push_bar_tick_rolls_closed_bar|stop
+push_bar_tick_rolls_closed_bar|expect_sent_count|1
+push_bar_tick_rolls_closed_bar|expect_bar_field|0|count|2
+push_bar_tick_rolls_closed_bar|expect_bar_open_close_aligned|0|2000

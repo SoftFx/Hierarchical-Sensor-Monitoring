@@ -2181,7 +2181,11 @@ namespace
             metric_bar_tick_ms_ = bar_tick_ms;
         }
 
-        bool IsMetricCandidate() const { return is_metric_candidate_ && !is_metric_driven_; }
+        bool IsMetricCandidate() const { return is_metric_candidate_ && !is_metric_driven_ && !is_partial_posting_; }
+
+        // A built-in DoubleBar/IntBar (catalog row or an internal sampler's bar) — the ones that post
+        // partial bars like managed BarMonitoringSensorBase even without a metric source (#1428).
+        bool IsBuiltInBar() const { return is_metric_candidate_ && IsMetricBar(); }
 
         // Bind a freshly created metric source (called on the Start thread before the scheduler runs).
         // Makes the sensor periodic so TickPeriodicSensors drives it; the source is read on the
@@ -2190,24 +2194,34 @@ namespace
         {
             metric_source_ = std::move(source);
             is_metric_driven_ = true;
-            is_periodic_ = true;
 
             const int64_t post = metric_post_period_ms_ > 0 ? metric_post_period_ms_ : 15000;
             metric_emit_period_ms_ = post;
             if (IsMetricBar())
             {
-                // Mirrors managed BarMonitoringSensorBase (#1428): two independent cadences over ONE
-                // bar of the sensor's bar period. The scheduler's own period is the sample tick
-                // (BarTickPeriod); the partial post (PostDataPeriod) keeps its own due time in
-                // metric_next_post_ms_. Each post publishes a snapshot of the in-progress bar with a
-                // stable OpenTime, so the server stores one bar per bar period, not one per post.
-                post_period_ms_ = metric_bar_tick_ms_ > 0 ? metric_bar_tick_ms_ : kMetricBarSampleMs;
+                ConfigureBarSchedule();
             }
             else
             {
                 // Value sensors (free disk, network): read + post once per period.
                 post_period_ms_ = post;
             }
+            is_periodic_ = true;
+        }
+
+        // A built-in bar fed by pushes (queue diagnostics, network speed) rather than a metric source:
+        // the same tick + partial-post schedule, without sampling (managed PublicBarMonitoringSensor —
+        // its collect tick only rolls the bar). Called on the Start thread before the scheduler runs,
+        // or by the owning sampler for a built-in bar it creates while running (then ResetPeriodicBaseline).
+        void EnablePartialPosts()
+        {
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                metric_emit_period_ms_ = metric_post_period_ms_ > 0 ? metric_post_period_ms_ : 15000;
+                ConfigureBarSchedule();
+                is_partial_posting_ = true;
+            }
+            is_periodic_ = true;
         }
 
         // Dispose the bound source on Stop (managed dispose-on-stop); a restart rebinds. The bar
@@ -2215,9 +2229,10 @@ namespace
         void ResetMetricSource()
         {
             metric_source_.reset();
-            if (is_metric_driven_)
+            if (is_metric_driven_ || is_partial_posting_)
             {
                 is_metric_driven_ = false;
+                is_partial_posting_ = false;
                 is_periodic_ = false;
             }
         }
@@ -2231,14 +2246,26 @@ namespace
         // a manual test clock drives bar OpenTime/CloseTime deterministically.
         int64_t SystemNowMs() const { return clock_ ? clock_->SystemNowMs() : UnixTimeMilliseconds(); }
 
-        // A bound DoubleBar/IntBar default sensor: sampled into bar_ and posted as partial bars.
+        // A DoubleBar/IntBar sensor (the bar constructor ran).
         bool IsMetricBar() const { return is_bar_ && (type_ == HSM_SENSOR_TYPE_DOUBLE_BAR || type_ == HSM_SENSOR_TYPE_INT_BAR); }
 
-        // Caller holds mutex_. The scheduler hint is the earlier of the two metric-bar cadences.
+        // A bar on the managed two-cadence schedule: metric-sampled or push-fed with partial posts.
+        bool HasBarSchedule() const { return IsMetricBar() && (is_metric_driven_ || is_partial_posting_); }
+
+        // Mirrors managed BarMonitoringSensorBase (#1428): two independent cadences over ONE bar of the
+        // sensor's bar period. The scheduler's own period is the tick (BarTickPeriod); the partial post
+        // (PostDataPeriod, metric_emit_period_ms_) keeps its own due time in metric_next_post_ms_. Each
+        // post publishes a snapshot of the in-progress bar with a stable OpenTime, so the server stores
+        // one bar per bar period, not one per post.
+        void ConfigureBarSchedule()
+        {
+            post_period_ms_ = metric_bar_tick_ms_ > 0 ? metric_bar_tick_ms_ : kMetricBarSampleMs;
+        }
+
+        // Caller holds mutex_. The scheduler hint is the earlier of the two bar cadences.
         void PublishNextDueHintLocked()
         {
-            const bool two_cadences = is_metric_driven_ && IsMetricBar();
-            next_post_hint_.store(two_cadences ? (std::min)(next_post_ms_, metric_next_post_ms_) : next_post_ms_);
+            next_post_hint_.store(HasBarSchedule() ? (std::min)(next_post_ms_, metric_next_post_ms_) : next_post_ms_);
         }
 
         bool TryBuildMetricBarJson(std::string& out_json, const std::shared_ptr<NativeCollector>& collector);
@@ -2264,7 +2291,9 @@ namespace
         std::atomic<int64_t> next_post_hint_{ (std::numeric_limits<int64_t>::max)() };
 
         // Periodic (rate / function) state, guarded by mutex_.
-        bool is_periodic_ = false;
+        // Atomic: a sampler thread may enable partial posts on a built-in bar it created while running,
+        // while the scheduler reads IsPeriodic() without the sensor lock.
+        std::atomic<bool> is_periodic_{ false };
         int64_t post_period_ms_ = 0;
         int64_t next_post_ms_ = 0;
         double rate_sum_ = 0.0;
@@ -2284,6 +2313,7 @@ namespace
         // touched only by the scheduler thread after Start, so they need no extra lock.
         bool is_metric_candidate_ = false;                // eligible: a value type that a metric source can drive
         bool is_metric_driven_ = false;                   // a source was bound at Start -> periodic reads
+        bool is_partial_posting_ = false;                 // a push-fed built-in bar on the partial-post schedule
         int64_t metric_post_period_ms_ = 0;               // post cadence (catalog post_period for default sensors)
         int64_t metric_bar_tick_ms_ = kMetricBarSampleMs; // bar sample cadence (managed BarTickPeriod)
         int64_t metric_emit_period_ms_ = 0;               // partial-bar post cadence / value post cadence once bound
@@ -2554,6 +2584,8 @@ namespace
                 {
                     if (auto source = CreateMetricSource(sensor->Path()))
                         sensor->BindMetricSource(std::move(source));
+                    else if (sensor->IsBuiltInBar())
+                        sensor->EnablePartialPosts(); // push-fed built-in bar: tick-roll + partial posts (#1428)
                 }
             }
 
@@ -4064,6 +4096,18 @@ namespace
                             if (CreateDefaultBarSensor(path, HSM_SENSOR_TYPE_DOUBLE_BAR, 60000, kDefaultBarPrecision, opts, sensor) != HSM_RESULT_OK)
                                 return;
 
+                            // Managed WindowsNetworkInterfaceSpeedMonitor bars: BarPeriod 1 min, BarTickPeriod
+                            // 15 s, PostDataPeriod 15 s — partial posts of the minute bar (#1428). Marked as
+                            // a built-in bar so a restart's Start loop re-enables the schedule; a sensor
+                            // already on it (created in an earlier run) is left alone.
+                            if (!sensor->IsPeriodic())
+                            {
+                                sensor->MarkMetricCandidate(15000, 15000);
+                                sensor->EnablePartialPosts();
+                                sensor->ResetPeriodicBaseline();
+                                scheduler_task_->Wake();
+                            }
+
                             it = cache.emplace(iface, sensor).first;
 #if defined(HSM_COLLECTOR_HTTP)
                             if (send_wire_)
@@ -5072,7 +5116,9 @@ namespace
         {
             std::lock_guard<std::mutex> guard(mutex_);
 
-            const auto now_ms = UnixTimeMilliseconds();
+            // Through the clock seam (real wall clock in production), like the built-in bar schedule
+            // that shares this bar (#1428).
+            const auto now_ms = SystemNowMs();
             if (bar_.close_ms < now_ms)
             {
                 if (bar_.count > 0)
@@ -5229,7 +5275,7 @@ namespace
         next_post_ms_ = SteadyNowMs();
         rate_has_prev_ = false;
 
-        if (is_metric_driven_ && IsMetricBar())
+        if (HasBarSchedule())
         {
             const int64_t wall_ms = SystemNowMs();
 
@@ -5263,7 +5309,7 @@ namespace
         };
 
         // Metric-bound DoubleBar/IntBar default sensor: its own two-cadence schedule (#1428).
-        if (is_metric_driven_ && IsMetricBar())
+        if (HasBarSchedule())
             return TryBuildMetricBarJson(out_json, collector);
 
         // The sensor lock covers only the due-check and the mutable-state snapshot. User
@@ -5404,8 +5450,8 @@ namespace
         return outcome;
     }
 
-    // Metric-bound DoubleBar/IntBar default sensor (#1428) — a transcription of managed
-    // BarMonitoringSensorBase + CollectableBarMonitoringSensorBase:
+    // Built-in DoubleBar/IntBar sensor (#1428) — metric-bound or push-fed — a transcription of managed
+    // BarMonitoringSensorBase + CollectableBarMonitoringSensorBase / PublicBarMonitoringSensor:
     //  - sample tick (BarTickPeriod, post_period_ms_ here; first tick immediately on Start): if the
     //    bar's CloseTime has passed, publish the closed bar and open a fresh one aligned to
     //    floor(now / BarPeriod) (CheckCurrentBar + BuildNewBar), THEN read the source and add the
@@ -5473,7 +5519,9 @@ namespace
         if (!closed_json.empty())
             collector->EnqueueIfRunning(std::move(closed_json));
 
-        if (sample_due)
+        // A push-fed built-in bar (queue diagnostics, network speed) only rolls on the tick; its values
+        // arrive through AddBar* (managed PublicBarMonitoringSensor: CollectBar == CheckCurrentBar).
+        if (sample_due && metric_source_)
         {
             double value = 0.0;
             if (ReadMetricSource(value, collector) == HSM_METRIC_READ_OK)

@@ -599,6 +599,19 @@ namespace HSMDataCollector.Tests
                         BuildConformanceBarOptions(int.Parse(step.Arg(1)), int.Parse(step.Arg(2)), int.Parse(step.Arg(3)))));
                     break;
 
+                case "create_int_bar_sensor_with_partial_posts":
+                    // #1428: a PublicBarMonitoringSensor with a live tick and post period — the base of the
+                    // managed queue-diagnostic bars (BaseQueueInfoSensor) and the per-interface network bars.
+                    AddSensor(state, state.IntBarSensors, state.Collector.CreateIntBarSensor(
+                        step.Arg(0),
+                        new BarSensorOptions
+                        {
+                            BarPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))),
+                            BarTickPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(2))),
+                            PostDataPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(3))),
+                        }));
+                    break;
+
                 case "create_sampled_double_bar_sensor":
                 {
                     // #1428: the machinery behind the metric-driven default bars (CollectableBarMonitoringSensorBase:

@@ -272,6 +272,18 @@ Every post of one window therefore carries the SAME `OpenTime`/`CloseTime` while
 `Max`, `Mean` and `Last` grow. Before 0.7.1 the native bar window equalled the post period, so each 15 s
 post was a separate, closed bar with its own `OpenTime`.
 
+**Push-fed built-in bars** follow the same schedule without the sampling step (managed
+`PublicBarMonitoringSensor`, whose collect tick only runs `CheckCurrentBar`): the queue diagnostics
+(`.module/Collector queue stats/Queue overflow`, `Items count in package`, `Package process time`,
+`Package content size` — 5 min / 5 s / 15 s) and the per-interface network speed bars
+(`.computer/Network/<iface>/{Received,Sent} MB,sec` — 1 min / 15 s / 15 s, managed
+`WindowsNetworkInterfaceSpeedMonitor`). Values still arrive by push (roll-on-add stays); on top of
+that they post a partial every post period with a stable `OpenTime`, and the tick rolls a closed bar
+and publishes it without waiting for a next value. Before 0.7.1 they published only on roll-on-add or
+at Stop — at most once per window. Any catalog DoubleBar/IntBar that no metric source binds takes this
+path at Start. Still different from managed: the queue-diagnostic `Comment` (managed lists per-queue
+totals, e.g. `Data: 12`; native has one queue and sends no comment).
+
 **Storage effect.** The server keeps a same-`OpenTime` post as the in-memory partial of the current bar
 and persists a bar only when a NEW `OpenTime` arrives (`BarValuesStorage`). A native sender now writes
 **one bar per 5 minutes per sensor** — as a managed sender does — instead of one per 15 s post (20× fewer
@@ -280,7 +292,8 @@ records), and EMA / alert evaluation runs on the same 5-min grid for both collec
 Pinned by: the conformance fixture `bar_sampled_partial_contract.hsmtest` (both drivers; a sampled bar
 with fixture-sized periods — OpenTime stable across partials, Count accumulating, a new OpenTime after
 the boundary, the stop flush); the native manual-clock tests `native_metric_bar_partial_posts_keep_open_time`,
-`native_metric_bar_rolls_over_at_window_boundary` and `native_metric_bar_flushes_partial_on_stop`, whose
+`native_metric_bar_rolls_over_at_window_boundary`, `native_metric_bar_flushes_partial_on_stop` and
+`native_built_in_push_bar_posts_partials` (queue diagnostics), whose
 expected values are derived step by step from the managed algorithm; and the live smoke tests on both
 platforms, which assert that real Total CPU posts are partials of one aligned 5-min bar.
 

@@ -1942,6 +1942,23 @@ namespace
             return;
         }
 
+        if (action == "create_int_bar_sensor_with_partial_posts")
+        {
+            // #1428: a push-fed IntBar on the built-in bar schedule (tick roll + partial posts) — the
+            // native queue-diagnostic / network-speed bar machinery with fixture-sized periods. No sample
+            // source is registered for it, so the collector leaves it push-fed (values via add_bar_int).
+            Require(step.size() >= 5, "create_int_bar_sensor_with_partial_posts requires path, bar period, tick, and post period");
+            const auto path = ExpandTextToken(step[1]);
+            SensorHandle sensor;
+            Require(
+                hsm_collector_test_create_sampled_bar_sensor(
+                    state.collector.value, path.c_str(), 1, std::stoll(step[2]), std::stoll(step[3]), std::stoll(step[4]), 0,
+                    &sensor.value) == HSM_RESULT_OK,
+                "partial-posting int bar sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
         if (action == "create_double_bar_sensor_full_options")
         {
             Require(step.size() >= 17, "create_double_bar_sensor_full_options requires 16 args");
@@ -3586,6 +3603,63 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "second stop failed");
         Require(hsm_collector_sent_count(collector.value) == 2, "the second stop flushes the second run only");
         RequireMetricBarPayload(SentJson(collector.value, 1), { kBarWindowStartMs, 1, 3.0, 3.0 }, "second stop flush");
+
+        hsm_sensor_release(sensor);
+    }
+
+    // #1428 (parity audit follow-up): a PUSH-fed built-in bar — the queue diagnostics
+    // (`.module/Collector queue stats/...`), which no metric source drives — follows managed
+    // PublicBarMonitoringSensor: partial posts every 15 s with a stable OpenTime over the 5-min
+    // window, a roll on the 5 s tick (no further value needed to publish the closed bar), and the stop
+    // flush. Before, it published only on roll-on-add / stop, i.e. at most once per 5 min.
+    void NativeBuiltInPushBarPostsPartials()
+    {
+        auto collector = CreateCollector();
+        hsm_collector_test_install_manual_clock(collector.value, kBarWindowStartMs + 1000);
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT, nullptr, &sensor) == HSM_RESULT_OK,
+            "add Items count in package default sensor failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        const auto field = [&](size_t index, const char* name) {
+            return std::stoll(NumberFieldFromPayload(SentJson(collector.value, index), name));
+        };
+
+        Require(hsm_sensor_add_bar_int(sensor, 5) == HSM_RESULT_OK, "add 5 failed");
+        Require(hsm_sensor_add_bar_int(sensor, 7) == HSM_RESULT_OK, "add 7 failed");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        Require(hsm_collector_sent_count(collector.value) == 0, "nothing posts before the first aligned 15 s post time");
+
+        // W+15 s: first partial of [W, W+5 min).
+        hsm_collector_test_advance_clock_ms(collector.value, 14000);
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "the push-fed bar should post a partial at W+15 s");
+        Require(field(0, "OpenTimeMs") == kBarWindowStartMs && field(0, "CloseTimeMs") == kBarWindowStartMs + 300000,
+                "the partial spans the 5-min window");
+        Require(field(0, "Count") == 2 && field(0, "Min") == 5 && field(0, "Max") == 7, "first partial aggregates 5, 7");
+
+        // W+30 s: same OpenTime, Count grown.
+        Require(hsm_sensor_add_bar_int(sensor, 9) == HSM_RESULT_OK, "add 9 failed");
+        hsm_collector_test_advance_clock_ms(collector.value, 15000);
+        Require(WaitForSentCountAtLeast(collector.value, 2, 2000), "the push-fed bar should post a partial at W+30 s");
+        Require(field(1, "OpenTimeMs") == kBarWindowStartMs && field(1, "Count") == 3 && field(1, "Max") == 9,
+                "second partial keeps the OpenTime and accumulates");
+
+        // Jump past the window: the tick rolls and publishes the closed bar with no new value; the
+        // post that falls due in the same call sees the fresh, empty bar and posts nothing.
+        hsm_collector_test_advance_clock_ms(collector.value, 271000); // W+301 s
+        Require(WaitForSentCountAtLeast(collector.value, 3, 2000), "the tick should publish the closed bar");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        Require(hsm_collector_sent_count(collector.value) == 3, "an empty new bar posts nothing");
+        Require(field(2, "OpenTimeMs") == kBarWindowStartMs && field(2, "Count") == 3, "the roll publishes the closed window");
+
+        // A value in the new window, then Stop: flushed as a partial of [W+5 min, W+10 min).
+        Require(hsm_sensor_add_bar_int(sensor, 11) == HSM_RESULT_OK, "add 11 failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        Require(hsm_collector_sent_count(collector.value) == 4, "Stop flushes the new window's partial");
+        Require(field(3, "OpenTimeMs") == kBarWindowStartMs + 300000 && field(3, "Count") == 1 && field(3, "First") == 11,
+                "stop flush of the next window");
 
         hsm_sensor_release(sensor);
     }
@@ -6006,6 +6080,7 @@ namespace
             { "native_metric_bar_partial_posts_keep_open_time", [](const std::string&) { NativeMetricBarPartialPostsKeepOpenTime(); } },
             { "native_metric_bar_rolls_over_at_window_boundary", [](const std::string&) { NativeMetricBarRollsOverAtWindowBoundary(); } },
             { "native_metric_bar_flushes_partial_on_stop", [](const std::string&) { NativeMetricBarFlushesPartialOnStop(); } },
+            { "native_built_in_push_bar_posts_partials", [](const std::string&) { NativeBuiltInPushBarPostsPartials(); } },
 #if defined(_WIN32)
             { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
             { "native_windows_process_metric_resolves_current_process",
