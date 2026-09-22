@@ -28,6 +28,7 @@
 
 #include <cerrno>
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -215,10 +216,11 @@ namespace hsm
                 // apart. A failure part-way through must not post a partial count as a real one.
                 double threads = 0.0;
                 errno = 0;
+                // Compared in place (no std::string): nothing between opendir and closedir may throw,
+                // or the Guarded barrier would swallow the exception and leak the DIR handle.
                 while (const dirent* entry = ::readdir(dir))
                 {
-                    const std::string name(entry->d_name);
-                    if (name != "." && name != "..")
+                    if (std::strcmp(entry->d_name, ".") != 0 && std::strcmp(entry->d_name, "..") != 0)
                         threads += 1.0;
                     errno = 0;
                 }
