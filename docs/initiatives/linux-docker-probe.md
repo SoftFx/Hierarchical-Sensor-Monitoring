@@ -1,6 +1,6 @@
 # Linux host + Docker Compose probe (garage-server)
 
-> Status: **accepted** (owner review, 2026-09-22). Epic: #1413; workstreams #1414–#1418.
+> Status: **accepted** (owner review, 2026-09-22). Epic: #1413; workstreams #1414–#1418, #1424.
 > Source task: garage_administration `hsm/TASK-linux-docker-monitoring.md`.
 > Scope: a Linux probe that reports Debian host metrics, Docker Compose service metrics,
 > SSD/archive-disk capacity and backup-contract signals into the existing HSM server.
@@ -256,6 +256,53 @@ self-update à la HsmAgent (single host, systemd + package is simpler and safer 
 of scope); a hosted apt repository (overkill for one server; the Release channel converts
 into one later if the fleet grows).
 
+### 4.6 Per-product download bundle: one-command, preconfigured install (#1424)
+
+Owner requirement: parity with the Windows agent, where the admin clicks **Download agent** on a
+product and the client runs one command and is connected
+(`aicontext/features/server/agent-download/feature.md`). The Linux probe gets the same flow.
+
+- **Server side** (HSMServer web app + model layer, no HSMServer.Core change): an admin-only
+  **Download Linux probe** button next to the Windows one streams
+  `hsm-linux-probe-<product>.tar.gz`, built by a pure, unit-tested bundle builder that sits
+  alongside `AgentInstallerBundle`:
+  - the `.deb`, **byte-identical** to the pinned `probe-v*` release. The server names it in
+    `src/server/HSMServer/probe-release.txt`, and every server build path downloads it and
+    checks its SHA-256, the same way `agent-release.txt` works;
+  - a generated `config.json` in the probe schema (§4.1). The address and port come from the
+    existing `AgentConnectionResolver` (so the admin's "Agent connection URL" setting applies
+    unchanged), `computerName: "auto"`, and `accessKeyFile` points at the LoadCredential path;
+  - `access-key`: the product key from the existing `AgentKeySelector`, in its own file. It is
+    never written into `config.json`, so the config can be shown and diffed safely;
+  - `server-ca.pem`: the server's **public** certificate chain, with no private key. This keeps
+    TLS verification on for self-signed installs, which Windows gets only by baking
+    `allowUntrustedCertificate`. The Linux probe never exposes that switch. If the server's
+    certificate is already publicly trusted (the Caddy/Let's Encrypt setup from #1411), the file
+    is omitted;
+  - `install.sh` / `uninstall.sh`.
+- **Client side:** `tar xzf hsm-linux-probe-<product>.tar.gz && sudo ./install.sh`. The script
+  refuses to run as non-root. It runs `apt install ./hsm-linux-probe_*.deb`, puts
+  `config.json` in `/etc/hsm-linux-probe/` (as a dpkg conffile, so a later reinstall keeps the
+  operator's edits unless `--force-config` is passed), and writes `access-key` as root:root
+  0400. It adds `server-ca.pem` to `/usr/local/share/ca-certificates/` and runs
+  `update-ca-certificates`, then runs `systemctl enable --now hsm-linux-probe` and prints the
+  unit status. It then deletes the extracted key file. `uninstall.sh` disables and purges the
+  unit and package, removes the key, the CA file and the config, and never touches HSM history.
+- **Deliberately not a `curl … | sudo bash` one-liner:** the download endpoint needs an admin
+  session, and a token in the URL would put the product key's bearer into shell history, proxy
+  logs and process args, which §4.3 forbids. The flow is the Windows one: download in the
+  browser, copy to the host, run one command.
+- **Key scope:** the bundle uses the same key selection as the Windows download (product
+  DefaultKey, otherwise a key that can send data and add nodes and sensors). It is
+  product-scoped, not a master key. A dedicated, separately revocable per-download key is the
+  same follow-up already listed for Windows. For garage-server, the operator can still issue a
+  send-only key and swap the file; the runbook documents this.
+- **Tests:** bundle contents and layout, a key that never appears in `config.json`,
+  byte-identical `.deb`, a 503 with a clear message while no probe release is staged, the
+  admin-only guard, and `install.sh` checked by shellcheck plus a smoke run in a `debian:13`
+  container against a locally built `.deb`. The server pipeline guards (the Windows zip and the
+  Docker image both contain the staged `.deb`) mirror the #1266 agent guards.
+
 ## 5. Resource budget & retention (to validate in the PR)
 
 - Process: 1 (native Rust binary, no managed runtime); threads: collector scheduler/sender +
@@ -298,6 +345,7 @@ budget.
 | 3 | Docker source | 2 | Engine-API client over unix socket, DTO/normalizer/identity/delta, SSD state persistence, fixtures. |
 | 4 | Disks + backup contract | 2 (3 for tree shape) | SSD statvfs detail, archive snapshots, backup contract reader, standby runbook section. |
 | 5 | Packaging + rollout kit | 2–4 | `.deb` build in `debian:13` CI container, `probe-v*` release workflow (§4.5), install/upgrade/rollback runbook, hardening finalized, soak + RSS/CPU measurements, retention table, `aicontext/` feature docs. |
+| 6 | Per-product download bundle (#1424) | 5 for a real .deb (builder + endpoint can land first, 503 until a release is pinned) | §4.6: server bundle builder, admin-only endpoint + button, `probe-release.txt` staging in both server build legs, install.sh/uninstall.sh, tests. |
 | — | Optional: `ca_file` transport knob | — | `CollectorOptions.ca_file` → `CURLOPT_CAINFO` + `native_http` test; not on the critical path (system trust store suffices). |
 
 Left to the operator after review: create the product + send-only key, approve CA trust
