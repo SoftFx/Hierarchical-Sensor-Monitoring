@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.6.2 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.7.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -106,6 +106,8 @@ add_library(hsm_collector_core STATIC
     src/network_speed.cpp                        # per-interface network speed (#1189; WindowsNetworkSampler #if _WIN32)
     src/tcp_connection_stats.cpp                 # TCP connection failure rate sampler (WindowsTcpFailureSampler #if _WIN32)
     src/windows_info.cpp                          # Windows OS-info readers (#1189 follow-up; ReadWindowsInfo #if _WIN32)
+    src/proc_metrics.cpp                         # portable /proc parsers + delta math (#1414; no OS reads)
+    src/platform/hsm_linux_metric_sources.cpp    # self-guarded #if __linux__ (#1414)
     src/platform/hsm_windows_metric_sources.cpp  # self-guarded #if _WIN32 (#1164)
 )
 
@@ -377,6 +379,17 @@ set(NATIVE_REGRESSION_TESTS
     tcp_failure_accumulator_unreadable_family_keeps_baseline
     tcp_failure_accumulator_neither_readable_returns_nullopt
     tcp_failure_accumulator_families_seed_independently
+    # Linux /proc parser + delta math (#1414). Portable: pure functions over sample text, run on
+    # every lane; the fixture values are shared with the managed ProcParsersTests.
+    proc_stat_parses_aggregate_cpu_line
+    proc_stat_excludes_guest_fields_from_total
+    proc_stat_rejects_non_aggregate_and_malformed_input
+    proc_stat_cpu_usage_computes_busy_percent_from_delta
+    proc_stat_cpu_usage_clamps_and_skips_degenerate_samples
+    proc_meminfo_prefers_mem_available
+    proc_meminfo_falls_back_when_mem_available_missing
+    proc_self_stat_parses_cpu_ticks_and_rss
+    process_cpu_usage_mirrors_managed_percent_math
 )
 
 foreach(name IN LISTS NATIVE_REGRESSION_TESTS)
@@ -409,6 +422,21 @@ if(WIN32)
     # EnableTcpConnectionFailureRateSensor is a no-op elsewhere).
     add_test(NAME native_tcp_failure_rate_sensor_registers
         COMMAND hsm_collector_tests native_tcp_failure_rate_sensor_registers
+    )
+    # #1414: the Linux factory must refuse to install off Linux instead of silently doing nothing.
+    add_test(NAME native_linux_metric_sources_rejected_off_linux
+        COMMAND hsm_collector_tests native_linux_metric_sources_rejected_off_linux
+    )
+endif()
+
+# Linux-only smoke (#1414): the real /proc + statvfs factory must drive live values for the Unix
+# default set, guarding against the registered-but-empty sensor class #1189 exposed on Windows.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_test(NAME native_linux_metric_sources_produce_live_value
+        COMMAND hsm_collector_tests native_linux_metric_sources_produce_live_value
+    )
+    add_test(NAME native_linux_process_metrics_produce_live_value
+        COMMAND hsm_collector_tests native_linux_process_metrics_produce_live_value
     )
 endif()
 
@@ -449,6 +477,7 @@ add_conformance_test(conformance_service_commands_contract service_commands_cont
 add_conformance_test(conformance_default_sensors_contract default_sensors_contract.hsmtest)
 add_conformance_test(conformance_top_cpu_contract top_cpu_contract.hsmtest)
 add_conformance_test(conformance_network_speed_contract network_speed_contract.hsmtest)
+add_conformance_test(conformance_unix_default_sensors_contract unix_default_sensors_contract.hsmtest)
 
 add_test(
     NAME native_default_sensors_wire_golden

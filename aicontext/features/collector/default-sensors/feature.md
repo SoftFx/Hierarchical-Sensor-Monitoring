@@ -1,6 +1,6 @@
 # Feature: Default Sensors
 
-> Owner: collector | Last reviewed: 2026-06-25 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-09-22 | Canonical: yes
 > Scope: Collector - built-in system, process, module, and diagnostic sensors registered via `Windows`/`Unix` collections
 
 ---
@@ -190,14 +190,69 @@ line and the golden lane overrides the managed `Description` to match.
 **Metric-source seam** (the `IPerformanceCounterFactory`/`IPerformanceCounter` equivalent):
 `hsm_collector_set_metric_source_factory` installs a C-callback factory; the native `MetricSource` RAII
 wrapper reads a sample per tick, recreates the source on a read error, and disposes it on stop. The
-production factory is a no-op.
+production default factory is a no-op; two ready-made factories ship with the library —
+`hsm_collector_install_windows_metric_sources` (PDH/Win32, #1164) and
+`hsm_collector_install_linux_metric_sources` (`/proc` + `statvfs`, #1414). Each returns
+`HSM_RESULT_INVALID_STATE` off its platform and must be installed before `Start`.
 
-**Out of scope here (live-value follow-up under #1099):** the real platform readers (Windows
-PDH/WMI/registry/EventLog; Linux `/proc/stat`, `/proc/meminfo`, `statvfs`), the per-sensor
-scheduled-tick wiring that pumps those readers, the disk fan-out over real fixed drives, and the
-free-space prediction EMA — all per-platform smoke-tested, not in the portable corpus. **Divergences:**
-the `.NET`-specific time-in-GC sensors are dropped (a native host has no managed GC); the Unix surface
-is the managed parity subset (no native systemd/journald/network extensions).
+### Native Linux metric sources (#1414)
+
+`InstallLinuxMetricSources()` binds the Unix catalog's value-typed sensors to the SAME OS truth the
+managed Unix sensor reads, running the mirrored algorithm (rule #10 — one sensor, one acquisition
+mechanism). Dispatch is on the sensor NAME (last path segment), as on Windows.
+
+| Native source | OS truth | Managed reference mirrored |
+|---|---|---|
+| `Total CPU` | `/proc/stat` aggregate line, busy% by delta | `UnixTotalCpu` + `ProcStatCpuUsage` |
+| `Free RAM memory` | `/proc/meminfo` `MemAvailable` (kB / 1024.0 → MB, double division) | `UnixFreeRamMemory` + `ProcMeminfo.ParseAvailableKb` |
+| `Free space on disk` | `statvfs("/")`, `f_bavail * f_frsize`, then two integer divides → whole MB | `UnixFreeDiskSpace` + `UnixDiskInfo` (`DriveInfo("/")` is statvfs underneath) |
+| `Process CPU` | `/proc/self/stat` `utime+stime` delta / wall delta × 100 | `UnixProcessCpu` (.NET reads the same fields) |
+| `Process memory` | `/proc/self/stat` `rss` pages × page size, integer divide → MB | `UnixProcessMemory` (`WorkingSet64`) |
+| `Process thread count` | `/proc/self/task` entry count | `UnixProcessThreadCount` (`Process.Threads`) |
+
+Pinned semantics carried over from the managed side: `idle` is the `idle` field ONLY (iowait counts as
+busy); `guest`/`guest_nice` are excluded from the total (Linux already folds them into user/nice); the
+busy fraction clamps to 0..100 and posts nothing when the interval is zero or the counters moved
+backwards (CPU-count change / reset); the free-RAM fallback is
+`MemFree + Buffers + Cached + SReclaimable - Shmem` clamped at 0; the disk and process-memory values
+truncate to whole MB exactly as the managed integer conversions do; process CPU is NOT normalized by
+core count (two saturated cores read 200%). A read failure is reported as "no value this tick" — a
+skipped bar, not a fault — mirroring the managed sensors' swallowed `IOException`; only a failed
+`statvfs` returns `ERROR` (recreate), as the Windows disk reader does.
+
+Not backed by a live source (registration-only, same as Windows): `Free space on disk prediction`
+(the seam is double-valued, the sensor is a TimeSpan) and `ThreadPool thread count` (a .NET runtime
+metric with no native equivalent). The Windows-only sensors (event logs, service status, network
+speed, top-CPU, OS info) are explicitly not ported.
+
+The parsing and delta math live in `src/proc_metrics.{hpp,cpp}` — portable, OS-read-free, and
+unit-tested on every CI lane (`proc_stat_*`, `proc_meminfo_*`, `proc_self_stat_*`,
+`process_cpu_usage_*`) using the SAME sample text and expected numbers as the managed
+`ProcParsersTests`; the `/proc` reads themselves live in `src/platform/hsm_linux_metric_sources.cpp`
+behind `#if defined(__linux__)` (the `tcp_connection_stats.hpp` precedent). Linux-only ctest smoke
+(`native_linux_metric_sources_produce_live_value`, `native_linux_process_metrics_produce_live_value`)
+asserts the sensors actually emit, guarding the registered-but-empty class #1189 exposed on Windows.
+
+### Platform-correct registration (#1414)
+
+The managed collector picks `WindowsSensorsCollection` / `UnixSensorsCollection` at runtime; the native
+collector is compiled for one OS, so the choice is made at compile time. Built for Linux:
+`add_disk_monitoring_sensors` registers the Unix pair (`Free space on disk` +
+`Free space on disk prediction`, ids `HSM_DEFAULT_UNIX_FREE_DISK_SPACE{,_PREDICTION}` — separate
+catalog rows because the managed Unix prototypes carry NO drive letter, which also changes the `{name}`
+the free-space alert template interpolates), and `add_all_computer_sensors` registers system + disk
+ONLY, mirroring `UnixSensorsCollection.AddAllComputerSensors`. The Windows OS-info, event-log and
+network-connection nodes are not in that set: they could never produce a value on Linux and would only
+plant permanently empty sensors in the server tree. Windows composition is unchanged.
+`native_default_sensor_group_composition` pins both compositions; the two Unix rows are pinned in the
+shared golden and by `unix_default_sensors_contract.hsmtest` in BOTH drivers.
+
+**Out of scope here (live-value follow-up under #1099):** the remaining platform readers (Windows
+WMI/registry/EventLog), the per-sensor scheduled-tick wiring for non-double sensors, the disk fan-out
+over real fixed drives, and the free-space prediction EMA — all per-platform smoke-tested, not in the
+portable corpus. **Divergences:** the `.NET`-specific time-in-GC sensors are dropped (a native host has
+no managed GC); the Unix surface is the managed parity subset (no native systemd/journald/network
+extensions).
 
 ## Known Issues / Limitations
 

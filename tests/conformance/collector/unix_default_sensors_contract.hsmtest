@@ -1,0 +1,66 @@
+# HSM collector conformance v1 — Unix default-sensor catalog (#1414, part of epic #1413).
+# No new verb: this fixture uses the existing `add_default_sensor|<id>` with two new stable ids,
+#   unix_free_disk_space             -> managed UnixFreeSpaceOnDiskPrototype       / HSM_DEFAULT_UNIX_FREE_DISK_SPACE
+#   unix_free_disk_space_prediction  -> managed UnixFreeSpaceOnDiskPredictionPrototype
+#                                                                                  / HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION
+# mapped in BOTH drivers (native DefaultSensorIdFromName, C# BuildDefaultSensorRequest).
+#
+# Why a separate fixture from default_sensors_contract: on a Unix host the disk sensor carries NO
+# drive letter (one root mount), so it is a distinct catalog row whose NAME also changes the {name}
+# the free-space alert template interpolates. That difference is exactly the thing a native Linux
+# port could get wrong silently, so it is pinned here in both collectors.
+#
+# Registration is asserted by SUFFIX (see default_sensors_contract's header note): the native driver
+# applies the collector's ComputerName/Module prefix while the C# driver records the prototype path.
+# Description is NOT pinned; byte-exact parity for these two rows is additionally locked by the
+# shared golden (tests/conformance/collector/golden/default_sensors_wire.golden), which the native
+# native_default_sensors_wire_golden and the managed All_default_sensor_registrations_match_the_golden
+# both reproduce.
+#
+# Both drivers run this on ANY OS: the registration payload is platform-agnostic text and the managed
+# Unix prototypes construct without touching the filesystem. The LIVE READ side (which /proc file and
+# which normalization each sensor uses) is not expressible in this protocol-level DSL; it is locked by
+# the native algorithm-contract fixtures (proc_* in the native suite), whose sample inputs and expected
+# numbers are copied verbatim from the managed ProcParsersTests — the same equivalence technique used
+# for top-CPU (conformance_top_cpu_contract + cpu_select_top_n_*).
+
+# Unix free space on disk — instant DoubleSensor, MB, EMA, IfEmaValue(<=,20480) + SensorError (Status 3).
+# The name has NO drive letter, and the alert template interpolates that same letter-less name.
+unix_free_disk_space_registers|create_collector
+unix_free_disk_space_registers|add_default_sensor|unix_free_disk_space
+unix_free_disk_space_registers|start
+unix_free_disk_space_registers|stop
+unix_free_disk_space_registers|expect_registration_count|1
+unix_free_disk_space_registers|expect_registration_contains|0|.computer/Disks monitoring/Free space on disk"
+unix_free_disk_space_registers|expect_registration_contains|0|"SensorType":2,
+unix_free_disk_space_registers|expect_registration_contains|0|"OriginalUnit":3,
+unix_free_disk_space_registers|expect_registration_contains|0|"DisplayUnit":0,
+unix_free_disk_space_registers|expect_registration_contains|0|"Statistics":1,
+unix_free_disk_space_registers|expect_registration_contains|0|"Property":210
+unix_free_disk_space_registers|expect_registration_contains|0|"Value":"20480"
+unix_free_disk_space_registers|expect_registration_contains|0|"Status":3,
+unix_free_disk_space_registers|expect_registration_contains|0|Free space on disk is running out. Current free space is
+
+# Unix free space prediction — TimeSpan, no data alert (Alerts:[] non-null empty list).
+unix_free_disk_space_prediction_registers|create_collector
+unix_free_disk_space_prediction_registers|add_default_sensor|unix_free_disk_space_prediction
+unix_free_disk_space_prediction_registers|start
+unix_free_disk_space_prediction_registers|stop
+unix_free_disk_space_prediction_registers|expect_registration_count|1
+unix_free_disk_space_prediction_registers|expect_registration_contains|0|.computer/Disks monitoring/Free space on disk prediction"
+unix_free_disk_space_prediction_registers|expect_registration_contains|0|"SensorType":7,
+unix_free_disk_space_prediction_registers|expect_registration_contains|0|"Statistics":0,
+unix_free_disk_space_prediction_registers|expect_registration_contains|0|"Alerts":[]
+
+# The Unix computer set is exactly these four sensors — the composition
+# UnixSensorsCollection.AddAllComputerSensors produces (system + disk), and the composition the
+# native add_all_computer_sensors produces when built for Linux. The Windows OS-info, event-log and
+# network-connection nodes are deliberately absent: they can never produce a value on a Unix host.
+unix_computer_set_is_system_plus_disk|create_collector
+unix_computer_set_is_system_plus_disk|add_default_sensor|total_cpu
+unix_computer_set_is_system_plus_disk|add_default_sensor|free_ram
+unix_computer_set_is_system_plus_disk|add_default_sensor|unix_free_disk_space
+unix_computer_set_is_system_plus_disk|add_default_sensor|unix_free_disk_space_prediction
+unix_computer_set_is_system_plus_disk|start
+unix_computer_set_is_system_plus_disk|stop
+unix_computer_set_is_system_plus_disk|expect_registration_count|4

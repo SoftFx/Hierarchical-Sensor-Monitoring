@@ -200,6 +200,14 @@ namespace hsm::collector
             Check(hsm_collector_install_windows_metric_sources(handle_), "Windows metric sources are only available on Windows.");
         }
 
+        /// Install the ready-made Linux /proc + statvfs metric-source factory so the Unix catalog's
+        /// value-typed default sensors report live values, mirroring the managed Unix sensors
+        /// algorithm-for-algorithm. Call BEFORE Start. Throws hsm::collector::Error off Linux.
+        void InstallLinuxMetricSources()
+        {
+            Check(hsm_collector_install_linux_metric_sources(handle_), "Linux metric sources are only available on Linux.");
+        }
+
         /// Graceful, terminal, idempotent shutdown. Safe from any thread/state.
         void Dispose()
         {

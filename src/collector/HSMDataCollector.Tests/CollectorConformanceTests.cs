@@ -1327,6 +1327,12 @@ namespace HSMDataCollector.Tests
                 case "free_ram": return new FreeRamMemoryPrototype().Get(null).ApiRequest;
                 case "free_disk_space": return new WindowsFreeSpaceOnDiskPrototype().Get(null).ApiRequest;
                 case "free_disk_space_prediction": return new WindowsFreeSpaceOnDiskPredictionPrototype().Get(null).ApiRequest;
+                // The Unix disk pair (#1414): same options as the Windows rows, but the sensor name
+                // carries no drive letter (one root mount), which also changes the {name} the
+                // free-space alert template interpolates. The prototypes construct without touching
+                // the filesystem, so they build the same request on any CI OS.
+                case "unix_free_disk_space": return new UnixFreeSpaceOnDiskPrototype().Get(null).ApiRequest;
+                case "unix_free_disk_space_prediction": return new UnixFreeSpaceOnDiskPredictionPrototype().Get(null).ApiRequest;
                 case "active_disk_time": return new WindowsActiveTimeDiskPrototype().Get(null).ApiRequest;
                 case "disk_queue_length": return new WindowsDiskQueueLengthPrototype().Get(null).ApiRequest;
                 case "disk_write_speed": return new WindowsDiskWriteSpeedPrototype().Get(null).ApiRequest;

@@ -225,6 +225,8 @@ Linux default sensors read metrics from the kernel directly — no external proc
 
 The parsing logic (`ProcStat`, `ProcMeminfo`) is split from file I/O so it is unit-tested with sample text on any OS. The old `top`/`free`/`df` bash-shelling (`BashCommandExtension`) has been removed.
 
+The **native** collector mirrors these sources algorithm-for-algorithm (repo rule #10) behind `InstallLinuxMetricSources()` (#1414) — same `/proc` files, same normalization, same rounding — with the pure math in a portable `src/proc_metrics.{hpp,cpp}` unit-tested against the SAME fixture values as `ProcParsersTests`, and the registration/options pinned in both drivers by `tests/conformance/collector/unix_default_sensors_contract.hsmtest`. These managed Unix sensors are the reference side of that equivalence and are unchanged. See [`default-sensors/feature.md`](./default-sensors/feature.md).
+
 #### Verifying the platform sensors
 
 Two complementary layers:

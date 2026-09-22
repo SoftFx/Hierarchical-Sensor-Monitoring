@@ -4,6 +4,7 @@
 #include "network_speed.hpp"                       // per-interface network speed sampling (#1189; _WIN32 only for WindowsNetworkSampler)
 #include "tcp_connection_stats.hpp"                // TCP connection failure rate sampling (_WIN32 only for WindowsTcpFailureSampler)
 #include "windows_info.hpp"                        // Windows OS-info readers (#1189 follow-up; _WIN32 only for ReadWindowsInfo)
+#include "platform/hsm_linux_metric_sources.hpp"   // Linux /proc + statvfs metric-source factory (#1414; __linux__ only)
 #include "platform/hsm_windows_metric_sources.hpp" // Windows PDH metric-source factory (#1164; _WIN32 only)
 
 #include <algorithm>
@@ -1356,6 +1357,11 @@ namespace
         { HSM_DEFAULT_ACTIVE_DISK_TIME, "Disks monitoring", "Active time on {letter} disk", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 100, true, false, 0, true, 0, false, 15000, "Disk active time.", { DefaultAlertKind::EmaScheduledWarning, HSM_ALERT_PROP_EMA_MEAN, HSM_ALERT_OP_GREATER_THAN_OR_EQUAL, "80", "[$product]$path $property $operation $target$unit" } },
         { HSM_DEFAULT_DISK_QUEUE_LENGTH, "Disks monitoring", "Disk queue length on {letter} disk", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 1011 /*Seconds*/, true, false, 0, true, 0, false, 15000, "Disk queue length.", { DefaultAlertKind::EmaScheduledWarning, HSM_ALERT_PROP_EMA_MEAN, HSM_ALERT_OP_GREATER_THAN_OR_EQUAL, "100", "[$product]$path $property $operation $target $unit" } },
         { HSM_DEFAULT_DISK_AVERAGE_WRITE_SPEED, "Disks monitoring", "Average disk write speed on {letter} disk", HSM_SENSOR_TYPE_DOUBLE_BAR, true, true, 2103 /*MBytes_sec*/, true, false, 0, true, 0, false, 15000, "Average disk write speed.", {} },
+        // ---- Unix disks (#1414). UnixFreeSpaceOnDiskPrototype / UnixFreeSpaceOnDiskPredictionPrototype:
+        // identical to the Windows rows except the name carries NO drive letter (one root mount), which
+        // also changes the {name} the free-space alert template interpolates. ----
+        { HSM_DEFAULT_UNIX_FREE_DISK_SPACE, "Disks monitoring", "Free space on disk", HSM_SENSOR_TYPE_DOUBLE, false, true, 3, true, false, 0, true, 0, false, 300000, "Free disk space.", { DefaultAlertKind::FreeDiskScheduled, HSM_ALERT_PROP_EMA_VALUE, HSM_ALERT_OP_LESS_THAN_OR_EQUAL, "20480", "[$product] {name} is running out. Current free space is $value $unit" } },
+        { HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION, "Disks monitoring", "Free space on disk prediction", HSM_SENSOR_TYPE_TIMESPAN, false, true, -1, false, false, 0, true, 0, false, 300000, "Predicted time until the disk is full.", {} },
         // ---- Windows OS info (.computer/Windows OS info/..., post 12 h) ----
         { HSM_DEFAULT_WINDOWS_LAST_RESTART, "Windows OS info", "Last restart", HSM_SENSOR_TYPE_TIMESPAN, false, true, -1, false, false, 0, true, 0, false, 43200000, "Time since the last OS restart.", {} },
         { HSM_DEFAULT_WINDOWS_INSTALL_DATE, "Windows OS info", "Install date", HSM_SENSOR_TYPE_TIMESPAN, false, true, -1, false, false, 0, true, 0, false, 43200000, "Time since the OS install date.", { DefaultAlertKind::ValueNotificationWarning, HSM_ALERT_PROP_VALUE, HSM_ALERT_OP_GREATER_THAN, "1460.00:00:00", "[$product] $sensor. Windows was installed more than $value ago" } },
@@ -5630,6 +5636,26 @@ extern "C" hsm_result_t hsm_collector_install_windows_metric_sources(hsm_collect
 #endif
 }
 
+// Install the ready-made Linux /proc + statvfs metric-source factory (#1414) so the Unix catalog's
+// value-typed default sensors (Total CPU, Free RAM, free disk space, process CPU / memory / thread
+// count) produce live values at Start. Symmetric to the Windows entry point above: call before
+// Start, and it returns HSM_RESULT_INVALID_STATE off Linux.
+extern "C" hsm_result_t hsm_collector_install_linux_metric_sources(hsm_collector_t* collector)
+{
+    if (collector == nullptr || collector->impl == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+#if defined(__linux__)
+    // Install before Start: the factory binds sources during Start. Reject on a running collector so
+    // the install can't no-op silently against already-bound sensors.
+    if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
+        return HSM_RESULT_INVALID_STATE;
+    collector->impl->SetMetricSourceFactory(&hsm::platform::LinuxMetricSourceFactory, nullptr);
+    return HSM_RESULT_OK;
+#else
+    return HSM_RESULT_INVALID_STATE;
+#endif
+}
+
 #if defined(HSM_COLLECTOR_HTTP)
 // Test seam (#1097): the native unit tests exercise the real queue -> worker -> POST path against
 // the in-proc capture server. Now an alias of the public hsm_collector_use_http_transport.
@@ -6942,10 +6968,21 @@ namespace
     constexpr hsm_default_sensor_t kSystemGroup[] = {
         HSM_DEFAULT_TOTAL_CPU, HSM_DEFAULT_FREE_RAM_MEMORY
     };
+    // The disk group is compiled per platform (#1414): each array is referenced by exactly one
+    // branch of add_disk_monitoring_sensors, so the other would be an unused-constant warning under
+    // -Werror.
+#if defined(__linux__)
+    // Managed UnixSensorsCollection.AddDiskMonitoringSensors = free space + prediction only: the
+    // remaining three are PDH LogicalDisk counters with no Unix counterpart.
+    constexpr hsm_default_sensor_t kUnixDiskGroup[] = {
+        HSM_DEFAULT_UNIX_FREE_DISK_SPACE, HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION
+    };
+#else
     constexpr hsm_default_sensor_t kDiskGroup[] = {
         HSM_DEFAULT_FREE_DISK_SPACE, HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION,
         HSM_DEFAULT_ACTIVE_DISK_TIME, HSM_DEFAULT_DISK_QUEUE_LENGTH, HSM_DEFAULT_DISK_AVERAGE_WRITE_SPEED
     };
+#endif
     // Order mirrors the managed AddWindowsInfoMonitoringSensors: install/last-update/last-restart/
     // version, then AddAllWindowsLogs (app-error, sys-error, app-warning, sys-warning). The 4 log
     // sensors MUST be here — dropping them would make add_all_default_sensors register fewer sensors
@@ -6990,10 +7027,18 @@ hsm_result_t hsm_collector_add_system_monitoring_sensors(hsm_collector_t* collec
 
 hsm_result_t hsm_collector_add_disk_monitoring_sensors(hsm_collector_t* collector)
 {
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+#if defined(__linux__)
+    // Unix hosts report one root mount, so the managed UnixSensorsCollection registers the
+    // letter-less pair and none of the PDH-only LogicalDisk counters (#1414).
+    return AddGroup(collector, kUnixDiskGroup);
+#else
     // Registers the single default disk ("C"), not the managed per-drive fan-out — live
     // DriveInfo.GetDrives() enumeration is the #1099 live-value follow-up. So add_all_default_sensors
     // currently registers only the C-drive disk sensors.
-    return collector != nullptr ? AddGroup(collector, kDiskGroup) : HSM_RESULT_INVALID_ARGUMENT;
+    return AddGroup(collector, kDiskGroup);
+#endif
 }
 
 hsm_result_t hsm_collector_add_windows_info_monitoring_sensors(hsm_collector_t* collector)
@@ -7112,10 +7157,16 @@ hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector)
     hsm_result_t result = hsm_collector_add_system_monitoring_sensors(collector);
     if (result == HSM_RESULT_OK)
         result = hsm_collector_add_disk_monitoring_sensors(collector);
+#if !defined(__linux__)
+    // Managed UnixSensorsCollection.AddAllComputerSensors is system + disk only. The Windows OS
+    // info, event-log and network-connection nodes are PDH/registry/EventLog-sourced: on Linux they
+    // could never produce a value, so registering them would only plant permanently empty sensors in
+    // the server tree (#1414). Windows behavior is unchanged.
     if (result == HSM_RESULT_OK)
         result = hsm_collector_add_windows_info_monitoring_sensors(collector);
     if (result == HSM_RESULT_OK)
         result = hsm_collector_add_all_network_sensors(collector);
+#endif
 #ifdef _WIN32
     // Best-effort: top-CPU and network speed require pre-Start setup; ignore errors when called
     // after Start (e.g. from a test that starts first, then adds sensors).

@@ -29,6 +29,11 @@ namespace hsm::collector
         DiskQueueLength = HSM_DEFAULT_DISK_QUEUE_LENGTH,
         DiskAverageWriteSpeed = HSM_DEFAULT_DISK_AVERAGE_WRITE_SPEED,
 
+        /// The Unix disk pair (#1414): the managed Unix prototypes name the sensor without a drive
+        /// letter (a Unix host reports one root mount), so these are distinct catalog rows.
+        UnixFreeDiskSpace = HSM_DEFAULT_UNIX_FREE_DISK_SPACE,
+        UnixFreeDiskSpacePrediction = HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION,
+
         WindowsLastRestart = HSM_DEFAULT_WINDOWS_LAST_RESTART,
         WindowsInstallDate = HSM_DEFAULT_WINDOWS_INSTALL_DATE,
         WindowsLastUpdate = HSM_DEFAULT_WINDOWS_LAST_UPDATE,

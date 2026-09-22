@@ -3,6 +3,7 @@
 #include "../src/cpu_top.hpp"
 #include "../src/hsm_http_endpoints.hpp"
 #include "../src/hsm_http_retry.hpp"
+#include "../src/proc_metrics.hpp"
 #include "../src/tcp_connection_stats.hpp"
 #include <iostream>
 #include <fstream>
@@ -636,6 +637,8 @@ namespace
             { "free_ram", HSM_DEFAULT_FREE_RAM_MEMORY },
             { "free_disk_space", HSM_DEFAULT_FREE_DISK_SPACE },
             { "free_disk_space_prediction", HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION },
+            { "unix_free_disk_space", HSM_DEFAULT_UNIX_FREE_DISK_SPACE },
+            { "unix_free_disk_space_prediction", HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION },
             { "active_disk_time", HSM_DEFAULT_ACTIVE_DISK_TIME },
             { "disk_queue_length", HSM_DEFAULT_DISK_QUEUE_LENGTH },
             { "disk_write_speed", HSM_DEFAULT_DISK_AVERAGE_WRITE_SPEED },
@@ -3289,6 +3292,16 @@ namespace
         hsm_sensor_release(sensor);
     }
 
+    // #1414: the Linux factory is not available on Windows and must say so rather than silently
+    // installing nothing (the symmetric counterpart of the Linux-side assertion below).
+    void NativeLinuxMetricSourcesRejectedOffLinux()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_linux_metric_sources(collector.value) == HSM_RESULT_INVALID_STATE,
+            "installing Linux metric sources off Linux must return INVALID_STATE");
+    }
+
     // #1189 follow-up guard against registered-but-empty host sensors. The "Windows OS info" sensors
     // were registered (so registration conformance stayed green) yet never produced values, because
     // the periodic value path is double-only while they are TimeSpan/Version. They are now driven by
@@ -3395,6 +3408,103 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
     }
 #endif
+
+#if defined(__linux__)
+    // #1414 Linux smoke: the real /proc + statvfs factory drives live values for the whole Unix
+    // computer set. Uses real time. Total CPU is a DoubleBar aggregating 5 s samples into a 15 s post
+    // window, so the first bar lands ~one window in; free disk space is an instant Double posted at
+    // its own period. The guard this test exists for is the one #1189 exposed on Windows — a sensor
+    // that registers but never produces a value.
+    void NativeLinuxMetricSourcesProduceLiveValue()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_linux_metric_sources(collector.value) == HSM_RESULT_OK,
+            "installing Linux metric sources should succeed on Linux");
+
+        hsm_sensor_t* cpu = nullptr;
+        hsm_sensor_t* ram = nullptr;
+        hsm_sensor_t* disk = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_TOTAL_CPU, nullptr, &cpu) == HSM_RESULT_OK,
+            "add Total CPU default sensor failed");
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_FREE_RAM_MEMORY, nullptr, &ram) == HSM_RESULT_OK,
+            "add Free RAM default sensor failed");
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_UNIX_FREE_DISK_SPACE, nullptr, &disk) == HSM_RESULT_OK,
+            "add Unix free-disk-space default sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // The free-disk sensor is an instant Double and posts on its first tick; the two bars need a
+        // full post window. Poll generously so a slow runner does not flake.
+        Require(
+            WaitForSentCountAtLeast(collector.value, 3, 40000),
+            "the Linux /proc factory should drive live posts for CPU, RAM and free disk space");
+
+        bool saw_cpu_bar = false;
+        bool saw_ram_bar = false;
+        bool saw_disk_value = false;
+        const auto count = hsm_collector_sent_count(collector.value);
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            const auto payload = SentJson(collector.value, i);
+            if (payload.find("/Total CPU\"") != std::string::npos)
+            {
+                Contains(payload, "\"Type\":5"); // DoubleBar
+                saw_cpu_bar = true;
+            }
+            else if (payload.find("/Free RAM memory\"") != std::string::npos)
+            {
+                Contains(payload, "\"Type\":5");
+                saw_ram_bar = true;
+            }
+            else if (payload.find("/Free space on disk\"") != std::string::npos)
+            {
+                Contains(payload, "\"Type\":2"); // Double
+                saw_disk_value = true;
+            }
+        }
+
+        Require(saw_cpu_bar, "Total CPU must produce a live bar from /proc/stat");
+        Require(saw_ram_bar, "Free RAM memory must produce a live bar from /proc/meminfo");
+        Require(saw_disk_value, "Free space on disk must produce a live value from statvfs");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(cpu);
+        hsm_sensor_release(ram);
+        hsm_sensor_release(disk);
+    }
+
+    // #1414: the process sensors bind to THIS process's /proc/self files and emit real bars.
+    void NativeLinuxProcessMetricsProduceLiveValue()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_linux_metric_sources(collector.value) == HSM_RESULT_OK,
+            "installing Linux metric sources should succeed on Linux");
+
+        hsm_sensor_t* threads = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_PROCESS_THREAD_COUNT, nullptr, &threads) == HSM_RESULT_OK,
+            "add Process thread count default sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(
+            WaitForSentCountAtLeast(collector.value, 1, 40000),
+            "the /proc/self/task reader should drive a live thread-count post");
+
+        const auto payload = SentJson(collector.value, 0);
+        Contains(payload, "\"Type\":5"); // DoubleBar
+        // A running collector always has at least its own threads alive, so the count is positive —
+        // guarding against a reader that "succeeds" with 0.
+        Require(payload.find("\"Min\":0,") == std::string::npos, "the live thread count must be positive");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(threads);
+    }
+#endif // __linux__
 
     // Service alive heartbeat must emit a VALUE, not sit registered-but-empty (#1198 follow-up).
     // Cross-platform: the heartbeat is OS-independent. add_all_module_sensors wires both the
@@ -3875,7 +3985,8 @@ namespace
     // map). The all-catalog golden is keyed by name so both drivers map identically.
     const char* const kAllDefaultSensorNames[] = {
         "process_cpu", "process_memory", "process_thread_count", "process_threadpool_thread_count",
-        "total_cpu", "free_ram", "free_disk_space", "free_disk_space_prediction", "active_disk_time",
+        "total_cpu", "free_ram", "free_disk_space", "free_disk_space_prediction",
+        "unix_free_disk_space", "unix_free_disk_space_prediction", "active_disk_time",
         "disk_queue_length", "disk_write_speed", "windows_last_restart", "windows_install_date",
         "windows_last_update", "windows_version", "windows_app_error_logs", "windows_sys_error_logs",
         "windows_app_warning_logs", "windows_sys_warning_logs", "network_established", "network_failures",
@@ -4046,18 +4157,29 @@ namespace
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_windows_info_monitoring_sensors(c); }) == 8,
                 "windows-info group registers 8 (incl. 4 event-log sensors)");
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_system_monitoring_sensors(c); }) == 2, "system group = 2");
-        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_disk_monitoring_sensors(c); }) == 5, "disk group = 5 (single C)");
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_network_sensors(c); }) == 3, "network group = 3");
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_process_monitoring_sensors(c); }) == 4, "process group = 4");
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_collector_monitoring_sensors(c); }) == 3, "collector group = 3");
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_queue_diagnostic_sensors(c); }) == 4, "queue group = 4");
 
+#if defined(__linux__)
+        // #1414 platform-correct composition, mirroring UnixSensorsCollection: the disk group is the
+        // letter-less free-space pair, and all-computer is system + disk ONLY — no Windows OS-info,
+        // event-log or network-connection nodes, which could never produce a value here.
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_disk_monitoring_sensors(c); }) == 2, "unix disk group = 2");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_computer_sensors(c); }) == 4, "linux all-computer = system(2) + disk(2)");
+        // default = computer(4) + module[process(4)+collector(3)+queue(4)] (11) + product version (1) = 16.
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_default_sensors(c, "1.0.0"); }) == 16, "linux all-default with product version = 16");
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_default_sensors(c, nullptr); }) == 15, "linux all-default without product version = 15");
+#else
+        Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_disk_monitoring_sensors(c); }) == 5, "disk group = 5 (single C)");
         // computer = system(2) + disk(5) + windows-info(8) + network(3) = 18 eager;
         // top-CPU sensors enabled by default but register lazily (first sample ~60 s).
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_computer_sensors(c); }) == 18, "all-computer = 18");
         // default = computer(18) + module[process(4)+collector(3)+queue(4)] (11) + product version (1) = 30.
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_default_sensors(c, "1.0.0"); }) == 30, "all-default with product version = 30");
         Require(countAfter([](hsm_collector_t* c) { hsm_collector_add_all_default_sensors(c, nullptr); }) == 29, "all-default without product version = 29");
+#endif
     }
 
     // The module-sensor group emits an initial value for BOTH version sensors on Start (mirrors managed
@@ -5144,6 +5266,182 @@ namespace
                         "v6 posts its delta from its own late baseline (504 - 500)");
     }
 
+    // ---- Linux /proc parsers (#1414) ------------------------------------------------------------
+    // Algorithm-equivalence fixtures for the Linux metric sources. Rule #10 requires the native and
+    // managed sensors to read the same OS truth AND run a mirrored algorithm; the SAMPLE TEXT AND
+    // EXPECTED NUMBERS below are copied verbatim from the managed reference suite
+    // (src/collector/HSMDataCollector.Tests/ProcParsersTests.cs), so the two implementations are
+    // asserted against the same fixture values. A divergence in either collector turns one of these
+    // red. Portable: pure functions over sample text, so they run on every CI lane, not only Linux.
+
+    void RequireProcDouble(const std::optional<double>& actual, double expected, const char* message)
+    {
+        Require(actual.has_value(), message);
+        Require(std::fabs(actual.value() - expected) < 1e-9, message);
+    }
+
+    // ProcParsersTests.ProcStat_parses_aggregate_cpu_line: idle is the idle field ONLY (iowait counts
+    // as busy); total sums every field. Per-core "cpu0" lines must not disturb the aggregate.
+    void ProcStatParsesAggregateCpuLine()
+    {
+        const auto times = hsm::collector::ParseProcStatCpuTimes(
+            "cpu  100 0 50 1000 20 0 5 0 0 0\ncpu0 50 0 25 500 10 0 2 0 0 0\n");
+        Require(times.has_value(), "aggregate cpu line must parse");
+        Require(times->idle == 1000.0, "idle must be the idle field only (iowait stays busy)");
+        Require(times->total == 1175.0, "total must be 100+0+50+1000+20+0+5 = 1175");
+    }
+
+    // ProcParsersTests.ProcStat_excludes_guest_fields_from_total: Linux folds guest into user and
+    // guest_nice into nice, so counting them again would inflate the total.
+    void ProcStatExcludesGuestFieldsFromTotal()
+    {
+        const auto times = hsm::collector::ParseProcStatCpuTimes("cpu  100 20 50 1000 20 0 5 0 30 10\n");
+        Require(times.has_value(), "guest-carrying cpu line must parse");
+        Require(times->idle == 1000.0, "idle unchanged by the guest fields");
+        Require(times->total == 1195.0, "guest(30)/guest_nice(10) must be excluded -> 1195");
+    }
+
+    // ProcParsersTests.ProcStat_handles_crlf + ProcStat_ignores_per_core_lines_and_requires_aggregate_first
+    // + ProcStat_returns_null_for_unparseable_input.
+    void ProcStatRejectsNonAggregateAndMalformedInput()
+    {
+        const auto crlf = hsm::collector::ParseProcStatCpuTimes("cpu  100 0 50 1000 20 0 5 0 0 0\r\n");
+        Require(crlf.has_value() && crlf->idle == 1000.0 && crlf->total == 1175.0, "CRLF input must parse identically");
+
+        Require(!hsm::collector::ParseProcStatCpuTimes("cpu0 50 0 25 500 10 0 2 0 0 0\ncpu  100 0 50 1000 20 0 5 0 0 0\n").has_value(),
+                "a leading per-core line must not be read as the aggregate");
+        Require(!hsm::collector::ParseProcStatCpuTimes("").has_value(), "empty content -> no value");
+        Require(!hsm::collector::ParseProcStatCpuTimes("garbage line\n").has_value(), "non-cpu line -> no value");
+        Require(!hsm::collector::ParseProcStatCpuTimes("cpu  100 abc 50 1000\n").has_value(), "non-numeric field -> no value");
+    }
+
+    // ProcParsersTests.CpuUsage_first_sample_after_baseline_computes_busy_percent / _full_load_ /
+    // _idle_reads_zero_percent: the normal delta path.
+    void ProcStatCpuUsageComputesBusyPercentFromDelta()
+    {
+        hsm::collector::ProcStatCpuUsage half("cpu 100 0 0 900 0 0 0 0 0 0\n");
+        // total +100, idle +50 -> 50% busy.
+        RequireProcDouble(half.NextBusyPercent("cpu 150 0 0 950 0 0 0 0 0 0\n"), 50.0, "50% busy from a half-idle delta");
+
+        hsm::collector::ProcStatCpuUsage full("cpu 100 0 0 900 0 0 0 0 0 0\n");
+        RequireProcDouble(full.NextBusyPercent("cpu 200 0 0 900 0 0 0 0 0 0\n"), 100.0, "idle flat -> 100% busy");
+
+        hsm::collector::ProcStatCpuUsage idle("cpu 100 0 0 900 0 0 0 0 0 0\n");
+        RequireProcDouble(idle.NextBusyPercent("cpu 100 0 0 1000 0 0 0 0 0 0\n"), 0.0, "all-idle delta -> 0% busy");
+
+        // ProcParsersTests.CpuUsage_counts_iowait_as_busy.
+        hsm::collector::ProcStatCpuUsage iowait("cpu 0 0 0 1000 0 0 0 0 0 0\n");
+        RequireProcDouble(iowait.NextBusyPercent("cpu 0 0 0 1000 100 0 0 0 0 0\n"), 100.0, "iowait counts as busy");
+    }
+
+    // ProcParsersTests.CpuUsage_clamps_lower_bound_to_zero: a CPU going offline can make the idle
+    // delta exceed the total delta; the raw busy% is then negative and must clamp to 0 rather than
+    // post a nonsensical value.
+    void ProcStatCpuUsageClampsAndSkipsDegenerateSamples()
+    {
+        hsm::collector::ProcStatCpuUsage clamp("cpu 100 0 0 1000 0 0 0 0 0 0\n");
+        RequireProcDouble(clamp.NextBusyPercent("cpu 0 0 0 1120 0 0 0 0 0 0\n"), 0.0,
+                          "idleDelta > totalDelta (CPU-count change) must clamp to 0, not go negative");
+
+        // ProcParsersTests.CpuUsage_returns_null_on_counter_reset_negative_delta.
+        hsm::collector::ProcStatCpuUsage reset("cpu 500 0 0 1000 0 0 0 0 0 0\n");
+        Require(!reset.NextBusyPercent("cpu 10 0 0 100 0 0 0 0 0 0\n").has_value(),
+                "a counter reset (totals moved backwards) must post nothing");
+
+        // ProcParsersTests.CpuUsage_returns_null_when_no_time_elapsed.
+        hsm::collector::ProcStatCpuUsage flat("cpu 100 0 0 900 0 0 0 0 0 0\n");
+        Require(!flat.NextBusyPercent("cpu 100 0 0 900 0 0 0 0 0 0\n").has_value(),
+                "an identical sample (zero elapsed interval) must post nothing");
+
+        // ProcParsersTests.CpuUsage_returns_null_when_current_sample_unparseable.
+        hsm::collector::ProcStatCpuUsage broken("cpu 100 0 0 900 0 0 0 0 0 0\n");
+        Require(!broken.NextBusyPercent("garbage").has_value(), "an unparseable sample must post nothing");
+
+        // An unparseable BASELINE leaves the sampler without a baseline: the next good sample only
+        // seeds it (UnixTotalCpu's constructor swallows an unreadable /proc/stat the same way).
+        hsm::collector::ProcStatCpuUsage unseeded("");
+        Require(!unseeded.NextBusyPercent("cpu 100 0 0 900 0 0 0 0 0 0\n").has_value(),
+                "without a baseline the first good sample only seeds");
+        RequireProcDouble(unseeded.NextBusyPercent("cpu 200 0 0 900 0 0 0 0 0 0\n"), 100.0,
+                          "the sample after the late seed posts normally");
+    }
+
+    // ProcParsersTests.ProcMeminfo_parses_mem_available_kb / _handles_crlf_and_extra_spacing.
+    void ProcMeminfoPrefersMemAvailable()
+    {
+        const auto available = hsm::collector::ParseMeminfoAvailableKb(
+            "MemTotal:       16384000 kB\n"
+            "MemFree:         1000000 kB\n"
+            "MemAvailable:    8192000 kB\n"
+            "Buffers:          200000 kB\n");
+        Require(available.has_value() && available.value() == 8192000, "MemAvailable must win over the estimate");
+
+        const auto crlf = hsm::collector::ParseMeminfoAvailableKb("MemTotal:  16384000 kB\r\nMemAvailable:     500 kB\r\n");
+        Require(crlf.has_value() && crlf.value() == 500, "CRLF + extra spacing must parse");
+    }
+
+    // ProcParsersTests.ProcMeminfo_estimates_available_when_mem_available_is_absent /
+    // _estimate_is_never_negative / _returns_null_when_unparseable_or_no_available_fields.
+    void ProcMeminfoFallsBackWhenMemAvailableMissing()
+    {
+        const auto estimate = hsm::collector::ParseMeminfoAvailableKb(
+            "MemTotal:       16384000 kB\n"
+            "MemFree:         1000000 kB\n"
+            "Buffers:          200000 kB\n"
+            "Cached:          3000000 kB\n"
+            "SReclaimable:     400000 kB\n"
+            "Shmem:            100000 kB\n");
+        Require(estimate.has_value() && estimate.value() == 4500000,
+                "free+buffers+cached+sreclaimable-shmem must be the fallback");
+
+        const auto clamped = hsm::collector::ParseMeminfoAvailableKb("MemFree: 10 kB\nShmem:   20 kB\n");
+        Require(clamped.has_value() && clamped.value() == 0, "the estimate must never go negative");
+
+        Require(!hsm::collector::ParseMeminfoAvailableKb("").has_value(), "empty meminfo -> no value");
+        Require(!hsm::collector::ParseMeminfoAvailableKb("MemAvailable:    notanumber kB\n").has_value(),
+                "an unparseable MemAvailable with no fallback fields -> no value");
+        Require(!hsm::collector::ParseMeminfoAvailableKb("MemTotal: 16384000 kB\n").has_value(),
+                "MemTotal alone is not an availability signal -> no value");
+    }
+
+    // /proc/<pid>/stat is what .NET's Process reads on Linux for TotalProcessorTime and WorkingSet64.
+    // The comm field is parenthesized and may contain spaces AND parentheses, so field splitting must
+    // start after the LAST ')' — a naive split would shift every field and silently mis-report.
+    void ProcSelfStatParsesCpuTicksAndRss()
+    {
+        // pid=42, comm="(weird name)", then fields 3..24 with utime=111, stime=222, rss=333 pages.
+        const std::string sample =
+            "42 ((weird name)) S 1 42 42 0 -1 4194304 900 0 0 0 111 222 0 0 20 0 8 0 12345 999424 333 "
+            "18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 17 2 0 0 0 0 0\n";
+
+        const auto stat = hsm::collector::ParseProcSelfStat(sample);
+        Require(stat.has_value(), "a well-formed /proc/self/stat line must parse");
+        Require(stat->utime_ticks == 111, "utime must come from field 14");
+        Require(stat->stime_ticks == 222, "stime must come from field 15");
+        Require(stat->rss_pages == 333, "rss must come from field 24");
+
+        Require(!hsm::collector::ParseProcSelfStat("").has_value(), "empty stat -> no value");
+        Require(!hsm::collector::ParseProcSelfStat("42 (proc) S 1 2 3\n").has_value(), "a truncated stat line -> no value");
+        Require(!hsm::collector::ParseProcSelfStat("42 no-parenthesis S 1 2 3\n").has_value(), "a malformed stat line -> no value");
+    }
+
+    // UnixProcessCpu: (cpuUsedMs / wallMs) * 100, NOT divided by core count and NOT clamped.
+    void ProcessCpuUsageMirrorsManagedPercentMath()
+    {
+        hsm::collector::ProcessCpuUsage usage(100.0); // 100 clock ticks per second (the usual _SC_CLK_TCK)
+
+        Require(!usage.NextCpuPercent(0, 1000).has_value(), "the first sample only seeds the baseline");
+
+        // +50 ticks = 500 ms of CPU over a 1000 ms wall interval -> 50%.
+        RequireProcDouble(usage.NextCpuPercent(50, 2000), 50.0, "half a core over the interval reads 50%");
+
+        // +200 ticks = 2000 ms of CPU over a 1000 ms wall interval -> 200% (two saturated cores).
+        RequireProcDouble(usage.NextCpuPercent(250, 3000), 200.0, "two saturated cores read 200%, not 100%");
+
+        // A zero-length interval would divide by zero: post nothing instead.
+        Require(!usage.NextCpuPercent(300, 3000).has_value(), "a zero elapsed interval must post nothing");
+    }
+
     // A user/agent can raise the built-in Total CPU sensor to Error (on top of its default Warning) by
     // attaching an extra EmaMean > threshold alert before Start — WITHOUT touching the shared default
     // catalog. add_default_sensor is idempotent by path, AttachAlert rebuilds the registration in place,
@@ -5221,6 +5519,14 @@ namespace
               [](const std::string&) { NativeServiceStatusSensorEmitsRunningForCriticalService(); } },
             { "native_service_status_sensor_reports_missing_service",
               [](const std::string&) { NativeServiceStatusSensorReportsMissingService(); } },
+            { "native_linux_metric_sources_rejected_off_linux",
+              [](const std::string&) { NativeLinuxMetricSourcesRejectedOffLinux(); } },
+#endif
+#if defined(__linux__)
+            { "native_linux_metric_sources_produce_live_value",
+              [](const std::string&) { NativeLinuxMetricSourcesProduceLiveValue(); } },
+            { "native_linux_process_metrics_produce_live_value",
+              [](const std::string&) { NativeLinuxProcessMetricsProduceLiveValue(); } },
 #endif
             { "native_collector_self_monitoring_emits",
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
@@ -5240,6 +5546,15 @@ namespace
             { "tcp_failure_accumulator_unreadable_family_keeps_baseline", [](const std::string&) { TcpFailureAccumulatorUnreadableFamilyKeepsBaseline(); } },
             { "tcp_failure_accumulator_neither_readable_returns_nullopt", [](const std::string&) { TcpFailureAccumulatorNeitherReadableReturnsNullopt(); } },
             { "tcp_failure_accumulator_families_seed_independently", [](const std::string&) { TcpFailureAccumulatorFamiliesSeedIndependently(); } },
+            { "proc_stat_parses_aggregate_cpu_line", [](const std::string&) { ProcStatParsesAggregateCpuLine(); } },
+            { "proc_stat_excludes_guest_fields_from_total", [](const std::string&) { ProcStatExcludesGuestFieldsFromTotal(); } },
+            { "proc_stat_rejects_non_aggregate_and_malformed_input", [](const std::string&) { ProcStatRejectsNonAggregateAndMalformedInput(); } },
+            { "proc_stat_cpu_usage_computes_busy_percent_from_delta", [](const std::string&) { ProcStatCpuUsageComputesBusyPercentFromDelta(); } },
+            { "proc_stat_cpu_usage_clamps_and_skips_degenerate_samples", [](const std::string&) { ProcStatCpuUsageClampsAndSkipsDegenerateSamples(); } },
+            { "proc_meminfo_prefers_mem_available", [](const std::string&) { ProcMeminfoPrefersMemAvailable(); } },
+            { "proc_meminfo_falls_back_when_mem_available_missing", [](const std::string&) { ProcMeminfoFallsBackWhenMemAvailableMissing(); } },
+            { "proc_self_stat_parses_cpu_ticks_and_rss", [](const std::string&) { ProcSelfStatParsesCpuTicksAndRss(); } },
+            { "process_cpu_usage_mirrors_managed_percent_math", [](const std::string&) { ProcessCpuUsageMirrorsManagedPercentMath(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
             { "native_alert_scheduled_notification_matches_net", [](const std::string&) { NativeAlertScheduledNotificationMatchesNet(); } },
             { "native_prototype_merge_pins_identity_overrides_metadata", [](const std::string&) { NativePrototypeMergePinsIdentityOverridesMetadata(); } },
@@ -5332,6 +5647,7 @@ namespace
             { "conformance_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_top_cpu_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_network_speed_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_unix_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };

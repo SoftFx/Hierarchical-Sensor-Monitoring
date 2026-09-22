@@ -17,8 +17,8 @@ extern "C"
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 6
-#define HSM_COLLECTOR_VERSION_PATCH 2
+#define HSM_COLLECTOR_VERSION_MINOR 7
+#define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -283,6 +283,15 @@ hsm_result_t hsm_collector_use_http_transport(hsm_collector_t* collector);
    hsm_collector_set_metric_source_factory; a custom factory may be installed instead. */
 hsm_result_t hsm_collector_install_windows_metric_sources(hsm_collector_t* collector);
 
+/* Install the ready-made Linux /proc + statvfs metric-source factory (#1414): the value-typed
+   default sensors of the Unix catalog (Total CPU, Free RAM, free disk space, process CPU / memory /
+   thread count) read live values each post period. Every source reads the SAME OS truth the managed
+   Unix sensor reads and runs the mirrored normalization (repo rule #10), so the two collectors
+   cannot drift. Call BEFORE Start. Returns HSM_RESULT_OK on Linux, or HSM_RESULT_INVALID_STATE on
+   other platforms. Equivalent to installing the Linux factory through
+   hsm_collector_set_metric_source_factory; a custom factory may be installed instead. */
+hsm_result_t hsm_collector_install_linux_metric_sources(hsm_collector_t* collector);
+
 /* Lifecycle observer (portable ILifecycleListener equivalent). The callback
    fires on the thread driving the transition, under the lifecycle lock, AFTER
    the status changes; only transitions after registration are delivered (no
@@ -428,6 +437,12 @@ typedef enum hsm_default_sensor_t HSM_ENUM_INT32
     HSM_DEFAULT_ACTIVE_DISK_TIME = 22,
     HSM_DEFAULT_DISK_QUEUE_LENGTH = 23,
     HSM_DEFAULT_DISK_AVERAGE_WRITE_SPEED = 24,
+    /* Unix disk pair (#1414). The managed Unix prototypes name the sensor WITHOUT a drive letter
+       ("Free space on disk"), because a Unix host reports one root mount — so these are separate
+       catalog rows, not the {letter} rows with an empty substitution. Registered by
+       add_disk_monitoring_sensors when the collector is BUILT for Linux. */
+    HSM_DEFAULT_UNIX_FREE_DISK_SPACE = 25,
+    HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION = 26,
     /* Windows OS info (.computer/Windows OS info/..., 12 h). */
     HSM_DEFAULT_WINDOWS_LAST_RESTART = 30,
     HSM_DEFAULT_WINDOWS_INSTALL_DATE = 31,
@@ -490,10 +505,22 @@ hsm_result_t hsm_collector_add_default_sensor(
     const hsm_default_sensor_params_t* params,
     hsm_sensor_t** out_sensor);
 
-/* Group helpers mirroring the managed AddAll* surface. The Windows-only categories (disk /
-   windows-info / network) are registered by add_all_computer_sensors on every platform here
-   because the registration payload is platform-agnostic text; the live readers gate per OS.
-   product_version may be NULL to skip the product-version sensor. */
+/* Group helpers mirroring the managed AddAll* surface; product_version may be NULL to skip the
+   product-version sensor.
+
+   PLATFORM-CORRECT COMPOSITION (#1414). The managed collector picks WindowsSensorsCollection or
+   UnixSensorsCollection at runtime; the native collector is compiled for one OS, so the choice is
+   made at compile time:
+   - On Linux, add_disk_monitoring_sensors registers the Unix pair (free space + prediction, no
+     drive letter) and add_all_computer_sensors registers system + disk only — mirroring
+     UnixSensorsCollection.AddAllComputerSensors. The Windows-only info / event-log / network nodes
+     are NOT registered there: they could never produce a value on Linux and would only add
+     permanently empty sensors to the server tree.
+   - Everywhere else the composition is unchanged: the five Windows disk sensors, plus
+     windows-info and network in add_all_computer_sensors.
+   add_windows_info_monitoring_sensors / add_all_network_sensors stay callable on any platform (the
+   registration payload is platform-agnostic text) — they are simply not part of the Linux
+   all-computer set. */
 hsm_result_t hsm_collector_add_all_default_sensors(hsm_collector_t* collector, const char* product_version);
 hsm_result_t hsm_collector_add_all_computer_sensors(hsm_collector_t* collector);
 hsm_result_t hsm_collector_add_all_module_sensors(hsm_collector_t* collector, const char* product_version);

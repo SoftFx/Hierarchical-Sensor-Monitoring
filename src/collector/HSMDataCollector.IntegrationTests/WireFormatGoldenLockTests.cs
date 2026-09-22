@@ -277,7 +277,7 @@ namespace HSMDataCollector.IntegrationTests
         public void All_default_sensor_registrations_match_the_golden()
         {
             var golden = ReadDefaultSensorGolden();
-            Assert.Equal(31, golden.Count);
+            Assert.Equal(33, golden.Count);
 
             foreach (var entry in golden)
             {
@@ -337,6 +337,10 @@ namespace HSMDataCollector.IntegrationTests
                 case "free_ram": return new FreeRamMemoryPrototype().Get(null).ApiRequest;
                 case "free_disk_space": return new WindowsFreeSpaceOnDiskPrototype().Get(null).ApiRequest;
                 case "free_disk_space_prediction": return new WindowsFreeSpaceOnDiskPredictionPrototype().Get(null).ApiRequest;
+                // The Unix disk pair (#1414) — identical options, letter-less name (one root mount),
+                // which also changes the {name} the free-space alert template interpolates.
+                case "unix_free_disk_space": return new UnixFreeSpaceOnDiskPrototype().Get(null).ApiRequest;
+                case "unix_free_disk_space_prediction": return new UnixFreeSpaceOnDiskPredictionPrototype().Get(null).ApiRequest;
                 case "active_disk_time": return new WindowsActiveTimeDiskPrototype().Get(null).ApiRequest;
                 case "disk_queue_length": return new WindowsDiskQueueLengthPrototype().Get(null).ApiRequest;
                 case "disk_write_speed": return new WindowsDiskWriteSpeedPrototype().Get(null).ApiRequest;
