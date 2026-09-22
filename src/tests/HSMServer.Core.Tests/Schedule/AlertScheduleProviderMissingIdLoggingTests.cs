@@ -19,9 +19,16 @@ namespace HSMServer.Core.Tests.Schedule
     // sweep, so one deleted schedule over a sensor park amplified into an
     // ERROR line per policy per sweep. The missing-id report must fire once
     // per id per process, and a re-saved schedule must re-arm it.
-    // Pinned into the serialized DB collection because the class swaps the
-    // process-global NLog configuration for its lifetime; without the pin it
-    // would run in parallel with other collections' logging.
+    //
+    // The class swaps the process-global NLog configuration for its lifetime.
+    // Pinned into this collection because xUnit serializes tests WITHIN a
+    // collection (it does NOT stop other collections running in parallel):
+    // the pin confines the swap's blast radius to collections other than
+    // "Database collection". The real mitigations are the Guid-filtered
+    // assertions (foreign lines landing in the MemoryTarget cannot flake
+    // them) and the config restore in Dispose. Residual, accepted: while
+    // this class runs, tests in parallel collections emit their log lines
+    // into this MemoryTarget instead of their intended targets.
     [Collection("Database collection")]
     public sealed class AlertScheduleProviderMissingIdLoggingTests : IDisposable
     {

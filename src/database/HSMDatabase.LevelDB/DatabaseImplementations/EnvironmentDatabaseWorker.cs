@@ -750,6 +750,15 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        // Row overwrite for an EXISTING template whose storage failure must
+        // be observable by the caller — unlike AddAlertTemplate above, which
+        // logs and swallows. The #1409 schedule detach persists templates
+        // through this member: a silently dropped write would leave the
+        // stored entity with a dangling schedule id while memory moves on,
+        // and the id would resurrect after a restart.
+        public void WriteAlertTemplate(AlertTemplateEntity entity) =>
+            _database.Put(entity.Id, JsonSerializer.SerializeToUtf8Bytes(entity, _options));
+
         public void RemoveAlertTemplate(byte[] id)
         {
             try

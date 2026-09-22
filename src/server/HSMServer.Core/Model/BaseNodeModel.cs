@@ -133,10 +133,43 @@ namespace HSMServer.Core.Model
                         if (!updateIds.Contains(existing.Id.ToString()))
                             ChangeTable.TtlPolicies[existing.Id.ToString()].SetUpdate(update.Initiator);
 
+                    // Rendered content of the TTL policies BEFORE the update —
+                    // the discriminator telling "this update mutated the policy"
+                    // from "the full list re-asserted it verbatim". Stamping
+                    // unconditionally handed every full-list update ownership
+                    // of EVERY targeted policy: a schedule detach (#1409) turned
+                    // a hand-edited User-owned policy into a System-owned one,
+                    // and the next template apply (0 <= 15 passes CanChange)
+                    // silently overwrote the operator's interval. Policy.ToString()
+                    // does not render ScheduleId, so a detach — whose only change
+                    // is the unrendered id — is the same no-op shape the change
+                    // journal already recognizes and leaves the owner untouched;
+                    // a real edit changes the rendered content and re-stamps.
+                    var renderedBefore = new Dictionary<Guid, string>();
+                    foreach (var policy in Policies.TTLPolicies)
+                        renderedBefore[policy.Id] = policy.ToString();
+
                     UpdateTTLs(update.TTLPolicies, update.Initiator);
+
+                    var renderedAfter = new Dictionary<Guid, string>();
+                    foreach (var policy in Policies.TTLPolicies)
+                        renderedAfter[policy.Id] = policy.ToString();
+
                     foreach (var ttlUpdate in update.TTLPolicies)
-                        if (ttlUpdate.Id != Guid.Empty)
+                    {
+                        if (ttlUpdate.Id == Guid.Empty)
+                            continue;
+
+                        // Stamp only what this update actually mutated: a policy
+                        // created by it (absent before) or whose rendered content
+                        // changed. A verbatim re-assertion keeps its recorded
+                        // owner and timestamp.
+                        var mutated = !renderedBefore.TryGetValue(ttlUpdate.Id, out var before) ||
+                                      renderedAfter.GetValueOrDefault(ttlUpdate.Id) != before;
+
+                        if (mutated)
                             ChangeTable.TtlPolicies[ttlUpdate.Id.ToString()].SetUpdate(update.Initiator);
+                    }
                 }
             }
 

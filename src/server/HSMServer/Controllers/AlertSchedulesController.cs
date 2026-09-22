@@ -61,9 +61,17 @@ namespace HSMServer.Controllers
         {
             // Existence guard BEFORE the detach: the detach walks the whole
             // tree, so a Remove posted with a random/unknown id must not pay
-            // for that walk (DeleteSchedule alone would be a no-op) (#1409).
+            // for that walk (#1409). GetSchedule reads the in-memory cache
+            // only, and the loader skips entities whose parse failed — such a
+            // row exists in storage but never enters the cache, and without
+            // the DeleteSchedule call below the guard would strand it there
+            // forever. DeleteSchedule is idempotent, so this purges the
+            // stored row (a no-op for a truly unknown id).
             if (_scheduleProvider.GetSchedule(id) is null)
+            {
+                _scheduleProvider.DeleteSchedule(id);
                 return RedirectToAction("Index");
+            }
 
             // Detach FIRST (#1409), before the schedule id disappears: the
             // detach is best-effort (internal failures are logged there, the

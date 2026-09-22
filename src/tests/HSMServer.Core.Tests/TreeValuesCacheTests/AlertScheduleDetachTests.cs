@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
@@ -27,11 +28,23 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     {
         private readonly TemplateConcurrencyFixture _fixture;
 
+        // Pass-through wrapper by default; individual tests flip its failure
+        // injection on (persist-first pins for the template detach arm).
+        private FailingDatabaseCore _failingDatabase;
+
 
         public AlertScheduleDetachTests(TemplateConcurrencyFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture, addTestProduct: false)
         {
             _fixture = fixture;
+        }
+
+
+        protected override IDatabaseCore WrapDatabase(IDatabaseCore inner)
+        {
+            _failingDatabase = new FailingDatabaseCore(inner, _ => false);
+
+            return _failingDatabase;
         }
 
 
@@ -228,8 +241,168 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        private async Task<AlertTemplateModel> AddTemplateWithScheduledPolicies(IReadOnlyList<string> paths, Guid deletedId, Guid survivorId)
+        // #1409 review: the detach sends the FULL TTL list, so it must not
+        // re-stamp change-table ownership of policies it did not touch —
+        // a User-owned (hand-edited) TTL policy on the same sensor keeps its
+        // owner, and a later template apply stays BLOCKED by the CanChange
+        // gate instead of silently overwriting the operator's interval.
+        [Fact]
+        [Trait("Category", "Alert schedules")]
+        public async Task Detach_PreservesOwnershipOfUntouchedTtlPolicies_TemplateApplyStaysBlocked()
         {
+            var deletedId = Guid.NewGuid();
+            var user = InitiatorInfo.AsUser("operator");
+
+            var sensorPath = "sensorDetachOwnership";
+            await CreateSensor(sensorPath);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensor));
+
+            var attach = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies =
+                [
+                    TtlUpdate(TimeSpan.FromMinutes(5).Ticks, initiator: user),
+                    TtlUpdate(TimeSpan.FromMinutes(6).Ticks, initiator: user, scheduleId: deletedId),
+                ],
+                Initiator = user,
+            });
+            Assert.True(attach.IsOk, attach.Error);
+
+            // The "hand edit": a follow-up edit by a user initiator re-stamps
+            // the policy's change-table owner to User (creation itself runs
+            // under empty ids, which the stamp loop skips).
+            var firstRevision = Assert.Single(sensor.Policies.TTLPolicies, t => t.ScheduleId is null);
+
+            var edit = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies =
+                [
+                    TtlUpdate(TimeSpan.FromMinutes(7).Ticks, initiator: user, id: firstRevision.Id),
+                    TtlUpdate(TimeSpan.FromMinutes(6).Ticks, initiator: user, scheduleId: deletedId),
+                ],
+                Initiator = user,
+            });
+            Assert.True(edit.IsOk, edit.Error);
+
+            var handMade = Assert.Single(sensor.Policies.TTLPolicies, t => t.ScheduleId is null);
+            Assert.Equal(TimeSpan.FromMinutes(7).Ticks, handMade.TTLTicks);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[handMade.Id.ToString()].Initiator.Type);
+
+            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+
+            // The detach worked on the scheduled policy...
+            Assert.All(sensor.Policies.TTLPolicies, t => Assert.Null(t.ScheduleId));
+
+            // ...and left the untouched policy's recorded owner alone.
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[handMade.Id.ToString()].Initiator.Type);
+
+            // Consequence, pinned end-to-end: a template-initiated apply
+            // (AlertTemplate, type 15) targeting the user-owned policy is
+            // still rejected by the CanChange gate (100 <= 15 is false).
+            var templateApply = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [TtlUpdate(TimeSpan.FromMinutes(99).Ticks, InitiatorInfo.AlertTemplate, handMade.Id)],
+                Initiator = InitiatorInfo.AlertTemplate,
+            });
+            Assert.True(templateApply.IsOk, templateApply.Error);
+
+            Assert.Equal(TimeSpan.FromMinutes(7).Ticks, handMade.TTLTicks);
+        }
+
+        // #1409 review: template detaches are PERSIST-FIRST — the detached
+        // entity is written through the failure-propagating path BEFORE the
+        // in-memory template is touched, so a failed write leaves the ids in
+        // place and the operator's Remove retry re-runs the detach.
+        [Fact]
+        [Trait("Category", "Alert schedules")]
+        public async Task Detach_TemplatePersistFailure_LeavesMemoryUntouched_RetrySucceeds()
+        {
+            var deletedId = Guid.NewGuid();
+
+            var sensorPath = "sensorDetachTemplatePersistFail";
+            var template = await AddTemplateWithScheduledPolicies([$"*/{sensorPath}"], deletedId, survivorId: Guid.NewGuid());
+            await CreateSensor(sensorPath);
+
+            _failingDatabase.ShouldFailAlertTemplateWrite = _ => true;
+
+            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+
+            // The sensor arm is unaffected by the template write failure: the
+            // policy-level detach below still applies. The TEMPLATE keeps its
+            // dangling id in memory and in storage — retryable.
+            var cached = _valuesCache.GetAlertTemplate(template.Id);
+            Assert.Contains(cached.TtlEntries, e => e.Policy.ScheduleId == deletedId);
+
+            var storedTemplate = _databaseCoreManager.DatabaseCore.GetAllAlertTemplates()
+                .First(t => new Guid(t.Id) == template.Id);
+            Assert.Contains(storedTemplate.TTLPolicies, p => p.ScheduleId.SequenceEqual(deletedId.ToByteArray()));
+
+            _failingDatabase.ShouldFailAlertTemplateWrite = null;
+
+            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+
+            Assert.All(_valuesCache.GetAlertTemplate(template.Id).TtlEntries, e => Assert.NotEqual(deletedId, e.Policy.ScheduleId));
+            Assert.DoesNotContain(_databaseCoreManager.DatabaseCore.GetAllAlertTemplates()
+                .First(t => new Guid(t.Id) == template.Id).TTLPolicies,
+                p => p.ScheduleId.SequenceEqual(deletedId.ToByteArray()));
+        }
+
+        // #1409 review: an explicit Never (long.MaxValue ticks) TTL bound to a
+        // deleted schedule degrades to FromParent — TTLPolicy.FullUpdate maps
+        // long.MaxValue to the empty interval. The mapping is inherent to
+        // FullUpdate (it applies at attach the same way), so the pin asserts
+        // the composed DOCUMENTED shape: in-memory FromParent, persisted
+        // TTL=null (which on load means FromParent, i.e. inherit from the
+        // parent chain). Not reachable through the editors (ForTimeout has
+        // no None).
+        [Fact]
+        [Trait("Category", "Alert schedules")]
+        public async Task Detach_ExplicitNeverTtl_DegradesToFromParent_PersistsNullTtl()
+        {
+            var deletedId = Guid.NewGuid();
+            var force = InitiatorInfo.AsSystemForce("test_attach_never_ttl");
+
+            var sensorPath = "sensorDetachNeverTtl";
+            await CreateSensor(sensorPath);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensor));
+
+            var attach = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [TtlUpdate(long.MaxValue, force, scheduleId: deletedId)],
+                Initiator = force,
+            });
+            Assert.True(attach.IsOk, attach.Error);
+
+            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+
+            var ttl = Assert.Single(sensor.Policies.TTLPolicies);
+            Assert.Null(ttl.ScheduleId);
+            Assert.True(ttl.IsTTLFromParent);
+
+            var storedTtl = _databaseCoreManager.DatabaseCore.GetAllSensors()
+                .First(e => e.Id == sensor.Id.ToString())
+                .TTLPolicies.First(p => new Guid(p.Id) == ttl.Id);
+            Assert.Null(storedTtl.TTL);
+            Assert.Empty(storedTtl.ScheduleId);
+        }
+
+
+        private static PolicyUpdate TtlUpdate(long ttlTicks, InitiatorInfo initiator, Guid id = default, Guid? scheduleId = null) => new()
+        {
+            Id = id,
+            TTL = ttlTicks,
+            ScheduleId = scheduleId,
+            Destination = new PolicyDestinationUpdate(),
+            Initiator = initiator,
+            ConfirmationPeriod = 0,
+            Conditions = [],
+        };
+
+        private async Task<AlertTemplateModel> AddTemplateWithScheduledPolicies(IReadOnlyList<string> paths, Guid deletedId, Guid survivorId)        {
             var ttlDeletedSetting = new TimeIntervalSettingProperty();
             ttlDeletedSetting.TrySetValue(new TimeIntervalModel(TimeSpan.FromMinutes(5).Ticks));
 
@@ -272,9 +445,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private async Task CreateSensor(string path)
         {
+            // AddSensorValueAsync AWAITS the queue round-trip, and the sensor
+            // creation (including template application — AddSensor runs
+            // ApplyTemplateToSensor inline on the queue thread) happens inside
+            // it, so the sensor is fully built when the await returns; no
+            // settle delay is needed.
             var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, path, DateTime.UtcNow);
             await _valuesCache.AddSensorValueAsync(_fixture.AccessKeyAId, _fixture.ProductAId, value);
-            await Task.Delay(300);
         }
     }
 }
