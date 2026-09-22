@@ -170,7 +170,7 @@ try {
     }
 
     # --- Ensure volume mount dirs exist (otherwise Docker creates them as root) ---
-    foreach ($vol in @("Logs", "Config", "Databases", "DatabasesBackups")) {
+    foreach ($vol in @("Logs", "Config", "Databases", "DatabasesBackups", "CaddyData")) {
         New-Item -ItemType Directory -Force -Path (Join-Path $repoRoot $vol) | Out-Null
     }
 
@@ -188,7 +188,7 @@ services:
 "@ | Set-Content -Path $overridePath -Encoding utf8
 
     # docker-compose.yml requires HSM_DOMAIN; a local run is https://localhost with Caddy's
-    # internal CA, published on loopback only.
+    # internal CA, published on loopback only. The `!override` tag needs Docker Compose v2.24.4+.
     if (-not $env:HSM_DOMAIN) { $env:HSM_DOMAIN = "localhost" }
 
     # --- Stop any existing project containers, then start fresh ---

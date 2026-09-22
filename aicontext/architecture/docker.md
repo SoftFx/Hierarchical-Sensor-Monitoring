@@ -8,6 +8,7 @@
 
 - `app`: the HSM server, unchanged. It serves HTTPS on both ports with its own certificate (see "TLS" below), publishes no ports, and is reachable only inside the compose network.
 - `caddy` (`caddy:2`): publishes `80`, `443`, `44330`, `44333` and obtains/renews the certificate clients see. It forwards to `https://app:44333` / `https://app:44330` with `tls_insecure_skip_verify`, because the upstream certificate is HSM's self-signed one. Its Caddyfile is inline in the compose file (`configs.content`, Docker Compose v2.23+), so the whole stack is one file.
+- Catch-all sites (`https://:443`, `https://:44333`, `https://:44330`) plus `default_sni`/`fallback_sni = HSM_DOMAIN` keep clients that address the host by IP (no SNI) or by another name working. Without them, Caddy refuses the TLS handshake and existing collectors and agent bundles go silent after a migration. Such clients receive the `HSM_DOMAIN` certificate, so they still need allow-untrusted. Verified live, and the per-port UI/Sensor-API split holds for them too.
 
 `HSM_DOMAIN` (`.env` next to the compose file) is **required**; compose interpolates it into the Caddyfile with `${HSM_DOMAIN:?...}` and refuses to start without it. A default of `localhost` would be reachable remotely: a Caddy site address is a Host/SNI matcher, not a loopback bind.
 
@@ -22,7 +23,13 @@ What the HSM side relies on behind Caddy:
 
 - **UI vs Sensor API split:** decided by listener port (`Connection.LocalPort`); Caddy keeps them apart by forwarding each site to its own upstream port.
 - **Request scheme and host:** the upstream hop is HTTPS, so `Request.Scheme` is `https`: no HTTPS redirect, HSTS is still sent, and cookies stay `Secure`. Caddy passes the original `Host` through, so the agent-bundle fallback address (`AgentConnectionResolver`) is the public one with `SensorPort`.
-- **Known limitation, client IP:** `RemoteIpAddress` is Caddy's container address; token audit and telemetry record the proxy, not the client. Forwarded headers are deliberately not trusted; doing so needs a trust boundary of its own.
+- **Known limitation, client IP (#1427):** `RemoteIpAddress` is Caddy's container address for every client. Consequences:
+  - The API-token invalid-attempt limiter degrades from per-source to one global bucket: one noisy source suppresses the recording of every other source's `AuthFailed` events for the rest of the minute. Authentication itself is unaffected.
+  - Token audit records the proxy.
+  - The telemetry RemoteIP is one constant.
+
+  Forwarded headers are not trusted yet; #1427 tracks pinning that trust to the compose network.
+- **HTTP on port 80:** Caddy redirects `http://<HSM_DOMAIN>/` to `https://<HSM_DOMAIN>/` (the UI on 443), verified live.
 
 ## Ports
 

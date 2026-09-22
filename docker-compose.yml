@@ -47,17 +47,36 @@ services:
 configs:
   caddyfile:
     content: |
+      {
+          # Clients that reach this host by IP (no SNI) or by another name get the
+          # HSM_DOMAIN certificate instead of a refused handshake.
+          default_sni ${HSM_DOMAIN:?Set HSM_DOMAIN in .env next to docker-compose.yml - see the comment at the top}
+          fallback_sni ${HSM_DOMAIN}
+      }
       (hsm_upstream) {
           transport http {
               tls_insecure_skip_verify
           }
       }
-      ${HSM_DOMAIN:?Set HSM_DOMAIN in .env next to docker-compose.yml - see the comment at the top}, ${HSM_DOMAIN}:44333 {
+      ${HSM_DOMAIN}, ${HSM_DOMAIN}:44333 {
           reverse_proxy https://app:44333 {
               import hsm_upstream
           }
       }
       ${HSM_DOMAIN}:44330 {
+          reverse_proxy https://app:44330 {
+              import hsm_upstream
+          }
+      }
+      # Any other address of this host (IP, short name, old CNAME): existing collectors and
+      # agent bundles keep working. The certificate does not match such a name, so those
+      # clients need "allow untrusted certificate", as with the old self-signed setup.
+      https://:443, https://:44333 {
+          reverse_proxy https://app:44333 {
+              import hsm_upstream
+          }
+      }
+      https://:44330 {
           reverse_proxy https://app:44330 {
               import hsm_upstream
           }

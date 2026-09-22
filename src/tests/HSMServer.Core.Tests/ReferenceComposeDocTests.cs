@@ -14,13 +14,15 @@ namespace HSMServer.Core.Tests
         {
             var root = FindRepoRoot();
 
+            var wikiPath = Path.Combine(root, "wiki-git", "Installation.md");
+            Assert.True(File.Exists(wikiPath), $"{wikiPath} not found: the reference compose copy lives on that page; update this test if the page moved.");
+
             var compose = Normalize(File.ReadAllText(Path.Combine(root, "docker-compose.yml"))).TrimEnd('\n');
-            var wiki = Normalize(File.ReadAllText(Path.Combine(root, "wiki-git", "Installation.md")));
+            var wiki = Normalize(File.ReadAllText(wikiPath));
 
             Assert.True(wiki.Contains("```yaml\n" + compose + "\n```", StringComparison.Ordinal),
                 "wiki-git/Installation.md must embed docker-compose.yml verbatim (section \"Reference docker-compose.yml\"); update both together.");
         }
-
 
         private static string Normalize(string text) => text.Replace("\r\n", "\n").TrimStart('﻿');
 

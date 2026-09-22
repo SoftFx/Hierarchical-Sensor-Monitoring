@@ -7,7 +7,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 ## Prerequisites
 
 - [Docker](https://www.docker.com/) with Docker Compose v2.23 or newer
-- Ports `44330` and `44333` available on the host, plus `80` and `443` for the automatic certificate
+- Ports `44330` and `44333` available on the host, plus `80` and `443` for the automatic certificate. Check that nothing else on the host (another web server or proxy) already uses `80`/`443`, otherwise Caddy cannot start. With `HSM_DOMAIN` set to an IP address, `80`/`443` are not needed and you can remove those two lines from the `caddy` service.
 
 ---
 
@@ -23,7 +23,7 @@ curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/
 
 Use this file as is. Do not write your own compose file or put a different proxy in front: the HSM side of the setup depends on exactly this Caddy configuration.
 
-**2. Tell Caddy the server address.** Create a file named `.env` next to `docker-compose.yml`. It is required: without it `docker compose up` stops with an error.
+**2. Tell Caddy the server address.** Create a file named `.env` next to `docker-compose.yml`. It is required: without it every `docker compose` command (`up`, `down`, `logs`, `pull`) stops with an error, so keep the file next to the compose file.
 
 ```bash
 HSM_DOMAIN=hsm.example.com
@@ -104,17 +104,36 @@ services:
 configs:
   caddyfile:
     content: |
+      {
+          # Clients that reach this host by IP (no SNI) or by another name get the
+          # HSM_DOMAIN certificate instead of a refused handshake.
+          default_sni ${HSM_DOMAIN:?Set HSM_DOMAIN in .env next to docker-compose.yml - see the comment at the top}
+          fallback_sni ${HSM_DOMAIN}
+      }
       (hsm_upstream) {
           transport http {
               tls_insecure_skip_verify
           }
       }
-      ${HSM_DOMAIN:?Set HSM_DOMAIN in .env next to docker-compose.yml - see the comment at the top}, ${HSM_DOMAIN}:44333 {
+      ${HSM_DOMAIN}, ${HSM_DOMAIN}:44333 {
           reverse_proxy https://app:44333 {
               import hsm_upstream
           }
       }
       ${HSM_DOMAIN}:44330 {
+          reverse_proxy https://app:44330 {
+              import hsm_upstream
+          }
+      }
+      # Any other address of this host (IP, short name, old CNAME): existing collectors and
+      # agent bundles keep working. The certificate does not match such a name, so those
+      # clients need "allow untrusted certificate", as with the old self-signed setup.
+      https://:443, https://:44333 {
+          reverse_proxy https://app:44333 {
+              import hsm_upstream
+          }
+      }
+      https://:44330 {
           reverse_proxy https://app:44330 {
               import hsm_upstream
           }
@@ -128,13 +147,14 @@ What must stay as it is, if you ever adapt it:
 | No `ports:` on `app` | HSM must be reachable only through Caddy. |
 | `reverse_proxy https://app:44333` and `https://app:44330` in separate sites | HSM tells the web UI and the Sensor API apart by the port a request arrives on. |
 | `tls_insecure_skip_verify` | HSM still serves HTTPS with its own self-signed certificate; Caddy connects to it inside the compose network without checking it. |
+| `default_sni` / `fallback_sni` and the `https://:443`, `https://:44333`, `https://:44330` sites | Clients that reach the server by IP or by another name keep working. They receive the `HSM_DOMAIN` certificate, which does not match the name they use, so they need "allow untrusted certificate". |
 | Public ports `44330` and `44333` | Collectors and agents connect to `https://<host>:44330`; downloaded agent bundles use this port. |
 | Ports `80` and `443` | Let's Encrypt checks the domain through them. |
 | `./CaddyData:/data` | Keeps certificates across updates; without it Caddy requests new ones on every restart and hits Let's Encrypt rate limits. |
 
 ### Internal DNS name (not reachable from the internet)
 
-Let's Encrypt cannot issue a certificate for a name it cannot reach. Either set `HSM_DOMAIN` to the server's IP address, or add `tls internal` to both sites in the `caddyfile` section of `docker-compose.yml`:
+Let's Encrypt cannot issue a certificate for a name it cannot reach. Either set `HSM_DOMAIN` to the server's IP address, or add `tls internal` to both `HSM_DOMAIN` sites in the `caddyfile` section of `docker-compose.yml`:
 
 ```
 hsm.corp.lan, hsm.corp.lan:44333 {
@@ -145,16 +165,25 @@ hsm.corp.lan, hsm.corp.lan:44333 {
 }
 ```
 
+Either way the certificate comes from Caddy's own certificate authority, which clients do not trust: browsers show a warning, and collectors/agents need "allow untrusted certificate". To avoid that, install Caddy's root certificate on the client machines. It is `CaddyData/caddy/pki/authorities/local/root.crt` next to the compose file.
+
 ### Moving an existing installation to Caddy
 
-Nothing changes on the HSM side: it keeps its data, settings and own certificate. Replace your `docker-compose.yml` with the reference one, create the `.env` file (step 2 above), then:
+Nothing changes on the HSM side: it keeps its data, settings and own certificate.
+
+**Before you stop the old stack**, check that ports `80` and `443` are free on the host. If they are taken, the new stack fails to start after the old one is already down.
+
+Then replace your `docker-compose.yml` with the reference one, create the `.env` file (step 2 above), and restart:
 
 ```bash
 docker compose down
 docker compose up -d
 ```
 
-Collector and agent addresses stay the same (`https://<host>:44330`). Once the certificate is trusted, you can switch off "Allow untrusted server certificate" in the agent settings.
+What happens to existing clients:
+
+- **Clients that use `HSM_DOMAIN`** (`https://hsm.example.com:44330`) get the new trusted certificate. For them you can switch off "Allow untrusted server certificate".
+- **Clients that use any other address**, such as the server's IP or a short internal name, keep working, including already distributed agent bundles. They receive the `HSM_DOMAIN` certificate, which does not match their address, so they must keep "allow untrusted certificate" on. To give them the trusted certificate, switch them to the `HSM_DOMAIN` address. For agents, set **Agent connection URL** (Configuration → Agent) to `https://<HSM_DOMAIN>:44330` and redistribute the bundles.
 
 ---
 
