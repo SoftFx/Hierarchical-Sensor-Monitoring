@@ -141,6 +141,8 @@ namespace HSMServer.Core.Tests
             Assert.Contains("systemctl status --no-pager \"$UNIT\"", script);
             Assert.Contains("shred -u access-key", script);
             Assert.Contains("apt-get update", script);
+            Assert.Contains("\"${packages[0]}\" ca-certificates", script); // unconditionally: the system store is always the trust source
+            Assert.Contains("still contains the access key", script);
 
             // The extracted key is cleaned up on every exit once it is installed, not only on success.
             // Armed before the key is copied, so even a failing copy cleans up.

@@ -114,13 +114,23 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
    still has it; a re-run after the key was consumed keeps the installed one.
    An `EXIT` trap, armed just before the key is copied, shreds the extracted copy on every exit path, a
    failing copy included.
-2. `apt-get update` (a failure only warns: an unreachable mirror is not fatal by itself), then `apt-get install -y ./hsm-linux-probe_*.deb` (+ `ca-certificates` when a CA ships) with
+2. `apt-get update` (a failure only warns: an unreachable mirror is not fatal by itself), then `apt-get install -y ./hsm-linux-probe_*.deb ca-certificates` with
    `--force-confold`, so the config written in step 1 wins over the package's placeholder conffile.
    Config and key go in **before** the package so the unit's first start already finds them.
+   `ca-certificates` is installed always: the probe verifies the server against the system trust store in
+   every case, including behind a public-CA proxy where no `server-ca.pem` ships, and minimal hosts lack it.
 3. With `server-ca.pem`: copies it to `/usr/local/share/ca-certificates/hsm-server.crt`, runs
-   `update-ca-certificates`.
+   `update-ca-certificates`, and prints the certificate's expiry date.
 4. `systemctl enable --now hsm-linux-probe`, then `restart` (a reinstall picks up the new key/config/CA).
-5. Waits 3 s, prints `systemctl status --no-pager`, exits non-zero if the unit is not active.
+5. Waits 3 s, prints `systemctl status --no-pager`, exits non-zero if the unit is not active. On success it
+   reminds the operator that the downloaded `.tar.gz` still contains the key and should be deleted: the script
+   cannot know where the archive is, and the archive keeps the browser's/scp's default permissions.
+
+**Certificate renewal.** Because only the leaf is trusted, renewing the server certificate (a new leaf) stops
+every installed probe from verifying the server. The procedure is: after the renewal, download the bundle again
+and re-run `install.sh` on each host. That replaces `hsm-server.crt` and keeps the config and key. A
+probe-scoped CA file (`ca_file` → `CURLOPT_CAINFO`, initiative §4.1) would allow trusting a private issuing CA
+without making it system-wide; it is not on this PR's path.
 
 uninstall.sh: disables and stops the unit, `apt-get purge`s the package, removes the key, config (incl.
 `.dpkg-dist`/`.dpkg-old`) and CA file, refreshes the trust store (plain `update-ca-certificates`, not
