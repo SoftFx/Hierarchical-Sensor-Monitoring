@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.7.3 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.8.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -365,6 +365,11 @@ set(NATIVE_REGRESSION_TESTS
     native_metric_source_seam_lifecycle
     native_metric_source_drives_default_bar_sensor
     native_metric_source_drives_custom_double_sensor
+    # #1426: a read failure is reported instead of skipped, and a typed source carries a TimeSpan +
+    # status + comment on its own refresh cadence. The prediction math is unit-tested on its own.
+    native_metric_sample_error_is_reported
+    native_metric_timespan_source_posts_typed_value
+    native_disk_prediction_calibrates_then_predicts
     # #1428: metric-driven default bars post partials of a 5-min bar (manual clock, managed-derived values).
     native_metric_bar_partial_posts_keep_open_time
     native_metric_bar_rolls_over_at_window_boundary
@@ -459,6 +464,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(NAME native_linux_free_disk_binds_only_the_unix_row
         COMMAND hsm_collector_tests native_linux_free_disk_binds_only_the_unix_row
     )
+    add_test(NAME native_linux_disk_prediction_produces_live_value
+        COMMAND hsm_collector_tests native_linux_disk_prediction_produces_live_value
+    )
 endif()
 
 function(add_conformance_test name fixture)
@@ -501,6 +509,7 @@ add_conformance_test(conformance_top_cpu_contract top_cpu_contract.hsmtest)
 add_conformance_test(conformance_network_speed_contract network_speed_contract.hsmtest)
 add_conformance_test(conformance_unix_default_sensors_contract unix_default_sensors_contract.hsmtest)
 add_conformance_test(conformance_module_markers_contract module_markers_contract.hsmtest)
+add_conformance_test(conformance_metric_source_contract metric_source_contract.hsmtest)
 
 add_test(
     NAME native_default_sensors_wire_golden

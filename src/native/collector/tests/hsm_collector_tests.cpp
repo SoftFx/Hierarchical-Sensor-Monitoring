@@ -1,6 +1,7 @@
 #include "hsm_collector/hsm_collector.h"
 #include "hsm_collector/hsm_collector.hpp"
 #include "../src/cpu_top.hpp"
+#include "../src/disk_prediction.hpp"
 #include "../src/hsm_http_endpoints.hpp"
 #include "../src/hsm_http_retry.hpp"
 #include "../src/proc_metrics.hpp"
@@ -98,6 +99,11 @@ extern "C" int32_t hsm_collector_test_drive_metric_source(
     int32_t max_reads,
     double* out_values,
     int32_t* out_recreated);
+extern "C" hsm_result_t hsm_collector_test_create_metric_timespan_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_sensor_t** out_sensor);
 extern "C" hsm_result_t hsm_collector_test_create_sampled_bar_sensor(
     hsm_collector_t* collector,
     const char* path,
@@ -565,6 +571,71 @@ namespace
         return std::string(count, ch);
     }
 
+    // create_disk_prediction_sensor (#1426): the production prediction math (disk_prediction.hpp)
+    // fed by a SCRIPTED free-space series, so a fixture's timeline rather than the host's disk
+    // decides what the sensor posts. Free space falls linearly with elapsed time — a function of the
+    // clock, not of the call count, so the two drivers see the same drain even though they read the
+    // source a different number of times. Touched only by the scheduler thread after Start.
+    class ScriptedDiskPrediction
+    {
+    public:
+        ScriptedDiskPrediction(long long calibration_requests, long long refresh_period_ms, double start, double drain_per_second)
+            : prediction_(calibration_requests)
+            , refresh_period_ms_(refresh_period_ms)
+            , start_(start)
+            , drain_per_second_(drain_per_second)
+            , created_ms_(NowMs())
+        {
+        }
+
+        long long RefreshPeriodMs() const { return refresh_period_ms_; }
+
+        void Refresh()
+        {
+            const auto now = NowMs();
+            const double elapsed = has_last_ ? static_cast<double>(now - last_ms_) / 1000.0 : 0.0;
+            prediction_.Sample(FreeSpace(now), elapsed);
+            last_ms_ = now;
+            has_last_ = true;
+        }
+
+        hsm_metric_read_t Read(hsm_metric_sample_t* sample)
+        {
+            const auto post = prediction_.NextPost(FreeSpace(NowMs()));
+            comment_ = post.comment;
+
+            sample->kind = HSM_METRIC_VALUE_TIMESPAN_MS;
+            sample->timespan_ms = post.value_ms;
+            sample->status = post.status;
+            sample->comment = comment_.c_str();
+            return HSM_METRIC_READ_OK;
+        }
+
+    private:
+        static long long NowMs()
+        {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now().time_since_epoch())
+                .count();
+        }
+
+        double FreeSpace(long long now_ms) const
+        {
+            const double elapsed = static_cast<double>(now_ms - created_ms_) / 1000.0;
+            const double free_space = start_ - drain_per_second_ * elapsed;
+            return free_space > 0.0 ? free_space : 0.0;
+        }
+
+        hsm::collector::DiskSpacePrediction prediction_;
+        long long refresh_period_ms_;
+        double start_;
+        double drain_per_second_;
+        long long created_ms_;
+        long long last_ms_ = 0;
+        bool has_last_ = false;
+        std::string comment_;
+    };
+
     struct ConformanceState
     {
         std::vector<SensorHandle> sensors;
@@ -598,37 +669,106 @@ namespace
         // lifetime reason as function_constants — the scheduler reads them until it is joined.
         std::vector<std::pair<std::string, std::unique_ptr<std::atomic<int>>>> sampled_counters;
 
+        // create_failing_metric_sensor (#1426): a source whose every read fails with this message.
+        // Same lifetime rule as sampled_counters.
+        std::vector<std::pair<std::string, std::unique_ptr<std::string>>> failing_sources;
+
+        // create_disk_prediction_sensor (#1426): the real prediction math (disk_prediction.hpp) over a
+        // scripted free-space series, so the fixture's timeline — not the host's disk — decides what
+        // is posted. Same lifetime rule as sampled_counters.
+        std::vector<std::pair<std::string, std::unique_ptr<ScriptedDiskPrediction>>> prediction_sources;
+
         CollectorHandle collector;
     };
 
-    hsm_metric_read_t SampledBarCounterRead(void* user_data, double* out_value)
+    // A fixture payload index, where a NEGATIVE index counts back from the end (−1 = last) as the
+    // DSL spec documents. A fixture whose tail length depends on scheduler timing can only address
+    // the last payload.
+    size_t ResolvePayloadIndex(ConformanceState& state, const std::string& token)
     {
-        *out_value = static_cast<double>(++*static_cast<std::atomic<int>*>(user_data));
+        const auto count = static_cast<long long>(hsm_collector_sent_count(state.collector.value));
+        long long index = std::stoll(token);
+        if (index < 0)
+            index += count;
+
+        Require(index >= 0 && index < count, "payload index out of range");
+        return static_cast<size_t>(index);
+    }
+
+    hsm_metric_read_t SampledBarCounterRead(void* user_data, hsm_metric_sample_t* sample)
+    {
+        sample->double_value = static_cast<double>(++*static_cast<std::atomic<int>*>(user_data));
         return HSM_METRIC_READ_OK;
     }
 
     void SampledBarCounterDispose(void*) {}
 
-    // Binds only the paths created by create_sampled_*_bar_sensor (matched by suffix: the collector
+    // Every read fails with the fixture's message, and the source stays usable — the /proc case.
+    hsm_metric_read_t FailingSourceRead(void* user_data, hsm_metric_sample_t* sample)
+    {
+        sample->error = static_cast<const std::string*>(user_data)->c_str();
+        return HSM_METRIC_READ_SAMPLE_ERROR;
+    }
+
+    void ScriptedDispose(void*) {}
+
+    hsm_metric_read_t DiskPredictionRefresh(void* user_data, hsm_metric_sample_t* /*sample*/)
+    {
+        static_cast<ScriptedDiskPrediction*>(user_data)->Refresh();
+        return HSM_METRIC_READ_NO_VALUE;
+    }
+
+    hsm_metric_read_t DiskPredictionRead(void* user_data, hsm_metric_sample_t* sample)
+    {
+        return static_cast<ScriptedDiskPrediction*>(user_data)->Read(sample);
+    }
+
+    // Binds the paths created by the metric-driven create_* verbs (matched by suffix: the collector
     // passes the full computer/module-prefixed path); every other metric candidate stays unbound.
-    int SampledBarCounterFactory(
-        void* factory_user_data, const char* sensor_path, hsm_metric_read_fn* out_read,
-        hsm_metric_dispose_fn* out_dispose, void** out_source_user_data)
+    int ConformanceMetricFactory(void* factory_user_data, const char* sensor_path, hsm_metric_source_t* out_source)
     {
         auto* state = static_cast<ConformanceState*>(factory_user_data);
         const std::string full(sensor_path != nullptr ? sensor_path : "");
 
+        const auto matches = [&full](const std::string& tail) {
+            return full.size() >= tail.size() && full.compare(full.size() - tail.size(), tail.size(), tail) == 0;
+        };
+
         for (auto& entry : state->sampled_counters)
         {
-            const auto& tail = entry.first;
-            if (full.size() >= tail.size() && full.compare(full.size() - tail.size(), tail.size(), tail) == 0)
+            if (matches(entry.first))
             {
-                *out_read = &SampledBarCounterRead;
-                *out_dispose = &SampledBarCounterDispose;
-                *out_source_user_data = entry.second.get();
+                out_source->read_sample = &SampledBarCounterRead;
+                out_source->dispose = &SampledBarCounterDispose;
+                out_source->user_data = entry.second.get();
                 return 1;
             }
         }
+
+        for (auto& entry : state->failing_sources)
+        {
+            if (matches(entry.first))
+            {
+                out_source->read_sample = &FailingSourceRead;
+                out_source->dispose = &ScriptedDispose;
+                out_source->user_data = entry.second.get();
+                return 1;
+            }
+        }
+
+        for (auto& entry : state->prediction_sources)
+        {
+            if (matches(entry.first))
+            {
+                out_source->read_sample = &DiskPredictionRead;
+                out_source->refresh = &DiskPredictionRefresh;
+                out_source->refresh_period_ms = entry.second->RefreshPeriodMs();
+                out_source->dispose = &ScriptedDispose;
+                out_source->user_data = entry.second.get();
+                return 1;
+            }
+        }
+
         return 0;
     }
 
@@ -1855,7 +1995,7 @@ namespace
         if (action == "expect_payload_contains")
         {
             Require(step.size() >= 3, "expect_payload_contains requires index and substring");
-            const auto payload = SentJson(state.collector.value, static_cast<size_t>(ToInt(step[1])));
+            const auto payload = SentJson(state.collector.value, ResolvePayloadIndex(state, step[1]));
             Contains(payload, step[2]);
             return;
         }
@@ -1863,7 +2003,7 @@ namespace
         if (action == "expect_payload_not_contains")
         {
             Require(step.size() >= 3, "expect_payload_not_contains requires index and substring");
-            const auto payload = SentJson(state.collector.value, static_cast<size_t>(ToInt(step[1])));
+            const auto payload = SentJson(state.collector.value, ResolvePayloadIndex(state, step[1]));
             NotContains(payload, step[2]);
             return;
         }
@@ -2001,7 +2141,8 @@ namespace
             const auto path = ExpandTextToken(step[1]);
             state.sampled_counters.emplace_back("/" + path, std::make_unique<std::atomic<int>>(0));
             Require(
-                hsm_collector_set_metric_source_factory(state.collector.value, &SampledBarCounterFactory, &state) == HSM_RESULT_OK,
+                hsm_collector_set_metric_source_factory_ex(state.collector.value, &ConformanceMetricFactory, &state) ==
+                    HSM_RESULT_OK,
                 "installing the sampled-bar source factory failed");
 
             SensorHandle sensor;
@@ -2010,6 +2151,54 @@ namespace
                     state.collector.value, path.c_str(), 0, std::stoll(step[2]), std::stoll(step[3]), std::stoll(step[4]),
                     ToInt(step[5]), &sensor.value) == HSM_RESULT_OK,
                 "sampled double bar sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "create_failing_metric_sensor")
+        {
+            // #1426: a Double value sensor whose metric source fails EVERY read with `message` and
+            // stays usable. C# registers a monitoring sensor whose GetValue throws the same message.
+            Require(step.size() >= 4, "create_failing_metric_sensor requires path, post period, and message");
+            const auto path = ExpandTextToken(step[1]);
+            state.failing_sources.emplace_back("/" + path, std::make_unique<std::string>(ExpandTextToken(step[3])));
+            Require(
+                hsm_collector_set_metric_source_factory_ex(state.collector.value, &ConformanceMetricFactory, &state) ==
+                    HSM_RESULT_OK,
+                "installing the failing source factory failed");
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_metric_double_sensor(
+                    state.collector.value, path.c_str(), std::stoll(step[2]), &sensor.value) == HSM_RESULT_OK,
+                "failing metric sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "create_disk_prediction_sensor")
+        {
+            // #1426: the "Free space on disk prediction" machinery with fixture-sized periods (the
+            // catalog runs 5 min posts / 30 s sampling / 6 calibration requests).
+            Require(
+                step.size() >= 7,
+                "create_disk_prediction_sensor requires path, calibration requests, post period, refresh period, "
+                "start free space, and drain per second");
+            const auto path = ExpandTextToken(step[1]);
+            state.prediction_sources.emplace_back(
+                "/" + path,
+                std::make_unique<ScriptedDiskPrediction>(
+                    std::stoll(step[2]), std::stoll(step[4]), ToDouble(step[5]), ToDouble(step[6])));
+            Require(
+                hsm_collector_set_metric_source_factory_ex(state.collector.value, &ConformanceMetricFactory, &state) ==
+                    HSM_RESULT_OK,
+                "installing the prediction source factory failed");
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_test_create_metric_timespan_sensor(
+                    state.collector.value, path.c_str(), std::stoll(step[3]), &sensor.value) == HSM_RESULT_OK,
+                "disk prediction sensor create failed");
             state.sensors.push_back(std::move(sensor));
             return;
         }
@@ -3440,6 +3629,197 @@ namespace
     // #1164 value-source plugin: a CUSTOM Double sensor created via create_metric_double_sensor is
     // bound to the installed factory at Start and posts the read value as a Double (the crypto-quote
     // plugin path, exercised here with the deterministic fake factory).
+    // ---- Typed metric sources + read-failure reporting (#1426) --------------------------------
+
+    // A typed source whose every read fails and stays usable — the /proc case.
+    struct FailingMetricState
+    {
+        std::atomic<int> reads{ 0 };
+        std::atomic<int> creates{ 0 };
+    };
+
+    inline hsm_metric_read_t FailingMetricRead(void* user_data, hsm_metric_sample_t* sample)
+    {
+        ++static_cast<FailingMetricState*>(user_data)->reads;
+        sample->error = "procfs is unreadable";
+        return HSM_METRIC_READ_SAMPLE_ERROR;
+    }
+
+    inline void FailingMetricDispose(void*) {}
+
+    inline int FailingMetricFactory(void* factory_user_data, const char* /*sensor_path*/, hsm_metric_source_t* out_source)
+    {
+        auto* state = static_cast<FailingMetricState*>(factory_user_data);
+        ++state->creates;
+        out_source->read_sample = &FailingMetricRead;
+        out_source->dispose = &FailingMetricDispose;
+        out_source->user_data = state;
+        return 1;
+    }
+
+    // A read failure that leaves the source usable must be REPORTED — on the `.module/Collector
+    // errors` sensor and as one Error-status value on the sensor itself (managed BuildSensorValue's
+    // catch arm) — and must NOT recreate the source, so a stateful reader keeps its baseline.
+    void NativeMetricSampleErrorIsReported()
+    {
+        FailingMetricState fake;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_set_metric_source_factory_ex(collector.value, &FailingMetricFactory, &fake) == HSM_RESULT_OK,
+            "set typed metric-source factory failed");
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_COLLECTOR_ERRORS, nullptr, nullptr) ==
+                HSM_RESULT_OK,
+            "registering the collector-errors sensor failed");
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_create_metric_double_sensor(collector.value, "plugin/broken", 100, &sensor) == HSM_RESULT_OK,
+            "create metric double sensor failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // The failing read posts an Error value AND an error line, so two payloads per tick.
+        Require(WaitForSentCountAtLeast(collector.value, 2, 3000), "a failing read should post");
+
+        bool saw_error_value = false;
+        bool saw_error_report = false;
+        const size_t count = hsm_collector_sent_count(collector.value);
+        for (size_t i = 0; i < count; ++i)
+        {
+            const std::string payload = SentJson(collector.value, i);
+
+            if (payload.find("plugin/broken") != std::string::npos &&
+                payload.find("\"Status\":3") != std::string::npos &&
+                payload.find("\"Comment\":\"procfs is unreadable\"") != std::string::npos)
+                saw_error_value = true;
+
+            if (payload.find("Collector errors") != std::string::npos &&
+                payload.find("Sensor: ") != std::string::npos &&
+                payload.find("procfs is unreadable") != std::string::npos)
+                saw_error_report = true;
+        }
+
+        Require(saw_error_value, "the sensor should post one Error-status value carrying the failure message");
+        Require(saw_error_report, "the failure should reach the .module/Collector errors sensor");
+        Require(fake.creates.load() == 1, "a sample failure must NOT recreate the source");
+        Require(fake.reads.load() >= 1, "the source should have been read");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+
+    // A typed source can carry a TimeSpan, a status and a comment — what the disk-space prediction
+    // needs and what the double-only seam could not express.
+    struct TimeSpanMetricState
+    {
+        std::atomic<int> reads{ 0 };
+        std::atomic<int> refreshes{ 0 };
+    };
+
+    inline hsm_metric_read_t TimeSpanMetricRead(void* user_data, hsm_metric_sample_t* sample)
+    {
+        ++static_cast<TimeSpanMetricState*>(user_data)->reads;
+        sample->kind = HSM_METRIC_VALUE_TIMESPAN_MS;
+        sample->timespan_ms = 3723000; // 1:02:03
+        sample->status = HSM_SENSOR_STATUS_OFF_TIME;
+        sample->comment = "still calibrating";
+        return HSM_METRIC_READ_OK;
+    }
+
+    inline hsm_metric_read_t TimeSpanMetricRefresh(void* user_data, hsm_metric_sample_t* /*sample*/)
+    {
+        ++static_cast<TimeSpanMetricState*>(user_data)->refreshes;
+        return HSM_METRIC_READ_NO_VALUE;
+    }
+
+    inline void TimeSpanMetricDispose(void*) {}
+
+    inline int TimeSpanMetricFactory(void* factory_user_data, const char* /*sensor_path*/, hsm_metric_source_t* out_source)
+    {
+        out_source->read_sample = &TimeSpanMetricRead;
+        out_source->refresh = &TimeSpanMetricRefresh;
+        out_source->refresh_period_ms = 20;
+        out_source->dispose = &TimeSpanMetricDispose;
+        out_source->user_data = factory_user_data;
+        return 1;
+    }
+
+    void NativeMetricTimeSpanSourcePostsTypedValue()
+    {
+        TimeSpanMetricState fake;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_set_metric_source_factory_ex(collector.value, &TimeSpanMetricFactory, &fake) == HSM_RESULT_OK,
+            "set typed metric-source factory failed");
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_test_create_metric_timespan_sensor(collector.value, "plugin/prediction", 400, &sensor) ==
+                HSM_RESULT_OK,
+            "create metric timespan sensor failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "the typed source should post on Start");
+
+        const std::string payload = SentJson(collector.value, 0);
+        Contains(payload, "\"Type\":7"); // TimeSpan
+        Contains(payload, "\"Value\":\"01:02:03\"");
+        Contains(payload, "\"Status\":0");
+        Contains(payload, "\"Comment\":\"still calibrating\"");
+
+        // The auxiliary tick runs on ITS OWN cadence (20 ms here vs a 400 ms post), which is what
+        // lets the prediction sample free space far more often than it posts.
+        for (int i = 0; i < 200 && fake.refreshes.load() < 5; ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        Require(
+            fake.refreshes.load() > fake.reads.load(),
+            "the refresh tick must run more often than the post tick");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+
+    // ---- Disk-space prediction math (#1426) ---------------------------------------------------
+    // A transcription of managed FreeDiskSpacePredictionBase, including its evaluation ORDER
+    // (GetValue -> GetStatus -> GetComment) and the resulting one-post overhang.
+    void NativeDiskPredictionCalibratesThenPredicts()
+    {
+        hsm::collector::DiskSpacePrediction prediction(2);
+
+        auto first = prediction.NextPost(1000.0);
+        Require(first.value_ms == 0, "a calibration post carries TimeSpan.Zero");
+        Require(first.status == 0, "a calibration post carries OffTime");
+        Require(first.comment == "Calibration request (1/2)", "unexpected first calibration comment");
+
+        auto second = prediction.NextPost(1000.0);
+        Require(second.comment == "Calibration request (2/2)", "unexpected second calibration comment");
+        Require(second.status == 0, "the last calibration post carries OffTime");
+
+        // Two samples one second apart, 100 units drained: the EMA seeds at 100 units/second.
+        prediction.Sample(1000.0, 0.0);
+        prediction.Sample(900.0, 1.0);
+
+        // The overhang: the value still comes from the calibration branch (the counter was at the
+        // limit on entry) while the status and comment already report a running sensor.
+        auto overhang = prediction.NextPost(900.0);
+        Require(overhang.value_ms == 0, "the post after calibration still carries TimeSpan.Zero");
+        Require(overhang.status == 1, "the post after calibration already reports Ok");
+        Require(
+            overhang.comment.rfind("Free space decreases by ", 0) == 0,
+            "the post after calibration already reports the drain speed");
+
+        // 900 units left draining at 100 units/second = 9 s.
+        auto predicted = prediction.NextPost(900.0);
+        Require(predicted.value_ms == 9000, "unexpected prediction");
+        Require(predicted.status == 1, "a prediction post carries Ok");
+
+        // A REFILL does not move the EMA (managed folds in positive speeds only), so the previous
+        // prediction is repeated rather than recomputed from a stale speed.
+        prediction.Sample(5000.0, 1.0);
+        auto after_refill = prediction.NextPost(900.0);
+        Require(after_refill.value_ms == 9000, "a refill must not change the drain speed");
+    }
+
     void NativeMetricSourceDrivesCustomDoubleSensor()
     {
         FakeMetricFactoryState fake;
@@ -4047,10 +4427,11 @@ namespace
     }
 
     // #1414 review finding: the Linux free-disk reader always reads the ROOT mount, so it must bind
-    // ONLY the letter-less Unix row. A letter-bearing Windows row ("Free space on D disk") is still
+    // ONLY the letter-less Unix rows. A letter-bearing Windows row ("Free space on D disk") is still
     // registerable here via add_default_sensor, and must stay registration-only rather than report
-    // the root filesystem under a label naming another volume. The prediction row is a TimeSpan and
-    // is declined too. Driven through the factory seam, so the binding decision itself is asserted.
+    // the root filesystem under a label naming another volume. The letter-less PREDICTION row binds
+    // since #1426 (the seam now carries a TimeSpan). Driven through the factory seam, so the binding
+    // decision itself is asserted.
     void NativeLinuxFreeDiskBindsOnlyTheUnixRow()
     {
         auto collector = CreateCollector();
@@ -4069,8 +4450,44 @@ namespace
             hsm_collector_test_drive_metric_source(collector.value, "host/.computer/Disks monitoring/Free space on D disk", 2, values, &recreated) == 0,
             "a letter-bearing Windows row must be declined, not bound to the root mount");
         Require(
-            hsm_collector_test_drive_metric_source(collector.value, "host/.computer/Disks monitoring/Free space on disk prediction", 2, values, &recreated) == 0,
-            "the TimeSpan prediction row must be declined by the double-valued seam");
+            hsm_collector_test_drive_metric_source(collector.value, "host/.computer/Disks monitoring/Free space on disk prediction", 2, values, &recreated) == 2,
+            "the letter-less prediction row must bind now that the seam carries a TimeSpan (#1426)");
+        Require(
+            values[0] == 0.0 && values[1] == 0.0,
+            "the opening prediction reads are calibration posts, which carry TimeSpan.Zero");
+        Require(
+            hsm_collector_test_drive_metric_source(collector.value, "host/.computer/Disks monitoring/Free space on D disk prediction", 2, values, &recreated) == 0,
+            "a letter-bearing prediction row must be declined, not bound to the root mount");
+    }
+
+    // #1426: the Unix prediction row is no longer registration-only — with the real statvfs reader
+    // behind it, the sensor posts a TimeSpan on Start (a calibration post, since the drain speed
+    // needs two samples of its own 30 s loop before it can predict anything).
+    void NativeLinuxDiskPredictionProducesLiveValue()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_linux_metric_sources(collector.value) == HSM_RESULT_OK,
+            "installing Linux metric sources should succeed on Linux");
+
+        hsm_sensor_t* prediction = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(
+                collector.value, HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION, nullptr, &prediction) == HSM_RESULT_OK,
+            "add Unix free-disk prediction default sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(WaitForSentCountAtLeast(collector.value, 1, 5000), "the prediction sensor should post on Start");
+
+        const std::string payload = SentJson(collector.value, 0);
+        Contains(payload, "\"Type\":7"); // TimeSpan
+        Contains(payload, "Free space on disk prediction");
+        Contains(payload, "\"Value\":\"00:00:00\"");
+        Contains(payload, "\"Status\":0"); // OffTime while calibrating
+        Contains(payload, "Calibration request (");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(prediction);
     }
 
     // #1414: all three process sensors bind to THIS process's /proc/self files and emit real bars —
@@ -6363,6 +6780,11 @@ namespace
             { "native_metric_source_seam_lifecycle", [](const std::string&) { NativeMetricSourceSeamLifecycle(); } },
             { "native_metric_source_drives_default_bar_sensor", [](const std::string&) { NativeMetricSourceDrivesDefaultBarSensor(); } },
             { "native_metric_source_drives_custom_double_sensor", [](const std::string&) { NativeMetricSourceDrivesCustomDoubleSensor(); } },
+            { "native_metric_sample_error_is_reported", [](const std::string&) { NativeMetricSampleErrorIsReported(); } },
+            { "native_metric_timespan_source_posts_typed_value",
+              [](const std::string&) { NativeMetricTimeSpanSourcePostsTypedValue(); } },
+            { "native_disk_prediction_calibrates_then_predicts",
+              [](const std::string&) { NativeDiskPredictionCalibratesThenPredicts(); } },
             { "native_metric_bar_partial_posts_keep_open_time", [](const std::string&) { NativeMetricBarPartialPostsKeepOpenTime(); } },
             { "native_metric_bar_rolls_over_at_window_boundary", [](const std::string&) { NativeMetricBarRollsOverAtWindowBoundary(); } },
             { "native_metric_bar_flushes_partial_on_stop", [](const std::string&) { NativeMetricBarFlushesPartialOnStop(); } },
@@ -6387,6 +6809,8 @@ namespace
               [](const std::string&) { NativeLinuxProcessMetricsProduceLiveValue(); } },
             { "native_linux_free_disk_binds_only_the_unix_row",
               [](const std::string&) { NativeLinuxFreeDiskBindsOnlyTheUnixRow(); } },
+            { "native_linux_disk_prediction_produces_live_value",
+              [](const std::string&) { NativeLinuxDiskPredictionProducesLiveValue(); } },
 #endif
             { "native_collector_self_monitoring_emits",
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
@@ -6514,6 +6938,7 @@ namespace
             { "conformance_network_speed_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_unix_default_sensors_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_module_markers_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_metric_source_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };
