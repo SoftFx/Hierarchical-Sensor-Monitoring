@@ -2,8 +2,8 @@
 
 The per-product Linux probe download (`GET /api/agent/linux-installer?productId=…`, #1424) serves a
 `.tar.gz` built around the **`hsm-linux-probe_<version>_<arch>.deb`** staged in this directory, plus a
-generated `config.json`, the product key in `access-key`, the server's public CA chain
-(`server-ca.pem`, only when this server terminates TLS itself) and `install.sh`/`uninstall.sh`.
+generated `config.json`, the product key in `access-key`, the server's public leaf certificate
+(`server-ca.pem`, only when this server terminates TLS itself with a configured certificate) and `install.sh`/`uninstall.sh`.
 
 The `.deb` is served **byte-identical** to the `probe-v<version>` GitHub Release asset. Only the files
 around it are generated per product.

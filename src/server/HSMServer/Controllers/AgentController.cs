@@ -90,7 +90,7 @@ namespace HSMServer.Controllers
 
         /// <summary>
         /// Per-product Linux probe download (#1424): a .tar.gz with the byte-identical released .deb, a
-        /// generated config.json (no key inside), the key in its own file, the server's public CA chain
+        /// generated config.json (no key inside), the key in its own file, the server's public leaf certificate
         /// when this server terminates TLS itself, and install.sh/uninstall.sh. Same guard, key selection
         /// and address resolution as the Windows <see cref="Installer"/>.
         /// </summary>
@@ -104,6 +104,20 @@ namespace HSMServer.Controllers
             var key = AgentKeySelector.Select(product);
             if (key is null)
                 return BadRequest("This product has no usable access key. Create one with send-data permission first.");
+
+            var (address, port) = AgentConnectionResolver.Resolve(
+                _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
+
+            var addressError = LinuxProbeInstallerBundle.ValidateServerAddress(address);
+            if (addressError is not null)
+                return BadRequest(addressError);
+
+            // A TLS handshake feature on this connection means Kestrel itself terminated TLS with its own
+            // certificate; behind a TLS-terminating proxy it is absent and no CA file is shipped.
+            var (caDecision, serverCa) = LinuxProbeServerCa.Resolve(
+                HttpContext.Features.Get<ITlsHandshakeFeature>() is not null, () => _config.ServerCertificate.CertificateSource);
+            if (caDecision == LinuxProbeCaDecision.RefuseBundledDefault)
+                return BadRequest(LinuxProbeServerCa.BundledDefaultMessage);
 
             if (string.IsNullOrEmpty(_environment.WebRootPath))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
@@ -119,28 +133,19 @@ namespace HSMServer.Controllers
 
                 package = System.IO.File.ReadAllBytes(Path.Combine(stagingDir, packageName));
             }
-            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
             }
 
-            var (address, port) = AgentConnectionResolver.Resolve(
-                _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
-
-            var addressError = LinuxProbeInstallerBundle.ValidateServerAddress(address);
-            if (addressError is not null)
-                return BadRequest(addressError);
-
-            // A TLS handshake feature on this connection means Kestrel itself terminated TLS with its own
-            // certificate; behind a TLS-terminating proxy it is absent and no CA file is shipped.
-            var serverCa = LinuxProbeServerCa.Resolve(
-                HttpContext.Features.Get<ITlsHandshakeFeature>() is not null, () => _config.ServerCertificate.CertificateSource);
-
-            var bundle = LinuxProbeInstallerBundle.BuildTarGz(packageName, package, new LinuxProbeBundleOptions(address, port, key.Id.ToString(), serverCa));
+            var productName = Sanitize(product.DisplayName);
+            var bundle = LinuxProbeInstallerBundle.BuildTarGz(
+                LinuxProbeInstallerBundle.BundleFolderName(productName), packageName, package,
+                new LinuxProbeBundleOptions(address, port, key.Id.ToString(), serverCa));
 
             _logger.Info($"{CurrentUser?.Name} downloaded the HSM Linux probe bundle for product '{product.DisplayName}' ({productId}).");
 
-            return File(bundle, "application/gzip", LinuxProbeInstallerBundle.BundleFileName(Sanitize(product.DisplayName)));
+            return File(bundle, "application/gzip", LinuxProbeInstallerBundle.BundleFileName(productName));
         }
 
 

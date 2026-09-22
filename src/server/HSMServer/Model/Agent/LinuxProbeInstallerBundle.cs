@@ -12,14 +12,14 @@ namespace HSMServer.Model.Agent
     /// <summary>
     /// Parameters baked into one per-product Linux probe bundle. <see cref="AccessKey"/> goes into its
     /// own <c>access-key</c> file, never into config.json. <see cref="ServerCaPem"/> is the server's
-    /// public certificate chain, or null to leave <c>server-ca.pem</c> out of the bundle.
+    /// public certificate, or null to leave <c>server-ca.pem</c> out of the bundle.
     /// </summary>
     public sealed record LinuxProbeBundleOptions(string ServerAddress, int Port, string AccessKey, string ServerCaPem = null);
 
     /// <summary>
     /// Builds the downloadable HSM Linux probe bundle (#1424, initiative linux-docker-probe §4.6): a
     /// .tar.gz of the byte-identical released .deb + a generated config.json (server address, no key) +
-    /// the product key in its own file + optionally the server's public CA chain + install/uninstall
+    /// the product key in its own file + optionally the server's public leaf certificate + install/uninstall
     /// scripts. The Linux sibling of <see cref="AgentInstallerBundle"/>; pure and side-effect-free so it
     /// is unit-tested without a web host.
     /// </summary>
@@ -65,8 +65,15 @@ namespace HSMServer.Model.Agent
         private static readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 
 
+        /// <summary>
+        /// The one top-level directory every entry sits in (the caller passes an already sanitized product
+        /// name), so extracting never scatters files, a key included, into the current directory or mixes
+        /// two products' bundles.
+        /// </summary>
+        public static string BundleFolderName(string sanitizedProductName) => $"hsm-linux-probe-{sanitizedProductName}";
+
         /// <summary>Download file name for a product (the caller passes an already sanitized product name).</summary>
-        public static string BundleFileName(string sanitizedProductName) => $"hsm-linux-probe-{sanitizedProductName}.tar.gz";
+        public static string BundleFileName(string sanitizedProductName) => BundleFolderName(sanitizedProductName) + ".tar.gz";
 
         /// <summary>
         /// Picks the staged package among the file names in wwwroot/probe/. Staging clears the folder
@@ -124,7 +131,7 @@ namespace HSMServer.Model.Agent
             return Join(
                 "#!/usr/bin/env bash",
                 "# HSM Linux probe: install this preconfigured bundle.",
-                "#   tar xzf hsm-linux-probe-<product>.tar.gz && sudo ./install.sh",
+                "#   tar xzf hsm-linux-probe-<product>.tar.gz && sudo ./hsm-linux-probe-<product>/install.sh",
                 "# Re-running it upgrades the package and keeps an existing /etc/hsm-linux-probe/config.json;",
                 "# pass --force-config to replace that config with the one in this bundle.",
                 "set -euo pipefail",
@@ -171,6 +178,7 @@ namespace HSMServer.Model.Agent
                 "if [ ! -f \"$CONFIG_DIR/" + ConfigName + "\" ] || [ \"$force_config\" -eq 1 ]; then",
                 "  # The probe does not resolve computerName \"" + AutoComputerName + "\" itself; name the node after this host.",
                 "  host=$(hostname -s 2>/dev/null || cat /proc/sys/kernel/hostname)",
+                "  host=${host%%.*}",
                 "  case \"$host\" in",
                 "    ''|*[!A-Za-z0-9._-]*) echo \"ERROR: cannot use host name '$host' as the computer name; edit " + ConfigName + " by hand.\" >&2; exit 1 ;;",
                 "  esac",
@@ -185,6 +193,8 @@ namespace HSMServer.Model.Agent
                 "",
                 "if [ -f " + KeyName + " ]; then",
                 "  install -m 0400 -o root -g root " + KeyName + " \"$CONFIG_DIR/" + KeyName + "\"",
+                "  # From here on the installed copy is the only one that should remain, whatever fails later.",
+                "  trap 'if [ -f " + KeyName + " ]; then shred -u " + KeyName + " 2>/dev/null || rm -f " + KeyName + "; fi' EXIT",
                 "  echo \"Access key installed to $CONFIG_DIR/" + KeyName + " (root:root 0400).\"",
                 "else",
                 "  echo \"Keeping the existing access key in $CONFIG_DIR/" + KeyName + ".\"",
@@ -196,6 +206,8 @@ namespace HSMServer.Model.Agent
                 "fi",
                 "",
                 "export DEBIAN_FRONTEND=noninteractive",
+                "# A fresh or stale package index cannot resolve the package's dependencies (or ca-certificates).",
+                "apt-get update",
                 "# --force-confold keeps the config placed above instead of the package's placeholder skeleton.",
                 "apt-get install -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \\",
                 "  \"${packages[0]}\" \"${extra_packages[@]}\"",
@@ -211,11 +223,6 @@ namespace HSMServer.Model.Agent
                 "systemctl enable --now \"$UNIT\"",
                 "# Also restart an already running probe so a reinstall picks up the new key, config and CA.",
                 "systemctl restart \"$UNIT\"",
-                "",
-                "# The installed copy is the only one that should remain.",
-                "if [ -f " + KeyName + " ]; then",
-                "  shred -u " + KeyName + " 2>/dev/null || rm -f " + KeyName,
-                "fi",
                 "",
                 "# Give a probe that cannot start (bad config, unreadable key) time to exit before judging.",
                 "sleep 3",
@@ -261,7 +268,7 @@ namespace HSMServer.Model.Agent
                 "",
                 "if [ -f \"$CA_TARGET\" ]; then",
                 "  rm -f \"$CA_TARGET\"",
-                "  update-ca-certificates --fresh",
+                "  update-ca-certificates",
                 "fi",
                 "",
                 "systemctl daemon-reload",
@@ -269,45 +276,54 @@ namespace HSMServer.Model.Agent
         }
 
         /// <summary>
-        /// Assembles the .tar.gz in memory: the unmodified .deb (under its release file name), the
-        /// generated config, the key file, the optional CA chain and both scripts (mode 0755).
+        /// Assembles the .tar.gz in memory under one <paramref name="folderName"/>/ directory: the
+        /// unmodified .deb (under its release file name), the generated config, the key file, the
+        /// optional CA certificate and both scripts (mode 0755). Fastest compression: the .deb, by far
+        /// the largest entry, is already compressed.
         /// </summary>
-        public static byte[] BuildTarGz(string packageFileName, byte[] package, LinuxProbeBundleOptions options)
+        public static byte[] BuildTarGz(string folderName, string packageFileName, byte[] package, LinuxProbeBundleOptions options)
         {
             var modified = DateTimeOffset.UtcNow;
+            var prefix = folderName + "/";
 
             using var memory = new MemoryStream();
-            using (var gzip = new GZipStream(memory, CompressionLevel.Optimal, leaveOpen: true))
+            using (var gzip = new GZipStream(memory, CompressionLevel.Fastest, leaveOpen: true))
             using (var tar = new TarWriter(gzip, TarEntryFormat.Ustar, leaveOpen: true))
             {
-                AddEntry(tar, packageFileName, package, DataMode, modified);
-                AddEntry(tar, ConfigName, Encoding.UTF8.GetBytes(BuildConfigJson(options)), DataMode, modified);
-                AddEntry(tar, KeyName, Encoding.ASCII.GetBytes(options.AccessKey + "\n"), KeyMode, modified);
+                AddEntry(tar, TarEntryType.Directory, prefix, null, ScriptMode, modified);
+                AddEntry(tar, TarEntryType.RegularFile, prefix + packageFileName, package, DataMode, modified);
+                AddEntry(tar, TarEntryType.RegularFile, prefix + ConfigName, Encoding.UTF8.GetBytes(BuildConfigJson(options)), DataMode, modified);
+                AddEntry(tar, TarEntryType.RegularFile, prefix + KeyName, Encoding.ASCII.GetBytes(options.AccessKey + "\n"), KeyMode, modified);
 
                 if (!string.IsNullOrEmpty(options.ServerCaPem))
-                    AddEntry(tar, ServerCaName, Encoding.ASCII.GetBytes(options.ServerCaPem), DataMode, modified);
+                    AddEntry(tar, TarEntryType.RegularFile, prefix + ServerCaName, Encoding.ASCII.GetBytes(options.ServerCaPem), DataMode, modified);
 
-                AddEntry(tar, InstallScript, Encoding.UTF8.GetBytes(BuildInstallScript()), ScriptMode, modified);
-                AddEntry(tar, UninstallScript, Encoding.UTF8.GetBytes(BuildUninstallScript()), ScriptMode, modified);
+                AddEntry(tar, TarEntryType.RegularFile, prefix + InstallScript, Encoding.UTF8.GetBytes(BuildInstallScript()), ScriptMode, modified);
+                AddEntry(tar, TarEntryType.RegularFile, prefix + UninstallScript, Encoding.UTF8.GetBytes(BuildUninstallScript()), ScriptMode, modified);
             }
 
             return memory.ToArray();
         }
 
-        private static void AddEntry(TarWriter tar, string name, byte[] content, UnixFileMode mode, DateTimeOffset modified)
+        private static void AddEntry(TarWriter tar, TarEntryType type, string name, byte[] content, UnixFileMode mode, DateTimeOffset modified)
         {
-            using var data = new MemoryStream(content, writable: false);
+            using var data = content is null ? null : new MemoryStream(content, writable: false);
 
-            tar.WriteEntry(new UstarTarEntry(TarEntryType.RegularFile, name)
+            var entry = new UstarTarEntry(type, name)
             {
-                DataStream = data,
                 Mode = mode,
                 ModificationTime = modified,
                 Uid = 0,
                 Gid = 0,
                 UserName = "root",
                 GroupName = "root",
-            });
+            };
+
+            // A directory entry carries no data and rejects even a null stream.
+            if (data is not null)
+                entry.DataStream = data;
+
+            tar.WriteEntry(entry);
         }
 
         // Shell scripts need LF line endings, whatever the server OS is.

@@ -14,6 +14,7 @@ namespace HSMServer.Core.Tests
     // out of config.json, the config schema and the tar entry modes install.sh relies on.
     public class LinuxProbeInstallerBundleTests
     {
+        private const string Folder = "hsm-linux-probe-garage";
         private const string PackageName = "hsm-linux-probe_0.1.0_amd64.deb";
         private const string Key = "11111111-2222-3333-4444-555555555555";
         private const string CaPem = "-----BEGIN CERTIFICATE-----\nTUlJ\n-----END CERTIFICATE-----\n";
@@ -26,7 +27,7 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void TarGz_ContainsPackageConfigKeyAndScripts()
         {
-            var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(PackageName, _package, _options));
+            var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options));
 
             Assert.Equal(
                 new[] { PackageName, "config.json", "access-key", "install.sh", "uninstall.sh" }.OrderBy(n => n),
@@ -36,8 +37,8 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void TarGz_CarriesServerCa_OnlyWhenGiven()
         {
-            var without = Read(LinuxProbeInstallerBundle.BuildTarGz(PackageName, _package, _options));
-            var with = Read(LinuxProbeInstallerBundle.BuildTarGz(PackageName, _package, _options with { ServerCaPem = CaPem }));
+            var without = Read(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options));
+            var with = Read(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options with { ServerCaPem = CaPem }));
 
             Assert.False(without.ContainsKey(LinuxProbeInstallerBundle.ServerCaName));
             Assert.Equal(CaPem, Encoding.ASCII.GetString(with[LinuxProbeInstallerBundle.ServerCaName].Content));
@@ -46,7 +47,7 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void TarGz_KeepsPackageByteIdentical()
         {
-            var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(PackageName, _package, _options));
+            var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options));
 
             Assert.Equal(_package, entries[PackageName].Content);
         }
@@ -54,7 +55,7 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void Key_IsOnlyInAccessKeyFile_NeverInConfigOrScripts()
         {
-            var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(PackageName, _package, _options with { ServerCaPem = CaPem }));
+            var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options with { ServerCaPem = CaPem }));
 
             Assert.Equal(Key, Encoding.ASCII.GetString(entries["access-key"].Content).Trim());
 
@@ -81,7 +82,7 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void TarEntries_HaveExpectedModesAndRootOwnership()
         {
-            var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(PackageName, _package, _options with { ServerCaPem = CaPem }));
+            var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options with { ServerCaPem = CaPem }));
 
             const UnixFileMode rwxr_xr_x = (UnixFileMode)0b111_101_101; // 0755
             const UnixFileMode rw_r__r__ = (UnixFileMode)0b110_100_100; // 0644
@@ -96,6 +97,21 @@ namespace HSMServer.Core.Tests
 
             Assert.All(entries.Values, e => Assert.Equal(TarEntryType.RegularFile, e.Type));
             Assert.All(entries.Values, e => Assert.Equal(0, e.Uid));
+            Assert.All(entries.Values, e => Assert.Equal(0, e.Gid));
+        }
+
+        [Fact]
+        public void TarGz_KeepsEverythingInOneTopLevelFolder()
+        {
+            var names = new List<string>();
+            using (var gzip = new GZipStream(new MemoryStream(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options)), CompressionMode.Decompress))
+            using (var reader = new TarReader(gzip))
+                while (reader.GetNextEntry() is { } entry)
+                    names.Add(entry.Name);
+
+            Assert.Equal(Folder + "/", names[0]);
+            Assert.All(names, n => Assert.StartsWith(Folder + "/", n));
+            Assert.Equal(Folder, LinuxProbeInstallerBundle.BundleFolderName("garage"));
         }
 
         [Fact]
@@ -124,6 +140,12 @@ namespace HSMServer.Core.Tests
             Assert.Contains("systemctl enable --now \"$UNIT\"", script);
             Assert.Contains("systemctl status --no-pager \"$UNIT\"", script);
             Assert.Contains("shred -u access-key", script);
+            Assert.Contains("apt-get update", script);
+
+            // The extracted key is cleaned up on every exit once it is installed, not only on success.
+            var trap = script.IndexOf("trap '", System.StringComparison.Ordinal);
+            Assert.True(trap > script.IndexOf("install -m 0400", System.StringComparison.Ordinal));
+            Assert.True(trap < script.IndexOf("apt-get", System.StringComparison.Ordinal));
 
             // The key is only moved as a file: never printed or read into a variable.
             Assert.DoesNotContain("cat access-key", script);
@@ -149,6 +171,7 @@ namespace HSMServer.Core.Tests
             Assert.Contains("\"$CONFIG_DIR/access-key\"", script);
             Assert.Contains("\"$CONFIG_DIR/config.json\"", script);
             Assert.Contains("rm -f \"$CA_TARGET\"", script);
+            Assert.DoesNotContain("--fresh", script); // would wipe unrelated hand-made links in /etc/ssl/certs
             Assert.DoesNotContain("curl", script); // never talks to the HSM server
         }
 
@@ -159,7 +182,7 @@ namespace HSMServer.Core.Tests
         }
 
 
-        private sealed record Entry(byte[] Content, UnixFileMode Mode, TarEntryType Type, int Uid);
+        private sealed record Entry(byte[] Content, UnixFileMode Mode, TarEntryType Type, int Uid, int Gid);
 
         private static Dictionary<string, Entry> Read(byte[] tarGz)
         {
@@ -171,9 +194,14 @@ namespace HSMServer.Core.Tests
 
             while (reader.GetNextEntry(copyData: true) is { } entry)
             {
+                // Entries sit under one top-level folder; key them by their name inside it.
+                Assert.StartsWith(Folder + "/", entry.Name);
+                if (entry.EntryType == TarEntryType.Directory)
+                    continue;
+
                 using var content = new MemoryStream();
                 entry.DataStream?.CopyTo(content);
-                result.Add(entry.Name, new Entry(content.ToArray(), entry.Mode, entry.EntryType, entry.Uid));
+                result.Add(entry.Name[(Folder.Length + 1)..], new Entry(content.ToArray(), entry.Mode, entry.EntryType, entry.Uid, entry.Gid));
             }
 
             return result;

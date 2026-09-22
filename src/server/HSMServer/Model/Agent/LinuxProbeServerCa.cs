@@ -1,79 +1,90 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 
 namespace HSMServer.Model.Agent
 {
+    public enum LinuxProbeCaDecision
+    {
+        /// <summary>No server-ca.pem: a proxy terminates TLS, or there is nothing to export.</summary>
+        Omit,
+
+        /// <summary>Ship the server's own certificate as server-ca.pem.</summary>
+        Include,
+
+        /// <summary>
+        /// Refuse the download: the server presents the bundled default certificate, whose private key
+        /// is in the repository. Trusting it would let anyone impersonate this server to the probe host.
+        /// </summary>
+        RefuseBundledDefault,
+    }
+
+
     /// <summary>
     /// Decides whether the Linux probe bundle carries <c>server-ca.pem</c> and produces its content: the
-    /// PUBLIC certificate chain the server's own TLS listener presents, never a private key (#1424, §4.6).
-    /// With the chain in the system trust store the probe keeps peer and hostname verification on; the
-    /// Linux probe has no allow-untrusted switch.
+    /// PUBLIC certificate Kestrel presents, never a private key (#1424, §4.6). install.sh adds it to the
+    /// system trust store so the probe keeps peer and hostname verification on; the Linux probe has no
+    /// allow-untrusted switch.
     /// </summary>
     public static class LinuxProbeServerCa
     {
+        public const string BundledDefaultMessage =
+            "This server presents the bundled default TLS certificate. Its private key is public (it ships with HSM), " +
+            "so a Linux probe must not be told to trust it. Configure a server certificate (Configuration > Server) " +
+            "or run HSM behind a TLS-terminating proxy, then download the Linux probe again.";
+
+
         /// <summary>
-        /// Pure decision. Include the chain only when this server terminates TLS itself (its own,
-        /// typically self-signed, certificate) and there is a certificate to export. Behind a
-        /// TLS-terminating proxy (plain-HTTP mode, Caddy + Let's Encrypt) the certificate clients see
-        /// is the proxy's and is already publicly trusted, so nothing is shipped.
+        /// Pure decision. Behind a TLS-terminating proxy (plain-HTTP mode, Caddy + Let's Encrypt) the
+        /// certificate clients see is the proxy's and is already publicly trusted: nothing ships. When the
+        /// server terminates TLS itself, its certificate ships unless it is the bundled default (refused)
+        /// or cannot be read (omitted; the download still works).
         /// </summary>
-        public static bool ShouldInclude(bool serverTerminatesTls, bool hasCertificate) => serverTerminatesTls && hasCertificate;
-
-        /// <summary>PEM of the public certificates only, leaf first, duplicates dropped.</summary>
-        public static string ExportPublicPem(IEnumerable<X509Certificate2> chain)
+        public static LinuxProbeCaDecision Decide(bool serverTerminatesTls, bool isBundledDefault, bool hasCertificate)
         {
-            var pem = new StringBuilder();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!serverTerminatesTls)
+                return LinuxProbeCaDecision.Omit;
 
-            foreach (var certificate in chain.Where(c => c is not null))
-                if (seen.Add(certificate.Thumbprint))
-                    pem.Append(certificate.ExportCertificatePem()).Append('\n');
+            if (isBundledDefault)
+                return LinuxProbeCaDecision.RefuseBundledDefault;
 
-            return pem.Length == 0 ? null : pem.ToString();
+            return hasCertificate ? LinuxProbeCaDecision.Include : LinuxProbeCaDecision.Omit;
         }
 
         /// <summary>
-        /// Reads the certificates of the file Kestrel loads its certificate from (a .pfx may carry
-        /// the issuing CA next to the leaf), with the leaf first. Returns an empty list when the file
-        /// cannot be read: the bundle then goes out without a CA file rather than failing the download.
+        /// PEM of the certificate Kestrel serves, public part only. Only the leaf: an issuing CA a .pfx may
+        /// also carry would become a trust anchor for every host the probe machine talks to, while the leaf
+        /// alone vouches only for this server (OpenSSL accepts it as a partial-chain anchor).
+        /// Null when the file cannot be read.
         /// </summary>
-        public static IReadOnlyList<X509Certificate2> LoadChain(string path, string password)
+        public static string ExportLeafPem(string path, string password)
         {
             try
             {
-                var collection = new X509Certificate2Collection();
-                collection.Import(path, password, X509KeyStorageFlags.EphemeralKeySet);
+                using var certificate = new X509Certificate2(path, password, X509KeyStorageFlags.EphemeralKeySet);
 
-                return collection.OrderByDescending(c => c.HasPrivateKey).ToList();
+                return certificate.ExportCertificatePem() + "\n";
             }
             catch (Exception ex) when (ex is CryptographicException or System.IO.IOException or UnauthorizedAccessException or PlatformNotSupportedException)
             {
-                return Array.Empty<X509Certificate2>();
+                return null;
             }
         }
 
-        /// <summary>The server-ca.pem content for this server, or null when the bundle must not carry one.</summary>
-        /// <remarks><paramref name="certificateSource"/> is only evaluated when the server terminates TLS.</remarks>
-        public static string Resolve(bool serverTerminatesTls, Func<(string Path, string Password)> certificateSource)
+        /// <summary>
+        /// The decision plus the server-ca.pem content (null unless <see cref="LinuxProbeCaDecision.Include"/>).
+        /// <paramref name="certificateSource"/> is only evaluated when the server terminates TLS.
+        /// </summary>
+        public static (LinuxProbeCaDecision Decision, string Pem) Resolve(bool serverTerminatesTls, Func<(string Path, string Password, bool IsBundledDefault)> certificateSource)
         {
             if (!serverTerminatesTls)
-                return null;
+                return (LinuxProbeCaDecision.Omit, null);
 
-            var (path, password) = certificateSource();
-            var chain = LoadChain(path, password);
-            try
-            {
-                return ShouldInclude(serverTerminatesTls, chain.Count > 0) ? ExportPublicPem(chain) : null;
-            }
-            finally
-            {
-                foreach (var certificate in chain)
-                    certificate.Dispose();
-            }
+            var (path, password, isBundledDefault) = certificateSource();
+            var pem = isBundledDefault ? null : ExportLeafPem(path, password);
+            var decision = Decide(serverTerminatesTls, isBundledDefault, pem is not null);
+
+            return (decision, decision == LinuxProbeCaDecision.Include ? pem : null);
         }
     }
 }

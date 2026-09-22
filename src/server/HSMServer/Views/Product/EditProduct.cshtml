@@ -172,7 +172,7 @@
         <div class="my-1">
             <h5 class="mt-2">HSM Agent</h5>
             <p class="text-muted small">Download a ready-to-run Windows agent pre-configured for this product — this server's address and an access key are baked into its <code>config.json</code>. Run <code>install.cmd</code> on the target machine; the agent self-installs as an auto-start Windows service and connects.</p>
-            <p class="text-muted small">For a Linux host, <b>Download Linux probe</b> gives a <code>.tar.gz</code> with the probe package, its config (this server's address) and the access key in a separate file. Run <code>tar xzf hsm-linux-probe-*.tar.gz &amp;&amp; sudo ./install.sh</code> on the host; the probe installs as a systemd service and connects.</p>
+            <p class="text-muted small">For a Linux host, <b>Download Linux probe</b> gives a <code>.tar.gz</code> with the probe package, its config (this server's address) and the access key in a separate file. Run <code>tar xzf hsm-linux-probe-&lt;product&gt;.tar.gz &amp;&amp; sudo ./hsm-linux-probe-&lt;product&gt;/install.sh</code> on the host; the probe installs as a systemd service and connects.</p>
             @{ var pageUser = User as User; }
             @if (pageUser is not null && pageUser.IsAdmin)
             {
