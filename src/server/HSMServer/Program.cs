@@ -47,10 +47,6 @@ var version = assembly.GetName().Version?.ToString();
 
 logger.Info($"HSM Server {version} starting...");
 
-if (!serverConfig.Kestrel.UseHttps)
-    logger.Warn($"Kestrel.UseHttps is false: serving plain HTTP on ports {serverConfig.Kestrel.SensorPort} and {serverConfig.Kestrel.SitePort}. " +
-                "A TLS-terminating reverse proxy is expected in front; do not expose these ports directly.");
-
 builder.WebHost.ConfigureWebHost(serverConfig);
 
 builder.Logging.ClearProviders()
@@ -128,7 +124,7 @@ try
 
     await app.Services.InitStorages();
 
-    app.ConfigureMiddleware(app.Environment.IsDevelopment(), serverConfig.Kestrel);
+    app.ConfigureMiddleware(app.Environment.IsDevelopment());
 
     app.MapControllers();
 

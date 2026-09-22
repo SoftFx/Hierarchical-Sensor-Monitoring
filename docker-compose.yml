@@ -1,12 +1,14 @@
 # HSM Server behind Caddy. Everyone runs the same stack with `docker compose up -d`.
 #
-# Caddy terminates TLS and obtains/renews the certificate by itself; HSM serves plain HTTP
-# inside the compose network only. Set the address clients use in a `.env` file next to
-# this one (or in the shell):
+# Caddy terminates TLS for clients and obtains/renews the certificate by itself. HSM keeps
+# serving HTTPS with its own (self-signed by default) certificate, reachable only inside the
+# compose network; Caddy connects to it without verifying that certificate.
+# Set the address clients use in a `.env` file next to this one (or in the shell); compose
+# refuses to start without it:
 #   HSM_DOMAIN=hsm.example.com   public DNS name -> Let's Encrypt certificate
 #                                (DNS must point here, port 80 reachable from the internet)
-#   HSM_DOMAIN=10.0.0.5          IP address / localhost -> Caddy's own self-signed certificate
-# Unset, it is `localhost`. Collectors and agents keep using https://<HSM_DOMAIN>:44330.
+#   HSM_DOMAIN=10.0.0.5          IP address -> Caddy's own self-signed certificate
+# Collectors and agents keep using https://<HSM_DOMAIN>:44330.
 #
 # The image is published by CI (server-build.yml). To run a build from local sources instead,
 # publish it to this exact tag first:
@@ -18,11 +20,10 @@ services:
     container_name: hsm-server
     restart: unless-stopped
     user: '0'
-    environment:
-      Kestrel__UseHttps: 'false'               # TLS is terminated by caddy; no ports published
+    # No ports: HSM is reachable only through caddy.
     volumes:
       - ./Logs:/app/Logs                       # NLog output
-      - ./Config:/app/Config                   # server config (Telegram, Agent settings)
+      - ./Config:/app/Config                   # server config (TLS cert, Telegram, Agent settings)
       - ./Databases:/app/Databases             # embedded LevelDB (sensor history + metadata)
       - ./DatabasesBackups:/app/DatabasesBackups
 
@@ -46,9 +47,18 @@ services:
 configs:
   caddyfile:
     content: |
-      ${HSM_DOMAIN:-localhost}, ${HSM_DOMAIN:-localhost}:44333 {
-          reverse_proxy app:44333
+      (hsm_upstream) {
+          transport http {
+              tls_insecure_skip_verify
+          }
       }
-      ${HSM_DOMAIN:-localhost}:44330 {
-          reverse_proxy app:44330
+      ${HSM_DOMAIN:?Set HSM_DOMAIN in .env next to docker-compose.yml - see the comment at the top}, ${HSM_DOMAIN}:44333 {
+          reverse_proxy https://app:44333 {
+              import hsm_upstream
+          }
+      }
+      ${HSM_DOMAIN}:44330 {
+          reverse_proxy https://app:44330 {
+              import hsm_upstream
+          }
       }

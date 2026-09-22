@@ -13,7 +13,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 ## Method 1 — Docker Compose (recommended)
 
-The compose file runs two containers: the HSM server and [Caddy](https://caddyserver.com/), a web server in front of it. Caddy takes care of HTTPS: it gets a certificate, renews it before it expires, and passes requests to HSM. You do not create, choose or install any certificate yourself.
+The compose file runs two containers: the HSM server and [Caddy](https://caddyserver.com/), a web server in front of it. Caddy takes care of the certificate clients see: it gets one, renews it before it expires, and passes requests to HSM. You do not create, choose or install any certificate yourself.
 
 **1. Download the reference compose file** (full text below, in [Reference docker-compose.yml](#reference-docker-composeyml)):
 
@@ -23,7 +23,7 @@ curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/
 
 Use this file as is. Do not write your own compose file or put a different proxy in front: the HSM side of the setup depends on exactly this Caddy configuration.
 
-**2. Tell Caddy the server address.** Create a file named `.env` next to `docker-compose.yml`:
+**2. Tell Caddy the server address.** Create a file named `.env` next to `docker-compose.yml`. It is required: without it `docker compose up` stops with an error.
 
 ```bash
 HSM_DOMAIN=hsm.example.com
@@ -34,8 +34,7 @@ What you put there decides which certificate Caddy uses:
 | `HSM_DOMAIN` | Certificate |
 |---|---|
 | Public DNS name, e.g. `hsm.example.com` | Free trusted certificate from **Let's Encrypt**, renewed automatically. The DNS record must point to this machine, and ports `80`/`443` must be reachable from the internet. |
-| IP address, e.g. `10.0.0.5`, or `localhost` | Caddy's own self-signed certificate: browsers show a warning, and collectors/agents need "allow untrusted certificate". |
-| not set | `localhost`: only usable from the same machine. |
+| IP address, e.g. `10.0.0.5` | Caddy's own self-signed certificate: browsers show a warning, and collectors/agents need "allow untrusted certificate". |
 
 **3. Start the server:**
 
@@ -58,13 +57,15 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 ```yaml
 # HSM Server behind Caddy. Everyone runs the same stack with `docker compose up -d`.
 #
-# Caddy terminates TLS and obtains/renews the certificate by itself; HSM serves plain HTTP
-# inside the compose network only. Set the address clients use in a `.env` file next to
-# this one (or in the shell):
+# Caddy terminates TLS for clients and obtains/renews the certificate by itself. HSM keeps
+# serving HTTPS with its own (self-signed by default) certificate, reachable only inside the
+# compose network; Caddy connects to it without verifying that certificate.
+# Set the address clients use in a `.env` file next to this one (or in the shell); compose
+# refuses to start without it:
 #   HSM_DOMAIN=hsm.example.com   public DNS name -> Let's Encrypt certificate
 #                                (DNS must point here, port 80 reachable from the internet)
-#   HSM_DOMAIN=10.0.0.5          IP address / localhost -> Caddy's own self-signed certificate
-# Unset, it is `localhost`. Collectors and agents keep using https://<HSM_DOMAIN>:44330.
+#   HSM_DOMAIN=10.0.0.5          IP address -> Caddy's own self-signed certificate
+# Collectors and agents keep using https://<HSM_DOMAIN>:44330.
 #
 # The image is published by CI (server-build.yml). To run a build from local sources instead,
 # publish it to this exact tag first:
@@ -76,11 +77,10 @@ services:
     container_name: hsm-server
     restart: unless-stopped
     user: '0'
-    environment:
-      Kestrel__UseHttps: 'false'               # TLS is terminated by caddy; no ports published
+    # No ports: HSM is reachable only through caddy.
     volumes:
       - ./Logs:/app/Logs                       # NLog output
-      - ./Config:/app/Config                   # server config (Telegram, Agent settings)
+      - ./Config:/app/Config                   # server config (TLS cert, Telegram, Agent settings)
       - ./Databases:/app/Databases             # embedded LevelDB (sensor history + metadata)
       - ./DatabasesBackups:/app/DatabasesBackups
 
@@ -104,11 +104,20 @@ services:
 configs:
   caddyfile:
     content: |
-      ${HSM_DOMAIN:-localhost}, ${HSM_DOMAIN:-localhost}:44333 {
-          reverse_proxy app:44333
+      (hsm_upstream) {
+          transport http {
+              tls_insecure_skip_verify
+          }
       }
-      ${HSM_DOMAIN:-localhost}:44330 {
-          reverse_proxy app:44330
+      ${HSM_DOMAIN:?Set HSM_DOMAIN in .env next to docker-compose.yml - see the comment at the top}, ${HSM_DOMAIN}:44333 {
+          reverse_proxy https://app:44333 {
+              import hsm_upstream
+          }
+      }
+      ${HSM_DOMAIN}:44330 {
+          reverse_proxy https://app:44330 {
+              import hsm_upstream
+          }
       }
 ```
 
@@ -116,9 +125,9 @@ What must stay as it is, if you ever adapt it:
 
 | Part | Why |
 |---|---|
-| `Kestrel__UseHttps: 'false'` on `app` | HSM serves plain HTTP; Caddy provides HTTPS. |
 | No `ports:` on `app` | HSM must be reachable only through Caddy. |
-| `reverse_proxy app:44333` and `reverse_proxy app:44330` in separate sites | HSM tells the web UI and the Sensor API apart by the port a request arrives on. |
+| `reverse_proxy https://app:44333` and `https://app:44330` in separate sites | HSM tells the web UI and the Sensor API apart by the port a request arrives on. |
+| `tls_insecure_skip_verify` | HSM still serves HTTPS with its own self-signed certificate; Caddy connects to it inside the compose network without checking it. |
 | Public ports `44330` and `44333` | Collectors and agents connect to `https://<host>:44330`; downloaded agent bundles use this port. |
 | Ports `80` and `443` | Let's Encrypt checks the domain through them. |
 | `./CaddyData:/data` | Keeps certificates across updates; without it Caddy requests new ones on every restart and hits Let's Encrypt rate limits. |
@@ -130,13 +139,15 @@ Let's Encrypt cannot issue a certificate for a name it cannot reach. Either set 
 ```
 hsm.corp.lan, hsm.corp.lan:44333 {
     tls internal
-    reverse_proxy app:44333
+    reverse_proxy https://app:44333 {
+        import hsm_upstream
+    }
 }
 ```
 
 ### Moving an existing installation to Caddy
 
-An installation that already ran HSM keeps serving HTTPS with its own certificate after an update, so nothing breaks. The new `docker-compose.yml` switches HSM to plain HTTP behind Caddy with its `Kestrel__UseHttps: 'false'` setting, which works as long as `Config/appsettings.json` has no `UseHttps` key. If it has `"UseHttps": true` (written by a newer server started without the new compose file), change it to `false`. Then:
+Nothing changes on the HSM side: it keeps its data, settings and own certificate. Replace your `docker-compose.yml` with the reference one, create the `.env` file (step 2 above), then:
 
 ```bash
 docker compose down
@@ -155,12 +166,11 @@ Collector and agent addresses stay the same (`https://<host>:44330`). Once the c
 docker pull hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
 
-**2. Run the container.** Without Caddy in front, HSM serves HTTPS itself with a built-in self-signed certificate: keep `-e Kestrel__UseHttps=true`.
+**2. Run the container.** Without Caddy in front, HSM serves HTTPS itself with a built-in self-signed certificate (or your own, see [Server Configuration](Server-Configuration)).
 
 ```bash
 docker run -u 0 -d \
   --restart unless-stopped \
-  -e Kestrel__UseHttps=true \
   -v /host/path/Logs:/app/Logs \
   -v /host/path/Config:/app/Config \
   -v /host/path/Databases:/app/Databases \
@@ -177,7 +187,6 @@ Replace `/host/path/` with an actual directory on your machine.
 ```bash
 docker run -u 0 -d ^
   --restart unless-stopped ^
-  -e Kestrel__UseHttps=true ^
   -v C:\HSM\Logs:/app/Logs ^
   -v C:\HSM\Config:/app/Config ^
   -v C:\HSM\Databases:/app/Databases ^

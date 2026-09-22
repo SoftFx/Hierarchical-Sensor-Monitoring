@@ -46,7 +46,7 @@ if [[ -n "$ExpectedImageId" ]]; then
     SensorDataPort="44330:44330"
     SensorSitePort="44333:44333"
 
-    docker run -d -it -u 0 -e Kestrel__UseHttps=true --name "${ContainerName}_$Version" -v "$LogsFolder" -v "$SensorConfigFolder" -v "$EnvironmentDatabaseFolder" -v "$DatabasesBackupsFolder" -p "$SensorDataPort" -p "$SensorSitePort" "$ExpectedImageId"
+    docker run -d -it -u 0 --name "${ContainerName}_$Version" -v "$LogsFolder" -v "$SensorConfigFolder" -v "$EnvironmentDatabaseFolder" -v "$DatabasesBackupsFolder" -p "$SensorDataPort" -p "$SensorSitePort" "$ExpectedImageId"
 else
     echo "Expected image hasn't been found"
 fi

@@ -181,7 +181,15 @@ try {
 services:
   app:
     image: '${ImageName}:${ImageTag}'
+  caddy:
+    ports: !override
+      - '127.0.0.1:44330:44330'
+      - '127.0.0.1:44333:44333'
 "@ | Set-Content -Path $overridePath -Encoding utf8
+
+    # docker-compose.yml requires HSM_DOMAIN; a local run is https://localhost with Caddy's
+    # internal CA, published on loopback only.
+    if (-not $env:HSM_DOMAIN) { $env:HSM_DOMAIN = "localhost" }
 
     # --- Stop any existing project containers, then start fresh ---
     Write-Host "Stopping any existing hsm-server container..."

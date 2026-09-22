@@ -12,9 +12,7 @@ Most settings can also be changed at runtime through **Configuration** in the we
 {
   "Kestrel": {
     "SensorPort": 44330,
-    "SitePort": 44333,
-    "UseHttps": false,
-    "TrustedProxies": []
+    "SitePort": 44333
   },
   "ServerCertificate": {
     "Name": "",
@@ -50,20 +48,16 @@ Most settings can also be changed at runtime through **Configuration** in the we
 ```json
 "Kestrel": {
   "SensorPort": 44330,
-  "SitePort": 44333,
-  "UseHttps": false,
-  "TrustedProxies": []
+  "SitePort": 44333
 }
 ```
 
 | Setting | Default | Description |
 |---|---|---|
-| `SensorPort` | `44330` | Port for sensor data ingestion (DataCollector and REST API) |
-| `SitePort` | `44333` | Port for the web UI |
-| `UseHttps` | new install: `false`; existing install: `true` | `false`: plain HTTP, HTTPS is provided by a reverse proxy in front (the Caddy service of the [Docker Compose setup](Installation)). `true`: HSM serves HTTPS itself with the certificate below. When the key is absent, a server that already has `appsettings.json` keeps HTTPS and writes `true`, so updates never switch an installation off HTTPS. Can also be set with the environment variable `Kestrel__UseHttps`. |
-| `TrustedProxies` | `[]` | Only with `UseHttps: false`. Proxy addresses (IP or CIDR such as `172.18.0.0/16`) whose `X-Forwarded-Proto`/`X-Forwarded-For` headers are trusted. Empty means localhost and private networks, which covers a proxy in the same Docker Compose. |
+| `SensorPort` | `44330` | HTTPS port for sensor data ingestion (DataCollector and REST API) |
+| `SitePort` | `44333` | HTTPS port for the web UI |
 
-With `UseHttps: false`, never expose the HSM ports directly: only the proxy may be reachable.
+With the [Docker Compose setup](Installation), keep both at their defaults: Caddy forwards to exactly these ports.
 
 To change ports, update `appsettings.json` and restart the server, or go to **Configuration → Server** in the web UI.
 
@@ -76,9 +70,9 @@ docker run -p 44330:44330 -p 44333:44333 ...
 
 ## TLS Certificate
 
-With the Docker Compose setup, you do not need anything here: Caddy obtains and renews the certificate (Let's Encrypt for a public domain), see [Installation](Installation).
+With the Docker Compose setup, you do not need anything here: Caddy obtains and renews the certificate clients see (Let's Encrypt for a public domain), see [Installation](Installation). HSM's own certificate is then used only between Caddy and HSM.
 
-The settings below apply only when HSM serves HTTPS itself (`Kestrel.UseHttps: true`):
+The settings below matter when clients connect to HSM directly (`docker run`, no Caddy):
 
 ```json
 "ServerCertificate": {
@@ -197,23 +191,10 @@ docker run \
   -v /host/DatabasesBackups:/app/DatabasesBackups \
   -p 44330:44330 \
   -p 44333:44333 \
-  softfx/hsm-server:latest
+  hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
 
-Or in `docker-compose.yml`:
-```yaml
-services:
-  hsm:
-    image: softfx/hsm-server:latest
-    ports:
-      - "44330:44330"
-      - "44333:44333"
-    volumes:
-      - ./Logs:/app/Logs
-      - ./Config:/app/Config
-      - ./Databases:/app/Databases
-      - ./DatabasesBackups:/app/DatabasesBackups
-```
+With Docker Compose, use the [reference docker-compose.yml](Installation#reference-docker-composeyml) instead of writing your own: it already mounts these directories.
 
 | Directory | Contents |
 |---|---|

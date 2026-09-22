@@ -89,9 +89,6 @@ namespace HSMServer.ServerConfiguration
             BackupDatabase = Register<BackupDatabaseConfig>(nameof(BackupDatabase));
             Telegram = Register<TelegramConfig>(nameof(Telegram));
             Kestrel = Register<KestrelConfig>(nameof(Kestrel));
-            Kestrel.ApplyInstallDefault(
-                _configuration[$"{nameof(Kestrel)}:{nameof(KestrelConfig.UseHttps)}"] is not null,
-                File.Exists(_settingsPath));
             MonitoringOptions = Register<MonitoringOptions>(nameof(MonitoringOptions));
             Agent = Register<AgentConfig>(nameof(Agent));
             ApiTokens = Register<ApiTokensConfig>(nameof(ApiTokens));
@@ -99,7 +96,6 @@ namespace HSMServer.ServerConfiguration
             // Startup validation with actionable errors (initiative, section
             // "Configuration"). Throws before the server starts serving.
             ApiTokens.Validate();
-            Kestrel.Validate();
 
             ResaveSettings();
         }

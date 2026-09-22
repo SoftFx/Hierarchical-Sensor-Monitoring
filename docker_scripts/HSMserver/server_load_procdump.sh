@@ -71,7 +71,7 @@ if [ -n "$EXPECTED_IMAGE_ID" ]; then
     SENSOR_DATA_PORT="44330:44330"
     SENSOR_SITE_PORT="44333:44333"
 
-    NEW_CONTAINER_ID=$(docker run -d -it -u 0 -e Kestrel__UseHttps=true --name "${CONTAINER_NAME}_${VERSION}" \
+    NEW_CONTAINER_ID=$(docker run -d -it -u 0 --name "${CONTAINER_NAME}_${VERSION}" \
         -v "$LOGS_FOLDER" \
         -v "$SENSOR_CONFIG_FOLDER" \
         -v "$ENVIRONMENT_DATABASE_FOLDER" \
