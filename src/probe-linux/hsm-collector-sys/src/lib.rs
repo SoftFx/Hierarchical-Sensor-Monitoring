@@ -214,8 +214,7 @@ extern "C" {
         collector: *mut hsm_collector_t,
     ) -> hsm_result_t;
     /// `.module/Service alive`, `Collector version`, `Collector errors` — the module group minus
-    /// the process sensors and the product version, so a host can register those itself with a
-    /// real process name.
+    /// the process sensors and the product version, so a host can register those one by one.
     pub fn hsm_collector_add_collector_monitoring_sensors(
         collector: *mut hsm_collector_t,
     ) -> hsm_result_t;

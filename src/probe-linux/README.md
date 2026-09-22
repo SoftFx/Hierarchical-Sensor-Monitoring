@@ -24,12 +24,10 @@ In this slice that means exactly two probe-added sources:
 
 Docker, disk and backup sources are workstreams #1416/#1417 and are deliberately absent.
 
-The collector's module group is registered sensor by sensor rather than through
-`add_all_module_sensors`, because that helper cannot carry a process name and would name the node
-`Process process`. The probe passes the name .NET's `Process.ProcessName` yields on Linux (`comm`,
-un-truncated from `argv[0]` at the 15-byte limit), so the node reads
-`.module/Process hsm-linux-probe/…` exactly as the managed collector would name it.
-`Process ThreadPool thread count` is omitted, as in `src/agent` — a native process has no CLR pool.
+The process node name is fixed as `.module/Process process`, the same as HsmAgent, so alert
+templates apply across hosts — do not rename it. As in `src/agent`, the process sensors are
+registered one by one and `Process ThreadPool thread count` is omitted (a native process has no
+CLR pool); the probe posts `.module/Version` itself since the module group helper is not used.
 
 ## Crate layout
 

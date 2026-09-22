@@ -72,15 +72,7 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
     let collector = build_collector(config, Arc::clone(&logger))?;
 
     register_default_sensors(&collector, &logger);
-    let process_name = procfs::current_process_name();
-    match &process_name {
-        Some(name) => logger.info(format!(
-            "process sensors register under '.module/Process {name}'"
-        )),
-        None => logger
-            .warn("cannot read /proc/self/comm; the process node falls back to 'Process process'"),
-    }
-    let product_version = register_module_sensors(&collector, process_name.as_deref(), &logger);
+    let product_version = register_module_sensors(&collector, &logger);
 
     // TTLs are derived from the sampling periods so a reconfigured period cannot leave a sensor
     // permanently expired: 3x the period for the fast source (the §4.2 value at the default 60 s),
@@ -320,14 +312,14 @@ fn register_default_sensors(collector: &Collector, logger: &Logger) {
 /// Register the module group — process sensors, collector self-sensors, queue diagnostics and the
 /// product version — and return the product-version handle for [`post_product_version`].
 ///
-/// Deliberately not `add_all_module_sensors`: that group helper cannot carry a process name, so
-/// the collector names the node with its `Process process` placeholder. The managed collector names
-/// it `Process <ProcessName>` (`ProcessCollectionPrototypes`), so the probe registers the process
-/// sensors one by one with the name .NET would use. `Process ThreadPool thread count` is left out
-/// on purpose, as in `src/agent`: it is a CLR concept a native process can only report as 0.
+/// Registered one by one exactly as `src/agent` does, rather than through `add_all_module_sensors`:
+/// that group also registers `Process ThreadPool thread count`, a CLR concept a native process can
+/// only report as 0. The process node is left at the collector's fixed `Process process` name (no
+/// process name passed) — deliberately the same path on every native host, so one HSM alert
+/// template on `.module/Process process/…` applies to all of them. Do not name it per process.
+/// Because the group helper is not called, the probe posts `.module/Version` itself.
 fn register_module_sensors<'c>(
     collector: &'c Collector,
-    process_name: Option<&str>,
     logger: &Logger,
 ) -> Option<VersionSensor<'c>> {
     for sensor in [
@@ -335,7 +327,7 @@ fn register_module_sensors<'c>(
         DefaultSensor::ProcessMemory,
         DefaultSensor::ProcessThreadCount,
     ] {
-        if let Err(error) = collector.add_default_sensor(sensor, process_name) {
+        if let Err(error) = collector.add_default_sensor(sensor, None) {
             logger.error(format!("cannot register {sensor:?}: {error}"));
         }
     }
@@ -397,7 +389,7 @@ mod tests {
 
     /// The registration text the collector sends to `/commands` for the module group, with the
     /// computer/module prefixes the trial host uses.
-    fn module_registrations(process_name: Option<&str>) -> Vec<String> {
+    fn module_registrations() -> Vec<String> {
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
         options.allow_plaintext_transport = true;
         options.computer_name = Some("garage-server".into());
@@ -405,7 +397,7 @@ mod tests {
         let collector = Collector::new(&options).expect("create");
         let logger = Logger::new(Level::Error, None);
 
-        let version = register_module_sensors(&collector, process_name, &logger);
+        let version = register_module_sensors(&collector, &logger);
         assert!(
             version.is_some(),
             "the product version sensor must register"
@@ -434,21 +426,24 @@ mod tests {
     }
 
     #[test]
-    fn the_process_node_is_named_after_the_probe_binary() {
-        // The trial host showed "Process process/…": the group helper's placeholder. This pins
-        // the node the managed collector would produce for a process named hsm-linux-probe.
-        let paths = registered_paths(&module_registrations(Some("hsm-linux-probe")));
+    fn the_process_node_keeps_the_shared_fixed_name_alert_templates_target() {
+        // By design (#1429 closed as such): every native host — HsmAgent and this probe — registers
+        // the same fixed ".module/Process process" node, so one HSM alert template on that path
+        // applies to all of them. A per-process name would silently detach hosts from it.
+        let paths = registered_paths(&module_registrations());
         for sensor in ["Process CPU", "Process memory", "Process thread count"] {
-            let expected =
-                format!("garage-server/LinuxProbe/.module/Process hsm-linux-probe/{sensor}");
+            let expected = format!("garage-server/LinuxProbe/.module/Process process/{sensor}");
             assert!(
                 paths.iter().any(|path| path == &expected),
                 "missing {expected} in {paths:#?}"
             );
         }
         assert!(
-            paths.iter().all(|path| !path.contains("Process process")),
-            "the placeholder node must not be registered: {paths:#?}"
+            paths
+                .iter()
+                .filter(|path| path.contains("/.module/Process "))
+                .all(|path| path.contains("/.module/Process process/")),
+            "no other process node may be registered: {paths:#?}"
         );
         assert!(
             paths.iter().all(|path| !path.contains("ThreadPool")),
@@ -458,7 +453,7 @@ mod tests {
 
     #[test]
     fn the_rest_of_the_module_group_is_still_registered() {
-        let paths = registered_paths(&module_registrations(Some("hsm-linux-probe")));
+        let paths = registered_paths(&module_registrations());
         for sensor in [
             ".module/Service alive",
             ".module/Collector version",

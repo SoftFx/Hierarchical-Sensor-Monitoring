@@ -220,8 +220,8 @@ impl Collector {
     }
 
     /// Register `.module/Service alive`, `Collector version` and `Collector errors` — the module
-    /// group without the process sensors and the product version, which a host that knows its own
-    /// process name registers individually (see [`Collector::add_default_sensor`]).
+    /// group without the process sensors and the product version, for a host that registers those
+    /// individually (see [`Collector::add_default_sensor`]).
     pub fn add_collector_monitoring_sensors(&self) -> Result<()> {
         let _guard = self.lock();
         // SAFETY: valid handle.
@@ -230,12 +230,11 @@ impl Collector {
         })
     }
 
-    /// Register one built-in sensor. For the process sensors, `process_name` fills the
-    /// `Process <name>` node exactly as the managed `ProcessCollectionPrototypes` does with
-    /// `Process.GetCurrentProcess().ProcessName`; `None` keeps the collector's `process` fallback.
+    /// Register one built-in sensor, so a host can pick its set instead of taking a whole group.
     ///
-    /// The group helpers (`add_all_module_sensors`, …) cannot carry a name and always register
-    /// the fallback, which is why a host that knows its name registers these one by one.
+    /// `process_name` fills the `{proc}` segment of the process sensors' `Process <name>` node.
+    /// Native hosts pass `None`, which keeps the collector's fixed `Process process` node: the same
+    /// path on every host, so HSM alert templates written against it apply everywhere.
     pub fn add_default_sensor(&self, id: DefaultSensor, process_name: Option<&str>) -> Result<()> {
         let name = optional_cstring("process_name", process_name)?;
         // SAFETY: returns a plain value struct.
