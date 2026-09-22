@@ -176,6 +176,13 @@ Two live-sampler filters keep the interface set meaningful (both collectors, par
 Both are live-acquisition rules (not part of the action-protocol corpus), so the conformance fixture, which
 registers prototypes directly, is unaffected.
 
+**Fixed process node — intentional managed/native divergence (#1429).** Native hosts register the
+process sensors under the FIXED node `.module/Process process` (the `{proc}` fallback in
+`ResolveDefaultCategory`; hosts leave `process_name` NULL on purpose). The path is identical on every
+host, so one HSM alert template on `.module/Process process/...` applies to all agents. The managed
+collector's `Process {ProcessName}` naming is a known divergence; do not "fix" either side (substitute
+the real process name natively, or fix the managed name) without an explicit product decision.
+
 Reproduced managed quirks: an alert-less default sensor emits `"Alerts":[]` (the prototype initializes
 the list — a user `CreateXSensor` with no alerts emits `null`); the `SpecialAlertCondition` TTL alert
 serializes `"Conditions":null`; `Free RAM memory` keeps `Statistics` `None` (it never sets EMA, and the

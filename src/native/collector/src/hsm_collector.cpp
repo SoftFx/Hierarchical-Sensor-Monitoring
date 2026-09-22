@@ -1308,7 +1308,7 @@ namespace
     struct DefaultSensorDef
     {
         hsm_default_sensor_t id;
-        const char* category; // "" => directly under .computer/.module; "{proc}" => "Process <name>"
+        const char* category; // "" => directly under .computer/.module; "{proc}" => "Process <name>" (fixed "Process process" by design, #1429 — see ResolveDefaultCategory)
         const char* name;     // "{letter}" substituted for per-disk sensors
         hsm_sensor_type_t type;
         bool is_bar;
@@ -1427,6 +1427,11 @@ namespace
     }
 
     // "{proc}" -> "Process <process_name>"; any other category is literal.
+    // DESIGN RULE (#1429, owner-confirmed): native hosts deliberately register process sensors under
+    // the FIXED node ".module/Process process" (the fallback below). It is identical on every host, so
+    // a single HSM alert template on ".module/Process process/..." applies to every agent. Do NOT
+    // substitute the real executable name here. The managed collector's "Process {ProcessName}" is a
+    // known, intentional divergence — do not "fix" it in either direction without a product decision.
     std::string ResolveDefaultCategory(const DefaultSensorDef& def, const char* process_name)
     {
         std::string category = def.category;

@@ -481,7 +481,10 @@ typedef enum hsm_default_sensor_t HSM_ENUM_INT32
    (the readers + non-host service placement) and are currently ignored. */
 typedef struct hsm_default_sensor_params_t
 {
-    const char* process_name;    /* "Process <name>" category; NULL => "process" */
+    const char* process_name;    /* "Process <name>" category; NULL => "process". Native hosts leave it
+                                    NULL ON PURPOSE (#1429): the fixed ".module/Process process" node is
+                                    identical on every host, so one HSM alert template matches all of
+                                    them. Do not default it to the real process name. */
     const char* disk_letter;     /* the {letter} in a disk sensor name; NULL => "C" */
     const char* interface_name;  /* the {iface} in a per-interface network sensor name; NULL => "Ethernet" */
     const char* service_name;    /* RESERVED (not yet honored): service-status resolution */
