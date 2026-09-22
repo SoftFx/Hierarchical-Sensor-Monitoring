@@ -156,7 +156,7 @@ try {
         if ($debs.Count -ne 1) { throw "probe-v$probePin must carry exactly one hsm-linux-probe_*.deb, found $($debs.Count)" }
         $probeShaFile = "$($debs[0].FullName).sha256"
         if (-not (Test-Path $probeShaFile)) { throw "probe-v$probePin has no $($debs[0].Name).sha256" }
-        $expected = ((Get-Content $probeShaFile -Raw).Trim() -split '\s+')[0]
+        $expected = ((Get-Content $probeShaFile -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
         $actual = (Get-FileHash $debs[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($expected -ne $actual) { throw "sha256 mismatch for probe-v${probePin}: release says $expected, file is $actual" }
         Remove-Item $probeShaFile
