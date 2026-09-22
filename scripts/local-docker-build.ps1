@@ -170,7 +170,7 @@ try {
     }
 
     # --- Ensure volume mount dirs exist (otherwise Docker creates them as root) ---
-    foreach ($vol in @("Logs", "Config", "Databases", "DatabasesBackups", "CaddyData", "Logs/caddy")) {
+    foreach ($vol in @("Logs", "Config", "Databases", "DatabasesBackups", "CaddyData")) {
         New-Item -ItemType Directory -Force -Path (Join-Path $repoRoot $vol) | Out-Null
     }
 
@@ -197,8 +197,8 @@ services:
     # internal CA, published on loopback only. Set for the compose calls below only, so it
     # does not leak into the caller's session and shadow a repo-root .env later. While they
     # run it also takes precedence over a repo-root .env (shell beats .env in Compose).
-    $hadDomain = [bool]$env:HSM_DOMAIN
-    if (-not $hadDomain) { $env:HSM_DOMAIN = "localhost" }
+    $script:origHsmDomain = $env:HSM_DOMAIN
+    if (-not $env:HSM_DOMAIN) { $env:HSM_DOMAIN = "localhost" }
 
     # --- Stop any existing project containers, then start fresh ---
     Write-Host "Stopping any existing hsm-server container..."
@@ -206,9 +206,7 @@ services:
 
     Write-Host "Starting container..."
     docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
-    $upExit = $LASTEXITCODE
-    if (-not $hadDomain) { Remove-Item Env:HSM_DOMAIN }
-    if ($upExit -ne 0) { throw "docker compose up failed." }
+    if ($LASTEXITCODE -ne 0) { throw "docker compose up failed." }
 
     Write-Host ""
     Write-Host "HSM Server is running:" -ForegroundColor Green
@@ -219,6 +217,11 @@ services:
     Write-Host "  Proxy logs:  `$env:HSM_DOMAIN='localhost'; docker compose -f docker-compose.yml -f docker-compose.local.yml logs -f caddy"
 }
 finally {
+    # HSM_DOMAIN was set for the compose calls only: restore the caller's value on every path.
+    if (Test-Path variable:script:origHsmDomain) {
+        if ($null -eq $script:origHsmDomain) { Remove-Item Env:HSM_DOMAIN -ErrorAction Ignore } else { $env:HSM_DOMAIN = $script:origHsmDomain }
+    }
+
     if (-not $StayOnBranch -and $origBranch -and $origBranch -ne $Branch) {
         Write-Host "Returning to original branch '$origBranch'..."
         try { Invoke-Git checkout $origBranch } catch { Write-Warning $_ }

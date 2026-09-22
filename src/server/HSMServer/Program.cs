@@ -126,6 +126,9 @@ try
 
     ForwardedHeadersOptions forwardedHeaders = null;
 
+    if (serverConfig.TrustedProxiesIgnoredInSettingsFile)
+        logger.Warn($"{KestrelConfig.TrustedProxiesKey} in {ServerConfig.ConfigName} is ignored: it is deployment-owned and read from the environment only (Kestrel__TrustedProxies__0=...).");
+
     if (serverConfig.Kestrel.TrustedProxies.Length > 0)
     {
         forwardedHeaders = serverConfig.Kestrel.BuildForwardedHeadersOptions();

@@ -47,7 +47,6 @@ services:
         target: /etc/caddy/Caddyfile
     volumes:
       - ./CaddyData:/data                      # ACME account + certificates; keep it across updates
-      - ./Logs/caddy:/var/log/caddy            # access log of every request, with client IPs
 
 configs:
   caddyfile:
@@ -63,22 +62,12 @@ configs:
               tls_insecure_skip_verify
           }
       }
-      (hsm_access_log) {
-          log {
-              output file /var/log/caddy/access.log {
-                  roll_size 50MiB
-                  roll_keep 10
-              }
-          }
-      }
       ${HSM_DOMAIN}, ${HSM_DOMAIN}:44333 {
-          import hsm_access_log
           reverse_proxy https://app:44333 {
               import hsm_upstream
           }
       }
       ${HSM_DOMAIN}:44330 {
-          import hsm_access_log
           reverse_proxy https://app:44330 {
               import hsm_upstream
           }
@@ -87,13 +76,11 @@ configs:
       # agent bundles keep working. The certificate does not match such a name, so those
       # clients need "allow untrusted certificate", as with the old self-signed setup.
       https://:443, https://:44333 {
-          import hsm_access_log
           reverse_proxy https://app:44333 {
               import hsm_upstream
           }
       }
       https://:44330 {
-          import hsm_access_log
           reverse_proxy https://app:44330 {
               import hsm_upstream
           }

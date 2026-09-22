@@ -15,7 +15,6 @@ namespace HSMServer.Middleware.Telemetry
         private const string ClientNameHeader = nameof(Header.ClientName);
         private const string AccessKeyHeader = nameof(Header.Key);
 
-        private const string XForvardHeader = "X-Forwarded-For"; // real ip without vpn redirection
         private const string EmptyClient = "No name";
 
         private protected readonly ClientStatisticsSensors _statistics = _collector.WebRequestsSensors;
@@ -101,27 +100,24 @@ namespace HSMServer.Middleware.Telemetry
         }
         
 
+        // The connection address only. Behind the bundled proxy, UseForwardedHeaders has
+        // already replaced it with the client's, from trusted proxies only (#1427); reading
+        // X-Forwarded-For here would trust whatever entries a client supplied.
         private static bool TryGetRemoteIP(HttpContext context, out string remoteIp)
         {
-            if (TryMapIPToString(context.Request.HttpContext.Connection.RemoteIpAddress, out remoteIp))
-                return remoteIp is not null;
+            var address = context.Connection.RemoteIpAddress;
 
-            if (remoteIp is null && context.TryReadInfo(XForvardHeader, out var forwardFor) && !string.IsNullOrEmpty(forwardFor))
-                foreach (var ipAddressRaw in forwardFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    if (IPAddress.TryParse(ipAddressRaw, out var address) && TryMapIPToString(address, out remoteIp))
-                        break;
+            if (address is null)
+            {
+                remoteIp = null;
+                return false;
+            }
 
-            return remoteIp is not null;
-        }
-
-        private static bool TryMapIPToString(IPAddress address, out string ip)
-        {
             if (address.IsIPv4MappedToIPv6)
                 address = address.MapToIPv4();
 
-            ip = address.ToString();
-
-            return ip is not null;
+            remoteIp = address.ToString();
+            return true;
         }
 
         private static string GetClientName(HttpContext context) => context.TryReadInfo(ClientNameHeader, out var name) && !string.IsNullOrWhiteSpace(name) ? name : EmptyClient;

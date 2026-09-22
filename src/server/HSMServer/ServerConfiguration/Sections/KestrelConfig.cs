@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,12 +30,27 @@ public class KestrelConfig
 
     // Reverse proxies (IP, CIDR or AttachedNetworksKeyword) whose X-Forwarded-For is trusted
     // for the client address (#1427). Empty = no forwarded headers are honoured, so a server
-    // reached directly keeps using the connection address. Deployment-owned: supplied by the
-    // environment (docker-compose.yml) and never written back to appsettings.json, where a
-    // stale copy would shadow the environment. The default must stay an empty array: the
+    // reached directly keeps using the connection address. Deployment-owned: read from the
+    // environment only (ReadTrustedProxies; docker-compose.yml sets it) and never written to
+    // appsettings.json. A file copy would outlive the deployment that needed it: e.g. a later
+    // `docker run` with published ports would then trust its bridge gateway, where
+    // userland-proxied connections come from. The default must stay an empty array: the
     // configuration binder appends to a pre-filled one.
     [JsonIgnore]
     public string[] TrustedProxies { get; set; } = [];
+
+    public const string TrustedProxiesKey = "Kestrel:" + nameof(TrustedProxies);
+
+
+    // Blank entries are dropped, so `Kestrel__TrustedProxies__0: ''` switches the trust off.
+    public static string[] ReadTrustedProxies(IConfiguration environment) =>
+        (environment.GetSection(TrustedProxiesKey).Get<string[]>() ?? [])
+            .Where(entry => !string.IsNullOrWhiteSpace(entry))
+            .ToArray();
+
+    public static bool SettingsFileHasTrustedProxies(IConfigurationRoot configuration) =>
+        configuration.Providers.OfType<FileConfigurationProvider>()
+            .Any(provider => provider.GetChildKeys([], TrustedProxiesKey).Any());
 
 
     public void Validate()
@@ -52,7 +68,10 @@ public class KestrelConfig
         var options = new ForwardedHeadersOptions
         {
             // Only the client address: the proxy-to-server hop is HTTPS already, so the scheme
-            // needs no restoring. One hop: Caddy overwrites X-Forwarded-For with the peer it saw.
+            // needs no restoring. Two independent guards against a client-chosen address:
+            // Caddy (no trusted_proxies) replaces any incoming X-Forwarded-For with the peer
+            // it saw, and ForwardLimit = 1 takes only the rightmost entry. Raising the limit
+            // (a second proxy hop) needs the outer hop's own sanitising first.
             ForwardedHeaders = ForwardedHeaders.XForwardedFor,
             ForwardLimit = 1,
         };

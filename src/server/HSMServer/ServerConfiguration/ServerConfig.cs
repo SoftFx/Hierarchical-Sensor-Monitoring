@@ -52,6 +52,9 @@ namespace HSMServer.ServerConfiguration
 
         public KestrelConfig Kestrel { get; }
 
+        [JsonIgnore]
+        public bool TrustedProxiesIgnoredInSettingsFile { get; }
+
         public MonitoringOptions MonitoringOptions { get; }
 
         public AgentConfig Agent { get; }
@@ -92,6 +95,10 @@ namespace HSMServer.ServerConfiguration
             MonitoringOptions = Register<MonitoringOptions>(nameof(MonitoringOptions));
             Agent = Register<AgentConfig>(nameof(Agent));
             ApiTokens = Register<ApiTokensConfig>(nameof(ApiTokens));
+
+            // Deployment-owned, environment only (#1427): a copy in the settings file is ignored.
+            Kestrel.TrustedProxies = KestrelConfig.ReadTrustedProxies(new ConfigurationBuilder().AddEnvironmentVariables().Build());
+            TrustedProxiesIgnoredInSettingsFile = KestrelConfig.SettingsFileHasTrustedProxies(configuration);
 
             // Startup validation with actionable errors (initiative, section
             // "Configuration"). Throws before the server starts serving.

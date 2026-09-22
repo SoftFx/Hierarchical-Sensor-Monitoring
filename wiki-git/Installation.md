@@ -61,7 +61,11 @@ HSM itself publishes no ports, so while Caddy is down (a port conflict, a typo i
 ```yaml
 services:
   app:
-    ports: ['127.0.0.1:44333:44333']
+    ports:
+      - '127.0.0.1:44333:44333'   # web UI, from the server itself only
+      # - '44330:44330'           # optional: let collectors send data directly meanwhile
+    environment:
+      Kestrel__TrustedProxies__0: ''   # no proxy in front now: trust no forwarded client address
 ```
 
 and start only HSM with it:
@@ -70,7 +74,7 @@ and start only HSM with it:
 docker compose -f docker-compose.yml -f docker-compose.recovery.yml up -d app
 ```
 
-The web UI is then at `https://localhost:44333` on the server itself, with HSM's own certificate. Run `docker compose up -d` again once Caddy is fixed.
+The web UI is then at `https://localhost:44333` on the server itself, with HSM's own certificate. While Caddy is down, collectors cannot deliver data; if the outage is long, uncomment the `44330` line so they can send directly (with HSM's self-signed certificate, so they need "allow untrusted certificate"). Run `docker compose up -d` again once Caddy is fixed.
 
 ### Reference docker-compose.yml
 
@@ -126,7 +130,6 @@ services:
         target: /etc/caddy/Caddyfile
     volumes:
       - ./CaddyData:/data                      # ACME account + certificates; keep it across updates
-      - ./Logs/caddy:/var/log/caddy            # access log of every request, with client IPs
 
 configs:
   caddyfile:
@@ -142,22 +145,12 @@ configs:
               tls_insecure_skip_verify
           }
       }
-      (hsm_access_log) {
-          log {
-              output file /var/log/caddy/access.log {
-                  roll_size 50MiB
-                  roll_keep 10
-              }
-          }
-      }
       ${HSM_DOMAIN}, ${HSM_DOMAIN}:44333 {
-          import hsm_access_log
           reverse_proxy https://app:44333 {
               import hsm_upstream
           }
       }
       ${HSM_DOMAIN}:44330 {
-          import hsm_access_log
           reverse_proxy https://app:44330 {
               import hsm_upstream
           }
@@ -166,13 +159,11 @@ configs:
       # agent bundles keep working. The certificate does not match such a name, so those
       # clients need "allow untrusted certificate", as with the old self-signed setup.
       https://:443, https://:44333 {
-          import hsm_access_log
           reverse_proxy https://app:44333 {
               import hsm_upstream
           }
       }
       https://:44330 {
-          import hsm_access_log
           reverse_proxy https://app:44330 {
               import hsm_upstream
           }
@@ -191,7 +182,6 @@ What must stay as it is, if you ever adapt it:
 | Ports `80` and `443` | Required when `HSM_DOMAIN` is a public DNS name: Let's Encrypt checks the domain through them. With an IP address or `tls internal` you can remove both lines; the web UI is then available on `44333` only. |
 | `./CaddyData:/data` | Keeps certificates across updates; without it Caddy requests new ones on every restart and hits Let's Encrypt rate limits. |
 | `Kestrel__TrustedProxies__0: 'attached-networks'` | HSM trusts the client address that Caddy forwards only from the network of its own container, the compose network, whose only other member is Caddy. The web UI and the API-token audit then show the real client IP, and nobody else can choose that address. No subnet has to be picked, so it cannot collide with other Docker networks on the host. |
-| `./Logs/caddy` access log | Every request with its client IP address (`Logs/caddy/access.log`), useful for incident analysis. |
 | `caddy:2.11.4` (pinned version) | Clients on other addresses depend on how Caddy picks a certificate; a new Caddy version is taken deliberately, after checking that behavior again. |
 
 ### Internal DNS name (not reachable from the internet)
@@ -307,7 +297,6 @@ Always mount these directories. Without them, **all data is lost** when the cont
 | `./Logs` | `/app/Logs` | Application logs |
 | `./Config` | `/app/Config` | `appsettings.json`, TLS certificates |
 | `./CaddyData` | `/data` (caddy) | Caddy's certificates and Let's Encrypt account (compose only) |
-| `./Logs/caddy` | `/var/log/caddy` (caddy) | Access log with real client IP addresses (compose only) |
 | `./Databases` | `/app/Databases` | All sensor data (LevelDB) |
 | `./DatabasesBackups` | `/app/DatabasesBackups` | Automatic database backups |
 
