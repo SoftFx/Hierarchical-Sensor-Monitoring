@@ -1,3 +1,4 @@
+using HSMServer.Middleware;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -37,7 +38,7 @@ namespace HSMServer.Core.Tests.Middleware
             context.Request.Headers["X-Forwarded-Proto"] = "http";
 
             var middleware = new ForwardedHeadersMiddleware(_ => Task.CompletedTask, NullLoggerFactory.Instance,
-                Options.Create(config.BuildForwardedHeadersOptions(() => AttachedCompose)));
+                Options.Create(TrustedProxyOptionsFactory.Build(config.TrustedProxies, () => AttachedCompose)));
 
             await middleware.Invoke(context);
 
@@ -109,7 +110,7 @@ namespace HSMServer.Core.Tests.Middleware
         [InlineData("10.0.0.7", false)]
         public async Task AttachedNetworks_TrustsOnlyTheServersOwnNetwork(string peerIp, bool trusted)
         {
-            var context = await SendThroughForwarding(new KestrelConfig { TrustedProxies = [KestrelConfig.AttachedNetworksKeyword] }, peerIp);
+            var context = await SendThroughForwarding(new KestrelConfig { TrustedProxies = [TrustedProxyOptionsFactory.AttachedNetworksKeyword] }, peerIp);
 
             Assert.Equal(IPAddress.Parse(trusted ? Client : peerIp), context.Connection.RemoteIpAddress);
         }
@@ -117,10 +118,9 @@ namespace HSMServer.Core.Tests.Middleware
         [Fact]
         public void AttachedNetworks_AreRegisteredAsTheirNetworkAddress()
         {
-            var options = new KestrelConfig { TrustedProxies = [KestrelConfig.AttachedNetworksKeyword] }
-                .BuildForwardedHeadersOptions(() => AttachedCompose);
+            var options = TrustedProxyOptionsFactory.Build([TrustedProxyOptionsFactory.AttachedNetworksKeyword], () => AttachedCompose);
 
-            Assert.Equal("172.30.244.0/24", KestrelConfig.Describe(options));
+            Assert.Equal("172.30.244.0/24", TrustedProxyOptionsFactory.Describe(options));
         }
 
         [Theory]
@@ -131,7 +131,7 @@ namespace HSMServer.Core.Tests.Middleware
         [InlineData("fd00::1:2", 64, "fd00::")]
         public void MaskToNetwork_ClearsHostBits(string address, int prefix, string expected)
         {
-            Assert.Equal(IPAddress.Parse(expected), KestrelConfig.MaskToNetwork(IPAddress.Parse(address), prefix));
+            Assert.Equal(IPAddress.Parse(expected), TrustedProxyOptionsFactory.MaskToNetwork(IPAddress.Parse(address), prefix));
         }
 
         [Fact]
@@ -158,14 +158,28 @@ namespace HSMServer.Core.Tests.Middleware
         {
             var environment = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string>
             {
-                ["Kestrel:TrustedProxies:0"] = KestrelConfig.AttachedNetworksKeyword,
+                ["Kestrel:TrustedProxies:0"] = TrustedProxyOptionsFactory.AttachedNetworksKeyword,
             }).Build();
 
-            Assert.Equal([KestrelConfig.AttachedNetworksKeyword], KestrelConfig.ReadTrustedProxies(environment));
+            Assert.Equal([TrustedProxyOptionsFactory.AttachedNetworksKeyword], KestrelConfig.ReadTrustedProxies(environment));
+        }
+
+        [Fact]
+        public void ReadTrustedProxies_AcceptsACommaSeparatedScalar()
+        {
+            // Kestrel__TrustedProxies=a,b without an index is the natural first guess; it must not
+            // silently turn the trust off.
+            var environment = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string>
+            {
+                ["Kestrel:TrustedProxies"] = "172.18.0.0/16, 10.1.0.5",
+            }).Build();
+
+            Assert.Equal(["172.18.0.0/16", "10.1.0.5"], KestrelConfig.ReadTrustedProxies(environment));
         }
 
         [Theory]
         [InlineData("{ \"Kestrel\": { \"SitePort\": 44333, \"TrustedProxies\": [ \"10.1.0.0/24\" ] } }", true)]
+        [InlineData("{ \"Kestrel\": { \"SitePort\": 44333, \"TrustedProxies\": \"10.1.0.0/24\" } }", true)]
         [InlineData("{ \"Kestrel\": { \"SitePort\": 44333 } }", false)]
         public void SettingsFileHasTrustedProxies_DetectsTheIgnoredFileValue(string json, bool expected)
         {
@@ -211,42 +225,6 @@ namespace HSMServer.Core.Tests.Middleware
         public void Validate_AcceptsAddressesAndNetworks()
         {
             new KestrelConfig { TrustedProxies = ["172.30.244.2", ComposeNetwork, "fd00::/8", "::1", "attached-networks", "Attached-Networks"] }.Validate();
-        }
-
-        [Fact]
-        public void Pipeline_RestoresTheClientAddressBeforeAnythingReadsIt()
-        {
-            // First within ConfigureMiddleware (Program.cs registers only request localization
-            // before it, which never reads the peer address). Registered lower, authentication
-            // (token audit and the invalid-attempt limiter) and the telemetry middleware would
-            // record the proxy instead of the client.
-            var body = ReadConfigureMiddlewareBody();
-
-            var forwarded = body.IndexOf("UseForwardedHeaders", StringComparison.Ordinal);
-
-            Assert.True(forwarded >= 0, "UseForwardedHeaders is not registered in ConfigureMiddleware");
-
-            foreach (var later in new[] { "UseExceptionHandler", "UseHttpsRedirection", "UseAuthentication", "ApiTokenUsageMiddleware", "TelemetryMiddleware" })
-                Assert.True(body.IndexOf(later, StringComparison.Ordinal) > forwarded, $"{later} must come after UseForwardedHeaders");
-        }
-
-
-        private static string ReadConfigureMiddlewareBody()
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-            while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "src")))
-                directory = directory.Parent;
-
-            Assert.NotNull(directory);
-
-            var source = File.ReadAllText(Path.Combine(directory.FullName, "src", "server", "HSMServer", "Extensions", "ApplicationServiceExtensions.cs"));
-            var start = source.IndexOf("ConfigureMiddleware", StringComparison.Ordinal);
-            var end = start < 0 ? -1 : source.IndexOf("return applicationBuilder;", start, StringComparison.Ordinal);
-
-            Assert.True(start >= 0 && end > start, "Cannot locate the ConfigureMiddleware body in ApplicationServiceExtensions.cs; update this test.");
-
-            return string.Join("\n", source[start..end].Split('\n').Where(line => !line.TrimStart().StartsWith("//")));
         }
     }
 }

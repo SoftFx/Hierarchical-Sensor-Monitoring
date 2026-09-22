@@ -127,13 +127,13 @@ try
     ForwardedHeadersOptions forwardedHeaders = null;
 
     if (serverConfig.TrustedProxiesIgnoredInSettingsFile)
-        logger.Warn($"{KestrelConfig.TrustedProxiesKey} in {ServerConfig.ConfigName} is ignored: it is deployment-owned and read from the environment only (Kestrel__TrustedProxies__0=...).");
+        logger.Warn($"{KestrelConfig.TrustedProxiesKey} in {ServerConfig.ConfigName} is ignored: it is deployment-owned and read from the environment only (Kestrel__TrustedProxies=...), because the settings file is rewritten on every start.");
 
     if (serverConfig.Kestrel.TrustedProxies.Length > 0)
     {
-        forwardedHeaders = serverConfig.Kestrel.BuildForwardedHeadersOptions();
+        forwardedHeaders = TrustedProxyOptionsFactory.Build(serverConfig.Kestrel.TrustedProxies);
 
-        var trusted = KestrelConfig.Describe(forwardedHeaders);
+        var trusted = TrustedProxyOptionsFactory.Describe(forwardedHeaders);
         if (string.IsNullOrEmpty(trusted))
             logger.Warn("Kestrel.TrustedProxies is set but resolved to no network: client IPs are the connecting peer's.");
         else
