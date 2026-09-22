@@ -116,6 +116,36 @@ namespace HSMServer.Core.Tests.Middleware
         }
 
         [Fact]
+        public async Task NothingResolved_TrustsNobody()
+        {
+            // ForwardedHeadersMiddleware treats two EMPTY known lists as "accept from anyone":
+            // an attached-networks entry that resolves to no interface must not arm that.
+            Assert.Null(TrustedProxyOptionsFactory.Build([TrustedProxyOptionsFactory.AttachedNetworksKeyword], () => []));
+
+            // Why null and not empty options: the framework honours anyone when both lists are empty.
+            var empty = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor };
+            empty.KnownNetworks.Clear();
+            empty.KnownProxies.Clear();
+
+            var context = new DefaultHttpContext();
+            context.Connection.RemoteIpAddress = IPAddress.Parse("198.51.100.20");
+            context.Request.Headers["X-Forwarded-For"] = Client;
+
+            await new ForwardedHeadersMiddleware(_ => Task.CompletedTask, NullLoggerFactory.Instance, Options.Create(empty)).Invoke(context);
+
+            Assert.Equal(IPAddress.Parse(Client), context.Connection.RemoteIpAddress);
+        }
+
+        [Theory]
+        [InlineData("::ffff:172.30.244.0/120", "172.30.244.0/24")]
+        [InlineData("::ffff:172.30.244.3", "172.30.244.3")]
+        public void MappedEntries_AreNormalisedToIPv4(string entry, string expected)
+        {
+            // The middleware maps the peer to IPv4 before comparing, never the configured entry.
+            Assert.Equal(expected, TrustedProxyOptionsFactory.Describe(TrustedProxyOptionsFactory.Build([entry], () => [])));
+        }
+
+        [Fact]
         public void AttachedNetworks_AreRegisteredAsTheirNetworkAddress()
         {
             var options = TrustedProxyOptionsFactory.Build([TrustedProxyOptionsFactory.AttachedNetworksKeyword], () => AttachedCompose);
@@ -214,6 +244,9 @@ namespace HSMServer.Core.Tests.Middleware
         [InlineData("10.0.0.0/abc")]
         [InlineData("10.0.0.0/8/1")]
         [InlineData("192.168")]    // IPAddress.TryParse shorthand for 0.0.192.168
+        [InlineData("10.0.0.0/0")] // trusts every peer
+        [InlineData("::/0")]
+        [InlineData("::ffff:10.0.0.0/64")] // mapped prefix shorter than the IPv4 part
         [InlineData("10/8")]
         [InlineData("")]
         public void Validate_RejectsMalformedEntry(string entry)

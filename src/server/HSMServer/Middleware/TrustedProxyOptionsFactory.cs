@@ -27,6 +27,8 @@ namespace HSMServer.Middleware
 
         public static ForwardedHeadersOptions Build(IEnumerable<string> trustedProxies) => Build(trustedProxies, GetAttachedNetworks);
 
+        // Null when no proxy resolved: ForwardedHeadersMiddleware treats two EMPTY known lists
+        // as "accept X-Forwarded-For from anyone", so such options must never be registered.
         public static ForwardedHeadersOptions Build(IEnumerable<string> trustedProxies, Func<IEnumerable<(IPAddress Address, int PrefixLength)>> attachedNetworks)
         {
             var options = new ForwardedHeadersOptions
@@ -60,7 +62,7 @@ namespace HSMServer.Middleware
                 }
             }
 
-            return options;
+            return options.KnownNetworks.Count + options.KnownProxies.Count > 0 ? options : null;
         }
 
         public static string Describe(ForwardedHeadersOptions options) =>
@@ -83,7 +85,9 @@ namespace HSMServer.Middleware
 
         private static IEnumerable<(IPAddress, int)> GetAttachedNetworks() =>
             NetworkInterface.GetAllNetworkInterfaces()
-                .Where(nic => nic.OperationalStatus == OperationalStatus.Up && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                // Container veth interfaces often report Unknown rather than Up on Linux.
+                .Where(nic => nic.OperationalStatus is OperationalStatus.Up or OperationalStatus.Unknown
+                              && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                 .SelectMany(nic => nic.GetIPProperties().UnicastAddresses)
                 .Where(unicast => !IPAddress.IsLoopback(unicast.Address) && !unicast.Address.IsIPv6LinkLocal && unicast.PrefixLength > 0)
                 .Select(unicast => (unicast.Address, unicast.PrefixLength))
@@ -106,11 +110,25 @@ namespace HSMServer.Middleware
                 return false;
             }
 
+            // The middleware maps the remote address to IPv4 before comparing, never the
+            // configured one: a mapped entry would never match, and a mapped CIDR would be
+            // masked against 128 bits (::ffff:172.18.0.0/16 becomes ::/16, i.e. everyone).
+            var mapped = address.IsIPv4MappedToIPv6;
+            if (mapped)
+                address = address.MapToIPv4();
+
             if (parts.Length == 1)
                 return true;
 
+            if (!int.TryParse(parts[1], out var length))
+                return false;
+
+            if (mapped)
+                length -= 96; // the prefix was written against the 128-bit mapped form
+
+            // /0 would trust every peer.
             var maxPrefix = address.AddressFamily == AddressFamily.InterNetworkV6 ? 128 : 32;
-            if (!int.TryParse(parts[1], out var length) || length < 0 || length > maxPrefix)
+            if (length < 1 || length > maxPrefix)
                 return false;
 
             prefix = length;

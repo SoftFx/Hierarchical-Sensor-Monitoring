@@ -131,15 +131,14 @@ try
                      "it is read from the environment only (Kestrel__TrustedProxies=...), because the settings file is rewritten on every start.");
 
     if (serverConfig.Kestrel.TrustedProxies.Length > 0)
-    {
         forwardedHeaders = TrustedProxyOptionsFactory.Build(serverConfig.Kestrel.TrustedProxies);
 
-        var trusted = TrustedProxyOptionsFactory.Describe(forwardedHeaders);
-        if (string.IsNullOrEmpty(trusted))
-            logger.Warn("Kestrel.TrustedProxies is set but resolved to no network: client IPs are the connecting peer's.");
-        else
-            logger.Info($"Client IP is taken from X-Forwarded-For only for connections from: {trusted}");
-    }
+    if (forwardedHeaders is not null)
+        logger.Info($"Client IP is taken from X-Forwarded-For only for connections from: {TrustedProxyOptionsFactory.Describe(forwardedHeaders)}");
+    else if (serverConfig.Kestrel.TrustedProxies.Length > 0)
+        logger.Warn($"Kestrel.TrustedProxies [{string.Join(", ", serverConfig.Kestrel.TrustedProxies)}] resolved to no address: forwarded headers are DISABLED, client IPs are the connecting peer's.");
+    else
+        logger.Info("Kestrel.TrustedProxies is empty: client IPs are the connecting peer's (no proxy trusted).");
 
     app.ConfigureMiddleware(app.Environment.IsDevelopment(), forwardedHeaders);
 

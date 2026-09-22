@@ -13,15 +13,21 @@ The easiest way to run HSM is with Docker Compose.
 curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/docker-compose.yml
 ```
 
-**2. Start HSM:**
+**2. Set the server address.** Create a file named `.env` next to `docker-compose.yml` (required):
+```dotenv
+HSM_DOMAIN=hsm.example.com
+```
+A public DNS name gets a trusted Let's Encrypt certificate automatically; an IP address gets a self-signed one. See [Installation](Installation) for details.
+
+**3. Start HSM:**
 ```bash
 docker compose up -d
 ```
 
-**3. Open the web UI:**
+**4. Open the web UI:**
 
-Navigate to `https://localhost:44333` in your browser.
-Accept the self-signed certificate warning if prompted.
+Navigate to `https://<HSM_DOMAIN>:44333` in your browser.
+With an IP address, accept the self-signed certificate warning if prompted.
 
 **Default credentials:**
 - Login: `default`
