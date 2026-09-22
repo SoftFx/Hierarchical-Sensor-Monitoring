@@ -6,7 +6,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 ## Prerequisites
 
-- [Docker](https://www.docker.com/) with Docker Compose v2.23 or newer
+- [Docker](https://www.docker.com/) with Docker Compose v2.23.1 or newer
 - Ports `44330` and `44333` available on the host, plus `80` and `443` for the automatic certificate. Check that nothing else on the host (another web server or proxy) already uses `80`/`443`, otherwise Caddy cannot start. With `HSM_DOMAIN` set to an IP address, `80`/`443` are not needed and you can remove those two lines from the `caddy` service.
 
 ---
@@ -21,7 +21,7 @@ The compose file runs two containers: the HSM server and [Caddy](https://caddyse
 curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/docker-compose.yml
 ```
 
-Use this file as is. Do not write your own compose file or put a different proxy in front: the HSM side of the setup depends on exactly this Caddy configuration.
+Do not write your own compose file or put a different proxy in front: the HSM side of the setup depends on exactly this Caddy configuration. The edits described on this page (`tls internal`, removing ports `80`/`443`, an e-mail for Let's Encrypt) are fine.
 
 **2. Tell Caddy the server address.** Create a file named `.env` next to `docker-compose.yml`. It is required: without it every `docker compose` command (`up`, `down`, `logs`, `pull`) stops with an error, so keep the file next to the compose file. If it is lost, you can still stop the stack with `HSM_DOMAIN=x docker compose down`.
 
@@ -51,6 +51,26 @@ Default credentials: login `default`, password `default`. **Change the password 
 Collectors and agents connect to `https://<HSM_DOMAIN>:44330`, as before.
 
 > If the certificate does not appear, check `docker logs hsm-caddy`. The usual cause is that the DNS record does not point to the server yet, or port 80 is closed in the firewall.
+
+Optionally, give Let's Encrypt an e-mail for expiry warnings and account recovery: add `email admin@example.com` as the first line inside the leading `{ ... }` block of the `caddyfile` section.
+
+### If Caddy does not start
+
+HSM itself publishes no ports, so while Caddy is down (a port conflict, a typo in `HSM_DOMAIN`, a broken edit of the `caddyfile` section) the web UI is unreachable too. Check `docker logs hsm-caddy`. To reach HSM directly in the meantime, create `docker-compose.recovery.yml` next to the compose file:
+
+```yaml
+services:
+  app:
+    ports: ['127.0.0.1:44333:44333']
+```
+
+and start only HSM with it:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.recovery.yml up -d app
+```
+
+The web UI is then at `https://localhost:44333` on the server itself, with HSM's own certificate. Run `docker compose up -d` again once Caddy is fixed.
 
 ### Reference docker-compose.yml
 
@@ -196,7 +216,9 @@ Nothing changes on the HSM side: it keeps its data, settings and own certificate
 **Before you stop the old stack**, check ports `80` and `443`:
 
 - **They must be free on the host.** If they are taken, the new stack fails to start after the old one is already down.
-- **They become open to the network.** Docker publishes ports past host firewalls such as `ufw`, so a host that exposed only `44330`/`44333` now also answers on `80` and `443`. If `HSM_DOMAIN` is an IP address, or the server must not be reachable on these ports, remove the `80:80` and `443:443` lines from the `caddy` service before starting. Let's Encrypt then cannot work, and Caddy uses its own certificate.
+- **They become open to the network.** Docker publishes ports past host firewalls such as `ufw`, so a host that exposed only `44330`/`44333` now also answers on `80` and `443`. If the server must not be reachable on these ports, remove the `80:80` and `443:443` lines from the `caddy` service before starting. Let's Encrypt cannot work then:
+  - with an IP address in `HSM_DOMAIN` nothing else is needed; Caddy uses its own certificate;
+  - with a DNS name in `HSM_DOMAIN` you **must** also add `tls internal` to both `HSM_DOMAIN` sites (see "Internal DNS name" above). Otherwise Caddy never gets a certificate, and every TLS connection fails: browsers and collectors on `44330` alike.
 
 Then replace your `docker-compose.yml` with the reference one, create the `.env` file (step 2 above), and restart:
 

@@ -188,12 +188,15 @@ services:
 "@ | Set-Content -Path $overridePath -Encoding utf8
 
     # The `!override` tag above needs Docker Compose v2.24.4+.
-    $composeVersion = [version]((docker compose version --short) -replace '^v', '' -replace '[^0-9.].*$', '')
+    $composeVersionText = docker compose version --short 2>$null
+    if (-not $composeVersionText) { throw "docker compose is not available. Is Docker running?" }
+    $composeVersion = [version](($composeVersionText -replace '^v', '') -replace '[^0-9.].*$', '')
     if ($composeVersion -lt [version]"2.24.4") { throw "Docker Compose v2.24.4+ is required (found $composeVersion)." }
 
     # docker-compose.yml requires HSM_DOMAIN; a local run is https://localhost with Caddy's
     # internal CA, published on loopback only. Set for the compose calls below only, so it
-    # does not leak into the caller's session and shadow a repo-root .env later.
+    # does not leak into the caller's session and shadow a repo-root .env later. While they
+    # run it also takes precedence over a repo-root .env (shell beats .env in Compose).
     $hadDomain = [bool]$env:HSM_DOMAIN
     if (-not $hadDomain) { $env:HSM_DOMAIN = "localhost" }
 
@@ -212,7 +215,8 @@ services:
     Write-Host "  Web UI:      https://localhost:44333"
     Write-Host "  Sensor API:  https://localhost:44330"
     Write-Host "  Logs:        $repoRoot\Logs"
-    Write-Host "  Stop:        docker compose -f docker-compose.yml -f docker-compose.local.yml down"
+    Write-Host "  Stop:        `$env:HSM_DOMAIN='localhost'; docker compose -f docker-compose.yml -f docker-compose.local.yml down"
+    Write-Host "  Proxy logs:  `$env:HSM_DOMAIN='localhost'; docker compose -f docker-compose.yml -f docker-compose.local.yml logs -f caddy"
 }
 finally {
     if (-not $StayOnBranch -and $origBranch -and $origBranch -ne $Branch) {

@@ -18,7 +18,7 @@
 | public DNS name | Let's Encrypt (ACME HTTP-01 on port 80 / TLS-ALPN on 443), auto-renewed |
 | IP address | Caddy's internal CA (self-signed; clients need allow-untrusted) |
 
-Caddy state (ACME account + certificates) lives in `./CaddyData` and must survive updates, or Let's Encrypt rate limits are hit on re-issue. The admin-facing guide is `wiki-git/Installation.md`. It embeds this compose file verbatim as the reference setup, and `ReferenceComposeDocTests` fails when the two differ, so change them together. Server tests do not run on pull requests, so the test catches drift only after merge (`server-build.yml` on master): run it locally when touching either file. `scripts/local-docker-build.ps1` sets `HSM_DOMAIN=localhost` and publishes Caddy on `127.0.0.1` only.
+Caddy state (ACME account + certificates) lives in `./CaddyData` and must survive updates, or Let's Encrypt rate limits are hit on re-issue. The admin-facing guide is `wiki-git/Installation.md`. It embeds this compose file verbatim as the reference setup, and `ReferenceComposeDocTests` fails when the two differ, so change them together. Server tests do not run on pull requests, so the test catches drift only after merge. It then fails `Build & Test Solution` in `server-build.yml`, the job that also publishes the Docker image, so drift blocks the release image: run it locally when touching either file. `scripts/local-docker-build.ps1` sets `HSM_DOMAIN=localhost` and publishes Caddy on `127.0.0.1` only.
 
 What the HSM side relies on behind Caddy:
 
@@ -30,6 +30,8 @@ What the HSM side relies on behind Caddy:
   - `TrustedProxies` is `[JsonIgnore]`: deployment-owned, never persisted by `ResaveSettings`. The settings file is added after environment providers, so a persisted copy would shadow a later compose change.
   - Empty (`docker run`, direct access): no forwarded headers are honoured, same as before.
   - With it, the per-source invariant of `ApiTokenInvalidAttemptLimiter`, the token audit source and the key telemetry `RemoteIP` hold behind the proxy as they did without it.
+- **TLS client compatibility:** Caddy's TLS 1.2 defaults are AEAD-only, while Kestrel used the platform (OpenSSL) list with CBC suites. Caddy issues ECDSA P-256 certificates by default (Let's Encrypt and its internal CA), and Windows 7 / Server 2008 R2 Schannel does offer `TLS_ECDHE_ECDSA_WITH_AES_*_GCM`, so `net472` collectors on those systems are expected to negotiate. This is not verified on a real Windows 7 client. If one fails, add an explicit `tls { ciphers ... }` to the sites.
+- **Recovery when Caddy is down:** `app` publishes nothing, so the documented `docker-compose.recovery.yml` override (`127.0.0.1:44333`) is the way into HSM while the proxy does not start (`wiki-git/Installation.md`, "If Caddy does not start").
 - **HTTP on port 80:** Caddy redirects `http://<HSM_DOMAIN>/` to `https://<HSM_DOMAIN>/` (the UI on 443), verified live.
 
 ## Ports

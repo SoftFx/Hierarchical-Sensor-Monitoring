@@ -20,11 +20,17 @@ namespace HSMServer.Core.Tests
             var compose = Normalize(File.ReadAllText(Path.Combine(root, "docker-compose.yml"))).TrimEnd('\n');
             var wiki = Normalize(File.ReadAllText(wikiPath));
 
-            Assert.True(wiki.Contains("```yaml\n" + compose + "\n```", StringComparison.Ordinal),
-                "wiki-git/Installation.md must embed docker-compose.yml verbatim (section \"Reference docker-compose.yml\"); update both together.");
+            const string heading = "### Reference docker-compose.yml";
+            var section = wiki.IndexOf(heading, StringComparison.Ordinal);
+            Assert.True(section >= 0, $"wiki-git/Installation.md has no \"{heading}\" section.");
+
+            // The first yaml block after the heading must be the file itself, not a copy elsewhere on the page.
+            var block = wiki.IndexOf("```yaml\n", section, StringComparison.Ordinal);
+            Assert.True(block >= 0 && wiki.AsSpan(block).StartsWith("```yaml\n" + compose + "\n```", StringComparison.Ordinal),
+                "wiki-git/Installation.md must embed docker-compose.yml verbatim right under \"Reference docker-compose.yml\"; update both together.");
         }
 
-        private static string Normalize(string text) => text.Replace("\r\n", "\n").TrimStart('﻿');
+        private static string Normalize(string text) => text.Replace("\r\n", "\n").TrimStart('\uFEFF');
 
         private static string FindRepoRoot()
         {
