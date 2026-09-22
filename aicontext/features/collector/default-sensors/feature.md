@@ -251,6 +251,39 @@ behind `#if defined(__linux__)` (the `tcp_connection_stats.hpp` precedent). Linu
 (`native_linux_metric_sources_produce_live_value`, `native_linux_process_metrics_produce_live_value`)
 asserts the sensors actually emit, guarding the registered-but-empty class #1189 exposed on Windows.
 
+### Native metric-driven bars: partial posts (#1428)
+
+Applies to every default DoubleBar/IntBar the native collector binds to a metric source (Total CPU,
+Free RAM memory, Process CPU / memory / thread count, the Windows disk bars), on Windows PDH and Linux
+`/proc` alike — the scheduling lives in the shared core, not in the platform factories. It is a
+transcription of managed `BarMonitoringSensorBase` + `CollectableBarMonitoringSensorBase`, using the
+managed `BarSensorOptions` defaults every default-bar prototype inherits:
+
+| Step | Managed | Native (collector ≥ 0.7.1) |
+|---|---|---|
+| Bar window | `BarPeriod` 5 min; `OpenTime = floor(UtcNow / BarPeriod) · BarPeriod`, `CloseTime = OpenTime + BarPeriod` (wall clock) | `kDefaultBarPeriodMs` (the sensor's registered bar period), same alignment in unix ms (5 min divides the 0001→1970 offset, so both land on the same instants) |
+| Sample tick | `BarTickPeriod` 5 s from Start (collect loop); each tick first rolls the bar if `CloseTime < now` (strict), then reads the source and adds the sample | `kMetricBarSampleMs` 5 s; same roll-then-sample order; the first tick fires at Start (a source with a first-read baseline, e.g. Total CPU, posts nothing on it) |
+| Partial post | every `PostDataPeriod` (catalog 15 s), first at the next wall-clock multiple of it (a full period when Start is exactly on one); posts a copy of the in-progress bar, nothing when it is empty | same cadence and alignment (`post_period_ms` of the catalog row) |
+| Window boundary | the post falling on the boundary instant still carries the old bar (`CloseTime == now` is not past); the next sample tick publishes the closed bar again and opens the next window | identical |
+| Stop | flushes a non-empty partial bar, then opens a fresh one (no resend on stop → start → stop) | identical (`TryFlushBarJson`) |
+| Rounding | `Complete()` on a copy: double → `Math.Round(v, Precision=2, AwayFromZero)`; int → mean only | same serializer as the public bars |
+
+Every post of one window therefore carries the SAME `OpenTime`/`CloseTime` while `Count`, `Min`,
+`Max`, `Mean` and `Last` grow. Before 0.7.1 the native bar window equalled the post period, so each 15 s
+post was a separate, closed bar with its own `OpenTime`.
+
+**Storage effect.** The server keeps a same-`OpenTime` post as the in-memory partial of the current bar
+and persists a bar only when a NEW `OpenTime` arrives (`BarValuesStorage`). A native sender now writes
+**one bar per 5 minutes per sensor** — as a managed sender does — instead of one per 15 s post (20× fewer
+records), and EMA / alert evaluation runs on the same 5-min grid for both collectors.
+
+Pinned by: the conformance fixture `bar_sampled_partial_contract.hsmtest` (both drivers; a sampled bar
+with fixture-sized periods — OpenTime stable across partials, Count accumulating, a new OpenTime after
+the boundary, the stop flush); the native manual-clock tests `native_metric_bar_partial_posts_keep_open_time`,
+`native_metric_bar_rolls_over_at_window_boundary` and `native_metric_bar_flushes_partial_on_stop`, whose
+expected values are derived step by step from the managed algorithm; and the live smoke tests on both
+platforms, which assert that real Total CPU posts are partials of one aligned 5-min bar.
+
 ### Platform-correct registration (#1414)
 
 The managed collector picks `WindowsSensorsCollection` / `UnixSensorsCollection` at runtime; the native
