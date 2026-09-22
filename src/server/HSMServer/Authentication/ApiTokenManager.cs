@@ -623,6 +623,47 @@ namespace HSMServer.Authentication
                 GlobalRevocationGeneration, GetOwnerRevocationGeneration(token.OwnerUserId));
         }
 
+        public bool IsTokenLiveByEntityId(Guid entityId) =>
+            TryGetLiveOwner(entityId, out _);
+
+        // The IsTokenLiveByEntityId rule PLUS the owner id, resolved in ONE index
+        // walk without materializing the ApiTokenInfo projection: the eviction
+        // sweep runs this over every monitored token on every tick, and composing
+        // IsTokenLiveByEntityId + GetTokenByEntityId would walk the index twice and
+        // rebuild the full projection each time (#1403 review; same narrowness rule
+        // as TryGetEntityId).
+        public bool TryGetLiveOwner(Guid entityId, out Guid ownerUserId)
+        {
+            ownerUserId = Guid.Empty;
+
+            var token = GetEntityByEntityId(entityId);
+
+            if (token is null)
+                return false;
+
+            // Same predicate family as IsTokenLive: boot health gates everything,
+            // and the record must be live against a single snapshot of both
+            // generations.
+            if (!IsGenerationStateHealthy || !IsLive(token,
+                GlobalRevocationGeneration, GetOwnerRevocationGeneration(token.OwnerUserId)))
+                return false;
+
+            ownerUserId = token.OwnerUserId;
+            return true;
+        }
+
+        public bool TryGetEntityId(string tokenId, out Guid entityId)
+        {
+            if (GetEntity(tokenId) is { } token)
+            {
+                entityId = token.EntityId;
+                return true;
+            }
+
+            entityId = Guid.Empty;
+            return false;
+        }
+
         // Durable half of last-used coalescing, on the flush timer. Each token's
         // read-modify-write runs under _stateLock so it serializes with lifecycle
         // mutations: a flushed timestamp can never overwrite a revocation written
