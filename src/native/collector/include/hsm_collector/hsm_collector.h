@@ -605,19 +605,19 @@ hsm_result_t hsm_collector_set_metric_source_factory(
    against a NEWER header must not write past the `struct_size` it is handed. */
 typedef enum hsm_metric_value_kind_t HSM_ENUM_INT32
 {
-    HSM_METRIC_VALUE_DOUBLE = 0,      /* `double_value` (the default; what `read` produces) */
-    HSM_METRIC_VALUE_TIMESPAN_MS = 1  /* `timespan_ms` — a TimeSpan-typed sensor's value */
+    HSM_METRIC_VALUE_DOUBLE = 0,     /* `double_value` (the default; what `read` produces) */
+    HSM_METRIC_VALUE_TIMESPAN_MS = 1 /* `timespan_ms` — a TimeSpan-typed sensor's value */
 } hsm_metric_value_kind_t;
 
 typedef struct hsm_metric_sample_t
 {
-    size_t struct_size;            /* sizeof as the COLLECTOR knows it; never written by the source */
+    size_t struct_size; /* sizeof as the COLLECTOR knows it; never written by the source */
     hsm_metric_value_kind_t kind;
     double double_value;
     int64_t timespan_ms;
-    int32_t status;                /* hsm_sensor_status_t; HSM_SENSOR_STATUS_OK on entry */
-    const char* comment;           /* NULL => no comment */
-    const char* error;             /* failure detail; NULL => the collector logs a generic line */
+    int32_t status;      /* hsm_sensor_status_t; HSM_SENSOR_STATUS_OK on entry */
+    const char* comment; /* NULL => no comment */
+    const char* error;   /* failure detail; NULL => the collector logs a generic line */
 } hsm_metric_sample_t;
 
 /* Reader for a typed source, and the optional auxiliary tick. Both use one signature; `refresh`

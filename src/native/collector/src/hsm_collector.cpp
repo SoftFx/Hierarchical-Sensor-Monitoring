@@ -1585,7 +1585,8 @@ namespace
         hsm_metric_source_t source{};
 
         MetricSource() = default;
-        explicit MetricSource(const hsm_metric_source_t& s) : source(s) {}
+        explicit MetricSource(const hsm_metric_source_t& s)
+            : source(s) {}
         MetricSource(const MetricSource&) = delete;
         MetricSource& operator=(const MetricSource&) = delete;
         ~MetricSource() { Dispose(); }
@@ -3937,7 +3938,8 @@ namespace
             struct Latch
             {
                 bool& flag;
-                explicit Latch(bool& f) : flag(f) { flag = true; }
+                explicit Latch(bool& f)
+                    : flag(f) { flag = true; }
                 ~Latch() { flag = false; }
             } latch(posting);
 

@@ -580,11 +580,7 @@ namespace
     {
     public:
         ScriptedDiskPrediction(long long calibration_requests, long long refresh_period_ms, double start, double drain_per_second)
-            : prediction_(calibration_requests)
-            , refresh_period_ms_(refresh_period_ms)
-            , start_(start)
-            , drain_per_second_(drain_per_second)
-            , created_ms_(NowMs())
+            : prediction_(calibration_requests), refresh_period_ms_(refresh_period_ms), start_(start), drain_per_second_(drain_per_second), created_ms_(NowMs())
         {
         }
 
