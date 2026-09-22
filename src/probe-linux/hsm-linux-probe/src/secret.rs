@@ -21,17 +21,21 @@ impl Secret {
 
     /// Read a key from a file, trimming surrounding whitespace (editors add a trailing newline).
     pub fn read_from_file(path: &Path) -> Result<Self, SecretError> {
-        let raw = std::fs::read_to_string(path).map_err(|source| SecretError::Read {
+        let mut raw = std::fs::read_to_string(path).map_err(|source| SecretError::Read {
             path: path.display().to_string(),
             source,
         })?;
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
+        let key = raw.trim().to_string();
+        // The read buffer holds the key too; wipe it rather than leaving a second copy behind on
+        // the freed heap.
+        wipe(&mut raw);
+
+        if key.is_empty() {
             return Err(SecretError::Empty {
                 path: path.display().to_string(),
             });
         }
-        Ok(Secret(trimmed.to_string()))
+        Ok(Secret(key))
     }
 }
 
@@ -132,6 +136,21 @@ mod tests {
         let mut copy = "super-secret-key".to_string();
         wipe(&mut copy);
         assert!(copy.is_empty());
+    }
+
+    #[test]
+    fn reading_trims_the_trailing_newline_an_editor_leaves() {
+        let path = std::env::temp_dir().join(format!("hsm-probe-key-{}", std::process::id()));
+        std::fs::write(&path, "  a-product-access-key\n").expect("write");
+        let secret = Secret::read_from_file(&path).expect("read");
+        assert_eq!(secret.expose(), "a-product-access-key");
+
+        std::fs::write(&path, "   \n").expect("write");
+        assert!(matches!(
+            Secret::read_from_file(&path),
+            Err(SecretError::Empty { .. })
+        ));
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
