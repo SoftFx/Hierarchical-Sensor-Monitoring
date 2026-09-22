@@ -15,11 +15,13 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 The compose file runs two containers: the HSM server and [Caddy](https://caddyserver.com/), a web server in front of it. Caddy takes care of HTTPS: it gets a certificate, renews it before it expires, and passes requests to HSM. You do not create, choose or install any certificate yourself.
 
-**1. Download the compose file:**
+**1. Download the reference compose file** (full text below, in [Reference docker-compose.yml](#reference-docker-composeyml)):
 
 ```bash
 curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/docker-compose.yml
 ```
+
+Use this file as is. Do not write your own compose file or put a different proxy in front: the HSM side of the setup depends on exactly this Caddy configuration.
 
 **2. Tell Caddy the server address.** Create a file named `.env` next to `docker-compose.yml`:
 
@@ -48,6 +50,78 @@ Default credentials: login `default`, password `default`. **Change the password 
 Collectors and agents connect to `https://<HSM_DOMAIN>:44330`, as before.
 
 > If the certificate does not appear, check `docker logs hsm-caddy`. The usual cause is that the DNS record does not point to the server yet, or port 80 is closed in the firewall.
+
+### Reference docker-compose.yml
+
+This is the supported setup, the same file as [`docker-compose.yml`](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/blob/master/docker-compose.yml) in the repository:
+
+```yaml
+# HSM Server behind Caddy. Everyone runs the same stack with `docker compose up -d`.
+#
+# Caddy terminates TLS and obtains/renews the certificate by itself; HSM serves plain HTTP
+# inside the compose network only. Set the address clients use in a `.env` file next to
+# this one (or in the shell):
+#   HSM_DOMAIN=hsm.example.com   public DNS name -> Let's Encrypt certificate
+#                                (DNS must point here, port 80 reachable from the internet)
+#   HSM_DOMAIN=10.0.0.5          IP address / localhost -> Caddy's own self-signed certificate
+# Unset, it is `localhost`. Collectors and agents keep using https://<HSM_DOMAIN>:44330.
+#
+# The image is published by CI (server-build.yml). To run a build from local sources instead,
+# publish it to this exact tag first:
+#   dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 \
+#     -p:PublishProfile=DefaultContainer -p:ContainerImageName=hsmonitoring/hierarchical_sensor_monitoring
+services:
+  app:
+    image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
+    container_name: hsm-server
+    restart: unless-stopped
+    user: '0'
+    environment:
+      Kestrel__UseHttps: 'false'               # TLS is terminated by caddy; no ports published
+    volumes:
+      - ./Logs:/app/Logs                       # NLog output
+      - ./Config:/app/Config                   # server config (Telegram, Agent settings)
+      - ./Databases:/app/Databases             # embedded LevelDB (sensor history + metadata)
+      - ./DatabasesBackups:/app/DatabasesBackups
+
+  caddy:
+    image: 'caddy:2'
+    container_name: hsm-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '80:80'         # ACME HTTP challenge + redirect to https
+      - '443:443'       # Web UI on the standard port
+      - '44330:44330'   # Sensor API — collectors/agents send values here (https, /api/sensors/*)
+      - '44333:44333'   # Web UI — browser dashboard, admin, agent download (https)
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - ./CaddyData:/data                      # ACME account + certificates; keep it across updates
+
+configs:
+  caddyfile:
+    content: |
+      ${HSM_DOMAIN:-localhost}, ${HSM_DOMAIN:-localhost}:44333 {
+          reverse_proxy app:44333
+      }
+      ${HSM_DOMAIN:-localhost}:44330 {
+          reverse_proxy app:44330
+      }
+```
+
+What must stay as it is, if you ever adapt it:
+
+| Part | Why |
+|---|---|
+| `Kestrel__UseHttps: 'false'` on `app` | HSM serves plain HTTP; Caddy provides HTTPS. |
+| No `ports:` on `app` | HSM must be reachable only through Caddy. |
+| `reverse_proxy app:44333` and `reverse_proxy app:44330` in separate sites | HSM tells the web UI and the Sensor API apart by the port a request arrives on. |
+| Public ports `44330` and `44333` | Collectors and agents connect to `https://<host>:44330`; downloaded agent bundles use this port. |
+| Ports `80` and `443` | Let's Encrypt checks the domain through them. |
+| `./CaddyData:/data` | Keeps certificates across updates; without it Caddy requests new ones on every restart and hits Let's Encrypt rate limits. |
 
 ### Internal DNS name (not reachable from the internet)
 
@@ -141,7 +215,7 @@ The scripts pull the latest image and start the container with the correct volum
 
 ## Volume Mounts — Important
 
-Always mount these four directories. Without them, **all data is lost** when the container is stopped or updated:
+Always mount these directories. Without them, **all data is lost** when the container is stopped or updated:
 
 | Host path | Container path | Contents |
 |---|---|---|
@@ -188,8 +262,8 @@ Note: the `Kestrel` config defines the ports the server listens on inside the co
 To update to the latest version:
 
 ```bash
-# Pull the new image
-docker pull hsmonitoring/hierarchical_sensor_monitoring:latest
+# Pull the new images (HSM and Caddy)
+docker compose pull
 
 # Restart with Docker Compose (data is preserved in volumes)
 docker compose down

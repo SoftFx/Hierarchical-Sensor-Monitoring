@@ -16,7 +16,7 @@ The address comes from `HSM_DOMAIN` (`.env` next to the compose file, default `l
 | public DNS name | Let's Encrypt (ACME HTTP-01 on port 80 / TLS-ALPN on 443), auto-renewed |
 | IP / `localhost` | Caddy's internal CA (self-signed; clients need allow-untrusted) |
 
-Caddy state (ACME account + certificates) lives in `./CaddyData` and must survive updates, or Let's Encrypt rate limits are hit on re-issue. Admin-facing guide: `wiki-git/Installation.md`.
+Caddy state (ACME account + certificates) lives in `./CaddyData` and must survive updates, or Let's Encrypt rate limits are hit on re-issue. Admin-facing guide: `wiki-git/Installation.md`, which embeds this compose file verbatim as the reference setup; `ReferenceComposeDocTests` fails when the two differ, so change them together.
 
 ## Ports
 
