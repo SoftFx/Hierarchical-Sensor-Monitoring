@@ -156,6 +156,21 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.8.0** (#1426) — additive typed metric sources. The double-only seam could not say WHY a read
+  failed (so a broken source degraded silently, against root rule #8) and could not carry a
+  non-double value (so the TimeSpan-typed disk-space prediction had no live value). Added:
+  `HSM_METRIC_READ_SAMPLE_ERROR` (this read failed, the source stays), `hsm_metric_value_kind_t`,
+  `hsm_metric_sample_t` (typed value + status + comment + error text, with `struct_size`),
+  `hsm_metric_read_sample_fn`, `hsm_metric_source_t` (`read`/`read_sample`/`refresh` +
+  `refresh_period_ms` + `dispose` + `user_data`, with `struct_size`),
+  `hsm_metric_source_factory_ex_fn` and `hsm_collector_set_metric_source_factory_ex`. The original
+  `hsm_metric_read_fn` / `hsm_metric_source_factory_fn` / `hsm_collector_set_metric_source_factory`
+  are UNCHANGED in signature and semantics — a source that fills only `read` behaves exactly as
+  before — so the Windows PDH factory, the Linux `/proc` factory and any host plugin keep linking.
+  The two setters share one factory slot (installing either replaces the other). Behavior growth on
+  top of the ABI: a reported read failure now reaches the deduplicated log AND the
+  `.module/Collector errors` sensor when registered, and a value-typed sensor posts one Error-status
+  value carrying the message (what managed already did).
 - **0.4.0** (#1099) — additive default-sensor catalog: `hsm_default_sensor_t` (the
   built-in IWindowsCollection/IUnixCollection prototypes) + `hsm_default_sensor_params_t`
   + `hsm_collector_add_default_sensor` and the `add_all_*` / per-category bulk helpers;

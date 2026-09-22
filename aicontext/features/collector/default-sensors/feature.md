@@ -115,6 +115,24 @@ Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySens
 
 `DefaultSensors/BaseTemplates/FreeDiskSpacePredictionBase.cs`: sample free space every 30 s; speed EMA `0.9*old + 0.1*new`; first **6** requests are calibration (default `DiskSensorOptions.CalibrationRequests = 6`, configurable; returns OffTime); if space is shrinking → `TimeSpan = freeSpace / speed`, status Ok; if growing → previous prediction + OffTime ("cannot be calculated"). Read failures are sensor errors (Error value with message), not lifecycle failures — sampling continues and recovers.
 
+Three details are part of the cross-collector contract and are reproduced verbatim by the native
+`src/disk_prediction.hpp` (#1426):
+- only a POSITIVE speed is folded into the EMA, so a refill moves the baseline without moving the
+  estimate — and `_isOffTime` (`_currentChangeSpeed < 0`) is therefore unreachable in practice;
+- the value, the status and the comment are evaluated in that order (`GetValue` → `GetStatus` →
+  `GetComment`) and only the value's branch consumes a calibration request, so the post right AFTER
+  calibration still carries `TimeSpan.Zero` while already reporting the running status and the speed
+  comment;
+- the comment divides the speed by 1 MiB and labels it `Mbytes/sec` whatever unit the platform's
+  `IDiskInfo` reports in (bytes on Windows, kB on Unix). Mirrored rather than corrected: the two
+  collectors must produce the same comment for the same host, and relabelling it is a separate,
+  user-visible decision.
+
+Known managed wrinkle: the send loop starts in `InitAsync` with a zero due time while `StartAsync`
+resets `_requestsCount` afterwards, so the opening post races that reset and the first calibration
+comment can repeat or read `(0/N)`. The conformance fixture therefore does not pin the NUMBER of
+calibration posts.
+
 ## Perf-counter infrastructure
 
 `System.Diagnostics.PerformanceCounter` is isolated behind `IPerformanceCounterFactory`/`IPerformanceCounter` (`WindowsPerformanceCounterFactory` is the only place real calls live; tests substitute fakes). Counters are recreated on `InvalidOperationException` and disposed in `StopAsync`.
@@ -202,6 +220,55 @@ production default factory is a no-op; two ready-made factories ship with the li
 `hsm_collector_install_linux_metric_sources` (`/proc` + `statvfs`, #1414). Each returns
 `HSM_RESULT_INVALID_STATE` off its platform and must be installed before `Start`.
 
+### Typed sources and read-failure reporting (#1426)
+
+The original seam carried a `double` and three outcomes, which left two gaps: a broken source could
+only say "no value", so it degraded silently (against rule #8), and a non-double sensor could not be
+driven at all. Both are closed **additively** in collector 0.8.0 — `hsm_metric_read_fn`,
+`hsm_metric_source_factory_fn` and `hsm_collector_set_metric_source_factory` keep their exact
+signatures and semantics, so an existing host plugin needs no change:
+
+| Addition | Purpose |
+|---|---|
+| `HSM_METRIC_READ_SAMPLE_ERROR` | THIS read failed and the source is still usable — report, do not recreate |
+| `hsm_metric_sample_t` | a typed sample: `kind` (double / TimeSpan-ms), the value, a `status`, a `comment` and an `error` string |
+| `hsm_metric_read_sample_fn` | a reader that fills that sample |
+| `hsm_metric_source_t` + `hsm_collector_set_metric_source_factory_ex` | the factory fills one struct instead of three out-params, so the seam can grow again without a new factory type |
+| `hsm_metric_source_t.refresh` / `.refresh_period_ms` | an OPTIONAL second cadence for a source whose posted value is derived from samples taken more often than it posts — the native shape of a managed sensor that runs its own sampling loop beside the post loop |
+
+Both setters share one factory slot: installing either replaces whichever was there, so a collector
+never holds two competing sources for one path. The collector zero-initializes both structs and sets
+their `struct_size` before every call; a source must not write past the size it is handed.
+
+**What a failure does now.** `HSM_METRIC_READ_ERROR` keeps its old meaning (the SOURCE is faulted:
+dispose + recreate; a declined recreate parks the sensor). `HSM_METRIC_READ_SAMPLE_ERROR` keeps the
+source. Either way the failure becomes visible, and exactly as the managed side already makes it
+visible:
+
+- the deduplicated error channel gets `Sensor: <path>, <reason>` — managed `AddException` formats
+  `Sensor: {SensorPath}, {ex}`;
+- native `LogError` now also posts every emitted line on the `.module/Collector errors` sensor when
+  the host registered it, which is the second half of the managed `MessageDeduplicator` action
+  (`logger.Error` + `CollectorErrors.SendCollectorError`). Only messages that survive deduplication
+  get there, so a storm collapses on the wire exactly as it does in the log;
+- a VALUE sensor also posts one value per post period: the default value, status `Error`, and the
+  failure message as the comment — managed `BuildSensorValue`'s catch arm. A BAR sensor posts
+  nothing and just skips the sample, which is what `CollectableBarMonitoringSensorBase` does.
+
+`HSM_METRIC_READ_NO_VALUE` stays SILENT by design: it means a legitimately empty tick (a delta source
+seeding its baseline, an interval too short to measure), which managed skips silently too.
+
+**Managed side of the same change.** `UnixTotalCpu` and `UnixFreeRamMemory` used to swallow their
+`IOException`/`UnauthorizedAccessException`/`SecurityException` and return `null`, and treated
+unparseable content the same way — the exact divergence the native change would have created. They
+now route both cases to `HandleException`, so the two collectors report the same failures. The
+`UnixTotalCpu` constructor's baseline read stays silent (it runs before the sensor is started, and
+every later tick reports the same failure anyway). Every other Unix sensor already let its exception
+reach the collect loop.
+
+Conformance: `metric_source_contract.hsmtest` (`metric_source_error_is_reported`,
+`disk_prediction_calibrates_then_predicts`).
+
 ### Native Linux metric sources (#1414)
 
 `InstallLinuxMetricSources()` binds the Unix catalog's value-typed sensors to the SAME OS truth the
@@ -234,22 +301,35 @@ busy fraction clamps to 0..100 and posts nothing when the interval is zero or th
 backwards (CPU-count change / reset); the free-RAM fallback is
 `MemFree + Buffers + Cached + SReclaimable - Shmem` clamped at 0; the disk and process-memory values
 truncate to whole MB exactly as the managed integer conversions do; process CPU is NOT normalized by
-core count (two saturated cores read 200%). A read failure is reported as "no value this tick" — a
-skipped bar, not a fault — mirroring the managed sensors' swallowed `IOException`; only a failed
-`statvfs` returns `ERROR` (recreate), as the Windows disk reader does.
+core count (two saturated cores read 200%).
 
-Not backed by a live source (registration-only, same as Windows): `Free space on disk prediction`
-(the seam is double-valued, the sensor is a TimeSpan) and `ThreadPool thread count` (a .NET runtime
-metric with no native equivalent). The Windows-only sensors (event logs, service status, network
-speed, top-CPU, OS info) are explicitly not ported.
+A read that FAILS — an unopenable/unreadable `/proc` file, unexpected content in one, a failing
+`statvfs`, an unlistable `/proc/self/task` — returns `HSM_METRIC_READ_SAMPLE_ERROR` with the reason
+(errno text or the offending path) since #1426, so it reaches the error channel instead of vanishing;
+the source is KEPT, so a delta reader does not lose its baseline to a transient failure. Only a tick
+that is legitimately empty (a baseline seed, no elapsed jiffies, a sub-tick interval) still returns
+`NO_VALUE` and stays silent.
+
+`Free space on disk prediction` is backed by a live source since #1426: `statvfs("/")` sampled every
+30 s to feed the drain-speed EMA, and a TimeSpan posted on the sensor's own post period — the
+`refresh` cadence on the typed seam is exactly this. It samples the free space in whole KILOBYTES,
+mirroring `UnixDiskInfo.FreeSpace` (`AvailableFreeSpace / 1024`); the unit cancels in the prediction's
+division, so Windows can sample bytes and both still produce the same TimeSpan. It binds by the same
+EXACT letter-less name rule as the free-space row, so a letter-bearing prediction row stays
+registration-only. Still registration-only on Linux: `ThreadPool thread count` (a .NET runtime metric
+with no native equivalent). The Windows-only sensors (event logs, service status, network speed,
+top-CPU, OS info) are explicitly not ported.
 
 The parsing and delta math live in `src/proc_metrics.{hpp,cpp}` — portable, OS-read-free, and
 unit-tested on every CI lane (`proc_stat_*`, `proc_meminfo_*`, `proc_self_stat_*`,
 `process_cpu_usage_*`) using the SAME sample text and expected numbers as the managed
 `ProcParsersTests`; the `/proc` reads themselves live in `src/platform/hsm_linux_metric_sources.cpp`
 behind `#if defined(__linux__)` (the `tcp_connection_stats.hpp` precedent). Linux-only ctest smoke
-(`native_linux_metric_sources_produce_live_value`, `native_linux_process_metrics_produce_live_value`)
-asserts the sensors actually emit, guarding the registered-but-empty class #1189 exposed on Windows.
+(`native_linux_metric_sources_produce_live_value`, `native_linux_process_metrics_produce_live_value`,
+`native_linux_disk_prediction_produces_live_value`) asserts the sensors actually emit, guarding the
+registered-but-empty class #1189 exposed on Windows. The prediction math itself lives in
+`src/disk_prediction.hpp` — portable, OS-read-free, shared by BOTH platform factories and unit-tested
+(`native_disk_prediction_calibrates_then_predicts`).
 
 ### Native metric-driven bars: partial posts (#1428)
 
@@ -313,22 +393,26 @@ plant permanently empty sensors in the server tree. Windows composition is uncha
 shared golden and by `unix_default_sensors_contract.hsmtest` in BOTH drivers.
 
 **Out of scope here (live-value follow-up under #1099):** the remaining platform readers (Windows
-WMI/registry/EventLog), the per-sensor scheduled-tick wiring for non-double sensors, the disk fan-out
-over real fixed drives, and the free-space prediction EMA — all per-platform smoke-tested, not in the
-portable corpus. **Divergences:** the `.NET`-specific time-in-GC sensors are dropped (a native host has
+WMI/registry/EventLog) and the disk fan-out over real fixed drives — per-platform smoke-tested, not
+in the portable corpus. The non-double scheduled-tick wiring and the free-space prediction EMA left
+this list in #1426: the seam now carries a typed sample, the prediction runs on both platforms out of
+the shared `src/disk_prediction.hpp`, and both are corpus-pinned by
+`metric_source_contract.hsmtest`. **Divergences:** the `.NET`-specific time-in-GC sensors are dropped (a native host has
 no managed GC); the Unix surface is the managed parity subset (no native systemd/journald/network
 extensions).
 
 ## Known Issues / Limitations
 
 - Unix surface is a strict subset of Windows (see gaps above).
-- **Native (Linux and Windows): a failing disk read is invisible on the server.** A failed
-  `statvfs` / `GetDiskFreeSpaceExW` returns `READ_ERROR`; the collector recreates the source (logged,
-  deduplicated) but posts nothing, and the row's TTL is infinite. The managed `FreeDiskSpaceBase`
-  instead posts `0` with `SensorStatus.Error` and the exception message. This is a limitation of the
-  metric seam (a read outcome cannot carry a status/comment); a status-carrying read outcome is the
-  follow-up.
-- **Native: `Free space on disk prediction` has no live value** (the seam is double-valued, the sensor a
-  TimeSpan), whereas the managed `UnixFreeDiskSpacePrediction` does emit values on Linux. Registration
-  is at parity; the value path is the #1099 prediction-EMA follow-up.
+- ~~**Native (Linux and Windows): a failing disk read is invisible on the server.**~~ Closed by
+  #1426: a failing read reports `SAMPLE_ERROR` with the reason, which reaches the deduplicated log
+  and `.module/Collector errors`, and a value sensor posts the default value with `SensorStatus.Error`
+  and the message as the comment — what managed `FreeDiskSpaceBase` already did.
+- ~~**Native: `Free space on disk prediction` has no live value**~~ Closed by #1426 on Linux AND
+  Windows: the seam carries a typed sample (double or TimeSpan-ms) plus an auxiliary sampling
+  cadence, and both platform factories bind the row to the shared `src/disk_prediction.hpp` math.
 - Disk prediction speed is a simple EMA; bursty deletes/writes distort the estimate until the average converges.
+- Managed `FreeDiskSpacePredictionBase` starts its send loop in `InitAsync` (first post due
+  immediately) and only resets the request counter in `StartAsync`, so the opening calibration post
+  races that reset. Cosmetic (one extra calibration post, a possibly wrong `(n/N)` in its comment)
+  and deliberately NOT pinned by conformance.
