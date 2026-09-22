@@ -18,6 +18,11 @@ def read(path: pathlib.Path) -> str:
 
 
 def main() -> int:
+    for path in (COMPOSE, WIKI):
+        if not path.exists():
+            print(f"{path.relative_to(ROOT)} not found: if it moved, update this script and compose-wiki-sync.yml.")
+            return 1
+
     compose = read(COMPOSE).rstrip("\n")
     wiki = read(WIKI)
 
@@ -26,8 +31,10 @@ def main() -> int:
         print(f"{WIKI.relative_to(ROOT)} has no '{HEADING}' section.")
         return 1
 
-    start = wiki.find("```yaml\n", section)
-    end = wiki.find("\n```", start + len("```yaml\n")) if start >= 0 else -1
+    # Only the block of this section, not a later one on the page.
+    next_heading = min((i for i in (wiki.find("\n## ", section + 1), wiki.find("\n### ", section + 1)) if i >= 0), default=len(wiki))
+    start = wiki.find("```yaml\n", section, next_heading)
+    end = wiki.find("\n```", start + len("```yaml\n"), next_heading) if start >= 0 else -1
     if start < 0 or end < 0:
         print(f"No yaml block under '{HEADING}' in {WIKI.relative_to(ROOT)}.")
         return 1

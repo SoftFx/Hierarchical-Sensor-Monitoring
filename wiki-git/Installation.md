@@ -21,7 +21,7 @@ The compose file runs two containers: the HSM server and [Caddy](https://caddyse
 curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/docker-compose.yml
 ```
 
-Do not write your own compose file or put a different proxy in front: the HSM side of the setup depends on exactly this Caddy configuration. The edits described on this page (`tls internal`, removing ports `80`/`443`, an e-mail for Let's Encrypt) are fine.
+Do not write your own compose file or put a different proxy in front: the HSM side of the setup depends on exactly this Caddy configuration. The edits described on this page (removing the `issuer acme` line, removing ports `80`/`443`, an e-mail for Let's Encrypt) are fine.
 
 **2. Tell Caddy the server address.** Create a file named `.env` next to `docker-compose.yml`. It is required: without it every `docker compose` command (`up`, `down`, `logs`, `pull`) stops with an error, so keep the file next to the compose file. If it is lost, you can still stop the stack with `HSM_DOMAIN=x docker compose down`.
 
@@ -50,7 +50,19 @@ Default credentials: login `default`, password `default`. **Change the password 
 
 Collectors and agents connect to `https://<HSM_DOMAIN>:44330`, as before.
 
-> If Let's Encrypt cannot issue the certificate (the DNS record does not point to the server yet, port 80 is closed in the firewall), the server keeps working with Caddy's own self-signed certificate, and Caddy tries Let's Encrypt again every few hours. Browsers then show a warning. `docker logs hsm-caddy` shows why issuance failed.
+> If Let's Encrypt cannot issue the certificate (the DNS record does not point to the server yet, port 80 is closed in the firewall), Caddy falls back to its own self-signed certificate and tries Let's Encrypt again every few hours. `docker logs hsm-caddy` shows why issuance failed.
+>
+> - **Collectors and agents** with "allow untrusted certificate" keep sending data.
+> - **Browsers:** on a fresh installation they show a certificate warning you can click through. But once a browser has opened the web UI with the Let's Encrypt certificate, it refuses the self-signed one with **no way to continue**, for up to 30 days (HSTS). In that case the web UI is unreachable from that browser until a trusted certificate is back.
+> - **Timing:** a name Let's Encrypt rejects falls back within seconds; a failed domain check (port 80 filtered, DNS not ready) takes a few minutes first, and nothing is served over HTTPS meanwhile.
+>
+> To see which certificate is in use, run on any machine:
+>
+> ```bash
+> openssl s_client -connect hsm.example.com:443 -servername hsm.example.com </dev/null 2>/dev/null | openssl x509 -noout -issuer -enddate
+> ```
+>
+> `Let's Encrypt` in the issuer means all is well; `Caddy Local Authority` means the fallback is active.
 
 Optionally, give Let's Encrypt an e-mail for expiry warnings and account recovery: add `email admin@example.com` as the first line inside the leading `{ ... }` block of the `caddyfile` section.
 
@@ -109,8 +121,10 @@ services:
       test: ['CMD', 'bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/44330']
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 10m                        # a large database can take minutes to load
+      # "unhealthy" makes `up` skip caddy for good, so leave a generous budget: 10 min start
+      # period + 180 failed probes (30 min). Once open, the port stays open.
+      retries: 180
+      start_period: 10m
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy,
       # so HSM records the real client IP (token audit, invalid-attempt limiter, key telemetry).
@@ -155,7 +169,8 @@ configs:
       (hsm_tls) {
           # Let's Encrypt first; if it cannot issue (DNS not ready, port 80 blocked), fall back to
           # Caddy's own certificate instead of refusing every connection. Internal certificates
-          # live 12 hours, so Let's Encrypt is retried on each renewal.
+          # live 12 hours, so Let's Encrypt is retried on each renewal. Listing issuers drops no
+          # public one: without an e-mail, Caddy's default is Let's Encrypt only.
           tls {
               issuer acme
               issuer internal
@@ -206,7 +221,7 @@ What must stay as it is, if you ever adapt it:
 | `healthcheck` on `app` + `condition: service_healthy` | Caddy starts only when HSM has loaded its database, instead of answering errors meanwhile. |
 | `default_sni` / `fallback_sni` and the `https://:443`, `https://:44333`, `https://:44330` sites | Clients that reach the server by IP or by another name keep working. They receive the `HSM_DOMAIN` certificate, which does not match the name they use, so they need "allow untrusted certificate". |
 | Public ports `44330` and `44333` | Collectors and agents connect to `https://<host>:44330`; downloaded agent bundles use this port. |
-| Ports `80` and `443` | Required when `HSM_DOMAIN` is a public DNS name: Let's Encrypt checks the domain through them. With an IP address or `tls internal` you can remove both lines; the web UI is then available on `44333` only. |
+| Ports `80` and `443` | Required when `HSM_DOMAIN` is a public DNS name: Let's Encrypt checks the domain through them. With an IP address, or with the `issuer acme` line removed, you can remove both lines; the web UI is then available on `44333` only. |
 | `./CaddyData:/data` | Keeps certificates across updates; without it Caddy requests new ones on every restart and hits Let's Encrypt rate limits. |
 | `Kestrel__TrustedProxies__0: 'attached-networks'` | HSM trusts the client address that Caddy forwards only from the network of its own container, the compose network, whose only other member is Caddy. The web UI and the API-token audit then show the real client IP, and remote clients cannot choose that address. Processes on the Docker host itself, and containers you attach to this network, can. No subnet has to be picked, so it cannot collide with other Docker networks on the host. |
 | `caddy:2.11.4` (pinned version) | Clients on other addresses depend on how Caddy picks a certificate; a new Caddy version is taken deliberately, after checking that behavior again. |
@@ -228,7 +243,7 @@ Nothing changes on the HSM side: it keeps its data, settings and own certificate
   - with an IP address in `HSM_DOMAIN` nothing else is needed; Caddy uses its own certificate;
   - with a DNS name in `HSM_DOMAIN` Caddy falls back to its own certificate as well; remove the `issuer acme` line (see "Internal DNS name" above) so it stops retrying Let's Encrypt.
 
-**Check that the certificate is really from Let's Encrypt.** If issuance fails, the server keeps working, but with Caddy's own untrusted certificate: collectors that do not allow untrusted certificates cannot connect. After starting, open the web UI; if the browser warns about the certificate, see `docker logs hsm-caddy`. Clients that already use "allow untrusted certificate" keep working either way.
+**Check that the certificate is really from Let's Encrypt** with the `openssl` command from step 4 above. If issuance fails, the server keeps working with Caddy's own untrusted certificate: collectors that do not allow untrusted certificates cannot connect, while clients that use "allow untrusted certificate" keep working. See `docker logs hsm-caddy` for the reason.
 
 Then replace your `docker-compose.yml` with the reference one, create the `.env` file (step 2 above), and restart:
 

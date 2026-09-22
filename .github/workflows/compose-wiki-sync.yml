@@ -4,20 +4,16 @@ name: compose / wiki sync
 # setup (#1411). Check it on the pull request that changes either file, instead of after merge
 # (where it used to run inside the server build that publishes the Docker image, #1431).
 
+# No paths filter on pull_request: a path-filtered check never reports on other PRs, so it could
+# not be made a required check. The whole job takes seconds.
 on:
   push:
-    paths:
-      - 'docker-compose.yml'
-      - 'wiki-git/Installation.md'
-      - 'scripts/check-compose-wiki-sync.py'
-      - '.github/workflows/compose-wiki-sync.yml'
+    branches: [master, develop]
   pull_request:
-    paths:
-      - 'docker-compose.yml'
-      - 'wiki-git/Installation.md'
-      - 'scripts/check-compose-wiki-sync.py'
-      - '.github/workflows/compose-wiki-sync.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   compose-wiki-sync:
