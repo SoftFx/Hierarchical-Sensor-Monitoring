@@ -80,6 +80,10 @@ services:
     restart: unless-stopped
     user: '0'
     # No ports: HSM is reachable only through caddy.
+    environment:
+      # Trust X-Forwarded-For only from the compose network, whose only other member is caddy,
+      # so HSM records the real client IP (token audit, invalid-attempt limiter, key telemetry).
+      Kestrel__TrustedProxies__0: 'attached-networks'
     volumes:
       - ./Logs:/app/Logs                       # NLog output
       - ./Config:/app/Config                   # server config (TLS cert, Telegram, Agent settings)
@@ -102,7 +106,7 @@ services:
         target: /etc/caddy/Caddyfile
     volumes:
       - ./CaddyData:/data                      # ACME account + certificates; keep it across updates
-      - ./Logs/caddy:/var/log/caddy            # access log with real client IPs (HSM sees only caddy's)
+      - ./Logs/caddy:/var/log/caddy            # access log of every request, with client IPs
 
 configs:
   caddyfile:
@@ -166,7 +170,8 @@ What must stay as it is, if you ever adapt it:
 | Public ports `44330` and `44333` | Collectors and agents connect to `https://<host>:44330`; downloaded agent bundles use this port. |
 | Ports `80` and `443` | Required when `HSM_DOMAIN` is a public DNS name: Let's Encrypt checks the domain through them. With an IP address or `tls internal` you can remove both lines; the web UI is then available on `44333` only. |
 | `./CaddyData:/data` | Keeps certificates across updates; without it Caddy requests new ones on every restart and hits Let's Encrypt rate limits. |
-| `./Logs/caddy` access log | HSM sees every request as coming from Caddy, so this log (`Logs/caddy/access.log`) is where the real client IP addresses are recorded. |
+| `Kestrel__TrustedProxies__0: 'attached-networks'` | HSM trusts the client address that Caddy forwards only from the network of its own container, the compose network, whose only other member is Caddy. The web UI and the API-token audit then show the real client IP, and nobody else can choose that address. No subnet has to be picked, so it cannot collide with other Docker networks on the host. |
+| `./Logs/caddy` access log | Every request with its client IP address (`Logs/caddy/access.log`), useful for incident analysis. |
 | `caddy:2.11.4` (pinned version) | Clients on other addresses depend on how Caddy picks a certificate; a new Caddy version is taken deliberately, after checking that behavior again. |
 
 ### Internal DNS name (not reachable from the internet)

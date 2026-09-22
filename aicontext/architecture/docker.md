@@ -9,7 +9,7 @@
 - `app`: the HSM server, unchanged. It serves HTTPS on both ports with its own certificate (see "TLS" below), publishes no ports, and is reachable only inside the compose network.
 - `caddy` (`caddy:2.11.4`, pinned): publishes `80`, `443`, `44330`, `44333` and obtains/renews the certificate clients see. It forwards to `https://app:44333` / `https://app:44330` with `tls_insecure_skip_verify`, because the upstream certificate is HSM's self-signed one. Its Caddyfile is inline in the compose file (`configs.content`, Docker Compose v2.23+), so the whole stack is one file.
 - Catch-all sites (`https://:443`, `https://:44333`, `https://:44330`) plus `default_sni`/`fallback_sni = HSM_DOMAIN` keep clients that address the host by IP (no SNI) or by another name working. Without them, Caddy refuses the TLS handshake and existing collectors and agent bundles go silent after a migration. Such clients receive the `HSM_DOMAIN` certificate, so they still need allow-untrusted. Verified live, and the per-port UI/Sensor-API split holds for them too. This certificate-selection behavior is why the image is pinned; re-verify IP / no-SNI / foreign-SNI requests when bumping it.
-- Caddy writes an access log to `./Logs/caddy/access.log` (rolled at 50 MiB, 10 files). Until #1427 it is the only place that records real client IP addresses.
+- Caddy writes an access log of every request with its client IP to `./Logs/caddy/access.log` (rolled at 50 MiB, 10 files).
 
 `HSM_DOMAIN` (`.env` next to the compose file) is **required**; compose interpolates it into the Caddyfile with `${HSM_DOMAIN:?...}` and refuses to start without it. A default of `localhost` would be reachable remotely: a Caddy site address is a Host/SNI matcher, not a loopback bind.
 
@@ -24,12 +24,12 @@ What the HSM side relies on behind Caddy:
 
 - **UI vs Sensor API split:** decided by listener port (`Connection.LocalPort`); Caddy keeps them apart by forwarding each site to its own upstream port.
 - **Request scheme and host:** the upstream hop is HTTPS, so `Request.Scheme` is `https`: no HTTPS redirect, HSTS is still sent, and cookies stay `Secure`. Caddy passes the original `Host` through, so the agent-bundle fallback address (`AgentConnectionResolver`) is the public one with `SensorPort`.
-- **Known limitation, client IP (#1427):** `RemoteIpAddress` is Caddy's container address for every client. Consequences:
-  - The API-token invalid-attempt limiter degrades from per-source to one global bucket: one noisy source suppresses the recording of every other source's `AuthFailed` events for the rest of the minute. Authentication itself is unaffected.
-  - Token audit records the proxy.
-  - The telemetry RemoteIP is one constant.
-
-  The invariant in `ApiTokenInvalidAttemptLimiter` ("one abusive source does not consume another source's budget") does not hold in this deployment until #1427. Forwarded headers are not trusted yet; #1427 tracks pinning that trust to the compose network. Meanwhile the Caddy access log keeps the client IPs.
+- **Client IP (#1427):** HSM restores it from Caddy's `X-Forwarded-For` through `UseForwardedHeaders`, registered first in `ConfigureMiddleware`, only when `Kestrel.TrustedProxies` is non-empty. It uses `XForwardedFor` only (the upstream hop is HTTPS already, so the scheme is never rewritten), `ForwardLimit = 1`, and the framework's implicit loopback trust cleared.
+  - The compose file sets `Kestrel__TrustedProxies__0: 'attached-networks'`. At startup HSM expands it to the networks of its own non-loopback interfaces (`KestrelConfig.GetAttachedNetworks`, masked to network addresses) and logs the result. In the container that is the compose network only. `app` publishes no ports, so Caddy is its only possible peer, and the trust boundary is one closed hop. Caddy overwrites incoming `X-Forwarded-For` because no `trusted_proxies` is configured, so a client cannot inject an address.
+  - A fixed compose subnet was tried and rejected: Docker hands out `/16`s from `172.17–172.31` to every compose project, so any pinned range collides on a busy host. It did on the development machine: "Pool overlaps with other one on this address space".
+  - `TrustedProxies` is `[JsonIgnore]`: deployment-owned, never persisted by `ResaveSettings`. The settings file is added after environment providers, so a persisted copy would shadow a later compose change.
+  - Empty (`docker run`, direct access): no forwarded headers are honoured, same as before.
+  - With it, the per-source invariant of `ApiTokenInvalidAttemptLimiter`, the token audit source and the key telemetry `RemoteIP` hold behind the proxy as they did without it.
 - **HTTP on port 80:** Caddy redirects `http://<HSM_DOMAIN>/` to `https://<HSM_DOMAIN>/` (the UI on 443), verified live.
 
 ## Ports

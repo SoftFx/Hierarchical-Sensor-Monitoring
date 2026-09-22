@@ -124,7 +124,20 @@ try
 
     await app.Services.InitStorages();
 
-    app.ConfigureMiddleware(app.Environment.IsDevelopment());
+    ForwardedHeadersOptions forwardedHeaders = null;
+
+    if (serverConfig.Kestrel.TrustedProxies.Length > 0)
+    {
+        forwardedHeaders = serverConfig.Kestrel.BuildForwardedHeadersOptions();
+
+        var trusted = KestrelConfig.Describe(forwardedHeaders);
+        if (string.IsNullOrEmpty(trusted))
+            logger.Warn("Kestrel.TrustedProxies is set but resolved to no network: client IPs are the connecting peer's.");
+        else
+            logger.Info($"Client IP is taken from X-Forwarded-For only for connections from: {trusted}");
+    }
+
+    app.ConfigureMiddleware(app.Environment.IsDevelopment(), forwardedHeaders);
 
     app.MapControllers();
 

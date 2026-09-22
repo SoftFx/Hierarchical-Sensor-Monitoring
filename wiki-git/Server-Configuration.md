@@ -59,6 +59,8 @@ Most settings can also be changed at runtime through **Configuration** in the we
 
 With the [Docker Compose setup](Installation), keep both at their defaults: Caddy forwards to exactly these ports.
 
+`Kestrel:TrustedProxies` is a list of reverse-proxy addresses (IP, CIDR such as `172.18.0.0/16`, or `attached-networks` for the networks of the server's own interfaces) whose `X-Forwarded-For` header HSM trusts for the client address. It is empty by default: HSM then records the address of whoever connects to it. The Docker Compose setup fills it in for its own Caddy through the environment variable `Kestrel__TrustedProxies__0`; you do not need to set it yourself. It is never written back to `appsettings.json`.
+
 To change ports, update `appsettings.json` and restart the server, or go to **Configuration → Server** in the web UI.
 
 In Docker — map these ports when running the container:

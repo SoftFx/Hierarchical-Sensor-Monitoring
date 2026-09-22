@@ -21,6 +21,10 @@ services:
     restart: unless-stopped
     user: '0'
     # No ports: HSM is reachable only through caddy.
+    environment:
+      # Trust X-Forwarded-For only from the compose network, whose only other member is caddy,
+      # so HSM records the real client IP (token audit, invalid-attempt limiter, key telemetry).
+      Kestrel__TrustedProxies__0: 'attached-networks'
     volumes:
       - ./Logs:/app/Logs                       # NLog output
       - ./Config:/app/Config                   # server config (TLS cert, Telegram, Agent settings)
@@ -43,7 +47,7 @@ services:
         target: /etc/caddy/Caddyfile
     volumes:
       - ./CaddyData:/data                      # ACME account + certificates; keep it across updates
-      - ./Logs/caddy:/var/log/caddy            # access log with real client IPs (HSM sees only caddy's)
+      - ./Logs/caddy:/var/log/caddy            # access log of every request, with client IPs
 
 configs:
   caddyfile:
