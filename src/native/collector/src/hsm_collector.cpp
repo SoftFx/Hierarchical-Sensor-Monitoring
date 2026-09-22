@@ -2277,12 +2277,12 @@ namespace
         // period comes from the installed metric-source factory (PDH/WMI/plugin). Set at AddDefault
         // (candidate) and bound at Start (driven). The bound source + the periodic state above are
         // touched only by the scheduler thread after Start, so they need no extra lock.
-        bool is_metric_candidate_ = false;   // eligible: a value type that a metric source can drive
-        bool is_metric_driven_ = false;      // a source was bound at Start -> periodic reads
-        int64_t metric_post_period_ms_ = 0;  // post cadence (catalog post_period for default sensors)
+        bool is_metric_candidate_ = false;                // eligible: a value type that a metric source can drive
+        bool is_metric_driven_ = false;                   // a source was bound at Start -> periodic reads
+        int64_t metric_post_period_ms_ = 0;               // post cadence (catalog post_period for default sensors)
         int64_t metric_bar_tick_ms_ = kMetricBarSampleMs; // bar sample cadence (managed BarTickPeriod)
-        int64_t metric_emit_period_ms_ = 0;  // partial-bar post cadence / value post cadence once bound
-        int64_t metric_next_post_ms_ = 0;    // steady due time of the next partial-bar post (bars only)
+        int64_t metric_emit_period_ms_ = 0;               // partial-bar post cadence / value post cadence once bound
+        int64_t metric_next_post_ms_ = 0;                 // steady due time of the next partial-bar post (bars only)
         std::unique_ptr<MetricSource> metric_source_;
 
         // File sensor identity.
