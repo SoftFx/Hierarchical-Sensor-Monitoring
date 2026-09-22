@@ -16,28 +16,29 @@ public class ServerCertificateConfig
     [JsonIgnore]
     public X509Certificate2 Certificate => _certificate ??= GetCertificate();
 
-    // The file Kestrel's certificate is loaded from, and the password that opens it: the configured
-    // certificate when it exists, otherwise the bundled self-signed default (no password). The default
-    // ships in the repository with its private key, so IsBundledDefault tells callers that this
-    // certificate proves nothing and must never become a trust anchor (Linux probe bundle, #1424).
+    // Whether Certificate came from the bundled self-signed default.server.pfx. That file ships in the
+    // repository with its private key, so its certificate proves nothing and must never become a trust
+    // anchor (Linux probe bundle, #1424). Recorded when Certificate is loaded: Name/Key can change at
+    // runtime but apply only after a restart, so this describes what Kestrel actually serves.
     [JsonIgnore]
-    public (string Path, string Password, bool IsBundledDefault) CertificateSource
-    {
-        get
-        {
-            var configured = Path.Combine(ServerConfig.ConfigPath, Name);
-
-            return File.Exists(configured)
-                ? (configured, string.IsNullOrEmpty(Key) ? null : Key, false)
-                : (Path.Combine(ServerConfig.ExecutableDirectory, "default.server.pfx"), null, true);
-        }
-    }
+    public bool IsBundledDefault { get; private set; }
 
 
     private X509Certificate2 GetCertificate()
     {
-        var (path, password, _) = CertificateSource;
+        var certificatePath = Path.Combine(ServerConfig.ConfigPath, Name);
 
-        return password is null ? new X509Certificate2(path) : new X509Certificate2(path, password);
+        if (File.Exists(certificatePath))
+        {
+            IsBundledDefault = false;
+
+            return string.IsNullOrEmpty(Key)
+                ? new X509Certificate2(certificatePath)
+                : new X509Certificate2(certificatePath, Key);
+        }
+
+        IsBundledDefault = true;
+
+        return new X509Certificate2(Path.Combine(ServerConfig.ExecutableDirectory, "default.server.pfx"));
     }
 }

@@ -27,7 +27,8 @@ Every entry sits in one top-level folder `hsm-linux-probe-<product>/`, so extrac
 (a key included) into the current directory or mixes two products' bundles. `<product>` is
 `LinuxProbeInstallerBundle.ShellSafeName`: product names allow `; & * ( ) #`, and the folder is typed into a
 root shell, so anything outside `[A-Za-z0-9._-]` becomes `_` (runs collapsed, leading `.`/`-`/`_` dropped,
-empty → `product`). The download file name uses the same form.
+empty → `product`). The download file name uses the same form. Two products whose names reduce to the
+same form (`Prod (EU)` / `Prod EU`) get the same folder name; extract each bundle in its own directory.
 
 | Entry | Mode | Content |
 |---|---|---|
@@ -56,19 +57,25 @@ compressed).
 - **Not staged ⇒ 503** with a clear message (no web root, no `wwwroot/probe/`, no `.deb`, or more than one).
   This is checked first, so an out-of-the-box server (no release pinned, default certificate) reports the
   missing package, not the certificate.
-- **Never cacheable.** The response carries a bearer credential: `AgentController` is
-  `[ResponseCache(NoStore = true, Location = None)]`, as `ProductController` already is.
+- **Never cacheable.** The response carries a bearer credential: `Installer` and `LinuxInstaller` are
+  `[ResponseCache(NoStore = true, Location = None)]`, the `ProductController` convention. The self-update
+  endpoints stay cacheable.
 
 ## TLS: when `server-ca.pem` ships
 
 `LinuxProbeServerCa.Decide(serverTerminatesTls, isBundledDefault, hasCertificate)` — pure, tested:
 
 - **Include** when Kestrel itself terminated TLS on the download request (an `ITlsHandshakeFeature` is
-  present on the connection) with an admin-configured certificate. Content: the **leaf** certificate of
-  the file Kestrel loads (`ServerCertificateConfig.CertificateSource`), public part only
-  (`ExportCertificatePem`). Only the leaf: an issuing CA a `.pfx` may also carry would become a system-wide
-  trust anchor for every host the probe machine talks to, while the leaf vouches only for this server
-  (libcurl/OpenSSL accept it as a partial-chain anchor).
+  present on the connection) with an admin-configured certificate. Content: the public part
+  (`ExportCertificatePem`) of the **same `X509Certificate2` instance Kestrel installed at startup**
+  (`ServerCertificateConfig.Certificate`), with `IsBundledDefault` recorded when that instance was loaded.
+  A certificate saved in settings but not yet applied by a restart is therefore ignored, and the `.pfx` is
+  not re-read per download.
+  Only the leaf: an issuing CA that a `.pfx` may also carry would become a system-wide trust anchor for every
+  host the probe machine talks to, while the leaf vouches only for this server. A CA-issued leaf alone
+  verifies because libcurl sets OpenSSL's partial-chain flag by default, and the collector keeps libcurl's
+  TLS defaults. This was checked on Debian 13 (curl 8.14.1 / OpenSSL 3.5): a leaf issued by a private CA
+  answered 200 both as `--cacert` and from the system store after `update-ca-certificates`.
 - **Refuse (400)** when Kestrel serves the bundled `default.server.pfx`. That file ships in the repository
   with its private key, so installing it as a trust anchor would let anyone impersonate any name in its SAN
   to every TLS client on the host. The admin must configure a server certificate (or run behind the proxy)
@@ -76,8 +83,9 @@ compressed).
   deliberately does not have.
 - **Omit** behind a TLS-terminating proxy (plain-HTTP mode + Caddy/Let's Encrypt, #1411): no TLS on the
   Kestrel connection, and the proxy's certificate is already publicly trusted.
-- **Omit, reported** when the certificate cannot be read: the download still succeeds, and the server logs a
-  warning that the probe will only connect if that certificate is already trusted on its host.
+- **Omit, reported** when the certificate cannot be loaded: the download still succeeds, and the server logs
+  a warning that the probe will only connect if that certificate is already trusted on its host. In practice
+  Kestrel would not have started with an unloadable certificate.
 
 **Known limit: the signal is the admin's connection, not the probe's.** The download arrives on the site
 port; the probe connects to the sensor port at the resolved address. Today both are Kestrel listeners with
@@ -106,7 +114,7 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
    still has it; a re-run after the key was consumed keeps the installed one.
    An `EXIT` trap, armed just before the key is copied, shreds the extracted copy on every exit path, a
    failing copy included.
-2. `apt-get update`, then `apt-get install -y ./hsm-linux-probe_*.deb` (+ `ca-certificates` when a CA ships) with
+2. `apt-get update` (a failure only warns: an unreachable mirror is not fatal by itself), then `apt-get install -y ./hsm-linux-probe_*.deb` (+ `ca-certificates` when a CA ships) with
    `--force-confold`, so the config written in step 1 wins over the package's placeholder conffile.
    Config and key go in **before** the package so the unit's first start already finds them.
 3. With `server-ca.pem`: copies it to `/usr/local/share/ca-certificates/hsm-server.crt`, runs
@@ -140,8 +148,9 @@ every host gets that package. When #1418 publishes more than one architecture, t
 parameter and a per-arch staging pick; until then a second asset fails the build loudly instead of shipping
 the wrong package.
 
-The staged `.deb` is also reachable anonymously as a static file (`/probe/<name>.deb`, like
-`/agent/hsm-agent.exe`). It carries no secret; everything per-product comes only from the admin endpoint.
+The staged `.deb` is **not** served as a static file: `UseStaticFiles()` runs with the default content-type
+provider, which does not map `.deb` (unlike `/agent/hsm-agent.exe`), so `/probe/<name>.deb` answers 404. The
+drop-point's `README.md` is served, which is harmless. Everything per-product comes only from the admin endpoint.
 
 Paths: `scripts/stage-linux-probe.sh` (both `server-build.yml` legs) and `scripts/local-docker-build.ps1`.
 The staged `.deb` is gitignored (`wwwroot/probe/.gitignore`). Shipping a newer probe = push the
@@ -153,8 +162,8 @@ The staged `.deb` is gitignored (`wwwroot/probe/.gitignore`). Shipping a newer p
 |---|---|
 | Endpoint `GET /api/agent/linux-installer?productId=…` | `HSMServer/Controllers/AgentController.cs` (`LinuxInstaller`) |
 | Bundle builder (config, scripts, tar.gz, staged-package pick, address check; pure) | `HSMServer/Model/Agent/LinuxProbeInstallerBundle.cs` |
-| CA decision + public-chain export | `HSMServer/Model/Agent/LinuxProbeServerCa.cs` |
-| Certificate file + password Kestrel uses, and whether it is the bundled default | `ServerConfiguration/Sections/ServerCertificateConfig.cs` (`CertificateSource`) |
+| CA decision + public leaf export | `HSMServer/Model/Agent/LinuxProbeServerCa.cs` |
+| Whether the certificate Kestrel loaded is the bundled default | `ServerConfiguration/Sections/ServerCertificateConfig.cs` (`IsBundledDefault`) |
 | Button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
 | Drop-point | `HSMServer/wwwroot/probe/` (README + gitignore) |
 | Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |

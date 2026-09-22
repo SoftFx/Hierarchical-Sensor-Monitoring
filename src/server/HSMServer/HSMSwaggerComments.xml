@@ -696,9 +696,9 @@
         <member name="T:HSMServer.Model.Agent.LinuxProbeServerCa">
             <summary>
             Decides whether the Linux probe bundle carries <c>server-ca.pem</c> and produces its content: the
-            PUBLIC certificate Kestrel presents, never a private key (#1424, §4.6). install.sh adds it to the
-            system trust store so the probe keeps peer and hostname verification on; the Linux probe has no
-            allow-untrusted switch.
+            PUBLIC part of the certificate Kestrel presents, never a private key (#1424, §4.6). install.sh adds
+            it to the system trust store so the probe keeps peer and hostname verification on; the Linux probe
+            has no allow-untrusted switch.
             </summary>
         </member>
         <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.Decide(System.Boolean,System.Boolean,System.Boolean)">
@@ -709,18 +709,20 @@
             or cannot be read (omitted and reported; the download still works).
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.ExportLeafPem(System.String,System.String)">
+        <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.ExportPem(System.Security.Cryptography.X509Certificates.X509Certificate2)">
             <summary>
-            PEM of the certificate Kestrel serves, public part only. Only the leaf: an issuing CA a .pfx may
-            also carry would become a trust anchor for every host the probe machine talks to, while the leaf
-            alone vouches only for this server (OpenSSL accepts it as a partial-chain anchor).
-            Null when the file cannot be read.
+            PEM of the served certificate, public part only. Only the leaf: an issuing CA would become a
+            trust anchor for every host the probe machine talks to, while the leaf vouches only for this
+            server. libcurl (which the collector's transport uses with its defaults) sets OpenSSL's
+            partial-chain flag, so a CA-issued leaf in the trust store verifies on its own; checked with
+            curl 8.14 / OpenSSL 3.5 on Debian 13.
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.Resolve(System.Boolean,System.Func{System.ValueTuple{System.String,System.String,System.Boolean}})">
+        <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.Resolve(System.Boolean,System.Func{System.ValueTuple{System.Security.Cryptography.X509Certificates.X509Certificate2,System.Boolean}})">
             <summary>
             The decision plus the server-ca.pem content (null unless <see cref="F:HSMServer.Model.Agent.LinuxProbeCaDecision.Include"/>).
-            <paramref name="certificateSource"/> is only evaluated when the server terminates TLS.
+            <paramref name="servedCertificate"/> returns the certificate Kestrel serves and whether it is the
+            bundled default; it is only evaluated when the server terminates TLS.
             </summary>
         </member>
         <member name="T:HSMServer.Model.Model.History.NodeChartRequest">

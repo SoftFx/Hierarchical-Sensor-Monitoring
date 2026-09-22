@@ -70,24 +70,19 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void ServerCa_ExportsTheLeafPublicCertificateOnly()
         {
-            var path = WriteSelfSignedPfx("secret", out var thumbprint);
-            try
-            {
-                var (decision, pem) = LinuxProbeServerCa.Resolve(true, () => (path, "secret", false));
+            using var served = CreateSelfSigned();
+            Assert.True(served.HasPrivateKey);
 
-                Assert.Equal(LinuxProbeCaDecision.Include, decision);
-                Assert.StartsWith("-----BEGIN CERTIFICATE-----", pem);
-                Assert.DoesNotContain("PRIVATE KEY", pem);
-                Assert.Equal(1, pem.Split("-----BEGIN CERTIFICATE-----").Length - 1);
+            var (decision, pem) = LinuxProbeServerCa.Resolve(true, () => (served, false));
 
-                using var exported = X509Certificate2.CreateFromPem(pem);
-                Assert.Equal(thumbprint, exported.Thumbprint);
-                Assert.False(exported.HasPrivateKey);
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            Assert.Equal(LinuxProbeCaDecision.Include, decision);
+            Assert.StartsWith("-----BEGIN CERTIFICATE-----", pem);
+            Assert.DoesNotContain("PRIVATE KEY", pem);
+            Assert.Equal(1, pem.Split("-----BEGIN CERTIFICATE-----").Length - 1);
+
+            using var exported = X509Certificate2.CreateFromPem(pem);
+            Assert.Equal(served.Thumbprint, exported.Thumbprint);
+            Assert.False(exported.HasPrivateKey);
         }
 
         [Fact]
@@ -100,9 +95,11 @@ namespace HSMServer.Core.Tests
         }
 
         [Fact]
-        public void ServerCa_RefusesTheBundledDefault_WithoutReadingIt()
+        public void ServerCa_RefusesTheBundledDefault()
         {
-            var (decision, pem) = LinuxProbeServerCa.Resolve(true, () => ("/definitely/not/read.pfx", null, true));
+            using var served = CreateSelfSigned();
+
+            var (decision, pem) = LinuxProbeServerCa.Resolve(true, () => (served, true));
 
             Assert.Equal(LinuxProbeCaDecision.RefuseBundledDefault, decision);
             Assert.Null(pem);
@@ -111,7 +108,7 @@ namespace HSMServer.Core.Tests
         [Fact]
         public void ServerCa_IsOmitted_WhenTheCertificateCannotBeRead()
         {
-            var (decision, pem) = LinuxProbeServerCa.Resolve(true, () => (Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.pfx"), null, false));
+            var (decision, pem) = LinuxProbeServerCa.Resolve(true, () => throw new CryptographicException("unreadable certificate file"));
 
             Assert.Equal(LinuxProbeCaDecision.OmitUnreadable, decision);
             Assert.Null(pem);
@@ -283,14 +280,43 @@ namespace HSMServer.Core.Tests
             }
         }
 
-        [Fact]
-        public void LinuxInstaller_IsNeverCacheable()
+        [Theory]
+        [InlineData(nameof(AgentController.LinuxInstaller))]
+        [InlineData(nameof(AgentController.Installer))]
+        public void Installers_AreNeverCacheable(string action)
         {
-            var attribute = (ResponseCacheAttribute)typeof(AgentController)
+            var attribute = (ResponseCacheAttribute)typeof(AgentController).GetMethod(action)
                 .GetCustomAttributes(typeof(ResponseCacheAttribute), inherit: true).Single();
 
             Assert.True(attribute.NoStore);
             Assert.Equal(ResponseCacheLocation.None, attribute.Location);
+        }
+
+        [Fact]
+        public void LinuxInstaller_UsesTheCertificateKestrelLoaded_NotALaterSettingsChange()
+        {
+            // Settings saved but not yet applied (restart pending): Kestrel still serves what it loaded.
+            var webRoot = Directory.CreateTempSubdirectory("hsm-probe-test-").FullName;
+            var pfx = WriteSelfSignedPfx("secret", out var thumbprint);
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(webRoot, "probe"));
+                File.WriteAllBytes(Path.Combine(webRoot, "probe", "hsm-linux-probe_0.1.0_amd64.deb"), new byte[] { 1 });
+
+                var certificate = new ServerCertificateConfig { Name = pfx, Key = "secret" };
+                _ = certificate.Certificate; // loaded at startup
+                certificate.Name = string.Empty; // admin clears the setting; takes effect after a restart
+
+                var result = CreateController(webRoot, out var productId, certificate: certificate, tls: true).LinuxInstaller(productId);
+
+                Assert.IsType<FileContentResult>(result);
+                Assert.False(certificate.IsBundledDefault);
+            }
+            finally
+            {
+                Directory.Delete(webRoot, recursive: true);
+                File.Delete(pfx);
+            }
         }
 
         [Fact]
@@ -342,6 +368,13 @@ namespace HSMServer.Core.Tests
             {
                 ControllerContext = new ControllerContext { HttpContext = context },
             };
+        }
+
+        private static X509Certificate2 CreateSelfSigned()
+        {
+            using var rsa = RSA.Create(2048);
+            var request = new CertificateRequest("CN=hsm.example.com", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
         }
 
         private static string WriteSelfSignedPfx(string password, out string thumbprint)

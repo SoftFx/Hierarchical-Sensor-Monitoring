@@ -27,7 +27,6 @@ namespace HSMServer.Controllers
     /// </summary>
     [Authorize]
     [Route("api/[controller]")]
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class AgentController : BaseController
     {
         private static readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
@@ -48,6 +47,7 @@ namespace HSMServer.Controllers
 
         [HttpGet("installer")]
         [AuthorizeIsAdmin]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)] // the bundle carries a bearer key
         public IActionResult Installer(Guid productId)
         {
             if (!_cache.TryGetProduct(productId, out var product))
@@ -97,6 +97,7 @@ namespace HSMServer.Controllers
         /// </summary>
         [HttpGet("linux-installer")]
         [AuthorizeIsAdmin]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)] // the bundle carries a bearer key
         public IActionResult LinuxInstaller(Guid productId)
         {
             if (!_cache.TryGetProduct(productId, out var product))
@@ -134,8 +135,11 @@ namespace HSMServer.Controllers
 
             // A TLS handshake feature on this connection means Kestrel itself terminated TLS with its own
             // certificate; behind a TLS-terminating proxy it is absent and no CA file is shipped.
+            // The certificate instance Kestrel installed at startup, read before IsBundledDefault, which
+            // its loading sets: a certificate saved in settings but not yet applied by a restart is ignored.
             var (caDecision, serverCa) = LinuxProbeServerCa.Resolve(
-                HttpContext.Features.Get<ITlsHandshakeFeature>() is not null, () => _config.ServerCertificate.CertificateSource);
+                HttpContext.Features.Get<ITlsHandshakeFeature>() is not null,
+                () => (_config.ServerCertificate.Certificate, _config.ServerCertificate.IsBundledDefault));
             if (caDecision == LinuxProbeCaDecision.RefuseBundledDefault)
                 return BadRequest(LinuxProbeServerCa.BundledDefaultMessage);
             if (caDecision == LinuxProbeCaDecision.OmitUnreadable)
