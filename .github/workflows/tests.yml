@@ -40,7 +40,8 @@ jobs:
 
       - name: Run Docker container
         run: |
-          docker run -d -it -u 0 \
+          # Standalone container without the compose proxy: keep the built-in HTTPS (#1411).
+          docker run -d -it -u 0 -e Kestrel__UseHttps=true \
             --name "${{ env.CONTAINER_NAME }}" \
             -p 44330:44330 -p 44333:44333 \
             -v "$(pwd)/container-logs:/app/logs" \

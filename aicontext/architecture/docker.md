@@ -4,23 +4,19 @@
 
 ## Production Deployment
 
-Single container via `docker-compose.yml`:
+`docker-compose.yml` runs two services (#1411):
 
-```yaml
-services:
-  app:
-    image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
-    restart: unless-stopped
-    user: '0'
-    ports:
-      - '44330:44330'   # Sensor API (DataCollector sends data here)
-      - '44333:44333'   # Web UI (admin dashboard)
-    volumes:
-      - ./Logs:/app/Logs
-      - ./Config:/app/Config
-      - ./Databases:/app/Databases
-      - ./DatabasesBackups:/app/DatabasesBackups
-```
+- `app`: the HSM server on **plain HTTP** (`Kestrel__UseHttps: 'false'`). It publishes no ports and is reachable only inside the compose network.
+- `caddy` (`caddy:2`): terminates TLS and publishes `80`, `443`, `44330`, `44333`. It obtains and renews the certificate itself. Its Caddyfile is inline in the compose file (`configs.content`, Docker Compose v2.23+), so the whole stack is one file.
+
+The address comes from `HSM_DOMAIN` (`.env` next to the compose file, default `localhost`), which compose interpolates into the Caddyfile:
+
+| `HSM_DOMAIN` | Certificate |
+|---|---|
+| public DNS name | Let's Encrypt (ACME HTTP-01 on port 80 / TLS-ALPN on 443), auto-renewed |
+| IP / `localhost` | Caddy's internal CA (self-signed; clients need allow-untrusted) |
+
+Caddy state (ACME account + certificates) lives in `./CaddyData` and must survive updates, or Let's Encrypt rate limits are hit on re-issue. Admin-facing guide: `wiki-git/Installation.md`.
 
 ## Ports
 
@@ -28,6 +24,10 @@ services:
 |---|---|
 | 44330 | Sensor API — DataCollector sends values here (`/api/sensors/*`) |
 | 44333 | Web UI — browser dashboard, user management, alerts |
+| 443 | Web UI on the standard port (compose/Caddy only) |
+| 80 | ACME challenge + redirect to HTTPS (compose/Caddy only) |
+
+The public ports equal `SensorPort`/`SitePort` on purpose: the UI/Sensor-API split is by listener port (`Connection.LocalPort`), and the agent bundle falls back to `SensorPort` when no External connection URL is set.
 
 ## Volumes
 
@@ -37,57 +37,35 @@ services:
 | `Config` | Server configuration (TLS, Telegram, backup settings) |
 | `Databases` | LevelDB data files (sensor history, metadata) |
 | `DatabasesBackups` | Automated SFTP backup snapshots |
+| `CaddyData` | Caddy certificates and ACME account |
 
-## TLS: built-in certificate or reverse proxy (#1411)
+## TLS mode: `Kestrel.UseHttps` (#1411)
 
-By default Kestrel serves HTTPS on both ports with `Config/<ServerCertificate.Name>` (PFX, optional `Key` password) or, when that file is absent, the bundled self-signed `default.server.pfx`. The certificate is loaded once at startup, so a renewed PFX needs a restart.
+`true`: Kestrel serves HTTPS on both ports with `Config/<ServerCertificate.Name>` (PFX, optional `Key` password) or, when that file is absent, the bundled self-signed `default.server.pfx`. The certificate is loaded once at startup, so a renewed PFX needs a restart.
 
-For an automatically renewed public certificate (Let's Encrypt), put a TLS-terminating reverse proxy in front and switch HSM to plain HTTP in `Config/appsettings.json`:
-
-```json
-"Kestrel": { "SensorPort": 44330, "SitePort": 44333, "UseHttps": false, "TrustedProxies": [] }
-```
-
-With `UseHttps: false`:
+`false`: plain HTTP behind a TLS-terminating proxy:
 
 - both ports listen on plain HTTP/1.1, and no certificate is loaded;
 - HSTS and the HTTPS redirect are off, because the proxy owns them;
-- `X-Forwarded-Proto` / `X-Forwarded-For` are honoured **only** from `TrustedProxies` (IP or CIDR). An empty list means loopback plus private networks (`10/8`, `172.16/12` including Docker bridges, `192.168/16`, `fc00::/7`). The client's `https` scheme is therefore restored for cookies (`Secure`), for the agent-bundle address (`AgentConnectionResolver`) and for the token-audit IPs, and a direct public client cannot spoof it;
-- a malformed `TrustedProxies` entry fails startup with the key named; startup logs a warning that a proxy is expected.
+- `X-Forwarded-Proto` / `X-Forwarded-For` are honoured **only** from `Kestrel.TrustedProxies` (IP or CIDR). An empty list means loopback plus private networks (`10/8`, `172.16/12` including Docker bridges, `192.168/16`, `fc00::/7`). The client's `https` scheme is therefore restored for cookies (`Secure`), for the agent-bundle address (`AgentConnectionResolver`) and for the token-audit IPs, and a direct public client cannot spoof it;
+- a malformed `TrustedProxies` entry fails startup with the key named; startup logs a warning that a proxy is expected;
+- **the HSM ports must never be published directly**; only the proxy may be reachable.
 
-**Never publish the HSM ports directly in this mode.** Only the proxy may be reachable. Keep the public ports equal to `SensorPort`/`SitePort`: the UI/Sensor-API split is by listener port, and the agent bundle falls back to `SensorPort`. Otherwise set the agent's External connection URL.
+**Default when the key is absent** (`KestrelConfig.ApplyInstallDefault`; configuration file or the `Kestrel__UseHttps` environment variable both count as set):
 
-Caddy example: it obtains and renews the certificate itself; ports 80/443 must be reachable for the ACME challenge.
+- no `Config/appsettings.json` yet (fresh install) → `false`;
+- the file exists (existing install) → `true`, written back to the file. An upgrade therefore never takes a server off HTTPS: every collector and agent points at `https://`, and a standalone container has no proxy in front.
 
-```
-{
-    email admin@example.com
-}
-hsm.example.com, hsm.example.com:44333 {
-    reverse_proxy http://hsm-server:44333
-}
-hsm.example.com:44330 {
-    reverse_proxy http://hsm-server:44330
-}
-```
+Consequences:
 
-```yaml
-  app:            # no `ports:` — reachable only through caddy
-    ...
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    ports: ['80:80', '443:443', '44330:44330', '44333:44333']
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - ./caddy_data:/data   # ACME account + certificates; keep it
-```
+- The compose file sets `Kestrel__UseHttps: 'false'`, so an existing install moved to the new compose switches to the proxy, as long as its `appsettings.json` has no explicit `true`.
+- Standalone `docker run` paths set `Kestrel__UseHttps=true` explicitly so a fresh standalone container keeps the built-in HTTPS: `docker_scripts/HSMserver/*` and the Playwright container in `.github/workflows/tests.yml`.
 
 ## Notes
 
 - No external database service needed — LevelDB is embedded
 - Server listens on both ports via Kestrel multi-binding
-- TLS certificate is configured in `Config/` volume, or terminated by a reverse proxy with `Kestrel.UseHttps: false` (see above)
+- TLS is terminated by Caddy in the compose setup; a standalone container serves HTTPS itself with the certificate from the `Config/` volume (see "TLS mode")
 
 ## Files To Check
 

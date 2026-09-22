@@ -59,7 +59,7 @@ $ExpectedImageId = docker images --filter=reference=$ExpectedImageTag -q
 if ($ExpectedImageId) {
     Write-Host "Starting new container..."
     
-    $NewContainerId = docker run -d -it -u 0 --name "${ContainerName}_$Version" `
+    $NewContainerId = docker run -d -it -u 0 -e Kestrel__UseHttps=true --name "${ContainerName}_$Version" `
         -v "${BaseDirectory}Logs:/app/Logs" `
         -v "${BaseDirectory}Config:/app/Config" `
         -v "${BaseDirectory}Databases:/app/Databases" `

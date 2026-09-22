@@ -164,6 +164,8 @@ CMakeUserPresets.json
 # docker-compose.yml bind-mount volumes created at repo root by `docker compose up`
 /Logs/
 /Config/
+/CaddyData/
+/.env
 /Databases/
 /DatabasesBackups/
 

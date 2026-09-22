@@ -68,12 +68,35 @@ namespace HSMServer.Core.Tests.Middleware
         }
 
         [Fact]
-        public void Defaults_KeepHttpsOnAndNoExplicitProxies()
+        public void Defaults_NoExplicitProxies()
+        {
+            Assert.Empty(new KestrelConfig().TrustedProxies);
+        }
+
+        [Theory]
+        [InlineData(false, false)] // fresh install: behind the bundled proxy
+        [InlineData(true, true)]   // existing install without the key: stays on HTTPS
+        public void InstallDefault_UnconfiguredFollowsWhetherTheInstallExists(bool settingsFileExists, bool expected)
         {
             var config = new KestrelConfig();
 
-            Assert.True(config.UseHttps);
-            Assert.Empty(config.TrustedProxies);
+            config.ApplyInstallDefault(useHttpsConfigured: false, settingsFileExists);
+
+            Assert.Equal(expected, config.UseHttps);
+        }
+
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        public void InstallDefault_ExplicitValueAlwaysWins(bool configured, bool settingsFileExists)
+        {
+            var config = new KestrelConfig { UseHttps = configured };
+
+            config.ApplyInstallDefault(useHttpsConfigured: true, settingsFileExists);
+
+            Assert.Equal(configured, config.UseHttps);
         }
 
         [Theory]

@@ -6,12 +6,14 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 ## Prerequisites
 
-- [Docker](https://www.docker.com/) installed and running
-- Ports `44330` and `44333` available on the host
+- [Docker](https://www.docker.com/) with Docker Compose v2.23 or newer
+- Ports `44330` and `44333` available on the host, plus `80` and `443` for the automatic certificate
 
 ---
 
 ## Method 1 — Docker Compose (recommended)
+
+The compose file runs two containers: the HSM server and [Caddy](https://caddyserver.com/), a web server in front of it. Caddy takes care of HTTPS: it gets a certificate, renews it before it expires, and passes requests to HSM. You do not create, choose or install any certificate yourself.
 
 **1. Download the compose file:**
 
@@ -19,35 +21,55 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/docker-compose.yml
 ```
 
-Or create it manually:
+**2. Tell Caddy the server address.** Create a file named `.env` next to `docker-compose.yml`:
 
-```yaml
-services:
-  app:
-    image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
-    restart: unless-stopped
-    user: '0'
-    ports:
-      - '44330:44330'
-      - '44333:44333'
-    volumes:
-      - ./Logs:/app/Logs
-      - ./Config:/app/Config
-      - ./Databases:/app/Databases
-      - ./DatabasesBackups:/app/DatabasesBackups
+```bash
+HSM_DOMAIN=hsm.example.com
 ```
 
-**2. Start the server:**
+What you put there decides which certificate Caddy uses:
+
+| `HSM_DOMAIN` | Certificate |
+|---|---|
+| Public DNS name, e.g. `hsm.example.com` | Free trusted certificate from **Let's Encrypt**, renewed automatically. The DNS record must point to this machine, and ports `80`/`443` must be reachable from the internet. |
+| IP address, e.g. `10.0.0.5`, or `localhost` | Caddy's own self-signed certificate: browsers show a warning, and collectors/agents need "allow untrusted certificate". |
+| not set | `localhost`: only usable from the same machine. |
+
+**3. Start the server:**
 
 ```bash
 docker compose up -d
 ```
 
-**3. Open the web UI:**
-
-Go to `https://localhost:44333` in your browser. Accept the self-signed certificate warning.
+**4. Open the web UI:** `https://<HSM_DOMAIN>` or `https://<HSM_DOMAIN>:44333`.
 
 Default credentials: login `default`, password `default`. **Change the password immediately.**
+
+Collectors and agents connect to `https://<HSM_DOMAIN>:44330`, as before.
+
+> If the certificate does not appear, check `docker logs hsm-caddy`. The usual cause is that the DNS record does not point to the server yet, or port 80 is closed in the firewall.
+
+### Internal DNS name (not reachable from the internet)
+
+Let's Encrypt cannot issue a certificate for a name it cannot reach. Either set `HSM_DOMAIN` to the server's IP address, or add `tls internal` to both sites in the `caddyfile` section of `docker-compose.yml`:
+
+```
+hsm.corp.lan, hsm.corp.lan:44333 {
+    tls internal
+    reverse_proxy app:44333
+}
+```
+
+### Moving an existing installation to Caddy
+
+An installation that already ran HSM keeps serving HTTPS with its own certificate after an update, so nothing breaks. The new `docker-compose.yml` switches HSM to plain HTTP behind Caddy with its `Kestrel__UseHttps: 'false'` setting, which works as long as `Config/appsettings.json` has no `UseHttps` key. If it has `"UseHttps": true` (written by a newer server started without the new compose file), change it to `false`. Then:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+Collector and agent addresses stay the same (`https://<host>:44330`). Once the certificate is trusted, you can switch off "Allow untrusted server certificate" in the agent settings.
 
 ---
 
@@ -59,11 +81,12 @@ Default credentials: login `default`, password `default`. **Change the password 
 docker pull hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
 
-**2. Run the container:**
+**2. Run the container.** Without Caddy in front, HSM serves HTTPS itself with a built-in self-signed certificate: keep `-e Kestrel__UseHttps=true`.
 
 ```bash
 docker run -u 0 -d \
   --restart unless-stopped \
+  -e Kestrel__UseHttps=true \
   -v /host/path/Logs:/app/Logs \
   -v /host/path/Config:/app/Config \
   -v /host/path/Databases:/app/Databases \
@@ -80,6 +103,7 @@ Replace `/host/path/` with an actual directory on your machine.
 ```bash
 docker run -u 0 -d ^
   --restart unless-stopped ^
+  -e Kestrel__UseHttps=true ^
   -v C:\HSM\Logs:/app/Logs ^
   -v C:\HSM\Config:/app/Config ^
   -v C:\HSM\Databases:/app/Databases ^
@@ -123,6 +147,7 @@ Always mount these four directories. Without them, **all data is lost** when the
 |---|---|---|
 | `./Logs` | `/app/Logs` | Application logs |
 | `./Config` | `/app/Config` | `appsettings.json`, TLS certificates |
+| `./CaddyData` | `/data` (caddy) | Caddy's certificates and Let's Encrypt account (compose only) |
 | `./Databases` | `/app/Databases` | All sensor data (LevelDB) |
 | `./DatabasesBackups` | `/app/DatabasesBackups` | Automatic database backups |
 
@@ -136,8 +161,10 @@ Always mount these four directories. Without them, **all data is lost** when the
 |---|---|---|
 | `44330` | HTTPS | Sensor data ingestion — used by DataCollector and REST API |
 | `44333` | HTTPS | Web UI |
+| `443` | HTTPS | Web UI on the standard port (compose only) |
+| `80` | HTTP | Let's Encrypt domain check and redirect to HTTPS (compose only) |
 
-If these ports are already in use, change them in `docker-compose.yml` and in `Config/appsettings.json`:
+With Docker Compose, HSM is reachable only through Caddy, and Caddy publishes these ports. To use other host ports, change the left side of the mapping in the `caddy` service. For `docker run`, change the mapping and `Config/appsettings.json`:
 
 ```yaml
 ports:
@@ -175,7 +202,7 @@ Or with `docker run` — stop and remove the old container, then run the `docker
 
 ## First Login
 
-After starting the server, open `https://localhost:44333`.
+After starting the server, open `https://<HSM_DOMAIN>:44333` (compose) or `https://localhost:44333` (`docker run`).
 
 - Username: `default`
 - Password: `default`

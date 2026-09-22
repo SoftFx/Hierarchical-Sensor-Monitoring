@@ -25,16 +25,27 @@ public class KestrelConfig
     public int SitePort { get; set; } = DefaultSitePort;
 
     // false = plain HTTP on both ports, for running behind a TLS-terminating reverse
-    // proxy (e.g. Caddy with Let's Encrypt). HSTS and the HTTPS redirect are then the
-    // proxy's job, and X-Forwarded-Proto/For from a trusted proxy restore the client's
-    // scheme and address. Default true keeps existing installs on HTTPS.
-    public bool UseHttps { get; set; } = true;
+    // proxy (the Caddy service of docker-compose.yml, with Let's Encrypt). HSTS and the
+    // HTTPS redirect are then the proxy's job, and X-Forwarded-Proto/For from a trusted
+    // proxy restore the client's scheme and address. When not configured, see
+    // ApplyInstallDefault: fresh installs get false, existing installs keep HTTPS.
+    public bool UseHttps { get; set; }
 
     // Proxy addresses (IP or CIDR) whose X-Forwarded-* headers are honoured in
     // plain-HTTP mode. Empty = loopback + private networks. Default must stay an empty
     // array: the configuration binder appends to a pre-filled one on every load.
     public string[] TrustedProxies { get; set; } = [];
 
+
+    // Upgrade-safe default (#1411): an install whose settings file already exists was
+    // serving HTTPS with its own certificate, and every collector points at https://,
+    // so it stays on HTTPS unless UseHttps is set explicitly (config file or the
+    // Kestrel__UseHttps environment variable). Only a fresh install starts behind the proxy.
+    public void ApplyInstallDefault(bool useHttpsConfigured, bool settingsFileExists)
+    {
+        if (!useHttpsConfigured)
+            UseHttps = settingsFileExists;
+    }
 
     public void Validate()
     {
