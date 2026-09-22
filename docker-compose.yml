@@ -3,12 +3,15 @@
 # Caddy terminates TLS for clients and obtains/renews the certificate by itself. HSM keeps
 # serving HTTPS with its own (self-signed by default) certificate, reachable only inside the
 # compose network; Caddy connects to it without verifying that certificate.
-# Set the address clients use in a `.env` file next to this one (or in the shell); compose
-# refuses to start without it:
-#   HSM_DOMAIN=hsm.example.com   public DNS name -> Let's Encrypt certificate
-#                                (DNS must point here, port 80 reachable from the internet)
-#   HSM_DOMAIN=10.0.0.5          IP address -> Caddy's own self-signed certificate
-# Collectors and agents keep using https://<HSM_DOMAIN>:44330.
+# Two settings in a `.env` file next to this one (or in the shell); compose refuses to start
+# without them:
+#   HSM_DOMAIN=hsm.example.com       the address clients use (DNS name or IP address)
+#   HSM_CERTIFICATE=letsencrypt      certificate from Let's Encrypt (public DNS name pointing here,
+#                                    port 80 reachable from the internet); nothing else is tried
+#   HSM_CERTIFICATE=self-signed      Caddy's own certificate (IP address, internal network, or
+#                                    while Let's Encrypt is unavailable)
+# Switching = edit .env and run `docker compose up -d`. Collectors and agents keep using
+# https://<HSM_DOMAIN>:44330. To run without Caddy, use docker-compose.direct.yml instead.
 #
 # The image is published by CI (server-build.yml). To run a build from local sources instead,
 # publish it to this exact tag first:
@@ -47,6 +50,11 @@ services:
     depends_on:
       app:
         condition: service_healthy             # start serving only once HSM is ready
+    environment:
+      # Passed to Caddy (read as {$VAR} in the Caddyfile) rather than written into it: a changed
+      # environment makes `docker compose up -d` recreate caddy, a changed inline config does not.
+      HSM_DOMAIN: '${HSM_DOMAIN:?Set HSM_DOMAIN in .env next to docker-compose.yml - see the comment at the top}'
+      HSM_CERTIFICATE: '${HSM_CERTIFICATE:?Set HSM_CERTIFICATE in .env to letsencrypt or self-signed - see the comment at the top}'
     ports:
       - '80:80'         # ACME HTTP challenge + redirect to https
       - '443:443'       # Web UI on the standard port
@@ -68,18 +76,18 @@ configs:
           }
           # Clients that reach this host by IP (no SNI) or by another name get the
           # HSM_DOMAIN certificate instead of a refused handshake.
-          default_sni ${HSM_DOMAIN:?Set HSM_DOMAIN in .env next to docker-compose.yml - see the comment at the top}
-          fallback_sni ${HSM_DOMAIN}
+          default_sni {$$HSM_DOMAIN}
+          fallback_sni {$$HSM_DOMAIN}
       }
-      (hsm_tls) {
-          # Let's Encrypt first; if it cannot issue (DNS not ready, port 80 blocked), fall back to
-          # Caddy's own certificate instead of refusing every connection. Internal certificates
-          # live 12 hours, so Let's Encrypt is retried on each renewal. Listing issuers drops no
-          # public one: without an e-mail, Caddy's default is Let's Encrypt only.
+      # One certificate source, chosen by the admin (HSM_CERTIFICATE), never an automatic
+      # fallback: a failed Let's Encrypt renewal must not replace a still-valid certificate.
+      (tls-letsencrypt) {
           tls {
               issuer acme
-              issuer internal
           }
+      }
+      (tls-self-signed) {
+          tls internal
       }
       (hsm_upstream) {
           transport http {
@@ -88,14 +96,14 @@ configs:
           # Wait for HSM while it starts (database load) instead of answering 502.
           lb_try_duration 30s
       }
-      ${HSM_DOMAIN}, ${HSM_DOMAIN}:44333 {
-          import hsm_tls
+      {$$HSM_DOMAIN}, {$$HSM_DOMAIN}:44333 {
+          import tls-{$$HSM_CERTIFICATE}
           reverse_proxy https://app:44333 {
               import hsm_upstream
           }
       }
-      ${HSM_DOMAIN}:44330 {
-          import hsm_tls
+      {$$HSM_DOMAIN}:44330 {
+          import tls-{$$HSM_CERTIFICATE}
           reverse_proxy https://app:44330 {
               import hsm_upstream
           }
