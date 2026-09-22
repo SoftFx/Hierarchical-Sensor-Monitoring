@@ -39,7 +39,9 @@ namespace HSMDataCollector.DefaultSensors
 
         internal FreeDiskSpacePredictionBase(DiskSensorOptions options, IDiskInfo diskInfo) : base(options)
         {
-            _calculateSpeedDelay = TimeSpan.FromSeconds(DefaultSpaceCheckPeriodInSec);
+            _calculateSpeedDelay = options.SpaceCheckPeriod > TimeSpan.Zero
+                ? options.SpaceCheckPeriod
+                : TimeSpan.FromSeconds(DefaultSpaceCheckPeriodInSec);
             _calibrationRequests = options.CalibrationRequests;
             _diskInfo = diskInfo;
 

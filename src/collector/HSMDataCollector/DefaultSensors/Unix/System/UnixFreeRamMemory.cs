@@ -17,27 +17,32 @@ namespace HSMDataCollector.DefaultSensors.Unix
 
         protected override double? GetBarData()
         {
-            var availableKb = ProcMeminfo.ParseAvailableKb(ReadMeminfo());
+            // A failed or unusable read is REPORTED (#1426) rather than silently thinning out this
+            // sensor's bars — the native source answers both cases with HSM_METRIC_READ_SAMPLE_ERROR.
+            var content = ReadMeminfo();
+            if (content == null)
+                return null;
 
-            return availableKb.HasValue ? availableKb.Value / KbPerMb : (double?)null;
+            var availableKb = ProcMeminfo.ParseAvailableKb(content);
+            if (!availableKb.HasValue)
+            {
+                HandleException(new InvalidDataException($"No usable memory fields in {ProcMeminfoPath}"));
+                return null;
+            }
+
+            return availableKb.Value / KbPerMb;
         }
 
-        private static string ReadMeminfo()
+        private string ReadMeminfo()
         {
             try
             {
                 return File.ReadAllText(ProcMeminfoPath);
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is SecurityException)
             {
-                return null;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return null;
-            }
-            catch (SecurityException)
-            {
+                HandleException(ex);
+
                 return null;
             }
         }
