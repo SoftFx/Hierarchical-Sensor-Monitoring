@@ -128,25 +128,31 @@ namespace HSMServer.Core.Model.Policies
             _okPolicy.TryUpdate(update with { Template = _okPolicy.OkTemplate, Icon = null }, out _, sensor);
         }
 
-        internal bool HasTimeout(DateTime? time) => IsActive && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
+        internal bool HasTimeout(DateTime? time) => IsActive && IsStale(time);
 
-        // The schedule provider arrives as a parameter (the policy owns no
-        // provider — the collection and the cache do; the maintenance sweep
-        // is the caller here and holds the shared instance). Fail-open
-        // inherited from IsWorkingTime: an unknown schedule id reads as
-        // in-window, the same fallback the expiry gate applies (#1405).
-        //
-        // The schedule gates deliberately differ between the two policy kinds
-        // (TTL gates evaluate at UtcNow, data-policy gates at the value's
-        // own timestamp) — the reasoning and the "do not unify" rule live in
-        // aicontext/features/server/alerts/feature.md (#1404).
+        // Staleness is read INDEPENDENTLY of enablement (#1404): "time since
+        // the last value exceeds the interval" has an answer even for a
+        // disabled policy, and the window-caused-resolution discriminator in
+        // SetExpiredSnapshot needs that answer for every policy in the
+        // snapshot — a disable on an expired sensor must not flip a
+        // window-caused resolution into a false recovery Ok. TTL-less reads
+        // as not stale (no interval — nothing to exceed).
+        internal bool IsStale(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
+
+        // The evaluation instant arrives from the caller (the sweep captures
+        // one per pass) so the window predicate and the repeat-interval
+        // comparison below read the SAME timestamp, not two fresh UtcNows
+        // (#1404). The provider arrives as a parameter (the policy owns no
+        // provider); fail-open is inherited from IsWorkingTime — an unknown
+        // schedule id reads as in-window (#1405). The TTL and data-policy
+        // schedule gates deliberately differ in their time argument — the
+        // "do not unify" rule: aicontext/features/server/alerts/feature.md.
         //
         // Not side-effect-free: the out-of-window arm cancels the
-        // notification state. The state pair (_lastTTLNotificationTime,
-        // _notifyCount) is written from two threads without a lock — the
+        // notification state. The unsynchronized state writes are the
         // tolerated trade-off (worst case one duplicate notification);
         // details: aicontext/features/server/alerts/feature.md (#1405).
-        internal bool TryResendNotification(DateTime? time, IAlertScheduleProvider scheduleProvider)
+        internal bool TryResendNotification(DateTime? time, IAlertScheduleProvider scheduleProvider, DateTime evaluationTime)
         {
             if (!HasTimeout(time))
                 return false;
@@ -154,7 +160,7 @@ namespace HSMServer.Core.Model.Policies
             // Outside the window the repeat is CANCELLED, not paused (#1405):
             // the state reset makes the next in-window evaluation deliver at
             // once (fresh), instead of resuming yesterday's cadence.
-            if (IsOutsideSchedule(scheduleProvider))
+            if (IsOutsideSchedule(scheduleProvider, evaluationTime))
             {
                 CancelNotification();
                 return false;
@@ -178,17 +184,14 @@ namespace HSMServer.Core.Model.Policies
             if (!_lastTTLNotificationTime.HasValue)
                 return true;
 
-            return DateTime.UtcNow - _lastTTLNotificationTime >= Schedule.GetShiftTime();
+            return evaluationTime - _lastTTLNotificationTime >= Schedule.GetShiftTime();
         }
 
         // The shared out-of-window decision of the two gates (#1404 expiry,
         // #1405 repeat cancellation): one home for the fail-open semantics
-        // (a null ScheduleId reads as in-window). Callers that already own an
-        // evaluation instant pass it explicitly, so a decision and the gates
-        // keyed on it cannot disagree across a minute/window boundary (#1404).
-        internal bool IsOutsideSchedule(IAlertScheduleProvider scheduleProvider) =>
-            IsOutsideSchedule(scheduleProvider, DateTime.UtcNow);
-
+        // (a null ScheduleId reads as in-window). Callers pass their
+        // evaluation instant explicitly, so a decision and the gates keyed
+        // on it cannot disagree across a minute/window boundary (#1404).
         internal bool IsOutsideSchedule(IAlertScheduleProvider scheduleProvider, DateTime evaluationTime) =>
             ScheduleId.HasValue && !scheduleProvider.IsWorkingTime(ScheduleId.Value, evaluationTime);
 

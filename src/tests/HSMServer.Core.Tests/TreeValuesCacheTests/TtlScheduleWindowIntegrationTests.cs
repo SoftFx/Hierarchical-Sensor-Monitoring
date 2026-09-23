@@ -35,6 +35,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     // marker is observable through LastTimeout, not LastValue: a timeout
     // marker leaves the newest-value cache untouched by design.
     [Collection("Database collection")]
+    // TemplateConcurrencyFixture is reused for its ProductAId/AccessKeyAId
+    // wiring only — there is no template-concurrency angle in this suite.
     public class TtlScheduleWindowIntegrationTests : MonitoringCoreTestsBase<TemplateConcurrencyFixture>
     {
         private readonly TemplateConcurrencyFixture _fixture;
@@ -208,6 +210,106 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // === The mixed sensor with UNEQUAL TTLs: the false sibling recovery ===
+
+        [Fact]
+        public async Task WindowClose_MixedSensorWithLongerSchedulelessGuard_NoSiblingRecoveryOk()
+        {
+            var scheduleId = Guid.NewGuid();
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
+
+            // The review's 5-min-scheduled vs 8h-guard shape, compressed to
+            // seconds: ~90 s of silence at creation — already past the
+            // scheduled TTL (10 s), still far short of the schedule-less
+            // guard (120 s).
+            var sensor = await CreateSensorWithStaleValueAsync("ttlUnequalGuards", TimeSpan.FromSeconds(90));
+
+            var scheduled = AddTtlPolicy(sensor, scheduleId, TimeSpan.FromSeconds(10));
+            var scheduleLess = AddTtlPolicy(sensor, scheduleId: null, TimeSpan.FromSeconds(120));
+
+            using var recorder = new SentMessagesRecorder(_valuesCache, sensor.Id);
+
+            // In-window fire: the sensor expires on the scheduled policy and
+            // the transition notifies every in-window TTL policy — the
+            // schedule-less sibling included (the sensor-level state is what
+            // the policies report).
+            _valuesCache.RunSensorTimeoutStep(sensor);
+
+            Assert.True(sensor.IsExpired);
+            Assert.Equal(1, recorder.CountFor(scheduled.Id));
+            Assert.Equal(1, recorder.CountFor(scheduleLess.Id));
+
+            // Session closes with silence still under the sibling's guard
+            // (~92 s < 120 s): no policy contributes a timeout, so the sweep
+            // resolves the sensor — a WINDOW-CAUSED resolution. The sensor
+            // did NOT recover, so NO policy may claim it did: the sibling is
+            // never out-of-window (no schedule) and must not deliver a
+            // "recovered" Ok just because the scheduled policy went quiet.
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: false));
+
+            _valuesCache.RunSensorTimeoutStep(sensor);
+
+            Assert.False(sensor.IsExpired);                      // the flip itself stands
+            Assert.Equal(1, recorder.CountFor(scheduled.Id));    // silent cancel, as before
+            Assert.Equal(1, recorder.CountFor(scheduleLess.Id)); // NO recovery Ok — the pin
+
+            // Still out-of-window, the sibling's own guard elapses: the sweep
+            // re-expires the sensor and the sibling fires — the resolution's
+            // cancellation did not disarm its future alert. The poll runs the
+            // shipped sweep step, which is exactly what the production timer
+            // does per tick.
+            await UntilAsync(() =>
+            {
+                _valuesCache.RunSensorTimeoutStep(sensor);
+                return recorder.CountFor(scheduleLess.Id) == 2;
+            }, "the schedule-less guard must fire once its own TTL elapses", TimeSpan.FromSeconds(45));
+
+            Assert.True(sensor.IsExpired);
+            Assert.Equal(1, recorder.CountFor(scheduled.Id)); // still cancelled out-of-window
+
+            // Window opens with the value STILL stale: the cancelled
+            // scheduled policy fires FRESH (no cadence to resume).
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
+
+            _valuesCache.RunSensorTimeoutStep(sensor);
+
+            Assert.Equal(2, recorder.CountFor(scheduled.Id)); // the fresh alert at window open
+        }
+
+
+        // === Staleness is read independently of enablement (the disable case) ===
+
+        [Fact]
+        public async Task WindowClose_AfterDisablingFiredScheduledPolicy_ResolutionStaysSilent()
+        {
+            var scheduleId = Guid.NewGuid();
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
+
+            var sensor = await CreateSensorWithStaleValueAsync("ttlDisabledStaleness", TimeSpan.FromMinutes(15));
+
+            var scheduled = AddTtlPolicy(sensor, scheduleId, TimeSpan.FromMinutes(5));
+
+            using var recorder = new SentMessagesRecorder(_valuesCache, sensor.Id);
+
+            // In-window: the alert fires.
+            Assert.True(sensor.CheckTimeout());
+            Assert.Equal(1, recorder.CountFor(scheduled.Id));
+
+            // The operator disables the fired alert; the session then closes
+            // with the sensor STILL silent. Staleness ("has the interval
+            // elapsed") is read independently of enablement, so the
+            // resolution is still WINDOW-CAUSED and must stay silent — no
+            // "recovered" Ok for a disabled policy on a dead sensor.
+            scheduled.SetDisabled(true);
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: false));
+
+            _valuesCache.RunSensorTimeoutStep(sensor);
+
+            Assert.False(sensor.IsExpired);
+            Assert.Equal(1, recorder.CountFor(scheduled.Id)); // no Ok — the resolution is silent
+        }
+
+
         // UTC timezone + a window covering the whole day (or none) makes the
         // schedule unconditionally open (closed) at ANY "now" — no flakiness
         // around midnight or the host machine's local zone.
@@ -252,10 +354,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             while (!condition())
             {
                 if (DateTime.UtcNow >= deadline)
-                {
                     Assert.Fail($"Timed out waiting for: {message}");
-                    return;
-                }
 
                 await Task.Delay(25);
             }
