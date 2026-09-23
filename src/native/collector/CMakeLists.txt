@@ -437,7 +437,10 @@ if(WIN32)
         COMMAND hsm_collector_tests native_windows_process_metric_resolves_current_process
     )
     # #1426: the disk readers bind by drive letter, so only a row naming one as a standalone token
-    # may bind — the letter-less Unix rows must not land on drive N:.
+    # may bind — the letter-less Unix rows must not land on drive N:. #1421 added the same test
+    # independently; this is the reconciled copy, which asserts the binding DECISION rather than a
+    # sample/recreate count (neither count can discriminate once a failed disk read answers
+    # SAMPLE_ERROR and so keeps its source).
     add_test(NAME native_windows_disk_binds_only_lettered_rows
         COMMAND hsm_collector_tests native_windows_disk_binds_only_lettered_rows
     )
@@ -456,10 +459,6 @@ if(WIN32)
     # EnableTcpConnectionFailureRateSensor is a no-op elsewhere).
     add_test(NAME native_tcp_failure_rate_sensor_registers
         COMMAND hsm_collector_tests native_tcp_failure_rate_sensor_registers
-    )
-    # #1414: the Windows factory must decline the letter-less Unix disk rows (they would parse as N:).
-    add_test(NAME native_windows_disk_binds_only_lettered_rows
-        COMMAND hsm_collector_tests native_windows_disk_binds_only_lettered_rows
     )
     # #1414: the Linux factory must refuse to install off Linux instead of silently doing nothing.
     add_test(NAME native_linux_metric_sources_rejected_off_linux
