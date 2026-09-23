@@ -175,6 +175,20 @@ namespace HSMServer.Core.Schedule
         // tests can shrink it to milliseconds.
         internal TimeSpan MissingScheduleReportInterval { get; set; } = TimeSpan.FromHours(1);
 
+        // Test seam for the throttle's monotonic clock (#1409 review round
+        // 5): shifts a stored report timestamp into the PAST so tests can
+        // expire the report window or stale-date the prune threshold
+        // deterministically, instead of Thread.Sleep-ing out wall-clock
+        // intervals. Internal; no production callers.
+        internal void BackdateMissingScheduleReport(Guid id, long byMilliseconds)
+        {
+            lock (_lock)
+            {
+                if (_missingScheduleReportedAt.TryGetValue(id, out var reportedAt))
+                    _missingScheduleReportedAt[id] = reportedAt - byMilliseconds;
+            }
+        }
+
         // Must be called under _lock only.
         private void ReportMissingSchedule(Guid id)
         {

@@ -180,6 +180,11 @@ namespace HSMServer.Core.Tests.Infrastructure
         // schedule alive for a retry.
         internal Func<SensorEntity, bool> ShouldFailSensorUpdate { get; set; }
 
+        // Optional custom message for the injected UpdateSensor failure
+        // (defaults to the fixed simulated-failure text): the detach
+        // aggregate's character-budget pin needs controllably long errors.
+        internal Func<SensorEntity, string> SensorUpdateFailureMessage { get; set; }
+
         public void AddSensor(SensorEntity entity)
         {
             if (_shouldFail(entity))
@@ -191,7 +196,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         public void UpdateSensor(SensorEntity entity)
         {
             if (ShouldFailSensorUpdate?.Invoke(entity) == true || _shouldFail(entity))
-                throw new InvalidOperationException($"Simulated DB failure for sensor {entity.Id}");
+                throw new InvalidOperationException(SensorUpdateFailureMessage?.Invoke(entity) ?? $"Simulated DB failure for sensor {entity.Id}");
 
             _inner.UpdateSensor(entity);
         }

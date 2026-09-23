@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
@@ -515,6 +516,123 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Contains(stored.TTLPolicies, p => p.ScheduleId.SequenceEqual(deletedId.ToByteArray()));
         }
 
+        // #1409 review round 5, HARD/SOFT split: TryUpdateSensor returns TRUE
+        // with a non-empty error when the update was applied and persisted
+        // but a per-policy rebuild failed (validation noise). A DETERMINISTIC
+        // noise policy must not make the schedule permanently undeletable:
+        // the soft failure is logged and the detach still reports Ok, so the
+        // controller's Remove proceeds to DeleteSchedule — whatever reference
+        // the noisy policy keeps degrades to the documented backstop
+        // (fail-open lookup #1405 + the throttled missing-id report). A HARD
+        // failure (the round-4 pin above) still blocks the deletion.
+        [Fact]
+        [Trait("Category", "Alert schedules")]
+        public async Task Detach_SoftPolicyRebuildFailure_IsNonBlocking_AndScheduleDeletable()
+        {
+            var deletedId = Guid.NewGuid();
+            var force = InitiatorInfo.AsSystemForce("test_attach_soft_fail");
+
+            var sensorPath = "sensorScheduleDetachSoftFail";
+            await CreateSensor(sensorPath);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensor));
+
+            var attach = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [TtlUpdate(TimeSpan.FromMinutes(5).Ticks, force, scheduleId: deletedId)],
+                Initiator = force,
+            });
+            Assert.True(attach.IsOk, attach.Error);
+
+            // The noisy policy: constructible (the Count property builds an
+            // int executor, so the condition object can be created and
+            // planted), but IntegerPolicy.GetCondition(Count) throws on every
+            // RE-ASSERT a full-list update performs — the "AnyType Value
+            // condition on a bar sensor" class feature.md documents for the
+            // apply path, planted directly on the collection.
+            var noisy = new IntegerPolicy { ScheduleId = deletedId };
+
+            noisy.Conditions.Add(new PolicyIntegerCondition<IntegerValue>
+            {
+                Operation = PolicyOperation.GreaterThan,
+                Property = PolicyProperty.Count,
+                Target = new TargetValue(TargetType.Const, "0"),
+            });
+
+            sensor.Policies.AddPolicy(noisy);
+
+            // Soft failure did not block: Ok is the completion contract the
+            // controller reads as "safe to delete the schedule".
+            var detach = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.True(detach.IsOk, detach.Error);
+
+            // The healthy TTL policy on the same sensor WAS detached.
+            var ttl = Assert.Single(sensor.Policies.TTLPolicies);
+            Assert.Null(ttl.ScheduleId);
+        }
+
+        // #1409 review round 5: the per-root chunk errors must fold into ONE
+        // wrapping level (the per-root aggregate used to re-wrap "detach of
+        // alert schedule {id} did not complete (...)" INSIDE the global wrap,
+        // repeating the prefix per root), and the flash-facing aggregate is
+        // capped by ITEM COUNT — a mass outage over one root shows the first
+        // five per-sensor failures plus an "and N more" summary.
+        [Fact]
+        [Trait("Category", "Alert schedules")]
+        public async Task Detach_ManySensorFailures_AggregateWrappedOnce_AndCountCapped()
+        {
+            var deletedId = Guid.NewGuid();
+
+            var sensorCount = TreeValuesCache.MaxReportedDetachErrors + 7;
+            await CreateScheduledSensors(deletedId, "sensorDetachMany", sensorCount);
+
+            _failingDatabase.ShouldFailSensorUpdate = _ => true;
+
+            var failed = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.False(failed.IsOk);
+
+            _failingDatabase.ShouldFailSensorUpdate = null;
+
+            // ONE wrapping level: the completion prefix appears exactly once.
+            Assert.Equal(1, CountOccurrences(failed.Error, "did not complete"));
+
+            // The item-count cap summarizes the tail.
+            Assert.Contains("; and 7 more (see the server log)", failed.Error);
+
+            // The whole message stays inside the cookie-safe character budget.
+            Assert.True(failed.Error.Length <= TreeValuesCache.MaxDetachErrorCharacters,
+                $"aggregate length {failed.Error.Length} exceeds the budget");
+        }
+
+        // #1409 review round 5: the item-count cap alone does not bound the
+        // STRING — a few long exception messages can exceed the browser's
+        // ~4 KB cookie limit, and CookieTempDataProvider then silently DROPS
+        // the flash (the operator sees a clean Index page while the schedule
+        // was not deleted). The aggregate is hard-truncated to
+        // MaxDetachErrorCharacters with a "see the server log" tail; the full
+        // per-entity detail stays in the Error log.
+        [Fact]
+        [Trait("Category", "Alert schedules")]
+        public async Task Detach_LongSensorFailures_AggregateTruncatedToCharacterBudget()
+        {
+            var deletedId = Guid.NewGuid();
+
+            await CreateScheduledSensors(deletedId, "sensorDetachLong", count: 2);
+
+            _failingDatabase.ShouldFailSensorUpdate = _ => true;
+            _failingDatabase.SensorUpdateFailureMessage = _ => new string('x', 900);
+
+            var failed = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.False(failed.IsOk);
+
+            _failingDatabase.ShouldFailSensorUpdate = null;
+            _failingDatabase.SensorUpdateFailureMessage = null;
+
+            Assert.Equal(1, CountOccurrences(failed.Error, "did not complete"));
+            Assert.Equal(TreeValuesCache.MaxDetachErrorCharacters, failed.Error.Length);
+            Assert.EndsWith(" ... (see the server log)", failed.Error);
+        }
+
         // #1409 review: an explicit Never (long.MaxValue ticks) TTL bound to a
         // deleted schedule degrades to FromParent — TTLPolicy.FullUpdate maps
         // long.MaxValue to the empty interval. The mapping is inherent to
@@ -567,6 +685,42 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             ConfirmationPeriod = 0,
             Conditions = [],
         };
+
+        // Creates `count` sensors under ProductA, each with a TTL policy
+        // bound to the schedule — the population for the aggregate-shape pins.
+        private async Task CreateScheduledSensors(Guid scheduleId, string pathPrefix, int count)
+        {
+            var force = InitiatorInfo.AsSystemForce("test_attach_scheduled");
+
+            for (var i = 0; i < count; i++)
+            {
+                var path = $"{pathPrefix}{i}";
+                await CreateSensor(path);
+                Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
+
+                var attach = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+                {
+                    Id = sensor.Id,
+                    TTLPolicies = [TtlUpdate(TimeSpan.FromMinutes(5).Ticks, force, scheduleId: scheduleId)],
+                    Initiator = force,
+                });
+                Assert.True(attach.IsOk, attach.Error);
+            }
+        }
+
+        private static int CountOccurrences(string text, string fragment)
+        {
+            var count = 0;
+            var index = 0;
+
+            while ((index = text.IndexOf(fragment, index, StringComparison.Ordinal)) >= 0)
+            {
+                count++;
+                index += fragment.Length;
+            }
+
+            return count;
+        }
 
         private async Task<AlertTemplateModel> AddTemplateWithScheduledPolicies(IReadOnlyList<string> paths, Guid deletedId, Guid survivorId)        {
             var ttlDeletedSetting = new TimeIntervalSettingProperty();

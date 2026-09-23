@@ -78,7 +78,9 @@ namespace HSMServer.Core.Tests.Schedule
 
         // The throttle is time-based, not once-per-process (#1409): a
         // persistent integrity problem must stay periodically visible, so
-        // after the interval the same id is reported again.
+        // after the interval the same id is reported again. The stored
+        // TickCount64 timestamp is BACK-DATED past the window instead of
+        // sleeping — the pin is deterministic, not wall-clock sensitive.
         [Fact]
         public void MissingSchedule_IsReportedAgain_AfterIntervalElapses()
         {
@@ -97,7 +99,7 @@ namespace HSMServer.Core.Tests.Schedule
 
             // Window elapsed: reported again.
             provider.MissingScheduleReportInterval = TimeSpan.FromMilliseconds(50);
-            System.Threading.Thread.Sleep(100);
+            provider.BackdateMissingScheduleReport(id, byMilliseconds: 60);
             Assert.True(provider.IsWorkingTime(id, DateTime.UtcNow));
             Assert.Equal(2, CountReports(id));
         }
@@ -149,10 +151,11 @@ namespace HSMServer.Core.Tests.Schedule
             Assert.True(provider.IsWorkingTime(id, DateTime.UtcNow));
             Assert.Equal(1, CountReports(id));
 
-            // Shrink the interval so the same entry is now older than 2x it;
-            // the cleanup prunes the stale entry.
+            // Shrink the interval so the same entry is now older than 2x it,
+            // and back-date the stored timestamp past that threshold — the
+            // prune is driven deterministically, without a wall-clock sleep.
             provider.MissingScheduleReportInterval = TimeSpan.FromMilliseconds(20);
-            System.Threading.Thread.Sleep(60);
+            provider.BackdateMissingScheduleReport(id, byMilliseconds: 60);
             provider.CleanupIntervalCache();
 
             // Interval restored BEFORE the hit: only the prune can explain a

@@ -24,7 +24,9 @@ namespace HSMServer.Controllers
     // dropdowns for managers too. Schedule MUTATION is a different class of
     // action: schedules are global cross-folder objects, and every mutation
     // (create/edit/delete) rewrites or removes what policies tree-wide point
-    // at — so SavePartial and Remove carry [AuthorizeIsAdmin] individually.
+    // at — so SavePartial and Remove carry [AuthorizeIsAdmin] individually,
+    // and the Index/table views gate the Add/Edit/Remove controls on the
+    // same check (non-admins get the read-only page, not 401 buttons).
     [Authorize]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class AlertSchedulesController : BaseController
