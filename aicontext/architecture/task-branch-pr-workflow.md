@@ -1,6 +1,6 @@
 # Task Branch And PR Workflow
 
-> Owner: shared | Last reviewed: 2026-05-28 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-09-23 | Canonical: yes
 
 Generic branch and pull request workflow for HSM.
 
@@ -31,7 +31,7 @@ focused re-review status.
 
 ## Review/Fix Loop
 
-- Before every push, the author fetches `origin/master` and reviews the whole branch diff (`/code-review medium origin/master...HEAD` or `/matt:code-review`), fixes confirmed findings and re-verifies them; a fix that goes beyond its finding, or new work, gets a focused re-review. The PR bot (`claude-review.yml`) is the second reader, not the first.
+- After committing and before every push, the author fetches `origin/master` and reviews the whole committed branch diff (`/code-review medium origin/master...HEAD` or `/matt:code-review`; the range sees committed work only), fixes confirmed findings and re-verifies them; a fix that goes beyond its finding, or new work, gets a focused re-review. The PR bot (`claude-review.yml`) is the second reader, not the first.
 - Run role-based review when the PR touches compatibility-sensitive or shared behavior.
 - Fix confirmed blockers.
 - Rerun only focused roles after fixes.

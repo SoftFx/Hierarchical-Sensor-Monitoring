@@ -1,6 +1,6 @@
 # Development Lifecycle
 
-> Owner: shared | Last reviewed: 2026-05-26 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-09-23 | Canonical: yes
 
 ## Workflow
 
@@ -22,8 +22,9 @@
 3.1. Self-review the diff for: exception leaks, resource leaks, thread safety, backward compatibility.
 3.2. Bump only the relevant component version when preparing a release/package or when the task asks for it.
 3.3. Commit with descriptive message in imperative mood.
-3.4. Push branch and create PR.
-3.5. No auto-merge: human reviews and merges.
+3.4. Review the committed branch diff before pushing: `git fetch origin master`, then `/code-review medium origin/master...HEAD` (or `/matt:code-review`). Fix confirmed findings, commit and re-verify the fixes. The PR bot (`claude-review.yml`) is the second reader, not the first.
+3.5. Push branch and create PR.
+3.6. No auto-merge: human reviews and merges.
 
 ## Code Review Checklist (DataCollector)
 

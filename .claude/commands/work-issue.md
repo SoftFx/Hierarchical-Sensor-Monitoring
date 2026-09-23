@@ -31,16 +31,7 @@ Before writing code, confirm that the UI patterns, file paths or signatures the 
 
 Hand over to the trialled skills. Keep the change inside the issue's scope; build to verify compilation.
 
-## 4. Review your own diff
-
-```
-git fetch origin master
-/code-review medium origin/master...HEAD     # or /matt:code-review for the standards + spec axes
-```
-
-Fetch first: the range uses your local copy of `origin/master`, and a stale one puts the merge base too far back, so the diff picks up commits that are already in master. Name the range explicitly: without it the review compares against the upstream branch, which on a first push does not exist and on later pushes covers only the unpushed commits. Review the whole branch diff right before the push. Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — then rebuild and re-run the narrowest tests for what you fixed. Re-review only when a fix goes beyond its finding; new work added after the review needs a review of its own. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
-
-## 5. Commit and push
+## 4. Commit
 
 ```
 git add <changed files>
@@ -51,12 +42,28 @@ Longer explanation if needed.
 Closes #$ARGUMENTS
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
-git push -u origin feature/$ARGUMENTS-<short-slug>
 ```
 
 `Closes #N` goes in before the PR is merged — added afterwards it does not close the issue.
 
-## 6. Open a draft PR
+## 5. Review your own diff
+
+```
+git fetch origin master
+/code-review medium origin/master...HEAD     # or /matt:code-review for the standards + spec axes
+```
+
+The range covers committed work only, which is why this comes after the commit. Fetch first: the range uses your local copy of `origin/master`, and a stale one puts the merge base too far back, so the diff picks up commits that are already in master. Name the range explicitly: without it the review compares against the upstream branch, which on a first push does not exist and on later pushes covers only the unpushed commits.
+
+Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — commit the fixes, then rebuild and re-run the narrowest tests for what you fixed. Re-review only when a fix goes beyond its finding; new work added after the review needs a review of its own. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
+
+## 6. Push
+
+```
+git push -u origin feature/$ARGUMENTS-<short-slug>
+```
+
+## 7. Open a draft PR
 
 ```
 gh pr create --draft --base master --title "Short description" --body "..."

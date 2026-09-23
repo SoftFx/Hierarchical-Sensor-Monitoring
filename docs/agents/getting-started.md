@@ -61,7 +61,7 @@
 ```
 /work-issue 1234     ← ветка от свежего master + draft PR
    └─ внутри: /matt:implement, при необходимости /matt:tdd, /matt:diagnosing-bugs
-   └─ перед каждым пушем: git fetch origin master, затем /code-review medium origin/master...HEAD — вся ветка; бот в PR второй читатель, не первый
+   └─ после коммита, перед каждым пушем: git fetch origin master, затем /code-review medium origin/master...HEAD — вся закоммиченная ветка; бот в PR второй читатель, не первый
 ```
 
 Правило про синхронизацию `master` перед веткой оплачено кровью на #1297 — фикс уехал против UI, который днём раньше заменили сквош-мержем. Не пропускайте этот шаг.
