@@ -34,10 +34,10 @@ Hand over to the trialled skills. Keep the change inside the issue's scope; buil
 ## 4. Review your own diff
 
 ```
-/code-review medium     # or /matt:code-review for the standards + spec axes
+/code-review medium origin/master...HEAD     # or /matt:code-review for the standards + spec axes
 ```
 
-Against the merge base, on the final diff, right before the push: anything committed after the review is unreviewed. Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — then rebuild and re-run the narrowest tests for what you fixed. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
+Name the range explicitly: without it the review compares against the upstream branch, which on a first push does not exist and on later pushes covers only the unpushed commits. Review the whole branch diff right before the push. Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — then rebuild and re-run the narrowest tests for what you fixed. Re-review only when a fix goes beyond its finding; new work added after the review needs a review of its own. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
 
 ## 5. Commit and push
 

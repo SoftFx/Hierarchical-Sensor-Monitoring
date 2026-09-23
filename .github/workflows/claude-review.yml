@@ -75,7 +75,7 @@ jobs:
             PR NUMBER: ${{ github.event.pull_request.number }}
             Branch: ${{ github.head_ref }} -> ${{ github.base_ref }}
 
-            Review this pull request. Focus on, in the code this diff changes:
+            Review this pull request. Focus on, for this change and what it affects:
             - Bugs and logic errors
             - Security vulnerabilities
             - Code quality and maintainability
@@ -90,9 +90,10 @@ jobs:
             Two carve-outs. Missing tests, missing conformance scenarios (CLAUDE.md rule #9) and
             missing `aicontext/` updates for behaviour this diff changes are findings, not new
             work. A problem you would rate P0 or P1 (security bypass, data loss, corrupt storage,
-            contract break) that you hit in code this diff touches or reaches is a finding with
-            full detail even when this diff did not cause it; do not sweep the repo for such
-            problems, and skip ones already tracked in an issue.
+            contract break) that you hit in the files this diff changes or in their direct callers
+            and consumers is a finding with full detail even when this diff did not cause it. Do
+            not look for such problems anywhere else, and report one even if it may already be
+            tracked, unless the PR itself says so.
 
             Suggestions beyond the diff are welcome but rationed: at most three, each one line,
             in a final "Optional (out of scope)" section, and only when one follows from a

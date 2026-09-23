@@ -150,7 +150,7 @@ When adding new functionality:
 - Initial review may use a role pack selected from changed surfaces.
 - Re-review after fixes must be focused: rerun only roles whose risk area changed.
 - Findings should lead with severity, file/line references, impact, and suggested fix.
-- **Review your own diff before pushing it.** Run `/code-review medium` (or `/matt:code-review` for the standards + spec axes) against the merge base on the final diff, adjudicate the findings, fix what is real, re-verify the fixes. Anything committed after the review is unreviewed. The PR bot (`claude-review.yml`) is the second reader, not the first: every round of it is a paid API call plus a full rebuild/verify/push cycle, and its rounds are worth spending on what a local pass could not see.
+- **Review your own diff before pushing it.** Run `/code-review medium origin/master...HEAD` (or `/matt:code-review` for the standards + spec axes) on the whole branch diff right before the push, adjudicate the findings, fix what is real, and re-verify the fixes. Re-review only when a fix goes beyond its finding; new work added after the review needs a review of its own. The PR bot (`claude-review.yml`) is the second reader, not the first: every round of it is a paid API call plus a full rebuild/verify/push cycle, and its rounds are worth spending on what a local pass could not see.
 - Never merge to `master` or `main`; stop at human handoff.
 
 ## Compatibility Rules
