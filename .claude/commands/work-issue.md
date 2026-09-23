@@ -65,17 +65,17 @@ Later pushes — only the new commits:
 /code-review medium @{upstream}..HEAD
 ```
 
-Already-reviewed commits are not reviewed again, so findings you declined do not come back.
+Already-reviewed commits are not reviewed again, so findings you declined do not come back. After a rebase onto master or a merge of master, `@{upstream}` no longer marks what is new: review the whole branch again with the first-push command.
 
-Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — commit the fixes, then rebuild and re-run the narrowest tests for what you fixed. Commits that only fix a review finding are re-verified, not re-reviewed; anything beyond the finding is new work and gets the later-push review. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
+Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — commit the fixes, then rebuild and re-run the narrowest tests for what you fixed. Commits that only fix a review finding are re-verified, not re-reviewed. If a fix goes beyond its finding, run the same review again; findings you already declined may reappear — keep declining them. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
 
 ## 6. Push
 
 ```
-git push -u origin feature/$ARGUMENTS-<short-slug>
+git push -u origin feature/$ARGUMENTS-<short-slug>     # later pushes: git push
 ```
 
-## 7. Open a draft PR
+## 7. Open a draft PR (first push only)
 
 ```
 gh pr create --draft --base master --title "Short description" --body "..."
