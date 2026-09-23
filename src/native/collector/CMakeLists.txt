@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.7.2 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.7.3 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -273,6 +273,19 @@ if(HSM_COLLECTOR_HTTP)
     )
     add_test(NAME native_http_registration_failure_logs_status
         COMMAND hsm_collector_tests native_http_registration_failure_logs_status
+    )
+    # #1432: the stop drain delivers on the real transport, stays bounded, and survives a restart.
+    add_test(NAME native_http_stop_drain_delivers_to_healthy_server
+        COMMAND hsm_collector_tests native_http_stop_drain_delivers_to_healthy_server
+    )
+    add_test(NAME native_http_stop_is_bounded_against_hung_server
+        COMMAND hsm_collector_tests native_http_stop_is_bounded_against_hung_server
+    )
+    add_test(NAME native_http_dispose_is_bounded_against_hung_server
+        COMMAND hsm_collector_tests native_http_dispose_is_bounded_against_hung_server
+    )
+    add_test(NAME native_http_stop_start_stop_delivers
+        COMMAND hsm_collector_tests native_http_stop_start_stop_delivers
     )
 endif()
 

@@ -8,9 +8,13 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cctype>
+#include <cerrno> // EINTR retry in the accept loop
 #include <cstring>
+#include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -225,5 +229,213 @@ namespace hsm::test
         std::atomic<bool> stop_{ false };
         std::thread worker_;
         CapturedRequest request_;
+    };
+
+    // Multi-request variant for the stop-drain tests (#1432): keeps accepting until destroyed and
+    // records every request's path + body. Requests whose path starts with hang_path_prefix are
+    // read and recorded but never answered — the connection is held open until the destructor, so
+    // the client sees a server that accepted the request and hung. Everything else gets a 200.
+    class HttpRecordingServer
+    {
+    public:
+        struct Recorded
+        {
+            std::string path;
+            std::string body;
+        };
+
+        explicit HttpRecordingServer(std::string hang_path_prefix = {})
+            : hang_path_prefix_(std::move(hang_path_prefix))
+        {
+#if defined(_WIN32)
+            WSADATA wsa;
+            WSAStartup(MAKEWORD(2, 2), &wsa);
+#endif
+            listen_ = socket(AF_INET, SOCK_STREAM, 0);
+            if (listen_ == INVALID_SOCKET)
+                return; // Port() stays 0: the test fails on the first connect, not on UB in FD_SET
+
+            sockaddr_in addr{};
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            addr.sin_port = 0; // ephemeral
+
+            int yes = 1;
+            setsockopt(listen_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&yes), sizeof(yes));
+            // A failed bind/listen must not leave the accept thread selecting on a dead socket.
+            if (bind(listen_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 || listen(listen_, 16) != 0)
+            {
+                closesocket(listen_);
+                listen_ = INVALID_SOCKET;
+                return;
+            }
+
+            sockaddr_in bound{};
+            socklen_t len = sizeof(bound);
+            getsockname(listen_, reinterpret_cast<sockaddr*>(&bound), &len);
+            port_ = ntohs(bound.sin_port);
+
+            worker_ = std::thread([this] { AcceptLoop(); });
+        }
+
+        ~HttpRecordingServer()
+        {
+            stop_.store(true, std::memory_order_release);
+            if (worker_.joinable())
+                worker_.join();
+            for (const auto conn : hung_)
+                closesocket(conn);
+            if (listen_ != INVALID_SOCKET)
+                closesocket(listen_);
+#if defined(_WIN32)
+            WSACleanup();
+#endif
+        }
+
+        HttpRecordingServer(const HttpRecordingServer&) = delete;
+        HttpRecordingServer& operator=(const HttpRecordingServer&) = delete;
+
+        int Port() const { return port_; }
+
+        std::vector<Recorded> Requests() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return requests_;
+        }
+
+        size_t CountPath(const std::string& path) const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            size_t count = 0;
+            for (const auto& request : requests_)
+                if (request.path == path)
+                    ++count;
+            return count;
+        }
+
+    private:
+        void AcceptLoop()
+        {
+            while (!stop_.load(std::memory_order_acquire))
+            {
+                fd_set readfds;
+                FD_ZERO(&readfds);
+                FD_SET(listen_, &readfds);
+
+                timeval tv{};
+                tv.tv_sec = 0;
+                tv.tv_usec = 50000; // 50 ms — re-check stop_ each tick
+
+#if defined(_WIN32)
+                const int nfds = 0;
+#else
+                const int nfds = listen_ + 1;
+#endif
+                const int ready = select(nfds, &readfds, nullptr, nullptr, &tv);
+                if (ready < 0)
+                {
+#if !defined(_WIN32)
+                    // A signal delivered to this thread makes select fail with EINTR; retrying keeps
+                    // the fixture alive instead of killing the accept loop for the rest of the test.
+                    if (errno == EINTR)
+                        continue;
+#endif
+                    return; // socket torn down (dtor) or a genuine error
+                }
+                if (ready == 0)
+                    continue;
+
+                const socket_t conn = accept(listen_, nullptr, nullptr);
+                if (conn == INVALID_SOCKET)
+                    continue;
+
+                Recorded recorded;
+                if (!ReadRequest(conn, recorded))
+                {
+                    closesocket(conn);
+                    continue;
+                }
+
+                const bool hang = !hang_path_prefix_.empty() && recorded.path.rfind(hang_path_prefix_, 0) == 0;
+                {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    requests_.push_back(std::move(recorded));
+                }
+
+                if (hang)
+                {
+                    hung_.push_back(conn); // never answered; closed by the destructor
+                    continue;
+                }
+
+                static const std::string response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                send(conn, response.c_str(), static_cast<int>(response.size()), 0);
+                closesocket(conn);
+            }
+        }
+
+        // Reads one request (headers + Content-Length body) with a blocking recv on the accept
+        // thread, so connections are served strictly one at a time: fine for libcurl, which sends
+        // the whole request immediately after connecting, but do not point a second concurrent
+        // client at this fixture without giving each connection its own thread.
+        static bool ReadRequest(socket_t conn, Recorded& out)
+        {
+            std::string raw;
+            char buffer[4096];
+            size_t header_end = std::string::npos;
+            size_t content_length = 0;
+
+            for (;;)
+            {
+                const int n = recv(conn, buffer, sizeof(buffer), 0);
+                if (n <= 0)
+                    return false;
+                raw.append(buffer, static_cast<size_t>(n));
+
+                if (header_end == std::string::npos)
+                {
+                    header_end = raw.find("\r\n\r\n");
+                    if (header_end != std::string::npos)
+                    {
+                        std::string head = raw.substr(0, header_end);
+                        for (auto& c : head)
+                            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                        const size_t pos = head.find("content-length:");
+                        if (pos != std::string::npos)
+                        {
+                            try
+                            {
+                                content_length = static_cast<size_t>(std::stoul(head.substr(pos + 15)));
+                            }
+                            catch (...)
+                            {
+                                content_length = 0;
+                            }
+                        }
+                    }
+                }
+
+                if (header_end != std::string::npos && raw.size() - (header_end + 4) >= content_length)
+                    break;
+            }
+
+            const size_t sp1 = raw.find(' ');
+            const size_t sp2 = sp1 == std::string::npos ? std::string::npos : raw.find(' ', sp1 + 1);
+            if (sp2 == std::string::npos || sp2 > header_end)
+                return false;
+
+            out.path = raw.substr(sp1 + 1, sp2 - sp1 - 1);
+            out.body = raw.substr(header_end + 4, content_length);
+            return true;
+        }
+
+        std::string hang_path_prefix_;
+        socket_t listen_ = INVALID_SOCKET;
+        int port_ = 0;
+        std::atomic<bool> stop_{ false };
+        std::thread worker_;
+        std::vector<socket_t> hung_; // worker-thread only until the join in the destructor
+        mutable std::mutex mutex_;
+        std::vector<Recorded> requests_;
     };
 } // namespace hsm::test
