@@ -31,7 +31,15 @@ Before writing code, confirm that the UI patterns, file paths or signatures the 
 
 Hand over to the trialled skills. Keep the change inside the issue's scope; build to verify compilation.
 
-## 4. Commit and push
+## 4. Review your own diff
+
+```
+/code-review            # or /matt:code-review for the standards + spec axes
+```
+
+Against the merge base, before the push. Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked". The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
+
+## 5. Commit and push
 
 ```
 git add <changed files>
@@ -47,7 +55,7 @@ git push -u origin feature/$ARGUMENTS-<short-slug>
 
 `Closes #N` goes in before the PR is merged — added afterwards it does not close the issue.
 
-## 5. Open a draft PR
+## 6. Open a draft PR
 
 ```
 gh pr create --draft --base master --title "Short description" --body "..."

@@ -75,7 +75,7 @@ jobs:
             PR NUMBER: ${{ github.event.pull_request.number }}
             Branch: ${{ github.head_ref }} -> ${{ github.base_ref }}
 
-            Review this pull request. Focus on:
+            Review this pull request. Focus on, in the code this diff changes:
             - Bugs and logic errors
             - Security vulnerabilities
             - Code quality and maintainability
