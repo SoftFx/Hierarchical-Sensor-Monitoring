@@ -429,6 +429,10 @@ if(WIN32)
     add_test(NAME native_tcp_failure_rate_sensor_registers
         COMMAND hsm_collector_tests native_tcp_failure_rate_sensor_registers
     )
+    # #1414: the Windows factory must decline the letter-less Unix disk rows (they would parse as N:).
+    add_test(NAME native_windows_disk_binds_only_lettered_rows
+        COMMAND hsm_collector_tests native_windows_disk_binds_only_lettered_rows
+    )
     # #1414: the Linux factory must refuse to install off Linux instead of silently doing nothing.
     add_test(NAME native_linux_metric_sources_rejected_off_linux
         COMMAND hsm_collector_tests native_linux_metric_sources_rejected_off_linux
