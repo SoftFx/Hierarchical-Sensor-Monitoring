@@ -113,16 +113,46 @@ Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySens
 
 ## Free disk space prediction algorithm
 
-`DefaultSensors/BaseTemplates/FreeDiskSpacePredictionBase.cs`: sample free space every 30 s; speed EMA `0.9*old + 0.1*new`; first **6** requests are calibration (default `DiskSensorOptions.CalibrationRequests = 6`, configurable; returns OffTime); if space is shrinking → `TimeSpan = freeSpace / speed`, status Ok; if growing → previous prediction + OffTime ("cannot be calculated"). Read failures are sensor errors (Error value with message), not lifecycle failures — sampling continues and recovers.
+`DefaultSensors/BaseTemplates/FreeDiskSpacePredictionBase.cs` — "сколько продержится свободное место
+при наблюдаемой скорости расхода". Переписан в #1445 — старая формула на простаивающем хосте
+навечно залипала на скорости одного всплеска записи и предсказывала никогда не наступающий full disk.
 
-Three details are part of the cross-collector contract and are reproduced verbatim by the native
-`src/disk_prediction.hpp` (#1426):
-- only a POSITIVE speed is folded into the EMA, so a refill moves the baseline without moving the
-  estimate — and `_isOffTime` (`_currentChangeSpeed < 0`) is therefore unreachable in practice;
-- the value, the status and the comment are evaluated in that order (`GetValue` → `GetStatus` →
-  `GetComment`) and only the value's branch consumes a calibration request, so the post right AFTER
-  calibration still carries `TimeSpan.Zero` while already reporting the running status and the speed
-  comment;
+**Сбор (sampling loop, каждые 30 s).** `curSpeed = (lastFree - curFree) / elapsedSeconds` — ЗНАКОВАЯ
+величина (>0 — место убывает, <0 — освобождается). В EMA складывается **каждый** интервал:
+первый задаёт начальное значение, дальше `0.9*old + 0.1*new`. Именно это даёт затухание: вес старого
+замера падает вдвое за ~6.6 замеров (~3.3 мин), и ~63 % оценки дают последние 10 замеров (~5 мин,
+один post period).
+
+**Калибровка** считается по часам СБОРА, а не постинга: `(n/6)` — это n завершённых замеров
+свободного места (default `DiskSensorOptions.CalibrationRequests = 6` → 3 минуты при 30 s sampling).
+
+**Постинг (каждые 5 мин).** Ровно одно из пяти состояний — вот что оператор видит в каждом:
+
+| Состояние | Условие | Value | Status | Comment |
+|---|---|---|---|---|
+| Draining | speed > 0, оценка ниже потолка | `freeSpace / speed` | **Ok** | `Free space decreases by X Mbytes/sec.` |
+| BeyondCeiling | speed > 0, но места хватит больше чем на год | `365.00:00:00` | OffTime | `Free space decreases by X Mbytes/sec. More than 365 days left.` |
+| NoDrain | speed == 0 | `365.00:00:00` | OffTime | `Free space is not decreasing. Value cannot be calculated.` |
+| Growing | speed < 0 | `365.00:00:00` | OffTime | `Free space increases by X Mbytes/sec. Value cannot be calculated.` |
+| Calibration | замеров меньше `CalibrationRequests` | `365.00:00:00` | OffTime | `Calibration request (n/N). Value cannot be calculated yet.` |
+
+Что это значит для оператора:
+- **Только `Ok` — реальная оценка.** Любой `OffTime` означает "оценки нет", а не "осталось ровно год".
+- **Потолок `365.00:00:00`** (`FreeDiskSpacePredictionBase.MaxPrediction`) читается как "при текущем
+  расходе диск в ближайший год не заполнится". Он же защищает от переполнения `TimeSpan.FromSeconds`
+  на очень маленькой скорости (раньше оно бросало исключение, и сенсор молча ничего не постил).
+- **`00:00:00` больше никогда не заглушка.** Ноль теперь означает ровно одно — свободного места нет
+  вообще. До #1445 ноль шлёл всю калибровку, и алерт читал его как "диск полон ПРЯМО СЕЙЧАС".
+- **Алерты вида `value <= 2 дней`** теперь срабатывают только на реальном расходе, а не на пустом месте.
+
+Read failures are sensor errors (Error value with message), not lifecycle failures — sampling
+continues and recovers.
+
+Две детали часть cross-collector контракта и воспроизведены дословно в нативном
+`src/disk_prediction.hpp` (#1426, #1445):
+- value, status и comment одного поста считаются из ОДНОГО снимка состояния, так что тройка
+  всегда согласована (до #1445 счётчик калибровки двигался внутри `GetValue`, и пост СРАЗУ после
+  калибровки нёс `TimeSpan.Zero` с уже рабочими status и comment);
 - the comment divides the speed by 1 MiB and labels it `Mbytes/sec` whatever unit the platform's
   `IDiskInfo` reports in (bytes on Windows, kB on Unix). Mirrored rather than corrected: the two
   collectors must produce the same comment for the same host, and relabelling it is a separate,
@@ -130,10 +160,10 @@ Three details are part of the cross-collector contract and are reproduced verbat
   managed used plain interpolation, which on a comma-decimal host (`ru-RU`, `de-DE`, …) emitted
   `1,5` where native emits `1.5`; fixed in #1426 so the contract holds on every host.
 
-Known managed wrinkle: the send loop starts in `InitAsync` with a zero due time while `StartAsync`
-resets `_requestsCount` afterwards, so the opening post races that reset and the first calibration
-comment can repeat or read `(0/N)`. The conformance fixture therefore does not pin the NUMBER of
-calibration posts.
+Known managed wrinkle: the send loop starts in `InitAsync` with a zero due time while the sampler's
+first tick is aligned to the next period boundary, so how many posts precede the N-th measurement
+depends on scheduling. The conformance fixture therefore does not pin the NUMBER of calibration
+posts — только их форму.
 
 ## Perf-counter infrastructure
 
