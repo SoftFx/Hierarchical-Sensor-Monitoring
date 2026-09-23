@@ -82,12 +82,14 @@ jobs:
             - Performance issues
 
             Review the change that is here, not the change you would have made. Findings are
-            defects, risks or regressions in this diff; lead with those, most severe first.
-            Do not raise new features, extra tooling, or refactors of untouched code as findings.
+            defects, risks or regressions caused by this diff — including the ones whose symptom
+            lands in code the diff did not touch, such as a caller of a changed API or a consumer
+            of a changed format; lead with those, most severe first. Do not raise new features,
+            extra tooling, or refactors of untouched code as findings.
 
             Suggestions beyond the diff are welcome but rationed: at most three, each one line,
             in a final "Optional (out of scope)" section, and only when one follows from a
-            concrete risk in this diff. Having nothing to put there is the normal case - omit
+            concrete risk in this diff. Having nothing to put there is the normal case — omit
             the section then rather than filling it.
 
             Use `gh pr diff ${{ github.event.pull_request.number }}` to see the changes. Do not
