@@ -3740,6 +3740,62 @@ namespace
         hsm_sensor_release(sensor);
     }
 
+    // #1428 review round 3: the two publishers of one push-fed bar - roll-on-add on a caller thread
+    // and the scheduler's tick roll / partial post - must be totally ordered, or the wire can carry a
+    // partial of window W+1 before the closed bar of W. The server persists on a NEW OpenTime, so that
+    // reordering reorders stored bars. Race-shaped by construction (a fast pusher against a 10 ms post
+    // cadence over 100 ms windows); the assertion is the invariant, not a timing.
+    void NativeBuiltInPushBarPublishesAreOrdered()
+    {
+        auto collector = CreateCollector();
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_test_create_sampled_bar_sensor(collector.value, "race/push/ordered", 1, 100, 10, 10, 0, &sensor) ==
+                HSM_RESULT_OK,
+            "create push-fed bar failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        std::atomic<bool> stop{ false };
+        std::atomic<int> pushed{ 0 };
+        std::thread pusher([&] {
+            while (!stop.load())
+            {
+                hsm_sensor_add_bar_int(sensor, ++pushed);
+                std::this_thread::sleep_for(std::chrono::microseconds(200));
+            }
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        stop.store(true);
+        pusher.join();
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        // Delivery order must never step back to an older window, and within one window every posted
+        // snapshot must be at least as complete as the previous one.
+        long long previous_open = -1;
+        std::map<long long, int> last_count;
+        const auto count = hsm_collector_sent_count(collector.value);
+        Require(count > 0, "the push-fed bar should have published");
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            const auto payload = SentJson(collector.value, index);
+            const auto open = std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs"));
+            const auto bar_count = std::stoi(NumberFieldFromPayload(payload, "Count"));
+
+            Require(open >= previous_open, ("a partial of a newer window overtook an older bar: " + payload).c_str());
+            previous_open = open;
+
+            const auto seen = last_count.find(open);
+            Require(
+                seen == last_count.end() || seen->second <= bar_count,
+                ("a stale snapshot of one window was published after a fuller one: " + payload).c_str());
+            last_count[open] = bar_count;
+        }
+
+        hsm_sensor_release(sensor);
+    }
+
     // Real-time bar-shape check for the live platform factories (#1428): every Total CPU payload is a
     // partial of an aligned 5-min bar, and posts inside one window share its OpenTime. Waits for
     // `posts` Total CPU payloads (15 s apart) — set HSM_LIVE_BAR_POSTS=22 to watch past a whole window.
@@ -4776,7 +4832,9 @@ namespace
     // the in-flight send is cancelled, and the drain's retry of it is capped at the stop-flush
     // budget (min(max(RequestTimeout, 1 s), 5 s) — managed DataProcessor parity), not the 30 s
     // request timeout.
-    void NativeHttpStopIsBoundedAgainstHungServer()
+    // Drives a collector against a server that accepts the POST and never answers, then times the
+    // given shutdown call. Returns its wall-clock duration in ms.
+    int64_t TimeShutdownAgainstHungServer(const std::function<void(hsm_collector_t*)>& shutdown)
     {
         hsm::test::HttpRecordingServer server("/api/sensors/list");
 
@@ -4793,13 +4851,36 @@ namespace
         Require(server.CountPath("/api/sensors/list") >= 1, "the worker must have a POST in flight");
 
         const auto started = std::chrono::steady_clock::now();
-        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
-        const auto elapsed_ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+        shutdown(collector.value);
+        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+    }
 
-        // 5 s drain budget + libcurl's abort latency (the xfer callback runs about once a second
-        // while idle) + CI slack; far below the 30 s request timeout an unbounded drain would take.
+    void NativeHttpStopIsBoundedAgainstHungServer()
+    {
+        const auto elapsed_ms = TimeShutdownAgainstHungServer([](hsm_collector_t* collector) {
+            Require(hsm_collector_stop(collector) == HSM_RESULT_OK, "collector stop failed");
+        });
+
+        // 5 s graceful drain budget + libcurl's abort latency (the xfer callback runs about once a
+        // second while idle) + CI slack; far below the 30 s request timeout an unbounded drain would
+        // take.
         Require(elapsed_ms < 9000, ("Stop against a hung server must stay bounded, took " + std::to_string(elapsed_ms) + " ms").c_str());
+    }
+
+    // Terminal dispose gets the SHORTER budget — min(graceful, 1 s), mirroring managed
+    // ShutdownMode.TerminalDispose: a disposing host (the agent's self-update restart) must not wait
+    // the graceful ceiling for a hung server.
+    void NativeHttpDisposeIsBoundedAgainstHungServer()
+    {
+        const auto elapsed_ms = TimeShutdownAgainstHungServer([](hsm_collector_t* collector) {
+            hsm_collector_dispose(collector);
+            Require(hsm_collector_status(collector) == HSM_COLLECTOR_STATUS_DISPOSED, "dispose must end in Disposed");
+        });
+
+        // 1 s terminal budget + abort latency + CI slack, and strictly tighter than the graceful
+        // bound asserted above.
+        Require(elapsed_ms < 5000,
+                ("Dispose against a hung server must use the terminal budget, took " + std::to_string(elapsed_ms) + " ms").c_str());
     }
 
     // Stop -> Start -> Stop: each drain delivers, and the restart's /commands registration is not
@@ -6398,6 +6479,7 @@ namespace
             { "native_http_registration_failure_logs_status", [](const std::string&) { NativeHttpRegistrationFailureLogsStatus(); } },
             { "native_http_stop_drain_delivers_to_healthy_server", [](const std::string&) { NativeHttpStopDrainDeliversToHealthyServer(); } },
             { "native_http_stop_is_bounded_against_hung_server", [](const std::string&) { NativeHttpStopIsBoundedAgainstHungServer(); } },
+            { "native_http_dispose_is_bounded_against_hung_server", [](const std::string&) { NativeHttpDisposeIsBoundedAgainstHungServer(); } },
             { "native_http_stop_start_stop_delivers", [](const std::string&) { NativeHttpStopStartStopDelivers(); } },
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
@@ -6417,6 +6499,7 @@ namespace
             { "native_metric_bar_rolls_over_at_window_boundary", [](const std::string&) { NativeMetricBarRollsOverAtWindowBoundary(); } },
             { "native_metric_bar_flushes_partial_on_stop", [](const std::string&) { NativeMetricBarFlushesPartialOnStop(); } },
             { "native_built_in_push_bar_posts_partials", [](const std::string&) { NativeBuiltInPushBarPostsPartials(); } },
+            { "native_built_in_push_bar_publishes_are_ordered", [](const std::string&) { NativeBuiltInPushBarPublishesAreOrdered(); } },
 #if defined(_WIN32)
             { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
             { "native_windows_process_metric_resolves_current_process",

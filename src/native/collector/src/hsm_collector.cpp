@@ -2234,9 +2234,21 @@ namespace
 
         bool IsMetricCandidate() const { return is_metric_candidate_ && !is_metric_driven_ && !is_partial_posting_; }
 
-        // A built-in DoubleBar/IntBar (catalog row or an internal sampler's bar) — the ones that post
-        // partial bars like managed BarMonitoringSensorBase even without a metric source (#1428).
+        // A catalog DoubleBar/IntBar that no metric source bound — it still posts partial bars like
+        // managed BarMonitoringSensorBase (#1428).
         bool IsBuiltInBar() const { return is_metric_candidate_ && IsMetricBar(); }
+
+        // Mark a bar an internal sampler feeds by push (network speed): it joins the partial-post
+        // schedule WITHOUT becoming a metric candidate, so a user-installed metric-source factory can
+        // never bind it and sample the same bar the sampler is pushing into.
+        void MarkBuiltInPushBar(int64_t post_period_ms, int64_t bar_tick_ms)
+        {
+            is_built_in_push_bar_ = true;
+            metric_post_period_ms_ = post_period_ms;
+            metric_bar_tick_ms_ = bar_tick_ms;
+        }
+
+        bool IsBuiltInPushBar() const { return is_built_in_push_bar_ && IsMetricBar() && !is_partial_posting_; }
 
         // Bind a freshly created metric source (called on the Start thread before the scheduler runs).
         // Makes the sensor periodic so TickPeriodicSensors drives it; the source is read on the
@@ -2331,6 +2343,10 @@ namespace
         bool is_last_value_;
         bool is_bar_ = false;
         mutable std::mutex mutex_;
+        // Orders this sensor's bar publishes against each other (roll-on-add, the scheduled tick roll
+        // and the partial post): held across snapshot + enqueue, never nested inside mutex_, and never
+        // taken by the collector — so it cannot participate in a lock cycle (#1428).
+        std::mutex publish_mutex_;
         std::string last_value_json_;
         hsm_sensor_status_t last_status_ = HSM_SENSOR_STATUS_OFF_TIME;
         std::string last_comment_;
@@ -2365,8 +2381,8 @@ namespace
         bool is_metric_candidate_ = false;                // eligible: a value type that a metric source can drive
         bool is_metric_driven_ = false;                   // a source was bound at Start -> periodic reads
         bool is_partial_posting_ = false;                 // a push-fed built-in bar on the partial-post schedule
+        bool is_built_in_push_bar_ = false;               // an internal sampler's bar: partial posts, never metric-bound
         bool metric_prime_pending_ = false;               // the Start tick's read only primes the source (not a sample)
-        bool partial_send_in_progress_ = false;           // a partial snapshot is between capture and enqueue (mutex_)
         int64_t metric_post_period_ms_ = 0;               // post cadence (catalog post_period for default sensors)
         int64_t metric_bar_tick_ms_ = kMetricBarSampleMs; // bar sample cadence (managed BarTickPeriod)
         int64_t metric_emit_period_ms_ = 0;               // partial-bar post cadence / value post cadence once bound
@@ -2642,6 +2658,11 @@ namespace
                     else if (sensor->IsBuiltInBar())
                         sensor->EnablePartialPosts(); // push-fed built-in bar: tick-roll + partial posts (#1428)
                 }
+                else if (sensor->IsBuiltInPushBar())
+                {
+                    // An internal sampler's bar (network speed): partial posts, never factory-bound.
+                    sensor->EnablePartialPosts();
+                }
             }
 
             // Re-arm periodic sensors outside the collector lock (sensor locks are never taken
@@ -2690,14 +2711,17 @@ namespace
         hsm_result_t Stop()
         {
             std::lock_guard<std::mutex> op_guard(op_mutex_);
-            return StopCore();
+            return StopCore(/*terminal=*/false);
         }
 
         // Caller holds op_mutex_. Drives the stop transition exactly once (Stopped/Disposed
         // are no-ops), firing the Stopping/Stopped notifications around the flush+drain.
         // Dispose reuses this so a dispose racing an in-flight Stop joins on op_mutex_ and
         // sees Stopped here — exactly one stopped-notification, no duplicate flush.
-        hsm_result_t StopCore()
+        // `terminal` = this stop is a Dispose, not a graceful stop: the drain gets the shorter
+        // terminal budget (managed ShutdownMode.TerminalDispose), because a disposing host is on
+        // its way out and must not wait the graceful ceiling for a hung server (#1432).
+        hsm_result_t StopCore(bool terminal)
         {
             std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
             {
@@ -2765,7 +2789,7 @@ namespace
             // remainder (the graceful stop must not hang on a dead transport) — same contract as
             // the C# stop flush.
             StopWorker();
-            DrainQueueOnStop();
+            DrainQueueOnStop(terminal);
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -2788,7 +2812,7 @@ namespace
                     return;
             }
 
-            StopCore();
+            StopCore(/*terminal=*/true);
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -4267,7 +4291,7 @@ namespace
                             // already on it (created in an earlier run) is left alone.
                             if (!sensor->IsPeriodic())
                             {
-                                sensor->MarkMetricCandidate(15000, 15000);
+                                sensor->MarkBuiltInPushBar(15000, 15000);
                                 sensor->EnablePartialPosts();
                                 sensor->ResetPeriodicBaseline();
                                 scheduler_task_->Wake();
@@ -4780,17 +4804,21 @@ namespace
             }
         }
 
-        // Bounded stop-flush budget, mirroring the managed DataProcessor: clamp(RequestTimeout,
-        // 1 s, 5 s). A graceful stop must never hold its host's shutdown hostage to a hung
-        // transport, so the drain gets at most this much wall-clock time in total — but, against a
-        // healthy server, that is far more than it needs and the data is delivered (#1432).
-        int64_t StopDrainBudgetMs() const
+        // Bounded stop-flush budget, mirroring the managed DataProcessor/ShutdownMode matrix:
+        //   graceful stop    -> clamp(RequestTimeout, 1 s, 5 s)  (DataProcessor._stopFlushTimeout)
+        //   terminal dispose -> min(that, 1 s)                   (ShutdownMode.StopWaitTimeout)
+        // A stop must never hold its host's shutdown hostage to a hung transport, so the drain gets
+        // at most this much wall-clock time in total — but against a healthy server that is far more
+        // than it needs and the data is delivered (#1432). A disposing host is on its way out (the
+        // agent's self-update restart), hence the tighter terminal ceiling.
+        int64_t StopDrainBudgetMs(bool terminal) const
         {
             const int64_t timeout = request_timeout_ms_;
-            return (std::max<int64_t>)(1000, (std::min<int64_t>)(timeout, 5000));
+            const int64_t graceful = (std::max<int64_t>)(1000, (std::min<int64_t>)(timeout, 5000));
+            return terminal ? (std::min<int64_t>)(graceful, 1000) : graceful;
         }
 
-        void DrainQueueOnStop()
+        void DrainQueueOnStop(bool terminal)
         {
             // The deadline is written here and read by HttpSendBatch on this same (stop) thread:
             // the worker is already joined, the samplers are stopped, and op_mutex_ serializes
@@ -4798,15 +4826,16 @@ namespace
             struct DrainWindow
             {
                 NativeCollector& owner;
-                explicit DrainWindow(NativeCollector& collector)
+                DrainWindow(NativeCollector& collector, bool terminal_stop)
                     : owner(collector)
                 {
-                    owner.stop_drain_deadline_ = std::chrono::steady_clock::now() +
-                                                 std::chrono::milliseconds(owner.StopDrainBudgetMs());
+                    owner.stop_drain_deadline_ =
+                        std::chrono::steady_clock::now() +
+                        std::chrono::milliseconds(owner.StopDrainBudgetMs(terminal_stop));
                     owner.stop_drain_active_ = true;
                 }
                 ~DrainWindow() { owner.stop_drain_active_ = false; }
-            } drain_window(*this);
+            } drain_window(*this, terminal);
 
             size_t dropped = 0;
             {
@@ -4814,14 +4843,19 @@ namespace
                 dropped = DispatchQueuedLocked(lock, /*clear_remainder_on_failure=*/true);
             }
 
-            // Debug, not Error: dropping buffered values on a bounded graceful stop is expected and
-            // contracted (a stop must not block on a dead/failing transport). Logging it as Error
-            // spammed the log and the Windows Event Log on every routine restart; keep it only as a
-            // Debug breadcrumb (logged outside the queue lock so a slow sink cannot stall shutdown).
+            // Info, not Debug: since #1432 the drain really sends, so a drop here means the server
+            // rejected the stop flush or never answered it and that data is gone. Rule #8 says loss
+            // must be visible, and Info is what the file sink keeps by default (there is no Warning
+            // level in the C ABI, and adding one would be ABI growth this fix does not need). It
+            // stays out of the Error sink because it is a contracted bounded-shutdown outcome, not
+            // a collector fault — the send failure that caused it is logged as an Error by the send
+            // path. One line per restart, so it is not the Event Log spam that made an earlier
+            // Error-level version of this too loud. Logged outside the queue lock so a slow sink
+            // cannot stall shutdown.
             if (dropped > 0)
-                LogMessage(HSM_LOG_LEVEL_DEBUG,
+                LogMessage(HSM_LOG_LEVEL_INFO,
                            "Collector stop dropped " + std::to_string(dropped) +
-                               " pending value(s): send failed within the bounded stop flush.");
+                               " pending value(s): the bounded stop flush could not deliver them.");
         }
 
         // Pops and sends batches of up to max_values_in_package_ until the queue is empty or a
@@ -4982,16 +5016,21 @@ namespace
                 const std::string msg = "Failed to send " + std::to_string(batch.size()) + " value(s): HTTP " +
                                         std::to_string(response.status_code) +
                                         (response.error.empty() ? "" : " " + response.error);
-                // A send whose in-flight POST was cancelled by a graceful stop is expected, not an
-                // error — log it at Debug (same treatment as the stop-drop). A genuine failure while
-                // running still logs at Error (deduplicated).
+                // The level must say what actually happened (#1432). send_cancelled_ stays latched
+                // from StopWorker through the drain, so it alone no longer identifies a cancelled
+                // send: during the drain the POST is a REAL send, and a 503 / refused connection /
+                // TLS error there is a genuine failure that costs data — it keeps the Error level
+                // (the drop breadcrumb reports how much was lost). Only a send aborted before the
+                // join was truly cancelled by the stop: expected, so Debug, and the text says so
+                // instead of blaming the server. Everything else is a normal running failure (Error,
+                // deduplicated).
                 bool cancelled_by_stop;
                 {
                     std::lock_guard<std::mutex> guard(hang_mutex_);
                     cancelled_by_stop = send_cancelled_;
                 }
-                if (cancelled_by_stop)
-                    LogMessage(HSM_LOG_LEVEL_DEBUG, msg);
+                if (cancelled_by_stop && !stop_drain_active_)
+                    LogMessage(HSM_LOG_LEVEL_DEBUG, msg + " (send cancelled by the collector stop)");
                 else
                     LogError(msg);
             }
@@ -5134,7 +5173,7 @@ namespace
         int32_t max_queue_size_;
         int32_t max_values_in_package_;
         int32_t collect_period_ms_;
-        [[maybe_unused]] int32_t request_timeout_ms_;
+        int32_t request_timeout_ms_;
         int32_t max_sensors_;
         [[maybe_unused]] bool allow_untrusted_certificate_;
         [[maybe_unused]] bool allow_plaintext_transport_;
@@ -5341,9 +5380,13 @@ namespace
             return HSM_RESULT_INVALID_STATE;
 
         // Roll-on-add: a value arriving past the close publishes the closed bar and opens a
-        // fresh aligned one. The closed-bar JSON is built under the sensor lock but published
-        // after releasing it — the collector takes sensor locks while holding its own, so the
-        // reverse nesting here would deadlock.
+        // fresh aligned one. publish_mutex_ spans the snapshot AND the enqueue, so this closed bar
+        // cannot be overtaken by a partial of the next window published by the scheduler (#1428) —
+        // the server persists on a NEW OpenTime, so a reordering there reorders stored bars. The
+        // closed-bar JSON is built under the sensor lock but enqueued after releasing it — the
+        // collector takes sensor locks while holding its own, so the reverse nesting would deadlock.
+        std::lock_guard<std::mutex> publish_guard(publish_mutex_);
+
         std::string closed_json;
         {
             std::lock_guard<std::mutex> guard(mutex_);
@@ -5351,10 +5394,7 @@ namespace
             // Through the clock seam (real wall clock in production), like the built-in bar schedule
             // that shares this bar (#1428).
             const auto now_ms = SystemNowMs();
-            // A partial of this bar is being enqueued (TryBuildMetricBarJson): defer the roll, as
-            // managed CheckCurrentBar does when TrySendValue returns false — the value joins the
-            // closing bar and the next tick publishes it closed, after the partial.
-            if (bar_.close_ms < now_ms && !partial_send_in_progress_)
+            if (bar_.close_ms < now_ms)
             {
                 if (bar_.count > 0)
                     closed_json = collector->OutgoingBarJson(bar_, path_);
@@ -5739,9 +5779,16 @@ namespace
             }
 
             PublishNextDueHintLocked();
+        }
 
-            if (sample_due)
+        // The roll and its publish share publish_mutex_ with the partial post and with roll-on-add,
+        // so a closed bar is always enqueued before any partial of the next window.
+        if (sample_due)
+        {
+            std::lock_guard<std::mutex> publish_guard(publish_mutex_);
             {
+                std::lock_guard<std::mutex> guard(mutex_);
+
                 const int64_t wall_ms = SystemNowMs();
                 // Runs on the collector's own scheduler thread, so the collector is alive; the guard
                 // only keeps a teardown race from rolling a bar nobody can publish.
@@ -5753,12 +5800,11 @@ namespace
                     bar_.Init(wall_ms);
                 }
             }
-        }
 
-        // Publish the closed bar outside the sensor lock (the collector takes sensor locks while
-        // holding its own), ahead of any partial of the new window this call returns.
-        if (!closed_json.empty())
-            collector->EnqueueIfRunning(std::move(closed_json));
+            // Publish outside the sensor lock (the collector takes sensor locks while holding its own).
+            if (!closed_json.empty())
+                collector->EnqueueIfRunning(std::move(closed_json));
+        }
 
         // A push-fed built-in bar (queue diagnostics, network speed) only rolls on the tick; its values
         // arrive through AddBar* (managed PublicBarMonitoringSensor: CollectBar == CheckCurrentBar).
@@ -5777,27 +5823,24 @@ namespace
         if (!post_due || !collector)
             return false;
 
-        // Snapshot + enqueue under a send-in-progress flag (managed _sendValueInProgress): while it is
-        // set, roll-on-add (AccumulateBar) on a push-fed bar defers its roll, so a closed bar can never
-        // be enqueued ahead of this older partial of the same window — the server keeps the LAST post
-        // per OpenTime, and an out-of-order stale partial would drop values. The enqueue runs outside
-        // the sensor lock (the collector takes sensor locks while holding its own).
+        // Snapshot + enqueue under publish_mutex_, the same lock AccumulateBar's roll takes: the two
+        // publishes of one bar are totally ordered in BOTH directions, so neither a newer partial can
+        // overtake an older closed bar nor the reverse (managed serializes them through
+        // _sendValueInProgress). The lock is released by its guard on every path, including a throw.
         std::string partial_json;
         {
-            std::lock_guard<std::mutex> guard(mutex_);
-            if (bar_.count <= 0)
-                return false;
+            std::lock_guard<std::mutex> publish_guard(publish_mutex_);
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (bar_.count <= 0)
+                    return false;
 
-            partial_json = collector->OutgoingBarJson(bar_, path_);
-            partial_send_in_progress_ = true;
+                partial_json = collector->OutgoingBarJson(bar_, path_);
+            }
+
+            collector->EnqueueIfRunning(std::move(partial_json));
         }
 
-        collector->EnqueueIfRunning(std::move(partial_json));
-
-        {
-            std::lock_guard<std::mutex> guard(mutex_);
-            partial_send_in_progress_ = false;
-        }
         (void)out_json; // published above, not through the caller
         return false;
     }
