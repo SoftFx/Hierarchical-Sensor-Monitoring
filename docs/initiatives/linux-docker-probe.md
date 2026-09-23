@@ -90,7 +90,8 @@ Probe host language — Rust vs C++ (both native, both consume the same collecto
   binding crate + safe wrapper for the subset of the ABI the probe uses (options, transport,
   lifecycle, instant/enum/bar sensors, logger callback); FFI discipline (no panic unwind
   across `extern "C"` — `catch_unwind` at every callback boundary). If review rejects the
-  new toolchain, the fallback is the same architecture in C++ over `hsm_collector_cpp` —
+  new toolchain, the fallback is the same architecture in C++ over the `hsm::collector` wrapper
+  (`include/hsm_collector/collector.hpp`) —
   nothing else in this document changes.
 
 ## 4. Architecture
@@ -135,8 +136,21 @@ the managed side may sit on a .NET wrapper over the same source):
 
 Also in this workstream: platform-correct registration — on Linux,
 `add_all_computer_sensors` must register the Unix set instead of the current unconditional
-Windows nodes (`hsm_collector.cpp:7089` registers `Windows Version`/`Windows Last Restart`
-etc. that can never produce values off-Windows).
+Windows nodes: `hsm_collector_add_all_computer_sensors` (`hsm_collector.cpp:7107`) calls
+`hsm_collector_add_windows_info_monitoring_sensors` unconditionally at `:7116`, registering the
+`kWindowsInfoGroup` sensors (`:6953`) that can never produce values off-Windows.
+
+**Entry-point decision (settled while implementing, recorded here):** the existing ABI function
+keeps its name and branches at **compile time**, rather than gaining a separate
+`..._add_all_unix_computer_sensors`. The managed reference does split its surface
+(`UnixSensorsCollection` vs `WindowsSensorsCollection` behind `IUnixCollection`/`IWindowsCollection`),
+so this is a deliberate divergence: one binary targets one OS, so a per-platform entry point would
+be dead code on the other, and every existing caller keeps working untouched. Two consequences the
+implementing slice owns rather than discovers: the counting assertions in
+`hsm_collector_tests.cpp:4057-4059` (18 computer / 30 default) become platform-dependent and must be
+rewritten per platform, and the invariant recorded at `hsm_collector.cpp:6950-6952` — the event-log
+sensors must stay in the group so the native default set is not smaller than the managed one — is
+explicitly **not** in force off-Windows, where the managed Unix set has no event-log sensors either.
 
 Governance: conformance scenario(s) in `tests/conformance/collector/` locking the Unix
 default set (paths, types, options, registration) with verb support in both drivers, plus
@@ -235,11 +249,14 @@ standby-gated (`smartctl -n standby`).
 
 Ship as a **`.deb` package published through a GitHub Release**, mirroring the repo's
 existing release channels (`agent-v*`, `wrapper-v*`): tag `probe-v<version>` → CI workflow
-(build in a `debian:13` container for the glibc/dependency baseline, `cargo build --release`,
+(build in a container for the **oldest supported target release** — currently `debian:13`
+(trixie), which is what garage-server runs; building on a newer release than the target would
+produce both a too-new glibc requirement and `Depends:` on packages that do not exist there —
+`cargo build --release`,
 package, tests) → Release with the `.deb` + its sha256, `--latest=false` as usual.
 
 The package carries the binary, the hardened systemd unit, a config skeleton in
-`/etc/hsm-linux-probe/` (dpkg conffile — operator edits survive upgrades), and a postinst
+`/etc/hsm-linux-probe/` (dpkg conffile), and a postinst
 that creates the system user and `StateDirectory`. The access key is **not** packaged — it is
 placed once, manually, as the root-owned `LoadCredential=` source per the runbook.
 `libcurl`/`libssl` are linked dynamically against the distro packages (declared as `Depends:`)
@@ -274,7 +291,10 @@ product and the client runs one command and is connected
     unchanged), `computerName: "auto"`, and `accessKeyFile` points at the LoadCredential path;
   - `access-key`: the product key from the existing `AgentKeySelector`, in its own file. It is
     never written into `config.json`, so the config can be shown and diffed safely;
-  - `server-ca.pem`: the server's **public** certificate chain, with no private key. This keeps
+  - `server-ca.pem`: the server's **public** certificate chain, with no private key. `install.sh`
+    installs it as `hsm-server.crt`, because `update-ca-certificates` only reads files with a
+    `.crt` extension and silently ignores any other name — a `.pem` left as-is would leave the
+    trust store unchanged while the install log still reported success. This keeps
     TLS verification on for self-signed installs, which Windows gets only by baking
     `allowUntrustedCertificate`. The Linux probe never exposes that switch. If the server's
     certificate is already publicly trusted (the Caddy/Let's Encrypt setup from #1411), the file
@@ -282,18 +302,31 @@ product and the client runs one command and is connected
   - `install.sh` / `uninstall.sh`.
 - **Client side:** `tar xzf hsm-linux-probe-<product>.tar.gz && sudo ./install.sh`. The script
   refuses to run as non-root. It runs `apt install ./hsm-linux-probe_*.deb`, puts
-  `config.json` in `/etc/hsm-linux-probe/` (as a dpkg conffile, so a later reinstall keeps the
-  operator's edits unless `--force-config` is passed), and writes `access-key` as root:root
-  0400. It adds `server-ca.pem` to `/usr/local/share/ca-certificates/` and runs
-  `update-ca-certificates`, then runs `systemctl enable --now hsm-linux-probe` and prints the
+  `config.json` in `/etc/hsm-linux-probe/` **before** the package, and installs the package with
+  `--force-confdef --force-confold`, so the generated config wins and the package skeleton lands
+  beside it as `config.json.dpkg-dist` (observed on the live install). `install.sh` will not
+  overwrite an existing config unless `--force-config` is passed. Ownership is therefore split by
+  design — the bundle owns the live file, the package owns the skeleton — and the consequence is
+  that a later package upgrade treats the config as a locally modified conffile: dpkg keeps the
+  operator's file and leaves the new skeleton as `.dpkg-dist` rather than upgrading it silently.
+  A future release may move the generated file out of the conffile path (or use `ucf`) so the two
+  mechanisms stop overlapping. It writes `access-key` as root:root
+  0400. It installs the certificate as `/usr/local/share/ca-certificates/hsm-server.crt` and runs
+  `update-ca-certificates`, then verifies that the anchor actually took effect instead of trusting
+  the exit code. Note the accepted cost: this trusts the HSM server certificate for **every** TLS
+  client on the host, which is wider than the probe needs. The narrower alternative is the §4.1
+  `ca_file` knob pointing at a probe-owned bundle; it stays off the critical path until the
+  collector grows that option, then runs `systemctl enable --now hsm-linux-probe` and prints the
   unit status. It then deletes the extracted key file. `uninstall.sh` disables and purges the
   unit and package, removes the key, the CA file and the config, and never touches HSM history.
 - **Deliberately not a `curl … | sudo bash` one-liner:** the download endpoint needs an admin
   session, and a token in the URL would put the product key's bearer into shell history, proxy
   logs and process args, which §4.3 forbids. The flow is the Windows one: download in the
   browser, copy to the host, run one command.
-- **Key scope:** the bundle uses the same key selection as the Windows download (product
-  DefaultKey, otherwise a key that can send data and add nodes and sensors). It is
+- **Key scope (this supersedes the "send-only key" wording in §4.3 and §8):** the bundle uses the
+  same key selection as the Windows download (product DefaultKey, otherwise a key that can send
+  data and add nodes and sensors) — registration needs add-node and add-sensor rights, so a
+  strictly send-only key cannot register the sensor tree. It is
   product-scoped, not a master key. A dedicated, separately revocable per-download key is the
   same follow-up already listed for Windows. For garage-server, the operator can still issue a
   send-only key and swap the file; the runbook documents this.
