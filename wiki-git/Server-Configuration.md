@@ -15,8 +15,8 @@ Most settings can also be changed at runtime through **Configuration** in the we
     "SitePort": 44333
   },
   "ServerCertificate": {
-    "CertificatePath": "",
-    "CertificatePassword": ""
+    "Name": "",
+    "Key": ""
   },
   "BackupDatabase": {
     "IsEnabled": true,
@@ -57,6 +57,12 @@ Most settings can also be changed at runtime through **Configuration** in the we
 | `SensorPort` | `44330` | HTTPS port for sensor data ingestion (DataCollector and REST API) |
 | `SitePort` | `44333` | HTTPS port for the web UI |
 
+With the [Docker Compose setup](Installation), keep both at their defaults: Caddy forwards to exactly these ports.
+
+`Kestrel:TrustedProxies` is a list of reverse-proxy addresses (IP, CIDR such as `172.18.0.0/16`, or `attached-networks` for the networks of the server's own interfaces) whose `X-Forwarded-For` header HSM trusts for the client address. It is empty by default: HSM then records the address of whoever connects to it. The Docker Compose setup fills it in for its own Caddy; you do not need to set it yourself. It is read **from environment variables only**, as `Kestrel__TrustedProxies=172.18.0.0/16,10.1.0.5` or `Kestrel__TrustedProxies__0=...`, `Kestrel__TrustedProxies__1=...`. The server rewrites `appsettings.json` on every start, so a value there could not be kept: it is ignored, **removed from the file**, and reported once as an error in the log. When HSM runs as a service behind your own proxy, set the variable for that service. An empty value switches the trust off.
+
+> **Warning:** `attached-networks` trusts every network the server's own interfaces are on. In the Docker Compose setup that is the private compose network. With `network_mode: host`, a macvlan network, or HSM installed directly on a machine, it means **your whole LAN**: any machine there could then choose the client address HSM records. Outside the Compose setup, list your proxy's exact address instead.
+
 To change ports, update `appsettings.json` and restart the server, or go to **Configuration → Server** in the web UI.
 
 In Docker — map these ports when running the container:
@@ -68,26 +74,23 @@ docker run -p 44330:44330 -p 44333:44333 ...
 
 ## TLS Certificate
 
+With the Docker Compose setup, you do not need anything here: Caddy obtains and renews the certificate clients see (Let's Encrypt for a public domain), see [Installation](Installation). HSM's own certificate is then used only between Caddy and HSM.
+
+The settings below matter when clients connect to HSM directly (`docker run`, no Caddy):
+
 ```json
 "ServerCertificate": {
-  "CertificatePath": "",
-  "CertificatePassword": ""
+  "Name": "",
+  "Key": ""
 }
 ```
 
-By default, HSM generates and uses a **self-signed certificate**. To use your own `.pfx` certificate:
+By default, HSM uses a built-in **self-signed certificate**. To use your own `.pfx` certificate:
 
-1. Set `CertificatePath` — absolute path to the `.pfx` file
-2. Set `CertificatePassword` — password for the certificate
-3. Restart the server
-
-In Docker, mount the certificate file into the container:
-```bash
-docker run \
-  -v /host/certs/hsm.pfx:/app/Config/hsm.pfx \
-  ...
-```
-Then set `CertificatePath` to `/app/Config/hsm.pfx`.
+1. Put the `.pfx` file into the `Config` folder (`/app/Config` in Docker)
+2. Set `Name` to the file name, e.g. `hsm.pfx`
+3. Set `Key` to the certificate password (leave empty if there is none)
+4. Restart the server; the certificate is read only at startup
 
 ---
 
@@ -192,23 +195,10 @@ docker run \
   -v /host/DatabasesBackups:/app/DatabasesBackups \
   -p 44330:44330 \
   -p 44333:44333 \
-  softfx/hsm-server:latest
+  hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
 
-Or in `docker-compose.yml`:
-```yaml
-services:
-  hsm:
-    image: softfx/hsm-server:latest
-    ports:
-      - "44330:44330"
-      - "44333:44333"
-    volumes:
-      - ./Logs:/app/Logs
-      - ./Config:/app/Config
-      - ./Databases:/app/Databases
-      - ./DatabasesBackups:/app/DatabasesBackups
-```
+With Docker Compose, use the [reference docker-compose.yml](Installation#reference-docker-composeyml) instead of writing your own: it already mounts these directories.
 
 | Directory | Contents |
 |---|---|
