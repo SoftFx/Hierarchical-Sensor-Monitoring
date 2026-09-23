@@ -3422,6 +3422,17 @@ namespace
             return collected;
         }
 
+        // Test seam: does the installed factory BIND this path at all? Answers the binding decision
+        // directly, which counting reads cannot — a row bound to a drive that does not exist on the
+        // runner collects no samples either, so "collected nothing" is true both for a correctly
+        // declined path and for a mis-bound one, and a disk read that fails answers SAMPLE_ERROR,
+        // which keeps the source and so does not move the recreate counter either. The source is
+        // created and disposed immediately; nothing is read.
+        int32_t TestMetricSourceBinds(const std::string& sensor_path)
+        {
+            return CreateMetricSource(sensor_path) != nullptr ? 1 : 0;
+        }
+
         hsm_result_t AddValueJson(
             const std::string& path,
             hsm_sensor_type_t type,
@@ -7991,6 +8002,14 @@ extern "C" hsm_result_t hsm_collector_set_metric_source_factory_ex(
 // Test hook: drive the metric-source seam lifecycle (create -> read with recreate-on-error -> dispose)
 // against the installed factory for `sensor_path`. Returns the number of OK samples written to
 // out_values; *out_recreated receives how many times a READ_ERROR forced a dispose+recreate.
+extern "C" int32_t hsm_collector_test_metric_source_binds(hsm_collector_t* collector, const char* sensor_path)
+{
+    if (collector == nullptr || collector->impl == nullptr || sensor_path == nullptr)
+        return 0;
+
+    return collector->impl->TestMetricSourceBinds(sensor_path);
+}
+
 extern "C" int32_t hsm_collector_test_drive_metric_source(
     hsm_collector_t* collector,
     const char* sensor_path,

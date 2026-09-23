@@ -93,6 +93,7 @@ extern "C" const char* hsm_collector_test_default_sensor_wire_json(
     int32_t id,
     const char* process_name,
     const char* disk_letter);
+extern "C" int32_t hsm_collector_test_metric_source_binds(hsm_collector_t* collector, const char* sensor_path);
 extern "C" int32_t hsm_collector_test_drive_metric_source(
     hsm_collector_t* collector,
     const char* sensor_path,
@@ -4279,6 +4280,7 @@ namespace
         double values[2] = { 0.0, 0.0 };
         int32_t recreated = 0;
 
+        // The lettered rows bind AND read: C: exists on every Windows runner.
         Require(
             hsm_collector_test_drive_metric_source(
                 collector.value, "host/.computer/Disks monitoring/Free space on C disk", 2, values, &recreated) == 2,
@@ -4292,19 +4294,30 @@ namespace
             values[0] == 0.0 && values[1] == 0.0,
             "the opening prediction reads are calibration posts, which carry TimeSpan.Zero");
 
+        // The letter-less rows are asserted on the BINDING DECISION, not on how many samples they
+        // produced. A count assertion cannot fail on a runner without an N: drive: the mis-bound row
+        // reads nothing there either, and since #1426 a failing disk read answers SAMPLE_ERROR —
+        // which keeps the source, so it does not move the recreate counter either. Both weaker forms
+        // were observed passing against the unfixed parser on an N:-less machine.
         Require(
-            hsm_collector_test_drive_metric_source(
-                collector.value, "host/.computer/Disks monitoring/Free space on disk", 2, values, &recreated) == 0,
+            hsm_collector_test_metric_source_binds(
+                collector.value, "host/.computer/Disks monitoring/Free space on disk") == 0,
             "the letter-less Unix free-disk row must be declined, not bound to drive N:");
         Require(
-            hsm_collector_test_drive_metric_source(
-                collector.value, "host/.computer/Disks monitoring/Free space on disk prediction", 2, values,
-                &recreated) == 0,
+            hsm_collector_test_metric_source_binds(
+                collector.value, "host/.computer/Disks monitoring/Free space on disk prediction") == 0,
             "the letter-less Unix prediction row must be declined, not bound to drive N:");
         Require(
-            hsm_collector_test_drive_metric_source(
-                collector.value, "host/.computer/Disks monitoring/Active time on disk", 2, values, &recreated) == 0,
+            hsm_collector_test_metric_source_binds(
+                collector.value, "host/.computer/Disks monitoring/Active time on disk") == 0,
             "a letter-less LogicalDisk row must be declined too");
+
+        // The same seam confirms the lettered rows really are bound, so the assertions above are a
+        // genuine contrast rather than a source that declines everything.
+        Require(
+            hsm_collector_test_metric_source_binds(
+                collector.value, "host/.computer/Disks monitoring/Free space on C disk") == 1,
+            "a lettered free-disk row must bind");
     }
 
     // #1164 Windows smoke: a Process default sensor binds to THIS process's PDH instance (the PID-
