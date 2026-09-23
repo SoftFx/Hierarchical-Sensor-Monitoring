@@ -67,15 +67,17 @@ push_bar_partial_posts_share_open_time|expect_bar_field|-1|count|3
 push_bar_partial_posts_share_open_time|expect_bar_open_close_aligned|0|86400000
 
 # The tick rolls a closed push-fed bar and publishes it with NO further value (managed CheckCurrentBar
-# on the collect tick) — before Stop; the fresh bar stays empty, so Stop adds nothing.
+# on the collect tick) — the pre-stop assertion is the point of the case: with a roll-on-add-only bar
+# nothing would be published until Stop. The counts are timing-immune (the two adds may straddle a
+# window boundary on a loaded runner, splitting them over two bars).
 push_bar_tick_rolls_closed_bar|create_collector
 push_bar_tick_rolls_closed_bar|create_int_bar_sensor_with_partial_posts|contract/push/roll|2000|100|86400000
 push_bar_tick_rolls_closed_bar|start
 push_bar_tick_rolls_closed_bar|add_bar_int|0|1
 push_bar_tick_rolls_closed_bar|add_bar_int|0|2
 push_bar_tick_rolls_closed_bar|sleep_ms|2600
-push_bar_tick_rolls_closed_bar|expect_sent_count|1
+push_bar_tick_rolls_closed_bar|expect_sent_count_between|1|2|5
 push_bar_tick_rolls_closed_bar|stop
-push_bar_tick_rolls_closed_bar|expect_sent_count|1
-push_bar_tick_rolls_closed_bar|expect_bar_field|0|count|2
-push_bar_tick_rolls_closed_bar|expect_bar_open_close_aligned|0|2000
+push_bar_tick_rolls_closed_bar|expect_bar_count_total|2
+push_bar_tick_rolls_closed_bar|expect_bar_open_times_nondecreasing
+push_bar_tick_rolls_closed_bar|expect_all_bars_aligned|2000

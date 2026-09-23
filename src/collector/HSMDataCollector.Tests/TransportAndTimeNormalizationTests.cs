@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using HSMDataCollector.Client;
@@ -101,6 +103,87 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        /// <summary>
+        /// #1433: the ".module" version markers carry a wire-visible "Start:"/"Stop:" timestamp that
+        /// must read identically on every host. "dd/MM/yyyy HH:mm:ss" is a CUSTOM format string, in
+        /// which '/' and ':' are the date/time SEPARATOR placeholders rather than literals — with the
+        /// current culture applied, ru-RU renders "22.09.2026 18:33:37" and the native collector,
+        /// which hard-codes '/' and ':', stops matching. This test forces a culture whose separators
+        /// differ from the invariant ones and pins the rendered layout.
+        /// </summary>
+        [Theory]
+        [InlineData("ru-RU")]
+        [InlineData("de-DE")]
+        public async Task Version_marker_comments_are_culture_invariant(string cultureName)
+        {
+            var sender = new RecordingDataSender();
+            var options = CreateOptions();
+            options.DataSender = sender;
+            options.PackageCollectPeriod = TimeSpan.FromMilliseconds(50);
+
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+
+            // Sanity: the culture really does disagree with the invariant separators, otherwise the
+            // test would pass without exercising anything (e.g. under InvariantGlobalization).
+            Assert.NotEqual("/", culture.DateTimeFormat.DateSeparator);
+
+            var previousCulture = CultureInfo.CurrentCulture;
+            var previousUiCulture = CultureInfo.CurrentUICulture;
+
+            try
+            {
+                CultureInfo.CurrentCulture = culture;
+                CultureInfo.CurrentUICulture = culture;
+
+                using (var collector = new DataCollector(options))
+                {
+                    if (DataCollector.IsWindowsOS)
+                        collector.Windows.AddCollectorVersion();
+                    else
+                        collector.Unix.AddCollectorVersion();
+
+                    await collector.Start().ConfigureAwait(false);
+                    await collector.Stop().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = previousCulture;
+                CultureInfo.CurrentUICulture = previousUiCulture;
+            }
+
+            var comments = sender.Comments;
+
+            Assert.Contains(comments, comment => IsMarker(comment, "Start"));
+            Assert.Contains(comments, comment => IsMarker(comment, "Stop"));
+            Assert.All(
+                comments,
+                comment => Assert.DoesNotContain(culture.DateTimeFormat.DateSeparator, comment));
+        }
+
+        // "<prefix>: dd/MM/yyyy HH:mm:ss" with the invariant separators, digits everywhere else.
+        private static bool IsMarker(string comment, string prefix)
+        {
+            const string layout = "dd/MM/yyyy HH:mm:ss";
+            var head = prefix + ": ";
+
+            if (comment == null || comment.Length != head.Length + layout.Length ||
+                !comment.StartsWith(head, StringComparison.Ordinal))
+                return false;
+
+            for (var i = 0; i < layout.Length; i++)
+            {
+                var actual = comment[head.Length + i];
+                var digitExpected = layout[i] != '/' && layout[i] != ':' && layout[i] != ' ';
+
+                if (digitExpected ? !char.IsDigit(actual) : actual != layout[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+
         private static CollectorOptions CreateOptions() => new CollectorOptions
         {
             AccessKey = "normalization-test-key",
@@ -115,6 +198,17 @@ namespace HSMDataCollector.Tests
         {
             private readonly System.Collections.Generic.List<SensorValueBase> _values = new System.Collections.Generic.List<SensorValueBase>();
             private readonly System.Threading.Tasks.TaskCompletionSource<bool> _valueReceived = new System.Threading.Tasks.TaskCompletionSource<bool>();
+
+            // Every captured comment, in delivery order. Snapshotted under the lock because the
+            // queue processor appends from its own thread.
+            internal System.Collections.Generic.IReadOnlyList<string> Comments
+            {
+                get
+                {
+                    lock (_values)
+                        return _values.Select(value => value.Comment ?? string.Empty).ToList();
+                }
+            }
 
             internal async System.Threading.Tasks.Task<SensorValueBase> WaitForFirstValueAsync(TimeSpan timeout)
             {

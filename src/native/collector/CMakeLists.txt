@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.8.1 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.8.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -281,6 +281,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_stop_is_bounded_against_hung_server
         COMMAND hsm_collector_tests native_http_stop_is_bounded_against_hung_server
     )
+    add_test(NAME native_http_dispose_is_bounded_against_hung_server
+        COMMAND hsm_collector_tests native_http_dispose_is_bounded_against_hung_server
+    )
     add_test(NAME native_http_stop_start_stop_delivers
         COMMAND hsm_collector_tests native_http_stop_start_stop_delivers
     )
@@ -362,6 +365,8 @@ set(NATIVE_REGRESSION_TESTS
     # #1433: .module start/stop markers mirror managed (first heartbeat false, version Start:/Stop:).
     native_service_alive_marks_the_first_beat
     native_version_sensor_marks_start_and_stop
+    native_version_marker_is_emitted_once_per_run
+    native_version_marker_added_while_running_marks_that_run
     native_metric_source_seam_lifecycle
     native_metric_source_drives_default_bar_sensor
     native_metric_source_drives_custom_double_sensor
@@ -375,6 +380,7 @@ set(NATIVE_REGRESSION_TESTS
     native_metric_bar_rolls_over_at_window_boundary
     native_metric_bar_flushes_partial_on_stop
     native_built_in_push_bar_posts_partials
+    native_built_in_push_bar_publishes_are_ordered
     # native_windows_metric_sources_produce_live_value is registered below (Windows only).
     native_prototype_merge_pins_identity_overrides_metadata
     native_http_endpoint_routing_matches_net

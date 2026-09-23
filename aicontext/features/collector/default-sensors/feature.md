@@ -88,7 +88,7 @@ Module info (paths directly under `.module/`):
 | Method | Sensor | Behavior |
 |---|---|---|
 | `AddCollectorAlive` | bool heartbeat | 15 s period; first value `false`, then `true`; the `false` start marker is armed once per SENSOR, so a collector restart beats `true` straight away; TTL 1 min; KeepHistory 180 d |
-| `AddCollectorVersion` | Version | collector assembly version, posted on EVERY Start with comment `Start: dd/MM/yyyy HH:mm:ss` and on EVERY Stop with `Stop: dd/MM/yyyy HH:mm:ss` (UTC, `SensorBase.DefaultTimeFormat`); the Start instant is stamped once at prototype creation and replayed unchanged by a restart, the Stop instant is the moment of the stop; KeepHistory ~5 y |
+| `AddCollectorVersion` | Version | collector assembly version, posted on EVERY Start with comment `Start: dd/MM/yyyy HH:mm:ss` and on EVERY Stop with `Stop: dd/MM/yyyy HH:mm:ss` (UTC, `SensorBase.DefaultTimeFormat`, formatted with `CultureInfo.InvariantCulture` — `/` and `:` are culture-replaced separator placeholders in a .NET custom format string, so a bare `ToString` would emit `22.09.2026 18:33:37` on ru-RU and break parity with the native collector, #1433); the Start instant is stamped once at prototype creation and replayed unchanged by a restart, the Stop instant is the moment of the stop; KeepHistory ~5 y |
 | `AddCollectorErrors` | string | fed by `MessageDeduplicator` callback (see `error-handling/`) |
 | `AddProductVersion(VersionSensorOptions)` | Version | user-supplied product version; same `Start:`/`Stop:` marker posts as `AddCollectorVersion` (one `ProductVersionSensor` class serves both) |
 | `CreateServiceCommandsSensor` | string commands | "Service commands" path; fixed strings "Service start/stop/restart", "Service update [from X] to Y", custom; registers an implicit `IfReceivedNewValue → notification` alert |
@@ -362,7 +362,7 @@ managed `BarSensorOptions` defaults every default-bar prototype inherits:
 | Partial post | every `PostDataPeriod` (catalog 15 s), first at the next wall-clock multiple of it (a full period when Start is exactly on one); posts a copy of the in-progress bar, nothing when it is empty | same cadence and alignment (`post_period_ms` of the catalog row) |
 | Window boundary | the post falling on the boundary instant still carries the old bar (`CloseTime == now` is not past); the next sample tick publishes the closed bar again and opens the next window | identical |
 | Stop | flushes a non-empty partial bar, then opens a fresh one (no resend on stop → start → stop) | identical (`TryFlushBarJson`) |
-| Snapshot vs roll | `_sendValueInProgress`: a roll attempted while a partial is being sent is deferred (no newer closed bar can overtake the older partial) | `partial_send_in_progress_`: roll-on-add defers while a partial is between snapshot and enqueue; the next tick rolls |
+| Publish ordering | `_sendValueInProgress` + roll-only-on-confirmed-send serialize the two publishers of one bar | a per-sensor `publish_mutex_` held across snapshot **and** enqueue by roll-on-add, the tick roll and the partial post: the closed bar of a window is always published before any partial of the next one (the server persists on a NEW OpenTime, so a reordering here would reorder stored bars) |
 | Rounding | `Complete()` on a copy: double → `Math.Round(v, Precision=2, AwayFromZero)`; int → mean only | same serializer as the public bars |
 
 Every post of one window therefore carries the SAME `OpenTime`/`CloseTime` while `Count`, `Min`,

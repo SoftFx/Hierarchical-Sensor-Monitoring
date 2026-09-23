@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cctype>
+#include <cerrno> // EINTR retry in the accept loop
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -251,6 +252,8 @@ namespace hsm::test
             WSAStartup(MAKEWORD(2, 2), &wsa);
 #endif
             listen_ = socket(AF_INET, SOCK_STREAM, 0);
+            if (listen_ == INVALID_SOCKET)
+                return; // Port() stays 0: the test fails on the first connect, not on UB in FD_SET
 
             sockaddr_in addr{};
             addr.sin_family = AF_INET;
@@ -259,8 +262,13 @@ namespace hsm::test
 
             int yes = 1;
             setsockopt(listen_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&yes), sizeof(yes));
-            bind(listen_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-            listen(listen_, 16);
+            // A failed bind/listen must not leave the accept thread selecting on a dead socket.
+            if (bind(listen_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 || listen(listen_, 16) != 0)
+            {
+                closesocket(listen_);
+                listen_ = INVALID_SOCKET;
+                return;
+            }
 
             sockaddr_in bound{};
             socklen_t len = sizeof(bound);
@@ -325,7 +333,15 @@ namespace hsm::test
 #endif
                 const int ready = select(nfds, &readfds, nullptr, nullptr, &tv);
                 if (ready < 0)
-                    return;
+                {
+#if !defined(_WIN32)
+                    // A signal delivered to this thread makes select fail with EINTR; retrying keeps
+                    // the fixture alive instead of killing the accept loop for the rest of the test.
+                    if (errno == EINTR)
+                        continue;
+#endif
+                    return; // socket torn down (dtor) or a genuine error
+                }
                 if (ready == 0)
                     continue;
 
@@ -358,8 +374,10 @@ namespace hsm::test
             }
         }
 
-        // Reads one request (headers + Content-Length body). The client sends it right after
-        // connecting, so a blocking recv is fine here.
+        // Reads one request (headers + Content-Length body) with a blocking recv on the accept
+        // thread, so connections are served strictly one at a time: fine for libcurl, which sends
+        // the whole request immediately after connecting, but do not point a second concurrent
+        // client at this fixture without giving each connection its own thread.
         static bool ReadRequest(socket_t conn, Recorded& out)
         {
             std::string raw;
