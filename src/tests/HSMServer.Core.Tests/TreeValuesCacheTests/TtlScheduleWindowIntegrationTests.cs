@@ -219,13 +219,16 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
 
             // The review's 5-min-scheduled vs 8h-guard shape, compressed to
-            // seconds: ~90 s of silence at creation — already past the
-            // scheduled TTL (10 s), still far short of the schedule-less
-            // guard (120 s).
-            var sensor = await CreateSensorWithStaleValueAsync("ttlUnequalGuards", TimeSpan.FromSeconds(90));
+            // seconds: ~10 s of silence at creation — already past the
+            // scheduled TTL (8 s), still short of the schedule-less guard
+            // (14 s). The assertion needs scheduledTtl < silence <
+            // schedulelessTtl, so the gap between the initial staleness and
+            // the guard sets BOTH the resolve's headroom and the wait below
+            // — a couple of seconds each, not the ~30 s the 90/120 shape cost.
+            var sensor = await CreateSensorWithStaleValueAsync("ttlUnequalGuards", TimeSpan.FromSeconds(10));
 
-            var scheduled = AddTtlPolicy(sensor, scheduleId, TimeSpan.FromSeconds(10));
-            var scheduleLess = AddTtlPolicy(sensor, scheduleId: null, TimeSpan.FromSeconds(120));
+            var scheduled = AddTtlPolicy(sensor, scheduleId, TimeSpan.FromSeconds(8));
+            var scheduleLess = AddTtlPolicy(sensor, scheduleId: null, TimeSpan.FromSeconds(14));
 
             using var recorder = new SentMessagesRecorder(_valuesCache, sensor.Id);
 
@@ -240,11 +243,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(1, recorder.CountFor(scheduleLess.Id));
 
             // Session closes with silence still under the sibling's guard
-            // (~92 s < 120 s): no policy contributes a timeout, so the sweep
-            // resolves the sensor — a WINDOW-CAUSED resolution. The sensor
-            // did NOT recover, so NO policy may claim it did: the sibling is
-            // never out-of-window (no schedule) and must not deliver a
-            // "recovered" Ok just because the scheduled policy went quiet.
+            // (~11 s < 14 s): no policy contributes a timeout, so the sweep
+            // resolves the sensor — a WINDOW-CAUSED resolution: NO new data
+            // arrived since the expiry marker, so the sensor did not recover
+            // and NO policy may claim it did: the sibling is never
+            // out-of-window (no schedule) and must not deliver a "recovered"
+            // Ok just because the scheduled policy went quiet.
             _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: false));
 
             _valuesCache.RunSensorTimeoutStep(sensor);
@@ -262,7 +266,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 _valuesCache.RunSensorTimeoutStep(sensor);
                 return recorder.CountFor(scheduleLess.Id) == 2;
-            }, "the schedule-less guard must fire once its own TTL elapses", TimeSpan.FromSeconds(45));
+            }, "the schedule-less guard must fire once its own TTL elapses", TimeSpan.FromSeconds(20));
 
             Assert.True(sensor.IsExpired);
             Assert.Equal(1, recorder.CountFor(scheduled.Id)); // still cancelled out-of-window
@@ -274,6 +278,55 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _valuesCache.RunSensorTimeoutStep(sensor);
 
             Assert.Equal(2, recorder.CountFor(scheduled.Id)); // the fresh alert at window open
+        }
+
+
+        // === The mixed sensor + a skewed-clock resume: the genuine sibling recovery ===
+
+        [Fact]
+        public async Task WindowClose_MixedSensor_DataResumesWithSkewedClock_SchedulelessGuardSendsRecoveryOk()
+        {
+            // The round-5 review scenario: scheduled TTL far shorter than a
+            // schedule-less guard; the sensor is expired and the guard has
+            // fired; out-of-window the collector resumes with a value whose
+            // Time is well behind the wall clock (batched/bar sends) but
+            // NEWER than the value in force at expiry. The resolution is a
+            // GENUINE recovery — new data arrived — so the guard's Ok MUST
+            // flow; the earlier discriminator (any out-of-window policy
+            // stale for the value) let the short scheduled TTL suppress it.
+            var scheduleId = Guid.NewGuid();
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
+
+            var sensor = await CreateSensorWithStaleValueAsync("ttlSkewedResume", TimeSpan.FromSeconds(10));
+
+            var scheduled = AddTtlPolicy(sensor, scheduleId, TimeSpan.FromSeconds(8));
+            var scheduleLess = AddTtlPolicy(sensor, scheduleId: null, TimeSpan.FromSeconds(120));
+
+            using var recorder = new SentMessagesRecorder(_valuesCache, sensor.Id);
+
+            // In-window expiry: the marker is written (its ReceivingTime is
+            // the server's clock at THIS transition — the witness the
+            // resolution discriminates on) and both policies fire.
+            _valuesCache.RunSensorTimeoutStep(sensor);
+
+            Assert.True(sensor.IsExpired);
+            Assert.Equal(1, recorder.CountFor(scheduled.Id));
+            Assert.Equal(1, recorder.CountFor(scheduleLess.Id));
+
+            // Session closes; data resumes with a skewed clock. 30 s behind
+            // the wall clock — minutes ahead of the expiry-time value, stale
+            // for the 8 s scheduled TTL, fresh for the 120 s guard.
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: false));
+
+            var skewed = SensorValuesFactory.BuildSensorValue(SensorType.Integer, "ttlSkewedResume", DateTime.UtcNow.AddSeconds(-30));
+            await _valuesCache.AddSensorValueAsync(_fixture.AccessKeyAId, _fixture.ProductAId, skewed);
+            await UntilAsync(() => !sensor.IsExpired, "the skewed fresh value must resolve the sensor on the data path");
+
+            Assert.False(sensor.IsExpired);
+            Assert.False(sensor.LastValue.IsTimeout);          // a real value, not a marker
+            Assert.Equal(-1, scheduled.RetryCount);            // cancelled on its OWN terms: outside AND stale
+            Assert.Equal(1, recorder.CountFor(scheduled.Id));  // no second send for the scheduled policy
+            Assert.Equal(2, recorder.CountFor(scheduleLess.Id)); // the GENUINE recovery Ok — the pin
         }
 
 

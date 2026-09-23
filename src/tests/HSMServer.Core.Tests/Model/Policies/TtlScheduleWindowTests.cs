@@ -24,8 +24,8 @@ namespace HSMServer.Core.Tests.Model.Policies
     //    FRESH alert while the schedule-less siblings keep their cadence.
     //  - The two gates are inseparable: the expiry gate alone resolves the
     //    sensor out-of-window, GetNotification(false) nulls the repeat
-    //    clock, and TryResendNotification's "never sent" arm would send on
-    //    EVERY sweep tick outside the window (the zombie, pinned below).
+    //    clock, and the resend step's "never sent" arm would send on EVERY
+    //    sweep tick outside the window (the zombie, pinned below).
     public class TtlScheduleWindowTests
     {
         private static readonly Guid ScheduleId = Guid.NewGuid();
@@ -195,29 +195,39 @@ namespace HSMServer.Core.Tests.Model.Policies
 
 
         // === Repeat cancellation (#1405) ===
+        //
+        // The sweep's resend step is an explicit per-policy state machine
+        // (TreeValuesCache.RunSensorTimeoutStep): healthy -> nothing; timed
+        // out and OUT-OF-WINDOW -> CancelNotification() (the write the old
+        // Try*-predicate hid, now at the call site); timed out and in-window
+        // -> ShouldResend (the pure remainder: never-sent bypass, then the
+        // repeat cadence). The pins below cover the pieces and their
+        // ordering inputs; the COMPOSITION — the window arm answering before
+        // the bypass — is structural in the sweep (cancel-and-continue) and
+        // pinned end-to-end by TtlScheduleWindowIntegrationTests through
+        // RunSensorTimeoutStep.
 
         [Fact]
-        public void TryResendNotification_CancellationIsReal_WindowOpenFiresFresh()
+        public void RepeatCancellation_IsReal_FreshAtWindowOpenDespiteCadence()
         {
             var ttl = AddTtlPolicy(ScheduleId);
             ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-1)); // sent a minute ago (interval: 5 min)
 
-            _isWorkingTimeNow = false;
+            // A PAUSE (the clock kept) would still be inside the 5-minute
+            // interval and stay silent at the next in-window evaluation:
+            Assert.False(ttl.ShouldResend(DateTime.UtcNow));
 
-            // Out-of-window: SILENT — and the state reset is real, asserted
-            // by the second half below (the clock itself is private).
-            Assert.False(ttl.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
+            // The sweep's out-of-window arm CANCELS — clock and counter
+            // reset, the state the next window open resumes from:
+            ttl.CancelNotification();
 
-            _isWorkingTimeNow = true; // window opens
-
-            // A PAUSE would still be inside the 5-min interval (last send a
-            // minute ago) and stay silent; a CANCELLATION has no clock and
-            // fires at once.
-            Assert.True(ttl.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
+            // A CANCELLATION has no clock and fires at once (the never-sent
+            // bypass) — nothing resumes the pre-close cadence.
+            Assert.True(ttl.ShouldResend(DateTime.UtcNow));
         }
 
         [Fact]
-        public void TryResendNotification_ImmediatelyRepeat_WindowOpenFiresTheCancelledAlert()
+        public void RepeatCancellation_ImmediatelyMode_CancelledClockStillFires()
         {
             // The DEFAULT repeat mode (Immediately): Schedule.IsActive is
             // false — the repeat-CADENCE gate — and the first delivery must
@@ -228,116 +238,132 @@ namespace HSMServer.Core.Tests.Model.Policies
             // delivery path left — gating it on the repeat mode lost the
             // alert forever while the UI kept showing it active (#1405).
             var ttl = AddTtlPolicy(ScheduleId, repeatMode: AlertRepeatMode.Immediately);
+            Assert.False(ttl.Schedule.IsActive);
+
             ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-1)); // delivered a minute ago
 
-            _isWorkingTimeNow = false;
+            // A set clock: the inactive cadence gate answers no.
+            Assert.False(ttl.ShouldResend(DateTime.UtcNow));
 
-            // Out-of-window: silent, and the cancellation is real — the
-            // Immediately sibling of the test above.
-            Assert.False(ttl.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
-
-            _isWorkingTimeNow = true; // the window opens
-
-            // The cancelled alert fires at once: the null clock outranks the
-            // repeat-mode gate, or the alert is lost forever on this shape.
-            Assert.True(ttl.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
+            // The sweep's out-of-window arm cancels; the null clock then
+            // OUTRANKS the cadence gate, or the alert is lost forever on
+            // this shape.
+            ttl.CancelNotification();
+            Assert.True(ttl.ShouldResend(DateTime.UtcNow));
         }
 
         [Fact]
-        public void TryResendNotification_InWindow_RepeatIntervalHeld()
+        public void ShouldResend_InWindow_RepeatIntervalHeld()
         {
             var ttl = AddTtlPolicy(ScheduleId);
+
             ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-1)); // a minute ago — inside the interval
+            Assert.False(ttl.ShouldResend(DateTime.UtcNow));
 
-            _isWorkingTimeNow = true;
-
-            Assert.False(ttl.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
+            ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-10)); // the 5-minute interval has elapsed
+            Assert.True(ttl.ShouldResend(DateTime.UtcNow));
         }
 
         [Fact]
-        public void TryResendNotification_NoSchedule_NeverCancelled()
+        public void ShouldResend_SchedulelessPolicy_NeverOutsideWindow_KeepsCadence()
         {
             var ttl = AddTtlPolicy(scheduleId: null);
-            ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-1)); // inside the interval
 
             _isWorkingTimeNow = false;
 
-            // Schedule-less policies never hit the window arm — the interval
-            // decision alone answers (here: too soon).
-            Assert.False(ttl.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
+            // Fail-open on a null ScheduleId: the sweep's CANCEL arm is
+            // unreachable for schedule-less policies — a window never resets
+            // their cadence.
+            Assert.False(ttl.IsOutsideSchedule(_scheduleProvider.Object, DateTime.UtcNow));
+
+            ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-1)); // inside the interval
+            Assert.False(ttl.ShouldResend(DateTime.UtcNow));
 
             ttl.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-10));
-
-            Assert.True(ttl.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
+            Assert.True(ttl.ShouldResend(DateTime.UtcNow));
         }
 
         [Fact]
-        public void TryResendNotification_NoSchedule_ImmediatelyRepeat_NeverDelivers()
+        public void ShouldResend_SchedulelessImmediately_NeverDeliversEvenWithNullClock()
         {
             // The never-sent bypass is scoped to SCHEDULED policies — its
-            // only producer is the out-of-window cancellation (#1405). A
-            // schedule-less policy keeps the master order (the repeat-mode
-            // gate answers first), so Immediately NEVER delivers from the
-            // resend loop, a nulled repeat clock included.
+            // only producers are the out-of-window cancellation and the
+            // resolution arm (#1405). A schedule-less policy keeps the
+            // master order (the repeat-mode gate answers first), so
+            // Immediately NEVER delivers from the resend loop, a nulled
+            // repeat clock included.
             var ttl = AddTtlPolicy(scheduleId: null, repeatMode: AlertRepeatMode.Immediately);
 
             ttl.GetNotification(true);  // delivered once — the clock is set
             ttl.GetNotification(false); // resolved — the clock is NULL again
 
-            Assert.False(ttl.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
+            Assert.False(ttl.ShouldResend(DateTime.UtcNow));
         }
 
 
         [Fact]
-        public void TryResendNotification_FreshValueAtWindowOpen_DoesNotFire()
+        public void ResendStep_FreshValueAtWindowOpen_DoesNotFire()
         {
             var ttl = AddTtlPolicy(ScheduleId);
 
             _isWorkingTimeNow = true; // window open…
 
-            // …but quotes resumed overnight: the value is fresh, HasTimeout is
-            // false — the data decides, not the timer (#1405's "may not fire").
-            Assert.False(ttl.TryResendNotification(DateTime.UtcNow.AddSeconds(-5), _scheduleProvider.Object, DateTime.UtcNow));
+            // …but quotes resumed overnight: the value is fresh, so the
+            // sweep's FIRST arm (HasTimeout) skips the policy before the
+            // window or the cadence are even consulted — the data decides,
+            // not the timer (#1405's "may not fire").
+            Assert.False(ttl.HasTimeout(DateTime.UtcNow.AddSeconds(-5)));
         }
 
 
         [Fact]
-        public void TryResendNotification_MixedSensor_OutOfWindow_ScheduledSilent_SchedulelessKeepsCadence()
+        public void ResendStep_MixedSensor_OutOfWindow_ScheduledCancelled_SchedulelessFires()
         {
             var scheduled = AddTtlPolicy(ScheduleId);
             var scheduleLess = AddTtlPolicy(scheduleId: null);
 
-            // Both sent recently → both inside their repeat intervals.
+            // Both sent ten minutes ago — the 5-minute cadence has elapsed.
             scheduled.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-10));
             scheduleLess.InitLastTtlTime(DateTime.UtcNow.AddMinutes(-10));
 
             _isWorkingTimeNow = false;
 
-            // The scheduled policy is CANCELLED (silent, state reset); the
-            // schedule-less sibling keeps its cadence — the interval has
-            // elapsed, so it fires.
-            Assert.False(scheduled.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
-            Assert.True(scheduleLess.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
+            // The scheduled policy hits the sweep's CANCEL arm (timed out
+            // and outside) — silent, state reset; the schedule-less sibling
+            // is never outside and its cadence has elapsed, so it fires.
+            Assert.True(scheduled.HasTimeout(_staleInSessionTime));
+            Assert.True(scheduled.IsOutsideSchedule(_scheduleProvider.Object, DateTime.UtcNow));
+            Assert.True(scheduleLess.ShouldResend(DateTime.UtcNow));
         }
 
 
         // === The zombie: why the two gates ship together ===
 
         [Fact]
-        public void TryResendNotification_AfterSensorResolve_OutOfWindow_StaysSilent()
+        public void ResendStep_AfterOutOfWindowResolve_NullClockWouldFireInWindowOnly()
         {
             var ttl = AddTtlPolicy(ScheduleId);
 
             // Mid-session fire, then the sensor resolves out-of-window (the
             // #1404 gate's transition) — GetNotification(false) nulls the
-            // repeat clock, which is exactly the state the zombie exploits.
+            // repeat clock, which is exactly the state the zombie exploited:
+            // the old composite predicate consulted the never-sent bypass
+            // AFTER the window arm, and delivered on EVERY out-of-window
+            // tick. In the split state machine the window arm is a structural
+            // precondition (the sweep cancels and continues out-of-window),
+            // so the bypass below is reachable only in-window.
             ttl.GetNotification(true);
             _isWorkingTimeNow = false;
             ttl.GetNotification(false);
 
-            // WITHOUT the window arm this returns true on every sweep tick
-            // (the "never sent" arm sees the nulled clock). With it: silent.
-            Assert.False(ttl.TryResendNotification(_staleInSessionTime, _scheduleProvider.Object, DateTime.UtcNow));
+            Assert.True(ttl.IsOutsideSchedule(_scheduleProvider.Object, DateTime.UtcNow));
+
+            // The bypass's fuel, for contrast: in-window the null clock does
+            // fire — which is exactly why the window arm must answer first.
+            // The out-of-window silence itself is pinned end-to-end by the
+            // integration suite (the polls between a window-caused resolve
+            // and the window open stay silent there).
+            Assert.True(ttl.ShouldResend(DateTime.UtcNow));
         }
     }
 }

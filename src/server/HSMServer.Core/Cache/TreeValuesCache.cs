@@ -3035,24 +3035,46 @@ namespace HSMServer.Core.Cache
                 return;
 
             // The sweep's single instant for the resend half too (#1404): the
-            // window predicate and the repeat-interval comparison inside
-            // TryResendNotification read the SAME timestamp instead of two
-            // fresh UtcNows.
+            // window predicate and the repeat-interval comparison inside the
+            // resend decision read the SAME timestamp instead of two fresh
+            // UtcNows.
             var evaluationTime = DateTime.UtcNow;
 
+            // The resend state machine, explicit per policy (#1405): healthy ->
+            // nothing; timed out and OUT-OF-WINDOW -> CANCELLED here — the write
+            // the old Try*-predicate hid, now at the call site where a second
+            // caller would see it; timed out and in-window -> the PURE ShouldResend
+            // decision (never-sent bypass, then the repeat cadence). Each
+            // predicate is evaluated exactly once per policy per tick.
             foreach (var ttl in sensor.Policies.TTLPolicies)
             {
-                if (ttl.TryResendNotification(last.LastUpdateTime, _alertScheduleProvider, evaluationTime))
+                if (!ttl.HasTimeout(last.LastUpdateTime))
+                    continue;
+
+                if (ttl.IsOutsideSchedule(_alertScheduleProvider, evaluationTime))
+                {
+                    // Outside the window the repeat is CANCELLED, not paused
+                    // (#1405): the state reset makes the next in-window
+                    // evaluation deliver at once (fresh), instead of resuming
+                    // yesterday's cadence.
+                    ttl.CancelNotification();
+                    continue;
+                }
+
+                if (ttl.ShouldResend(evaluationTime))
                     SendNotification(sensor.Id, ttl.GetNotification(true));
             }
         }
 
         // May run while the sensor holds its initialization lock (#1296), so nothing below — the
         // notification path included — may block. The schedule gate below takes the AlertSchedule-
-        // Provider's process-wide lock per TTL policy per transition: contention only, not a new
-        // blocking class — SensorTimeout already takes the same lock earlier on this stack (but
-        // SaveSchedule/DeleteSchedule hold it across a LevelDB write, so the window is not
-        // nominal). Reasoning: aicontext/features/server/overview.md.
+        // Provider's process-wide lock ONCE per TTL policy per transition (the per-policy window
+        // and staleness decisions are materialized in one pass before both consumers, so the
+        // sensor-global cause and the per-policy gate cannot observe different schedule
+        // definitions for the same instant): contention only, not a new blocking class —
+        // SensorTimeout already takes the same lock earlier on this stack (but SaveSchedule/
+        // DeleteSchedule hold it across a LevelDB write, so the window is not nominal).
+        // Reasoning: aicontext/features/server/overview.md.
         private void SetExpiredSnapshot(BaseSensorModel sensor, ExpiryEvaluation evaluation)
         {
             var (timeout, evaluationTime, evaluatedValue) = evaluation;
@@ -3073,36 +3095,67 @@ namespace HSMServer.Core.Cache
                 var ttlSnapshot = sensor.Policies.TTLPolicies;
 
                 // WHY the sensor resolved, decided ONCE before the loop: the
-                // cause is sensor-global — a scheduled policy dropping out of
-                // its window flipped anyTimeout — not per-policy. A
-                // WINDOW-CAUSED resolution means the sensor did NOT recover
-                // (its value is still stale), so NO policy may claim recovery
-                // for it: a schedule-less sibling is never out-of-window and
-                // would otherwise send a false "recovered" Ok at every
-                // session close. Staleness ignores enablement here — a
-                // disabled scheduled policy still witnesses the cause.
-                var windowCaused = !timeout && ttlSnapshot.Any(t =>
-                    t.IsOutsideSchedule(_alertScheduleProvider, evaluationTime) &&
-                    t.IsStale(evaluatedValue?.LastUpdateTime));
+                // cause is sensor-global. The discriminator is whether NEW
+                // DATA ARRIVED SINCE THE SENSOR EXPIRED, witnessed
+                // server-clock-side: the timeout marker above stamps
+                // ReceivingTime with the server's UtcNow at the expiry
+                // transition, and every ingested value stamps its own
+                // ReceivingTime the same way — comparing the two is immune
+                // to the client clock skew of value Time (batched/bar sends
+                // arriving minutes "behind" the wall clock), which the
+                // earlier per-policy-staleness discriminator was not: it let
+                // the SHORTEST out-of-window TTL suppress a longer
+                // schedule-less guard's genuine recovery Ok. With NO new
+                // data a resolution can only be window-caused (a scheduled
+                // policy dropping out of its window is what flipped
+                // anyTimeout) — the sensor did NOT recover, so NO policy may
+                // claim recovery for it: a schedule-less sibling is never
+                // out-of-window and would otherwise send a false "recovered"
+                // Ok at every session close. With new data it is a GENUINE
+                // recovery — every policy is then gated only by its own arm
+                // below, and the Ok flows out-of-window included. No marker
+                // (expired with an empty cache, or a marker write that lost
+                // the newest-wins race) reads as genuine: the value in force
+                // at expiry is not observable then, and a false recovery Ok
+                // beats a lost one.
+                var newDataArrived = evaluatedValue is not null &&
+                                     (sensor.LastTimeout is null ||
+                                      evaluatedValue.ReceivingTime > sensor.LastTimeout.ReceivingTime);
+                var windowCaused = !timeout && !newDataArrived;
 
-                foreach (var ttl in ttlSnapshot)
+                // The per-policy window/staleness decisions, materialized
+                // ONCE before both consumers — the sensor-global cause above
+                // and the per-policy gate below — so a SaveSchedule landing
+                // between two evaluations cannot make them read different
+                // schedule definitions for the same instant, and the
+                // provider's process-wide lock is taken once per policy per
+                // transition.
+                var outside = new bool[ttlSnapshot.Count];
+                var stale = new bool[ttlSnapshot.Count];
+
+                for (var i = 0; i < ttlSnapshot.Count; i++)
+                {
+                    outside[i] = ttlSnapshot[i].IsOutsideSchedule(_alertScheduleProvider, evaluationTime);
+                    stale[i] = ttlSnapshot[i].IsStale(evaluatedValue?.LastUpdateTime);
+                }
+
+                for (var i = 0; i < ttlSnapshot.Count; i++)
                 {
                     // The transition's schedule gate, evaluated at the SAME
                     // instant as the expiry decision that raised it (#1404).
-                    // Out-of-window on either arm, or a window-caused
-                    // resolution -> CANCEL silently and fire FRESH at the
-                    // next window open; a GENUINE recovery (fresh value)
-                    // still sends the Ok out-of-window. Rules and edge
-                    // cases: aicontext/features/server/alerts/feature.md.
-                    if (windowCaused ||
-                        (ttl.IsOutsideSchedule(_alertScheduleProvider, evaluationTime) &&
-                         (timeout || ttl.IsStale(evaluatedValue?.LastUpdateTime))))
+                    // Out-of-window on the fire arm, or still stale on the
+                    // policy's OWN terms on the recovery arm -> CANCEL
+                    // silently and fire FRESH at the next window open; a
+                    // GENUINE recovery (new data, this policy's TTL no
+                    // longer up) still sends the Ok out-of-window. Rules and
+                    // edge cases: aicontext/features/server/alerts/feature.md.
+                    if (windowCaused || (outside[i] && (timeout || stale[i])))
                     {
-                        ttl.CancelNotification();
+                        ttlSnapshot[i].CancelNotification();
                         continue;
                     }
 
-                    SendNotification(sensor.Id, ttl.GetNotification(timeout));
+                    SendNotification(sensor.Id, ttlSnapshot[i].GetNotification(timeout));
                 }
             }
 
