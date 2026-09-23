@@ -167,7 +167,11 @@ namespace hsm::http
         int64_t timeout_ms)
     {
         // A zero/negative timeout means "no timeout" to libcurl, which is the opposite of what a
-        // spent budget asks for — clamp to 1 ms so the request fails fast instead of hanging.
+        // spent budget asks for — clamp to 1 ms so the request fails fast instead of hanging. The
+        // caller (the stop drain) already refuses a spent budget, so the clamp is a guard, not a
+        // routine path. Caveat for sub-second values: with libcurl's standard synchronous resolver
+        // (no threaded resolver / c-ares) the DNS phase keeps whole-second resolution, so a build
+        // configured that way can overshoot a sub-second budget by up to ~1 s on a name lookup.
         return Perform(url, headers, timeout_ms > 0 ? timeout_ms : 1, verify_peer_, cancelled_, /*is_post=*/true, json_body);
     }
 

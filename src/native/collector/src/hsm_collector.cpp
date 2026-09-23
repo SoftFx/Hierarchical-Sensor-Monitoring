@@ -2632,14 +2632,17 @@ namespace
         hsm_result_t Stop()
         {
             std::lock_guard<std::mutex> op_guard(op_mutex_);
-            return StopCore();
+            return StopCore(/*terminal=*/false);
         }
 
         // Caller holds op_mutex_. Drives the stop transition exactly once (Stopped/Disposed
         // are no-ops), firing the Stopping/Stopped notifications around the flush+drain.
         // Dispose reuses this so a dispose racing an in-flight Stop joins on op_mutex_ and
         // sees Stopped here — exactly one stopped-notification, no duplicate flush.
-        hsm_result_t StopCore()
+        // `terminal` = this stop is a Dispose, not a graceful stop: the drain gets the shorter
+        // terminal budget (managed ShutdownMode.TerminalDispose), because a disposing host is on
+        // its way out and must not wait the graceful ceiling for a hung server (#1432).
+        hsm_result_t StopCore(bool terminal)
         {
             std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
             {
@@ -2701,7 +2704,7 @@ namespace
             // remainder (the graceful stop must not hang on a dead transport) — same contract as
             // the C# stop flush.
             StopWorker();
-            DrainQueueOnStop();
+            DrainQueueOnStop(terminal);
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -2724,7 +2727,7 @@ namespace
                     return;
             }
 
-            StopCore();
+            StopCore(/*terminal=*/true);
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -4620,17 +4623,21 @@ namespace
             }
         }
 
-        // Bounded stop-flush budget, mirroring the managed DataProcessor: clamp(RequestTimeout,
-        // 1 s, 5 s). A graceful stop must never hold its host's shutdown hostage to a hung
-        // transport, so the drain gets at most this much wall-clock time in total — but, against a
-        // healthy server, that is far more than it needs and the data is delivered (#1432).
-        int64_t StopDrainBudgetMs() const
+        // Bounded stop-flush budget, mirroring the managed DataProcessor/ShutdownMode matrix:
+        //   graceful stop    -> clamp(RequestTimeout, 1 s, 5 s)  (DataProcessor._stopFlushTimeout)
+        //   terminal dispose -> min(that, 1 s)                   (ShutdownMode.StopWaitTimeout)
+        // A stop must never hold its host's shutdown hostage to a hung transport, so the drain gets
+        // at most this much wall-clock time in total — but against a healthy server that is far more
+        // than it needs and the data is delivered (#1432). A disposing host is on its way out (the
+        // agent's self-update restart), hence the tighter terminal ceiling.
+        int64_t StopDrainBudgetMs(bool terminal) const
         {
             const int64_t timeout = request_timeout_ms_;
-            return (std::max<int64_t>)(1000, (std::min<int64_t>)(timeout, 5000));
+            const int64_t graceful = (std::max<int64_t>)(1000, (std::min<int64_t>)(timeout, 5000));
+            return terminal ? (std::min<int64_t>)(graceful, 1000) : graceful;
         }
 
-        void DrainQueueOnStop()
+        void DrainQueueOnStop(bool terminal)
         {
             // The deadline is written here and read by HttpSendBatch on this same (stop) thread:
             // the worker is already joined, the samplers are stopped, and op_mutex_ serializes
@@ -4638,15 +4645,16 @@ namespace
             struct DrainWindow
             {
                 NativeCollector& owner;
-                explicit DrainWindow(NativeCollector& collector)
+                DrainWindow(NativeCollector& collector, bool terminal_stop)
                     : owner(collector)
                 {
-                    owner.stop_drain_deadline_ = std::chrono::steady_clock::now() +
-                                                 std::chrono::milliseconds(owner.StopDrainBudgetMs());
+                    owner.stop_drain_deadline_ =
+                        std::chrono::steady_clock::now() +
+                        std::chrono::milliseconds(owner.StopDrainBudgetMs(terminal_stop));
                     owner.stop_drain_active_ = true;
                 }
                 ~DrainWindow() { owner.stop_drain_active_ = false; }
-            } drain_window(*this);
+            } drain_window(*this, terminal);
 
             size_t dropped = 0;
             {
@@ -4654,14 +4662,19 @@ namespace
                 dropped = DispatchQueuedLocked(lock, /*clear_remainder_on_failure=*/true);
             }
 
-            // Debug, not Error: dropping buffered values on a bounded graceful stop is expected and
-            // contracted (a stop must not block on a dead/failing transport). Logging it as Error
-            // spammed the log and the Windows Event Log on every routine restart; keep it only as a
-            // Debug breadcrumb (logged outside the queue lock so a slow sink cannot stall shutdown).
+            // Info, not Debug: since #1432 the drain really sends, so a drop here means the server
+            // rejected the stop flush or never answered it and that data is gone. Rule #8 says loss
+            // must be visible, and Info is what the file sink keeps by default (there is no Warning
+            // level in the C ABI, and adding one would be ABI growth this fix does not need). It
+            // stays out of the Error sink because it is a contracted bounded-shutdown outcome, not
+            // a collector fault — the send failure that caused it is logged as an Error by the send
+            // path. One line per restart, so it is not the Event Log spam that made an earlier
+            // Error-level version of this too loud. Logged outside the queue lock so a slow sink
+            // cannot stall shutdown.
             if (dropped > 0)
-                LogMessage(HSM_LOG_LEVEL_DEBUG,
+                LogMessage(HSM_LOG_LEVEL_INFO,
                            "Collector stop dropped " + std::to_string(dropped) +
-                               " pending value(s): send failed within the bounded stop flush.");
+                               " pending value(s): the bounded stop flush could not deliver them.");
         }
 
         // Pops and sends batches of up to max_values_in_package_ until the queue is empty or a
@@ -4822,16 +4835,21 @@ namespace
                 const std::string msg = "Failed to send " + std::to_string(batch.size()) + " value(s): HTTP " +
                                         std::to_string(response.status_code) +
                                         (response.error.empty() ? "" : " " + response.error);
-                // A send whose in-flight POST was cancelled by a graceful stop is expected, not an
-                // error — log it at Debug (same treatment as the stop-drop). A genuine failure while
-                // running still logs at Error (deduplicated).
+                // The level must say what actually happened (#1432). send_cancelled_ stays latched
+                // from StopWorker through the drain, so it alone no longer identifies a cancelled
+                // send: during the drain the POST is a REAL send, and a 503 / refused connection /
+                // TLS error there is a genuine failure that costs data — it keeps the Error level
+                // (the drop breadcrumb reports how much was lost). Only a send aborted before the
+                // join was truly cancelled by the stop: expected, so Debug, and the text says so
+                // instead of blaming the server. Everything else is a normal running failure (Error,
+                // deduplicated).
                 bool cancelled_by_stop;
                 {
                     std::lock_guard<std::mutex> guard(hang_mutex_);
                     cancelled_by_stop = send_cancelled_;
                 }
-                if (cancelled_by_stop)
-                    LogMessage(HSM_LOG_LEVEL_DEBUG, msg);
+                if (cancelled_by_stop && !stop_drain_active_)
+                    LogMessage(HSM_LOG_LEVEL_DEBUG, msg + " (send cancelled by the collector stop)");
                 else
                     LogError(msg);
             }
@@ -4963,7 +4981,7 @@ namespace
         int32_t max_queue_size_;
         int32_t max_values_in_package_;
         int32_t collect_period_ms_;
-        [[maybe_unused]] int32_t request_timeout_ms_;
+        int32_t request_timeout_ms_;
         int32_t max_sensors_;
         [[maybe_unused]] bool allow_untrusted_certificate_;
         [[maybe_unused]] bool allow_plaintext_transport_;

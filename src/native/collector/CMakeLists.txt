@@ -281,6 +281,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_stop_is_bounded_against_hung_server
         COMMAND hsm_collector_tests native_http_stop_is_bounded_against_hung_server
     )
+    add_test(NAME native_http_dispose_is_bounded_against_hung_server
+        COMMAND hsm_collector_tests native_http_dispose_is_bounded_against_hung_server
+    )
     add_test(NAME native_http_stop_start_stop_delivers
         COMMAND hsm_collector_tests native_http_stop_start_stop_delivers
     )
