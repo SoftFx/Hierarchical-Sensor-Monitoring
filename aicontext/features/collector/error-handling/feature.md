@@ -75,7 +75,9 @@ the C-ABI log sink **and** the `.module/Collector errors` sensor, when the host 
 that survive deduplication are posted, so a storm collapses on the wire exactly as it does in the
 log, and a thread-local reentrancy latch keeps a failure raised *while* publishing an error from
 recursing (it still reaches the log). A metric-source read failure is formatted as
-`Sensor: <path>, <reason>`, mirroring managed `AddException`'s `Sensor: {SensorPath}, {ex}`.
+`Sensor: <path>, <reason>`, taking the shape of managed `AddException`'s
+`Sensor: {SensorPath}, {ex}`. Only the prefix and the reason are shared: managed interpolates the
+whole exception (type + message + stack trace), so the two texts are not byte-identical.
 Requirement this places on callers: `LogError` must never be called while holding the collector
 mutex, since publishing takes it.
 

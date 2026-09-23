@@ -167,10 +167,12 @@ Version history:
   `hsm_metric_read_fn` / `hsm_metric_source_factory_fn` / `hsm_collector_set_metric_source_factory`
   are UNCHANGED in signature and semantics — a source that fills only `read` behaves exactly as
   before — so the Windows PDH factory, the Linux `/proc` factory and any host plugin keep linking.
-  The two setters share one factory slot (installing either replaces the other). Behavior growth on
-  top of the ABI: a reported read failure now reaches the deduplicated log AND the
-  `.module/Collector errors` sensor when registered, and a value-typed sensor posts one Error-status
-  value carrying the message (what managed already did).
+  The two setters share one factory slot (installing either replaces the other). `kind` is ENFORCED
+  against the bound sensor's type, and a source-supplied `status`/`comment` gets the same
+  range/trim guards as every other value path. Behavior growth on top of the ABI: a reported read
+  failure now reaches the deduplicated log AND the `.module/Collector errors` sensor when
+  registered, and a value-typed sensor posts one Error-status value carrying the message (what
+  managed already did).
 - **0.4.0** (#1099) — additive default-sensor catalog: `hsm_default_sensor_t` (the
   built-in IWindowsCollection/IUnixCollection prototypes) + `hsm_default_sensor_params_t`
   + `hsm_collector_add_default_sensor` and the `add_all_*` / per-category bulk helpers;

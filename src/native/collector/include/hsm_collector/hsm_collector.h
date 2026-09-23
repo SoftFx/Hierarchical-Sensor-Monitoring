@@ -18,7 +18,7 @@ extern "C"
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
 #define HSM_COLLECTOR_VERSION_MINOR 8
-#define HSM_COLLECTOR_VERSION_PATCH 0
+#define HSM_COLLECTOR_VERSION_PATCH 1
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -597,22 +597,29 @@ hsm_result_t hsm_collector_set_metric_source_factory(
    only `read` behaves precisely as before, and the two shipped platform factories plus any host
    plugin keep linking unchanged.
 
-   `kind` selects which of the value fields carries this tick's sample; `status`/`comment` are the
-   posted value's status and comment (managed GetStatus/GetComment), and `error` is the failure
-   detail for HSM_METRIC_READ_ERROR / HSM_METRIC_READ_SAMPLE_ERROR. The collector zero-initializes
-   the struct, sets `struct_size` and `status` before every call, and copies any string it keeps
-   during the call — a source may point `comment`/`error` at its own storage. A source built
-   against a NEWER header must not write past the `struct_size` it is handed. */
+   `kind` declares which of the value fields this tick's sample was written to, and is ENFORCED: it
+   must match the bound sensor's type (TIMESPAN_MS for a TimeSpan sensor, DOUBLE for every other
+   value type, including the sample a bar accumulates), or the read is treated as a failure and
+   reported like one. Leaving it at its default on a TimeSpan sensor would otherwise publish
+   00:00:00 from an untouched `timespan_ms` — a wrong value with an OK status.
+
+   `status`/`comment` are the posted value's status and comment (managed GetStatus/GetComment); an
+   out-of-range status falls back to OK and a comment longer than 1024 characters is trimmed, the
+   same guards every other value path applies. `error` is the failure detail for
+   HSM_METRIC_READ_ERROR / HSM_METRIC_READ_SAMPLE_ERROR. The collector zero-initializes the struct,
+   sets `struct_size`, `kind` and `status` before every call, and copies any string it keeps during
+   the call — a source may point `comment`/`error` at its own storage. A source built against a
+   NEWER header must not write past the `struct_size` it is handed. */
 typedef enum hsm_metric_value_kind_t HSM_ENUM_INT32
 {
     HSM_METRIC_VALUE_DOUBLE = 0,     /* `double_value` (the default; what `read` produces) */
-    HSM_METRIC_VALUE_TIMESPAN_MS = 1 /* `timespan_ms` — a TimeSpan-typed sensor's value */
+    HSM_METRIC_VALUE_TIMESPAN_MS = 1 /* `timespan_ms` — required by a TimeSpan-typed sensor */
 } hsm_metric_value_kind_t;
 
 typedef struct hsm_metric_sample_t
 {
-    size_t struct_size; /* sizeof as the COLLECTOR knows it; never written by the source */
-    hsm_metric_value_kind_t kind;
+    size_t struct_size;           /* sizeof as the COLLECTOR knows it; never written by the source */
+    hsm_metric_value_kind_t kind; /* must match the sensor's type — see above */
     double double_value;
     int64_t timespan_ms;
     int32_t status;      /* hsm_sensor_status_t; HSM_SENSOR_STATUS_OK on entry */

@@ -43,17 +43,21 @@ metric_source_error_is_reported|expect_eventually_payload_contains|proc read fai
 metric_source_error_is_reported|expect_eventually_payload_contains|"Value":0,"Status":3,"Comment":"proc read failed"|5
 metric_source_error_is_reported|stop
 
-# 2 calibration requests, a post every 500 ms and a sample every 250 ms over 3.6 s: at least seven
-# posts, which outruns the longest calibration opening either collector can produce, so the LAST
-# payload is a settled prediction. Free space starts at 1 000 000 units and drains 1 000 per second,
-# a strictly positive speed, so that prediction is a real (non-zero) TimeSpan rather than a repeat
-# of the previous one.
+# 2 calibration requests, a post every 500 ms and a sample every 250 ms over 5.6 s: twelve posts
+# nominally, which outruns the longest calibration opening either collector can produce (managed's
+# is one longer than native's — see above), so the LAST payload is a settled prediction. Free space
+# starts at 1 000 000 units and drains 1 000 per second, a strictly positive speed, so that
+# prediction is a real (non-zero) TimeSpan rather than a repeat of the previous one.
+# The lower count bound is load-bearing, not cosmetic: below 6 posts the tail can still be the
+# calibration overhang, which carries TimeSpan.Zero and would fail the last-payload assertion. The
+# margin therefore lives in the sleep (12 nominal vs a floor of 6 tolerates half the posts slipping
+# on a loaded runner), not in a looser bound.
 disk_prediction_calibrates_then_predicts|create_collector
 disk_prediction_calibrates_then_predicts|create_disk_prediction_sensor|contract/metric/prediction|2|500|250|1000000|1000
 disk_prediction_calibrates_then_predicts|start
-disk_prediction_calibrates_then_predicts|sleep_ms|3600
+disk_prediction_calibrates_then_predicts|sleep_ms|5600
 disk_prediction_calibrates_then_predicts|stop
-disk_prediction_calibrates_then_predicts|expect_sent_count_between|6|10|10
+disk_prediction_calibrates_then_predicts|expect_sent_count_between|6|14|10
 disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Type":7
 disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Value":"00:00:00"
 disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Status":0

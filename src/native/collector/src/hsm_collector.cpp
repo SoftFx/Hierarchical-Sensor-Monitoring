@@ -3863,7 +3863,14 @@ namespace
         }
 
         // Error routing entry point: validation drops, loop errors and shutdown discards all
-        // funnel here. Errors pass through the deduplicator (window/capacity from the options)
+        // funnel here.
+        //
+        // MUST NOT be called while holding mutex_: an emitted message is published on the
+        // `.module/Collector errors` sensor (PostCollectorError -> AddValueJson), which takes mutex_,
+        // and mutex_ is not recursive. Every current caller runs on a thread that holds neither
+        // mutex_ nor queue_mutex_.
+        //
+        // Errors pass through the deduplicator (window/capacity from the options)
         // so a storm of identical messages collapses to one log line; the suppressed count is
         // flushed as a "(N suppressed)" suffix on the FIRST recurrence after the window elapses
         // (recurrence-driven, not timer-driven — a storm that simply stops leaves its trailing
@@ -5703,12 +5710,18 @@ namespace
                 if (failure.empty())
                     return false;
 
-                out_json = build_value(type_, DefaultMetricValueJson(type_), HSM_SENSOR_STATUS_ERROR, failure);
+                out_json = build_value(
+                    type_, DefaultMetricValueJson(type_), HSM_SENSOR_STATUS_ERROR, TrimComment(failure));
                 return true;
             }
 
-            const auto status = static_cast<hsm_sensor_status_t>(sample.status);
-            const std::string comment = sample.comment != nullptr ? std::string(sample.comment) : std::string{};
+            // The source's status and comment are host-supplied and get the same guards every other
+            // ingress path applies: an out-of-range status would land outside the server's SensorStatus
+            // enum on the wire, and an unbounded comment would break the 1024-char trim invariant.
+            const auto raw_status = static_cast<hsm_sensor_status_t>(sample.status);
+            const auto status = IsValidStatus(raw_status) ? raw_status : HSM_SENSOR_STATUS_OK;
+            const std::string comment =
+                TrimComment(sample.comment != nullptr ? std::string(sample.comment) : std::string{});
 
             if (type_ == HSM_SENSOR_TYPE_TIMESPAN)
             {
@@ -5793,6 +5806,24 @@ namespace
         failure.clear();
 
         const auto outcome = metric_source_ ? metric_source_->ReadInto(sample) : HSM_METRIC_READ_NO_VALUE;
+
+        // A source declares which value field it filled, and the declaration is enforced. Trusting the
+        // sensor's type instead would let a source that filled double_value on a TimeSpan sensor (the
+        // easy mistake — FreshSample defaults the kind to DOUBLE) publish 00:00:00 from an untouched
+        // timespan_ms: a WRONG value with an OK status, which is worse than the read failure this seam
+        // exists to surface. A mismatch is reported like any other failed read and posts no sample.
+        if (outcome == HSM_METRIC_READ_OK)
+        {
+            const auto expected_kind =
+                type_ == HSM_SENSOR_TYPE_TIMESPAN ? HSM_METRIC_VALUE_TIMESPAN_MS : HSM_METRIC_VALUE_DOUBLE;
+            if (sample.kind != expected_kind)
+            {
+                if (collector)
+                    failure = collector->ReportMetricSampleError(path_, "the metric source filled the wrong value field");
+                return HSM_METRIC_READ_SAMPLE_ERROR;
+            }
+        }
+
         const std::string detail = sample.error != nullptr ? std::string(sample.error) : std::string();
 
         if (outcome == HSM_METRIC_READ_SAMPLE_ERROR)
@@ -5852,6 +5883,13 @@ namespace
         bool post_due = false;
         std::string closed_json;
 
+        // BEFORE the due gate, exactly as the value path serves it before its own gate. The refresh
+        // cadence is independent of both bar cadences, so a refresh that came due while neither the
+        // sample tick nor the partial post is due must still run — otherwise the early return below
+        // would leave metric_refresh_next_ms_ in the past, and the scheduler, whose hint folds it in,
+        // would take its no-wait branch and spin until the next bar tick.
+        RunMetricRefreshIfDue(collector);
+
         {
             std::lock_guard<std::mutex> guard(mutex_);
 
@@ -5907,8 +5945,6 @@ namespace
         // arrive through AddBar* (managed PublicBarMonitoringSensor: CollectBar == CheckCurrentBar).
         if (sample_due && metric_source_)
         {
-            RunMetricRefreshIfDue(collector);
-
             auto sample = MetricSource::FreshSample();
             std::string failure;
             const bool prime = metric_prime_pending_;

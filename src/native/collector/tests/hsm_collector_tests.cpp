@@ -4206,6 +4206,50 @@ namespace
         hsm_sensor_release(sensor);
     }
 
+    // Mirror of NativeLinuxFreeDiskBindsOnlyTheUnixRow (#1426 review): the Windows disk readers bind
+    // by DRIVE LETTER, so they must bind ONLY a row whose name carries one as a standalone token.
+    // The letter-LESS Unix rows are registerable on a Windows host (the catalog ids are
+    // platform-agnostic) and end in "on disk" — parsing the 'n' of "on" would bind them to N:, which
+    // either reports an unrelated volume under a label naming the root filesystem or fails on every
+    // post period. Driven through the factory seam, so the binding decision itself is asserted.
+    void NativeWindowsDiskBindsOnlyLetteredRows()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_windows_metric_sources(collector.value) == HSM_RESULT_OK,
+            "installing Windows metric sources should succeed on Windows");
+
+        double values[2] = { 0.0, 0.0 };
+        int32_t recreated = 0;
+
+        Require(
+            hsm_collector_test_drive_metric_source(
+                collector.value, "host/.computer/Disks monitoring/Free space on C disk", 2, values, &recreated) == 2,
+            "a lettered free-disk row must bind to that drive");
+        Require(
+            hsm_collector_test_drive_metric_source(
+                collector.value, "host/.computer/Disks monitoring/Free space on C disk prediction", 2, values,
+                &recreated) == 2,
+            "a lettered prediction row must bind to that drive");
+        Require(
+            values[0] == 0.0 && values[1] == 0.0,
+            "the opening prediction reads are calibration posts, which carry TimeSpan.Zero");
+
+        Require(
+            hsm_collector_test_drive_metric_source(
+                collector.value, "host/.computer/Disks monitoring/Free space on disk", 2, values, &recreated) == 0,
+            "the letter-less Unix free-disk row must be declined, not bound to drive N:");
+        Require(
+            hsm_collector_test_drive_metric_source(
+                collector.value, "host/.computer/Disks monitoring/Free space on disk prediction", 2, values,
+                &recreated) == 0,
+            "the letter-less Unix prediction row must be declined, not bound to drive N:");
+        Require(
+            hsm_collector_test_drive_metric_source(
+                collector.value, "host/.computer/Disks monitoring/Active time on disk", 2, values, &recreated) == 0,
+            "a letter-less LogicalDisk row must be declined too");
+    }
+
     // #1164 Windows smoke: a Process default sensor binds to THIS process's PDH instance (the PID-
     // resolved "<exe>" / "<exe>#N"), so the per-process counter path resolves and a DoubleBar is
     // produced. Exercises CurrentProcessInstance's enumeration + ID-Process match end to end.
@@ -6787,6 +6831,8 @@ namespace
             { "native_built_in_push_bar_posts_partials", [](const std::string&) { NativeBuiltInPushBarPostsPartials(); } },
 #if defined(_WIN32)
             { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
+            { "native_windows_disk_binds_only_lettered_rows",
+              [](const std::string&) { NativeWindowsDiskBindsOnlyLetteredRows(); } },
             { "native_windows_process_metric_resolves_current_process",
               [](const std::string&) { NativeWindowsProcessMetricResolvesCurrentProcess(); } },
             { "native_windows_info_sensors_emit_values",

@@ -126,7 +126,9 @@ Three details are part of the cross-collector contract and are reproduced verbat
 - the comment divides the speed by 1 MiB and labels it `Mbytes/sec` whatever unit the platform's
   `IDiskInfo` reports in (bytes on Windows, kB on Unix). Mirrored rather than corrected: the two
   collectors must produce the same comment for the same host, and relabelling it is a separate,
-  user-visible decision.
+  user-visible decision. The NUMBER in it is rendered with the invariant culture on both sides —
+  managed used plain interpolation, which on a comma-decimal host (`ru-RU`, `de-DE`, …) emitted
+  `1,5` where native emits `1.5`; fixed in #1426 so the contract holds on every host.
 
 Known managed wrinkle: the send loop starts in `InitAsync` with a zero due time while `StartAsync`
 resets `_requestsCount` afterwards, so the opening post races that reset and the first calibration
@@ -234,7 +236,14 @@ signatures and semantics, so an existing host plugin needs no change:
 | `hsm_metric_sample_t` | a typed sample: `kind` (double / TimeSpan-ms), the value, a `status`, a `comment` and an `error` string |
 | `hsm_metric_read_sample_fn` | a reader that fills that sample |
 | `hsm_metric_source_t` + `hsm_collector_set_metric_source_factory_ex` | the factory fills one struct instead of three out-params, so the seam can grow again without a new factory type |
-| `hsm_metric_source_t.refresh` / `.refresh_period_ms` | an OPTIONAL second cadence for a source whose posted value is derived from samples taken more often than it posts — the native shape of a managed sensor that runs its own sampling loop beside the post loop |
+| `hsm_metric_source_t.refresh` / `.refresh_period_ms` | an OPTIONAL second cadence for a source whose posted value is derived from samples taken more often than it posts — the native shape of a managed sensor that runs its own sampling loop beside the post loop. Served before the due gate on BOTH the value and the bar path, so a refresh that comes due between bar ticks cannot leave the scheduler hint in the past |
+
+A sample is not taken on trust. `kind` must match the bound sensor's type (`TIMESPAN_MS` for a
+TimeSpan sensor, `DOUBLE` for every other value type and for the sample a bar accumulates) or the
+read is treated as a failure and reported like one — otherwise a source that filled `double_value`
+on a TimeSpan sensor would publish `00:00:00` from an untouched `timespan_ms`, a wrong value with an
+OK status. An out-of-range `status` falls back to OK and a `comment` over 1024 characters is
+trimmed, the same guards `AddValueJson` / `AddRate` / the file path already applied.
 
 Both setters share one factory slot: installing either replaces whichever was there, so a collector
 never holds two competing sources for one path. The collector zero-initializes both structs and sets
@@ -245,8 +254,10 @@ dispose + recreate; a declined recreate parks the sensor). `HSM_METRIC_READ_SAMP
 source. Either way the failure becomes visible, and exactly as the managed side already makes it
 visible:
 
-- the deduplicated error channel gets `Sensor: <path>, <reason>` — managed `AddException` formats
-  `Sensor: {SensorPath}, {ex}`;
+- the deduplicated error channel gets `Sensor: <path>, <reason>`. Managed `AddException` formats
+  `Sensor: {SensorPath}, {ex}`, i.e. the exception's type + message + stack trace, so only the
+  `Sensor: <path>, ` prefix and the reason text are shared — the corpus asserts loosely for that
+  reason, and the two texts are NOT byte-identical;
 - native `LogError` now also posts every emitted line on the `.module/Collector errors` sensor when
   the host registered it, which is the second half of the managed `MessageDeduplicator` action
   (`logger.Error` + `CollectorErrors.SendCollectorError`). Only messages that survive deduplication
@@ -274,9 +285,14 @@ Conformance: `metric_source_contract.hsmtest` (`metric_source_error_is_reported`
 `InstallLinuxMetricSources()` binds the Unix catalog's value-typed sensors to the SAME OS truth the
 managed Unix sensor reads, running the mirrored algorithm (rule #10 — one sensor, one acquisition
 mechanism). Dispatch is on the sensor NAME (last path segment), as on Windows. The free-disk reader
-binds ONLY the exact letter-less name `Free space on disk`: a letter-bearing Windows row (still
-registerable on Linux via `add_default_sensor` + `disk_letter`) stays registration-only instead of
-reporting the root mount under a label naming another volume. Total CPU seeds its baseline on the
+binds ONLY the exact letter-less names `Free space on disk` / `Free space on disk prediction`: a
+letter-bearing Windows row (still registerable on Linux via `add_default_sensor` + `disk_letter`)
+stays registration-only instead of reporting the root mount under a label naming another volume.
+The Windows factory enforces the MIRROR of that rule (#1426): it binds by drive letter, and the
+letter must be a standalone token (`" <L> disk"`, a space on both sides), so the letter-less Unix
+rows — registerable on a Windows host, and ending in `on disk` — are declined rather than parsed as
+drive `N:` off the `n` of `on`. Pinned by `native_linux_free_disk_binds_only_the_unix_row` and
+`native_windows_disk_binds_only_lettered_rows`. Total CPU seeds its baseline on the
 FIRST scheduled read (posting nothing), not at source construction: the factory binds during Start and
 the first read follows within milliseconds, where a single jiffy would read as 0% or 100% and could
 trip the built-in EmaMean > 50 warning — seeding on the first read reproduces the managed timing (first

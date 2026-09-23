@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.8.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.8.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -429,6 +429,11 @@ if(WIN32)
     )
     add_test(NAME native_windows_process_metric_resolves_current_process
         COMMAND hsm_collector_tests native_windows_process_metric_resolves_current_process
+    )
+    # #1426: the disk readers bind by drive letter, so only a row naming one as a standalone token
+    # may bind — the letter-less Unix rows must not land on drive N:.
+    add_test(NAME native_windows_disk_binds_only_lettered_rows
+        COMMAND hsm_collector_tests native_windows_disk_binds_only_lettered_rows
     )
     # #1189 follow-up: host sensors must actually emit, not register empty.
     add_test(NAME native_windows_info_sensors_emit_values
