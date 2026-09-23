@@ -1,0 +1,23 @@
+# HSM Server WITHOUT Caddy: HSM serves HTTPS itself with its own certificate (self-signed by
+# default, or your .pfx in Config/, see the wiki page Server-Configuration). Same data folders as
+# docker-compose.yml, so you can switch between the two in both directions:
+#   docker compose down                                 # stop the Caddy stack
+#   docker compose -f docker-compose.direct.yml up -d   # start HSM alone
+# and back:
+#   docker compose -f docker-compose.direct.yml down
+#   docker compose up -d
+# Collectors and agents keep using https://<host>:44330.
+services:
+  app:
+    image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
+    container_name: hsm-server
+    restart: unless-stopped
+    user: '0'
+    ports:
+      - '44330:44330'   # Sensor API — collectors/agents send values here (https, /api/sensors/*)
+      - '44333:44333'   # Web UI — browser dashboard, admin, agent download (https)
+    volumes:
+      - ./Logs:/app/Logs                       # NLog output
+      - ./Config:/app/Config                   # server config (TLS cert, Telegram, Agent settings)
+      - ./Databases:/app/Databases             # embedded LevelDB (sensor history + metadata)
+      - ./DatabasesBackups:/app/DatabasesBackups

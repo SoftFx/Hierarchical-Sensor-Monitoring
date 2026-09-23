@@ -31,20 +31,21 @@ docker run -p 44330:44330 -p 44333:44333 ...
 
 ## TLS Certificate
 
+With the Docker Compose setup, you do not need anything here: Caddy obtains and renews the certificate clients see (Let's Encrypt for a public domain), see [Installation](Installation). The settings below matter when clients connect to HSM directly (`docker run`, no Caddy):
+
 ```json
 "ServerCertificate": {
-  "CertificatePath": "",
-  "CertificatePassword": ""
+  "Name": "",
+  "Key": ""
 }
 ```
 
-By default, HSM uses a self-signed certificate. To use your own:
+By default, HSM uses a built-in self-signed certificate. To use your own `.pfx`:
 
-1. Set `CertificatePath` to the `.pfx` file path
-2. Set `CertificatePassword` to the certificate password
-3. Restart the server
-
-When running in Docker, mount the certificate file into the container and reference its path inside the container.
+1. Put the `.pfx` file into the `Config` folder (`/app/Config` in Docker)
+2. Set `Name` to the file name, e.g. `hsm.pfx`
+3. Set `Key` to the certificate password (leave empty if there is none)
+4. Restart the server; the certificate is read only at startup
 
 ---
 
@@ -115,17 +116,10 @@ docker run \
   -v /host/DatabasesBackups:/app/DatabasesBackups \
   -p 44330:44330 \
   -p 44333:44333 \
-  softfx/hsm-server:latest
+  hsmonitoring/hierarchical_sensor_monitoring:latest
 ```
 
-Or in `docker-compose.yml`:
-```yaml
-volumes:
-  - ./Logs:/app/Logs
-  - ./Config:/app/Config
-  - ./Databases:/app/Databases
-  - ./DatabasesBackups:/app/DatabasesBackups
-```
+With Docker Compose, use the reference `docker-compose.yml` from [Installation](Installation) instead of writing your own: it already mounts these directories.
 
 | Directory | Contents |
 |---|---|

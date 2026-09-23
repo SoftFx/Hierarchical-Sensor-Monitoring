@@ -1,6 +1,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
+using HSMServer.Core.Schedule;
 using System;
 using System.Linq;
 using System.Text;
@@ -127,20 +128,81 @@ namespace HSMServer.Core.Model.Policies
             _okPolicy.TryUpdate(update with { Template = _okPolicy.OkTemplate, Icon = null }, out _, sensor);
         }
 
-        internal bool HasTimeout(DateTime? time) => IsActive && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
+        internal bool HasTimeout(DateTime? time) => IsActive && IsStale(time);
 
-        internal bool ResendNotification(DateTime? time)
+        // Staleness is read INDEPENDENTLY of enablement (#1404): "time since
+        // the last value exceeds the interval" has an answer even for a
+        // disabled policy, and the window-caused-resolution discriminator in
+        // SetExpiredSnapshot needs that answer for every policy in the
+        // snapshot — a disable on an expired sensor must not flip a
+        // window-caused resolution into a false recovery Ok. TTL-less reads
+        // as not stale (no interval — nothing to exceed).
+        internal bool IsStale(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
+
+        // The evaluation instant arrives from the caller (the sweep captures
+        // one per pass) so the window predicate and the repeat-interval
+        // comparison below read the SAME timestamp, not two fresh UtcNows
+        // (#1404). The provider arrives as a parameter (the policy owns no
+        // provider); fail-open is inherited from IsWorkingTime — an unknown
+        // schedule id reads as in-window (#1405). The TTL and data-policy
+        // schedule gates deliberately differ in their time argument — the
+        // "do not unify" rule: aicontext/features/server/alerts/feature.md.
+        //
+        // Not side-effect-free: the out-of-window arm cancels the
+        // notification state. The unsynchronized state writes are the
+        // tolerated trade-off (worst case one duplicate notification);
+        // details: aicontext/features/server/alerts/feature.md (#1405).
+        internal bool TryResendNotification(DateTime? time, IAlertScheduleProvider scheduleProvider, DateTime evaluationTime)
         {
             if (!HasTimeout(time))
                 return false;
 
-            if(!Schedule.IsActive)
+            // Outside the window the repeat is CANCELLED, not paused (#1405):
+            // the state reset makes the next in-window evaluation deliver at
+            // once (fresh), instead of resuming yesterday's cadence.
+            if (IsOutsideSchedule(scheduleProvider, evaluationTime))
+            {
+                CancelNotification();
+                return false;
+            }
+
+            // Never-sent bypass, SCHEDULED policies only (#1405): the null
+            // clock is produced only by the cancellation above or a
+            // resolution — the fresh delivery at window open must outrank
+            // the repeat-mode gate, or the DEFAULT mode (Immediately, whose
+            // Schedule.IsActive is false) loses the alert forever on the
+            // mixed-sensor shape. Schedule-less policies keep the master
+            // order (the repeat-mode gate first): their null clock pairs
+            // with a resolved sensor, and the re-expiry transition re-arms
+            // it before this loop runs.
+            if (ScheduleId.HasValue && !_lastTTLNotificationTime.HasValue)
+                return true;
+
+            if (!Schedule.IsActive)
                 return false;
 
             if (!_lastTTLNotificationTime.HasValue)
                 return true;
 
-            return DateTime.UtcNow - _lastTTLNotificationTime >= Schedule.GetShiftTime();
+            return evaluationTime - _lastTTLNotificationTime >= Schedule.GetShiftTime();
+        }
+
+        // The shared out-of-window decision of the two gates (#1404 expiry,
+        // #1405 repeat cancellation): one home for the fail-open semantics
+        // (a null ScheduleId reads as in-window). Callers pass their
+        // evaluation instant explicitly, so a decision and the gates keyed
+        // on it cannot disagree across a minute/window boundary (#1404).
+        internal bool IsOutsideSchedule(IAlertScheduleProvider scheduleProvider, DateTime evaluationTime) =>
+            ScheduleId.HasValue && !scheduleProvider.IsWorkingTime(ScheduleId.Value, evaluationTime);
+
+        // The per-policy half of GetNotification(false): resets the repeat
+        // clock and the counter without going through the sensor-level
+        // transition (which is what sends resolution notifications — a
+        // per-policy window close must stay silent, #1405).
+        internal void CancelNotification()
+        {
+            _lastTTLNotificationTime = null;
+            _notifyCount = 0;
         }
 
         internal PolicyResult GetNotification(bool timeout)
@@ -153,8 +215,7 @@ namespace HSMServer.Core.Model.Policies
                 return PolicyResult;
             }
 
-            _lastTTLNotificationTime =  null;
-            _notifyCount = 0;
+            CancelNotification();
 
             return Ok;
         }

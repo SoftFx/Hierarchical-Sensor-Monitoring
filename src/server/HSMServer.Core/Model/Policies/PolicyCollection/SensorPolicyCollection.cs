@@ -14,6 +14,12 @@ using HSMServer.Core.TableOfChanges;
 
 namespace HSMServer.Core.Model.Policies
 {
+    // The evaluation context of a sensor-expiry transition: the decision
+    // (did any TTL policy time out), the instant it was taken at, and the
+    // value it judged. A record struct so the names travel with the
+    // positional arguments and the fan-out allocates once.
+    internal readonly record struct ExpiryEvaluation(bool Timeout, DateTime At, BaseValue Value);
+
     public abstract class SensorPolicyCollection : PolicyCollectionBase, IEnumerable<Policy>
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
@@ -28,7 +34,12 @@ namespace HSMServer.Core.Model.Policies
 
         // Fires while the sensor holds its initialization lock (#1296), so subscribers must not
         // block. Reasoning: aicontext/features/server/overview.md, BaseSensorModel<T>.
-        internal Action<BaseSensorModel, bool> SensorExpired;
+        // The ExpiryEvaluation payload carries the evaluation context subscribers must reuse
+        // instead of recomputing: the instant the decision was taken at (a schedule gate at a
+        // fresh UtcNow can diverge across a minute/window boundary, #1404) and the value that
+        // was judged (on the data path the event fires BEFORE the value reaches Storage, so
+        // sensor.LastValue is still the previous value there).
+        internal Action<BaseSensorModel, ExpiryEvaluation> SensorExpired;
 
 
         internal abstract void AddPolicy<U>(U policy) where U : Policy;
@@ -116,16 +127,27 @@ namespace HSMServer.Core.Model.Policies
 
             var anyTimeout = false;
 
+            // One evaluation instant for the whole pass (#1404): the per-policy
+            // window decisions below and the transition raised at the end carry
+            // the SAME timestamp, so a sweep straddling a minute boundary that
+            // is also a window boundary cannot split the decision from its
+            // notification. Evaluation time, not the value's timestamp: a stale
+            // in-session last value passes the old gate even when "now" is
+            // outside the session — the exact restart incident. Gating at
+            // UtcNow also resolves the sensor on the first out-of-window
+            // sweep (SetExpiredSnapshot fires on the TRANSITION), so a
+            // session close without OffTime ends the alert instead of
+            // leaving it firing into the night. The shared predicate with
+            // the repeat-cancellation gate (#1405): one home for the
+            // fail-open semantics.
+            var evaluationTime = DateTime.UtcNow;
+
             foreach (var ttlPolicy in ttlSnapshot)
             {
                 if (ttlPolicy is null || ttlPolicy.IsDisabled)
                     continue;
 
-                bool schedulePassed = true;
-                if (ttlPolicy.ScheduleId.HasValue)
-                    schedulePassed = _scheduleProvider.IsWorkingTime(ttlPolicy.ScheduleId.Value, value.LastUpdateTime);
-
-                if (!schedulePassed)
+                if (ttlPolicy.IsOutsideSchedule(_scheduleProvider, evaluationTime))
                     continue;
 
                 if (ttlPolicy.HasTimeout(value.LastUpdateTime))
@@ -136,7 +158,7 @@ namespace HSMServer.Core.Model.Policies
                 }
             }
 
-            SensorExpired?.Invoke(_sensor, anyTimeout);
+            SensorExpired?.Invoke(_sensor, new ExpiryEvaluation(anyTimeout, evaluationTime, value));
 
             return anyTimeout;
         }
