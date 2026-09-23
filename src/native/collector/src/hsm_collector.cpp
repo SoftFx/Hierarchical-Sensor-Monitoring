@@ -443,6 +443,39 @@ namespace
         return result;
     }
 
+    // "dd/MM/yyyy HH:mm:ss" in UTC — the managed SensorBase.DefaultTimeFormat used by
+    // ProductVersionSensor for its "Start:"/"Stop:" comments (#1433). Separators are the
+    // invariant '/' and ':' the managed side renders on an invariant/en-US host.
+    std::string MarkerTimeFromUnixMs(int64_t unix_ms)
+    {
+        // Floored division, same as IsoUtcFromUnixMs, so a pre-epoch (negative) input still yields a
+        // correctly floored second instead of C++ truncate-toward-zero. Unlike that function this one
+        // renders no fraction, so there is no millisecond remainder to fix up.
+        int64_t secs64 = unix_ms / 1000;
+        if (unix_ms % 1000 < 0)
+            --secs64;
+
+        const std::time_t secs = static_cast<std::time_t>(secs64);
+
+        std::tm tm{};
+#if defined(_WIN32)
+        const bool ok = gmtime_s(&tm, &secs) == 0;
+#else
+        const bool ok = gmtime_r(&secs, &tm) != nullptr;
+#endif
+        // Out-of-range second: emit a well-formed sentinel rather than a zero-initialized tm.
+        if (!ok)
+            return "01/01/0001 00:00:00";
+
+        // Sized for the worst case gcc's -Wformat-truncation assumes: six unbounded ints.
+        char buf[80];
+        std::snprintf(
+            buf, sizeof(buf), "%02d/%02d/%04d %02d:%02d:%02d",
+            tm.tm_mday, tm.tm_mon + 1, tm.tm_year + 1900, tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+        return std::string(buf);
+    }
+
     // .NET Version.ToString(): "major.minor[.build[.revision]]". A trailing component is emitted
     // only when present (>= 0) and only if every earlier optional component is present too — a
     // revision without a build cannot exist (Version forbids it), so build < 0 drops revision.
@@ -2007,6 +2040,24 @@ namespace
         std::string comment;
     };
 
+    // A ".module" version sensor that marks the collector's lifecycle (#1433): it re-posts its
+    // version value with a "Start: <time>" comment on every Start and a "Stop: <time>" comment on
+    // every Stop, mirroring managed ProductVersionSensor.StartAsync/StopAsync. `start_time_ms` is
+    // the sensor's creation time and is reused by every Start comment, because managed stamps
+    // `options.StartTime` once when the prototype is built and never refreshes it.
+    struct VersionMarker
+    {
+        std::string path;
+        hsm_sensor_type_t type;
+        std::string value_json;
+        int64_t start_time_ms;
+        // The run (collector start epoch) this marker's "Start:" value was already emitted for.
+        // Registration-while-running and the Start transition both emit, and either can run first,
+        // so whichever gets there claims the epoch and the other skips it — one Start marker per
+        // run, however the sensor was added (#1433).
+        int64_t emitted_start_epoch;
+    };
+
     class NativeCollector;
 
     class NativeSensor
@@ -2576,6 +2627,7 @@ namespace
                 }
 
                 state_ = CollectorState::Starting;
+                ++start_epoch_; // opens a new run for the version markers (#1433)
                 ClearError();
 
                 sensors_snapshot.reserve(sensors_.size());
@@ -2636,8 +2688,14 @@ namespace
             StartServiceStatusSampler();
             StartSelfMonitor();
 
-            // Drain the one-shot Start values (e.g. product/collector version) now the worker is up.
+            // Drain the one-shot Start values now the worker is up.
             for (auto& json : start_values)
+                Enqueue(std::move(json));
+
+            // Version sensors mark every Start, not just the first (#1433): managed re-Inits and
+            // re-Starts every sensor on each collector start, so ProductVersionSensor.StartAsync
+            // posts its "Start:" value again after a restart.
+            for (auto& json : BuildVersionMarkerValues(/*starting*/ true))
                 Enqueue(std::move(json));
 
             {
@@ -2717,6 +2775,12 @@ namespace
             }
 
             for (auto& json : flushed)
+                Enqueue(std::move(json));
+
+            // Version sensors mark the stop (#1433): managed ProductVersionSensor.StopAsync sends
+            // its version with a "Stop: <time>" comment before the data processor drains, so the
+            // value rides out on the same stop flush. Enqueued here, ahead of the drain below.
+            for (auto& json : BuildVersionMarkerValues(/*starting*/ false))
                 Enqueue(std::move(json));
 
             // Phase 3: stop the dispatcher and drain everything still queued. Against a reachable
@@ -3348,6 +3412,100 @@ namespace
 
             Enqueue(std::move(outgoing));
             return HSM_RESULT_OK;
+        }
+
+        // Register a version sensor as a lifecycle marker (#1433). From now on the collector
+        // re-posts `value_json` with a "Start: <time>" comment on every Start and a
+        // "Stop: <time>" comment on every Stop — managed ProductVersionSensor does exactly that
+        // from StartAsync/StopAsync, and its sensors are re-Inited on every collector start.
+        // Re-registering the same path refreshes the value and keeps the original start time. If this
+        // run's Start marker is already out, the refreshed value is NOT re-posted, so a host that
+        // re-registers the same path with a DIFFERENT version mid-run ends that run with a "Stop:"
+        // carrying the new version against a "Start:" carrying the old one. No in-tree host does
+        // that (the version is fixed per process); the next run posts both from the new value.
+        // A marker registered on an already-running collector posts its Start value straight away,
+        // mirroring the managed dynamic-add path (a sensor added while running is started at once).
+        void RegisterVersionMarker(const std::string& path, hsm_sensor_type_t type, std::string value_json)
+        {
+            int64_t start_time_ms = 0;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+
+                auto existing = std::find_if(
+                    version_markers_.begin(), version_markers_.end(),
+                    [&path](const VersionMarker& marker) { return marker.path == path; });
+
+                if (existing == version_markers_.end())
+                {
+                    version_markers_.push_back(
+                        VersionMarker{ path, type, std::move(value_json), UnixTimeMilliseconds(), 0 });
+                    existing = std::prev(version_markers_.end());
+                }
+                else
+                {
+                    existing->value_json = std::move(value_json);
+                }
+
+                // Starting/Running only — NOT the Stopping that CanAcceptDataLocked also allows for
+                // stop flushes: a "Start:" value enqueued then would land after StopCore has already
+                // built this run's "Stop:" marker, leaving a stopped collector reading as just
+                // started. Mirrors managed, where a sensor added while RUNNING is started at once.
+                if (!CanStartNewSensorsLocked())
+                    return; // the next Start emits it — queueing here too would double-post
+
+                if (!TryClaimStartEpochLocked(*existing))
+                    return; // this run's Start marker is already out (Start() or an earlier Add)
+
+                start_time_ms = existing->start_time_ms;
+                value_json = existing->value_json;
+            }
+
+            const std::string start_comment = "Start: " + MarkerTimeFromUnixMs(start_time_ms);
+            Enqueue(OutgoingValueJson(path, type, value_json, HSM_SENSOR_STATUS_OK, TrimComment(start_comment)));
+        }
+
+        // Caller holds mutex_. True when THIS caller owns emitting the marker's "Start:" value for
+        // the current run; false when someone already has.
+        bool TryClaimStartEpochLocked(VersionMarker& marker)
+        {
+            if (marker.emitted_start_epoch == start_epoch_)
+                return false;
+
+            marker.emitted_start_epoch = start_epoch_;
+            return true;
+        }
+
+        // Build the "Start:"/"Stop:" marker payloads for every registered version sensor. The Start
+        // comment carries the marker's creation time (managed replays its one StartTime on every
+        // restart); the Stop comment carries the moment of the stop.
+        std::vector<std::string> BuildVersionMarkerValues(bool starting)
+        {
+            std::vector<VersionMarker> markers;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+
+                // On Start, take only the markers whose Start value nobody has emitted for this run
+                // yet; a sensor registered concurrently with Start() may already have posted its own.
+                // Stop takes them all: managed calls StopAsync on every registered sensor.
+                for (auto& marker : version_markers_)
+                    if (!starting || TryClaimStartEpochLocked(marker))
+                        markers.push_back(marker);
+            }
+
+            std::vector<std::string> values;
+            values.reserve(markers.size());
+
+            for (const auto& marker : markers)
+            {
+                const std::string comment = starting
+                                                ? "Start: " + MarkerTimeFromUnixMs(marker.start_time_ms)
+                                                : "Stop: " + MarkerTimeFromUnixMs(UnixTimeMilliseconds());
+
+                values.push_back(
+                    OutgoingValueJson(marker.path, marker.type, marker.value_json, HSM_SENSOR_STATUS_OK, TrimComment(comment)));
+            }
+
+            return values;
         }
 
         // Bar publish path (roll-on-add): gated on CanAcceptData exactly like an instant value —
@@ -4037,7 +4195,17 @@ namespace
                 try
                 {
                     if (service_alive_sensor_)
-                        service_alive_sensor_->AddBool(true, HSM_SENSOR_STATUS_OK, nullptr);
+                    {
+                        // The very first heartbeat of the sensor's life is `false` — a start
+                        // marker the server renders as the boundary of a new collector run, then
+                        // every later beat is `true` (managed CollectorAlive._firstData, #1433).
+                        // The flag lives on the collector, not on this thread, because managed
+                        // keeps it on the sensor instance: a restart re-runs the loop but does
+                        // NOT re-arm the marker, so only the first run after Add posts `false`.
+                        const bool alive = !service_alive_first_beat_;
+                        service_alive_first_beat_ = false;
+                        service_alive_sensor_->AddBool(alive, HSM_SENSOR_STATUS_OK, nullptr);
+                    }
 
                     // Overflow since the last tick — post only when non-zero so the bar isn't all-zeros.
                     if (queue_overflow_sensor_)
@@ -4903,6 +5071,13 @@ namespace
         // value on connect (mirrors managed SensorBase.StartAsync) instead of having it dropped by the
         // data gate. Guarded by mutex_.
         std::vector<std::string> deferred_start_values_;
+        // Version sensors that re-post their value with a "Start:"/"Stop:" comment on every
+        // lifecycle transition (#1433) — mirrors managed ProductVersionSensor. Guarded by mutex_.
+        std::vector<VersionMarker> version_markers_;
+        // Bumped on every Start (under mutex_, together with the state flip) so a marker's
+        // emitted_start_epoch identifies the run its Start value went out for. Starts at 1 because
+        // a fresh marker carries 0 = "never emitted".
+        int64_t start_epoch_ = 0;
         mutable std::string last_error_;
 
         std::mutex queue_mutex_;
@@ -4927,6 +5102,10 @@ namespace
         bool collector_monitoring_enabled_ = false;
         bool queue_diagnostics_enabled_ = false;
         std::shared_ptr<NativeSensor> service_alive_sensor_;
+        // First heartbeat of the sensor's life posts `false` as a start marker (#1433). Owned by
+        // the collector so a Stop/Start cycle does not re-arm it; written only by the self-monitor
+        // thread, whose creation and join carry the happens-before against Start/Stop.
+        bool service_alive_first_beat_ = true;
         std::shared_ptr<NativeSensor> queue_overflow_sensor_;
         std::shared_ptr<NativeSensor> queue_items_sensor_;
         std::shared_ptr<NativeSensor> queue_time_sensor_;
@@ -7392,11 +7571,12 @@ namespace
         revision = parts[3];
     }
 
-    // Queue the one-shot "<version>" value with a "Start: <utc>" comment for a freshly registered
-    // version sensor, mirroring the managed ProductVersionSensor.StartAsync. Routed through
-    // PostStartValue because registration happens pre-Start (the agent adds sensors before Start),
-    // where the data gate would drop a direct send — the value is held and emitted on Start instead.
-    void EmitVersionStartValue(NativeCollector* impl, const std::shared_ptr<NativeSensor>& sensor, const char* version_text)
+    // Register a freshly added version sensor as a lifecycle marker, mirroring managed
+    // ProductVersionSensor: its "<version>" value is posted with a "Start: <dd/MM/yyyy HH:mm:ss>"
+    // comment on every Start and a "Stop: <dd/MM/yyyy HH:mm:ss>" comment on every Stop (#1433).
+    // Registration normally happens pre-Start (the agent adds sensors before Start), where the data
+    // gate would drop a direct send — the collector emits the value from its Start transition instead.
+    void RegisterVersionMarkerSensor(NativeCollector* impl, const std::shared_ptr<NativeSensor>& sensor, const char* version_text)
     {
         if (impl == nullptr || !sensor)
             return;
@@ -7405,8 +7585,7 @@ namespace
         ParseVersionString(version_text, major, minor, build, revision);
 
         const std::string value_json = "\"" + EscapeJson(VersionString(major, minor, build, revision)) + "\"";
-        const std::string comment = "Start: " + IsoUtcFromUnixMs(UnixTimeMilliseconds());
-        (void)impl->PostStartValue(sensor->Path(), sensor->Type(), value_json, HSM_SENSOR_STATUS_OK, comment);
+        impl->RegisterVersionMarker(sensor->Path(), sensor->Type(), value_json);
     }
 } // namespace
 
@@ -7433,7 +7612,7 @@ hsm_result_t hsm_collector_add_collector_monitoring_sensors(hsm_collector_t* col
             const std::string version = override_ver.empty()
                                             ? std::string(HSM_COLLECTOR_VERSION_STRING)
                                             : override_ver;
-            EmitVersionStartValue(collector->impl.get(), collector_version, version.c_str());
+            RegisterVersionMarkerSensor(collector->impl.get(), collector_version, version.c_str());
         }
 
         // Wire the Service alive heartbeat — the group registered it above but its value was never
@@ -7507,7 +7686,7 @@ hsm_result_t hsm_collector_add_all_module_sensors(hsm_collector_t* collector, co
         // Emit the connected application's version + start time once so ".module/Version" carries a
         // value instead of registering empty. Mirrors managed ProductVersionSensor.StartAsync.
         if (result == HSM_RESULT_OK)
-            EmitVersionStartValue(collector->impl.get(), sensor, product_version);
+            RegisterVersionMarkerSensor(collector->impl.get(), sensor, product_version);
     }
     return result;
 }

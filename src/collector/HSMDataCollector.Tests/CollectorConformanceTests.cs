@@ -246,6 +246,20 @@ namespace HSMDataCollector.Tests
                     state.Sender.RecordRegistration(BuildDefaultSensorRequest(step.Arg(0), step.TryArg(2, out var ifaceArg) ? ifaceArg : null));
                     break;
 
+                case "add_collector_monitoring_sensors":
+                    // The real ".module" collector-monitoring group — Service alive + Collector
+                    // version + Collector errors — exactly what the native
+                    // hsm_collector_add_collector_monitoring_sensors registers. The three sensors
+                    // are OS-independent and both collections route to the same
+                    // AddFullCollectorMonitoringCommon, but each collection refuses to register on
+                    // the other platform, so the driver picks the host's collection the way a real
+                    // application does.
+                    if (DataCollector.IsWindowsOS)
+                        state.Collector.Windows.AddCollectorMonitoringSensors();
+                    else
+                        state.Collector.Unix.AddCollectorMonitoringSensors();
+                    break;
+
                 case "service_send_custom":
                     state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendCustomCommand(ExpandTextToken(step.Arg(1)), ExpandTextToken(step.Arg(2)));
                     break;
@@ -554,6 +568,10 @@ namespace HSMDataCollector.Tests
 
                 case "expect_comment_length":
                     Assert.Equal(int.Parse(step.Arg(1)), state.Sender.Values[int.Parse(step.Arg(0))].Comment?.Length ?? 0);
+                    break;
+
+                case "expect_time_marker_comments":
+                    ExpectTimeMarkerComments(state, prefix: step.Arg(0), expected: int.Parse(step.Arg(1)));
                     break;
 
                 case "expect_all_payloads_contain":
@@ -1406,6 +1424,49 @@ namespace HSMDataCollector.Tests
                 var payload = PayloadText(state.Sender.Values[startPayloadIndex + offset]);
                 Assert.Contains("\"Value\":" + (startValue + offset), payload);
             }
+        }
+
+        // Lifecycle-marker comments ("Start: dd/MM/yyyy HH:mm:ss" / "Stop: ...", #1433). Only the
+        // layout is pinned — the instant is wall-clock and is never compared across implementations.
+        // Every comment opening with "<prefix>: " must carry the shape, so a marker that loses its
+        // format fails instead of silently dropping out of the count.
+        private static void ExpectTimeMarkerComments(ContractState state, string prefix, int expected)
+        {
+            var head = prefix + ": ";
+            var matched = 0;
+
+            foreach (var comment in state.Sender.Values.Select(value => value.Comment ?? string.Empty))
+            {
+                if (!comment.StartsWith(head, StringComparison.Ordinal))
+                    continue;
+
+                Assert.True(
+                    IsTimeMarkerComment(comment, head),
+                    $"Marker comment is not '{prefix}: dd/MM/yyyy HH:mm:ss': {comment}");
+
+                matched++;
+            }
+
+            Assert.True(matched == expected, $"Expected {expected} '{prefix}:' marker comment(s), got {matched}.");
+        }
+
+        private static bool IsTimeMarkerComment(string comment, string head)
+        {
+            const string layout = "dd/MM/yyyy HH:mm:ss";
+
+            if (comment.Length != head.Length + layout.Length)
+                return false;
+
+            for (var i = 0; i < layout.Length; i++)
+            {
+                var actual = comment[head.Length + i];
+                var digitExpected = layout[i] != '/' && layout[i] != ':' && layout[i] != ' ';
+
+                if (digitExpected ? !char.IsDigit(actual) : actual != layout[i])
+                    return false;
+            }
+
+            return true;
         }
 
         private static void ExpectPayloadTypeCounts(

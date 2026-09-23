@@ -13,6 +13,10 @@ namespace HSMDataCollector.DefaultSensors
 
     public abstract class SensorBase<TDisplayUnit> : ISensor, ISensorIdentity where TDisplayUnit : struct, Enum
     {
+        // ALWAYS format with CultureInfo.InvariantCulture: '/' and ':' are the date/time
+        // SEPARATOR placeholders in a custom format string, not literals, so a bare
+        // ToString(DefaultTimeFormat) renders "22.09.2026 18:33:37" on ru-RU. These timestamps
+        // go out as wire-visible comments and must read the same on every host (#1433).
         internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";
 
         private readonly SensorOptions<TDisplayUnit> _metainfo;

@@ -1,0 +1,86 @@
+# HSM collector conformance v1 — .module start/stop markers (#1433).
+# Verbs:
+#   add_collector_monitoring_sensors      register the collector-monitoring group under .module:
+#                                         Service alive + Collector version + Collector errors.
+#                                         C# calls AddCollectorMonitoringSensors on the host's
+#                                         collection (the Unix and Windows collections route to one
+#                                         implementation; none of the three sensors reads the OS);
+#                                         native calls hsm_collector_add_collector_monitoring_sensors.
+#   expect_time_marker_comments|prefix|count
+#                                         exactly `count` captured payloads carry a comment of the
+#                                         form "<prefix>: dd/MM/yyyy HH:mm:ss". A comment that opens
+#                                         with "<prefix>: " but loses that shape FAILS, so a broken
+#                                         format cannot hide by dropping out of the count. The
+#                                         instant itself is wall-clock and is never compared.
+# Notes:
+# - The heartbeat period is each implementation's own post period (managed: the sensor's
+#   PostDataPeriod, 15 s; native: the collector's package-collect period). Every case therefore runs
+#   with a 60 s collect period and relies ONLY on the beat that fires immediately on Start; a second
+#   beat is provoked by RESTARTING, never by waiting one out. The same long period keeps everything
+#   queued until the graceful stop flushes it, so every assertion runs after a stop.
+# - `sleep_ms` after each Start is the one wall-clock dependency, and it is NOT symmetric. Too many
+#   beats is impossible (1.5 s is 40x below the 60 s beat period), but too FEW is possible: the
+#   immediate beat is published from a scheduler callback, and a Stop landing mid-callback drops it
+#   for good (the managed lifecycle-epoch guard), which no amount of polling afterwards can recover.
+#   The window is therefore sized for a loaded CI agent, not for the observed latency.
+# - The count assertions are preceded by the POLLING `expect_sent_count`, so dispatch latency after
+#   the stop cannot be mistaken for a missing beat: the two failures then read differently.
+# - The Collector version VALUE is deliberately not asserted: the managed and native collectors are
+#   separate products with independent versions (src/native/collector/CLAUDE.md).
+# - Payload paths are asserted by SUFFIX ("/Service alive\"") — both drivers prefix the identity.
+
+# Service alive opens a collector's life with `false` (the start marker) — not `true`.
+service_alive_first_beat_is_false|create_collector_with_limits|20000|50|60000
+service_alive_first_beat_is_false|add_collector_monitoring_sensors
+service_alive_first_beat_is_false|start
+service_alive_first_beat_is_false|sleep_ms|1500
+service_alive_first_beat_is_false|stop
+service_alive_first_beat_is_false|expect_sent_count|3
+service_alive_first_beat_is_false|expect_payload_type_counts|1|0|0|0|0
+service_alive_first_beat_is_false|expect_eventually_payload_contains|/Service alive","Value":false,"Status":1,"Comment":""|5
+
+# The start marker is armed once per SENSOR, not once per run: the beat after a restart is `true`.
+service_alive_beats_true_after_restart|create_collector_with_limits|20000|50|60000
+service_alive_beats_true_after_restart|add_collector_monitoring_sensors
+service_alive_beats_true_after_restart|start
+service_alive_beats_true_after_restart|sleep_ms|1500
+service_alive_beats_true_after_restart|stop
+service_alive_beats_true_after_restart|start
+service_alive_beats_true_after_restart|sleep_ms|1500
+service_alive_beats_true_after_restart|stop
+service_alive_beats_true_after_restart|expect_sent_count|6
+service_alive_beats_true_after_restart|expect_payload_type_counts|2|0|0|0|0
+service_alive_beats_true_after_restart|expect_eventually_payload_contains|/Service alive","Value":false|5
+service_alive_beats_true_after_restart|expect_eventually_payload_contains|/Service alive","Value":true|5
+
+# Collector version marks BOTH ends of a run: one "Start:" post and one "Stop:" post, each carrying
+# the dd/MM/yyyy HH:mm:ss comment. Three payloads in total: the version twice plus one heartbeat.
+collector_version_marks_start_and_stop|create_collector_with_limits|20000|50|60000
+collector_version_marks_start_and_stop|add_collector_monitoring_sensors
+collector_version_marks_start_and_stop|start
+collector_version_marks_start_and_stop|sleep_ms|1500
+collector_version_marks_start_and_stop|stop
+collector_version_marks_start_and_stop|expect_sent_count|3
+collector_version_marks_start_and_stop|expect_eventually_payload_contains|/Collector version"|5
+collector_version_marks_start_and_stop|expect_time_marker_comments|Start|1
+collector_version_marks_start_and_stop|expect_time_marker_comments|Stop|1
+
+# Every run is marked, not just the first: a restart replays the Start/Stop pair.
+collector_version_marks_every_run|create_collector_with_limits|20000|50|60000
+collector_version_marks_every_run|add_collector_monitoring_sensors
+collector_version_marks_every_run|start
+collector_version_marks_every_run|sleep_ms|1500
+collector_version_marks_every_run|stop
+collector_version_marks_every_run|start
+collector_version_marks_every_run|sleep_ms|1500
+collector_version_marks_every_run|stop
+collector_version_marks_every_run|expect_sent_count|6
+collector_version_marks_every_run|expect_time_marker_comments|Start|2
+collector_version_marks_every_run|expect_time_marker_comments|Stop|2
+
+# The group registers exactly its three sensors, once per start.
+collector_monitoring_group_registers_three|create_collector_with_limits|20000|50|60000
+collector_monitoring_group_registers_three|add_collector_monitoring_sensors
+collector_monitoring_group_registers_three|start
+collector_monitoring_group_registers_three|stop
+collector_monitoring_group_registers_three|expect_registration_count|3

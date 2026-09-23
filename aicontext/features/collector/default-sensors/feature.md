@@ -87,10 +87,10 @@ Module info (paths directly under `.module/`):
 
 | Method | Sensor | Behavior |
 |---|---|---|
-| `AddCollectorAlive` | bool heartbeat | 15 s period; first value `false`, then `true`; TTL 1 min; KeepHistory 180 d |
-| `AddCollectorVersion` | Version | collector assembly version + start time; KeepHistory ~5 y |
+| `AddCollectorAlive` | bool heartbeat | 15 s period; first value `false`, then `true`; the `false` start marker is armed once per SENSOR, so a collector restart beats `true` straight away; TTL 1 min; KeepHistory 180 d |
+| `AddCollectorVersion` | Version | collector assembly version, posted on EVERY Start with comment `Start: dd/MM/yyyy HH:mm:ss` and on EVERY Stop with `Stop: dd/MM/yyyy HH:mm:ss` (UTC, `SensorBase.DefaultTimeFormat`, formatted with `CultureInfo.InvariantCulture` — `/` and `:` are culture-replaced separator placeholders in a .NET custom format string, so a bare `ToString` would emit `22.09.2026 18:33:37` on ru-RU and break parity with the native collector, #1433); the Start instant is stamped once at prototype creation and replayed unchanged by a restart, the Stop instant is the moment of the stop; KeepHistory ~5 y |
 | `AddCollectorErrors` | string | fed by `MessageDeduplicator` callback (see `error-handling/`) |
-| `AddProductVersion(VersionSensorOptions)` | Version | user-supplied product version + start time |
+| `AddProductVersion(VersionSensorOptions)` | Version | user-supplied product version; same `Start:`/`Stop:` marker posts as `AddCollectorVersion` (one `ProductVersionSensor` class serves both) |
 | `CreateServiceCommandsSensor` | string commands | "Service commands" path; fixed strings "Service start/stop/restart", "Service update [from X] to Y", custom; registers an implicit `IfReceivedNewValue → notification` alert |
 
 Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySensor=true`; suppression boundary in `data-pipeline/feature.md`):
