@@ -3785,10 +3785,10 @@ namespace
     // decimal that both collectors' formatters agree on.
     namespace disk_prediction_series
     {
-        constexpr double kSeedFreeSpace = 1048576000.0;   // 1000 MiB
-        constexpr double kDrainPerInterval = 31457280.0;  // 30 MiB per 30 s interval = 1 MiB/sec
+        constexpr double kSeedFreeSpace = 1048576000.0;  // 1000 MiB
+        constexpr double kDrainPerInterval = 31457280.0; // 30 MiB per 30 s interval = 1 MiB/sec
         constexpr double kIntervalSeconds = 30.0;
-        constexpr int64_t kCeilingMs = 31536000000LL;     // 365 days
+        constexpr int64_t kCeilingMs = 31536000000LL; // 365 days
 
         // Mirrors the managed PredictionProbe: a seeded sampler plus a free-space cursor.
         struct Probe
@@ -4762,7 +4762,7 @@ namespace
         Contains(payload, "\"Type\":7"); // TimeSpan
         Contains(payload, "Free space on disk prediction");
         Contains(payload, "\"Value\":\"365.00:00:00\""); // the ceiling, not zero (#1445)
-        Contains(payload, "\"Status\":0"); // OffTime while calibrating
+        Contains(payload, "\"Status\":0");               // OffTime while calibrating
         Contains(payload, "Calibration request (");
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
