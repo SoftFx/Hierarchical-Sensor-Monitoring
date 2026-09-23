@@ -34,10 +34,11 @@ Hand over to the trialled skills. Keep the change inside the issue's scope; buil
 ## 4. Review your own diff
 
 ```
+git fetch origin master
 /code-review medium origin/master...HEAD     # or /matt:code-review for the standards + spec axes
 ```
 
-Name the range explicitly: without it the review compares against the upstream branch, which on a first push does not exist and on later pushes covers only the unpushed commits. Review the whole branch diff right before the push. Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — then rebuild and re-run the narrowest tests for what you fixed. Re-review only when a fix goes beyond its finding; new work added after the review needs a review of its own. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
+Fetch first: the range uses your local copy of `origin/master`, and a stale one puts the merge base too far back, so the diff picks up commits that are already in master. Name the range explicitly: without it the review compares against the upstream branch, which on a first push does not exist and on later pushes covers only the unpushed commits. Review the whole branch diff right before the push. Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — then rebuild and re-run the narrowest tests for what you fixed. Re-review only when a fix goes beyond its finding; new work added after the review needs a review of its own. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
 
 ## 5. Commit and push
 
