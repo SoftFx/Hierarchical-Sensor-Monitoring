@@ -3418,7 +3418,11 @@ namespace
         // re-posts `value_json` with a "Start: <time>" comment on every Start and a
         // "Stop: <time>" comment on every Stop — managed ProductVersionSensor does exactly that
         // from StartAsync/StopAsync, and its sensors are re-Inited on every collector start.
-        // Re-registering the same path refreshes the value and keeps the original start time.
+        // Re-registering the same path refreshes the value and keeps the original start time. If this
+        // run's Start marker is already out, the refreshed value is NOT re-posted, so a host that
+        // re-registers the same path with a DIFFERENT version mid-run ends that run with a "Stop:"
+        // carrying the new version against a "Start:" carrying the old one. No in-tree host does
+        // that (the version is fixed per process); the next run posts both from the new value.
         // A marker registered on an already-running collector posts its Start value straight away,
         // mirroring the managed dynamic-add path (a sensor added while running is started at once).
         void RegisterVersionMarker(const std::string& path, hsm_sensor_type_t type, std::string value_json)
@@ -3442,7 +3446,11 @@ namespace
                     existing->value_json = std::move(value_json);
                 }
 
-                if (!CanAcceptDataLocked())
+                // Starting/Running only — NOT the Stopping that CanAcceptDataLocked also allows for
+                // stop flushes: a "Start:" value enqueued then would land after StopCore has already
+                // built this run's "Stop:" marker, leaving a stopped collector reading as just
+                // started. Mirrors managed, where a sensor added while RUNNING is started at once.
+                if (!CanStartNewSensorsLocked())
                     return; // the next Start emits it — queueing here too would double-post
 
                 if (!TryClaimStartEpochLocked(*existing))

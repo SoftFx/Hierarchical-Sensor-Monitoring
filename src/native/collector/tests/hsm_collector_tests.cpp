@@ -440,10 +440,11 @@ namespace
     bool IsTimeMarkerComment(const std::string& comment, const std::string& prefix)
     {
         const std::string head = prefix + ": ";
-        if (comment.size() != head.size() + 19 || comment.compare(0, head.size(), head) != 0)
+        const std::string layout = "dd/MM/yyyy HH:mm:ss";
+
+        if (comment.size() != head.size() + layout.size() || comment.compare(0, head.size(), head) != 0)
             return false;
 
-        const std::string layout = "dd/MM/yyyy HH:mm:ss";
         for (size_t i = 0; i < layout.size(); ++i)
         {
             const char actual = comment[head.size() + i];
