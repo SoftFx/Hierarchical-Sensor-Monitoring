@@ -219,8 +219,13 @@ namespace HSMServer.ServiceExtensions
             return webHostBuilder;
         }
 
-        public static IApplicationBuilder ConfigureMiddleware(this IApplicationBuilder applicationBuilder, bool isDevelopment)
+        public static IApplicationBuilder ConfigureMiddleware(this IApplicationBuilder applicationBuilder, bool isDevelopment, ForwardedHeadersOptions forwardedHeaders)
         {
+            // Behind the bundled Caddy (#1427): restore the client address first, so token
+            // audit, the invalid-attempt limiter and key telemetry see the client, not the proxy.
+            if (forwardedHeaders is not null)
+                applicationBuilder.UseForwardedHeaders(forwardedHeaders);
+
             if (isDevelopment)
                 applicationBuilder.UseDeveloperExceptionPage();
             else
