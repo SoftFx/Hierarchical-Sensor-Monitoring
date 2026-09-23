@@ -10,8 +10,8 @@
 #   BuildSensorValue routes a throwing read to the error channel.
 # create_disk_prediction_sensor|path|calibration_requests|post_period_ms|refresh_period_ms|free_space_start|drain_per_second
 #   The "Free space on disk prediction" sensor over a SCRIPTED free-space series (free space changes
-#   linearly with elapsed time), with fixture-sized periods; the catalog row runs 5 min posts, 30 s
-#   sampling and 6 calibration requests. C# registers FreeDiskSpacePredictionBase over a scripted
+#   linearly with elapsed time), with fixture-sized periods; the catalog row runs 5 min posts,
+#   10 min sampling and 3 calibration requests. C# registers FreeDiskSpacePredictionBase over a scripted
 #   IDiskInfo; native binds a metric source running the same disk_prediction.hpp math.
 #   `drain_per_second` is SIGNED: positive drains the disk, zero holds it flat, negative frees space
 #   (#1445), which is how the idle and growing states below are reached.
@@ -26,7 +26,10 @@
 #   the sample. That split is managed's: BuildSensorValue's catch arm publishes the default value,
 #   while CollectableBarMonitoringSensorBase simply takes no sample.
 # - The prediction sensor runs two independent cadences: free space is sampled on its own period to
-#   feed the SIGNED drain-speed EMA, and a TimeSpan is posted on the sensor's post period.
+#   feed the SIGNED drain-speed EMA, and a TimeSpan is posted on the sensor's post period. In
+#   production the sampling period is 10 min and the smoothing factor is 1/37, which puts the mean
+#   age of the samples behind the estimate at exactly 6 h (#1445). Fixtures shrink both periods; the
+#   factor is not a fixture knob, so a fixture asserts STATES and not smoothed numbers.
 # - Exactly one of five states is posted (#1445), and only the first carries a real estimate:
 #     draining below the ceiling  -> free_space / speed, Ok, "Free space decreases by X Mbytes/sec."
 #     draining beyond the ceiling -> 365.00:00:00, OffTime, "... More than 365 days left."

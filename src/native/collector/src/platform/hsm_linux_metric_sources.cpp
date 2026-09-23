@@ -62,8 +62,8 @@ namespace hsm
 
             // FreeDiskSpacePredictionBase: DefaultSpaceCheckPeriodInSec sampling,
             // DiskSensorOptions.DefaultCalibrationRequests calibration posts.
-            constexpr std::int64_t kSpaceCheckPeriodMs = 30000;
-            constexpr std::int64_t kCalibrationRequests = 6;
+            constexpr std::int64_t kSpaceCheckPeriodMs = 600000; // managed DefaultSpaceCheckPeriodInSec (#1445)
+            constexpr std::int64_t kCalibrationRequests = 3;     // managed DiskSensorOptions.CalibrationRequests
 
             // Backing store for the strings a read hands back through hsm_metric_sample_t. The
             // collector copies them during the call and every read runs on one scheduler thread, so

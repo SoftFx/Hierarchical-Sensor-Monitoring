@@ -3793,10 +3793,16 @@ namespace
     // decimal that both collectors' formatters agree on.
     namespace disk_prediction_series
     {
-        constexpr double kSeedFreeSpace = 1048576000.0;  // 1000 MiB
-        constexpr double kDrainPerInterval = 31457280.0; // 30 MiB per 30 s interval = 1 MiB/sec
-        constexpr double kIntervalSeconds = 30.0;
+        constexpr double kSeedFreeSpace = 52428800000.0;  // 50 000 MiB
+        constexpr double kDrainPerInterval = 314572800.0; // 300 MiB per 10 min interval = 0.5 MiB/sec
+        constexpr double kIntervalSeconds = 600.0;
         constexpr int64_t kCeilingMs = 31536000000LL; // 365 days
+
+        // The host from the #1445 report in its own numbers: 51 GB free, draining ~1.3 GB/h. Decimal
+        // GB and a rate that is not a round MiB figure, on purpose - these two series check the
+        // retuned window against the real thing rather than against a convenient one.
+        constexpr double kGarageFreeSpace = 51000000000.0;
+        constexpr double kGarageDrainPerInterval = 216666666.0; // per 10 min = 1.3 GB/h
 
         // Mirrors the managed PredictionProbe: a seeded sampler plus a free-space cursor.
         struct Probe
@@ -3813,10 +3819,12 @@ namespace
                 prediction.Sample(free_space, kIntervalSeconds);
             }
 
-            void DrainSteadily(int intervals)
+            void DrainSteadily(int intervals) { Drain(intervals, kDrainPerInterval); }
+
+            void Drain(int intervals, double per_interval)
             {
                 for (int i = 0; i < intervals; ++i)
-                    Sample(free_space - kDrainPerInterval);
+                    Sample(free_space - per_interval);
             }
 
             void Idle(int intervals)
@@ -3843,15 +3851,15 @@ namespace
 
         Probe probe(3);
 
-        // Three 30 s intervals, 30 MiB consumed each: a steady 1 MiB/sec.
+        // Three 10-minute intervals, 300 MiB consumed each: a steady 0.5 MiB/sec.
         probe.DrainSteadily(3);
 
         const auto post = probe.Post();
 
-        // 910 MiB left at 1 MiB/sec = 910 s.
-        Require(post.value_ms == 910000, "unexpected steady-drain prediction");
+        // 49 100 MiB left at 0.5 MiB/sec = 98 200 s.
+        Require(post.value_ms == 98200000, "unexpected steady-drain prediction");
         Require(post.status == 1, "a real estimate carries Ok");
-        Require(post.comment == "Free space decreases by 1 Mbytes/sec.", "unexpected steady-drain comment");
+        Require(post.comment == "Free space decreases by 0.5 Mbytes/sec.", "unexpected steady-drain comment");
     }
 
     void NativeDiskPredictionDecaysWhenDrainStops()
@@ -3863,7 +3871,7 @@ namespace
 
         const auto draining = probe.Post();
 
-        probe.Idle(10); // the burst is over: ten flat intervals
+        probe.Idle(10); // the burst is over: ten flat intervals (100 minutes)
 
         const auto relaxed = probe.Post();
 
@@ -3871,14 +3879,16 @@ namespace
         // positive samples were folded in, so this was bit-for-bit the previous estimate.
         Require(relaxed.value_ms > draining.value_ms, "the estimate must decay while the disk is idle");
 
-        // 1 MiB/sec * 0.9^10 = 0.3486784401 MiB/sec over 910 MiB.
-        Require(relaxed.value_ms == 2609855, "unexpected decayed prediction");
+        // 0.5 MiB/sec * (36/37)^10 = 0.38017 MiB/sec over 49 100 MiB. The rate halves every 4.22 h,
+        // so 100 minutes of idling is worth about a third of the estimate - the deliberate price of
+        // a six-hour window.
+        Require(relaxed.value_ms == 129152769, "unexpected decayed prediction");
         Require(relaxed.status == 1, "a decayed estimate is still a real estimate");
 
         // The mantissa is left out on purpose: managed net472 renders 15 significant digits where
         // net6.0 and this collector render the shortest round-trip form.
         Require(
-            StartsWith(relaxed.comment, "Free space decreases by 0.3486784401"),
+            StartsWith(relaxed.comment, "Free space decreases by 0.380169937438"),
             "unexpected decayed-drain comment");
     }
 
@@ -3888,7 +3898,8 @@ namespace
 
         Probe probe(1);
 
-        // 30 MiB freed over one 30 s interval seeds the EMA at -1 MiB/sec. Unreachable before #1445.
+        // 300 MiB freed over one 10-minute interval seeds the EMA at -0.5 MiB/sec. Unreachable
+        // before #1445.
         probe.Sample(kSeedFreeSpace + kDrainPerInterval);
 
         const auto post = probe.Post();
@@ -3896,7 +3907,7 @@ namespace
         Require(post.value_ms == kCeilingMs, "a growing disk posts the ceiling");
         Require(post.status == 0, "a growing disk posts OffTime");
         Require(
-            post.comment == "Free space increases by 1 Mbytes/sec. Value cannot be calculated.",
+            post.comment == "Free space increases by 0.5 Mbytes/sec. Value cannot be calculated.",
             "unexpected growth comment");
     }
 
@@ -3906,7 +3917,7 @@ namespace
 
         Probe probe(1);
 
-        // One 30 MiB write, then ten intervals alternating 30 MiB freed / 30 MiB written.
+        // One 300 MiB write, then ten intervals alternating 300 MiB freed / 300 MiB written.
         probe.Sample(kSeedFreeSpace - kDrainPerInterval);
 
         const auto first = probe.Post();
@@ -3916,12 +3927,12 @@ namespace
 
         const auto last = probe.Post();
 
-        Require(first.value_ms == 970000, "unexpected first flapping prediction");
-        Require(last.value_ms == 2532911, "unexpected last flapping prediction");
+        Require(first.value_ms == 99400000, "unexpected first flapping prediction");
+        Require(last.value_ms == 130168963, "unexpected last flapping prediction");
         Require(last.status == 1, "a flapping disk still reports a real estimate");
 
         // A disk that writes as much as it frees must not converge on an alarming estimate.
-        Require(last.value_ms > first.value_ms * 2, "flapping must relax the estimate");
+        Require(last.value_ms > first.value_ms, "flapping must relax the estimate");
     }
 
     void NativeDiskPredictionReportsNoDrainOnIdleDisk()
@@ -3949,7 +3960,7 @@ namespace
 
         // 1 KiB/sec over two exabytes of free space: ~62 million years, which managed
         // TimeSpan.FromSeconds cannot represent at all (it threw before #1445).
-        probe.Sample(2000000000000000000.0 - 30720.0);
+        probe.Sample(2000000000000000000.0 - 614400.0);
 
         const auto post = probe.Post();
 
@@ -3964,18 +3975,18 @@ namespace
     {
         using namespace disk_prediction_series;
 
-        Probe probe(6);
-        probe.DrainSteadily(3);
+        Probe probe(3);
+        probe.DrainSteadily(2);
 
         // Three posts in a row without a single new measurement: the counter must not move. Before
-        // #1445 it advanced per POST, so a 5 min post cadence finished a "6 measurement"
-        // calibration without ever having taken six measurements.
+        // #1445 it advanced per POST, so a 5 min post cadence finished a "3 measurement"
+        // calibration without ever having taken three measurements.
         for (int i = 0; i < 3; ++i)
         {
             const auto calibrating = probe.Post();
 
             Require(
-                calibrating.comment == "Calibration request (3/6). Value cannot be calculated yet.",
+                calibrating.comment == "Calibration request (2/3). Value cannot be calculated yet.",
                 "the calibration counter must follow the sampling clock, not the post clock");
             Require(calibrating.status == 0, "a calibration post carries OffTime");
 
@@ -3983,14 +3994,63 @@ namespace
             Require(calibrating.value_ms == kCeilingMs, "a calibration post carries the ceiling, not zero");
         }
 
-        probe.DrainSteadily(3);
+        probe.DrainSteadily(1);
 
         const auto predicting = probe.Post();
 
-        Require(predicting.status == 1, "the sixth measurement ends calibration");
+        Require(predicting.status == 1, "the third measurement ends calibration");
         Require(
             StartsWith(predicting.comment, "Free space decreases by "),
             "the first post after calibration reports the drain speed");
+    }
+
+    // The #1445 report's own series: 51 GB free, losing ~1.3 GB/h, where the minute-scale window
+    // reported a four-fold swing between adjacent posts while free space was actually growing. The
+    // managed FreeDiskSpacePredictionTests run the same two series and assert the same numbers.
+    void NativeDiskPredictionMatchesTheReportedHost()
+    {
+        using namespace disk_prediction_series;
+
+        Probe probe(3, kGarageFreeSpace);
+
+        // Calibration is three measurements, so the first estimate lands 30 minutes after Start.
+        probe.Drain(3, kGarageDrainPerInterval);
+
+        const auto first_estimate = probe.Post();
+
+        Require(first_estimate.status == 1, "the first estimate carries Ok");
+        Require(first_estimate.value_ms == 139430770, "unexpected first estimate"); // 1.61 days
+
+        // Four more hours of the same drain: the rate is unchanged, so the estimate is just the
+        // countdown of the free space that is actually gone.
+        probe.Drain(21, kGarageDrainPerInterval);
+
+        const auto later = probe.Post();
+
+        Require(later.value_ms == 126830770, "unexpected estimate four hours in"); // 1.47 days
+    }
+
+    void NativeDiskPredictionBarelyMovesOnATenMinuteBurst()
+    {
+        using namespace disk_prediction_series;
+
+        Probe probe(3, kGarageFreeSpace);
+        probe.Drain(24, kGarageDrainPerInterval);
+
+        const auto steady = probe.Post();
+
+        // One 10-minute interval at FOUR TIMES the drain - the size of swing the reported host
+        // showed between adjacent posts. A single sample moves the estimate by at most the
+        // smoothing factor (2.7 %) of the distance to what it just measured.
+        probe.Drain(1, kGarageDrainPerInterval * 4.0);
+
+        const auto after_burst = probe.Post();
+
+        Require(after_burst.value_ms == 115098462, "unexpected estimate after the burst");
+        Require(after_burst.status == 1, "a burst does not change the state");
+
+        const double swing = 1.0 - static_cast<double>(after_burst.value_ms) / static_cast<double>(steady.value_ms);
+        Require(swing < 0.10, "a 10-minute burst must not move the estimate by a tenth");
     }
 
     void NativeMetricSourceDrivesCustomDoubleSensor()
@@ -7160,6 +7220,10 @@ namespace
               [](const std::string&) { NativeDiskPredictionClampsAbsurdlySlowDrain(); } },
             { "native_disk_prediction_calibration_counts_measurements",
               [](const std::string&) { NativeDiskPredictionCalibrationCountsMeasurements(); } },
+            { "native_disk_prediction_matches_the_reported_host",
+              [](const std::string&) { NativeDiskPredictionMatchesTheReportedHost(); } },
+            { "native_disk_prediction_barely_moves_on_a_ten_minute_burst",
+              [](const std::string&) { NativeDiskPredictionBarelyMovesOnATenMinuteBurst(); } },
             { "native_metric_bar_partial_posts_keep_open_time", [](const std::string&) { NativeMetricBarPartialPostsKeepOpenTime(); } },
             { "native_metric_bar_rolls_over_at_window_boundary", [](const std::string&) { NativeMetricBarRollsOverAtWindowBoundary(); } },
             { "native_metric_bar_flushes_partial_on_stop", [](const std::string&) { NativeMetricBarFlushesPartialOnStop(); } },

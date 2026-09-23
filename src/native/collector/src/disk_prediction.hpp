@@ -6,14 +6,18 @@
 // It is a transcription of managed FreeDiskSpacePredictionBase, which is the contract (repo rule
 // #10 — one sensor, one acquisition mechanism, mirrored algorithm):
 //
-//   * a sampling loop every SpaceCheckPeriod (managed DefaultSpaceCheckPeriodInSec = 30 s) computes
+//   * a sampling loop every SpaceCheckPeriod (managed DefaultSpaceCheckPeriodInSec = 600 s) computes
 //     the SIGNED drain speed over the interval — positive when free space shrank, negative when it
 //     grew — and folds EVERY interval into an EMA: the first sample seeds it, every later one is
-//     prev*0.9 + cur*0.1. Folding the non-draining intervals too is what lets the estimate decay
-//     when the disk stops filling (#1445); the old code folded positive samples only, so one burst
-//     of writes pinned a high drain rate forever.
-//   * the calibration counter advances on that SAMPLING clock, so "(n/6)" means six completed
-//     free-space measurements rather than six posts.
+//     prev*(1-a) + cur*a with a = 1/37. Folding the non-draining intervals too is what lets the
+//     estimate decay when the disk stops filling (#1445); the old code folded positive samples
+//     only, so one burst of writes pinned a high drain rate forever. The period and the factor are
+//     chosen together so the estimate spans SIX HOURS (mean sample age period*(1-a)/a = 36 periods)
+//     — the scale this sensor's answer lives on. A minute-scale window sampled write bursts
+//     instead of the drain.
+//   * the calibration counter advances on that SAMPLING clock, so "(n/3)" means three completed
+//     free-space measurements rather than three posts — the first estimate lands ~30 min after
+//     Start.
 //   * the post loop, every PostDataPeriod (5 min), publishes exactly one of five states. Only
 //     Draining carries a real estimate (free_space / speed, status Ok). Every other state posts the
 //     CEILING (365 days) with status OffTime and a comment naming the state, so a reader can tell
@@ -45,8 +49,10 @@ namespace hsm
         class DiskSpacePrediction
         {
         public:
-            // Managed FreeDiskSpacePredictionBase.SpeedSmoothingFactor.
-            static constexpr double kSpeedSmoothingFactor = 0.1;
+            // Managed FreeDiskSpacePredictionBase.SpeedSmoothingFactor. Chosen together with the
+            // 10-minute sampling period so the mean age of the samples behind the estimate,
+            // period * (1 - a) / a, is exactly 36 periods = 6.0 h (#1445).
+            static constexpr double kSpeedSmoothingFactor = 1.0 / 37.0;
 
             // Managed FreeDiskSpacePredictionBase.MaxPrediction = TimeSpan.FromDays(365).
             static constexpr int64_t kMaxPredictionMs = 365LL * 24 * 60 * 60 * 1000;

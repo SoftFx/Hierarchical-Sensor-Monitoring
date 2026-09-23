@@ -22,6 +22,11 @@ namespace HSMDataCollector.DefaultSensors
     /// the estimate once it stops instead of pinning a high drain rate forever, which is what made
     /// the sensor predict a full disk on an idle host.
     ///
+    /// Free space is measured every ten minutes and the average spans six hours, because that is the
+    /// scale the answer lives on. A minute-scale window made the sensor report a four-fold swing in
+    /// the drain rate between adjacent posts on a host whose free space was actually GROWING, while
+    /// the true hour-scale picture on that host was a steady 1.3 GB/h.
+    ///
     /// The value posted is a TimeSpan, but only the <see cref="PredictionState.Draining"/> state
     /// carries a real estimate (status Ok). Every other state posts <see cref="MaxPrediction"/>
     /// with status OffTime and a comment that names the state, so a reader can tell "nothing is
@@ -33,15 +38,28 @@ namespace HSMDataCollector.DefaultSensors
     /// </summary>
     public abstract class FreeDiskSpacePredictionBase : MonitoringSensorBase<TimeSpan, NoDisplayUnit>
     {
-        public const int DefaultSpaceCheckPeriodInSec = 30;
+        /// <summary>
+        /// How often free space is measured. Ten minutes, not seconds: this sensor answers an
+        /// hours-to-days question, and a minute-scale cadence only sampled write bursts (#1445).
+        /// </summary>
+        public const int DefaultSpaceCheckPeriodInSec = 600;
 
         /// <summary>
-        /// Weight of the newest sampling interval in the drain-speed EMA. At the default 30 s
-        /// sampling period a sample's weight halves after ~6.6 samples (~3.3 min) and about 63 % of
-        /// the estimate comes from the last 10 samples (~5 min), so the estimate follows a change in
-        /// disk behaviour within roughly one post period while still ignoring single-sample spikes.
+        /// Weight of the newest sampling interval in the drain-speed EMA, chosen together with
+        /// <see cref="DefaultSpaceCheckPeriodInSec"/> so the estimate describes the last SIX HOURS
+        /// of disk activity (#1445).
+        ///
+        /// The weights are a geometric series, so the mean age of the samples behind the estimate is
+        /// <c>period * (1 - a) / a</c>. With a 10-minute period and <c>a = 1/37</c> that is exactly
+        /// 36 periods = 6.0 h; the exponential time constant is <c>period / a</c> = 6.17 h and the
+        /// weight of any one sample halves every 4.22 h.
+        ///
+        /// The point of a window this long is that the sensor answers an hours-to-days question.
+        /// A single interval can move the estimate by at most <c>a</c> = 2.7 % of the distance to
+        /// what it just measured, so a burst of writes no longer swings the prediction, while a
+        /// genuine steady drain is reported exactly (the EMA of identical samples is that sample).
         /// </summary>
-        public const double SpeedSmoothingFactor = 0.1;
+        public const double SpeedSmoothingFactor = 1.0 / 37.0;
 
         /// <summary>
         /// The ceiling for a posted prediction. Anything at or beyond it is reported as exactly this

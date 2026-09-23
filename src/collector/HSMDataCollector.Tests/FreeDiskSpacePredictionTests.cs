@@ -86,25 +86,25 @@ namespace HSMDataCollector.Tests
 
         // ---- Prediction formula (#1445) --------------------------------------------------------
         // One scripted free-space series per state, driven through an injected clock so the folding
-        // math is asserted against exact intervals. The native unit tests
-        // (NativeDiskPrediction* in hsm_collector_tests.cpp) run the SAME series and assert the SAME
-        // numbers, so the two collectors are pinned to one set of values rather than to each other's
-        // opinion (repo rule #10).
+        // math is asserted against exact intervals - and so a 10-minute sampling period costs the
+        // suite nothing. The native unit tests (NativeDiskPrediction* in hsm_collector_tests.cpp)
+        // run the SAME series and assert the SAME numbers, so the two collectors are pinned to one
+        // set of values rather than to each other's opinion (repo rule #10).
 
         [Fact]
         public async Task Prediction_reports_a_real_estimate_while_the_disk_drains_steadily()
         {
             using (var probe = await PredictionProbe.CreateAsync(calibrationRequests: 3))
             {
-                // Three 30 s intervals, 30 MiB consumed each: a steady 1 MiB/sec.
+                // Three 10-minute intervals, 300 MiB consumed each: a steady 0.5 MiB/sec.
                 probe.DrainSteadily(3);
 
                 var post = probe.Post();
 
-                // 910 MiB left at 1 MiB/sec = 910 s.
-                Assert.Equal(TimeSpan.FromSeconds(910), post.Value);
+                // 49 100 MiB left at 0.5 MiB/sec = 98 200 s (a day and three hours).
+                Assert.Equal(TimeSpan.FromSeconds(98200), post.Value);
                 Assert.Equal(SensorStatus.Ok, post.Status);
-                Assert.Equal("Free space decreases by 1 Mbytes/sec.", post.Comment);
+                Assert.Equal("Free space decreases by 0.5 Mbytes/sec.", post.Comment);
             }
         }
 
@@ -117,7 +117,7 @@ namespace HSMDataCollector.Tests
 
                 var draining = probe.Post();
 
-                // The burst is over: ten flat intervals with not a byte written.
+                // The burst is over: ten flat intervals (100 minutes) with not a byte written.
                 probe.Idle(10);
 
                 var relaxed = probe.Post();
@@ -129,14 +129,16 @@ namespace HSMDataCollector.Tests
                     relaxed.Value > draining.Value,
                     $"the estimate must decay while the disk is idle, got {relaxed.Value} after {draining.Value}");
 
-                // 1 MiB/sec * 0.9^10 = 0.3486784401 MiB/sec over 910 MiB.
-                Assert.Equal(2609855L, (long)relaxed.Value.TotalMilliseconds);
+                // 0.5 MiB/sec * (36/37)^10 = 0.38017 MiB/sec over 49 100 MiB. The rate halves every
+                // 4.22 h, so 100 minutes of idling is worth about a third of the estimate - the
+                // deliberate price of a six-hour window.
+                Assert.Equal(129152769L, (long)relaxed.Value.TotalMilliseconds);
                 Assert.Equal(SensorStatus.Ok, relaxed.Status);
 
                 // The mantissa is left out of this assertion on purpose: net472 renders a double with
                 // 15 significant digits and net6.0 with the shortest round-trip form, a pre-existing
                 // divergence that the number-format conformance matrix already excludes.
-                Assert.StartsWith("Free space decreases by 0.3486784401", relaxed.Comment);
+                Assert.StartsWith("Free space decreases by 0.380169937438", relaxed.Comment);
                 Assert.EndsWith(" Mbytes/sec.", relaxed.Comment);
             }
         }
@@ -146,8 +148,8 @@ namespace HSMDataCollector.Tests
         {
             using (var probe = await PredictionProbe.CreateAsync(calibrationRequests: 1))
             {
-                // 30 MiB freed over one 30 s interval seeds the EMA at -1 MiB/sec. Unreachable
-                // before #1445, because a negative sample was discarded instead of folded in.
+                // 300 MiB freed over one 10-minute interval seeds the EMA at -0.5 MiB/sec.
+                // Unreachable before #1445, because a negative sample was discarded, not folded in.
                 probe.Sample(SeedFreeSpace + DrainPerInterval);
 
                 var post = probe.Post();
@@ -155,7 +157,7 @@ namespace HSMDataCollector.Tests
                 Assert.Equal(FreeDiskSpacePredictionBase.MaxPrediction, post.Value);
                 Assert.Equal(SensorStatus.OffTime, post.Status);
                 Assert.Equal(
-                    "Free space increases by 1 Mbytes/sec. Value cannot be calculated.",
+                    "Free space increases by 0.5 Mbytes/sec. Value cannot be calculated.",
                     post.Comment);
             }
         }
@@ -165,7 +167,7 @@ namespace HSMDataCollector.Tests
         {
             using (var probe = await PredictionProbe.CreateAsync(calibrationRequests: 1))
             {
-                // One 30 MiB write, then ten intervals alternating 30 MiB freed / 30 MiB written.
+                // One 300 MiB write, then ten intervals alternating 300 MiB freed / 300 MiB written.
                 probe.Sample(SeedFreeSpace - DrainPerInterval);
 
                 var first = probe.Post();
@@ -175,14 +177,14 @@ namespace HSMDataCollector.Tests
 
                 var last = probe.Post();
 
-                Assert.Equal(970000L, (long)first.Value.TotalMilliseconds);
-                Assert.Equal(2532911L, (long)last.Value.TotalMilliseconds);
+                Assert.Equal(99400000L, (long)first.Value.TotalMilliseconds);
+                Assert.Equal(130168963L, (long)last.Value.TotalMilliseconds);
                 Assert.Equal(SensorStatus.Ok, last.Status);
 
                 // A disk that writes as much as it frees must not converge on an alarming estimate:
                 // the anti-correlated samples cancel and the horizon moves further out.
                 Assert.True(
-                    last.Value > TimeSpan.FromTicks(first.Value.Ticks * 2),
+                    last.Value > first.Value,
                     $"flapping must relax the estimate, got {last.Value} after {first.Value}");
             }
         }
@@ -212,7 +214,7 @@ namespace HSMDataCollector.Tests
                 // 1 KiB/sec over two exabytes of free space: ~62 million years, which
                 // TimeSpan.FromSeconds cannot represent at all — it threw before #1445, and the
                 // sensor then posted nothing at all while still looking healthy.
-                probe.Sample(2_000_000_000_000_000_000L - 30_720L);
+                probe.Sample(2_000_000_000_000_000_000L - 614_400L);
 
                 var post = probe.Post();
 
@@ -221,6 +223,73 @@ namespace HSMDataCollector.Tests
                 Assert.Equal(
                     "Free space decreases by 0.0009765625 Mbytes/sec. More than 365 days left.",
                     post.Comment);
+            }
+        }
+
+        [Fact]
+        public async Task Prediction_matches_the_hour_scale_drain_of_the_reported_host()
+        {
+            using (var probe = await PredictionProbe.CreateAsync(
+                calibrationRequests: 3, freeSpace: GarageFreeSpace))
+            {
+                // The series from the #1445 report: 51 GB free, losing ~1.3 GB/h. The true answer is
+                // "about a day and a half", and the sensor must say so as soon as calibration ends -
+                // three measurements, i.e. 30 minutes after Start.
+                probe.Drain(3, GarageDrainPerInterval);
+
+                var firstEstimate = probe.Post();
+
+                Assert.Equal(SensorStatus.Ok, firstEstimate.Status);
+                Assert.Equal(139430770L, (long)firstEstimate.Value.TotalMilliseconds);
+                Assert.Equal(1.61, Math.Round(firstEstimate.Value.TotalDays, 2));
+
+                // Four more hours of the same drain: the rate is unchanged, so the estimate is just
+                // the countdown of the free space that is actually gone. The old minute-scale window
+                // swung by 4x between adjacent posts on this host.
+                probe.Drain(21, GarageDrainPerInterval);
+
+                var later = probe.Post();
+
+                Assert.Equal(126830770L, (long)later.Value.TotalMilliseconds);
+                Assert.Equal(1.47, Math.Round(later.Value.TotalDays, 2));
+
+                // The implied rate - the free space remaining over the reported horizon - is the real
+                // 361 111.11 bytes/sec at both ends of those four hours, to within a thousandth.
+                Assert.Equal(361111.11, ImpliedRate(firstEstimate, 3), 2);
+                Assert.Equal(361111.11, ImpliedRate(later, 24), 2);
+            }
+        }
+
+        /// <summary>The drain rate the posted horizon implies, after <paramref name="intervals"/> drains.</summary>
+        private static double ImpliedRate(Post post, int intervals) =>
+            (GarageFreeSpace - intervals * GarageDrainPerInterval) / post.Value.TotalSeconds;
+
+        [Fact]
+        public async Task A_ten_minute_write_burst_barely_moves_the_estimate()
+        {
+            using (var probe = await PredictionProbe.CreateAsync(
+                calibrationRequests: 3, freeSpace: GarageFreeSpace))
+            {
+                probe.Drain(24, GarageDrainPerInterval);
+
+                var steady = probe.Post();
+
+                // One 10-minute interval at FOUR TIMES the drain - the size of swing the reported
+                // host showed between adjacent posts. A single sample can move the estimate by at
+                // most the smoothing factor (2.7 %) of the distance to what it just measured, so
+                // this costs under a tenth of the horizon instead of most of it.
+                probe.Drain(1, GarageDrainPerInterval * 4);
+
+                var afterBurst = probe.Post();
+
+                Assert.Equal(115098462L, (long)afterBurst.Value.TotalMilliseconds);
+                Assert.Equal(SensorStatus.Ok, afterBurst.Status);
+
+                var swing = 1.0 - afterBurst.Value.TotalSeconds / steady.Value.TotalSeconds;
+
+                Assert.True(
+                    swing < 0.10,
+                    $"a 10-minute burst must not move the estimate by a tenth, moved {swing:P2}");
             }
         }
 
@@ -237,27 +306,27 @@ namespace HSMDataCollector.Tests
 
                 var post = probe.Post();
 
-                Assert.Equal(TimeSpan.FromSeconds(940), post.Value);
+                Assert.Equal(TimeSpan.FromSeconds(98800), post.Value);
                 Assert.Equal(SensorStatus.Ok, post.Status);
-                Assert.Equal("Free space decreases by 1 Mbytes/sec.", post.Comment);
+                Assert.Equal("Free space decreases by 0.5 Mbytes/sec.", post.Comment);
             }
         }
 
         [Fact]
         public async Task Calibration_counts_free_space_measurements_not_posts()
         {
-            using (var probe = await PredictionProbe.CreateAsync(calibrationRequests: 6))
+            using (var probe = await PredictionProbe.CreateAsync(calibrationRequests: 3))
             {
-                probe.DrainSteadily(3);
+                probe.DrainSteadily(2);
 
                 // Three posts in a row without a single new measurement in between: the counter must
                 // not move. Before #1445 it advanced per POST, so a 5 min post cadence finished a
-                // "6 measurement" calibration without ever having six measurements.
+                // "3 measurement" calibration without ever having three measurements.
                 for (var i = 0; i < 3; i++)
                 {
                     var calibrating = probe.Post();
 
-                    Assert.Equal("Calibration request (3/6). Value cannot be calculated yet.", calibrating.Comment);
+                    Assert.Equal("Calibration request (2/3). Value cannot be calculated yet.", calibrating.Comment);
                     Assert.Equal(SensorStatus.OffTime, calibrating.Status);
 
                     // And never TimeSpan.Zero, which an alert reads as "the disk is full NOW".
@@ -265,7 +334,7 @@ namespace HSMDataCollector.Tests
                     Assert.NotEqual(TimeSpan.Zero, calibrating.Value);
                 }
 
-                probe.DrainSteadily(3);
+                probe.DrainSteadily(1);
 
                 var predicting = probe.Post();
 
@@ -275,14 +344,23 @@ namespace HSMDataCollector.Tests
         }
 
 
-        // MiB-aligned on purpose: the drain rate the comment renders is then an exact short decimal
-        // that net472's 15-digit formatter and net6.0's shortest-round-trip formatter agree on.
-        private const long SeedFreeSpace = 1_048_576_000L;      // 1000 MiB
-        private const long DrainPerInterval = 31_457_280L;      // 30 MiB per 30 s interval = 1 MiB/sec
+        // MiB-aligned on purpose, and a power-of-two rate: the drain rate the comment renders is
+        // then an exact short decimal that net472's 15-digit formatter and net6.0's
+        // shortest-round-trip formatter agree on, and it is a fixed point of the EMA, so a steady
+        // drain is reported exactly rather than to within an ulp.
+        private const long SeedFreeSpace = 52_428_800_000L;     // 50 000 MiB
+        private const long DrainPerInterval = 314_572_800L;     // 300 MiB per 10 min interval = 0.5 MiB/sec
+
+        // The host from the #1445 report, in its own numbers: 51 GB free, draining ~1.3 GB/h. Used
+        // by the two tests that check the retuned window against the real series rather than against
+        // a convenient one, so these are decimal GB and the rate is not a round MiB figure.
+        private const long GarageFreeSpace = 51_000_000_000L;
+        private const long GarageDrainPerInterval = 216_666_666L; // per 10 min = 1.3 GB/h
 
         private sealed class PredictionProbe : IDisposable
         {
-            private static readonly TimeSpan _interval = TimeSpan.FromSeconds(30);
+            private static readonly TimeSpan _interval =
+                TimeSpan.FromSeconds(FreeDiskSpacePredictionBase.DefaultSpaceCheckPeriodInSec);
 
             private readonly DataCollector _collector;
             private readonly MutableDiskInfo _disk;
@@ -337,8 +415,13 @@ namespace HSMDataCollector.Tests
 
             public void DrainSteadily(int intervals)
             {
+                Drain(intervals, DrainPerInterval);
+            }
+
+            public void Drain(int intervals, long perInterval)
+            {
                 for (var i = 0; i < intervals; i++)
-                    Sample(_cursor - DrainPerInterval);
+                    Sample(_cursor - perInterval);
             }
 
             public void Idle(int intervals)
