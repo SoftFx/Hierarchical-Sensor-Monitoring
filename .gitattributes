@@ -3,3 +3,10 @@
 # parsed by multiple language drivers, and CRLF checkouts broke the native one.
 *.hsmtest text eol=lf
 *.golden text eol=lf
+# The Linux probe (src/probe-linux) is built and formatted only on Linux: rustfmt emits LF and
+# `cargo fmt --check` fails on a CRLF checkout, and systemd parses a unit file byte-for-byte, so a
+# CRLF checkout would put a stray CR at the end of every value.
+*.rs text eol=lf
+*.toml text eol=lf
+*.service text eol=lf
+Cargo.lock text eol=lf

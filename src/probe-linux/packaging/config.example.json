@@ -1,0 +1,16 @@
+{
+  "hsm": {
+    "address": "https://hsm.example.invalid",
+    "port": 44330,
+    "accessKeyFile": "access-key",
+    "computerName": "linux-host",
+    "module": "LinuxProbe",
+    "packageCollectPeriodSec": 15,
+    "requestTimeoutSec": 30
+  },
+  "logging": {
+    "directory": "/var/log/hsm-linux-probe",
+    "level": "info"
+  },
+  "shutdownTimeoutSec": 10
+}

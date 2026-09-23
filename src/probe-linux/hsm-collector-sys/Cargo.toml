@@ -1,0 +1,19 @@
+[package]
+name = "hsm-collector-sys"
+description = "Raw FFI declarations for the HSM native collector's stable C ABI (hsm_collector.h)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+links = "hsm_collector_core"
+
+[features]
+default = []
+# TODO(#1414): the Linux metric-source factory (`hsm_collector_install_linux_metric_sources`)
+# lands with workstream 1. It does not exist in master's collector yet, so the declaration is
+# feature-gated: with the feature off this crate links against today's collector unchanged.
+# Flip the feature (and eventually make it the default) once #1414 is merged and released.
+linux-default-sensors = []
+
+[dependencies]
