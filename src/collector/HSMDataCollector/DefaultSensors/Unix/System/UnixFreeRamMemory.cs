@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Security;
 using HSMDataCollector.DefaultSensors.Unix.SystemInfo;
@@ -17,27 +17,42 @@ namespace HSMDataCollector.DefaultSensors.Unix
 
         protected override double? GetBarData()
         {
-            var availableKb = ProcMeminfo.ParseAvailableKb(ReadMeminfo());
+            // A failed or unusable read is REPORTED (#1426) rather than silently thinning out this
+            // sensor's bars — the native source answers both cases with HSM_METRIC_READ_SAMPLE_ERROR.
+            var content = ReadMeminfo();
+            if (content == null)
+                return null;
 
-            return availableKb.HasValue ? availableKb.Value / KbPerMb : (double?)null;
+            var availableKb = ProcMeminfo.ParseAvailableKb(content);
+            if (!availableKb.HasValue)
+            {
+                HandleException(new InvalidDataException($"No usable memory fields in {ProcMeminfoPath}"));
+                return null;
+            }
+
+            return availableKb.Value / KbPerMb;
         }
 
-        private static string ReadMeminfo()
+        private string ReadMeminfo()
         {
             try
             {
                 return File.ReadAllText(ProcMeminfoPath);
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is FileNotFoundException || ex is DirectoryNotFoundException)
             {
+                // No /proc on this host at all (macOS/FreeBSD — UnixSensorsCollection is chosen for
+                // every non-Windows OS — or /proc masked in a container). A platform fact, not data
+                // loss: the sensor can never produce a value here, and the native collector is
+                // likewise silent because its Linux factory is compiled out. See UnixTotalCpu.
                 return null;
             }
-            catch (UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is SecurityException)
             {
-                return null;
-            }
-            catch (SecurityException)
-            {
+                // The file EXISTS but could not be read: a real failure on a host where this sensor
+                // is supposed to work.
+                HandleException(ex);
+
                 return null;
             }
         }

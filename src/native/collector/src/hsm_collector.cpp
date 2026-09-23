@@ -1,6 +1,7 @@
 #include "hsm_collector/hsm_collector.h"
 
 #include "cpu_top.hpp"                             // per-process CPU sampling (#1179; _WIN32 only for WindowsCpuSampler)
+#include "double_format.hpp"                       // .NET shortest round-trip double text (#1426)
 #include "network_speed.hpp"                       // per-interface network speed sampling (#1189; _WIN32 only for WindowsNetworkSampler)
 #include "tcp_connection_stats.hpp"                // TCP connection failure rate sampling (_WIN32 only for WindowsTcpFailureSampler)
 #include "windows_info.hpp"                        // Windows OS-info readers (#1189 follow-up; _WIN32 only for ReadWindowsInfo)
@@ -952,70 +953,11 @@ namespace
         std::thread worker_;
     };
 
-    // .NET shortest round-trip ("R") double text — the canonical payload contract
-    // (tests/conformance/README.md). std::to_chars produces the shortest digits, but its
-    // fixed/scientific choice differs from .NET (e.g. 1e5: to_chars "1e+05", .NET "100000"),
-    // so the digits are extracted from the scientific form and reassembled with .NET rules:
-    // fixed notation iff the decimal exponent is in [-4, 14], otherwise "dE±XX" with an
-    // uppercase 'E' and a sign-prefixed exponent of at least two digits.
+    // .NET shortest round-trip ("R") double text. The implementation lives in double_format.hpp
+    // so the prediction sensor's comment (disk_prediction.hpp) renders numbers identically (#1426).
     std::string DoubleJson(double value)
     {
-        char buffer[64];
-        const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value, std::chars_format::scientific);
-        const std::string scientific(buffer, result.ptr);
-
-        const bool negative = scientific[0] == '-';
-        const auto exponent_marker = scientific.find('e');
-        const int exponent = std::stoi(scientific.substr(exponent_marker + 1));
-
-        std::string digits;
-        for (size_t i = negative ? 1 : 0; i < exponent_marker; ++i)
-            if (scientific[i] != '.')
-                digits.push_back(scientific[i]);
-
-        std::string text;
-        if (negative && value != 0.0)
-            text.push_back('-');
-
-        if (exponent >= -4 && exponent <= 14)
-        {
-            if (exponent < 0)
-            {
-                text += "0.";
-                text.append(static_cast<size_t>(-exponent - 1), '0');
-                text += digits;
-            }
-            else if (static_cast<size_t>(exponent) + 1 >= digits.size())
-            {
-                text += digits;
-                text.append(static_cast<size_t>(exponent) + 1 - digits.size(), '0');
-            }
-            else
-            {
-                text += digits.substr(0, static_cast<size_t>(exponent) + 1);
-                text.push_back('.');
-                text += digits.substr(static_cast<size_t>(exponent) + 1);
-            }
-        }
-        else
-        {
-            text += digits.substr(0, 1);
-            if (digits.size() > 1)
-            {
-                text.push_back('.');
-                text += digits.substr(1);
-            }
-
-            text.push_back('E');
-            text.push_back(exponent < 0 ? '-' : '+');
-
-            const auto magnitude = std::to_string(exponent < 0 ? -exponent : exponent);
-            if (magnitude.size() < 2)
-                text.push_back('0');
-            text += magnitude;
-        }
-
-        return text;
+        return hsm::collector::DoubleToInvariantString(value);
     }
 
     struct EnumOptionData
@@ -1437,6 +1379,12 @@ namespace
         { HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, "Collector queue stats", "Package content size", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 3 /*MB*/, false, false, 0, true, 0, true, 15000, "Package body size.", {} },
     };
 
+    // The two TimeSpan-typed disk-prediction rows (Windows per-letter + the Unix letter-less one).
+    bool IsDiskPrediction(hsm_default_sensor_t id)
+    {
+        return id == HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION || id == HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION;
+    }
+
     const DefaultSensorDef* FindDefaultSensorDef(hsm_default_sensor_t id)
     {
         for (const auto& def : kDefaultSensorCatalog)
@@ -1637,35 +1585,63 @@ namespace
     // recreate the source on HSM_METRIC_READ_ERROR (managed recreate-on-InvalidOperationException).
     struct MetricSource
     {
-        hsm_metric_read_fn read = nullptr;
-        hsm_metric_dispose_fn dispose = nullptr;
-        void* user_data = nullptr;
+        hsm_metric_source_t source{};
 
         MetricSource() = default;
-        MetricSource(hsm_metric_read_fn r, hsm_metric_dispose_fn d, void* ud)
-            : read(r), dispose(d), user_data(ud)
-        {
-        }
+        explicit MetricSource(const hsm_metric_source_t& s)
+            : source(s) {}
         MetricSource(const MetricSource&) = delete;
         MetricSource& operator=(const MetricSource&) = delete;
         ~MetricSource() { Dispose(); }
 
-        hsm_metric_read_t ReadInto(double& out_value) const
+        // Every call hands the source a freshly zeroed sample carrying the collector's own
+        // sizeof + the default OK status, so a source never sees a stale field (#1426).
+        static hsm_metric_sample_t FreshSample()
         {
-            if (read == nullptr)
+            hsm_metric_sample_t sample{};
+            sample.struct_size = sizeof(hsm_metric_sample_t);
+            sample.kind = HSM_METRIC_VALUE_DOUBLE;
+            sample.status = HSM_SENSOR_STATUS_OK;
+            return sample;
+        }
+
+        // A typed source answers through read_sample; a legacy double-only one through read, whose
+        // outcome is widened into the same sample. Both paths are exercised in production: the two
+        // shipped platform factories are typed, a host plugin may still be double-only.
+        hsm_metric_read_t ReadInto(hsm_metric_sample_t& sample) const
+        {
+            if (source.read_sample != nullptr)
+                return source.read_sample(source.user_data, &sample);
+            if (source.read != nullptr)
+                return source.read(source.user_data, &sample.double_value);
+            return HSM_METRIC_READ_NO_VALUE;
+        }
+
+        bool HasRefresh() const { return source.refresh != nullptr && source.refresh_period_ms > 0; }
+
+        hsm_metric_read_t Refresh(hsm_metric_sample_t& sample) const
+        {
+            if (!HasRefresh())
                 return HSM_METRIC_READ_NO_VALUE;
-            return read(user_data, &out_value);
+            return source.refresh(source.user_data, &sample);
         }
 
         void Dispose()
         {
-            if (dispose != nullptr)
-                dispose(user_data);
-            dispose = nullptr;
-            read = nullptr;
-            user_data = nullptr;
+            if (source.dispose != nullptr)
+                source.dispose(source.user_data);
+            source = hsm_metric_source_t{};
         }
     };
+
+    // The value a metric-driven sensor posts when its read fails — managed BuildSensorValue's catch
+    // arm, which publishes GetDefaultValue() with SensorStatus.Error and the message as the comment.
+    std::string DefaultMetricValueJson(hsm_sensor_type_t type)
+    {
+        // default(TimeSpan) renders as the .NET "c" format "00:00:00"; default(double)/default(int)
+        // both render as "0" (shortest round-trip of 0.0 is "0").
+        return type == HSM_SENSOR_TYPE_TIMESPAN ? std::string("\"00:00:00\"") : std::string("0");
+    }
 
     // AddOrUpdate.TTLs (ticks). A TTL alert overrides the plain TTL: when ttl_alerts exist the list
     // is each alert's inactivity ticks (null where unset), mirroring ApiConverters
@@ -2257,6 +2233,7 @@ namespace
         {
             metric_source_ = std::move(source);
             is_metric_driven_ = true;
+            ResetMetricRefreshBaseline();
 
             const int64_t post = metric_post_period_ms_ > 0 ? metric_post_period_ms_ : 15000;
             metric_emit_period_ms_ = post;
@@ -2292,6 +2269,7 @@ namespace
         void ResetMetricSource()
         {
             metric_source_.reset();
+            metric_refresh_next_ms_ = (std::numeric_limits<int64_t>::max)();
             if (is_metric_driven_ || is_partial_posting_)
             {
                 is_metric_driven_ = false;
@@ -2328,11 +2306,25 @@ namespace
         // Caller holds mutex_. The scheduler hint is the earlier of the two bar cadences.
         void PublishNextDueHintLocked()
         {
-            next_post_hint_.store(HasBarSchedule() ? (std::min)(next_post_ms_, metric_next_post_ms_) : next_post_ms_);
+            int64_t due = HasBarSchedule() ? (std::min)(next_post_ms_, metric_next_post_ms_) : next_post_ms_;
+            if (metric_refresh_next_ms_ < due)
+                due = metric_refresh_next_ms_; // the source's auxiliary sampling tick (#1426)
+            next_post_hint_.store(due);
         }
 
         bool TryBuildMetricBarJson(std::string& out_json, const std::shared_ptr<NativeCollector>& collector);
-        hsm_metric_read_t ReadMetricSource(double& value, const std::shared_ptr<NativeCollector>& collector);
+        hsm_metric_read_t ReadMetricSource(
+            hsm_metric_sample_t& sample, const std::shared_ptr<NativeCollector>& collector, std::string& failure);
+        void RunMetricRefreshIfDue(const std::shared_ptr<NativeCollector>& collector);
+
+        // Anchor the auxiliary refresh cadence on now (bind, rebind after a recreate, restart).
+        void ResetMetricRefreshBaseline()
+        {
+            metric_refresh_next_ms_ =
+                metric_source_ && metric_source_->HasRefresh()
+                    ? SteadyNowMs() + metric_source_->source.refresh_period_ms
+                    : (std::numeric_limits<int64_t>::max)();
+        }
 
         template <typename Accumulate>
         hsm_result_t AccumulateBar(Accumulate&& accumulate);
@@ -2387,6 +2379,8 @@ namespace
         int64_t metric_bar_tick_ms_ = kMetricBarSampleMs; // bar sample cadence (managed BarTickPeriod)
         int64_t metric_emit_period_ms_ = 0;               // partial-bar post cadence / value post cadence once bound
         int64_t metric_next_post_ms_ = 0;                 // steady due time of the next partial-bar post (bars only)
+        // Steady due time of the source's auxiliary refresh tick (#1426); max() when it has none.
+        int64_t metric_refresh_next_ms_ = (std::numeric_limits<int64_t>::max)();
         std::unique_ptr<MetricSource> metric_source_;
 
         // File sensor identity.
@@ -2551,11 +2545,33 @@ namespace
         // reader is visible instead of degrading silently (the PeriodicTask silent-death lesson).
         // recreated=true: the source was rebuilt and the sensor keeps trying; false: the factory
         // declined to rebuild it, so the sensor stops reporting until the next Start.
-        void LogMetricSourceError(const std::string& path, bool recreated)
+        void LogMetricSourceError(const std::string& path, bool recreated, const std::string& detail = std::string())
         {
+            const std::string suffix = detail.empty() ? std::string() : (" " + detail);
             LogError(
-                recreated ? ("Metric source for '" + path + "' failed to read; recreated it.")
-                          : ("Metric source for '" + path + "' is unavailable; sensor will not report until restart."));
+                recreated ? ("Metric source for '" + path + "' failed to read; recreated it." + suffix)
+                          : ("Metric source for '" + path + "' is unavailable; sensor will not report until restart." +
+                             suffix));
+        }
+
+        // A source that reported a read failure. For HSM_METRIC_READ_SAMPLE_ERROR the source is
+        // still usable, so nothing is recreated — the failure is only made visible (#1426).
+        //
+        // Two different strings come out of one failure, matching managed exactly:
+        //   * the ERROR CHANNEL gets "Sensor: <path>, <reason>" — managed AddException formats
+        //     "Sensor: {SensorPath}, {ex}";
+        //   * the returned REASON is what the sensor puts on the Error-status value it posts —
+        //     managed BuildSensorValue's catch arm uses ex.Message alone as the comment.
+        static std::string MetricFailureReason(const std::string& detail)
+        {
+            return detail.empty() ? "metric source read failed" : detail;
+        }
+
+        std::string ReportMetricSampleError(const std::string& path, const std::string& detail)
+        {
+            const std::string reason = MetricFailureReason(detail);
+            LogError("Sensor: " + path + ", " + reason);
+            return reason;
         }
 
         // Advance the installed manual clock and wake the scheduler so it re-evaluates the
@@ -3212,11 +3228,24 @@ namespace
             // metric-source factory (PDH/WMI/plugin) is asked for a reader for this path; if it binds,
             // the sensor posts live values each post_period. Non-value default sensors (bool/string/
             // enum/version/timespan heartbeat/self-diagnostic feeds) are not metric-driven.
+            // TimeSpan joined the list in #1426: the disk-space prediction is the one TimeSpan-typed
+            // catalog row with a live reader, now that the seam can carry a non-double value.
             if (rc == HSM_RESULT_OK && out_sensor &&
                 (def->type == HSM_SENSOR_TYPE_DOUBLE_BAR || def->type == HSM_SENSOR_TYPE_INT_BAR ||
-                 def->type == HSM_SENSOR_TYPE_DOUBLE || def->type == HSM_SENSOR_TYPE_INT))
+                 def->type == HSM_SENSOR_TYPE_DOUBLE || def->type == HSM_SENSOR_TYPE_INT ||
+                 (def->type == HSM_SENSOR_TYPE_TIMESPAN && IsDiskPrediction(id))))
             {
                 out_sensor->MarkMetricCandidate(def->post_period_ms, kMetricBarSampleMs);
+            }
+
+            // Remember where collector errors go. From now on every deduplicated error the collector
+            // emits is also posted to this sensor — the managed MessageDeduplicator action does
+            // exactly that (logger.Error + CollectorErrors.SendCollectorError), and without it a
+            // native error is visible only in a log file nobody watches (#1426, root rule #8).
+            if (rc == HSM_RESULT_OK && out_sensor && id == HSM_DEFAULT_COLLECTOR_ERRORS)
+            {
+                std::lock_guard<std::mutex> guard(logger_mutex_);
+                collector_errors_path_ = out_sensor->Path();
             }
 
             return rc;
@@ -3296,6 +3325,17 @@ namespace
         {
             std::lock_guard<std::mutex> guard(mutex_);
             metric_source_factory_ = factory;
+            metric_source_factory_ex_ = nullptr;
+            metric_source_factory_user_data_ = user_data;
+        }
+
+        // The typed factory (#1426) shares the legacy factory's slot: installing either replaces
+        // whichever was there, so a collector never holds two competing sources for one path.
+        void SetMetricSourceFactoryEx(hsm_metric_source_factory_ex_fn factory, void* user_data)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            metric_source_factory_ = nullptr;
+            metric_source_factory_ex_ = factory;
             metric_source_factory_user_data_ = user_data;
         }
 
@@ -3305,30 +3345,43 @@ namespace
         std::unique_ptr<MetricSource> CreateMetricSource(const std::string& sensor_path)
         {
             hsm_metric_source_factory_fn factory = nullptr;
+            hsm_metric_source_factory_ex_fn factory_ex = nullptr;
             void* factory_user_data = nullptr;
             {
                 std::lock_guard<std::mutex> guard(mutex_);
                 factory = metric_source_factory_;
+                factory_ex = metric_source_factory_ex_;
                 factory_user_data = metric_source_factory_user_data_;
             }
 
-            if (factory == nullptr)
-                return nullptr;
+            hsm_metric_source_t source{};
+            source.struct_size = sizeof(hsm_metric_source_t);
 
-            hsm_metric_read_fn read = nullptr;
-            hsm_metric_dispose_fn dispose = nullptr;
-            void* source_user_data = nullptr;
-            const int created = factory(factory_user_data, sensor_path.c_str(), &read, &dispose, &source_user_data);
-            if (created == 0 || read == nullptr)
+            int created = 0;
+            if (factory_ex != nullptr)
             {
-                // Dispose whatever the factory handed back so a half-constructed source can't leak,
-                // honoring "dispose is called exactly once" even on this partial-failure path.
-                if (dispose != nullptr)
-                    dispose(source_user_data);
+                created = factory_ex(factory_user_data, sensor_path.c_str(), &source);
+            }
+            else if (factory != nullptr)
+            {
+                created = factory(
+                    factory_user_data, sensor_path.c_str(), &source.read, &source.dispose, &source.user_data);
+            }
+            else
+            {
                 return nullptr;
             }
 
-            return std::make_unique<MetricSource>(read, dispose, source_user_data);
+            if (created == 0 || (source.read == nullptr && source.read_sample == nullptr))
+            {
+                // Dispose whatever the factory handed back so a half-constructed source can't leak,
+                // honoring "dispose is called exactly once" even on this partial-failure path.
+                if (source.dispose != nullptr)
+                    source.dispose(source.user_data);
+                return nullptr;
+            }
+
+            return std::make_unique<MetricSource>(source);
         }
 
         // Test seam: create a source, read up to max_reads samples — disposing and recreating it on a
@@ -3345,12 +3398,14 @@ namespace
                 if (source == nullptr)
                     break;
 
-                double value = 0.0;
-                const auto outcome = source->ReadInto(value);
+                auto sample = MetricSource::FreshSample();
+                const auto outcome = source->ReadInto(sample);
                 if (outcome == HSM_METRIC_READ_OK)
                 {
                     if (out_values != nullptr)
-                        out_values[collected] = value;
+                        out_values[collected] = sample.kind == HSM_METRIC_VALUE_TIMESPAN_MS
+                                                    ? static_cast<double>(sample.timespan_ms)
+                                                    : sample.double_value;
                     ++collected;
                 }
                 else if (outcome == HSM_METRIC_READ_ERROR)
@@ -3359,12 +3414,23 @@ namespace
                     source = CreateMetricSource(sensor_path);
                     ++recreated;
                 }
-                // NO_VALUE: skip this tick, keep the source.
+                // NO_VALUE / SAMPLE_ERROR: skip this tick, keep the source.
             }
 
             if (out_recreated != nullptr)
                 *out_recreated = recreated;
             return collected;
+        }
+
+        // Test seam: does the installed factory BIND this path at all? Answers the binding decision
+        // directly, which counting reads cannot — a row bound to a drive that does not exist on the
+        // runner collects no samples either, so "collected nothing" is true both for a correctly
+        // declined path and for a mis-bound one, and a disk read that fails answers SAMPLE_ERROR,
+        // which keeps the source and so does not move the recreate counter either. The source is
+        // created and disposed immediately; nothing is read.
+        int32_t TestMetricSourceBinds(const std::string& sensor_path)
+        {
+            return CreateMetricSource(sensor_path) != nullptr ? 1 : 0;
         }
 
         hsm_result_t AddValueJson(
@@ -3872,7 +3938,14 @@ namespace
         }
 
         // Error routing entry point: validation drops, loop errors and shutdown discards all
-        // funnel here. Errors pass through the deduplicator (window/capacity from the options)
+        // funnel here.
+        //
+        // MUST NOT be called while holding mutex_: an emitted message is published on the
+        // `.module/Collector errors` sensor (PostCollectorError -> AddValueJson), which takes mutex_,
+        // and mutex_ is not recursive. Every current caller runs on a thread that holds neither
+        // mutex_ nor queue_mutex_.
+        //
+        // Errors pass through the deduplicator (window/capacity from the options)
         // so a storm of identical messages collapses to one log line; the suppressed count is
         // flushed as a "(N suppressed)" suffix on the FIRST recurrence after the window elapses
         // (recurrence-driven, not timer-driven — a storm that simply stops leaves its trailing
@@ -3883,6 +3956,7 @@ namespace
             if (dedup_window_ms_ <= 0)
             {
                 LogMessage(HSM_LOG_LEVEL_ERROR, message);
+                PostCollectorError(message);
                 return;
             }
 
@@ -3913,9 +3987,47 @@ namespace
             }
 
             if (emit)
-                LogMessage(HSM_LOG_LEVEL_ERROR, suppressed > 0
-                                                    ? message + " (" + std::to_string(suppressed) + " suppressed)"
-                                                    : message);
+            {
+                const std::string emitted = suppressed > 0
+                                                ? message + " (" + std::to_string(suppressed) + " suppressed)"
+                                                : message;
+                LogMessage(HSM_LOG_LEVEL_ERROR, emitted);
+                PostCollectorError(emitted);
+            }
+        }
+
+        // Publish an emitted error line on `.module/Collector errors` when that sensor is registered
+        // — the managed MessageDeduplicator action's second half (#1426). Only messages that survive
+        // deduplication get here, so a storm collapses on the wire exactly as it does in the log.
+        // Reentrancy guard: the enqueue path itself reports failures through LogError, and an error
+        // raised while publishing an error must not recurse (it still reaches the log).
+        void PostCollectorError(const std::string& message)
+        {
+            static thread_local bool posting = false;
+            if (posting)
+                return;
+
+            std::string path;
+            {
+                std::lock_guard<std::mutex> guard(logger_mutex_);
+                path = collector_errors_path_;
+            }
+            if (path.empty())
+                return;
+
+            // Scoped so a throw on the enqueue path cannot leave the guard latched for the life of
+            // the thread, which would mute every later error on it.
+            struct Latch
+            {
+                bool& flag;
+                explicit Latch(bool& f)
+                    : flag(f) { flag = true; }
+                ~Latch() { flag = false; }
+            } latch(posting);
+
+            // Managed CollectorErrorsSensor.SendCollectorError is a plain SendValue: Ok status, no
+            // comment. AddValueJson drops the value when the collector is not accepting data.
+            AddValueJson(path, HSM_SENSOR_TYPE_STRING, "\"" + EscapeJson(message) + "\"", HSM_SENSOR_STATUS_OK, "");
         }
 
         // Caller holds logger_mutex_. Bounds the dedup map to max_deduplicated_messages_ by
@@ -5167,6 +5279,9 @@ namespace
         void* log_user_data_ = nullptr;
         std::unique_ptr<FileLogger> file_logger_; // built-in file sink (EnableFileLogging); guarded by logger_mutex_
         std::unordered_map<std::string, DedupEntry> dedup_;
+        // Full path of the registered `.module/Collector errors` sensor, or empty when the host did
+        // not register it. Guarded by logger_mutex_ (written once at registration, read per error).
+        std::string collector_errors_path_;
 
         // [[maybe_unused]] marks options stored to mirror CollectorOptions but consumed only by
         // the HTTP transport (#1096), which has not landed yet — this keeps the clang
@@ -5190,6 +5305,7 @@ namespace
         // Metric-source seam (#1099): the value provider a default monitoring sensor reads on each
         // tick. Null is the no-op production default (no live values until a real factory is set).
         hsm_metric_source_factory_fn metric_source_factory_ = nullptr;
+        hsm_metric_source_factory_ex_fn metric_source_factory_ex_ = nullptr;
         void* metric_source_factory_user_data_ = nullptr;
 
         // Top-CPU sensor sampling (#1179): optional background thread, Windows-only.
@@ -5557,6 +5673,7 @@ namespace
         // new run does not divide by the stopped gap (mirrors C# MonitoringRateSensor.InitAsync).
         next_post_ms_ = SteadyNowMs();
         rate_has_prev_ = false;
+        ResetMetricRefreshBaseline(); // re-anchor the source's auxiliary sampling tick (#1426)
 
         if (HasBarSchedule())
         {
@@ -5601,6 +5718,12 @@ namespace
         if (HasBarSchedule())
             return TryBuildMetricBarJson(out_json, collector);
 
+        // The source's auxiliary sampling tick (#1426) runs on its own cadence, which is typically
+        // much shorter than the post cadence — so it must be served BEFORE the post-due gate below,
+        // not inside the post branch.
+        if (is_metric_driven_)
+            RunMetricRefreshIfDue(collector);
+
         // The sensor lock covers only the due-check and the mutable-state snapshot. User
         // callbacks run OUTSIDE it: a callback that re-enters the same sensor (AddRate /
         // AddFunctionInt) must not deadlock on the non-recursive mutex, and arbitrary user
@@ -5630,7 +5753,7 @@ namespace
             {
                 next_post_ms_ = now_ms + 1;
             }
-            next_post_hint_.store(next_post_ms_);
+            PublishNextDueHintLocked();
 
             if (type_ == HSM_SENSOR_TYPE_RATE)
             {
@@ -5671,18 +5794,46 @@ namespace
         // for the rest of the run.
         if (is_metric_driven_)
         {
-            double value = 0.0;
-            if (ReadMetricSource(value, collector) != HSM_METRIC_READ_OK)
-                return false;
+            auto sample = MetricSource::FreshSample();
+            std::string failure;
+            const auto outcome = ReadMetricSource(sample, collector, failure);
+            if (outcome != HSM_METRIC_READ_OK)
+            {
+                // A failed read on a VALUE sensor posts one Error-status value carrying the message,
+                // exactly as managed BuildSensorValue does when GetValue throws (#1426). A merely
+                // empty tick (NO_VALUE) still posts nothing.
+                if (failure.empty())
+                    return false;
 
-            if (type_ == HSM_SENSOR_TYPE_INT)
+                out_json = build_value(
+                    type_, DefaultMetricValueJson(type_), HSM_SENSOR_STATUS_ERROR, TrimComment(failure));
+                return true;
+            }
+
+            // The source's status and comment are host-supplied and get the same guards every other
+            // ingress path applies: an out-of-range status would land outside the server's SensorStatus
+            // enum on the wire, and an unbounded comment would break the 1024-char trim invariant.
+            const auto raw_status = static_cast<hsm_sensor_status_t>(sample.status);
+            const auto status = IsValidStatus(raw_status) ? raw_status : HSM_SENSOR_STATUS_OK;
+            const std::string comment =
+                TrimComment(sample.comment != nullptr ? std::string(sample.comment) : std::string{});
+
+            if (type_ == HSM_SENSOR_TYPE_TIMESPAN)
+            {
+                // The seam carries whole milliseconds; the wire carries the .NET "c" format.
+                out_json = build_value(
+                    HSM_SENSOR_TYPE_TIMESPAN, "\"" + EscapeJson(TimeSpanCFormat(sample.timespan_ms * 10000)) + "\"",
+                    status, comment);
+            }
+            else if (type_ == HSM_SENSOR_TYPE_INT)
             {
                 out_json = build_value(
-                    HSM_SENSOR_TYPE_INT, std::to_string(static_cast<long long>(std::llround(value))), HSM_SENSOR_STATUS_OK, std::string{});
+                    HSM_SENSOR_TYPE_INT, std::to_string(static_cast<long long>(std::llround(sample.double_value))),
+                    status, comment);
             }
             else
             {
-                out_json = build_value(HSM_SENSOR_TYPE_DOUBLE, DoubleJson(value), HSM_SENSOR_STATUS_OK, std::string{});
+                out_json = build_value(HSM_SENSOR_TYPE_DOUBLE, DoubleJson(sample.double_value), status, comment);
             }
             return true;
         }
@@ -5708,11 +5859,77 @@ namespace
         return false;
     }
 
-    // Scheduler thread only. Reads the bound source; ERROR disposes + recreates it (managed
-    // recreate-on-error, logged), and a declined recreate parks the sensor (no longer periodic).
-    hsm_metric_read_t NativeSensor::ReadMetricSource(double& value, const std::shared_ptr<NativeCollector>& collector)
+    // Scheduler thread only. Runs the source's auxiliary refresh tick when one is configured and due
+    // — the native shape of a managed sensor's own sampling loop (FreeDiskSpacePredictionBase samples
+    // free space every 30 s while posting every 5 min). Its outcome never produces a value; only a
+    // reported failure is surfaced, deduplicated like any other (#1426).
+    void NativeSensor::RunMetricRefreshIfDue(const std::shared_ptr<NativeCollector>& collector)
     {
-        const auto outcome = metric_source_ ? metric_source_->ReadInto(value) : HSM_METRIC_READ_NO_VALUE;
+        if (!metric_source_ || !metric_source_->HasRefresh())
+            return;
+
+        const auto now_ms = SteadyNowMs();
+        if (now_ms < metric_refresh_next_ms_)
+            return;
+
+        const int64_t period = metric_source_->source.refresh_period_ms;
+        do
+            metric_refresh_next_ms_ += period;
+        while (metric_refresh_next_ms_ <= now_ms);
+
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            PublishNextDueHintLocked();
+        }
+
+        auto sample = MetricSource::FreshSample();
+        const auto outcome = metric_source_->Refresh(sample);
+        if (outcome == HSM_METRIC_READ_SAMPLE_ERROR || outcome == HSM_METRIC_READ_ERROR)
+        {
+            if (collector)
+                collector->ReportMetricSampleError(path_, sample.error != nullptr ? sample.error : "");
+        }
+    }
+
+    // Scheduler thread only. Reads the bound source. SAMPLE_ERROR reports the failure and keeps the
+    // source; ERROR disposes + recreates it (managed recreate-on-error, logged), and a declined
+    // recreate parks the sensor (no longer periodic). `failure` receives the message a value sensor
+    // should post with Error status, and stays empty for a silent NO_VALUE tick.
+    hsm_metric_read_t NativeSensor::ReadMetricSource(
+        hsm_metric_sample_t& sample, const std::shared_ptr<NativeCollector>& collector, std::string& failure)
+    {
+        failure.clear();
+
+        const auto outcome = metric_source_ ? metric_source_->ReadInto(sample) : HSM_METRIC_READ_NO_VALUE;
+
+        // A source declares which value field it filled, and the declaration is enforced. Trusting the
+        // sensor's type instead would let a source that filled double_value on a TimeSpan sensor (the
+        // easy mistake — FreshSample defaults the kind to DOUBLE) publish 00:00:00 from an untouched
+        // timespan_ms: a WRONG value with an OK status, which is worse than the read failure this seam
+        // exists to surface. A mismatch is reported like any other failed read and posts no sample.
+        if (outcome == HSM_METRIC_READ_OK)
+        {
+            const auto expected_kind =
+                type_ == HSM_SENSOR_TYPE_TIMESPAN ? HSM_METRIC_VALUE_TIMESPAN_MS : HSM_METRIC_VALUE_DOUBLE;
+            if (sample.kind != expected_kind)
+            {
+                if (collector)
+                    failure = collector->ReportMetricSampleError(path_, "the metric source filled the wrong value field");
+                return HSM_METRIC_READ_SAMPLE_ERROR;
+            }
+        }
+
+        const std::string detail = sample.error != nullptr ? std::string(sample.error) : std::string();
+
+        if (outcome == HSM_METRIC_READ_SAMPLE_ERROR)
+        {
+            // The source is intact (an unreadable /proc file, a failing statvfs): report and keep it,
+            // so a stateful reader does not lose its baseline to a transient failure.
+            if (collector)
+                failure = collector->ReportMetricSampleError(path_, detail);
+            return outcome;
+        }
+
         if (outcome != HSM_METRIC_READ_ERROR)
             return outcome;
 
@@ -5720,9 +5937,13 @@ namespace
         if (collector)
             metric_source_ = collector->CreateMetricSource(path_);
 
+        if (collector)
+            failure = NativeCollector::MetricFailureReason(detail);
+
         if (collector && metric_source_)
         {
-            collector->LogMetricSourceError(path_, /*recreated=*/true);
+            collector->LogMetricSourceError(path_, /*recreated=*/true, detail);
+            ResetMetricRefreshBaseline();
         }
         else
         {
@@ -5730,7 +5951,7 @@ namespace
             // so it can't loop on NO_VALUE forever, and make the stall loud. A metric bar keeps its
             // accumulated samples; the Stop path flushes them.
             if (collector)
-                collector->LogMetricSourceError(path_, /*recreated=*/false);
+                collector->LogMetricSourceError(path_, /*recreated=*/false, detail);
             std::lock_guard<std::mutex> guard(mutex_);
             is_metric_driven_ = false;
             is_periodic_ = false;
@@ -5756,6 +5977,13 @@ namespace
         bool sample_due = false;
         bool post_due = false;
         std::string closed_json;
+
+        // BEFORE the due gate, exactly as the value path serves it before its own gate. The refresh
+        // cadence is independent of both bar cadences, so a refresh that came due while neither the
+        // sample tick nor the partial post is due must still run — otherwise the early return below
+        // would leave metric_refresh_next_ms_ in the past, and the scheduler, whose hint folds it in,
+        // would take its no-wait branch and spin until the next bar tick.
+        RunMetricRefreshIfDue(collector);
 
         {
             std::lock_guard<std::mutex> guard(mutex_);
@@ -5818,13 +6046,17 @@ namespace
         // arrive through AddBar* (managed PublicBarMonitoringSensor: CollectBar == CheckCurrentBar).
         if (sample_due && metric_source_)
         {
-            double value = 0.0;
+            auto sample = MetricSource::FreshSample();
+            std::string failure;
             const bool prime = metric_prime_pending_;
             metric_prime_pending_ = false;
-            if (ReadMetricSource(value, collector) == HSM_METRIC_READ_OK && !prime)
+            // A bar sensor does NOT post an error value: managed CollectableBarMonitoringSensorBase
+            // just skips the sample when GetBarData yields nothing, and a read failure only reaches
+            // the error channel (which ReadMetricSource already did).
+            if (ReadMetricSource(sample, collector, failure) == HSM_METRIC_READ_OK && !prime)
             {
                 std::lock_guard<std::mutex> guard(mutex_);
-                bar_.AddValue(value);
+                bar_.AddValue(sample.double_value);
             }
         }
 
@@ -6115,7 +6347,7 @@ extern "C" hsm_result_t hsm_collector_install_windows_metric_sources(hsm_collect
     // the install can't no-op silently against already-bound sensors.
     if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
         return HSM_RESULT_INVALID_STATE;
-    collector->impl->SetMetricSourceFactory(&hsm::platform::WindowsMetricSourceFactory, nullptr);
+    collector->impl->SetMetricSourceFactoryEx(&hsm::platform::WindowsMetricSourceFactory, nullptr);
     return HSM_RESULT_OK;
 #else
     return HSM_RESULT_INVALID_STATE;
@@ -6135,7 +6367,7 @@ extern "C" hsm_result_t hsm_collector_install_linux_metric_sources(hsm_collector
     // the install can't no-op silently against already-bound sensors.
     if (collector->impl->Status() != HSM_COLLECTOR_STATUS_STOPPED)
         return HSM_RESULT_INVALID_STATE;
-    collector->impl->SetMetricSourceFactory(&hsm::platform::LinuxMetricSourceFactory, nullptr);
+    collector->impl->SetMetricSourceFactoryEx(&hsm::platform::LinuxMetricSourceFactory, nullptr);
     return HSM_RESULT_OK;
 #else
     return HSM_RESULT_INVALID_STATE;
@@ -7755,9 +7987,29 @@ hsm_result_t hsm_collector_set_metric_source_factory(
     return HSM_RESULT_OK;
 }
 
+extern "C" hsm_result_t hsm_collector_set_metric_source_factory_ex(
+    hsm_collector_t* collector,
+    hsm_metric_source_factory_ex_fn factory,
+    void* factory_user_data)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    collector->impl->SetMetricSourceFactoryEx(factory, factory_user_data);
+    return HSM_RESULT_OK;
+}
+
 // Test hook: drive the metric-source seam lifecycle (create -> read with recreate-on-error -> dispose)
 // against the installed factory for `sensor_path`. Returns the number of OK samples written to
 // out_values; *out_recreated receives how many times a READ_ERROR forced a dispose+recreate.
+extern "C" int32_t hsm_collector_test_metric_source_binds(hsm_collector_t* collector, const char* sensor_path)
+{
+    if (collector == nullptr || collector->impl == nullptr || sensor_path == nullptr)
+        return 0;
+
+    return collector->impl->TestMetricSourceBinds(sensor_path);
+}
+
 extern "C" int32_t hsm_collector_test_drive_metric_source(
     hsm_collector_t* collector,
     const char* sensor_path,
@@ -7768,6 +8020,30 @@ extern "C" int32_t hsm_collector_test_drive_metric_source(
     if (collector == nullptr || sensor_path == nullptr || max_reads < 0)
         return 0;
     return collector->impl->TestDriveMetricSource(sensor_path, max_reads, out_values, out_recreated);
+}
+
+// Test hook (#1426), deliberately NOT in the public header: a TimeSpan sensor driven by the
+// installed metric-source factory, which is what the disk-space prediction catalog row is. The
+// public surface has hsm_collector_create_metric_double_sensor for the double case; a custom
+// TimeSpan metric sensor has no host use yet, so the conformance corpus reaches it through here
+// rather than growing the ABI for a test.
+extern "C" hsm_result_t hsm_collector_test_create_metric_timespan_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_sensor_t** out_sensor)
+{
+    if (post_period_ms <= 0)
+    {
+        if (out_sensor != nullptr)
+            *out_sensor = nullptr;
+        return HSM_RESULT_INVALID_ARGUMENT;
+    }
+
+    const auto result = CreateSensor(collector, path, HSM_SENSOR_TYPE_TIMESPAN, false, std::string{}, out_sensor);
+    if (result == HSM_RESULT_OK && out_sensor != nullptr && *out_sensor != nullptr)
+        (*out_sensor)->impl->MarkMetricCandidate(post_period_ms);
+    return result;
 }
 
 // Test hook (#1428), deliberately NOT in the public header: a DoubleBar/IntBar sensor driven by the

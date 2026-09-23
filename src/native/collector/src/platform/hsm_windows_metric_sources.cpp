@@ -1,17 +1,27 @@
 // Windows metric-source factory (#1164). See the header for scope. Implemented with PDH (perf
 // counters) and Win32 (free disk). Each source owns its PDH query / drive root and is freed by its
-// dispose callback. A read failure returns HSM_METRIC_READ_ERROR so the collector recreates the
-// source (managed recreate-on-error).
+// dispose callback. A hard failure returns HSM_METRIC_READ_ERROR so the collector recreates the
+// source (managed recreate-on-error); a failure that leaves the source usable returns
+// HSM_METRIC_READ_SAMPLE_ERROR with the reason (#1426), which the collector logs, posts on
+// `.module/Collector errors`, and — for a value sensor — publishes as one Error-status value.
+// Either way the status code travels with the report, so a wedged counter is diagnosable instead
+// of silently missing.
 
 #include "hsm_windows_metric_sources.hpp"
 
 #if defined(_WIN32)
+
+#include "../disk_prediction.hpp"
 
 #include <windows.h>
 
 #include <pdh.h>
 #include <pdhmsg.h>
 
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <exception>
 #include <string>
 #include <vector>
 
@@ -21,6 +31,52 @@ namespace hsm
     {
         namespace
         {
+            using hsm::collector::DiskSpacePrediction;
+
+            // FreeDiskSpacePredictionBase: DefaultSpaceCheckPeriodInSec sampling,
+            // DiskSensorOptions.DefaultCalibrationRequests calibration posts.
+            constexpr std::int64_t kSpaceCheckPeriodMs = 30000;
+            constexpr std::int64_t kCalibrationRequests = 6;
+
+            // Backing store for the strings a read hands back through hsm_metric_sample_t. The
+            // collector copies them during the call and every read runs on one scheduler thread, so
+            // per-thread storage is enough and keeps the stateless sources stateless.
+            std::string& ScratchError()
+            {
+                static thread_local std::string buffer;
+                return buffer;
+            }
+
+            std::string& ScratchComment()
+            {
+                static thread_local std::string buffer;
+                return buffer;
+            }
+
+            // The read failed but the source is intact: report the reason and keep the query, so a
+            // primed rate counter does not lose its baseline to one bad sample.
+            hsm_metric_read_t Fail(hsm_metric_sample_t* sample, std::string reason)
+            {
+                ScratchError() = std::move(reason);
+                sample->error = ScratchError().c_str();
+                return HSM_METRIC_READ_SAMPLE_ERROR;
+            }
+
+            // The source is faulted (an invalid handle, a query that will not collect again): the
+            // collector disposes and recreates it, and the reason rides along with the report.
+            hsm_metric_read_t Faulted(hsm_metric_sample_t* sample, std::string reason)
+            {
+                ScratchError() = std::move(reason);
+                sample->error = ScratchError().c_str();
+                return HSM_METRIC_READ_ERROR;
+            }
+
+            std::string StatusText(const char* what, long status)
+            {
+                char code[24] = { 0 };
+                std::snprintf(code, sizeof(code), "0x%08lX", static_cast<unsigned long>(status));
+                return std::string(what) + " failed with status " + code;
+            }
 
             // A PDH source: one query holding one or more counters whose formatted DOUBLE values are summed and
             // scaled (e.g. bytes -> MB). Rate counters need two collects; the factory primes once, and the first
@@ -43,11 +99,11 @@ namespace hsm
                 std::wstring root; // e.g. "C:\\"
             };
 
-            hsm_metric_read_t PdhRead(void* user_data, double* out_value)
+            hsm_metric_read_t PdhRead(void* user_data, hsm_metric_sample_t* sample)
             {
                 auto* source = static_cast<PdhSource*>(user_data);
                 if (source == nullptr || source->query == nullptr)
-                    return HSM_METRIC_READ_ERROR;
+                    return Faulted(sample, "the PDH query handle is missing");
 
                 const PDH_STATUS collect = PdhCollectQueryData(source->query);
                 if (collect != ERROR_SUCCESS)
@@ -61,7 +117,7 @@ namespace hsm
                     if (collect == PDH_NO_DATA || collect == PDH_INVALID_DATA || collect == PDH_CSTATUS_NO_INSTANCE ||
                         collect == PDH_CSTATUS_NO_OBJECT || collect == PDH_CSTATUS_NO_COUNTER)
                         return HSM_METRIC_READ_NO_VALUE;
-                    return HSM_METRIC_READ_ERROR;
+                    return Faulted(sample, StatusText("PdhCollectQueryData", collect));
                 }
 
                 double sum = 0.0;
@@ -77,15 +133,15 @@ namespace hsm
                         status == PDH_CALC_NEGATIVE_DENOMINATOR || status == PDH_CALC_NEGATIVE_VALUE ||
                         status == PDH_CALC_NEGATIVE_TIMEBASE)
                     {
-                        *out_value = 0.0;
+                        sample->double_value = 0.0;
                         return HSM_METRIC_READ_OK;
                     }
                     if (status != ERROR_SUCCESS)
-                        return HSM_METRIC_READ_ERROR;
+                        return Faulted(sample, StatusText("PdhGetFormattedCounterValue", status));
                     sum += value.doubleValue;
                 }
 
-                *out_value = sum * source->scale;
+                sample->double_value = sum * source->scale;
                 return HSM_METRIC_READ_OK;
             }
 
@@ -94,11 +150,11 @@ namespace hsm
             // first read sets the baseline and posts NOTHING; later reads post the difference, and ONLY
             // when it is non-zero — a quiet period (no new failures/resets, the healthy-host norm) posts
             // no value, mirroring the managed sensor.
-            hsm_metric_read_t PdhReadDelta(void* user_data, double* out_value)
+            hsm_metric_read_t PdhReadDelta(void* user_data, hsm_metric_sample_t* sample)
             {
                 auto* source = static_cast<PdhSource*>(user_data);
                 if (source == nullptr || source->query == nullptr)
-                    return HSM_METRIC_READ_ERROR;
+                    return Faulted(sample, "the PDH query handle is missing");
 
                 const PDH_STATUS collect = PdhCollectQueryData(source->query);
                 if (collect != ERROR_SUCCESS)
@@ -106,7 +162,7 @@ namespace hsm
                     if (collect == PDH_NO_DATA || collect == PDH_INVALID_DATA || collect == PDH_CSTATUS_NO_INSTANCE ||
                         collect == PDH_CSTATUS_NO_OBJECT || collect == PDH_CSTATUS_NO_COUNTER)
                         return HSM_METRIC_READ_NO_VALUE;
-                    return HSM_METRIC_READ_ERROR;
+                    return Faulted(sample, StatusText("PdhCollectQueryData", collect));
                 }
 
                 double sum = 0.0;
@@ -133,7 +189,7 @@ namespace hsm
                 if (delta == 0.0)
                     return HSM_METRIC_READ_NO_VALUE; // no change this period -> post nothing
 
-                *out_value = delta * source->scale;
+                sample->double_value = delta * source->scale;
                 return HSM_METRIC_READ_OK;
             }
 
@@ -147,23 +203,105 @@ namespace hsm
                 delete source;
             }
 
-            hsm_metric_read_t DiskRead(void* user_data, double* out_value)
+            // Available space on the drive in BYTES — DriveInfo.AvailableFreeSpace, which is the
+            // caller-quota-aware lpFreeBytesAvailable of GetDiskFreeSpaceEx (WindowsDiskInfo).
+            bool ReadFreeBytes(const DiskSource& source, double& bytes, std::string& error)
+            {
+                ULARGE_INTEGER free_bytes{};
+                if (!GetDiskFreeSpaceExW(source.root.c_str(), &free_bytes, nullptr, nullptr))
+                {
+                    error = StatusText("GetDiskFreeSpaceEx", static_cast<long>(GetLastError()));
+                    return false;
+                }
+
+                bytes = static_cast<double>(free_bytes.QuadPart);
+                return true;
+            }
+
+            hsm_metric_read_t DiskRead(void* user_data, hsm_metric_sample_t* sample)
             {
                 auto* source = static_cast<DiskSource*>(user_data);
                 if (source == nullptr)
-                    return HSM_METRIC_READ_ERROR;
+                    return Faulted(sample, "the drive root is missing");
 
-                ULARGE_INTEGER free_bytes{};
-                if (!GetDiskFreeSpaceExW(source->root.c_str(), &free_bytes, nullptr, nullptr))
-                    return HSM_METRIC_READ_ERROR;
+                double free_bytes = 0.0;
+                std::string error;
+                if (!ReadFreeBytes(*source, free_bytes, error))
+                    return Fail(sample, std::move(error));
 
-                *out_value = static_cast<double>(free_bytes.QuadPart) / (1024.0 * 1024.0); // -> MB
+                sample->double_value = free_bytes / (1024.0 * 1024.0); // -> MB
                 return HSM_METRIC_READ_OK;
             }
 
             void DiskDispose(void* user_data)
             {
                 delete static_cast<DiskSource*>(user_data);
+            }
+
+            // ---- Free disk space prediction (#1426) ------------------------------------------
+            // WindowsFreeDiskSpacePrediction: a 30 s sampling loop feeding the drain-speed EMA and a
+            // TimeSpan posted on the sensor's own post period. WindowsDiskInfo.FreeSpace is in BYTES
+            // (DriveInfo.AvailableFreeSpace), which is what this source samples and divides.
+            struct DiskPredictionSource
+            {
+                DiskSource disk;
+                DiskSpacePrediction prediction{ kCalibrationRequests };
+                std::int64_t last_sample_ms = 0;
+                bool has_last_sample = false;
+            };
+
+            std::int64_t SteadyClockMilliseconds()
+            {
+                return std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now().time_since_epoch())
+                    .count();
+            }
+
+            hsm_metric_read_t DiskPredictionRefresh(void* user_data, hsm_metric_sample_t* sample)
+            {
+                auto* source = static_cast<DiskPredictionSource*>(user_data);
+                if (source == nullptr)
+                    return Faulted(sample, "the drive root is missing");
+
+                double free_bytes = 0.0;
+                std::string error;
+                if (!ReadFreeBytes(source->disk, free_bytes, error))
+                    return Fail(sample, std::move(error)); // managed TryReadFreeSpace -> HandleException
+
+                const auto now_ms = SteadyClockMilliseconds();
+                const double elapsed_seconds =
+                    source->has_last_sample ? static_cast<double>(now_ms - source->last_sample_ms) / 1000.0 : 0.0;
+
+                source->prediction.Sample(free_bytes, elapsed_seconds);
+                source->last_sample_ms = now_ms;
+                source->has_last_sample = true;
+                return HSM_METRIC_READ_NO_VALUE; // a sampling tick never posts
+            }
+
+            hsm_metric_read_t DiskPredictionRead(void* user_data, hsm_metric_sample_t* sample)
+            {
+                auto* source = static_cast<DiskPredictionSource*>(user_data);
+                if (source == nullptr)
+                    return Faulted(sample, "the drive root is missing");
+
+                double free_bytes = 0.0;
+                std::string error;
+                if (!ReadFreeBytes(source->disk, free_bytes, error))
+                    return Fail(sample, std::move(error));
+
+                const auto post = source->prediction.NextPost(free_bytes);
+                ScratchComment() = post.comment;
+
+                sample->kind = HSM_METRIC_VALUE_TIMESPAN_MS;
+                sample->timespan_ms = post.value_ms;
+                sample->status = post.status;
+                sample->comment = ScratchComment().c_str();
+                return HSM_METRIC_READ_OK;
+            }
+
+            void DiskPredictionDispose(void* user_data)
+            {
+                delete static_cast<DiskPredictionSource*>(user_data);
             }
 
             bool Contains(const std::string& haystack, const char* needle)
@@ -329,33 +467,54 @@ namespace hsm
             }
 
             bool Finish(
-                void* source, hsm_metric_read_fn read, hsm_metric_dispose_fn dispose, hsm_metric_read_fn* out_read,
-                hsm_metric_dispose_fn* out_dispose, void** out_source_user_data)
+                void* source, hsm_metric_read_sample_fn read, hsm_metric_dispose_fn dispose,
+                hsm_metric_source_t* out_source, hsm_metric_read_sample_fn refresh = nullptr,
+                std::int64_t refresh_period_ms = 0)
             {
                 if (source == nullptr)
                     return false;
-                *out_read = read;
-                *out_dispose = dispose;
-                *out_source_user_data = source;
+                out_source->read_sample = read;
+                out_source->refresh = refresh;
+                out_source->refresh_period_ms = refresh_period_ms;
+                out_source->dispose = dispose;
+                out_source->user_data = source;
                 return true;
+            }
+
+            // Exception barrier for a read callback. The seam contract (hsm_collector.h) is that a
+            // callback never throws across the C boundary and the core does not catch around it;
+            // these readers build their report text and can raise std::bad_alloc. Anything thrown is
+            // reported as a FAILED read rather than escaping into the scheduler (root rule #6), and
+            // since it is a sample failure rather than a source fault the primed query is kept.
+            template <hsm_metric_read_t (*Read)(void*, hsm_metric_sample_t*)>
+            hsm_metric_read_t Guarded(void* user_data, hsm_metric_sample_t* sample) noexcept
+            {
+                try
+                {
+                    return Read(user_data, sample);
+                }
+                catch (...)
+                {
+                    sample->error = nullptr;
+                    return HSM_METRIC_READ_SAMPLE_ERROR;
+                }
             }
 
         } // namespace
 
         int WindowsMetricSourceFactory(
-            void* /*factory_user_data*/, const char* sensor_path, hsm_metric_read_fn* out_read,
-            hsm_metric_dispose_fn* out_dispose, void** out_source_user_data)
+            void* /*factory_user_data*/, const char* sensor_path, hsm_metric_source_t* out_source)
         {
-            if (sensor_path == nullptr || out_read == nullptr || out_dispose == nullptr || out_source_user_data == nullptr)
+            if (sensor_path == nullptr || out_source == nullptr)
                 return 0;
 
             const std::string name = SensorName(sensor_path);
             const auto pdh = [&](const std::vector<std::wstring>& paths, double scale) {
-                return Finish(MakePdhSource(paths, scale), &PdhRead, &PdhDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
+                return Finish(MakePdhSource(paths, scale), &Guarded<PdhRead>, &PdhDispose, out_source) ? 1 : 0;
             };
             // Same source, but reports the change since the previous read (cumulative counter -> delta).
             const auto pdh_delta = [&](const std::vector<std::wstring>& paths, double scale) {
-                return Finish(MakePdhSource(paths, scale), &PdhReadDelta, &PdhDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
+                return Finish(MakePdhSource(paths, scale), &Guarded<PdhReadDelta>, &PdhDispose, out_source) ? 1 : 0;
             };
 
             // ---- System (unambiguous _Total / instance-less counters) ----
@@ -365,14 +524,29 @@ namespace hsm
                 return pdh({ L"\\Memory\\Available MBytes" }, 1.0);
 
             // ---- Disks (per drive letter; decline if the drive can't be parsed) ----
-            if (Contains(name, "Free space on") && !Contains(name, "prediction"))
+            // DiskLetter parses the letter out of "... on <L> disk", so it reads the PREDICTION name
+            // too ("Free space on C disk prediction"); both rows bind to the same volume.
+            if (Contains(name, "Free space on") && Contains(name, "prediction"))
+            {
+                const wchar_t letter = DiskLetter(name);
+                if (letter == 0)
+                    return 0;
+                auto* source = new DiskPredictionSource();
+                source->disk.root = std::wstring(1, letter) + L":\\";
+                return Finish(
+                           source, &Guarded<DiskPredictionRead>, &DiskPredictionDispose, out_source,
+                           &Guarded<DiskPredictionRefresh>, kSpaceCheckPeriodMs)
+                           ? 1
+                           : 0;
+            }
+            if (Contains(name, "Free space on"))
             {
                 const wchar_t letter = DiskLetter(name);
                 if (letter == 0)
                     return 0;
                 auto* source = new DiskSource();
                 source->root = std::wstring(1, letter) + L":\\";
-                return Finish(source, &DiskRead, &DiskDispose, out_read, out_dispose, out_source_user_data) ? 1 : 0;
+                return Finish(source, &Guarded<DiskRead>, &DiskDispose, out_source) ? 1 : 0;
             }
             if (Contains(name, "Active time on"))
             {

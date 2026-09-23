@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.DefaultSensors.SystemInfo;
@@ -39,7 +40,9 @@ namespace HSMDataCollector.DefaultSensors
 
         internal FreeDiskSpacePredictionBase(DiskSensorOptions options, IDiskInfo diskInfo) : base(options)
         {
-            _calculateSpeedDelay = TimeSpan.FromSeconds(DefaultSpaceCheckPeriodInSec);
+            _calculateSpeedDelay = options.SpaceCheckPeriod > TimeSpan.Zero
+                ? options.SpaceCheckPeriod
+                : TimeSpan.FromSeconds(DefaultSpaceCheckPeriodInSec);
             _calibrationRequests = options.CalibrationRequests;
             _diskInfo = diskInfo;
 
@@ -91,10 +94,14 @@ namespace HSMDataCollector.DefaultSensors
             if (IsCalibration)
                 return $"Calibration request ({_requestsCount}/{_calibrationRequests})";
 
+            // Invariant culture on purpose: the native collector renders the same number through its
+            // shortest-round-trip formatter, so plain interpolation (current culture) would make the two
+            // collectors emit "1,5" and "1.5" for identical input on a comma-decimal host — a drift in
+            // exactly the field repo rule #10 pins (#1426).
             var mbPerSec = _currentChangeSpeed.BytesToMegabytesDouble();
 
-            return _isOffTime ? $"Free space increases by {-mbPerSec} Mbytes/sec. Value cannot be calculated." :
-                                $"Free space decreases by {mbPerSec} Mbytes/sec.";
+            return _isOffTime ? $"Free space increases by {(-mbPerSec).ToString(CultureInfo.InvariantCulture)} Mbytes/sec. Value cannot be calculated." :
+                                $"Free space decreases by {mbPerSec.ToString(CultureInfo.InvariantCulture)} Mbytes/sec.";
         }
 
         protected sealed override SensorStatus GetStatus() => IsCalibration || _isOffTime ? SensorStatus.OffTime : base.GetStatus();

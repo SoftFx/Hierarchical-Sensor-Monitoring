@@ -5,6 +5,7 @@ using HSMDataCollector.Prototypes;
 using HSMDataCollector.Prototypes.Collections;
 using HSMDataCollector.Prototypes.Collections.Disks;
 using HSMDataCollector.Prototypes.Collections.Network;
+using HSMDataCollector.DefaultSensors.SystemInfo;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
@@ -535,7 +536,7 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "expect_payload_contains":
-                    Assert.Contains(step.Arg(1), PayloadText(state.Sender.Values[int.Parse(step.Arg(0))]));
+                    Assert.Contains(step.Arg(1), PayloadText(PayloadAt(state, step.Arg(0))));
                     break;
 
                 // Differential-fuzzer support: write every captured payload's canonical text,
@@ -563,7 +564,7 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "expect_payload_not_contains":
-                    Assert.DoesNotContain(step.Arg(1), PayloadText(state.Sender.Values[int.Parse(step.Arg(0))]));
+                    Assert.DoesNotContain(step.Arg(1), PayloadText(PayloadAt(state, step.Arg(0))));
                     break;
 
                 case "expect_comment_length":
@@ -616,6 +617,53 @@ namespace HSMDataCollector.Tests
                         step.Arg(0),
                         BuildConformanceBarOptions(int.Parse(step.Arg(1)), int.Parse(step.Arg(2)), int.Parse(step.Arg(3)))));
                     break;
+
+                case "create_failing_metric_sensor":
+                {
+                    // #1426: a Double monitoring sensor whose read fails EVERY tick with the fixture's
+                    // message. Native binds a metric source that answers HSM_METRIC_READ_SAMPLE_ERROR;
+                    // here GetValue throws, which is the same seam — MonitoringSensorBase.BuildSensorValue
+                    // routes it to HandleException (the error channel) and posts the default value with
+                    // SensorStatus.Error and the message as the comment.
+                    var failingProcessor = GetDataProcessor(state.Collector);
+                    var failingOptions = new MonitoringInstantSensorOptions
+                    {
+                        PostDataPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))),
+                        ComputerName = state.Collector.ComputerName,
+                        Module = state.Collector.Module,
+                        Path = step.Arg(0),
+                        Type = SensorType.DoubleSensor,
+                        DataProcessor = failingProcessor,
+                    };
+                    var failing = failingProcessor.SensorStorage.Register(
+                        new ConformanceFailingSensor(failingOptions, ExpandTextToken(step.Arg(2))));
+                    state.Sensors.Add(failing);
+                    break;
+                }
+
+                case "create_disk_prediction_sensor":
+                {
+                    // #1426: the real FreeDiskSpacePredictionBase over a scripted free-space series, with
+                    // fixture-sized periods (the catalog runs 5 min posts / 30 s sampling / 6 calibration
+                    // requests). Native drives the same math from disk_prediction.hpp.
+                    var predictionProcessor = GetDataProcessor(state.Collector);
+                    var predictionOptions = new DiskSensorOptions
+                    {
+                        CalibrationRequests = int.Parse(step.Arg(1)),
+                        PostDataPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(2))),
+                        SpaceCheckPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(3))),
+                        ComputerName = state.Collector.ComputerName,
+                        Module = state.Collector.Module,
+                        Path = step.Arg(0),
+                        Type = SensorType.TimeSpanSensor,
+                        DataProcessor = predictionProcessor,
+                    };
+                    var diskInfo = new ScriptedDiskInfo(ParseDouble(step.Arg(4)), ParseDouble(step.Arg(5)));
+                    var prediction = predictionProcessor.SensorStorage.Register(
+                        new ConformanceDiskPredictionSensor(predictionOptions, diskInfo));
+                    state.Sensors.Add(prediction);
+                    break;
+                }
 
                 case "create_int_bar_sensor_with_partial_posts":
                     // #1428: a PublicBarMonitoringSensor with a live tick and post period — the base of the
@@ -1008,6 +1056,60 @@ namespace HSMDataCollector.Tests
             internal ConformanceSampledBarSensor(BarSensorOptions options) : base(options) { }
 
             protected override double? GetBarData() => Interlocked.Increment(ref _samples);
+        }
+
+        /// <summary>
+        /// A value sensor whose read always fails (#1426) — the managed twin of a native metric source
+        /// answering HSM_METRIC_READ_SAMPLE_ERROR on every read.
+        /// </summary>
+        private sealed class ConformanceFailingSensor : MonitoringSensorBase<double, NoDisplayUnit>
+        {
+            private readonly string _message;
+
+            internal ConformanceFailingSensor(MonitoringInstantSensorOptions options, string message) : base(options)
+            {
+                _message = message;
+            }
+
+            protected override double GetValue() => throw new IOException(_message);
+        }
+
+        /// <summary>
+        /// Free space that falls linearly with elapsed time (#1426). A function of the CLOCK, not of the
+        /// call count, so both drivers observe the same drain even though they read the disk a different
+        /// number of times per post.
+        /// </summary>
+        private sealed class ScriptedDiskInfo : IDiskInfo
+        {
+            private readonly Stopwatch _elapsed = Stopwatch.StartNew();
+            private readonly double _start;
+            private readonly double _drainPerSecond;
+
+            internal ScriptedDiskInfo(double start, double drainPerSecond)
+            {
+                _start = start;
+                _drainPerSecond = drainPerSecond;
+            }
+
+            public long FreeSpace
+            {
+                get
+                {
+                    var remaining = _start - _drainPerSecond * _elapsed.Elapsed.TotalSeconds;
+
+                    return remaining > 0.0 ? (long)remaining : 0L;
+                }
+            }
+
+            public long FreeSpaceMb => FreeSpace / (1024L * 1024L);
+
+            public string DiskLetter => "C";
+        }
+
+        private sealed class ConformanceDiskPredictionSensor : FreeDiskSpacePredictionBase
+        {
+            internal ConformanceDiskPredictionSensor(DiskSensorOptions options, IDiskInfo diskInfo)
+                : base(options, diskInfo) { }
         }
 
         private static void AddSensor<T>(ContractState state, List<T> typedSensors, T sensor)
@@ -1622,6 +1724,24 @@ namespace HSMDataCollector.Tests
             }
 
             return options;
+        }
+
+        /// <summary>
+        /// Resolves a fixture payload index, where a NEGATIVE index counts back from the end
+        /// (−1 = last), as the DSL spec documents and the native driver already implements. A
+        /// fixture whose tail length depends on scheduler timing can only address the last payload.
+        /// </summary>
+        private static SensorValueBase PayloadAt(ContractState state, string index)
+        {
+            var values = state.Sender.Values;
+            var position = int.Parse(index);
+
+            if (position < 0)
+                position += values.Count;
+
+            Assert.InRange(position, 0, Math.Max(values.Count - 1, 0));
+
+            return values[position];
         }
 
         private static string PayloadText(SensorValueBase value)

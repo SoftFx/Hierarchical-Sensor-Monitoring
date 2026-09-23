@@ -67,8 +67,23 @@ one neither crosses the C ABI boundary nor breaks the collector; a `MessageDedup
 collapses repeated error messages within `exception_deduplicator_window_ms`
 (count-suffix flush, capacity + oldest-expiry eviction), and **zero window logs
 immediately** (the same regression-guarded contract). Error routing funnels validation
-drops and shutdown discards through the deduplicator to the C-ABI log sink. Verified by
-`native_logger_*` and `native_lifecycle_listener_exception_is_isolated` unit tests. C ABI:
+drops, shutdown discards and metric-source read failures through the deduplicator.
+
+Since #1426 an emitted error line goes to BOTH sinks the managed `MessageDeduplicator` action uses:
+the C-ABI log sink **and** the `.module/Collector errors` sensor, when the host registered it
+(`hsm_collector_add_default_sensor(HSM_DEFAULT_COLLECTOR_ERRORS)` records its path). Only messages
+that survive deduplication are posted, so a storm collapses on the wire exactly as it does in the
+log, and a thread-local reentrancy latch keeps a failure raised *while* publishing an error from
+recursing (it still reaches the log). A metric-source read failure is formatted as
+`Sensor: <path>, <reason>`, taking the shape of managed `AddException`'s
+`Sensor: {SensorPath}, {ex}`. Only the prefix and the reason are shared: managed interpolates the
+whole exception (type + message + stack trace), so the two texts are not byte-identical.
+Requirement this places on callers: `LogError` must never be called while holding the collector
+mutex, since publishing takes it.
+
+Verified by `native_logger_*`, `native_metric_sample_error_is_reported` and
+`native_lifecycle_listener_exception_is_isolated` unit tests, plus the
+`metric_source_contract.hsmtest` corpus case in both drivers. C ABI:
 [`docs/native-collector-c-abi.md`](../../../../docs/native-collector-c-abi.md).
 
 ## Known Issues / Limitations

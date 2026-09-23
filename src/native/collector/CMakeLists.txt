@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.7.4 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.8.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -370,6 +370,11 @@ set(NATIVE_REGRESSION_TESTS
     native_metric_source_seam_lifecycle
     native_metric_source_drives_default_bar_sensor
     native_metric_source_drives_custom_double_sensor
+    # #1426: a read failure is reported instead of skipped, and a typed source carries a TimeSpan +
+    # status + comment on its own refresh cadence. The prediction math is unit-tested on its own.
+    native_metric_sample_error_is_reported
+    native_metric_timespan_source_posts_typed_value
+    native_disk_prediction_calibrates_then_predicts
     # #1428: metric-driven default bars post partials of a 5-min bar (manual clock, managed-derived values).
     native_metric_bar_partial_posts_keep_open_time
     native_metric_bar_rolls_over_at_window_boundary
@@ -431,6 +436,14 @@ if(WIN32)
     add_test(NAME native_windows_process_metric_resolves_current_process
         COMMAND hsm_collector_tests native_windows_process_metric_resolves_current_process
     )
+    # #1426: the disk readers bind by drive letter, so only a row naming one as a standalone token
+    # may bind — the letter-less Unix rows must not land on drive N:. #1421 added the same test
+    # independently; this is the reconciled copy, which asserts the binding DECISION rather than a
+    # sample/recreate count (neither count can discriminate once a failed disk read answers
+    # SAMPLE_ERROR and so keeps its source).
+    add_test(NAME native_windows_disk_binds_only_lettered_rows
+        COMMAND hsm_collector_tests native_windows_disk_binds_only_lettered_rows
+    )
     # #1189 follow-up: host sensors must actually emit, not register empty.
     add_test(NAME native_windows_info_sensors_emit_values
         COMMAND hsm_collector_tests native_windows_info_sensors_emit_values
@@ -446,10 +459,6 @@ if(WIN32)
     # EnableTcpConnectionFailureRateSensor is a no-op elsewhere).
     add_test(NAME native_tcp_failure_rate_sensor_registers
         COMMAND hsm_collector_tests native_tcp_failure_rate_sensor_registers
-    )
-    # #1414: the Windows factory must decline the letter-less Unix disk rows (they would parse as N:).
-    add_test(NAME native_windows_disk_binds_only_lettered_rows
-        COMMAND hsm_collector_tests native_windows_disk_binds_only_lettered_rows
     )
     # #1414: the Linux factory must refuse to install off Linux instead of silently doing nothing.
     add_test(NAME native_linux_metric_sources_rejected_off_linux
@@ -468,6 +477,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
     add_test(NAME native_linux_free_disk_binds_only_the_unix_row
         COMMAND hsm_collector_tests native_linux_free_disk_binds_only_the_unix_row
+    )
+    add_test(NAME native_linux_disk_prediction_produces_live_value
+        COMMAND hsm_collector_tests native_linux_disk_prediction_produces_live_value
     )
 endif()
 
@@ -511,6 +523,7 @@ add_conformance_test(conformance_top_cpu_contract top_cpu_contract.hsmtest)
 add_conformance_test(conformance_network_speed_contract network_speed_contract.hsmtest)
 add_conformance_test(conformance_unix_default_sensors_contract unix_default_sensors_contract.hsmtest)
 add_conformance_test(conformance_module_markers_contract module_markers_contract.hsmtest)
+add_conformance_test(conformance_metric_source_contract metric_source_contract.hsmtest)
 
 add_test(
     NAME native_default_sensors_wire_golden

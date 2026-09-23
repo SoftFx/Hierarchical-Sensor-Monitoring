@@ -1,4 +1,5 @@
 ﻿using System;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.DefaultSensors.SystemInfo;
 
 
@@ -16,6 +17,16 @@ namespace HSMDataCollector.Options
         public int CalibrationRequests { get; set; } = DefaultCalibrationRequests;
 
         public string TargetPath { get; set; } = DefaultTargetPath;
+
+        /// <summary>
+        /// How often the disk-space prediction sensor samples free space to update its drain-speed
+        /// EMA, independently of how often it POSTS. Internal on purpose: the 30 s default is part of
+        /// the cross-collector contract (the native source uses the same constant), and only the
+        /// conformance driver shortens it so a fixture can observe the calibration sequence in
+        /// seconds instead of half an hour (#1426).
+        /// </summary>
+        internal TimeSpan SpaceCheckPeriod { get; set; } =
+            TimeSpan.FromSeconds(FreeDiskSpacePredictionBase.DefaultSpaceCheckPeriodInSec);
 
 
         internal DiskSensorOptions SetInfo(IDiskInfo info)

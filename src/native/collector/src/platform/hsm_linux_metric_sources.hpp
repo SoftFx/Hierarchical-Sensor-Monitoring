@@ -14,14 +14,13 @@ namespace hsm
     namespace platform
     {
 
-        // hsm_metric_source_factory_fn: returns 1 and fills the read/dispose/user_data out-params when it
-        // recognizes the path; returns 0 (no source) otherwise so the sensor stays registration-only.
+        // hsm_metric_source_factory_ex_fn (#1426): returns 1 and fills *out_source when it recognizes
+        // the path; returns 0 (no source) otherwise so the sensor stays registration-only. The typed
+        // form is what lets a reader report WHY a read failed and carry a non-double value.
         int LinuxMetricSourceFactory(
             void* factory_user_data,
             const char* sensor_path,
-            hsm_metric_read_fn* out_read,
-            hsm_metric_dispose_fn* out_dispose,
-            void** out_source_user_data);
+            hsm_metric_source_t* out_source);
 
     } // namespace platform
 } // namespace hsm

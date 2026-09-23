@@ -17,8 +17,8 @@ extern "C"
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 7
-#define HSM_COLLECTOR_VERSION_PATCH 4
+#define HSM_COLLECTOR_VERSION_MINOR 8
+#define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -544,9 +544,13 @@ hsm_result_t hsm_collector_add_all_queue_diagnostic_sensors(hsm_collector_t* col
 
 /* ---- Metric-source seam (#1099) ------------------------------------------------------------
    The native equivalent of IPerformanceCounterFactory/IPerformanceCounter: the value source a
-   default monitoring sensor reads on each scheduled tick. A source returns a double sample or
-   signals "no value this tick"; on a read error the collector disposes and recreates it (managed
-   recreate-on-InvalidOperationException), and disposes it on stop. The DEFAULT factory is a no-op
+   default monitoring sensor reads on each scheduled tick. A source returns a sample, signals "no
+   value this tick", or reports a read failure; on a source fault the collector disposes and
+   recreates it (managed recreate-on-InvalidOperationException), and disposes it on stop. Every
+   reported failure reaches the collector's error channel — the deduplicated error log and, when it
+   is registered, the `.module/Collector errors` sensor — and a value-typed (non-bar) sensor also
+   posts one Error-status value carrying the message, exactly as the managed monitoring base does
+   when its GetValue throws (#1426). The DEFAULT factory is a no-op
    that never yields a value — installing a real factory (or a fake, for tests) is what feeds live
    data. Callbacks run on the scheduler thread outside any collector lock and must not throw across
    the boundary or call a lifecycle method. */
@@ -554,7 +558,13 @@ typedef enum hsm_metric_read_t HSM_ENUM_INT32
 {
     HSM_METRIC_READ_OK = 0,       /* *out_value holds this tick's sample */
     HSM_METRIC_READ_NO_VALUE = 1, /* no sample this tick (skip the post) */
-    HSM_METRIC_READ_ERROR = 2     /* read failed: the collector recreates the source */
+    HSM_METRIC_READ_ERROR = 2,    /* the SOURCE is faulted: the collector recreates it */
+    /* (#1426) THIS READ failed and the source is still usable (an unreadable /proc file, a failing
+       statvfs): the collector reports `sample.error` through its error channel and KEEPS the
+       source, so a stateful reader does not lose its baseline over a transient failure. Never
+       answer a legitimately empty tick with this — that is HSM_METRIC_READ_NO_VALUE, which stays
+       silent by design (a rate source seeding its baseline, a quiet delta counter). */
+    HSM_METRIC_READ_SAMPLE_ERROR = 3
 } hsm_metric_read_t;
 
 /* Create a source for `sensor_path` (the full registered path). Return NULL to leave the sensor
@@ -577,6 +587,79 @@ typedef int (*hsm_metric_source_factory_fn)(
 hsm_result_t hsm_collector_set_metric_source_factory(
     hsm_collector_t* collector,
     hsm_metric_source_factory_fn factory,
+    void* factory_user_data);
+
+/* ---- Typed metric sources (#1426) -----------------------------------------------------------
+   The double-only seam above cannot say WHY a read failed (so a broken source degrades silently,
+   against root rule #8) and cannot carry a non-double value (so the TimeSpan-typed
+   "Free space on disk prediction" had no live value at all). Both gaps are closed additively: the
+   callbacks and the setter above keep their exact signatures and semantics, a source that fills
+   only `read` behaves precisely as before, and the two shipped platform factories plus any host
+   plugin keep linking unchanged.
+
+   `kind` declares which of the value fields this tick's sample was written to, and is ENFORCED: it
+   must match the bound sensor's type (TIMESPAN_MS for a TimeSpan sensor, DOUBLE for every other
+   value type, including the sample a bar accumulates), or the read is treated as a failure and
+   reported like one. Leaving it at its default on a TimeSpan sensor would otherwise publish
+   00:00:00 from an untouched `timespan_ms` — a wrong value with an OK status.
+
+   `status`/`comment` are the posted value's status and comment (managed GetStatus/GetComment); an
+   out-of-range status falls back to OK and a comment longer than 1024 characters is trimmed, the
+   same guards every other value path applies. `error` is the failure detail for
+   HSM_METRIC_READ_ERROR / HSM_METRIC_READ_SAMPLE_ERROR. The collector zero-initializes the struct,
+   sets `struct_size`, `kind` and `status` before every call, and copies any string it keeps during
+   the call — a source may point `comment`/`error` at its own storage. A source built against a
+   NEWER header must not write past the `struct_size` it is handed. */
+typedef enum hsm_metric_value_kind_t HSM_ENUM_INT32
+{
+    HSM_METRIC_VALUE_DOUBLE = 0,     /* `double_value` (the default; what `read` produces) */
+    HSM_METRIC_VALUE_TIMESPAN_MS = 1 /* `timespan_ms` — required by a TimeSpan-typed sensor */
+} hsm_metric_value_kind_t;
+
+typedef struct hsm_metric_sample_t
+{
+    size_t struct_size;           /* sizeof as the COLLECTOR knows it; never written by the source */
+    hsm_metric_value_kind_t kind; /* must match the sensor's type — see above */
+    double double_value;
+    int64_t timespan_ms;
+    int32_t status;      /* hsm_sensor_status_t; HSM_SENSOR_STATUS_OK on entry */
+    const char* comment; /* NULL => no comment */
+    const char* error;   /* failure detail; NULL => the collector logs a generic line */
+} hsm_metric_sample_t;
+
+/* Reader for a typed source, and the optional auxiliary tick. Both use one signature; `refresh`
+   ignores the sample's value fields and only its outcome + `error` are read. */
+typedef hsm_metric_read_t (*hsm_metric_read_sample_fn)(void* source_user_data, hsm_metric_sample_t* sample);
+
+/* Filled by the extended factory. The collector zero-initializes it and sets `struct_size`.
+   - `read_sample` takes precedence over `read`; supply exactly one.
+   - `refresh` is an OPTIONAL second cadence for sources whose posted value is derived from samples
+     taken more often than it is posted — the native shape of a managed sensor that runs its own
+     sampling loop beside the post loop (FreeDiskSpacePredictionBase: free space every 30 s,
+     prediction posted every 5 min). It runs on the same scheduler thread as `read`, never
+     concurrently with it, every `refresh_period_ms` (<= 0 disables it entirely). */
+typedef struct hsm_metric_source_t
+{
+    size_t struct_size;
+    hsm_metric_read_fn read;
+    hsm_metric_read_sample_fn read_sample;
+    hsm_metric_read_sample_fn refresh;
+    int64_t refresh_period_ms;
+    hsm_metric_dispose_fn dispose;
+    void* user_data;
+} hsm_metric_source_t;
+
+/* Return non-zero after filling `out_source`, or 0 to leave the sensor registration-only. */
+typedef int (*hsm_metric_source_factory_ex_fn)(
+    void* factory_user_data,
+    const char* sensor_path,
+    hsm_metric_source_t* out_source);
+
+/* Install a typed factory. It replaces whichever factory is installed (the two setters share one
+   slot), and NULL restores the no-op default. */
+hsm_result_t hsm_collector_set_metric_source_factory_ex(
+    hsm_collector_t* collector,
+    hsm_metric_source_factory_ex_fn factory,
     void* factory_user_data);
 
 hsm_result_t hsm_collector_create_enum_sensor_with_options(

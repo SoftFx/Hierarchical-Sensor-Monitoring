@@ -1,0 +1,68 @@
+# HSM collector conformance v1 — metric-source failures and the disk-space prediction (#1426).
+# Format: case|action|arg1|arg2|...
+# Wall-clock fixture.
+#
+# Actions introduced here:
+# create_failing_metric_sensor|path|post_period_ms|message
+#   A Double value sensor whose live read FAILS every tick with `message`, leaving the source
+#   usable. Native binds a metric source that answers HSM_METRIC_READ_SAMPLE_ERROR; C# registers a
+#   MonitoringSensorBase<double> whose GetValue throws the same message — the same seam, since
+#   BuildSensorValue routes a throwing read to the error channel.
+# create_disk_prediction_sensor|path|calibration_requests|post_period_ms|refresh_period_ms|free_space_start|drain_per_second
+#   The "Free space on disk prediction" sensor over a SCRIPTED free-space series (free space falls
+#   linearly with elapsed time), with fixture-sized periods; the catalog row runs 5 min posts, 30 s
+#   sampling and 6 calibration requests. C# registers FreeDiskSpacePredictionBase over a scripted
+#   IDiskInfo; native binds a metric source running the same disk_prediction.hpp math.
+#
+# Contract notes:
+# - A FAILED read is never silent (root rule #8). It lands in the collector's error channel — the
+#   deduplicated error log and, when the host registered it, the `.module/Collector errors` sensor —
+#   as "Sensor: <path>, <reason>". An EMPTY tick (a delta source seeding its baseline) is NOT a
+#   failure and stays silent in both collectors.
+# - A VALUE sensor whose read failed also posts one value per post period: the default value, status
+#   Error (3), and the failure message as the comment. A BAR sensor posts nothing — it just skips
+#   the sample. That split is managed's: BuildSensorValue's catch arm publishes the default value,
+#   while CollectableBarMonitoringSensorBase simply takes no sample.
+# - The prediction sensor runs two independent cadences: free space is sampled on its own period to
+#   feed the drain-speed EMA, and a TimeSpan is posted on the sensor's post period. It opens with
+#   calibration posts — TimeSpan.Zero, status OffTime, a "Calibration request (n/N)" comment — and
+#   settles into a real prediction with status Ok and a "Free space decreases by ..." comment.
+# - The NUMBER of calibration posts is deliberately NOT pinned. Managed starts its send loop in
+#   InitAsync (first post due immediately) and only then resets the request counter in StartAsync,
+#   so its opening post races that reset and the first comment can repeat or read (0/N). That is a
+#   managed lifecycle wrinkle, not a contract, and pinning it would pin a race.
+
+# A read failure reaches `.module/Collector errors` and posts an Error-status value. The payload
+# stream also carries the module group's own start markers, so both assertions are index-free.
+metric_source_error_is_reported|create_collector
+metric_source_error_is_reported|add_collector_monitoring_sensors
+metric_source_error_is_reported|create_failing_metric_sensor|contract/metric/failing|300|proc read failed
+metric_source_error_is_reported|start
+metric_source_error_is_reported|expect_eventually_payload_contains|Collector errors","Value":"Sensor: |5
+metric_source_error_is_reported|expect_eventually_payload_contains|proc read failed|5
+metric_source_error_is_reported|expect_eventually_payload_contains|"Value":0,"Status":3,"Comment":"proc read failed"|5
+metric_source_error_is_reported|stop
+
+# 2 calibration requests, a post every 500 ms and a sample every 250 ms over 5.6 s: twelve posts
+# nominally, which outruns the longest calibration opening either collector can produce (managed's
+# is one longer than native's — see above), so the LAST payload is a settled prediction. Free space
+# starts at 1 000 000 units and drains 1 000 per second, a strictly positive speed, so that
+# prediction is a real (non-zero) TimeSpan rather than a repeat of the previous one.
+# The lower count bound is load-bearing, not cosmetic: below 6 posts the tail can still be the
+# calibration overhang, which carries TimeSpan.Zero and would fail the last-payload assertion. The
+# margin therefore lives in the sleep (12 nominal vs a floor of 6 tolerates half the posts slipping
+# on a loaded runner), not in a looser bound.
+disk_prediction_calibrates_then_predicts|create_collector
+disk_prediction_calibrates_then_predicts|create_disk_prediction_sensor|contract/metric/prediction|2|500|250|1000000|1000
+disk_prediction_calibrates_then_predicts|start
+disk_prediction_calibrates_then_predicts|sleep_ms|5600
+disk_prediction_calibrates_then_predicts|stop
+disk_prediction_calibrates_then_predicts|expect_sent_count_between|6|14|10
+disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Type":7
+disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Value":"00:00:00"
+disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Status":0
+disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Comment":"Calibration request (
+disk_prediction_calibrates_then_predicts|expect_payload_contains|-1|"Type":7
+disk_prediction_calibrates_then_predicts|expect_payload_contains|-1|"Status":1
+disk_prediction_calibrates_then_predicts|expect_payload_contains|-1|"Comment":"Free space decreases by
+disk_prediction_calibrates_then_predicts|expect_payload_not_contains|-1|"Value":"00:00:00"

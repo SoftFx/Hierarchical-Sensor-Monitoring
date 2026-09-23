@@ -1,6 +1,6 @@
 {
   "name": "hsm-collector",
-  "version": "0.7.4",
+  "version": "0.8.0",
   "description": "Native C++ HSM DataCollector — stable C ABI core + header-only RAII C++ wrapper.",
   "homepage": "https://github.com/SoftFx/Hierarchical-Sensor-Monitoring",
   "supports": "!uwp",
