@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Security;
 using HSMDataCollector.DefaultSensors.Unix.SystemInfo;
@@ -48,11 +48,23 @@ namespace HSMDataCollector.DefaultSensors.Unix
             {
                 return File.ReadAllText(ProcStatPath);
             }
+            catch (Exception ex) when (ex is FileNotFoundException || ex is DirectoryNotFoundException)
+            {
+                // There is no /proc on this host at all — UnixSensorsCollection is chosen for EVERY
+                // non-Windows OS, so this is macOS/FreeBSD, or a container with /proc masked. The
+                // sensor can never produce a value there; that is a platform fact, not data loss, and
+                // reporting it every tick forever would be noise. Stays silent, which is also what the
+                // native collector does on such a host (its Linux factory is compiled out, so the
+                // sensor is simply registration-only) — reporting here would recreate the very
+                // divergence #1426 removed, in the opposite direction.
+                return null;
+            }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is SecurityException)
             {
-                // /proc/stat unavailable (non-Linux host, sandbox): no sample this tick. The
-                // constructor's baseline read stays silent — it runs before the sensor is started,
-                // and every later tick reports the same failure anyway.
+                // /proc/stat EXISTS but could not be read (permissions, I/O error): a real failure on
+                // a host where this sensor is supposed to work, so it is reported. The constructor's
+                // baseline read stays silent — it runs before the sensor is started, and every later
+                // tick reports the same failure anyway.
                 if (reportFailure)
                     HandleException(ex);
 

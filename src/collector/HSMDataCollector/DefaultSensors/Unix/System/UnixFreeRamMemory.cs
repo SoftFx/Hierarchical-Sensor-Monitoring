@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Security;
 using HSMDataCollector.DefaultSensors.Unix.SystemInfo;
@@ -39,8 +39,18 @@ namespace HSMDataCollector.DefaultSensors.Unix
             {
                 return File.ReadAllText(ProcMeminfoPath);
             }
+            catch (Exception ex) when (ex is FileNotFoundException || ex is DirectoryNotFoundException)
+            {
+                // No /proc on this host at all (macOS/FreeBSD — UnixSensorsCollection is chosen for
+                // every non-Windows OS — or /proc masked in a container). A platform fact, not data
+                // loss: the sensor can never produce a value here, and the native collector is
+                // likewise silent because its Linux factory is compiled out. See UnixTotalCpu.
+                return null;
+            }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is SecurityException)
             {
+                // The file EXISTS but could not be read: a real failure on a host where this sensor
+                // is supposed to work.
                 HandleException(ex);
 
                 return null;

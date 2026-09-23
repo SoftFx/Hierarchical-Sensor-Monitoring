@@ -272,10 +272,22 @@ seeding its baseline, an interval too short to measure), which managed skips sil
 **Managed side of the same change.** `UnixTotalCpu` and `UnixFreeRamMemory` used to swallow their
 `IOException`/`UnauthorizedAccessException`/`SecurityException` and return `null`, and treated
 unparseable content the same way — the exact divergence the native change would have created. They
-now route both cases to `HandleException`, so the two collectors report the same failures. The
-`UnixTotalCpu` constructor's baseline read stays silent (it runs before the sensor is started, and
-every later tick reports the same failure anyway). Every other Unix sensor already let its exception
-reach the collect loop.
+now route both cases to `HandleException`, so the two collectors report the same failures. Every
+other Unix sensor already let its exception reach the collect loop.
+
+Two cases stay deliberately SILENT, because reporting them would recreate the divergence in the
+opposite direction:
+- **the host has no `/proc` at all** (`FileNotFoundException` / `DirectoryNotFoundException`).
+  `UnixSensorsCollection` is chosen for EVERY non-Windows OS, so this is macOS/FreeBSD, or a
+  container with `/proc` masked. The sensor can never produce a value there — a platform fact, not
+  data loss — and the native collector is silent for the same host because its Linux factory is
+  compiled out and the sensor stays registration-only. Reporting would mean a permanent recurring
+  error on `.module/Collector errors` for a sensor that was never going to work.
+- **the `UnixTotalCpu` constructor's baseline read**, which runs before the sensor is started; every
+  later tick reports the same failure anyway.
+
+A file that EXISTS but cannot be read (permissions, I/O error) is the real failure case and is
+reported — that is the host where the sensor is supposed to work.
 
 Conformance: `metric_source_contract.hsmtest` (`metric_source_error_is_reported`,
 `disk_prediction_calibrates_then_predicts`).
