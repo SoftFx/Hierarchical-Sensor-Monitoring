@@ -199,7 +199,18 @@ namespace HSMServer.Core.DataLayer
 
         #region Alert Templates
         List<AlertTemplateEntity> GetAllAlertTemplates();
+
+        // Create-path upsert: logs and swallows storage failures.
         void AddAlertTemplate(AlertTemplateEntity policy);
+
+        // Overwrite of an EXISTING template row that PROPAGATES storage
+        // failures instead of logging and swallowing them: callers that must
+        // not silently diverge memory from storage (the #1409 schedule
+        // detach) need the failure surfaced to keep their persist-first
+        // ordering retryable. The template must already exist — the id-list
+        // add of the AddAlertTemplate upsert is not repeated here.
+        void UpdateAlertTemplate(AlertTemplateEntity entity);
+
         void RemoveAlertTemplate(Guid id);
         #endregion
 
