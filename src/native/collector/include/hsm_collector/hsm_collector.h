@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -18,7 +18,7 @@ extern "C"
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
 #define HSM_COLLECTOR_VERSION_MINOR 7
-#define HSM_COLLECTOR_VERSION_PATCH 3
+#define HSM_COLLECTOR_VERSION_PATCH 4
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 

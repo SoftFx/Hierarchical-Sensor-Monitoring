@@ -1,10 +1,10 @@
-# 3.21 (matches CMakePresets.json) so PROJECT_IS_TOP_LEVEL is always defined — it gates the
+﻿# 3.21 (matches CMakePresets.json) so PROJECT_IS_TOP_LEVEL is always defined — it gates the
 # install/example defaults below and is only auto-set from 3.21.
 cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.7.3 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.7.4 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -362,6 +362,8 @@ set(NATIVE_REGRESSION_TESTS
     # #1433: .module start/stop markers mirror managed (first heartbeat false, version Start:/Stop:).
     native_service_alive_marks_the_first_beat
     native_version_sensor_marks_start_and_stop
+    native_version_marker_is_emitted_once_per_run
+    native_version_marker_added_while_running_marks_that_run
     native_metric_source_seam_lifecycle
     native_metric_source_drives_default_bar_sensor
     native_metric_source_drives_custom_double_sensor
