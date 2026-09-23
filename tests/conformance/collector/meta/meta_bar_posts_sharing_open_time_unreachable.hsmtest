@@ -1,0 +1,9 @@
+# MUST-FAIL: the only bar payload is the single stop flush, but the fixture demands two posts sharing
+# its OpenTime. Proves expect_bar_posts_sharing_open_time_at_least counts per-OpenTime groups (#1428).
+meta_bar_posts_sharing_open_time_unreachable|create_collector
+meta_bar_posts_sharing_open_time_unreachable|create_int_bar_sensor|meta/bar/one-post|3600000|0
+meta_bar_posts_sharing_open_time_unreachable|start
+meta_bar_posts_sharing_open_time_unreachable|add_bar_int|0|1
+meta_bar_posts_sharing_open_time_unreachable|stop
+meta_bar_posts_sharing_open_time_unreachable|expect_sent_count|1
+meta_bar_posts_sharing_open_time_unreachable|expect_bar_posts_sharing_open_time_at_least|2

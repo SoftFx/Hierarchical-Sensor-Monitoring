@@ -90,7 +90,7 @@ into the per-case creation order of that sensor kind (0-based).
 | `start` / `stop` | lifecycle transitions (graceful stop flushes the data queue) |
 | `repeat_start_stop_add\|cycles\|sensor_index\|status\|comment_prefix` | restart cycling with one add per cycle |
 | `stop_expect_under_ms\|bound_ms` | stop must return within the bound (shutdown boundedness) |
-| `sleep_ms\|milliseconds` | wall-clock wait — rollover cases only, keep rare |
+| `sleep_ms\|milliseconds` | wall-clock wait — rollover and sampled-bar partial-post cases only, keep rare |
 
 ### Sensor creation
 
@@ -101,6 +101,8 @@ into the per-case creation order of that sensor kind (0-based).
 | `create_last_int_sensor\|path\|default_value` (also `bool`, `double`, `string`) | last-value sensor; default posts on stop if never updated |
 | `create_int_bar_sensor\|path\|bar_period_ms\|post_period_ms` | `post_period_ms=0` ⇒ inert periodic posting; `BarTickPeriod` always inert |
 | `create_double_bar_sensor\|path\|bar_period_ms\|post_period_ms\|precision` | double bar with rounding precision |
+| `create_int_bar_sensor_with_partial_posts\|path\|bar_period_ms\|bar_tick_ms\|post_period_ms` | (#1428) a push-fed IntBar (values via `add_bar_int`) on the built-in bar schedule: a partial of the in-progress bar every `post_period_ms` (aligned) with a stable OpenTime, and a roll on the `bar_tick_ms` tick that publishes the closed bar without a further value. C#: `CreateIntBarSensor` with a live tick/post (`PublicBarMonitoringSensor`, base of the queue-diagnostic bars); native: the same test hook without a sample source (the queue-diagnostic / network-speed bar path) |
+| `create_sampled_double_bar_sensor\|path\|bar_period_ms\|bar_tick_ms\|post_period_ms\|precision` | (#1428) the machinery behind the metric-driven default bars (Total CPU, Free RAM, Process CPU/memory/threads): a driver-owned source is sampled every `bar_tick_ms` (the n-th sample is n) into a bar aligned to `bar_period_ms`, and a partial of the in-progress bar is posted every `post_period_ms` (aligned to multiples of it) with a stable OpenTime; stop flushes the partial. C# registers a `CollectableBarMonitoringSensorBase` subclass; native uses the test-only hook `hsm_collector_test_create_sampled_bar_sensor` + a counting metric-source factory. Wall-clock: pair with the timing-immune bar invariants below |
 | `create_rate_sensor\|path\|post_period_ms` | rate = sum / measured elapsed; first post immediately on start |
 | `create_function_int_sensor\|path\|post_period_ms\|constant` | driver callback returns `constant` |
 | `create_values_function_int_sum_sensor\|path\|post_period_ms\|max_cache_size` | driver callback sums the sliding-window snapshot |
@@ -187,6 +189,9 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_bar_count_total\|expected` | Σ Count over all bar payloads — "no value lost", timing-immune |
 | `expect_bar_open_close_aligned\|payload_index\|period_ms` | close−open == period and open % period == 0 (unix ms) |
 | `expect_all_bars_aligned\|period_ms` / `expect_bar_open_times_increasing` | invariants over all bar payloads |
+| `expect_bar_open_times_nondecreasing` | like the above but partial posts may repeat an OpenTime; it must never go backwards |
+| `expect_partial_bars_accumulate` | payloads sharing an OpenTime are snapshots of one bar: same CloseTime and First, Count never shrinking in delivery order |
+| `expect_bar_posts_sharing_open_time_at_least\|min` / `expect_distinct_bar_open_times_at_least\|min` | the largest same-OpenTime group / the number of distinct OpenTimes reaches `min` |
 | `expect_eventually_payload_contains\|substring\|timeout_s` | polls any payload for the substring |
 | `expect_registration_count\|count[\|timeout_s]` | polls the recorded AddOrUpdate registrations (every sensor registers on every start; immediately when created while running) |
 | `expect_registration_contains\|index\|substring` | substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[...]\|null,"Alerts":[...]\|null,"TtlAlerts":[...]\|null}` — full path incl. identity prefix; TTL in .NET ticks; `Alerts`/`TtlAlerts` are real `AlertUpdateRequest` JSON (numeric enums, emoji escaped) |
@@ -208,11 +213,11 @@ in **all** drivers in the same PR (or an explicit unsupported marker, below).
 - Materialize pending state through contract points instead of sleeping:
   bars flush on graceful stop; the **first periodic post fires immediately on
   start** (buffer values before `start`, assert payload 0).
-- `sleep_ms` is reserved for explicitly wall-clock cases (bar rollover);
+- `sleep_ms` is reserved for explicitly wall-clock cases (bar rollover, sampled-bar partial posts);
   pair it with timing-immune invariants (`expect_bar_count_total`,
   alignment/monotonicity) rather than exact payload layouts where possible.
 - Bar-alignment assertions only with periods that divide the 0001→1970 epoch
-  offset (100/200/500/1000/2000/60000/3600000 ms) — .NET aligns in ticks,
+  offset (100/200/500/1000/2000/60000/3600000/86400000 ms) — .NET aligns in ticks,
   native in unix ms; they agree only there.
 - Cross-language doubles: assert via `expect_bar_field` (tolerant) or pin
   binary-exact decimals (0.5/1.5/2.5); never assert long decimal tails as text.

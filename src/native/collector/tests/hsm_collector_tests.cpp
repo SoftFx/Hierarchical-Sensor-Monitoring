@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <map>
@@ -97,6 +98,15 @@ extern "C" int32_t hsm_collector_test_drive_metric_source(
     int32_t max_reads,
     double* out_values,
     int32_t* out_recreated);
+extern "C" hsm_result_t hsm_collector_test_create_sampled_bar_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int32_t is_int,
+    int64_t bar_period_ms,
+    int64_t bar_tick_ms,
+    int64_t post_period_ms,
+    int32_t precision,
+    hsm_sensor_t** out_sensor);
 extern "C" const char* hsm_collector_test_merge_registration_json(
     int proto_is_computer,
     int64_t proto_ttl_ms,
@@ -545,8 +555,72 @@ namespace
         hsm_alert_t* current_alert = nullptr;
         std::vector<hsm_alert_t*> pending_alerts;
 
+        // create_sampled_*_bar_sensor (#1428): per-path sample counters read by the metric-source
+        // factory (the n-th sample of a sensor is n). Declared before the collector for the same
+        // lifetime reason as function_constants — the scheduler reads them until it is joined.
+        std::vector<std::pair<std::string, std::unique_ptr<std::atomic<int>>>> sampled_counters;
+
         CollectorHandle collector;
     };
+
+    hsm_metric_read_t SampledBarCounterRead(void* user_data, double* out_value)
+    {
+        *out_value = static_cast<double>(++*static_cast<std::atomic<int>*>(user_data));
+        return HSM_METRIC_READ_OK;
+    }
+
+    void SampledBarCounterDispose(void*) {}
+
+    // Binds only the paths created by create_sampled_*_bar_sensor (matched by suffix: the collector
+    // passes the full computer/module-prefixed path); every other metric candidate stays unbound.
+    int SampledBarCounterFactory(
+        void* factory_user_data, const char* sensor_path, hsm_metric_read_fn* out_read,
+        hsm_metric_dispose_fn* out_dispose, void** out_source_user_data)
+    {
+        auto* state = static_cast<ConformanceState*>(factory_user_data);
+        const std::string full(sensor_path != nullptr ? sensor_path : "");
+
+        for (auto& entry : state->sampled_counters)
+        {
+            const auto& tail = entry.first;
+            if (full.size() >= tail.size() && full.compare(full.size() - tail.size(), tail.size(), tail) == 0)
+            {
+                *out_read = &SampledBarCounterRead;
+                *out_dispose = &SampledBarCounterDispose;
+                *out_source_user_data = entry.second.get();
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    struct BarPayloadFields
+    {
+        long long open = 0;
+        long long close = 0;
+        long long count = 0;
+        std::string first;
+    };
+
+    std::vector<BarPayloadFields> BarPayloadsInDeliveryOrder(hsm_collector_t* collector)
+    {
+        std::vector<BarPayloadFields> bars;
+        const auto sent_count = hsm_collector_sent_count(collector);
+        for (size_t index = 0; index < sent_count; ++index)
+        {
+            const auto payload = SentJson(collector, index);
+            if (!IsBarPayload(payload))
+                continue;
+
+            BarPayloadFields bar;
+            bar.open = std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs"));
+            bar.close = std::stoll(NumberFieldFromPayload(payload, "CloseTimeMs"));
+            bar.count = std::stoll(NumberFieldFromPayload(payload, "Count"));
+            bar.first = NumberFieldFromPayload(payload, "First");
+            bars.push_back(std::move(bar));
+        }
+        return bars;
+    }
 
     int32_t ConstantIntFunction(void* user_data)
     {
@@ -1846,6 +1920,45 @@ namespace
             return;
         }
 
+        if (action == "create_sampled_double_bar_sensor")
+        {
+            // #1428: a bar fed by a driver-owned sample source (the n-th sample is n) at bar_tick_ms,
+            // posting partial bars every post_period_ms — the metric-driven default-bar machinery with
+            // fixture-sized periods, reached through the test hook (the catalog uses 5 min/5 s/15 s).
+            Require(step.size() >= 6, "create_sampled_double_bar_sensor requires path, bar period, tick, post period, and precision");
+            const auto path = ExpandTextToken(step[1]);
+            state.sampled_counters.emplace_back("/" + path, std::make_unique<std::atomic<int>>(0));
+            Require(
+                hsm_collector_set_metric_source_factory(state.collector.value, &SampledBarCounterFactory, &state) == HSM_RESULT_OK,
+                "installing the sampled-bar source factory failed");
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_test_create_sampled_bar_sensor(
+                    state.collector.value, path.c_str(), 0, std::stoll(step[2]), std::stoll(step[3]), std::stoll(step[4]),
+                    ToInt(step[5]), &sensor.value) == HSM_RESULT_OK,
+                "sampled double bar sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "create_int_bar_sensor_with_partial_posts")
+        {
+            // #1428: a push-fed IntBar on the built-in bar schedule (tick roll + partial posts) — the
+            // native queue-diagnostic / network-speed bar machinery with fixture-sized periods. No sample
+            // source is registered for it, so the collector leaves it push-fed (values via add_bar_int).
+            Require(step.size() >= 5, "create_int_bar_sensor_with_partial_posts requires path, bar period, tick, and post period");
+            const auto path = ExpandTextToken(step[1]);
+            SensorHandle sensor;
+            Require(
+                hsm_collector_test_create_sampled_bar_sensor(
+                    state.collector.value, path.c_str(), 1, std::stoll(step[2]), std::stoll(step[3]), std::stoll(step[4]), 0,
+                    &sensor.value) == HSM_RESULT_OK,
+                "partial-posting int bar sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
         if (action == "create_double_bar_sensor_full_options")
         {
             Require(step.size() >= 17, "create_double_bar_sensor_full_options requires 16 args");
@@ -2140,6 +2253,57 @@ namespace
                 has_previous = true;
             }
 
+            return;
+        }
+
+        if (action == "expect_bar_open_times_nondecreasing")
+        {
+            const auto bars = BarPayloadsInDeliveryOrder(state.collector.value);
+            Require(!bars.empty(), "expected at least one bar payload");
+            for (size_t index = 1; index < bars.size(); ++index)
+                Require(bars[index - 1].open <= bars[index].open, "bar open times should never decrease in delivery order");
+            return;
+        }
+
+        if (action == "expect_partial_bars_accumulate")
+        {
+            // Every payload of one OpenTime is a snapshot of the same bar: same CloseTime and First,
+            // Count never shrinking in delivery order.
+            const auto bars = BarPayloadsInDeliveryOrder(state.collector.value);
+            Require(!bars.empty(), "expected at least one bar payload");
+            std::map<long long, BarPayloadFields> latest;
+            for (const auto& bar : bars)
+            {
+                const auto previous = latest.find(bar.open);
+                if (previous != latest.end())
+                {
+                    Require(previous->second.close == bar.close, "partials of one bar should share CloseTime");
+                    Require(previous->second.first == bar.first, "partials of one bar should share First");
+                    Require(previous->second.count <= bar.count, "partials of one bar should never lose Count");
+                }
+                latest[bar.open] = bar;
+            }
+            return;
+        }
+
+        if (action == "expect_bar_posts_sharing_open_time_at_least")
+        {
+            Require(step.size() >= 2, "expect_bar_posts_sharing_open_time_at_least requires a minimum");
+            std::map<long long, int> per_open;
+            int largest = 0;
+            for (const auto& bar : BarPayloadsInDeliveryOrder(state.collector.value))
+                largest = (std::max)(largest, ++per_open[bar.open]);
+            Require(largest >= ToInt(step[1]), "too few bar posts share one OpenTime");
+            return;
+        }
+
+        if (action == "expect_distinct_bar_open_times_at_least")
+        {
+            Require(step.size() >= 2, "expect_distinct_bar_open_times_at_least requires a minimum");
+            std::set<long long> opens;
+            for (const auto& bar : BarPayloadsInDeliveryOrder(state.collector.value))
+                opens.insert(bar.open);
+            Require(static_cast<int>(opens.size()) >= ToInt(step[1]), "too few distinct bar OpenTimes");
             return;
         }
 
@@ -3128,8 +3292,8 @@ namespace
     }
 
     // #1164: a default DoubleBar sensor (Total CPU) bound to a metric source at Start samples its
-    // reader at a sub-period tick and emits ONE aggregated bar per post window (real Min/Max/Mean/Count,
-    // not a single instantaneous sample). An ERROR read posts nothing and recreates the source; a
+    // reader at a sub-period tick into a 5-min bar and posts partial snapshots of it (real
+    // Min/Max/Mean/Count, #1428). An ERROR read posts nothing and recreates the source; a
     // DECLINED recreate parks the sensor (no silent NO_VALUE forever). The manual clock drives cadence
     // deterministically; reads/creates are polled because the scheduler runs on its own thread.
     void NativeMetricSourceDrivesDefaultBarSensor()
@@ -3148,19 +3312,18 @@ namespace
 
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
 
-        // First sample fires on Start and OPENS the bar — it must NOT emit yet (the 15 s window is not
-        // elapsed). Total CPU posts every 15 s (catalog) and samples every 5 s (kMetricBarSampleMs).
+        // First sample fires on Start and goes into the open 5-min bar — nothing is posted yet: partial
+        // posts are aligned to wall-clock multiples of the 15 s post period, and the clock base
+        // (1 000 000 ms) is 10 s into such a period, so the first post is due 5 s after Start (#1428).
         Require(WaitForAtomicAtLeast(fake.reads, 1, 2000), "first metric sample should fire on Start");
         Require(fake.creates.load() == 1, "factory should create the source once at Start");
-        Require(hsm_collector_sent_count(collector.value) == 0, "an open metric bar must not emit before its window");
+        Require(hsm_collector_sent_count(collector.value) == 0, "no partial post before the first aligned post time");
 
-        // Drive three more 5 s sample ticks; the read at the 15 s boundary closes + emits the bar.
-        for (int sample = 2; sample <= 4; ++sample)
-        {
-            hsm_collector_test_advance_clock_ms(collector.value, 5000);
-            Require(WaitForAtomicAtLeast(fake.reads, sample, 2000), "each sample tick should read the source");
-        }
-        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "the aggregated bar should emit at the post window");
+        // +5 s: the second 5 s sample and the first aligned post fall due together; the sample is taken
+        // first, so the partial bar carries both.
+        hsm_collector_test_advance_clock_ms(collector.value, 5000);
+        Require(WaitForAtomicAtLeast(fake.reads, 2, 2000), "each sample tick should read the source");
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "the partial bar should post at the aligned post time");
 
         const char* json = nullptr;
         Require(hsm_collector_get_sent_json(collector.value, 0, &json) == HSM_RESULT_OK, "sent payload lookup failed");
@@ -3169,7 +3332,10 @@ namespace
         Contains(payload, "\"Mean\":42"); // every sample read 42
         Contains(payload, "\"Min\":42");
         Contains(payload, "\"Max\":42");
-        Contains(payload, "\"Count\":4"); // 4 samples aggregated into ONE bar (not a single sample)
+        Contains(payload, "\"Count\":1"); // the Start read only primed the source; the +5 s read is the first sample
+        Require(
+            std::stoll(NumberFieldFromPayload(payload, "CloseTimeMs")) - std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs")) == 300000,
+            "a default bar spans the catalog bar period (5 min), not the post period");
 
         // ERROR read -> nothing posted, source disposed + recreated (poll the recreate).
         const auto after_first = hsm_collector_sent_count(collector.value);
@@ -3232,10 +3398,401 @@ namespace
         hsm_sensor_release(sensor);
     }
 
+    // #1428: a counting metric source (the n-th read returns n) so the partial-bar tests can pin
+    // First/Last/Min/Max/Mean/Count exactly. Shared across recreates, like FakeMetricFactoryState.
+    struct CountingMetricState
+    {
+        std::atomic<int> reads{ 0 };
+    };
+
+    inline hsm_metric_read_t CountingMetricRead(void* user_data, double* out_value)
+    {
+        auto* state = static_cast<CountingMetricState*>(user_data);
+        *out_value = static_cast<double>(++state->reads);
+        return HSM_METRIC_READ_OK;
+    }
+
+    inline int CountingMetricFactory(
+        void* factory_user_data, const char* /*sensor_path*/, hsm_metric_read_fn* out_read,
+        hsm_metric_dispose_fn* out_dispose, void** out_source_user_data)
+    {
+        *out_read = &CountingMetricRead;
+        *out_dispose = &FakeMetricDispose;
+        *out_source_user_data = factory_user_data;
+        return 1;
+    }
+
+    // A unix-ms instant on a 5-min boundary (1 700 000 100 000 = 5 666 667 x 300 000), so the
+    // expected OpenTime/CloseTime of every window is a literal. The tests start 1 s into the window,
+    // which keeps every 5 s sample tick off the 15 s post grid and off the window boundary.
+    constexpr int64_t kBarWindowStartMs = 1700000100000;
+
+    struct MetricBarExpect
+    {
+        int64_t open_ms;
+        int count;
+        double first;
+        double last;
+    };
+
+    void RequireMetricBarPayload(const std::string& payload, const MetricBarExpect& expect, const char* what)
+    {
+        const auto fail = [&](const char* field) {
+            return std::string(what) + ": unexpected " + field + "\nActual: " + payload;
+        };
+        Require(std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs")) == expect.open_ms, fail("OpenTimeMs").c_str());
+        Require(std::stoll(NumberFieldFromPayload(payload, "CloseTimeMs")) == expect.open_ms + 300000, fail("CloseTimeMs").c_str());
+        Require(std::stoi(NumberFieldFromPayload(payload, "Count")) == expect.count, fail("Count").c_str());
+        Require(std::stod(NumberFieldFromPayload(payload, "First")) == expect.first, fail("First").c_str());
+        Require(std::stod(NumberFieldFromPayload(payload, "Min")) == expect.first, fail("Min").c_str());
+        Require(std::stod(NumberFieldFromPayload(payload, "Last")) == expect.last, fail("Last").c_str());
+        Require(std::stod(NumberFieldFromPayload(payload, "Max")) == expect.last, fail("Max").c_str());
+        // Samples are consecutive integers, so the mean is the midpoint (exact at precision 2).
+        Require(std::stod(NumberFieldFromPayload(payload, "Mean")) == (expect.first + expect.last) / 2.0, fail("Mean").c_str());
+    }
+
+    // Drives a manual-clock Total CPU bar through one whole 5-min window and into the next, one
+    // scheduler event at a time (a 5 s sample or a 15 s post), and returns the collector for asserts.
+    // Expected values are derived from managed BarMonitoringSensorBase, step by step:
+    //   start at W+1 s: read 1 only primes the source (managed collect loop starts one tick later),
+    //   bar [W, W+5 min)
+    //   post at W+15 s·j (j = 1..19): partial, OpenTime W, Count 3j-1 (samples 2.. at W+6 s+5 s·k)
+    //   post at W+300 s: CloseTime == now is NOT past (strict <), so the old bar posts again, Count 59
+    //   sample at W+301 s: CloseTime < now -> the closed bar is published (Count 59) and a new bar
+    //   [W+5 min, W+10 min) opens with sample 61
+    //   post at W+315 s: partial of the new bar, Count 3 (61..63)
+    void WalkMetricBarThroughOneWindow(hsm_collector_t* collector, CountingMetricState& counting, int64_t until_offset_ms)
+    {
+        int64_t now_offset = 1000;
+        int samples = 1;
+        size_t posts = 0;
+        Require(WaitForAtomicAtLeast(counting.reads, 1, 2000), "the first sample should fire on Start");
+
+        int64_t next_sample = 6000;
+        int64_t next_post = 15000;
+        while ((std::min)(next_sample, next_post) <= until_offset_ms)
+        {
+            if (next_sample < next_post)
+            {
+                hsm_collector_test_advance_clock_ms(collector, next_sample - now_offset);
+                now_offset = next_sample;
+                ++samples;
+                Require(WaitForAtomicAtLeast(counting.reads, samples, 2000), "each 5 s tick should take one sample");
+                if (now_offset == 301000)
+                {
+                    // The roll publishes the closed window's bar.
+                    ++posts;
+                    Require(WaitForSentCountAtLeast(collector, posts, 2000), "the roll should publish the closed bar");
+                }
+                next_sample += 5000;
+            }
+            else
+            {
+                hsm_collector_test_advance_clock_ms(collector, next_post - now_offset);
+                now_offset = next_post;
+                ++posts;
+                Require(WaitForSentCountAtLeast(collector, posts, 2000), "each 15 s post should publish one partial bar");
+                next_post += 15000;
+            }
+        }
+
+        // No stray posts beyond the ones the walk accounted for.
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        Require(hsm_collector_sent_count(collector) == posts, "the walk must account for every posted bar");
+    }
+
+    // #1428: every partial post inside one 5-min window carries the same OpenTime/CloseTime while
+    // Count/Last/Max/Mean grow — the server overwrites these in memory and stores ONE bar per window.
+    void NativeMetricBarPartialPostsKeepOpenTime()
+    {
+        CountingMetricState counting;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_set_metric_source_factory(collector.value, &CountingMetricFactory, &counting) == HSM_RESULT_OK,
+            "set metric-source factory failed");
+        hsm_collector_test_install_manual_clock(collector.value, kBarWindowStartMs + 1000);
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_TOTAL_CPU, nullptr, &sensor) == HSM_RESULT_OK,
+            "add Total CPU default sensor failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        WalkMetricBarThroughOneWindow(collector.value, counting, 45000);
+
+        Require(hsm_collector_sent_count(collector.value) == 3, "three 15 s posts in the first 45 s");
+        for (int j = 1; j <= 3; ++j)
+        {
+            RequireMetricBarPayload(
+                SentJson(collector.value, static_cast<size_t>(j - 1)),
+                { kBarWindowStartMs, 3 * j - 1, 2.0, 3.0 * j },
+                "partial post inside the first window");
+        }
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+
+    // #1428: at the window boundary the closed bar is published once more (the roll on the next
+    // sample tick) and the following posts carry the NEW OpenTime, restarting Count from the first
+    // sample of the new window. Exact values follow managed CheckCurrentBar (strict CloseTime < now).
+    void NativeMetricBarRollsOverAtWindowBoundary()
+    {
+        CountingMetricState counting;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_set_metric_source_factory(collector.value, &CountingMetricFactory, &counting) == HSM_RESULT_OK,
+            "set metric-source factory failed");
+        hsm_collector_test_install_manual_clock(collector.value, kBarWindowStartMs + 1000);
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_TOTAL_CPU, nullptr, &sensor) == HSM_RESULT_OK,
+            "add Total CPU default sensor failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        WalkMetricBarThroughOneWindow(collector.value, counting, 315000);
+
+        // 19 partials (j = 1..19) + the post at the boundary + the roll + the first partial after it.
+        Require(hsm_collector_sent_count(collector.value) == 22, "one window of posts, the roll, and one post of the next");
+        for (int j = 1; j <= 19; ++j)
+        {
+            RequireMetricBarPayload(
+                SentJson(collector.value, static_cast<size_t>(j - 1)),
+                { kBarWindowStartMs, 3 * j - 1, 2.0, 3.0 * j },
+                "partial post inside the first window");
+        }
+        RequireMetricBarPayload(SentJson(collector.value, 19), { kBarWindowStartMs, 59, 2.0, 60.0 }, "post at the boundary instant");
+        RequireMetricBarPayload(SentJson(collector.value, 20), { kBarWindowStartMs, 59, 2.0, 60.0 }, "closed bar published by the roll");
+        RequireMetricBarPayload(
+            SentJson(collector.value, 21), { kBarWindowStartMs + 300000, 3, 61.0, 63.0 }, "first partial of the next window");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+
+    // #1428 (PR #1107 contract, now for metric bars too): Stop flushes the in-progress partial bar,
+    // and re-opens it so a stop -> start -> stop cycle does not resend the already-flushed samples.
+    void NativeMetricBarFlushesPartialOnStop()
+    {
+        CountingMetricState counting;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_set_metric_source_factory(collector.value, &CountingMetricFactory, &counting) == HSM_RESULT_OK,
+            "set metric-source factory failed");
+        hsm_collector_test_install_manual_clock(collector.value, kBarWindowStartMs + 1000);
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_FREE_RAM_MEMORY, nullptr, &sensor) == HSM_RESULT_OK,
+            "add Free RAM default sensor failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // Read 1 at Start only primes the source (managed: first sample one BarTickPeriod after Start).
+        Require(WaitForAtomicAtLeast(counting.reads, 1, 2000), "the priming read should fire on Start");
+        hsm_collector_test_advance_clock_ms(collector.value, 5000);
+        Require(WaitForAtomicAtLeast(counting.reads, 2, 2000), "the first sample should fire at +5 s");
+        Require(hsm_collector_sent_count(collector.value) == 0, "no post before the first aligned 15 s post time");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        Require(hsm_collector_sent_count(collector.value) == 1, "Stop must flush the partial bar exactly once");
+        RequireMetricBarPayload(SentJson(collector.value, 0), { kBarWindowStartMs, 1, 2.0, 2.0 }, "stop flush");
+
+        // Restart in the same window: the bar was re-opened empty, so the next flush carries only the
+        // new run's sample (read 4; read 3 primed the rebound source), not the one already flushed.
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "restart failed");
+        Require(WaitForAtomicAtLeast(counting.reads, 3, 2000), "the restart should prime immediately");
+        hsm_collector_test_advance_clock_ms(collector.value, 5000);
+        Require(WaitForAtomicAtLeast(counting.reads, 4, 2000), "the restart's first sample should fire at +5 s");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "second stop failed");
+        Require(hsm_collector_sent_count(collector.value) == 2, "the second stop flushes the second run only");
+        RequireMetricBarPayload(SentJson(collector.value, 1), { kBarWindowStartMs, 1, 4.0, 4.0 }, "second stop flush");
+
+        hsm_sensor_release(sensor);
+    }
+
+    // #1428 (parity audit follow-up): a PUSH-fed built-in bar — the queue diagnostics
+    // (`.module/Collector queue stats/...`), which no metric source drives — follows managed
+    // PublicBarMonitoringSensor: partial posts every 15 s with a stable OpenTime over the 5-min
+    // window, a roll on the 5 s tick (no further value needed to publish the closed bar), and the stop
+    // flush. Before, it published only on roll-on-add / stop, i.e. at most once per 5 min.
+    void NativeBuiltInPushBarPostsPartials()
+    {
+        auto collector = CreateCollector();
+        hsm_collector_test_install_manual_clock(collector.value, kBarWindowStartMs + 1000);
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_add_default_sensor(collector.value, HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT, nullptr, &sensor) == HSM_RESULT_OK,
+            "add Items count in package default sensor failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        const auto field = [&](size_t index, const char* name) {
+            return std::stoll(NumberFieldFromPayload(SentJson(collector.value, index), name));
+        };
+
+        Require(hsm_sensor_add_bar_int(sensor, 5) == HSM_RESULT_OK, "add 5 failed");
+        Require(hsm_sensor_add_bar_int(sensor, 7) == HSM_RESULT_OK, "add 7 failed");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        Require(hsm_collector_sent_count(collector.value) == 0, "nothing posts before the first aligned 15 s post time");
+
+        // W+15 s: first partial of [W, W+5 min).
+        hsm_collector_test_advance_clock_ms(collector.value, 14000);
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "the push-fed bar should post a partial at W+15 s");
+        Require(field(0, "OpenTimeMs") == kBarWindowStartMs && field(0, "CloseTimeMs") == kBarWindowStartMs + 300000,
+                "the partial spans the 5-min window");
+        Require(field(0, "Count") == 2 && field(0, "Min") == 5 && field(0, "Max") == 7, "first partial aggregates 5, 7");
+
+        // W+30 s: same OpenTime, Count grown.
+        Require(hsm_sensor_add_bar_int(sensor, 9) == HSM_RESULT_OK, "add 9 failed");
+        hsm_collector_test_advance_clock_ms(collector.value, 15000);
+        Require(WaitForSentCountAtLeast(collector.value, 2, 2000), "the push-fed bar should post a partial at W+30 s");
+        Require(field(1, "OpenTimeMs") == kBarWindowStartMs && field(1, "Count") == 3 && field(1, "Max") == 9,
+                "second partial keeps the OpenTime and accumulates");
+
+        // Jump past the window: the tick rolls and publishes the closed bar with no new value; the
+        // post that falls due in the same call sees the fresh, empty bar and posts nothing.
+        hsm_collector_test_advance_clock_ms(collector.value, 271000); // W+301 s
+        Require(WaitForSentCountAtLeast(collector.value, 3, 2000), "the tick should publish the closed bar");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        Require(hsm_collector_sent_count(collector.value) == 3, "an empty new bar posts nothing");
+        Require(field(2, "OpenTimeMs") == kBarWindowStartMs && field(2, "Count") == 3, "the roll publishes the closed window");
+
+        // A value in the new window, then Stop: flushed as a partial of [W+5 min, W+10 min).
+        Require(hsm_sensor_add_bar_int(sensor, 11) == HSM_RESULT_OK, "add 11 failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        Require(hsm_collector_sent_count(collector.value) == 4, "Stop flushes the new window's partial");
+        Require(field(3, "OpenTimeMs") == kBarWindowStartMs + 300000 && field(3, "Count") == 1 && field(3, "First") == 11,
+                "stop flush of the next window");
+
+        hsm_sensor_release(sensor);
+    }
+
+    // #1428 review round 3: the two publishers of one push-fed bar - roll-on-add on a caller thread
+    // and the scheduler's tick roll / partial post - must be totally ordered, or the wire can carry a
+    // partial of window W+1 before the closed bar of W. The server persists on a NEW OpenTime, so that
+    // reordering reorders stored bars. Race-shaped by construction (a fast pusher against a 10 ms post
+    // cadence over 100 ms windows); the assertion is the invariant, not a timing.
+    void NativeBuiltInPushBarPublishesAreOrdered()
+    {
+        auto collector = CreateCollector();
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_test_create_sampled_bar_sensor(collector.value, "race/push/ordered", 1, 100, 10, 10, 0, &sensor) ==
+                HSM_RESULT_OK,
+            "create push-fed bar failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        std::atomic<bool> stop{ false };
+        std::atomic<int> pushed{ 0 };
+        std::thread pusher([&] {
+            while (!stop.load())
+            {
+                hsm_sensor_add_bar_int(sensor, ++pushed);
+                std::this_thread::sleep_for(std::chrono::microseconds(200));
+            }
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        stop.store(true);
+        pusher.join();
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        // Delivery order must never step back to an older window, and within one window every posted
+        // snapshot must be at least as complete as the previous one.
+        long long previous_open = -1;
+        std::map<long long, int> last_count;
+        const auto count = hsm_collector_sent_count(collector.value);
+        Require(count > 0, "the push-fed bar should have published");
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            const auto payload = SentJson(collector.value, index);
+            const auto open = std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs"));
+            const auto bar_count = std::stoi(NumberFieldFromPayload(payload, "Count"));
+
+            Require(open >= previous_open, ("a partial of a newer window overtook an older bar: " + payload).c_str());
+            previous_open = open;
+
+            const auto seen = last_count.find(open);
+            Require(
+                seen == last_count.end() || seen->second <= bar_count,
+                ("a stale snapshot of one window was published after a fuller one: " + payload).c_str());
+            last_count[open] = bar_count;
+        }
+
+        hsm_sensor_release(sensor);
+    }
+
+    // Real-time bar-shape check for the live platform factories (#1428): every Total CPU payload is a
+    // partial of an aligned 5-min bar, and posts inside one window share its OpenTime. Waits for
+    // `posts` Total CPU payloads (15 s apart) — set HSM_LIVE_BAR_POSTS=22 to watch past a whole window.
+    // Clamped to >= 3: two posts may straddle a window boundary and share no OpenTime; three span 30 s,
+    // so at most one boundary, and some window holds two of them.
+    void RequireLiveTotalCpuPartialPosts(hsm_collector_t* collector)
+    {
+        int posts = 3;
+#if defined(_MSC_VER)
+        char* env = nullptr;
+        size_t env_len = 0;
+        if (_dupenv_s(&env, &env_len, "HSM_LIVE_BAR_POSTS") == 0 && env != nullptr)
+        {
+            posts = (std::max)(3, std::atoi(env));
+            std::free(env);
+        }
+#else
+        if (const char* env = std::getenv("HSM_LIVE_BAR_POSTS"))
+            posts = (std::max)(3, std::atoi(env));
+#endif
+
+        const auto count_cpu = [&](std::vector<std::string>& out) {
+            out.clear();
+            const auto count = hsm_collector_sent_count(collector);
+            for (std::size_t i = 0; i < count; ++i)
+            {
+                auto payload = SentJson(collector, i);
+                if (payload.find("/Total CPU\"") != std::string::npos)
+                    out.push_back(std::move(payload));
+            }
+        };
+
+        std::vector<std::string> cpu;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20 + 15 * posts);
+        do
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            count_cpu(cpu);
+        } while (static_cast<int>(cpu.size()) < posts && std::chrono::steady_clock::now() < deadline);
+        Require(static_cast<int>(cpu.size()) >= posts, "Total CPU should post a partial bar every 15 s");
+
+        std::map<long long, int> posts_per_open;
+        long long previous_open = 0;
+        for (const auto& payload : cpu)
+        {
+            Contains(payload, "\"Type\":5"); // DoubleBar
+            const auto open = std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs"));
+            const auto close = std::stoll(NumberFieldFromPayload(payload, "CloseTimeMs"));
+            Require(close - open == 300000, "a live Total CPU bar spans 5 min, not the 15 s post period");
+            Require(open % 300000 == 0, "a live Total CPU bar is aligned to the 5-min grid");
+            Require(open >= previous_open, "live bar OpenTimes never go backwards");
+            previous_open = open;
+            ++posts_per_open[open];
+        }
+
+        // 15 s posts over a 5-min grid: a run of N posts spans at most ceil(N/20)+1 windows, so some
+        // window saw several posts sharing its OpenTime.
+        int largest = 0;
+        for (const auto& entry : posts_per_open)
+            largest = (std::max)(largest, entry.second);
+        Require(largest >= 2, "several 15 s posts must share one 5-min OpenTime");
+        std::printf("live Total CPU: %zu posts over %zu window(s), up to %d sharing one OpenTime\n",
+                    cpu.size(), posts_per_open.size(), largest);
+    }
+
 #if defined(_WIN32)
     // #1164 Windows smoke: the real PDH factory drives a live Total CPU reading. Uses real time. The
-    // bar now aggregates 5 s samples and emits at the 15 s post window, so the first DoubleBar lands
-    // ~one window in (not immediately) — the timeout allows for that plus a slow runner.
+    // bar aggregates 5 s samples into a 5-min bar and posts a partial of it on the 15 s wall-clock
+    // grid, so the first DoubleBar lands within one post period — the timeout allows a slow runner.
     void NativeWindowsMetricSourcesProduceLiveValue()
     {
         auto collector = CreateCollector();
@@ -3250,15 +3807,8 @@ namespace
 
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
 
-        // Generous timeout: the aggregated bar emits at the 15 s window, so allow ~one window plus
-        // priming and slow-runner overhead.
-        Require(
-            WaitForSentCountAtLeast(collector.value, 1, 30000),
-            "the Windows PDH factory should drive a live Total CPU post");
-
-        const char* json = nullptr;
-        Require(hsm_collector_get_sent_json(collector.value, 0, &json) == HSM_RESULT_OK, "sent payload lookup failed");
-        Contains(std::string(json), "\"Type\":5"); // DoubleBar
+        // Several 15 s partial posts of one aligned 5-min PDH bar (#1428).
+        RequireLiveTotalCpuPartialPosts(collector.value);
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
         hsm_sensor_release(sensor);
@@ -3512,6 +4062,9 @@ namespace
         Require(saw_cpu_bar, "Total CPU must produce a live bar from /proc/stat");
         Require(saw_ram_bar, "Free RAM memory must produce a live bar from /proc/meminfo");
         Require(saw_disk_value, "Free space on disk must produce a live value from statvfs");
+
+        // Total CPU keeps posting every 15 s as partials of one aligned 5-min bar (#1428).
+        RequireLiveTotalCpuPartialPosts(collector.value);
 
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
         hsm_sensor_release(cpu);
@@ -5626,6 +6179,11 @@ namespace
             { "native_metric_source_seam_lifecycle", [](const std::string&) { NativeMetricSourceSeamLifecycle(); } },
             { "native_metric_source_drives_default_bar_sensor", [](const std::string&) { NativeMetricSourceDrivesDefaultBarSensor(); } },
             { "native_metric_source_drives_custom_double_sensor", [](const std::string&) { NativeMetricSourceDrivesCustomDoubleSensor(); } },
+            { "native_metric_bar_partial_posts_keep_open_time", [](const std::string&) { NativeMetricBarPartialPostsKeepOpenTime(); } },
+            { "native_metric_bar_rolls_over_at_window_boundary", [](const std::string&) { NativeMetricBarRollsOverAtWindowBoundary(); } },
+            { "native_metric_bar_flushes_partial_on_stop", [](const std::string&) { NativeMetricBarFlushesPartialOnStop(); } },
+            { "native_built_in_push_bar_posts_partials", [](const std::string&) { NativeBuiltInPushBarPostsPartials(); } },
+            { "native_built_in_push_bar_publishes_are_ordered", [](const std::string&) { NativeBuiltInPushBarPublishesAreOrdered(); } },
 #if defined(_WIN32)
             { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
             { "native_windows_process_metric_resolves_current_process",
@@ -5752,6 +6310,7 @@ namespace
             { "conformance_bar_double_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_partial_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_rollover_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_bar_sampled_partial_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_bar_options_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_queue_overflow_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_sender_retry_contract", [](const std::string& path) { RunConformanceContract(path); } },

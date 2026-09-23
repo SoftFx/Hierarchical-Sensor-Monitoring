@@ -1,4 +1,5 @@
 using HSMDataCollector.Core;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.Prototypes.Collections;
@@ -598,6 +599,42 @@ namespace HSMDataCollector.Tests
                         BuildConformanceBarOptions(int.Parse(step.Arg(1)), int.Parse(step.Arg(2)), int.Parse(step.Arg(3)))));
                     break;
 
+                case "create_int_bar_sensor_with_partial_posts":
+                    // #1428: a PublicBarMonitoringSensor with a live tick and post period — the base of the
+                    // managed queue-diagnostic bars (BaseQueueInfoSensor) and the per-interface network bars.
+                    AddSensor(state, state.IntBarSensors, state.Collector.CreateIntBarSensor(
+                        step.Arg(0),
+                        new BarSensorOptions
+                        {
+                            BarPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))),
+                            BarTickPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(2))),
+                            PostDataPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(3))),
+                        }));
+                    break;
+
+                case "create_sampled_double_bar_sensor":
+                {
+                    // #1428: the machinery behind the metric-driven default bars (CollectableBarMonitoringSensorBase:
+                    // sample every BarTickPeriod into a BarPeriod bar, post a partial every PostDataPeriod) with a
+                    // driver-owned source whose n-th sample is n, registered like the default prototypes are.
+                    var dataProcessor = GetDataProcessor(state.Collector);
+                    var sampledOptions = new BarSensorOptions
+                    {
+                        BarPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))),
+                        BarTickPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(2))),
+                        PostDataPeriod = TimeSpan.FromMilliseconds(long.Parse(step.Arg(3))),
+                        Precision = int.Parse(step.Arg(4)),
+                        ComputerName = state.Collector.ComputerName,
+                        Module = state.Collector.Module,
+                        Path = step.Arg(0),
+                        Type = SensorType.DoubleBarSensor,
+                        DataProcessor = dataProcessor,
+                    };
+                    var sampled = (ConformanceSampledBarSensor)dataProcessor.SensorStorage.Register(new ConformanceSampledBarSensor(sampledOptions));
+                    state.Sensors.Add(sampled);
+                    break;
+                }
+
                 case "create_double_bar_sensor_full_options":
                 {
                     // Arg(6) display_unit is ignored: BarSensorOptions is SensorOptions<NoDisplayUnit>,
@@ -710,6 +747,29 @@ namespace HSMDataCollector.Tests
                 case "expect_bar_open_times_increasing":
                     ExpectBarOpenTimesIncreasing(state);
                     break;
+
+                case "expect_bar_open_times_nondecreasing":
+                    ExpectBarOpenTimesNondecreasing(state);
+                    break;
+
+                case "expect_partial_bars_accumulate":
+                    ExpectPartialBarsAccumulate(state);
+                    break;
+
+                case "expect_bar_posts_sharing_open_time_at_least":
+                {
+                    var bars = state.Sender.Values.OfType<BarSensorValueBase>().ToArray();
+                    var largest = bars.Length == 0 ? 0 : bars.GroupBy(bar => bar.OpenTime).Max(group => group.Count());
+                    Assert.True(largest >= int.Parse(step.Arg(0)), $"Expected at least {step.Arg(0)} bar posts sharing one OpenTime, got {largest}.");
+                    break;
+                }
+
+                case "expect_distinct_bar_open_times_at_least":
+                {
+                    var distinct = state.Sender.Values.OfType<BarSensorValueBase>().Select(bar => bar.OpenTime).Distinct().Count();
+                    Assert.True(distinct >= int.Parse(step.Arg(0)), $"Expected at least {step.Arg(0)} distinct bar OpenTimes, got {distinct}.");
+                    break;
+                }
 
                 case "expect_bar_count_total":
                     Assert.Equal(
@@ -910,6 +970,26 @@ namespace HSMDataCollector.Tests
                 AddSensor(state, state.StringSensors, state.Collector.CreateStringSensor(pathPrefix + "/" + i + "/string"));
                 AddSensor(state, state.EnumSensors, state.Collector.CreateEnumSensor(pathPrefix + "/" + i + "/enum"));
             }
+        }
+
+        // Same private-field seam the other collector tests use (PerformanceCounterIsolationTests & co.);
+        // a rename fails here with a message instead of an opaque NullReferenceException.
+        private static DataProcessor GetDataProcessor(DataCollector collector)
+        {
+            var field = typeof(DataCollector).GetField("_dataProcessor", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("DataCollector._dataProcessor not found (renamed?) — update the conformance driver's sampled-bar seam.");
+            return (DataProcessor)field.GetValue(collector);
+        }
+
+        // create_sampled_double_bar_sensor (#1428): a CollectableBarMonitoringSensorBase — the base of
+        // every managed default bar (UnixTotalCpu, WindowsSensorBase, …) — whose n-th sample is n.
+        private sealed class ConformanceSampledBarSensor : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
+        {
+            private int _samples;
+
+            internal ConformanceSampledBarSensor(BarSensorOptions options) : base(options) { }
+
+            protected override double? GetBarData() => Interlocked.Increment(ref _samples);
         }
 
         private static void AddSensor<T>(ContractState state, List<T> typedSensors, T sensor)
@@ -1201,6 +1281,40 @@ namespace HSMDataCollector.Tests
                 Assert.True(
                     bars[i - 1].OpenTime < bars[i].OpenTime,
                     $"Bar open times must be strictly increasing, got {bars[i - 1].OpenTime:O} then {bars[i].OpenTime:O}.");
+        }
+
+        private static void ExpectBarOpenTimesNondecreasing(ContractState state)
+        {
+            var bars = state.Sender.Values.OfType<BarSensorValueBase>().ToArray();
+
+            Assert.NotEmpty(bars);
+
+            for (var i = 1; i < bars.Length; i++)
+                Assert.True(
+                    bars[i - 1].OpenTime <= bars[i].OpenTime,
+                    $"Bar open times must never decrease, got {bars[i - 1].OpenTime:O} then {bars[i].OpenTime:O}.");
+        }
+
+        // Payloads sharing an OpenTime are snapshots of one bar: same CloseTime and First, Count never
+        // shrinking in delivery order.
+        private static void ExpectPartialBarsAccumulate(ContractState state)
+        {
+            var bars = state.Sender.Values.OfType<BarSensorValueBase>().ToArray();
+
+            Assert.NotEmpty(bars);
+
+            var latest = new Dictionary<DateTime, BarSensorValueBase>();
+            foreach (var bar in bars)
+            {
+                if (latest.TryGetValue(bar.OpenTime, out var previous))
+                {
+                    Assert.Equal(previous.CloseTime, bar.CloseTime);
+                    Assert.Equal(GetBarNumericField(previous, "first"), GetBarNumericField(bar, "first"));
+                    Assert.True(previous.Count <= bar.Count, $"Partials of one bar must never lose Count, got {previous.Count} then {bar.Count}.");
+                }
+
+                latest[bar.OpenTime] = bar;
+            }
         }
 
         private static async Task ExpectSentCountBetweenAsync(ContractState state, int min, int max, TimeSpan timeout)
