@@ -35,7 +35,7 @@ trial runs:
   `matt:to-spec`, `matt:to-tickets`, `matt:wayfinder` and `matt:triage`, but no
   skill in the set touches branches, draft PRs or `Closes #N`: `matt:implement`
   takes a spec as given and stops at "commit". So `/work-issue` stays live in a
-  thin form — fresh-master sync, branch naming, draft PR, hand-off — and delegates
+  thin form — fresh-master sync, branch naming, pre-push self-review, draft PR, hand-off — and delegates
   the thinking to the trialled skills. Those mechanics are repo policy, not
   methodology, and the stale-master rule in it was paid for on #1297.
 - **The upstream document layout is left as the author wrote it.** These skills
