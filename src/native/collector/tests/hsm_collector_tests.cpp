@@ -4247,6 +4247,56 @@ namespace
         Require(IsTimeMarkerComment(CommentFromPayload(versions[3]), "Stop"), "the second Stop comment lost its shape");
     }
 
+    // Registering the collector-monitoring group a second time must NOT produce a second "Start:"
+    // marker for the same run: the group's own comment documents re-registration as idempotent, and
+    // a host that calls both AddAllModuleSensors() and AddCollectorMonitoringSensors() takes exactly
+    // that path. Emission is claimed per run, so whichever of Start() and the live Add gets there
+    // first wins and the other skips (#1433).
+    void NativeVersionMarkerIsEmittedOncePerRun()
+    {
+        auto collector = CreateMarkerCollector();
+
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "add collector monitoring sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // Re-register while RUNNING — the pre-Start registration already owns this run's marker.
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "re-adding the collector monitoring group failed");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto versions = PayloadsForPath(collector.value, "/Collector version\"");
+        Require(
+            versions.size() == 2,
+            ("a run must post exactly one Start and one Stop marker, got " + std::to_string(versions.size())).c_str());
+        Require(IsTimeMarkerComment(CommentFromPayload(versions[0]), "Start"), "first marker should be the Start marker");
+        Require(IsTimeMarkerComment(CommentFromPayload(versions[1]), "Stop"), "second marker should be the Stop marker");
+    }
+
+    // A group added for the FIRST time on an already-running collector still marks that run — the
+    // managed dynamic-add path starts the sensor immediately, so its Start value must not wait for
+    // the next restart.
+    void NativeVersionMarkerAddedWhileRunningMarksThatRun()
+    {
+        auto collector = CreateMarkerCollector();
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "add collector monitoring sensors failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto versions = PayloadsForPath(collector.value, "/Collector version\"");
+        Require(
+            versions.size() == 2,
+            ("a live add must mark the running run once, got " + std::to_string(versions.size())).c_str());
+        Require(IsTimeMarkerComment(CommentFromPayload(versions[0]), "Start"), "live add should post the Start marker");
+        Require(IsTimeMarkerComment(CommentFromPayload(versions[1]), "Stop"), "the stop should post the Stop marker");
+    }
+
     void NativeSchedulerOnErrorIsolatesThrowingCallback()
     {
         auto collector = CreateCollector();
@@ -6394,6 +6444,10 @@ namespace
               [](const std::string&) { NativeServiceAliveMarksTheFirstBeat(); } },
             { "native_version_sensor_marks_start_and_stop",
               [](const std::string&) { NativeVersionSensorMarksStartAndStop(); } },
+            { "native_version_marker_is_emitted_once_per_run",
+              [](const std::string&) { NativeVersionMarkerIsEmittedOncePerRun(); } },
+            { "native_version_marker_added_while_running_marks_that_run",
+              [](const std::string&) { NativeVersionMarkerAddedWhileRunningMarksThatRun(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_rate_options_parity", [](const std::string&) { NativeRateOptionsParity(); } },

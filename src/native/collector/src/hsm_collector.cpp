@@ -448,6 +448,9 @@ namespace
     // invariant '/' and ':' the managed side renders on an invariant/en-US host.
     std::string MarkerTimeFromUnixMs(int64_t unix_ms)
     {
+        // Floored division, same as IsoUtcFromUnixMs, so a pre-epoch (negative) input still yields a
+        // correctly floored second instead of C++ truncate-toward-zero. Unlike that function this one
+        // renders no fraction, so there is no millisecond remainder to fix up.
         int64_t secs64 = unix_ms / 1000;
         if (unix_ms % 1000 < 0)
             --secs64;
@@ -2048,6 +2051,11 @@ namespace
         hsm_sensor_type_t type;
         std::string value_json;
         int64_t start_time_ms;
+        // The run (collector start epoch) this marker's "Start:" value was already emitted for.
+        // Registration-while-running and the Start transition both emit, and either can run first,
+        // so whichever gets there claims the epoch and the other skips it — one Start marker per
+        // run, however the sensor was added (#1433).
+        int64_t emitted_start_epoch;
     };
 
     class NativeCollector;
@@ -2603,6 +2611,7 @@ namespace
                 }
 
                 state_ = CollectorState::Starting;
+                ++start_epoch_; // opens a new run for the version markers (#1433)
                 ClearError();
 
                 sensors_snapshot.reserve(sensors_.size());
@@ -3398,23 +3407,40 @@ namespace
                     version_markers_.begin(), version_markers_.end(),
                     [&path](const VersionMarker& marker) { return marker.path == path; });
 
-                if (existing != version_markers_.end())
+                if (existing == version_markers_.end())
                 {
-                    existing->value_json = value_json;
-                    start_time_ms = existing->start_time_ms;
+                    version_markers_.push_back(
+                        VersionMarker{ path, type, std::move(value_json), UnixTimeMilliseconds(), 0 });
+                    existing = std::prev(version_markers_.end());
                 }
                 else
                 {
-                    start_time_ms = UnixTimeMilliseconds();
-                    version_markers_.push_back(VersionMarker{ path, type, value_json, start_time_ms });
+                    existing->value_json = std::move(value_json);
                 }
 
                 if (!CanAcceptDataLocked())
                     return; // the next Start emits it — queueing here too would double-post
+
+                if (!TryClaimStartEpochLocked(*existing))
+                    return; // this run's Start marker is already out (Start() or an earlier Add)
+
+                start_time_ms = existing->start_time_ms;
+                value_json = existing->value_json;
             }
 
             const std::string start_comment = "Start: " + MarkerTimeFromUnixMs(start_time_ms);
             Enqueue(OutgoingValueJson(path, type, value_json, HSM_SENSOR_STATUS_OK, TrimComment(start_comment)));
+        }
+
+        // Caller holds mutex_. True when THIS caller owns emitting the marker's "Start:" value for
+        // the current run; false when someone already has.
+        bool TryClaimStartEpochLocked(VersionMarker& marker)
+        {
+            if (marker.emitted_start_epoch == start_epoch_)
+                return false;
+
+            marker.emitted_start_epoch = start_epoch_;
+            return true;
         }
 
         // Build the "Start:"/"Stop:" marker payloads for every registered version sensor. The Start
@@ -3425,7 +3451,13 @@ namespace
             std::vector<VersionMarker> markers;
             {
                 std::lock_guard<std::mutex> guard(mutex_);
-                markers = version_markers_;
+
+                // On Start, take only the markers whose Start value nobody has emitted for this run
+                // yet; a sensor registered concurrently with Start() may already have posted its own.
+                // Stop takes them all: managed calls StopAsync on every registered sensor.
+                for (auto& marker : version_markers_)
+                    if (!starting || TryClaimStartEpochLocked(marker))
+                        markers.push_back(marker);
             }
 
             std::vector<std::string> values;
@@ -4995,6 +5027,10 @@ namespace
         // Version sensors that re-post their value with a "Start:"/"Stop:" comment on every
         // lifecycle transition (#1433) — mirrors managed ProductVersionSensor. Guarded by mutex_.
         std::vector<VersionMarker> version_markers_;
+        // Bumped on every Start (under mutex_, together with the state flip) so a marker's
+        // emitted_start_epoch identifies the run its Start value went out for. Starts at 1 because
+        // a fresh marker carries 0 = "never emitted".
+        int64_t start_epoch_ = 0;
         mutable std::string last_error_;
 
         std::mutex queue_mutex_;
