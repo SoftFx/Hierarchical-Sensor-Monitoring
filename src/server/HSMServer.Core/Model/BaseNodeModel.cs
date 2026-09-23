@@ -134,9 +134,24 @@ namespace HSMServer.Core.Model
                             ChangeTable.TtlPolicies[existing.Id.ToString()].SetUpdate(update.Initiator);
 
                     UpdateTTLs(update.TTLPolicies, update.Initiator);
+
                     foreach (var ttlUpdate in update.TTLPolicies)
-                        if (ttlUpdate.Id != Guid.Empty)
-                            ChangeTable.TtlPolicies[ttlUpdate.Id.ToString()].SetUpdate(update.Initiator);
+                    {
+                        // #1409: updates carrying PreserveChangeOwnership (the
+                        // schedule detach) do not take ownership — the detach's
+                        // only mutation, ScheduleId, is not rendered by
+                        // Policy.ToString(), so the change journal records
+                        // nothing for it either and a later template apply must
+                        // stay blocked by the CanChange gate. Every OTHER
+                        // update stamps its targeted policies unconditionally
+                        // (pre-#1409 behaviour), including edits the change
+                        // journal itself does not render (e.g. a chat-only
+                        // Destination edit on a template-cleared alert).
+                        if (ttlUpdate.Id == Guid.Empty || ttlUpdate.PreserveChangeOwnership)
+                            continue;
+
+                        ChangeTable.TtlPolicies[ttlUpdate.Id.ToString()].SetUpdate(update.Initiator);
+                    }
                 }
             }
 

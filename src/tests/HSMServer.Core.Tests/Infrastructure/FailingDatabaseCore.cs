@@ -174,6 +174,17 @@ namespace HSMServer.Core.Tests.Infrastructure
             return _inner.RemoveApiTokenSecurityEventsBefore(ticksCutoffUtc, limit);
         }
 
+        // Optional injection point for sensor entity update failures, used to
+        // verify the #1409 detach completion contract: a failed sensor persist
+        // must surface as a non-Ok detach result so the controller keeps the
+        // schedule alive for a retry.
+        internal Func<SensorEntity, bool> ShouldFailSensorUpdate { get; set; }
+
+        // Optional custom message for the injected UpdateSensor failure
+        // (defaults to the fixed simulated-failure text): the detach
+        // aggregate's character-budget pin needs controllably long errors.
+        internal Func<SensorEntity, string> SensorUpdateFailureMessage { get; set; }
+
         public void AddSensor(SensorEntity entity)
         {
             if (_shouldFail(entity))
@@ -184,8 +195,8 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public void UpdateSensor(SensorEntity entity)
         {
-            if (_shouldFail(entity))
-                throw new InvalidOperationException($"Simulated DB failure for sensor {entity.Id}");
+            if (ShouldFailSensorUpdate?.Invoke(entity) == true || _shouldFail(entity))
+                throw new InvalidOperationException(SensorUpdateFailureMessage?.Invoke(entity) ?? $"Simulated DB failure for sensor {entity.Id}");
 
             _inner.UpdateSensor(entity);
         }
@@ -232,6 +243,20 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public List<AlertTemplateEntity> GetAllAlertTemplates() => _inner.GetAllAlertTemplates();
         public void AddAlertTemplate(AlertTemplateEntity policy) => _inner.AddAlertTemplate(policy);
+
+        // Optional injection point for alert template update failures, used to
+        // verify the persist-first detach ordering (#1409): a failed write must
+        // leave the in-memory template untouched so the retry re-runs the detach.
+        internal Func<AlertTemplateEntity, bool> ShouldFailAlertTemplateUpdate { get; set; }
+
+        public void UpdateAlertTemplate(AlertTemplateEntity entity)
+        {
+            if (ShouldFailAlertTemplateUpdate?.Invoke(entity) == true)
+                throw new InvalidOperationException("Simulated DB failure for alert template update");
+
+            _inner.UpdateAlertTemplate(entity);
+        }
+
         public void RemoveAlertTemplate(Guid id) => _inner.RemoveAlertTemplate(id);
 
         public List<AlertScheduleEntity> GetAllAlertSchedules() => _inner.GetAllAlertSchedules();

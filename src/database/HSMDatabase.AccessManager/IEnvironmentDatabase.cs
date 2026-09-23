@@ -151,6 +151,11 @@ namespace HSMDatabase.AccessManager
         AlertTemplateEntity GetAlertTemplate(byte[] id);
         void AddAlertTemplateIdToList(byte[] id);
         void AddAlertTemplate(AlertTemplateEntity alertTemplate);
+
+        // Row overwrite for an EXISTING template that PROPAGATES storage
+        // failures (AddAlertTemplate swallows them); see IDatabaseCore.
+        void UpdateAlertTemplate(AlertTemplateEntity alertTemplate);
+
         void RemoveAlertTemplate(byte[] id);
         #endregion
 

@@ -78,6 +78,11 @@ namespace HSMServer.Core.Cache
 
         private const int LogSampleSize = 10;
 
+        // #1409: sensors per detach queue request — bounds one item's hold
+        // time on a root product's queue; combined with the sequential
+        // per-root chunk dispatch this lets ingestion interleave between
+        // chunks instead of waiting out a whole-park detach.
+        private const int DetachSensorsChunkSize = 100;
         // Cap on orphaned policy ids listed in the #1407 boot Warn: the first
         // boot after that fix plausibly sees many stale references at once.
         private const int MaxLoggedOrphanIds = 50;
@@ -1417,7 +1422,308 @@ namespace HSMServer.Core.Cache
             }
             catch (Exception ex)
             {
-                _logger.Error($"An error was occurred while removing chats {string.Join(',', chats)} from folder {folderId} policies", ex);
+                // Exception-first overload: NLog binds Error(string, Exception)
+                // to the structured-template method and silently drops the
+                // exception when the message has no placeholder.
+                _logger.Error(ex, $"An error was occurred while removing chats {string.Join(',', chats)} from folder {folderId} policies");
+            }
+        }
+
+        // #1409: a schedule being deleted must not leave dangling ScheduleIds
+        // on policies — they fail open at evaluation (#1405) and log a
+        // missing-id error on lookups. Owners of the reference: sensor
+        // policies (regular and TTL), product TTL policies, and alert
+        // templates (a template surviving with the id re-mints it on every
+        // matching sensor). Ordering, completion contract and residuals:
+        // aicontext/features/server/alerts/feature.md (#1409).
+        // The result reports COMPLETION and the method never throws: any
+        // per-entity HARD failure (queue result, sensor or template persist)
+        // or a cancellation marks the detach incomplete, so the caller must
+        // NOT delete the schedule over an incomplete detach. SOFT per-policy
+        // rebuild noise (update applied and persisted) does not block — see
+        // DetachAlertScheduleFromSensor (#1409 review round 5).
+        public async Task<TaskResult> DetachAlertScheduleFromPoliciesAsync(Guid scheduleId, CancellationToken token = default)
+        {
+            var errors = new List<string>();
+
+            try
+            {
+                if (token.IsCancellationRequested)
+                    return IncompleteDetach(scheduleId, ["cancelled before any work was dispatched"]);
+
+                var initiator = InitiatorInfo.AsSystemForce("DetachAlertSchedule");
+
+                // One cancellation event yields ONE error entry (#1409
+                // review round 5): the first walk that observes the
+                // cancelled token returns immediately — the follow-up walks
+                // would only re-describe the same event in extra flash
+                // slots. Already-dispatched queue items are left to finish
+                // on their own (their outcome stays in the Error log); the
+                // detach is non-Ok either way, so the schedule survives
+                // for the operator's retry.
+                if (!DetachAlertScheduleFromTemplates(scheduleId, token, errors))
+                {
+                    errors.Add("cancelled during the template walk");
+                    return IncompleteDetach(scheduleId, errors);
+                }
+
+                var productTasks = new List<Task<TaskResult>>();
+
+                // Raw per-root chunk-error lists (no IncompleteDetach wrap —
+                // the wrap happens ONCE, at the aggregate, below).
+                var sensorRootTasks = new List<Task<List<string>>>();
+
+                // Product arm: the full-list update is built ON the queue
+                // thread (inside the request handler), so a TTL policy added
+                // between this walk and the handler's execution is not
+                // silently dropped by the full-list semantics.
+                foreach (var product in GetProducts().SelectMany(EnumerateProducts))
+                {
+                    if (token.IsCancellationRequested)
+                    {
+                        errors.Add("cancelled during the product walk");
+                        return IncompleteDetach(scheduleId, errors);
+                    }
+
+                    if (!product.Policies.TTLPolicies.Any(t => t.ScheduleId == scheduleId))
+                        continue;
+
+                    // Route to the ROOT product's queue — see the comment in
+                    // RemoveChatsFromPoliciesAsync for why dispatching to a
+                    // sub-product's own queue would race with admin edits.
+                    var request = new DetachAlertScheduleFromProductRequest(product.Id, scheduleId, initiator);
+                    productTasks.Add(DetachAndReportAsync(product.Root.Id, request, scheduleId, token));
+                }
+
+                // Sensor arm: matching sensors are batched per ROOT product in
+                // CHUNKS — one multi-thousand-sensor item would monopolize the
+                // root product's queue (the same queue AddSensorValueAsync
+                // uses). Chunks of one root are dispatched SEQUENTIALLY, each
+                // awaited before the next is enqueued: the bounded channel
+                // accepts writes synchronously while capacity is free, so
+                // eagerly created chunk tasks filled the queue back-to-back
+                // and a concurrent ingestion item landed behind every chunk
+                // anyway — sequential dispatch is what actually lets data
+                // interleave between chunks. Roots still drain in parallel.
+                foreach (var sensorsByRoot in GetSensorsByAlertSchedule(scheduleId).GroupBy(sensor => sensor.Root.Id))
+                {
+                    if (token.IsCancellationRequested)
+                    {
+                        errors.Add("cancelled during the sensor walk");
+                        return IncompleteDetach(scheduleId, errors);
+                    }
+
+                    sensorRootTasks.Add(DetachRootSequentiallyAsync(sensorsByRoot, scheduleId, initiator, token));
+                }
+
+                // WhenAll completes immediately over an empty task list, so
+                // the "nothing referenced the schedule" walk needs no special
+                // case — the detach is trivially complete.
+                errors.AddRange((await Task.WhenAll(productTasks)).Where(result => !result.IsOk).Select(result => result.Error));
+
+                // The per-root chunk errors arrive RAW (unwrapped — see
+                // DetachRootSequentiallyAsync), so they fold into ONE
+                // wrapping level here (#1409 review round 5).
+                foreach (var rootErrors in await Task.WhenAll(sensorRootTasks))
+                    errors.AddRange(rootErrors);
+            }
+            catch (Exception ex)
+            {
+                // Per-entity failures are reported per arm (queue results are
+                // checked, per-sensor and template persists are collected);
+                // this catch is only for the caller-thread walk blowing up —
+                // reported as an incomplete detach so the caller does not
+                // delete the schedule over an unknown state (#1409).
+                _logger.Error(ex, $"An error was occurred while detaching alert schedule {scheduleId} from policies");
+                errors.Add($"the tree walk failed: {ex.Message}");
+            }
+
+            return errors.Count == 0 ? TaskResult.Ok : IncompleteDetach(scheduleId, errors);
+        }
+
+        // Bounded aggregate: the detach result reaches the operator through a
+        // cookie-backed TempData flash, so a mass outage's per-entity errors
+        // are truncated here — the full per-entity detail is Error-logged in
+        // the arms above (#1409). The cap is TWO-sided (#1409 review round
+        // 5): an item-count cap AND a hard character budget — a handful of
+        // long exception messages could already exceed the browser's ~4 KB
+        // cookie limit, and an oversized TempData payload is silently
+        // dropped (clean Index page, no error, schedule not deleted). Both
+        // cut-offs point at the server log. Internal consts so the pins in
+        // AlertScheduleDetachTests assert against the real budgets.
+        internal const int MaxReportedDetachErrors = 5;
+        internal const int MaxDetachErrorCharacters = 1500;
+
+        private static TaskResult IncompleteDetach(Guid scheduleId, List<string> errors)
+        {
+            var details = errors.Count <= MaxReportedDetachErrors
+                ? string.Join("; ", errors)
+                : $"{string.Join("; ", errors.Take(MaxReportedDetachErrors))}; and {errors.Count - MaxReportedDetachErrors} more (see the server log)";
+
+            var message = $"detach of alert schedule {scheduleId} did not complete ({details})";
+
+            if (message.Length <= MaxDetachErrorCharacters)
+                return TaskResult.FromError(message);
+
+            const string tail = " ... (see the server log)";
+            var cut = MaxDetachErrorCharacters - tail.Length;
+
+            // Do not split a UTF-16 surrogate pair at the cut boundary.
+            if (char.IsHighSurrogate(message[cut]))
+                cut--;
+
+            return TaskResult.FromError(string.Concat(message.AsSpan(0, cut), tail));
+        }
+
+        // One root's sensor chunks, awaited one-by-one — see the sensor-arm
+        // comment in DetachAlertScheduleFromPoliciesAsync for why the chunks
+        // must not be enqueued eagerly. Chunk-level failures (queue results
+        // plus the per-sensor failures the handler collects into the request)
+        // are returned as a RAW message list (#1409 review round 5): the
+        // caller folds them into the detach's single wrapping level instead
+        // of nesting an IncompleteDetach per root, which re-repeated the
+        // prefix per root and could overflow the cookie flash.
+        private async Task<List<string>> DetachRootSequentiallyAsync(
+            IGrouping<Guid, BaseSensorModel> sensorsByRoot, Guid scheduleId, InitiatorInfo initiator, CancellationToken token)
+        {
+            var chunkErrors = new List<string>();
+
+            foreach (var chunk in sensorsByRoot.Chunk(DetachSensorsChunkSize))
+            {
+                if (token.IsCancellationRequested)
+                {
+                    chunkErrors.Add("cancelled during chunk dispatch");
+                    break;
+                }
+
+                var request = new DetachAlertScheduleFromSensorsRequest(
+                    [.. chunk.Select(sensor => sensor.Id)], scheduleId, initiator, []);
+
+                var result = await DetachAndReportAsync(sensorsByRoot.Key, request, scheduleId, token);
+
+                if (!result.IsOk)
+                    chunkErrors.Add(result.Error);
+
+                // Per-sensor failures logged by the queue handler; reading
+                // them here is ordered by the chunk round-trip completing
+                // first.
+                chunkErrors.AddRange(request.Errors);
+            }
+
+            return chunkErrors;
+        }
+
+        // Shared dispatch tail for both detach arms: ProcessRequestAsync
+        // never throws (queue failures come back as TaskResult), and its own
+        // log line carries no schedule or product context — add both here so
+        // a failed detach is actionable (#1409). The queue result is also
+        // RETURNED: it is one of the signals the detach's completion
+        // TaskResult aggregates.
+        private async Task<TaskResult> DetachAndReportAsync(Guid rootProductId, IUpdateRequest request, Guid scheduleId, CancellationToken token)
+        {
+            var result = await ProcessRequestAsync(rootProductId, request, token);
+
+            if (!result.IsOk)
+                _logger.Error($"Failed to detach alert schedule {scheduleId} on root product {rootProductId}: {result.Error}");
+
+            return result;
+        }
+
+        // #1409: templates are detached PERSIST-FIRST through the
+        // failure-propagating UpdateAlertTemplate (the template already
+        // exists, so the row Put alone is the upsert); only on a successful
+        // write are the in-memory ids nulled — a failed write leaves the
+        // template carrying the id so the operator's Remove retry re-runs
+        // the detach. Returns false when the token aborted the walk mid-way
+        // (the same abort semantics as the two dispatch loops); per-template
+        // persist failures are logged AND appended to `errors` — they leave
+        // the dangling id in place, so the detach counts as incomplete.
+        // RESIDUAL (#1409 review round 5, feature.md): this walk runs on the
+        // HTTP thread and nulls ids on LIVE template models — a sensor
+        // created during the walk can still mint a policy carrying a
+        // not-yet-nulled ScheduleId via ApplyTemplateToSensor; the
+        // ReferenceEquals guard below covers template SAVES, not reads.
+        // Backstopped by the fail-open lookup + throttled report.
+        // Full ordering rationale: feature.md (#1409).
+        private bool DetachAlertScheduleFromTemplates(Guid scheduleId, CancellationToken token, List<string> errors)
+        {
+            foreach (var template in _alertTemplates.Values)
+            {
+                if (token.IsCancellationRequested)
+                    return false;
+
+                if (!TemplateReferencesSchedule(template, scheduleId))
+                    continue;
+
+                // Lost-update guard: AddAlertTemplateAsync REPLACES the
+                // dictionary entry on every save, so a save that interleaved
+                // with this walk makes the snapshotted model stale — writing
+                // its entity would revert the operator's edit in storage,
+                // not just restore the id. Re-read right before the write
+                // and skip when the entry was replaced; the save's own
+                // persist is authoritative. Not atomic with the Put — the
+                // residual window is the Put itself (feature.md, #1409).
+                if (!_alertTemplates.TryGetValue(template.Id, out var current) || !ReferenceEquals(current, template))
+                    continue;
+
+                try
+                {
+                    _database.UpdateAlertTemplate(BuildDetachedTemplateEntity(template, scheduleId));
+                }
+                catch (Exception ex)
+                {
+                    // Memory untouched on purpose — the retry must still see
+                    // the dangling ids to detach.
+                    _logger.Error(ex, $"An error was occurred while detaching alert schedule {scheduleId} from alert template {template.Id}");
+                    errors.Add($"alert template {template.Id} persist failed: {ex.Message}");
+                    continue;
+                }
+
+                NullTemplateScheduleIds(template, scheduleId);
+            }
+
+            return true;
+        }
+
+        private static bool TemplateReferencesSchedule(AlertTemplateModel template, Guid scheduleId) =>
+            (template.Policies ?? Enumerable.Empty<Policy>()).Any(p => p.ScheduleId == scheduleId) ||
+            (template.TtlEntries ?? Enumerable.Empty<TtlEntry>()).Any(e => e.Policy.ScheduleId == scheduleId);
+
+        // The stored image of the template with the deleted schedule's
+        // references cleared — built from ToEntity() WITHOUT mutating the
+        // live model, so a failed persist below leaves nothing half-applied.
+        private static AlertTemplateEntity BuildDetachedTemplateEntity(AlertTemplateModel template, Guid scheduleId)
+        {
+            var entity = template.ToEntity();
+
+            return entity with
+            {
+                Policies = DetachEntityPolicies(entity.Policies, scheduleId),
+                TTLPolicies = DetachEntityPolicies(entity.TTLPolicies, scheduleId),
+            };
+        }
+
+        // AlertTemplateModel.ToEntity always emits a non-null list (`?? []`),
+        // so no null branch here. A malformed stored ScheduleId (not 16
+        // bytes) is treated as "no id" — the same semantics as Policy.Apply
+        // and AlertTemplateDtoMapper — instead of throwing from new Guid(...).
+        private static List<PolicyEntity> DetachEntityPolicies(List<PolicyEntity> policies, Guid scheduleId) =>
+            policies.Select(p => p.ScheduleId is { Length: 16 } id && new Guid(id) == scheduleId
+                ? p with { ScheduleId = [] }
+                : p).ToList();
+
+        private static void NullTemplateScheduleIds(AlertTemplateModel template, Guid scheduleId)
+        {
+            foreach (var policy in template.Policies ?? Enumerable.Empty<Policy>())
+            {
+                if (policy.ScheduleId == scheduleId)
+                    policy.ScheduleId = null;
+            }
+
+            foreach (var entry in template.TtlEntries ?? Enumerable.Empty<TtlEntry>())
+            {
+                if (entry.Policy.ScheduleId == scheduleId)
+                    entry.Policy.ScheduleId = null;
             }
         }
 
@@ -1430,6 +1736,18 @@ namespace HSMServer.Core.Cache
 
             foreach (var (_, subProduct) in product.SubProducts)
                 CollectBranch(subProduct, products, sensors);
+        }
+
+        // Lazy branch walk for pre-scans that only filter a handful of
+        // products (the #1409 detach): unlike CollectBranch it materializes
+        // nothing — the caller enumerates and discards.
+        private static IEnumerable<ProductModel> EnumerateProducts(ProductModel product)
+        {
+            yield return product;
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                foreach (var nested in EnumerateProducts(subProduct))
+                    yield return nested;
         }
 
         private void RemoveChatsFromSensor(RemoveChatsFromSensorRequest request)
@@ -1482,6 +1800,122 @@ namespace HSMServer.Core.Cache
             TryUpdateSensor(update, out _);
         }
 
+
+        // One queue pass for every matching sensor of a root branch (#1409):
+        // the Remove POST pays one queue round-trip per CHUNK of sensors
+        // (DetachSensorsChunkSize) instead of one per sensor, all on this
+        // same queue thread. Per-sensor failures are appended to the
+        // request's error bag — the dispatcher folds them into the detach's
+        // completion TaskResult after the round-trip completes.
+        private void DetachAlertScheduleFromSensors(DetachAlertScheduleFromSensorsRequest request)
+        {
+            foreach (var sensorId in request.SensorIds)
+            {
+                var failure = DetachAlertScheduleFromSensor(sensorId, request.ScheduleId, request.Initiator);
+
+                if (failure is not null)
+                    request.Errors?.Add(failure);
+            }
+        }
+
+        // #1409: queue-thread counterpart of the product arm — the full-list
+        // update is built from the LIVE product.Policies here (not from a
+        // caller-thread snapshot), so a TTL policy added between the dispatch
+        // walk and this execution rides through instead of being dropped by
+        // the full-list semantics. UpdateProduct persists and throws on DB
+        // failure; the queue converts that into the reported TaskResult.
+        private void DetachAlertScheduleFromProduct(DetachAlertScheduleFromProductRequest request)
+        {
+            if (!_tree.TryGetValue(request.ProductId, out var product))
+                return;
+
+            if (!product.Policies.TTLPolicies.Any(t => t.ScheduleId == request.ScheduleId))
+                return;
+
+            // Full-list semantics: re-assert EVERY TTL policy of the
+            // product, patching only the matching ScheduleId.
+            var update = new ProductUpdate
+            {
+                Id = product.Id,
+                TTLPolicies = product.Policies.TTLPolicies
+                    .Select(ttl => DetachFromSchedule(ttl, request.ScheduleId, request.Initiator))
+                    .ToList(),
+                Initiator = request.Initiator,
+            };
+
+            UpdateProduct(update);
+        }
+
+        // #1409: null out ScheduleId on the sensor's policies that point at the
+        // schedule being deleted, so the persisted policy degrades to schedule-less
+        // semantics instead of keeping a dangling id. Full-list semantics like
+        // RemoveChatsFromSensor: the update re-asserts EVERY policy of the sensor,
+        // patching only the matching ScheduleId — a partial list would drop the rest.
+        // Returns null on a clean detach, the failure description otherwise.
+        private string DetachAlertScheduleFromSensor(Guid sensorId, Guid scheduleId, InitiatorInfo initiator)
+        {
+            if (!TryGetSensorById(sensorId, out var sensor))
+                return null;
+
+            List<PolicyUpdate> sensorTtlUpdates = null;
+            if (sensor.Policies.TTLPolicies.Any(t => t.ScheduleId == scheduleId))
+            {
+                sensorTtlUpdates = new List<PolicyUpdate>(sensor.Policies.TTLPolicies.Count);
+
+                foreach (var ttl in sensor.Policies.TTLPolicies)
+                    sensorTtlUpdates.Add(DetachFromSchedule(ttl, scheduleId, initiator));
+            }
+
+            List<PolicyUpdate> policiesUpdate = null;
+            if (sensor.Policies.Any(p => p.ScheduleId == scheduleId))
+            {
+                policiesUpdate = new List<PolicyUpdate>();
+
+                foreach (var policy in sensor.Policies)
+                    policiesUpdate.Add(DetachFromSchedule(policy, scheduleId, initiator));
+            }
+
+            if (policiesUpdate is null && sensorTtlUpdates is null)
+                return null;
+
+            var update = new SensorUpdate
+            {
+                Id = sensor.Id,
+                Policies = policiesUpdate,
+                TTLPolicies = sensorTtlUpdates,
+                Initiator = initiator,
+            };
+
+            // Unlike a dispatched SensorUpdate (whose failure the queue handler
+            // logs), this direct call would otherwise drop the error silently —
+            // the dangling id would stay in storage with no trace (#1409).
+            // The failure semantics are SPLIT by the TryUpdateSensor return
+            // value (#1409 review round 5), same split as ApplyTemplateToSensor:
+            //
+            // HARD (false): the sensor was gone, the in-memory update threw, or
+            // the DB write failed — the dangling id may survive in storage, so
+            // the failure is RETURNED: it marks the whole detach incomplete and
+            // the controller keeps the schedule alive for the retry.
+            if (!TryUpdateSensor(update, out var error))
+            {
+                _logger.Error($"Detach of schedule {scheduleId} from sensor {sensorId} failed: {error}");
+                return $"sensor {sensorId} detach failed: {error}";
+            }
+
+            // SOFT (true with a non-empty error): the update was applied AND
+            // persisted, but a per-policy rebuild failed — validation noise of
+            // the "AnyType Value condition re-asserted on a bar sensor" class
+            // feature.md documents for the apply path. A deterministic noise
+            // policy must not make the schedule permanently undeletable, so
+            // this arm is LOGGED (sensor + schedule context) and NOT returned:
+            // the deletion proceeds, and whatever reference that policy kept
+            // degrades to the documented backstop — fail-open lookup (#1405)
+            // plus the throttled missing-id report.
+            if (!string.IsNullOrEmpty(error))
+                _logger.Warn($"Detach of schedule {scheduleId} from sensor {sensorId} partially failed: {error}");
+
+            return null;
+        }
 
         public AlertTemplateModel GetAlertTemplate(Guid id)
         {
@@ -1996,6 +2430,23 @@ namespace HSMServer.Core.Cache
                 .Select(c => $"{c.Property}:{c.Operation}:{c.Target}"));
         }
 
+        // #1409: full copy of the policy with the deleted schedule's reference
+        // nulled — the copy keeps every other field (the full-list update
+        // semantics re-assert the whole policy), so a ScheduleId bound to a
+        // DIFFERENT schedule rides through unchanged. TTL must be re-asserted
+        // explicitly (a null TTL in full-list semantics is an explicit
+        // FromParent reset; an explicit Never degrades to FromParent). The
+        // update opts out of change-table ownership — see
+        // PolicyUpdate.PreserveChangeOwnership. Full mapping notes:
+        // feature.md (#1409).
+        private static PolicyUpdate DetachFromSchedule(Policy policy, Guid scheduleId, InitiatorInfo initiator) =>
+            new(policy, initiator)
+            {
+                ScheduleId = policy.ScheduleId == scheduleId ? null : policy.ScheduleId,
+                TTL = policy is TTLPolicy { IsTTLFromParent: false } ttl ? ttl.TTLTicks : null,
+                PreserveChangeOwnership = true,
+            };
+
         private static bool TryGetPolicyUpdate(Policy policy, HashSet<Guid> chats, InitiatorInfo initiator,
             out PolicyUpdate update)
         {
@@ -2155,6 +2606,12 @@ namespace HSMServer.Core.Cache
                     break;
                 case RemoveChatsFromSensorRequest request:
                     RemoveChatsFromSensor(request);
+                    break;
+                case DetachAlertScheduleFromSensorsRequest request:
+                    DetachAlertScheduleFromSensors(request);
+                    break;
+                case DetachAlertScheduleFromProductRequest request:
+                    DetachAlertScheduleFromProduct(request);
                     break;
                 case ClearHistoryRequest request:
                     ClearSensorHistory(request);
@@ -3199,7 +3656,11 @@ namespace HSMServer.Core.Cache
             catch (Exception ex)
             {
                 var msg = $"An error was occurred while processing request: {request}";
-                _logger.Error(msg, ex);
+                // Exception-first overload: NLog binds Error(string, Exception)
+                // to the structured-template method and silently drops the
+                // exception — the stack trace behind a failed detach (and
+                // every other queue failure routed here) must survive.
+                _logger.Error(ex, msg);
                 return TaskResult.FromError(msg);
             }
         }
