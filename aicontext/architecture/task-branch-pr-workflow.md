@@ -31,6 +31,7 @@ focused re-review status.
 
 ## Review/Fix Loop
 
+- Before every push, the author reviews the final diff against the merge base (`/code-review medium` or `/matt:code-review`), fixes confirmed findings and re-verifies them. The PR bot (`claude-review.yml`) is the second reader, not the first.
 - Run role-based review when the PR touches compatibility-sensitive or shared behavior.
 - Fix confirmed blockers.
 - Rerun only focused roles after fixes.

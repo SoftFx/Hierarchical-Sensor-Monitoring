@@ -34,10 +34,10 @@ Hand over to the trialled skills. Keep the change inside the issue's scope; buil
 ## 4. Review your own diff
 
 ```
-/code-review            # or /matt:code-review for the standards + spec axes
+/code-review medium     # or /matt:code-review for the standards + spec axes
 ```
 
-Against the merge base, before the push. Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked". The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
+Against the merge base, on the final diff, right before the push: anything committed after the review is unreviewed. Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — then rebuild and re-run the narrowest tests for what you fixed. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
 
 ## 5. Commit and push
 
