@@ -296,12 +296,16 @@ namespace HSMServer.Core.Schedule
             }
         }
 
+        // Timer callback. Internal so tests can drive the prune deterministically —
+        // AlertScheduleProviderMissingIdLoggingTests calls it directly to pin the
+        // missing-id throttle prune; making it private breaks that suite's build.
+        //
         // Prunes IntervalCache only. _workingTimeByMinute is DELIBERATELY not
         // pruned here: it is hard-bounded at MaxCachedMinutes (4) slots per
         // schedule entry and self-evicts on overflow, so it needs no periodic
         // cleanup; IntervalCache is the only unbounded structure (one entry
         // per distinct (start, end) argument pair).
-        private void CleanupIntervalCache()
+        internal void CleanupIntervalCache()
         {
             try
             {
