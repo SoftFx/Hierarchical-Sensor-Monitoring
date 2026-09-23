@@ -85,6 +85,26 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Fact]
+        public void ForwardedHeaders_RestoreTheClientAddressBeforeAnythingReadsIt()
+        {
+            // #1427: the client IP behind the bundled Caddy is restored first in
+            // ConfigureMiddleware (Program.cs registers only request localization before it,
+            // which never reads the peer address). Registered lower, authentication (token
+            // audit, invalid-attempt limiter) and telemetry would record the proxy instead.
+            var body = ExtractConfigureMiddlewareBody(ReadPipelineSource());
+
+            AssertInOrder(body,
+            [
+                "UseForwardedHeaders",
+                "UseExceptionHandler",
+                "UseHttpsRedirection",
+                "UseAuthentication",
+                "ApiTokenUsageMiddleware",
+                "TelemetryMiddleware",
+            ]);
+        }
+
+        [Fact]
         public void SwaggerGate_IsRegisteredBeforeTheSwaggerMiddleware()
         {
             // The port gate is correct only ABOVE UseSwagger/UseSwaggerUI; below them
