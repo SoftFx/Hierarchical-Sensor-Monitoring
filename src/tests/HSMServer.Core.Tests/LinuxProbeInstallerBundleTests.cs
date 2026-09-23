@@ -174,7 +174,7 @@ namespace HSMServer.Core.Tests
 
             Assert.Contains("systemctl disable --now \"$UNIT\"", script);
             Assert.Contains("apt-get purge -y \"$PACKAGE\"", script);
-            Assert.Contains("\"$CONFIG_DIR/access-key\"", script);
+            Assert.Contains("shred -u \"$CONFIG_DIR/access-key\" 2>/dev/null || rm -f \"$CONFIG_DIR/access-key\"", script);
             Assert.Contains("\"$CONFIG_DIR/config.json\"", script);
             Assert.Contains("rm -f \"$CA_TARGET\"", script);
             Assert.DoesNotContain("--fresh", script); // would wipe unrelated hand-made links in /etc/ssl/certs

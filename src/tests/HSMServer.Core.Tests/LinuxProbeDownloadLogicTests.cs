@@ -9,6 +9,7 @@ using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using System;
@@ -112,6 +113,48 @@ namespace HSMServer.Core.Tests
 
             Assert.Equal(LinuxProbeCaDecision.OmitUnreadable, decision);
             Assert.Null(pem);
+        }
+
+        [Theory]
+        // The reference deployment (#1427): Caddy terminates the client's TLS with a public certificate
+        // and re-encrypts to Kestrel, so the Kestrel handshake is not the one the probe will verify.
+        [InlineData(true, true, true, false)]
+        [InlineData(true, true, false, true)]    // trusted proxies configured, but this request came directly
+        [InlineData(true, false, true, true)]    // no trusted proxy configured: an invented header changes nothing
+        [InlineData(false, false, false, false)] // plaintext hop: nothing of ours terminated it
+        public void ServerTerminatesClientTls_IsFalse_OnlyForATrustedProxyHop(bool kestrelHandshake, bool trustedProxyConfigured, bool forwarded, bool expected)
+        {
+            Assert.Equal(expected, LinuxProbeServerCa.ServerTerminatesClientTls(kestrelHandshake, trustedProxyConfigured, forwarded));
+        }
+
+        [Fact]
+        public void LinuxInstaller_ShipsNoCa_BehindTheBundledReverseProxy()
+        {
+            // docker-compose.yml: Caddy holds the public certificate, HSM keeps the bundled default on the
+            // proxy hop. Nothing of HSM's is worth trusting there, and nothing needs to be: no 400, no CA.
+            var webRoot = Directory.CreateTempSubdirectory("hsm-probe-test-").FullName;
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(webRoot, "probe"));
+                File.WriteAllBytes(Path.Combine(webRoot, "probe", "hsm-linux-probe_0.1.0_amd64.deb"), new byte[] { 1 });
+
+                var controller = CreateController(webRoot, out var productId, certificate: new ServerCertificateConfig(), tls: true, behindTrustedProxy: true);
+
+                var result = Assert.IsType<FileContentResult>(controller.LinuxInstaller(productId));
+
+                using var gzip = new GZipStream(new MemoryStream(result.FileContents), CompressionMode.Decompress);
+                using var reader = new TarReader(gzip);
+                var names = new System.Collections.Generic.List<string>();
+                while (reader.GetNextEntry() is { } entry)
+                    names.Add(entry.Name);
+
+                Assert.DoesNotContain(names, n => n.EndsWith("/server-ca.pem"));
+                Assert.Contains(names, n => n.EndsWith("/config.json"));
+            }
+            finally
+            {
+                Directory.Delete(webRoot, recursive: true);
+            }
         }
 
         [Fact]
@@ -340,7 +383,7 @@ namespace HSMServer.Core.Tests
 
 
         private static AgentController CreateController(string webRoot, out Guid productId, string externalUrl = "https://hsm.example.com",
-                                                        ServerCertificateConfig certificate = null, bool tls = false)
+                                                        ServerCertificateConfig certificate = null, bool tls = false, bool behindTrustedProxy = false)
         {
             var product = new ProductModel("Garage server");
             var key = AccessKeyModel.BuildDefault(product);
@@ -352,7 +395,10 @@ namespace HSMServer.Core.Tests
 
             var config = new Mock<IServerConfig>();
             config.Setup(c => c.Agent).Returns(new AgentConfig { ExternalConnectionUrl = externalUrl });
-            config.Setup(c => c.Kestrel).Returns(new KestrelConfig());
+            config.Setup(c => c.Kestrel).Returns(new KestrelConfig
+            {
+                TrustedProxies = behindTrustedProxy ? ["attached-networks"] : [],
+            });
             config.Setup(c => c.ServerCertificate).Returns(certificate ?? new ServerCertificateConfig());
 
             var environment = new Mock<IWebHostEnvironment>();
@@ -363,6 +409,10 @@ namespace HSMServer.Core.Tests
             context.Request.Host = new HostString("hsm.example.com");
             if (tls)
                 context.Features.Set(new Mock<ITlsHandshakeFeature>().Object);
+
+            // What the forwarded-headers middleware leaves behind after it consumed a trusted proxy's header.
+            if (behindTrustedProxy)
+                context.Request.Headers[ForwardedHeadersDefaults.XOriginalForHeaderName] = "203.0.113.7:51000";
 
             return new AgentController(new Mock<IUserManager>().Object, cache.Object, config.Object, environment.Object)
             {

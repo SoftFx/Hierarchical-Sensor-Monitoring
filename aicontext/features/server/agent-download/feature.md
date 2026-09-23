@@ -23,6 +23,9 @@ pure-native exe's own `--install`. No .NET runtime, no C#/MSI installer is produ
   signed binary. Only `config.json` is generated per product — the PE is never patched (Authenticode).
   Pinned by `AgentInstallerBundleTests.Zip_KeepsExeByteIdentical`.
 - **Admin-only.** `[AuthorizeIsAdmin]` on the endpoint; the UI button renders only for `User.IsAdmin`.
+- **Never cacheable.** The zip carries the product access key, so `Installer` (like the Linux probe's
+  `LinuxInstaller`, #1424) is `[ResponseCache(NoStore = true, Location = None)]` — the `ProductController`
+  convention. The self-update endpoints (`version`, `exe`) stay cacheable: they carry no credential.
 - **The baked key is the product's access-key GUID.** The agent sends it in the `Key` header. Selection
   prefers the product **DefaultKey** (full permissions, never expires), else any valid key with
   send-data + add-node/add-sensor permissions.

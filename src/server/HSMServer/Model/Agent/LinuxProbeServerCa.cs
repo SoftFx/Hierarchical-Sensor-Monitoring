@@ -35,10 +35,25 @@ namespace HSMServer.Model.Agent
     public static class LinuxProbeServerCa
     {
         public const string BundledDefaultMessage =
-            "This server presents the bundled default TLS certificate. Its private key is public (it ships with HSM), " +
-            "so a Linux probe must not be told to trust it. Configure a server certificate (Configuration > Server) " +
-            "and restart, or run HSM behind a TLS-terminating proxy, then download the Linux probe again.";
+            "This server presents the bundled default TLS certificate directly to clients. Its private key is public " +
+            "(it ships with HSM), so a Linux probe must not be told to trust it. Either configure a server certificate " +
+            "(Configuration > Server) and restart the server, or front HSM with the bundled Caddy reverse proxy " +
+            "(docker-compose.yml) and set Kestrel__TrustedProxies so this server sees the proxy hop - the probe then " +
+            "trusts the proxy's public certificate. Then download the Linux probe again.";
 
+
+        /// <summary>
+        /// Whether the TLS the probe will verify is terminated by this server. A Kestrel handshake on the
+        /// download connection says only that the admin's request was not plaintext: in the reference
+        /// deployment (docker-compose.yml, #1427) Caddy terminates the client's TLS with a public
+        /// certificate and re-encrypts to Kestrel, which still serves the bundled default. A request that
+        /// arrived through a configured trusted proxy is therefore proxy-terminated, whatever Kestrel did
+        /// on its own hop. <paramref name="forwardedByTrustedProxy"/> is the forwarded-headers middleware's
+        /// own verdict (it moves the consumed X-Forwarded-For into X-Original-For), and it counts only when
+        /// a trusted proxy is configured at all, so a header invented by a direct caller changes nothing.
+        /// </summary>
+        public static bool ServerTerminatesClientTls(bool kestrelHandshake, bool trustedProxyConfigured, bool forwardedByTrustedProxy) =>
+            kestrelHandshake && !(trustedProxyConfigured && forwardedByTrustedProxy);
 
         /// <summary>
         /// Pure decision. Behind a TLS-terminating proxy (plain-HTTP mode, Caddy + Let's Encrypt) the

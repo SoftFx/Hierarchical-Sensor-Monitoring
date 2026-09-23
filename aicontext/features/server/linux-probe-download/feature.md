@@ -65,8 +65,16 @@ compressed).
 
 `LinuxProbeServerCa.Decide(serverTerminatesTls, isBundledDefault, hasCertificate)` — pure, tested:
 
-- **Include** when Kestrel itself terminated TLS on the download request (an `ITlsHandshakeFeature` is
-  present on the connection) with an admin-configured certificate. Content: the public part
+The input is **whose TLS the probe will verify**, not merely whether the download hop was encrypted
+(`LinuxProbeServerCa.ServerTerminatesClientTls`): a Kestrel handshake counts as this server's TLS *unless*
+the request arrived through a configured trusted proxy. In the reference deployment (`docker-compose.yml`,
+#1427) Caddy terminates the client's TLS with a public certificate and re-encrypts to Kestrel, which still
+serves the bundled default — so the Kestrel handshake there is the proxy hop, not the probe's. The proxy hop
+is recognised from `Kestrel.TrustedProxies` being set **and** the forwarded-headers middleware having
+consumed that proxy's `X-Forwarded-For` (it moves it to `X-Original-For`), so a header invented by a direct
+caller changes nothing.
+
+- **Include** when Kestrel itself terminated the client's TLS with an admin-configured certificate. Content: the public part
   (`ExportCertificatePem`) of the **same `X509Certificate2` instance Kestrel installed at startup**
   (`ServerCertificateConfig.Certificate`), with `IsBundledDefault` recorded when that instance was loaded.
   A certificate saved in settings but not yet applied by a restart is therefore ignored, and the `.pfx` is
@@ -78,31 +86,27 @@ compressed).
   answered 200 both as `--cacert` and from the system store after `update-ca-certificates`.
 - **Refuse (400)** when Kestrel serves the bundled `default.server.pfx`. That file ships in the repository
   with its private key, so installing it as a trust anchor would let anyone impersonate any name in its SAN
-  to every TLS client on the host. The admin must configure a server certificate (or run behind the proxy)
-  first. Windows solves the same case with the process-scoped `allowUntrustedCertificate`, which the probe
-  deliberately does not have.
-- **Omit** behind a TLS-terminating proxy (plain-HTTP mode + Caddy/Let's Encrypt, #1411): no TLS on the
-  Kestrel connection, and the proxy's certificate is already publicly trusted.
+  to every TLS client on the host. The message names both ways out: configure a server certificate and
+  restart, or front HSM with the bundled Caddy and set `Kestrel__TrustedProxies`. Windows solves the same
+  case with the process-scoped `allowUntrustedCertificate`, which the probe deliberately does not have.
+- **Omit** behind a TLS-terminating proxy (the bundled Caddy, #1411/#1427, or any plaintext hop): the
+  certificate the probe verifies is the proxy's, which is publicly trusted (Let's Encrypt) — nothing of
+  HSM's needs shipping, and the bundle is produced normally. This is the reference compose deployment.
 - **Omit, reported** when the certificate cannot be loaded: the download still succeeds, and the server logs
   a warning that the probe will only connect if that certificate is already trusted on its host. In practice
   Kestrel would not have started with an unloadable certificate.
 
-**Known limit: the signal is the admin's connection, not the probe's.** The download arrives on the site
-port; the probe connects to the sensor port at the resolved address. Today both are Kestrel listeners with
-the same certificate, so they agree. They can disagree in split deployments, and the result is then wrong:
+| Deployment | Decision |
+|---|---|
+| **Reference compose stack** (Caddy + `Kestrel__TrustedProxies`, HSM on the bundled default) | Omit — bundle works out of the box against Caddy's public certificate |
+| Direct HSM (`docker-compose.direct.yml`, bare metal) with an admin-configured certificate | Include — that leaf ships |
+| Direct HSM on the bundled default certificate | 400, naming both ways out (configure a certificate, or front HSM with the bundled Caddy and set `Kestrel__TrustedProxies`) |
 
-| Deployment | Result | Should be |
-|---|---|---|
-| Proxy terminates TLS for the UI only; the sensor port is exposed directly with a self-signed cert | Omit (probe cannot verify) | Include |
-| Proxy re-encrypts to Kestrel, which still serves the bundled default | 400 | Omit |
-| Proxy re-encrypts to Kestrel with an internal-name cert | Include (unused anchor on the host) | Omit |
-
-The fix is an explicit admin choice (or a probe of the resolved address). It is deferred until #1411's
-plain-HTTP mode lands and settles which topologies HSM supports. Until then, an operator in the first case can
-copy the server's certificate to `/usr/local/share/ca-certificates/` by hand.
-
-Deciding from the connection rather than from a config flag keeps the rule correct both before and after
-the plain-HTTP mode of #1411 is enabled, with no coupling to that setting.
+**Known limit: the decision is read from the admin's download hop, not from the probe's route.** Both ports
+sit behind the same listener and the same proxy in every shipped topology, so they agree there. A hand-built
+split (proxy in front of the site port only, sensor port exposed directly with a self-signed certificate)
+would omit a CA the probe does need; that operator installs the certificate on the probe host by hand. An
+explicit admin setting, or probing the resolved address, is the fix if such a topology ever ships.
 
 ## install.sh / uninstall.sh
 
@@ -132,7 +136,8 @@ and re-run `install.sh` on each host. That replaces `hsm-server.crt` and keeps t
 probe-scoped CA file (`ca_file` → `CURLOPT_CAINFO`, initiative §4.1) would allow trusting a private issuing CA
 without making it system-wide; it is not on this PR's path.
 
-uninstall.sh: disables and stops the unit, `apt-get purge`s the package, removes the key, config (incl.
+uninstall.sh: disables and stops the unit, `apt-get purge`s the package, shreds the installed key (as
+install.sh shreds the extracted one), removes the config (incl.
 `.dpkg-dist`/`.dpkg-old`) and CA file, refreshes the trust store (plain `update-ca-certificates`, not
 `--fresh`, so hand-made links in `/etc/ssl/certs` survive). It never contacts the HSM server —
 the sensor history stays.

@@ -91,6 +91,9 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Agent bundle | Per-product zip an admin downloads from the server (signed `hsm-agent.exe` + generated `config.json` + install scripts). | The exe is byte-identical across downloads; only `config.json` differs. |
 | Agent config | `config.json` read by the agent (server address + access key + sensor groups). | Schema lives in `src/agent` + `docs/hsm-agent.md`; the server generates it per product. |
 | Agent connection URL | Admin server setting (`AgentConfig.ExternalConnectionUrl`) — the externally-reachable Sensor-API base baked into bundles. | Behind Docker/NAT the server can't infer it; blank falls back to the request host. |
+| Linux probe | The systemd-hosted Linux host/Docker monitoring process (`hsm-linux-probe`, epic #1413), the Linux counterpart of the HSM Agent. | Say "Linux probe", not "Linux agent": it is a separate product built on the native collector. |
+| Probe bundle | The per-product `.tar.gz` an admin downloads for a Linux host: the released `.deb`, a generated `config.json`, the access key in its own file, optionally `server-ca.pem`, and `install.sh`/`uninstall.sh`. | Built by `LinuxProbeInstallerBundle` (#1424); the Linux sibling of the agent zip. |
+| Probe release pin | `src/server/HSMServer/probe-release.txt` — the one tracked line naming the `probe-v*` release the server stages and serves. | Empty = nothing staged: staging skips and the download answers 503. Mirrors `agent-release.txt`. |
 
 ## Deprecated / Avoid
 

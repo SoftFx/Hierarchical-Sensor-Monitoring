@@ -5,6 +5,7 @@ using HSMServer.Model.Agent;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Connections.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -133,12 +134,18 @@ namespace HSMServer.Controllers
             if (addressError is not null)
                 return BadRequest(addressError);
 
-            // A TLS handshake feature on this connection means Kestrel itself terminated TLS with its own
-            // certificate; behind a TLS-terminating proxy it is absent and no CA file is shipped.
-            // The certificate instance Kestrel installed at startup, read before IsBundledDefault, which
+            // Whose certificate the probe will verify: this server's only when Kestrel terminated the TLS
+            // the client saw. A request forwarded by a configured trusted proxy (the bundled Caddy, #1427)
+            // was terminated there, even though the proxy-to-Kestrel hop is HTTPS too.
+            // The certificate instance Kestrel installed at startup is read before IsBundledDefault, which
             // its loading sets: a certificate saved in settings but not yet applied by a restart is ignored.
-            var (caDecision, serverCa) = LinuxProbeServerCa.Resolve(
+            var serverTerminatesTls = LinuxProbeServerCa.ServerTerminatesClientTls(
                 HttpContext.Features.Get<ITlsHandshakeFeature>() is not null,
+                _config.Kestrel.TrustedProxies.Length > 0,
+                Request.Headers.ContainsKey(ForwardedHeadersDefaults.XOriginalForHeaderName));
+
+            var (caDecision, serverCa) = LinuxProbeServerCa.Resolve(
+                serverTerminatesTls,
                 () => (_config.ServerCertificate.Certificate, _config.ServerCertificate.IsBundledDefault));
             if (caDecision == LinuxProbeCaDecision.RefuseBundledDefault)
                 return BadRequest(LinuxProbeServerCa.BundledDefaultMessage);
