@@ -584,6 +584,14 @@ namespace
         ScriptedDiskPrediction(long long calibration_requests, long long refresh_period_ms, double start, double drain_per_second)
             : prediction_(calibration_requests), refresh_period_ms_(refresh_period_ms), start_(start), drain_per_second_(drain_per_second), created_ms_(NowMs())
         {
+            // The Start seed, mirroring managed StartAsync and the production factories'
+            // SeedDiskPrediction (#1445). Without it this driver would spend its first refresh
+            // establishing the baseline and run a whole sampling period behind the managed driver,
+            // which is exactly the regression the platform seed exists to prevent - and the corpus
+            // could not see it.
+            prediction_.Sample(FreeSpace(created_ms_), 0.0);
+            last_ms_ = created_ms_;
+            has_last_ = true;
         }
 
         long long RefreshPeriodMs() const { return refresh_period_ms_; }

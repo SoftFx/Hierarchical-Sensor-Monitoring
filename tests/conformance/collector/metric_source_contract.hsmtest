@@ -120,3 +120,21 @@ disk_prediction_calibration_counts_samples_not_posts|expect_payload_contains|-1|
 disk_prediction_calibration_counts_samples_not_posts|expect_payload_contains|-1|"Status":0
 disk_prediction_calibration_counts_samples_not_posts|expect_payload_contains|-1|"Comment":"Calibration request (
 disk_prediction_calibration_counts_samples_not_posts|expect_payload_not_contains|-1|"Comment":"Free space
+
+# The 365-day ceiling (#1445), the fix for the overflow defect whose old symptom was the worst of
+# the five: freeSpace / speed exceeded TimeSpan.MaxValue, FromSeconds threw, and the sensor posted
+# NOTHING while still looking healthy. An exabyte draining at 1 MB/s is ~1e12 seconds, four orders
+# of magnitude past the ceiling, so no scheduling jitter can move the state. The drain is kept large
+# enough that a 250 ms interval is still a non-zero delta after the managed driver truncates free
+# space to a long - a zero delta would land the case in the "not decreasing" state instead.
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|create_collector
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|create_disk_prediction_sensor|contract/metric/prediction_ceiling|2|500|250|1000000000000000000|1000000
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|start
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|sleep_ms|5600
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|stop
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|expect_sent_count_between|6|14|10
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|expect_payload_contains|-1|"Type":7
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|expect_payload_contains|-1|"Value":"365.00:00:00"
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|expect_payload_contains|-1|"Status":0
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|expect_payload_contains|-1|"Comment":"Free space decreases by
+disk_prediction_clamps_a_trickle_drain_to_the_ceiling|expect_payload_contains|-1|More than 365 days left.
