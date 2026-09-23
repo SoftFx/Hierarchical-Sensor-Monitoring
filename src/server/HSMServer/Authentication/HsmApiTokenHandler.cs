@@ -171,9 +171,13 @@ namespace HSMServer.Authentication
         }
 
         // Remote endpoint only, in the ip:port form HSM already treats as safe source
-        // context; never headers (which are attacker-controlled free text).
+        // context; never headers (which are attacker-controlled free text). Behind the
+        // bundled proxy the address comes from X-Forwarded-For, which carries no port
+        // (RemotePort is 0 then), so the port is omitted rather than recorded as ":0".
         private string DescribeSource() =>
-            Context.Connection.RemoteIpAddress is { } ip ? $"{ip}:{Context.Connection.RemotePort}" : null;
+            Context.Connection.RemoteIpAddress is { } ip
+                ? Context.Connection.RemotePort > 0 ? $"{ip}:{Context.Connection.RemotePort}" : ip.ToString()
+                : null;
 
         // Budget identity for the invalid-attempt limiter: the remote IP only. The port
         // is the client's EPHEMERAL port — a fresh value per TCP connection — so bucketing

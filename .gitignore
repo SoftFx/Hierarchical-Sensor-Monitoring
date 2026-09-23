@@ -164,8 +164,12 @@ CMakeUserPresets.json
 # docker-compose.yml bind-mount volumes created at repo root by `docker compose up`
 /Logs/
 /Config/
+/CaddyData/
 /Databases/
 /DatabasesBackups/
+
+# docker-compose.yml settings (HSM_DOMAIN), machine-local
+/.env
 
 # Local override for scripts/local-docker-build.ps1 — pins image tag, machine-local
 docker-compose.local.yml
