@@ -3,6 +3,9 @@ use std::time::Duration;
 
 use hsm_collector_sys as sys;
 
+/// The managed collector's `CollectorOptions.ExceptionDeduplicatorWindow` default.
+pub const DEFAULT_EXCEPTION_DEDUPLICATOR_WINDOW: Duration = Duration::from_secs(60 * 60);
+
 /// Connection and pipeline options for a [`crate::Collector`].
 ///
 /// Deliberately **does not** expose `allow_untrusted_server_certificate`. That ABI flag turns off
@@ -29,6 +32,11 @@ pub struct CollectorOptions {
     pub max_values_in_package: Option<u32>,
     /// Allow a plaintext `http://` endpoint. Test-only: production configuration cannot set it.
     pub allow_plaintext_transport: bool,
+    /// How long an identical error message is suppressed after its first occurrence.
+    ///
+    /// Always sent explicitly: the collector reads 0 as "log every occurrence", not as "take the
+    /// default" (see [`crate::Collector::new`]). Defaults to the managed collector's 1 hour.
+    pub exception_deduplicator_window: Duration,
 }
 
 impl CollectorOptions {
@@ -49,6 +57,7 @@ impl CollectorOptions {
             max_queue_size: None,
             max_values_in_package: None,
             allow_plaintext_transport: false,
+            exception_deduplicator_window: DEFAULT_EXCEPTION_DEDUPLICATOR_WINDOW,
         }
     }
 }
@@ -67,6 +76,10 @@ impl fmt::Debug for CollectorOptions {
             .field("max_queue_size", &self.max_queue_size)
             .field("max_values_in_package", &self.max_values_in_package)
             .field("allow_plaintext_transport", &self.allow_plaintext_transport)
+            .field(
+                "exception_deduplicator_window",
+                &self.exception_deduplicator_window,
+            )
             .finish()
     }
 }

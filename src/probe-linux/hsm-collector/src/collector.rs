@@ -134,11 +134,22 @@ impl Collector {
         if let Some(size) = options.max_values_in_package {
             raw.max_values_in_package = i32::try_from(size).unwrap_or(i32::MAX);
         }
+        // Always explicit: unlike every other numeric field, the collector does NOT read 0 as
+        // "take the default" here (hsm_collector.cpp: `dedup_window_ms_(options.exception_
+        // deduplicator_window_ms)` with no `> 0 ?` fallback), and LogError treats a window of 0 as
+        // "log every occurrence". Leaving it zeroed would turn a repeated failure -- an unreachable
+        // server logs one error per dispatch -- into thousands of identical lines a day in the
+        // journal, the probe's log file and `.module/Collector errors`.
+        raw.exception_deduplicator_window_ms = clamp_millis(options.exception_deduplicator_window);
 
         let mut handle: *mut sys::hsm_collector_t = ptr::null_mut();
         // SAFETY: every pointer in `raw` is valid until the call returns, which is all the ABI
         // needs — the collector copies the strings it keeps.
         let code = unsafe { sys::hsm_collector_create(&raw, &mut handle) };
+        // The collector copied the key into its own storage, so this wrapper's copy has no further
+        // use: wipe it rather than leaving the key in freed heap for the life of the daemon. (Still
+        // best-effort -- the collector's own C++ copy is not ours to clear.)
+        wipe_cstring(access_key);
         if code != sys::HSM_RESULT_OK || handle.is_null() {
             // No handle yet, so there is no last_error to read. The message would risk echoing the
             // options back anyway, and those contain the access key.
@@ -542,6 +553,17 @@ impl Drop for Collector {
             sys::hsm_collector_dispose(self.handle);
             sys::hsm_collector_destroy(self.handle);
         }
+    }
+}
+
+/// Overwrite a C string's bytes before it is freed. Used for the access key, which this wrapper
+/// copies out of [`CollectorOptions`] to hand to the ABI.
+fn wipe_cstring(value: CString) {
+    let mut bytes = value.into_bytes_with_nul();
+    for byte in bytes.iter_mut() {
+        // SAFETY-adjacent: write_volatile keeps the compiler from eliding a write to a buffer that
+        // is about to be dropped.
+        unsafe { std::ptr::write_volatile(byte, 0) };
     }
 }
 

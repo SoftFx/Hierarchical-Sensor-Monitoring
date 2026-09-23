@@ -227,8 +227,16 @@ fn read_access_acl(path: &Path) -> Option<Vec<AclEntry>> {
     use std::os::unix::ffi::OsStrExt;
     let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
     let name = c"system.posix_acl_access";
-    let mut buffer = [0u8; 512];
-    // SAFETY: both strings are NUL-terminated; the buffer length is passed alongside it.
+    // Ask for the size first: a fixed buffer would return ERANGE for a file with many ACL entries,
+    // and treating that as "no ACL" falls back to the mode bits - which is exactly the false
+    // "readable beyond its owner" warning the ACL check exists to avoid.
+    // SAFETY: both strings are NUL-terminated; a null buffer with size 0 asks for the length.
+    let needed = unsafe { libc::getxattr(c_path.as_ptr(), name.as_ptr(), std::ptr::null_mut(), 0) };
+    if needed <= 0 {
+        return None;
+    }
+    let mut buffer = vec![0u8; usize::try_from(needed).ok()?];
+    // SAFETY: the buffer is at least `needed` bytes and its length is passed alongside it.
     let length = unsafe {
         libc::getxattr(
             c_path.as_ptr(),

@@ -10,6 +10,8 @@ documentation that shows third parties how to use HSM.
 
 - `native-collector/` - public C++ RAII API over the native collector C ABI: lifetime model,
   `find_package` packaging, console example, and the C++/CLI-wrapper migration story (#1100).
+- `linux-probe/` - the systemd-hosted Linux host probe `src/probe-linux/` (Rust over the C ABI):
+  crate layout, FFI and secret invariants, and the managed-parity sensor contract (#1413/#1415).
 
 ## Feature Folders To Add Here
 

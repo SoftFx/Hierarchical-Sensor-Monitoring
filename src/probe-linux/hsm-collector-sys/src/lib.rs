@@ -86,8 +86,11 @@ pub struct hsm_collector_options_t {
 
 impl Default for hsm_collector_options_t {
     fn default() -> Self {
-        // A zeroed struct is the documented "all defaults" value for this struct specifically
-        // (unlike hsm_sensor_options_t, whose tri-states need -1 sentinels).
+        // Zeroed, which the collector reads as "take the default" for every numeric field EXCEPT
+        // exception_deduplicator_window_ms: there 0 means "no deduplication, log every
+        // occurrence", so a caller that wants the documented 1-hour window must pass it
+        // explicitly (hsm-collector's Collector::new does). Unlike hsm_sensor_options_t, whose
+        // tri-states need -1 sentinels, the rest of this struct is zero-safe.
         Self {
             access_key: std::ptr::null(),
             server_address: std::ptr::null(),
@@ -357,53 +360,104 @@ extern "C" {
 /// Whether the crate was built with the Linux default-sensor factory bound (#1414).
 pub const HAS_LINUX_METRIC_SOURCES: bool = cfg!(feature = "linux-default-sensors");
 
-/// Layout guards for the three structs the ABI passes by value/pointer. They are the only place a
-/// silent field insertion on either side can be caught, since the Rust compiler never sees the C
-/// header. The expected sizes are the 64-bit C layout (8-byte pointers, natural alignment) worked
-/// out field by field from `hsm_collector.h`.
+/// Rust half of the ABI layout guard.
+///
+/// The C half lives in `build.rs`: it compiles `static_assert`s over the real header, so a field
+/// appended, inserted or reordered on the C side fails the BUILD. These tests close the other
+/// direction — that this crate's Rust mirrors still match the same expected layout. Both sides read
+/// one source of truth, the `LAYOUTS` table in `build.rs`, through the `HSM_ABI_*` env vars it
+/// emits; a `size_of` compared against a constant written in this file would prove nothing about C.
 #[cfg(all(test, target_pointer_width = "64"))]
 mod layout_tests {
     use super::*;
-    use std::mem::{align_of, size_of};
+    use std::mem::{align_of, offset_of, size_of};
+
+    /// Expected size/alignment as `build.rs` asserted them against the C header.
+    macro_rules! expected {
+        ($stem:literal) => {
+            (
+                env!(concat!("HSM_ABI_", $stem, "_SIZE"))
+                    .parse::<usize>()
+                    .expect("size"),
+                env!(concat!("HSM_ABI_", $stem, "_ALIGN"))
+                    .parse::<usize>()
+                    .expect("align"),
+            )
+        };
+    }
 
     #[test]
     fn collector_options_layout_matches_the_c_struct() {
-        // ptr,ptr,i32+pad,ptr,ptr,ptr = 48 | 5×i32 = 20 | 2×bool = 2 (+2 pad)
-        // | i64 @72 | i32 @80 (+4 tail pad)
-        assert_eq!(size_of::<hsm_collector_options_t>(), 88);
-        assert_eq!(align_of::<hsm_collector_options_t>(), 8);
+        let (size, align) = expected!("HSM_COLLECTOR_OPTIONS_T");
+        assert_eq!(size_of::<hsm_collector_options_t>(), size);
+        assert_eq!(align_of::<hsm_collector_options_t>(), align);
+        assert_eq!(offset_of!(hsm_collector_options_t, access_key), 0);
+        assert_eq!(offset_of!(hsm_collector_options_t, port), 16);
+        assert_eq!(offset_of!(hsm_collector_options_t, max_queue_size), 48);
+        assert_eq!(
+            offset_of!(hsm_collector_options_t, allow_untrusted_server_certificate),
+            68
+        );
+        assert_eq!(
+            offset_of!(hsm_collector_options_t, exception_deduplicator_window_ms),
+            72
+        );
+        assert_eq!(
+            offset_of!(hsm_collector_options_t, max_deduplicated_messages),
+            80
+        );
     }
 
     #[test]
     fn sensor_options_layout_matches_the_c_struct() {
-        // i64 | i32+pad | ptr | i64 | i64 | 5×i32 | bool @60 (+3 pad) | i32 @64 | i64 @72
-        assert_eq!(size_of::<hsm_sensor_options_t>(), 80);
-        assert_eq!(align_of::<hsm_sensor_options_t>(), 8);
+        let (size, align) = expected!("HSM_SENSOR_OPTIONS_T");
+        assert_eq!(size_of::<hsm_sensor_options_t>(), size);
+        assert_eq!(align_of::<hsm_sensor_options_t>(), align);
+        assert_eq!(offset_of!(hsm_sensor_options_t, ttl_ms), 0);
+        assert_eq!(offset_of!(hsm_sensor_options_t, description), 16);
+        assert_eq!(offset_of!(hsm_sensor_options_t, is_computer_sensor), 60);
+        assert_eq!(offset_of!(hsm_sensor_options_t, default_alert_options), 72);
     }
 
     #[test]
     fn enum_option_layout_matches_the_c_struct() {
-        // i32+pad | ptr | i32+pad | ptr
-        assert_eq!(size_of::<hsm_enum_option_t>(), 32);
-        assert_eq!(align_of::<hsm_enum_option_t>(), 8);
+        let (size, align) = expected!("HSM_ENUM_OPTION_T");
+        assert_eq!(size_of::<hsm_enum_option_t>(), size);
+        assert_eq!(align_of::<hsm_enum_option_t>(), align);
+        assert_eq!(offset_of!(hsm_enum_option_t, value), 8);
+        assert_eq!(offset_of!(hsm_enum_option_t, description), 24);
     }
 
     #[test]
     fn default_sensor_params_layout_matches_the_c_struct() {
-        // 4×ptr = 32 | int @32 (+4 pad) | ptr @40
-        assert_eq!(size_of::<hsm_default_sensor_params_t>(), 48);
-        assert_eq!(align_of::<hsm_default_sensor_params_t>(), 8);
+        let (size, align) = expected!("HSM_DEFAULT_SENSOR_PARAMS_T");
+        assert_eq!(size_of::<hsm_default_sensor_params_t>(), size);
+        assert_eq!(align_of::<hsm_default_sensor_params_t>(), align);
+        assert_eq!(offset_of!(hsm_default_sensor_params_t, process_name), 0);
+        assert_eq!(offset_of!(hsm_default_sensor_params_t, is_host_service), 32);
+        assert_eq!(offset_of!(hsm_default_sensor_params_t, product_version), 40);
     }
 
     #[test]
-    fn linked_library_is_the_abi_this_crate_declares() {
-        // MAJOR*10000 + MINOR*100 + PATCH. The probe binds a 0.x ABI; a MAJOR bump is a breaking
-        // change that must be reviewed here rather than discovered at runtime.
-        let packed = unsafe { hsm_collector_version() };
+    fn the_linked_library_is_the_header_this_crate_was_built_against() {
+        // Header/library skew is possible whenever HSM_COLLECTOR_LIB_DIR points at a prebuilt
+        // collector: the declarations would come from one version and the code from another, which
+        // is the same stack-corrupting mismatch the build-time static_asserts prevent in-tree.
+        let header: i32 = env!("HSM_COLLECTOR_HEADER_VERSION")
+            .parse()
+            .expect("version");
+        let linked = unsafe { hsm_collector_version() };
         assert_eq!(
-            packed / 10000,
-            0,
-            "unexpected collector MAJOR version: {packed}"
+            linked,
+            header,
+            "linked collector {}.{}.{} does not match the header this crate was built against \
+             ({}.{}.{})",
+            linked / 10000,
+            (linked / 100) % 100,
+            linked % 100,
+            header / 10000,
+            (header / 100) % 100,
+            header % 100
         );
     }
 }

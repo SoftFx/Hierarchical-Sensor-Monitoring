@@ -112,10 +112,17 @@ impl Config {
         // Plaintext is not configurable. The initiative (§4.3) requires peer + hostname
         // verification everywhere, including examples; a private CA is trusted by installing it in
         // the system store, not by downgrading the transport.
-        if address.starts_with("http://") {
-            return Err(ConfigError::invalid(
-                "hsm.address must use https:// — plaintext transport is not configurable",
-            ));
+        // An allow-list, not a single rejected spelling: anything else (a typo'd scheme, ws://,
+        // ftp://) would be passed to the collector verbatim and reach libcurl as a URL that cannot
+        // be what the operator meant. A bare host stays valid - the collector defaults it to HTTPS.
+        let lowercase = address.to_ascii_lowercase();
+        let is_https = lowercase.starts_with("https://");
+        let is_bare_host = !lowercase.contains("://");
+        if !is_https && !is_bare_host {
+            return Err(ConfigError::invalid(format!(
+                "hsm.address must be https://<host> or a bare host name (got '{address}') - \
+                 plaintext and other schemes are not configurable"
+            )));
         }
         if self.hsm.port == 0 {
             return Err(ConfigError::invalid("hsm.port must be between 1 and 65535"));
@@ -287,6 +294,44 @@ mod tests {
                 "expected a parse error for {text}"
             );
         }
+    }
+
+    #[test]
+    fn a_bare_host_is_accepted_and_left_to_the_collector() {
+        // The collector defaults a scheme-less address to HTTPS, so this is not a plaintext hole.
+        let text =
+            r#"{ "hsm": { "address": "garage.lan", "port": 44330, "accessKeyFile": "/k" } }"#;
+        assert_eq!(
+            Config::parse(text).expect("parse").hsm.address,
+            "garage.lan"
+        );
+    }
+
+    #[test]
+    fn every_non_https_scheme_is_rejected_whatever_its_spelling() {
+        // The contract is "must be https", so the check is an allow-list: a rejected-prefix test
+        // would pass while ftp:// or a typo sailed through to libcurl.
+        for address in [
+            "http://garage.lan",
+            "HTTP://garage.lan",
+            "Http://garage.lan",
+            "ftp://garage.lan",
+            "ws://garage.lan",
+            "htps://garage.lan",
+        ] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "{address}", "port": 44330, "accessKeyFile": "/k" }} }}"#
+            );
+            let error = Config::parse(&text).expect_err("must be rejected");
+            assert!(
+                matches!(error, ConfigError::Invalid(_)),
+                "{address}: {error}"
+            );
+        }
+        // Case does not matter for the accepted spelling either.
+        let text =
+            r#"{ "hsm": { "address": "HTTPS://garage.lan", "port": 1, "accessKeyFile": "/k" } }"#;
+        assert!(Config::parse(text).is_ok());
     }
 
     #[test]

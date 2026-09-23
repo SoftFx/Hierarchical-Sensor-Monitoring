@@ -143,7 +143,8 @@ fn register_computer_sensors(collector: &Collector, logger: &Logger) {
         Err(CollectorError::Unsupported { .. }) => logger.error(
             "the collector's Linux metric sources are unavailable (built without the \
              'linux-default-sensors' feature — see #1414): the default host catalog \
-             (Total CPU, Free RAM, free disk) will NOT be reported",
+             (Total CPU, Free RAM, free disk and the three process sensors) will NOT be \
+             reported and are therefore not registered",
         ),
         Err(error) => logger.error(format!("cannot install the Linux metric sources: {error}")),
     }
@@ -174,13 +175,19 @@ fn register_module_sensors<'c>(
     collector: &'c Collector,
     logger: &Logger,
 ) -> Option<VersionSensor<'c>> {
-    for sensor in [
-        DefaultSensor::ProcessCpu,
-        DefaultSensor::ProcessMemory,
-        DefaultSensor::ProcessThreadCount,
-    ] {
-        if let Err(error) = collector.add_default_sensor(sensor, None) {
-            logger.error(format!("cannot register {sensor:?}: {error}"));
+    // Same gate as the computer catalog, for the same reason: the process sensors are
+    // metric-source-fed (add_default_sensor marks every value-typed default sensor as a metric
+    // candidate, and a candidate produces values only once a factory binds a reader at Start).
+    // Without the Linux metric sources they would be permanently empty nodes in the tree.
+    if LINUX_METRIC_SOURCES_AVAILABLE {
+        for sensor in [
+            DefaultSensor::ProcessCpu,
+            DefaultSensor::ProcessMemory,
+            DefaultSensor::ProcessThreadCount,
+        ] {
+            if let Err(error) = collector.add_default_sensor(sensor, None) {
+                logger.error(format!("cannot register {sensor:?}: {error}"));
+            }
         }
     }
     if let Err(error) = collector.add_collector_monitoring_sensors() {
@@ -290,7 +297,9 @@ mod tests {
         paths
     }
 
-    /// The module set: managed `AddAllModuleSensors` minus `Process ThreadPool thread count`.
+    /// The module set: managed `AddAllModuleSensors` minus `Process ThreadPool thread count`
+    /// (a CLR concept) and minus the metric-fed process sensors, which register only when
+    /// the build can feed them (`METRIC_FED_SET`).
     const MODULE_SET: &[&str] = &[
         "garage-server/LinuxProbe/.module/Collector errors",
         "garage-server/LinuxProbe/.module/Collector queue stats/Items count in package",
@@ -298,21 +307,22 @@ mod tests {
         "garage-server/LinuxProbe/.module/Collector queue stats/Package process time",
         "garage-server/LinuxProbe/.module/Collector queue stats/Queue overflow",
         "garage-server/LinuxProbe/.module/Collector version",
-        "garage-server/LinuxProbe/.module/Process process/Process CPU",
-        "garage-server/LinuxProbe/.module/Process process/Process memory",
-        "garage-server/LinuxProbe/.module/Process process/Process thread count",
         "garage-server/LinuxProbe/.module/Service alive",
         "garage-server/LinuxProbe/.module/Version",
     ];
 
-    /// The computer set (managed `AddAllComputerSensors` on Unix), registered only when the build
-    /// has the Linux metric sources (#1414).
+    /// Everything the metric-source factory feeds: the computer set (managed
+    /// `AddAllComputerSensors` on Unix) plus the process sensors. Registered only when the build
+    /// has the Linux metric sources (#1414); without them these would be empty nodes.
     #[cfg(feature = "linux-default-sensors")]
-    const COMPUTER_SET: &[&str] = &[
+    const METRIC_FED_SET: &[&str] = &[
         "garage-server/.computer/Disks monitoring/Free space on disk",
         "garage-server/.computer/Disks monitoring/Free space on disk prediction",
         "garage-server/.computer/Free RAM memory",
         "garage-server/.computer/Total CPU",
+        "garage-server/LinuxProbe/.module/Process process/Process CPU",
+        "garage-server/LinuxProbe/.module/Process process/Process memory",
+        "garage-server/LinuxProbe/.module/Process process/Process thread count",
     ];
 
     #[test]
@@ -322,13 +332,14 @@ mod tests {
         #[allow(unused_mut)]
         let mut expected: Vec<&str> = MODULE_SET.to_vec();
         #[cfg(feature = "linux-default-sensors")]
-        expected.extend_from_slice(COMPUTER_SET);
+        expected.extend_from_slice(METRIC_FED_SET);
         expected.sort_unstable();
 
         assert_eq!(registered_paths(), expected);
     }
 
     #[test]
+    #[cfg(feature = "linux-default-sensors")]
     fn the_process_node_keeps_the_shared_fixed_name_alert_templates_target() {
         // By design (#1429 closed as such): every native host — HsmAgent and this probe — registers
         // the same fixed ".module/Process process" node, so one HSM alert template on that path

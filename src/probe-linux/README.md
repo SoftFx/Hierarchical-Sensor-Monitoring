@@ -114,11 +114,19 @@ The wrapper crate exists to make these mechanical rather than remembered:
 * **`Send`/`Sync` follow `hsm_collector.h`, not convenience.** They are asserted only for entry
   points the header documents as callable from any thread; the calls it asks the caller to
   serialize (start/stop/dispose/registration) are serialized by a lock inside `Collector`.
-* **Struct layouts are asserted.** `hsm-collector-sys` carries size/alignment tests for the three
-  structs that cross the ABI — the only way a silent field insertion gets caught, since the Rust
-  compiler never sees the C header.
+* **Struct layouts are asserted against the real header, at build time.** `build.rs` compiles
+  `static_assert`s over `hsm_collector.h` for the size, alignment and every field offset of each
+  mirrored struct, and pins the header's version against the version the linked library reports.
+  A Rust-only `size_of` test could not do this: it measures the Rust mirror against a constant in
+  the same crate, so a field appended on the C side — a MINOR bump under the collector's own
+  versioning policy — would change neither and would surface only at runtime, as C writing past the
+  end of a Rust stack slot. Verified by deliberately drifting the header: an appended field and a
+  reordered field both fail the build.
 * **The access key is a `Secret`.** Redacted from `Debug`/`Display`, wiped on drop, never in argv,
-  never in an error message, never in the config file.
+  never in an error message, never in the config file. Every copy this code makes — the probe's
+  `Secret`, the `CollectorOptions` string, and the `CString` the wrapper hands to the ABI — is
+  wiped once the collector has taken it. The collector's own C++ copy is not ours to clear, which
+  is why the guarantee is best-effort.
 
 ## The #1414 feature gate
 
@@ -128,9 +136,12 @@ added by workstream 1 (#1414) and **does not exist in master's collector**. So:
 
 * the declaration lives behind the cargo feature `linux-default-sensors`, **off by default**;
 * with the feature off the crate builds and runs against today's collector, and the probe logs a
-  loud warning at startup saying the default host catalog will not be reported;
-* with the feature off the probe also **skips registering** the `.computer` catalog, rather than
-  showing the operator a tree of nodes whose values can never arrive;
+  loud warning at startup naming what will not be reported;
+* with the feature off the probe also **skips registering** everything the metric-source factory
+  feeds — the `.computer` catalog *and* the three `.module/Process process/…` sensors — rather than
+  showing the operator nodes whose values can never arrive. The collector-driven module sensors
+  (`Service alive`, `Collector version`, `Collector errors`, the queue stats, `Version`) are
+  unaffected and still register;
 * with the feature on against an older collector, the link fails — deliberately, so the gap is
   never silent.
 
@@ -167,14 +178,16 @@ Placeholders only — **no secrets**:
   a master key). A **relative** name (the skeleton's `"access-key"`) is a systemd credential and
   resolves against `$CREDENTIALS_DIRECTORY`, the directory `LoadCredential=` fills — so the config
   never hardcodes `/run/credentials/<unit>/`; without that variable a relative name is an error. An
-  absolute path is used as is. The probe reads the key at startup and wipes its in-process copies
-  once the collector has taken it.
+  absolute path is used as is. The probe reads the key at startup and wipes every copy it
+  makes once the collector has taken it (the collector's own C++ copy is not ours to clear).
 * It warns if the key is readable beyond its owner. The check evaluates the POSIX ACL, not just the
   mode bits: systemd hands a credential to a non-root `User=` as a root-owned `0400` file plus a
   named-user ACL entry for the service, which makes `stat` report `0440` (the ACL mask shows in the
   group bits) although no group can read it. That case passes; a genuinely group- or
   world-readable key, or one readable by another named user or group, still warns.
-* `hsm.address` must be `https://…`. Plaintext is rejected by config validation, and the wrapper
+* `hsm.address` must be `https://<host>` (case-insensitive) or a bare host name, which the
+  collector defaults to HTTPS. Validation is an allow-list, so `http://`, `ftp://`, `ws://` and a
+  typo'd scheme are all rejected rather than passed through to libcurl; the wrapper
   deliberately does not expose the ABI's `allow_untrusted_server_certificate` flag — it disables
   both peer and hostname verification, which §4.1/§4.3 ban. Trust a private CA by installing it
   with `update-ca-certificates`; libcurl/OpenSSL picks up the system store with verification on.
