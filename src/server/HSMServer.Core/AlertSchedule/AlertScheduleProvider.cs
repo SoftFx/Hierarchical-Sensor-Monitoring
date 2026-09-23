@@ -46,7 +46,10 @@ namespace HSMServer.Core.Schedule
         // a sensor park used to produce one ERROR line per policy per sweep.
         // The interval keeps the problem periodically visible (it can persist
         // for the process lifetime) instead of muting it after the first hit.
-        private readonly Dictionary<Guid, DateTime> _missingScheduleReportedAt = new();
+        // Timestamps are Environment.TickCount64 (monotonic — a wall-clock
+        // backwards jump must not mute the report) and the cleanup timer
+        // prunes entries older than twice the report interval.
+        private readonly Dictionary<Guid, long> _missingScheduleReportedAt = new();
 
         private readonly object _lock = new object();
 
@@ -175,10 +178,13 @@ namespace HSMServer.Core.Schedule
         // Must be called under _lock only.
         private void ReportMissingSchedule(Guid id)
         {
-            var now = DateTime.UtcNow;
+            // TickCount64, not DateTime.UtcNow: a pure throttle wants a
+            // monotonic source, so a backwards wall-clock jump cannot yield
+            // a negative delta and mute the report for the jump duration.
+            var now = Environment.TickCount64;
 
             if (_missingScheduleReportedAt.TryGetValue(id, out var reportedAt) &&
-                now - reportedAt < MissingScheduleReportInterval)
+                now - reportedAt < MissingScheduleReportInterval.TotalMilliseconds)
                 return;
 
             _missingScheduleReportedAt[id] = now;
@@ -238,7 +244,8 @@ namespace HSMServer.Core.Schedule
             }
         }
 
-        private void CleanupIntervalCache()
+        // Timer callback; internal so tests can drive the prune deterministically.
+        internal void CleanupIntervalCache()
         {
             try
             {
@@ -267,9 +274,23 @@ namespace HSMServer.Core.Schedule
                         totalRemoved += keysToRemove.Count;
                     }
 
-                    if (totalRemoved > 0)
+                    // Prune the missing-id throttle timestamps older than
+                    // twice the report interval (#1409 review): the growth is
+                    // bounded by the number of distinct dangling ids, but the
+                    // timer is right here, and a pruned entry re-adds itself
+                    // on the next hit.
+                    var throttleThreshold = Environment.TickCount64 - (long)(2 * MissingScheduleReportInterval.TotalMilliseconds);
+                    var staleThrottleIds = _missingScheduleReportedAt
+                        .Where(kvp => kvp.Value < throttleThreshold)
+                        .Select(kvp => kvp.Key)
+                        .ToList();
+
+                    foreach (var id in staleThrottleIds)
+                        _missingScheduleReportedAt.Remove(id);
+
+                    if (totalRemoved > 0 || staleThrottleIds.Count > 0)
                     {
-                        _logger.Debug($"Cleaned up {totalRemoved} expired interval cache entries");
+                        _logger.Debug($"Cleaned up {totalRemoved} expired interval cache entries and {staleThrottleIds.Count} stale missing-schedule throttle entries");
                     }
                 }
             }

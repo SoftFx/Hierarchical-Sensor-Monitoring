@@ -174,6 +174,12 @@ namespace HSMServer.Core.Tests.Infrastructure
             return _inner.RemoveApiTokenSecurityEventsBefore(ticksCutoffUtc, limit);
         }
 
+        // Optional injection point for sensor entity update failures, used to
+        // verify the #1409 detach completion contract: a failed sensor persist
+        // must surface as a non-Ok detach result so the controller keeps the
+        // schedule alive for a retry.
+        internal Func<SensorEntity, bool> ShouldFailSensorUpdate { get; set; }
+
         public void AddSensor(SensorEntity entity)
         {
             if (_shouldFail(entity))
@@ -184,7 +190,7 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         public void UpdateSensor(SensorEntity entity)
         {
-            if (_shouldFail(entity))
+            if (ShouldFailSensorUpdate?.Invoke(entity) == true || _shouldFail(entity))
                 throw new InvalidOperationException($"Simulated DB failure for sensor {entity.Id}");
 
             _inner.UpdateSensor(entity);

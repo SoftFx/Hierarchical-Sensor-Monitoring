@@ -85,14 +85,11 @@
                                                         Alert Templates
                                                     </a>
                                                 </li>
-                                                @if (UserRoleHelper.IsAlertSchedulesPageAllowed((User)Context.User))
-                                                {
-                                                    <li>
-                                                        <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AlertSchedulesController)">
-                                                            Alert Schedules
-                                                        </a>
-                                                    </li>
-                                                }
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AlertSchedulesController)">
+                                                        Alert Schedules
+                                                    </a>
+                                                </li>
                                             </ul>
                                         </li>
 

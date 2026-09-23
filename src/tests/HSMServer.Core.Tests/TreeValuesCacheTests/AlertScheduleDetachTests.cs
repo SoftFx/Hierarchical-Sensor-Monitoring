@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -65,7 +66,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var ttlDeleted = Assert.Single(sensor.Policies.TTLPolicies, t => t.ScheduleId == deletedId);
             var ttlSurvivor = Assert.Single(sensor.Policies.TTLPolicies, t => t.ScheduleId == survivorId);
 
-            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            var detach = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.True(detach.IsOk, detach.Error);
 
             // In-memory: the reference is gone, the policies themselves and the
             // other schedule's binding survive.
@@ -130,7 +132,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var ttlDeleted = Assert.Single(product.Policies.TTLPolicies, t => t.ScheduleId == deletedId);
             var ttlSurvivor = Assert.Single(product.Policies.TTLPolicies, t => t.ScheduleId == survivorId);
 
-            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            var detach = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.True(detach.IsOk, detach.Error);
 
             Assert.Null(ttlDeleted.ScheduleId);
             Assert.Equal(survivorId, ttlSurvivor.ScheduleId);
@@ -147,9 +150,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        // The controller detaches BEFORE deleting the schedule; if the delete
-        // fails the operator retries Remove, so a second detach over already-
-        // detached policies must be a harmless no-op.
+        // The controller detaches BEFORE deleting the schedule and skips the
+        // deletion whenever the detach reports incomplete, so the operator's
+        // Remove retry re-runs the detach — a second detach over already-
+        // detached policies must be a harmless no-op that still reports Ok.
         [Fact]
         [Trait("Category", "Alert schedules")]
         public async Task Detach_SecondCall_IsNoOp()
@@ -181,8 +185,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             });
             Assert.True(attach.IsOk, attach.Error);
 
-            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
-            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            var first = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.True(first.IsOk, first.Error);
+
+            // The controller consumes the completion contract: a no-op retry
+            // over already-detached policies must still report Ok, so an
+            // idempotent Remove retry proceeds to the deletion.
+            var second = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.True(second.IsOk, second.Error);
 
             var ttl = Assert.Single(sensor.Policies.TTLPolicies);
             Assert.Null(ttl.ScheduleId);
@@ -207,7 +217,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var template = await AddTemplateWithScheduledPolicies([$"*/{firstPath}", $"*/{secondPath}"], deletedId, survivorId);
             await CreateSensor(firstPath);
 
-            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            var detach = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.True(detach.IsOk, detach.Error);
 
             // In-memory template: the dangling id is gone, the other schedule's
             // binding and the TTL intervals survive.
@@ -290,7 +301,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(TimeSpan.FromMinutes(7).Ticks, handMade.TTLTicks);
             Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[handMade.Id.ToString()].Initiator.Type);
 
-            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            var detach = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.True(detach.IsOk, detach.Error);
 
             // The detach worked on the scheduled policy...
             Assert.All(sensor.Policies.TTLPolicies, t => Assert.Null(t.ScheduleId));
@@ -381,7 +393,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         // #1409 review: template detaches are PERSIST-FIRST — the detached
         // entity is written through the failure-propagating path BEFORE the
         // in-memory template is touched, so a failed write leaves the ids in
-        // place and the operator's Remove retry re-runs the detach.
+        // place and the operator's Remove retry re-runs the detach. The
+        // completion contract: the failed persist must report a non-Ok
+        // detach (the controller keeps the schedule alive), and the retry
+        // after the failure clears reports Ok.
         [Fact]
         [Trait("Category", "Alert schedules")]
         public async Task Detach_TemplatePersistFailure_LeavesMemoryUntouched_RetrySucceeds()
@@ -394,7 +409,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _failingDatabase.ShouldFailAlertTemplateUpdate = _ => true;
 
-            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            var failed = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.False(failed.IsOk);
 
             // The sensor arm is unaffected by the template write failure: the
             // policy-level detach below still applies. The TEMPLATE keeps its
@@ -408,12 +424,95 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _failingDatabase.ShouldFailAlertTemplateUpdate = null;
 
-            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            var retry = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.True(retry.IsOk, retry.Error);
 
             Assert.All(_valuesCache.GetAlertTemplate(template.Id).TtlEntries, e => Assert.NotEqual(deletedId, e.Policy.ScheduleId));
             Assert.DoesNotContain(_databaseCoreManager.DatabaseCore.GetAllAlertTemplates()
                 .First(t => new Guid(t.Id) == template.Id).TTLPolicies,
                 p => p.ScheduleId.SequenceEqual(deletedId.ToByteArray()));
+        }
+
+        // #1409 review round 4: the detach reports COMPLETION through its
+        // TaskResult and never throws — the controller deletes the schedule
+        // only on Ok. A detach aborted by the request-abort token must
+        // return non-Ok WITHOUT dispatching anything, leaving the references
+        // (and, in the controller, the schedule row) alive so the retry
+        // re-runs the detach over them.
+        [Fact]
+        [Trait("Category", "Alert schedules")]
+        public async Task Detach_AbortedByToken_ReturnsNonOk_AndRetryCompletes()
+        {
+            var deletedId = Guid.NewGuid();
+            var force = InitiatorInfo.AsSystemForce("test_attach_detach_abort");
+
+            var sensorPath = "sensorScheduleDetachAbort";
+            await CreateSensor(sensorPath);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensor));
+
+            var attach = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [TtlUpdate(TimeSpan.FromMinutes(5).Ticks, force, scheduleId: deletedId)],
+                Initiator = force,
+            });
+            Assert.True(attach.IsOk, attach.Error);
+
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            var aborted = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId, cts.Token);
+            Assert.False(aborted.IsOk);
+
+            // Nothing was dispatched — the reference is intact, which is what
+            // makes the operator's Remove retry (after the controller skipped
+            // the deletion) re-run the detach.
+            var ttl = Assert.Single(sensor.Policies.TTLPolicies);
+            Assert.Equal(deletedId, ttl.ScheduleId);
+
+            var retry = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.True(retry.IsOk, retry.Error);
+            Assert.Null(ttl.ScheduleId);
+        }
+
+        // #1409 review round 4: a per-SENSOR persist failure must also report
+        // a non-Ok detach — the queue handler swallows it (TryUpdateSensor
+        // reports instead of throwing), so it travels out through the chunk
+        // request's error bag. The sensor arm is memory-first: storage keeps
+        // the dangling id, and the non-Ok result is what keeps the schedule
+        // alive in the controller (a restart reloads the stored reference and
+        // a later Remove re-detaches it).
+        [Fact]
+        [Trait("Category", "Alert schedules")]
+        public async Task Detach_FailingSensorPersist_ReturnsNonOk_StorageKeepsReference()
+        {
+            var deletedId = Guid.NewGuid();
+            var force = InitiatorInfo.AsSystemForce("test_attach_detach_sensor_fail");
+
+            var sensorPath = "sensorScheduleDetachPersistFail";
+            await CreateSensor(sensorPath);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensor));
+
+            var attach = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [TtlUpdate(TimeSpan.FromMinutes(5).Ticks, force, scheduleId: deletedId)],
+                Initiator = force,
+            });
+            Assert.True(attach.IsOk, attach.Error);
+
+            _failingDatabase.ShouldFailSensorUpdate = _ => true;
+
+            var failed = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.False(failed.IsOk);
+
+            _failingDatabase.ShouldFailSensorUpdate = null;
+
+            // The stored sensor still carries the id — the recoverable state
+            // the controller preserves by not deleting the schedule.
+            var stored = _databaseCoreManager.DatabaseCore.GetAllSensors()
+                .First(e => e.Id == sensor.Id.ToString());
+            Assert.Contains(stored.TTLPolicies, p => p.ScheduleId.SequenceEqual(deletedId.ToByteArray()));
         }
 
         // #1409 review: an explicit Never (long.MaxValue ticks) TTL bound to a
@@ -443,7 +542,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             });
             Assert.True(attach.IsOk, attach.Error);
 
-            await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            var detach = await _valuesCache.DetachAlertScheduleFromPoliciesAsync(deletedId);
+            Assert.True(detach.IsOk, detach.Error);
 
             var ttl = Assert.Single(sensor.Policies.TTLPolicies);
             Assert.Null(ttl.ScheduleId);

@@ -124,6 +124,44 @@ namespace HSMServer.Core.Tests.Schedule
             Assert.Equal(1, CountReports(id));
         }
 
+        // #1409 review: the throttle timestamps are pruned by the cleanup
+        // timer once older than twice the CURRENT report interval — so the
+        // dictionary does not accumulate an entry per dangling id for the
+        // process lifetime. Pin both edges: a fresh entry under the full
+        // interval survives the prune (no over-pruning), and an entry that
+        // became stale relative to a since-shrunk interval is dropped —
+        // after which a hit reports again even with the interval restored
+        // to the full hour (without the prune the mute would still hold).
+        [Fact]
+        public void MissingSchedule_ThrottleEntries_ArePruned_ByCleanupTimer()
+        {
+            using var provider = CreateProvider();
+
+            var id = Guid.NewGuid();
+            provider.MissingScheduleReportInterval = TimeSpan.FromHours(1);
+
+            Assert.True(provider.IsWorkingTime(id, DateTime.UtcNow));
+            Assert.Equal(1, CountReports(id));
+
+            // Fresh entry, full interval: the 2x threshold has not elapsed,
+            // the prune must keep it and the report stays muted.
+            provider.CleanupIntervalCache();
+            Assert.True(provider.IsWorkingTime(id, DateTime.UtcNow));
+            Assert.Equal(1, CountReports(id));
+
+            // Shrink the interval so the same entry is now older than 2x it;
+            // the cleanup prunes the stale entry.
+            provider.MissingScheduleReportInterval = TimeSpan.FromMilliseconds(20);
+            System.Threading.Thread.Sleep(60);
+            provider.CleanupIntervalCache();
+
+            // Interval restored BEFORE the hit: only the prune can explain a
+            // fresh report here.
+            provider.MissingScheduleReportInterval = TimeSpan.FromHours(1);
+            Assert.True(provider.IsWorkingTime(id, DateTime.UtcNow));
+            Assert.Equal(2, CountReports(id));
+        }
+
 
         private int CountReports(Guid id) => SnapshotLogs().Count(message => message.Contains(id.ToString()));
 

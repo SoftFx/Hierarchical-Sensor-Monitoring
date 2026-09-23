@@ -119,8 +119,12 @@ namespace HSMServer.Core.Cache
         // schedule, so a deleted schedule leaves schedule-less policies instead
         // of dangling ids (fail-open + a repeated missing-id error log). The
         // token stops the dispatch of further detach work (already-queued
-        // chunks still complete).
-        Task DetachAlertScheduleFromPoliciesAsync(Guid scheduleId, CancellationToken token = default);
+        // chunks still complete). The result reports COMPLETION and the method
+        // never throws: Ok only when every referenced entity was detached —
+        // the caller must NOT delete the schedule otherwise (a deleted
+        // schedule makes the surviving dangling ids permanent; a live one
+        // lets a Remove retry re-run the idempotent detach).
+        Task<TaskResult> DetachAlertScheduleFromPoliciesAsync(Guid scheduleId, CancellationToken token = default);
 
         List<AlertTemplateModel> GetAlertTemplateModels();
 
