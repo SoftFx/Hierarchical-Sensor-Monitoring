@@ -2183,9 +2183,21 @@ namespace
 
         bool IsMetricCandidate() const { return is_metric_candidate_ && !is_metric_driven_ && !is_partial_posting_; }
 
-        // A built-in DoubleBar/IntBar (catalog row or an internal sampler's bar) — the ones that post
-        // partial bars like managed BarMonitoringSensorBase even without a metric source (#1428).
+        // A catalog DoubleBar/IntBar that no metric source bound — it still posts partial bars like
+        // managed BarMonitoringSensorBase (#1428).
         bool IsBuiltInBar() const { return is_metric_candidate_ && IsMetricBar(); }
+
+        // Mark a bar an internal sampler feeds by push (network speed): it joins the partial-post
+        // schedule WITHOUT becoming a metric candidate, so a user-installed metric-source factory can
+        // never bind it and sample the same bar the sampler is pushing into.
+        void MarkBuiltInPushBar(int64_t post_period_ms, int64_t bar_tick_ms)
+        {
+            is_built_in_push_bar_ = true;
+            metric_post_period_ms_ = post_period_ms;
+            metric_bar_tick_ms_ = bar_tick_ms;
+        }
+
+        bool IsBuiltInPushBar() const { return is_built_in_push_bar_ && IsMetricBar() && !is_partial_posting_; }
 
         // Bind a freshly created metric source (called on the Start thread before the scheduler runs).
         // Makes the sensor periodic so TickPeriodicSensors drives it; the source is read on the
@@ -2280,6 +2292,10 @@ namespace
         bool is_last_value_;
         bool is_bar_ = false;
         mutable std::mutex mutex_;
+        // Orders this sensor's bar publishes against each other (roll-on-add, the scheduled tick roll
+        // and the partial post): held across snapshot + enqueue, never nested inside mutex_, and never
+        // taken by the collector — so it cannot participate in a lock cycle (#1428).
+        std::mutex publish_mutex_;
         std::string last_value_json_;
         hsm_sensor_status_t last_status_ = HSM_SENSOR_STATUS_OFF_TIME;
         std::string last_comment_;
@@ -2314,8 +2330,8 @@ namespace
         bool is_metric_candidate_ = false;                // eligible: a value type that a metric source can drive
         bool is_metric_driven_ = false;                   // a source was bound at Start -> periodic reads
         bool is_partial_posting_ = false;                 // a push-fed built-in bar on the partial-post schedule
+        bool is_built_in_push_bar_ = false;               // an internal sampler's bar: partial posts, never metric-bound
         bool metric_prime_pending_ = false;               // the Start tick's read only primes the source (not a sample)
-        bool partial_send_in_progress_ = false;           // a partial snapshot is between capture and enqueue (mutex_)
         int64_t metric_post_period_ms_ = 0;               // post cadence (catalog post_period for default sensors)
         int64_t metric_bar_tick_ms_ = kMetricBarSampleMs; // bar sample cadence (managed BarTickPeriod)
         int64_t metric_emit_period_ms_ = 0;               // partial-bar post cadence / value post cadence once bound
@@ -2589,6 +2605,11 @@ namespace
                         sensor->BindMetricSource(std::move(source));
                     else if (sensor->IsBuiltInBar())
                         sensor->EnablePartialPosts(); // push-fed built-in bar: tick-roll + partial posts (#1428)
+                }
+                else if (sensor->IsBuiltInPushBar())
+                {
+                    // An internal sampler's bar (network speed): partial posts, never factory-bound.
+                    sensor->EnablePartialPosts();
                 }
             }
 
@@ -4110,7 +4131,7 @@ namespace
                             // already on it (created in an earlier run) is left alone.
                             if (!sensor->IsPeriodic())
                             {
-                                sensor->MarkMetricCandidate(15000, 15000);
+                                sensor->MarkBuiltInPushBar(15000, 15000);
                                 sensor->EnablePartialPosts();
                                 sensor->ResetPeriodicBaseline();
                                 scheduler_task_->Wake();
@@ -5188,9 +5209,13 @@ namespace
             return HSM_RESULT_INVALID_STATE;
 
         // Roll-on-add: a value arriving past the close publishes the closed bar and opens a
-        // fresh aligned one. The closed-bar JSON is built under the sensor lock but published
-        // after releasing it — the collector takes sensor locks while holding its own, so the
-        // reverse nesting here would deadlock.
+        // fresh aligned one. publish_mutex_ spans the snapshot AND the enqueue, so this closed bar
+        // cannot be overtaken by a partial of the next window published by the scheduler (#1428) —
+        // the server persists on a NEW OpenTime, so a reordering there reorders stored bars. The
+        // closed-bar JSON is built under the sensor lock but enqueued after releasing it — the
+        // collector takes sensor locks while holding its own, so the reverse nesting would deadlock.
+        std::lock_guard<std::mutex> publish_guard(publish_mutex_);
+
         std::string closed_json;
         {
             std::lock_guard<std::mutex> guard(mutex_);
@@ -5198,10 +5223,7 @@ namespace
             // Through the clock seam (real wall clock in production), like the built-in bar schedule
             // that shares this bar (#1428).
             const auto now_ms = SystemNowMs();
-            // A partial of this bar is being enqueued (TryBuildMetricBarJson): defer the roll, as
-            // managed CheckCurrentBar does when TrySendValue returns false — the value joins the
-            // closing bar and the next tick publishes it closed, after the partial.
-            if (bar_.close_ms < now_ms && !partial_send_in_progress_)
+            if (bar_.close_ms < now_ms)
             {
                 if (bar_.count > 0)
                     closed_json = collector->OutgoingBarJson(bar_, path_);
@@ -5586,9 +5608,16 @@ namespace
             }
 
             PublishNextDueHintLocked();
+        }
 
-            if (sample_due)
+        // The roll and its publish share publish_mutex_ with the partial post and with roll-on-add,
+        // so a closed bar is always enqueued before any partial of the next window.
+        if (sample_due)
+        {
+            std::lock_guard<std::mutex> publish_guard(publish_mutex_);
             {
+                std::lock_guard<std::mutex> guard(mutex_);
+
                 const int64_t wall_ms = SystemNowMs();
                 // Runs on the collector's own scheduler thread, so the collector is alive; the guard
                 // only keeps a teardown race from rolling a bar nobody can publish.
@@ -5600,12 +5629,11 @@ namespace
                     bar_.Init(wall_ms);
                 }
             }
-        }
 
-        // Publish the closed bar outside the sensor lock (the collector takes sensor locks while
-        // holding its own), ahead of any partial of the new window this call returns.
-        if (!closed_json.empty())
-            collector->EnqueueIfRunning(std::move(closed_json));
+            // Publish outside the sensor lock (the collector takes sensor locks while holding its own).
+            if (!closed_json.empty())
+                collector->EnqueueIfRunning(std::move(closed_json));
+        }
 
         // A push-fed built-in bar (queue diagnostics, network speed) only rolls on the tick; its values
         // arrive through AddBar* (managed PublicBarMonitoringSensor: CollectBar == CheckCurrentBar).
@@ -5624,27 +5652,24 @@ namespace
         if (!post_due || !collector)
             return false;
 
-        // Snapshot + enqueue under a send-in-progress flag (managed _sendValueInProgress): while it is
-        // set, roll-on-add (AccumulateBar) on a push-fed bar defers its roll, so a closed bar can never
-        // be enqueued ahead of this older partial of the same window — the server keeps the LAST post
-        // per OpenTime, and an out-of-order stale partial would drop values. The enqueue runs outside
-        // the sensor lock (the collector takes sensor locks while holding its own).
+        // Snapshot + enqueue under publish_mutex_, the same lock AccumulateBar's roll takes: the two
+        // publishes of one bar are totally ordered in BOTH directions, so neither a newer partial can
+        // overtake an older closed bar nor the reverse (managed serializes them through
+        // _sendValueInProgress). The lock is released by its guard on every path, including a throw.
         std::string partial_json;
         {
-            std::lock_guard<std::mutex> guard(mutex_);
-            if (bar_.count <= 0)
-                return false;
+            std::lock_guard<std::mutex> publish_guard(publish_mutex_);
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (bar_.count <= 0)
+                    return false;
 
-            partial_json = collector->OutgoingBarJson(bar_, path_);
-            partial_send_in_progress_ = true;
+                partial_json = collector->OutgoingBarJson(bar_, path_);
+            }
+
+            collector->EnqueueIfRunning(std::move(partial_json));
         }
 
-        collector->EnqueueIfRunning(std::move(partial_json));
-
-        {
-            std::lock_guard<std::mutex> guard(mutex_);
-            partial_send_in_progress_ = false;
-        }
         (void)out_json; // published above, not through the caller
         return false;
     }

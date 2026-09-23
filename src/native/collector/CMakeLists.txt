@@ -370,6 +370,7 @@ set(NATIVE_REGRESSION_TESTS
     native_metric_bar_rolls_over_at_window_boundary
     native_metric_bar_flushes_partial_on_stop
     native_built_in_push_bar_posts_partials
+    native_built_in_push_bar_publishes_are_ordered
     # native_windows_metric_sources_produce_live_value is registered below (Windows only).
     native_prototype_merge_pins_identity_overrides_metadata
     native_http_endpoint_routing_matches_net
