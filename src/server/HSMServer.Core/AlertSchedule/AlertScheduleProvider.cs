@@ -47,19 +47,34 @@ namespace HSMServer.Core.Schedule
 
         private class CacheEntry
         {
+            // Per-minute result slots instead of a single (time, result) pair:
+            // the TTL gate queries at UtcNow while the data-policy gate queries
+            // at the value's own timestamp for the same schedule id (#1404), so
+            // one overwritten slot thrashed on every ingested value and
+            // AlertSchedule.IsWorkingTime ran twice per value under the
+            // provider's lock. A few minute-keyed slots cover the hot path's
+            // distinct instants; the map stays bounded by clearing on overflow
+            // (a result's lifetime is one minute anyway).
+            private const int MaxCachedMinutes = 4;
+
             public AlertSchedule Schedule { get; set; }
-            public DateTime? CachedTime { get; set; }
-            public bool? WorkingTimeResult { get; set; }
+
+            private readonly Dictionary<DateTime, bool> _workingTimeByMinute = new();
 
             public Dictionary<CacheEntryKey, bool> IntervalCache { get; set; } = new();
 
 
-            public bool IsCacheValid(DateTime time)
-            {
-                if (!CachedTime.HasValue || !WorkingTimeResult.HasValue)
-                    return false;
+            public bool TryGetWorkingTime(DateTime time, out bool result) =>
+                _workingTimeByMinute.TryGetValue(RoundToMinute(time), out result);
 
-                return RoundToMinute(CachedTime.Value) == RoundToMinute(time);
+            public void AddWorkingTime(DateTime time, bool result)
+            {
+                var minute = RoundToMinute(time);
+
+                if (_workingTimeByMinute.Count >= MaxCachedMinutes && !_workingTimeByMinute.ContainsKey(minute))
+                    _workingTimeByMinute.Clear();
+
+                _workingTimeByMinute[minute] = result;
             }
 
             public void AddIntervalToCache(DateTime startTime, DateTime endTime, bool result)
@@ -78,8 +93,7 @@ namespace HSMServer.Core.Schedule
 
             public void InvalidateCache()
             {
-                CachedTime = null;
-                WorkingTimeResult = null;
+                _workingTimeByMinute.Clear();
                 IntervalCache.Clear();
             }
 
@@ -108,17 +122,14 @@ namespace HSMServer.Core.Schedule
             {
                 if (_cache.TryGetValue(id, out var cacheEntry))
                 {
-                    if (cacheEntry.IsCacheValid(time))
-                    {
-                        return cacheEntry.WorkingTimeResult.Value;
-                    }
+                    if (cacheEntry.TryGetWorkingTime(time, out var result))
+                        return result;
 
-                    var result = cacheEntry.Schedule.IsWorkingTime(time);
+                    var computed = cacheEntry.Schedule.IsWorkingTime(time);
 
-                    cacheEntry.CachedTime = time;
-                    cacheEntry.WorkingTimeResult = result;
+                    cacheEntry.AddWorkingTime(time, computed);
 
-                    return result;
+                    return computed;
                 }
                 else
                 {
