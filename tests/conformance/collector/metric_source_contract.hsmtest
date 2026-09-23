@@ -9,10 +9,12 @@
 #   MonitoringSensorBase<double> whose GetValue throws the same message — the same seam, since
 #   BuildSensorValue routes a throwing read to the error channel.
 # create_disk_prediction_sensor|path|calibration_requests|post_period_ms|refresh_period_ms|free_space_start|drain_per_second
-#   The "Free space on disk prediction" sensor over a SCRIPTED free-space series (free space falls
+#   The "Free space on disk prediction" sensor over a SCRIPTED free-space series (free space changes
 #   linearly with elapsed time), with fixture-sized periods; the catalog row runs 5 min posts, 30 s
 #   sampling and 6 calibration requests. C# registers FreeDiskSpacePredictionBase over a scripted
 #   IDiskInfo; native binds a metric source running the same disk_prediction.hpp math.
+#   `drain_per_second` is SIGNED: positive drains the disk, zero holds it flat, negative frees space
+#   (#1445), which is how the idle and growing states below are reached.
 #
 # Contract notes:
 # - A FAILED read is never silent (root rule #8). It lands in the collector's error channel — the
@@ -24,13 +26,20 @@
 #   the sample. That split is managed's: BuildSensorValue's catch arm publishes the default value,
 #   while CollectableBarMonitoringSensorBase simply takes no sample.
 # - The prediction sensor runs two independent cadences: free space is sampled on its own period to
-#   feed the drain-speed EMA, and a TimeSpan is posted on the sensor's post period. It opens with
-#   calibration posts — TimeSpan.Zero, status OffTime, a "Calibration request (n/N)" comment — and
-#   settles into a real prediction with status Ok and a "Free space decreases by ..." comment.
+#   feed the SIGNED drain-speed EMA, and a TimeSpan is posted on the sensor's post period.
+# - Exactly one of five states is posted (#1445), and only the first carries a real estimate:
+#     draining below the ceiling  -> free_space / speed, Ok, "Free space decreases by X Mbytes/sec."
+#     draining beyond the ceiling -> 365.00:00:00, OffTime, "... More than 365 days left."
+#     not decreasing              -> 365.00:00:00, OffTime, "Free space is not decreasing. Value cannot be calculated."
+#     increasing                  -> 365.00:00:00, OffTime, "Free space increases by X Mbytes/sec. Value cannot be calculated."
+#     calibrating                 -> 365.00:00:00, OffTime, "Calibration request (n/N). Value cannot be calculated yet."
+#   The ceiling stands for "no actionable estimate"; 00:00:00 is reserved for a disk with no free
+#   space left and is never a placeholder, because an alert reads it as "full NOW".
+# - Calibration counts SAMPLES, not posts: (n/N) means n completed free-space measurements.
 # - The NUMBER of calibration posts is deliberately NOT pinned. Managed starts its send loop in
-#   InitAsync (first post due immediately) and only then resets the request counter in StartAsync,
-#   so its opening post races that reset and the first comment can repeat or read (0/N). That is a
-#   managed lifecycle wrinkle, not a contract, and pinning it would pin a race.
+#   InitAsync (first post due immediately) while the sampler's first tick is aligned to the next
+#   period boundary, so how many posts precede the N-th sample depends on scheduling. That is a
+#   lifecycle wrinkle, not a contract, and pinning it would pin a race.
 
 # A read failure reaches `.module/Collector errors` and posts an Error-status value. The payload
 # stream also carries the module group's own start markers, so both assertions are index-free.
@@ -48,10 +57,10 @@ metric_source_error_is_reported|stop
 # is one longer than native's — see above), so the LAST payload is a settled prediction. Free space
 # starts at 1 000 000 units and drains 1 000 per second, a strictly positive speed, so that
 # prediction is a real (non-zero) TimeSpan rather than a repeat of the previous one.
-# The lower count bound is load-bearing, not cosmetic: below 6 posts the tail can still be the
-# calibration overhang, which carries TimeSpan.Zero and would fail the last-payload assertion. The
-# margin therefore lives in the sleep (12 nominal vs a floor of 6 tolerates half the posts slipping
-# on a loaded runner), not in a looser bound.
+# The lower count bound is load-bearing, not cosmetic: below 6 posts the tail can still be a
+# calibration post, which carries the ceiling and would fail the last-payload assertion. The margin
+# therefore lives in the sleep (12 nominal vs a floor of 6 tolerates half the posts slipping on a
+# loaded runner), not in a looser bound.
 disk_prediction_calibrates_then_predicts|create_collector
 disk_prediction_calibrates_then_predicts|create_disk_prediction_sensor|contract/metric/prediction|2|500|250|1000000|1000
 disk_prediction_calibrates_then_predicts|start
@@ -59,10 +68,55 @@ disk_prediction_calibrates_then_predicts|sleep_ms|5600
 disk_prediction_calibrates_then_predicts|stop
 disk_prediction_calibrates_then_predicts|expect_sent_count_between|6|14|10
 disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Type":7
-disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Value":"00:00:00"
+disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Value":"365.00:00:00"
 disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Status":0
 disk_prediction_calibrates_then_predicts|expect_payload_contains|0|"Comment":"Calibration request (
 disk_prediction_calibrates_then_predicts|expect_payload_contains|-1|"Type":7
 disk_prediction_calibrates_then_predicts|expect_payload_contains|-1|"Status":1
 disk_prediction_calibrates_then_predicts|expect_payload_contains|-1|"Comment":"Free space decreases by
 disk_prediction_calibrates_then_predicts|expect_payload_not_contains|-1|"Value":"00:00:00"
+disk_prediction_calibrates_then_predicts|expect_payload_not_contains|-1|"Value":"365.00:00:00"
+
+# A disk that is NOT being written to (drain_per_second = 0) must say so, rather than repeat the
+# last estimate or post zero (#1445). Every sample folds an exact 0 into the EMA, so the speed is
+# exactly zero and the sensor settles in the "not decreasing" state.
+disk_prediction_reports_no_drain_when_idle|create_collector
+disk_prediction_reports_no_drain_when_idle|create_disk_prediction_sensor|contract/metric/prediction_idle|2|500|250|1000000|0
+disk_prediction_reports_no_drain_when_idle|start
+disk_prediction_reports_no_drain_when_idle|sleep_ms|5600
+disk_prediction_reports_no_drain_when_idle|stop
+disk_prediction_reports_no_drain_when_idle|expect_sent_count_between|6|14|10
+disk_prediction_reports_no_drain_when_idle|expect_payload_contains|-1|"Type":7
+disk_prediction_reports_no_drain_when_idle|expect_payload_contains|-1|"Value":"365.00:00:00"
+disk_prediction_reports_no_drain_when_idle|expect_payload_contains|-1|"Status":0
+disk_prediction_reports_no_drain_when_idle|expect_payload_contains|-1|"Comment":"Free space is not decreasing. Value cannot be calculated."
+
+# A disk that is being FREED (negative drain) reports growth. Before #1445 this branch was dead in
+# both collectors, because a negative sample was discarded instead of folded into the EMA. The
+# rendered rate depends on the wall-clock sampling intervals, so only the sentence is asserted.
+disk_prediction_reports_growth_when_space_is_freed|create_collector
+disk_prediction_reports_growth_when_space_is_freed|create_disk_prediction_sensor|contract/metric/prediction_growth|2|500|250|1000000|-1000
+disk_prediction_reports_growth_when_space_is_freed|start
+disk_prediction_reports_growth_when_space_is_freed|sleep_ms|5600
+disk_prediction_reports_growth_when_space_is_freed|stop
+disk_prediction_reports_growth_when_space_is_freed|expect_sent_count_between|6|14|10
+disk_prediction_reports_growth_when_space_is_freed|expect_payload_contains|-1|"Type":7
+disk_prediction_reports_growth_when_space_is_freed|expect_payload_contains|-1|"Value":"365.00:00:00"
+disk_prediction_reports_growth_when_space_is_freed|expect_payload_contains|-1|"Status":0
+disk_prediction_reports_growth_when_space_is_freed|expect_payload_contains|-1|"Comment":"Free space increases by
+
+# Calibration is counted on the SAMPLING clock (#1445). Posts every 200 ms against a 5 s sampling
+# period: after 1.5 s there have been ~7 posts and AT MOST one measurement, so a 6-measurement
+# calibration cannot possibly be over and the tail is still a calibration post carrying the ceiling.
+# Counting posts instead - what the sensor used to do - would have finished calibration after 6
+# posts (1.2 s) and started publishing an "estimate" built on one measurement or none.
+disk_prediction_calibration_counts_samples_not_posts|create_collector
+disk_prediction_calibration_counts_samples_not_posts|create_disk_prediction_sensor|contract/metric/prediction_calibration|6|200|5000|1000000|1000
+disk_prediction_calibration_counts_samples_not_posts|start
+disk_prediction_calibration_counts_samples_not_posts|sleep_ms|1500
+disk_prediction_calibration_counts_samples_not_posts|stop
+disk_prediction_calibration_counts_samples_not_posts|expect_payload_contains|-1|"Type":7
+disk_prediction_calibration_counts_samples_not_posts|expect_payload_contains|-1|"Value":"365.00:00:00"
+disk_prediction_calibration_counts_samples_not_posts|expect_payload_contains|-1|"Status":0
+disk_prediction_calibration_counts_samples_not_posts|expect_payload_contains|-1|"Comment":"Calibration request (
+disk_prediction_calibration_counts_samples_not_posts|expect_payload_not_contains|-1|"Comment":"Free space

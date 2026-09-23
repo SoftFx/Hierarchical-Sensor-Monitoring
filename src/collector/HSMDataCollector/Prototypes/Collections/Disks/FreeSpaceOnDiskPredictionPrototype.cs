@@ -7,7 +7,7 @@ namespace HSMDataCollector.Prototypes
 {
     internal abstract class FreeSpaceOnDiskPredictionPrototype : DisksMonitoringPrototype
     {
-        private const string CalibrationInfo = "After the start of the sensor, it's calibrated during {0} requests that post with OffTime status.";
+        private const string CalibrationInfo = "After the start of the sensor, it's calibrated during {0} free-space measurements (one every 30 seconds) that post with OffTime status. Only an Ok status carries a real estimate; every other status posts the 365-day ceiling, which means there is no actionable estimate.";
 
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromMinutes(5);
 
