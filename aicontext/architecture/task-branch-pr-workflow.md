@@ -31,7 +31,7 @@ focused re-review status.
 
 ## Review/Fix Loop
 
-- Each push reviews what it adds, after committing it (a range sees committed work only): the first push reviews the whole branch (`git fetch origin master`, then `/code-review medium origin/master...HEAD` or `/matt:code-review origin/master`), a later push only its new commits (`/code-review medium @{upstream}..HEAD`). Commits that only fix a review finding are re-verified (build, narrowest tests), not re-reviewed. The PR bot (`claude-review.yml`) is the second reader, not the first.
+- Before every push, review what the push adds: see the pre-push self-review rule in `CLAUDE.md` → Review Rules (the single copy of it). The PR bot (`claude-review.yml`) is the second reader, not the first.
 - Run role-based review when the PR touches compatibility-sensitive or shared behavior.
 - Fix confirmed blockers.
 - Rerun only focused roles after fixes.

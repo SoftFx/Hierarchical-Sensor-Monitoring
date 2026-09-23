@@ -48,7 +48,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ## 5. Review your own diff
 
-Each push reviews what it adds, after it is committed (a range sees committed work only).
+The rule is in `CLAUDE.md` → Review Rules; the commands for this flow are below. Each push reviews what it adds, after it is committed (a range sees committed work only).
 
 First push of the branch — the whole branch:
 
@@ -72,7 +72,7 @@ Adjudicate the findings the way you would the PR bot's — fix defects, decline 
 ## 6. Push
 
 ```
-git push -u origin feature/$ARGUMENTS-<short-slug>     # later pushes: git push
+git push -u origin feature/$ARGUMENTS-<short-slug>     # later pushes: git push; after a rebase: git push --force-with-lease
 ```
 
 ## 7. Open a draft PR (first push only)

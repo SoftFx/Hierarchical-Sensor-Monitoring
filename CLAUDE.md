@@ -1,6 +1,6 @@
 # HSM — Agent Instructions
 
-> Owner: shared | Last reviewed: 2026-08-01 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-09-23 | Canonical: yes
 
 ## Project Overview
 
@@ -150,7 +150,7 @@ When adding new functionality:
 - Initial review may use a role pack selected from changed surfaces.
 - Re-review after fixes must be focused: rerun only roles whose risk area changed.
 - Findings should lead with severity, file/line references, impact, and suggested fix.
-- **Review your own diff before pushing it.** Each push reviews what it adds, after committing it (a range sees committed work only): the first push reviews the whole branch (`git fetch origin master`, then `/code-review medium origin/master...HEAD` or `/matt:code-review origin/master`), a later push only its new commits (`/code-review medium @{upstream}..HEAD`). After a rebase onto master or a merge of master, review the whole branch again with the first-push command. Adjudicate the findings and fix what is real. Commits that only fix a review finding are re-verified (build, narrowest tests), not re-reviewed; if a fix goes beyond its finding, run the same review again and keep declining findings you already declined. This holds for every push, with or without `/work-issue`. The PR bot (`claude-review.yml`) is the second reader, not the first: every round of it is a paid API call plus a full rebuild/verify/push cycle, and its rounds are worth spending on what a local pass could not see.
+- **Review your own diff before pushing it.** Each push reviews what it adds, after committing it (a range sees committed work only): the first push reviews the whole branch (`git fetch origin master`, then `/code-review medium origin/master...HEAD` or `/matt:code-review origin/master`), a later push only its new commits (`/code-review medium @{upstream}..HEAD`). After a rebase onto master or a merge of master, review the whole branch again with the first-push command, then push with `git push --force-with-lease`. Adjudicate the findings and fix what is real. Commits that only fix a review finding are re-verified (build, narrowest tests), not re-reviewed; if a fix goes beyond its finding, run the same review again and keep declining findings you already declined. This holds for every push, with or without `/work-issue`; this bullet is the only copy of the rule — other docs link here. The PR bot (`claude-review.yml`) is the second reader, not the first: every round of it is a paid API call plus a full rebuild/verify/push cycle, and its rounds are worth spending on what a local pass could not see.
 - Never merge to `master` or `main`; stop at human handoff.
 
 ## Compatibility Rules

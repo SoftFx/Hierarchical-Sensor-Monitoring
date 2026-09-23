@@ -22,7 +22,7 @@
 3.1. Self-review the diff for: exception leaks, resource leaks, thread safety, backward compatibility.
 3.2. Bump only the relevant component version when preparing a release/package or when the task asks for it.
 3.3. Commit with descriptive message in imperative mood.
-3.4. Before pushing, review what the push adds. Each push reviews what it adds, after committing it (a range sees committed work only): the first push reviews the whole branch (`git fetch origin master`, then `/code-review medium origin/master...HEAD` or `/matt:code-review origin/master`), a later push only its new commits (`/code-review medium @{upstream}..HEAD`). Commits that only fix a review finding are re-verified (build, narrowest tests), not re-reviewed. The PR bot (`claude-review.yml`) is the second reader, not the first.
+3.4. Before pushing, review what the push adds: see the pre-push self-review rule in `CLAUDE.md` → Review Rules (the single copy of it).
 3.5. Push the branch; create the PR on the first push.
 3.6. No auto-merge: human reviews and merges.
 
