@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.7.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.7.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -422,6 +422,10 @@ if(WIN32)
     # EnableTcpConnectionFailureRateSensor is a no-op elsewhere).
     add_test(NAME native_tcp_failure_rate_sensor_registers
         COMMAND hsm_collector_tests native_tcp_failure_rate_sensor_registers
+    )
+    # #1414: the Windows factory must decline the letter-less Unix disk rows (they would parse as N:).
+    add_test(NAME native_windows_disk_binds_only_lettered_rows
+        COMMAND hsm_collector_tests native_windows_disk_binds_only_lettered_rows
     )
     # #1414: the Linux factory must refuse to install off Linux instead of silently doing nothing.
     add_test(NAME native_linux_metric_sources_rejected_off_linux
