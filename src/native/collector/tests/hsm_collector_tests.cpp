@@ -4348,6 +4348,48 @@ namespace
         hsm_sensor_release(sensor);
     }
 
+    // #1414: the Windows factory must bind ONLY rows whose name carries a standalone drive letter.
+    // Before the DiskLetter fix, the letter-less Unix rows this PR adds to the platform-agnostic
+    // catalog parsed as drive N: (the 'n' of "on" precedes " disk"), so a Windows host registering
+    // HSM_DEFAULT_UNIX_FREE_DISK_SPACE reported an unrelated volume's free space - or failed on
+    // every post period where no N: exists. Mirrors native_linux_free_disk_binds_only_the_unix_row.
+    void NativeWindowsDiskBindsOnlyLetteredRows()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_install_windows_metric_sources(collector.value) == HSM_RESULT_OK,
+            "installing Windows metric sources should succeed on Windows");
+
+        double values[2] = { 0.0, 0.0 };
+        int32_t recreated = 0;
+
+        Require(
+            hsm_collector_test_drive_metric_source(
+                collector.value, "host/.computer/Disks monitoring/Free space on C disk", 2, values, &recreated) == 2,
+            "a lettered free-disk row must bind to that drive");
+
+        // A DECLINED row and a row BOUND TO A MISSING DRIVE both collect 0 samples, so the sample
+        // count alone cannot tell them apart on a host without an N: drive. The recreate counter
+        // does: a declined row never enters the read loop (recreated == 0), while a bound source
+        // whose GetDiskFreeSpaceEx fails returns READ_ERROR and is recreated on every read.
+        const auto declined = [&](const char* path, const char* message) {
+            recreated = -1;
+            const int32_t collected =
+                hsm_collector_test_drive_metric_source(collector.value, path, 2, values, &recreated);
+            Require(collected == 0 && recreated == 0, message);
+        };
+
+        declined(
+            "host/.computer/Disks monitoring/Free space on disk",
+            "the letter-less Unix free-disk row must be declined, not bound to drive N:");
+        declined(
+            "host/.computer/Disks monitoring/Free space on disk prediction",
+            "the letter-less Unix prediction row must be declined, not bound to drive N:");
+        declined(
+            "host/.computer/Disks monitoring/Active time on disk",
+            "a letter-less LogicalDisk row must be declined too");
+    }
+
     // #1414: the Linux factory is not available on Windows and must say so rather than silently
     // installing nothing (the symmetric counterpart of the Linux-side assertion below).
     void NativeLinuxMetricSourcesRejectedOffLinux()
@@ -6988,6 +7030,8 @@ namespace
               [](const std::string&) { NativeServiceStatusSensorEmitsRunningForCriticalService(); } },
             { "native_service_status_sensor_reports_missing_service",
               [](const std::string&) { NativeServiceStatusSensorReportsMissingService(); } },
+            { "native_windows_disk_binds_only_lettered_rows",
+              [](const std::string&) { NativeWindowsDiskBindsOnlyLetteredRows(); } },
             { "native_linux_metric_sources_rejected_off_linux",
               [](const std::string&) { NativeLinuxMetricSourcesRejectedOffLinux(); } },
 #endif
