@@ -26,7 +26,10 @@ namespace HSMDataCollector.DefaultSensors
     /// carries a real estimate (status Ok). Every other state posts <see cref="MaxPrediction"/>
     /// with status OffTime and a comment that names the state, so a reader can tell "nothing is
     /// draining" from a genuine estimate. TimeSpan.Zero is therefore reserved for its literal
-    /// meaning — no free space left at all — and is never used as a placeholder.
+    /// meaning — no free space left at all — and is never used as a placeholder. The one other way
+    /// a zero can be posted is a FAILED disk read, which the base class publishes as the default
+    /// value with status Error and the failure message as the comment; that is the generic
+    /// value-sensor contract, mirrored by the native collector, and it is loud rather than silent.
     /// </summary>
     public abstract class FreeDiskSpacePredictionBase : MonitoringSensorBase<TimeSpan, NoDisplayUnit>
     {
@@ -55,6 +58,7 @@ namespace HSMDataCollector.DefaultSensors
         private readonly int _calibrationRequests;
 
         private DateTime _lastSpeedCheckTime;
+        private bool _hasBaseline;
 
         private double _currentChangeSpeed;
         private long _lastAvailableSpace;
@@ -103,8 +107,14 @@ namespace HSMDataCollector.DefaultSensors
                 {
                     var utc = UtcNowProvider();
 
+                    // A FAILED initial read must not become a baseline. It used to be harmless — the
+                    // huge negative first sample it produced was discarded, because only a positive
+                    // speed was folded in — but a signed EMA would SEED on it and spend an hour
+                    // decaying back (#1445). The next sampling tick establishes the baseline instead,
+                    // which is what the native mirror's has_last_space_ does.
+                    _hasBaseline = TryReadFreeSpace(out var freeSpace);
                     _lastSpeedCheckTime = utc;
-                    _lastAvailableSpace = TryReadFreeSpace(out var freeSpace) ? freeSpace : 0L;
+                    _lastAvailableSpace = freeSpace;
 
                     Interlocked.Exchange(ref _currentChangeSpeed, 0.0);
                     Interlocked.Exchange(ref _samplesCount, 0L);
@@ -219,7 +229,7 @@ namespace HSMDataCollector.DefaultSensors
                 return;
 
             var utc = UtcNowProvider();
-            var elapsedSeconds = (utc - _lastSpeedCheckTime).TotalSeconds;
+            var elapsedSeconds = _hasBaseline ? (utc - _lastSpeedCheckTime).TotalSeconds : 0.0;
 
             if (elapsedSeconds > 0.0)
             {
@@ -235,6 +245,7 @@ namespace HSMDataCollector.DefaultSensors
                 Interlocked.Increment(ref _samplesCount);
             }
 
+            _hasBaseline = true;
             _lastAvailableSpace = curSpace;
             _lastSpeedCheckTime = utc;
         }

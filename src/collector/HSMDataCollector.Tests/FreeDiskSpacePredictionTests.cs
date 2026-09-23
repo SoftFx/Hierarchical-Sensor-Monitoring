@@ -225,6 +225,25 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task A_failed_initial_disk_read_does_not_poison_the_drain_speed()
+        {
+            using (var probe = await PredictionProbe.CreateAsync(calibrationRequests: 1, failFirstRead: true))
+            {
+                // The Start read threw, so there is no baseline: the next successful read establishes
+                // one and only the interval AFTER it is a measurement. Folding a signed sample against
+                // a phantom zero baseline would instead seed the EMA at roughly minus the whole disk
+                // per interval and park the sensor in the growing state for the best part of an hour.
+                probe.DrainSteadily(2);
+
+                var post = probe.Post();
+
+                Assert.Equal(TimeSpan.FromSeconds(940), post.Value);
+                Assert.Equal(SensorStatus.Ok, post.Status);
+                Assert.Equal("Free space decreases by 1 Mbytes/sec.", post.Comment);
+            }
+        }
+
+        [Fact]
         public async Task Calibration_counts_free_space_measurements_not_posts()
         {
             using (var probe = await PredictionProbe.CreateAsync(calibrationRequests: 6))
@@ -271,17 +290,24 @@ namespace HSMDataCollector.Tests
 
             private DateTime _now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-            private PredictionProbe(DataCollector collector, MutableDiskInfo disk, TestFreeDiskSpacePrediction sensor)
+            // The scripted free space, tracked here rather than read back off the disk so a probe can
+            // also script a READ FAILURE without the series losing its place.
+            private long _cursor;
+
+            private PredictionProbe(
+                DataCollector collector, MutableDiskInfo disk, TestFreeDiskSpacePrediction sensor, long freeSpace)
             {
                 _collector = collector;
                 _disk = disk;
                 _sensor = sensor;
+                _cursor = freeSpace;
             }
 
-            public static async Task<PredictionProbe> CreateAsync(int calibrationRequests, long freeSpace = SeedFreeSpace)
+            public static async Task<PredictionProbe> CreateAsync(
+                int calibrationRequests, long freeSpace = SeedFreeSpace, bool failFirstRead = false)
             {
                 var collector = CreateCollector();
-                var disk = new MutableDiskInfo { FreeSpace = freeSpace };
+                var disk = new MutableDiskInfo { FreeSpace = freeSpace, FailNextRead = failFirstRead };
                 var options = CreateOptions(collector);
 
                 options.CalibrationRequests = calibrationRequests;
@@ -291,7 +317,7 @@ namespace HSMDataCollector.Tests
                 options.SpaceCheckPeriod = TimeSpan.FromHours(1);
 
                 var sensor = new TestFreeDiskSpacePrediction(options, disk);
-                var probe = new PredictionProbe(collector, disk, sensor);
+                var probe = new PredictionProbe(collector, disk, sensor, freeSpace);
 
                 sensor.UtcNowProvider = () => probe._now;
 
@@ -304,6 +330,7 @@ namespace HSMDataCollector.Tests
             public void Sample(long freeSpace)
             {
                 _now += _interval;
+                _cursor = freeSpace;
                 _disk.FreeSpace = freeSpace;
                 _sensor.UpdateDiskSpeed();
             }
@@ -311,13 +338,13 @@ namespace HSMDataCollector.Tests
             public void DrainSteadily(int intervals)
             {
                 for (var i = 0; i < intervals; i++)
-                    Sample(_disk.FreeSpace - DrainPerInterval);
+                    Sample(_cursor - DrainPerInterval);
             }
 
             public void Idle(int intervals)
             {
                 for (var i = 0; i < intervals; i++)
-                    Sample(_disk.FreeSpace);
+                    Sample(_cursor);
             }
 
             /// <summary>One post, read in the order MonitoringSensorBase builds a sensor value.</summary>
@@ -353,9 +380,28 @@ namespace HSMDataCollector.Tests
 
         private sealed class MutableDiskInfo : IDiskInfo
         {
-            public long FreeSpace { get; set; }
+            private long _freeSpace;
 
-            public long FreeSpaceMb => FreeSpace / (1024L * 1024L);
+            /// <summary>Makes the next read throw once, like a drive that is briefly unavailable.</summary>
+            public bool FailNextRead { get; set; }
+
+            public long FreeSpace
+            {
+                get
+                {
+                    if (FailNextRead)
+                    {
+                        FailNextRead = false;
+
+                        throw new IOException("drive is not ready");
+                    }
+
+                    return _freeSpace;
+                }
+                set => _freeSpace = value;
+            }
+
+            public long FreeSpaceMb => _freeSpace / (1024L * 1024L);
 
             public string DiskLetter => "C";
         }

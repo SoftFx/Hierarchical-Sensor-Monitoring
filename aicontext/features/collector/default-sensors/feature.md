@@ -146,7 +146,11 @@ Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySens
 - **Алерты вида `value <= 2 дней`** теперь срабатывают только на реальном расходе, а не на пустом месте.
 
 Read failures are sensor errors (Error value with message), not lifecycle failures — sampling
-continues and recovers.
+continues and recovers. Это единственный путь, где сенсор всё ещё может отправить `00:00:00`: оба
+коллектора при провале чтения публикуют default-значение со статусом **Error** и текстом ошибки в
+комментарии — общий контракт всех value-сенсоров, а не заглушка этого; статус Error делает его
+громким. Провал первого чтения на Start НЕ становится baseline'ом ни в одном коллекторе (иначе знаковая
+EMA засеялась бы огромным отрицательным значением) — baseline ставит следующий успешный замер.
 
 Две детали часть cross-collector контракта и воспроизведены дословно в нативном
 `src/disk_prediction.hpp` (#1426, #1445):

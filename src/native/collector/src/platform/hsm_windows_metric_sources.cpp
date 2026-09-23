@@ -257,6 +257,23 @@ namespace hsm
                     .count();
             }
 
+            // The factory binds during Start, so seeding here is managed's StartAsync
+            // (_lastAvailableSpace = FreeSpace) to the tick: without it the FIRST refresh would be
+            // spent establishing the baseline and calibration would run one sampling period behind
+            // managed, which now counts MEASUREMENTS (#1445). A failed read leaves the source
+            // unseeded, exactly as managed leaves _hasBaseline false.
+            void SeedDiskPrediction(DiskPredictionSource& source)
+            {
+                double free_bytes = 0.0;
+                std::string error;
+                if (!ReadFreeBytes(source.disk, free_bytes, error))
+                    return;
+
+                source.prediction.Sample(free_bytes, 0.0);
+                source.last_sample_ms = SteadyClockMilliseconds();
+                source.has_last_sample = true;
+            }
+
             hsm_metric_read_t DiskPredictionRefresh(void* user_data, hsm_metric_sample_t* sample)
             {
                 auto* source = static_cast<DiskPredictionSource*>(user_data);
@@ -533,6 +550,7 @@ namespace hsm
                     return 0;
                 auto* source = new DiskPredictionSource();
                 source->disk.root = std::wstring(1, letter) + L":\\";
+                SeedDiskPrediction(*source);
                 return Finish(
                            source, &Guarded<DiskPredictionRead>, &DiskPredictionDispose, out_source,
                            &Guarded<DiskPredictionRefresh>, kSpaceCheckPeriodMs)
