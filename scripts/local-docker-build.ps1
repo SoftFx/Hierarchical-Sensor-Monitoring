@@ -137,6 +137,32 @@ try {
         }
     }
 
+    # --- Stage the HSM Linux probe .deb pinned in probe-release.txt (mirrors CI, #1424). An empty pin
+    # --- means no probe-v* release exists yet: skip, and /api/agent/linux-installer answers 503.
+    $probeDir = Join-Path $repoRoot "src/server/HSMServer/wwwroot/probe"
+    $probePinFile = Join-Path $repoRoot "src/server/HSMServer/probe-release.txt"
+    $probePin = if (Test-Path $probePinFile) { (Get-Content $probePinFile -Raw) -replace '\s', '' } else { '' }
+    if (-not $probePin) {
+        Write-Host "No Linux probe release pinned (probe-release.txt is empty); skipping probe staging."
+    } elseif (-not (Test-Tool "gh")) {
+        Write-Warning "gh CLI not found — cannot download pinned probe release probe-v$probePin; /api/agent/linux-installer will 503. Install gh and 'gh auth login'."
+    } else {
+        Write-Host "Downloading pinned Linux probe release probe-v$probePin ..."
+        New-Item -ItemType Directory -Force -Path $probeDir | Out-Null
+        Get-ChildItem -Path $probeDir -Filter "hsm-linux-probe_*.deb*" -File | Remove-Item -Force
+        gh release download "probe-v$probePin" --repo SoftFx/Hierarchical-Sensor-Monitoring -p "hsm-linux-probe_*.deb" -p "hsm-linux-probe_*.deb.sha256" -D $probeDir --clobber
+        if ($LASTEXITCODE -ne 0) { throw "gh release download probe-v$probePin failed — does the release exist and is gh authenticated?" }
+        $debs = @(Get-ChildItem -Path $probeDir -Filter "hsm-linux-probe_*.deb" -File)
+        if ($debs.Count -ne 1) { throw "probe-v$probePin must carry exactly one hsm-linux-probe_*.deb, found $($debs.Count)" }
+        $probeShaFile = "$($debs[0].FullName).sha256"
+        if (-not (Test-Path $probeShaFile)) { throw "probe-v$probePin has no $($debs[0].Name).sha256" }
+        $expected = ((Get-Content $probeShaFile -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+        $actual = (Get-FileHash $debs[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($expected -ne $actual) { throw "sha256 mismatch for probe-v${probePin}: release says $expected, file is $actual" }
+        Remove-Item $probeShaFile
+        Write-Host "Staged Linux probe $probePin (sha256 $actual): $($debs[0].Name)"
+    }
+
     # --- Publish server to a folder, then build the image with plain `docker build` ---
     # We avoid the SDK's DefaultContainer profile because its HTTP base-image fetch
     # breaks on Windows Docker Desktop (docker-credential-desktop / CONTAINER1008).

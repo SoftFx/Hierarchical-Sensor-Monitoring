@@ -172,11 +172,15 @@
         <div class="my-1">
             <h5 class="mt-2">HSM Agent</h5>
             <p class="text-muted small">Download a ready-to-run Windows agent pre-configured for this product — this server's address and an access key are baked into its <code>config.json</code>. Run <code>install.cmd</code> on the target machine; the agent self-installs as an auto-start Windows service and connects.</p>
+            <p class="text-muted small">For a Linux host, <b>Download Linux probe</b> gives a <code>.tar.gz</code> with the probe package, its config (this server's address) and the access key in a separate file. Run <code>tar xzf hsm-linux-probe-&lt;product&gt;.tar.gz &amp;&amp; sudo ./hsm-linux-probe-&lt;product&gt;/install.sh</code> on the host; the probe installs as a systemd service and connects.</p>
             @{ var pageUser = User as User; }
             @if (pageUser is not null && pageUser.IsAdmin)
             {
                 <button id="downloadAgentButton" class="btn btn-secondary" type="button" onclick="downloadAgentClick()" title="Download a ready-to-run Windows agent for this product (server address + key pre-configured)">
                     <i class="fa-solid fa-download"></i> Download agent
+                </button>
+                <button id="downloadLinuxProbeButton" class="btn btn-secondary" type="button" onclick="downloadLinuxProbeClick()" title="Download a ready-to-run Linux probe for this product (server address + key pre-configured)">
+                    <i class="fa-solid fa-download"></i> Download Linux probe
                 </button>
             }
             else
@@ -413,34 +417,42 @@
 
 <script>
     async function downloadAgentClick() {
+        await downloadBundle('downloadAgentButton', '/api/Agent/installer?productId=@Model.GeneralInfo.Id', 'hsm-agent.zip', 'HSM Agent');
+    }
+
+    async function downloadLinuxProbeClick() {
+        await downloadBundle('downloadLinuxProbeButton', '/api/Agent/linux-installer?productId=@Model.GeneralInfo.Id', 'hsm-linux-probe.tar.gz', 'HSM Linux probe');
+    }
+
+    async function downloadBundle(buttonId, url, fallbackFileName, label) {
         // Fetch + blob (not window.location) so a 503/BadRequest surfaces as a toast instead of
         // navigating the browser to a raw error page — e.g. when the product has no usable access
-        // key or the agent binary isn't staged on the server yet.
-        const button = document.getElementById('downloadAgentButton');
+        // key or the binary/package isn't staged on the server yet.
+        const button = document.getElementById(buttonId);
         button.disabled = true;
         try {
-            const response = await fetch('/api/Agent/installer?productId=@Model.GeneralInfo.Id');
+            const response = await fetch(url);
             if (!response.ok) {
                 const message = await response.text();
-                showToast(message || 'Failed to download the HSM Agent.', 'Error');
+                showToast(message || 'Failed to download the ' + label + '.', 'Error');
                 return;
             }
 
             const blob = await response.blob();
             const disposition = response.headers.get('Content-Disposition') || '';
             const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
-            const fileName = match ? decodeURIComponent(match[1]) : 'hsm-agent.zip';
+            const fileName = match ? decodeURIComponent(match[1]) : fallbackFileName;
 
-            const url = URL.createObjectURL(blob);
+            const objectUrl = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.href = url;
+            link.href = objectUrl;
             link.download = fileName;
             document.body.appendChild(link);
             link.click();
             link.remove();
-            URL.revokeObjectURL(url);
+            URL.revokeObjectURL(objectUrl);
         } catch (error) {
-            showToast('Failed to download the HSM Agent: ' + error, 'Error');
+            showToast('Failed to download the ' + label + ': ' + error, 'Error');
         } finally {
             button.disabled = false;
         }

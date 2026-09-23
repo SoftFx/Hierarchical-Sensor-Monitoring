@@ -77,6 +77,15 @@ jobs:
           echo "staged agent $pin (sha256 $actual)"
           ls -l "$dir"
 
+      # HSM Linux probe (#1424): same model as the agent. The .deb is a released probe-v* artifact
+      # pinned in probe-release.txt; an empty pin (no release yet) skips staging and the download
+      # endpoint answers 503.
+      - name: Stage pinned HSM Linux probe release into wwwroot
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/stage-linux-probe.sh
+
       - name: Publish HSMServer
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
 
@@ -94,6 +103,19 @@ jobs:
           }
           Write-Host "staged agent version: $(Get-Content (Join-Path $dir 'version.txt'))"
           Get-ChildItem $dir | Format-Table Name, Length
+
+      # Same guard for the Linux probe (#1424), active only once probe-release.txt names a version.
+      - name: Verify published output contains the Linux probe package
+        shell: pwsh
+        run: |
+          $pinFile = "src/server/HSMServer/probe-release.txt"
+          $pin = if (Test-Path $pinFile) { (Get-Content $pinFile -Raw) -replace '\s', '' } else { '' }
+          if (-not $pin) { Write-Host "no Linux probe release pinned; nothing to verify"; exit 0 }
+          $dir = Join-Path "${{ env.OUTPUT_FOLDER }}" "wwwroot/probe"
+          $debs = @(Get-ChildItem -Path $dir -Filter "hsm-linux-probe_*.deb" -File -ErrorAction SilentlyContinue)
+          if ($debs.Count -ne 1) { throw "publish output must contain exactly one wwwroot/probe/hsm-linux-probe_*.deb for probe-v$pin, found $($debs.Count)" }
+          if ($debs[0].Length -eq 0) { throw "publish output has an empty wwwroot/probe/$($debs[0].Name)" }
+          Write-Host "staged Linux probe: $($debs[0].Name) ($($debs[0].Length) bytes)"
 
       - id: save-version
         name: Try to get server version
@@ -253,6 +275,11 @@ jobs:
           echo "staged agent $pin (sha256 $actual)"
           ls -l "$dir"
 
+      - name: Stage pinned HSM Linux probe release into wwwroot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/stage-linux-probe.sh
+
       - name: Build Linux image for Docker
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
 
@@ -272,6 +299,23 @@ jobs:
           echo "image app dir: $app"
           docker run --rm --entrypoint /bin/sh "$img" -c \
             "ls -l '$app/wwwroot/agent' && test -s '$app/wwwroot/agent/hsm-agent.exe' && test -s '$app/wwwroot/agent/version.txt'"
+
+      # Linux probe guard (#1424), active only once probe-release.txt names a version.
+      - name: Verify Linux probe package inside the image
+        env:
+          IMAGE_VERSION: ${{ needs.build.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          pin=$(tr -d ' \r\n\t' < src/server/HSMServer/probe-release.txt 2>/dev/null || true)
+          if [ -z "$pin" ]; then
+            echo "no Linux probe release pinned; nothing to verify"
+            exit 0
+          fi
+          img="${DockerMainName}:${IMAGE_VERSION}"
+          app="$(docker inspect --format '{{.Config.WorkingDir}}' "$img")"
+          app="${app:-/app}"
+          docker run --rm --entrypoint /bin/sh "$img" -c \
+            "ls -l '$app/wwwroot/probe' && set -- '$app'/wwwroot/probe/hsm-linux-probe_*.deb && test \$# -eq 1 && test -s \"\$1\""
 
       - name: Push VERSION image to remote Docker
         run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"

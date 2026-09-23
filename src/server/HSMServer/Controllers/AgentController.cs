@@ -4,6 +4,8 @@ using HSMServer.Core.Cache;
 using HSMServer.Model.Agent;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Connections.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -46,6 +48,7 @@ namespace HSMServer.Controllers
 
         [HttpGet("installer")]
         [AuthorizeIsAdmin]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)] // the bundle carries a bearer key
         public IActionResult Installer(Guid productId)
         {
             if (!_cache.TryGetProduct(productId, out var product))
@@ -84,6 +87,88 @@ namespace HSMServer.Controllers
             _logger.Info($"{CurrentUser?.Name} downloaded the HSM Agent bundle for product '{product.DisplayName}' ({productId}).");
 
             return File(zip, "application/zip", $"hsm-agent-{Sanitize(product.DisplayName)}.zip");
+        }
+
+
+        /// <summary>
+        /// Per-product Linux probe download (#1424): a .tar.gz with the byte-identical released .deb, a
+        /// generated config.json (no key inside), the key in its own file, the server's public leaf certificate
+        /// when this server terminates TLS itself, and install.sh/uninstall.sh. Same guard, key selection
+        /// and address resolution as the Windows <see cref="Installer"/>.
+        /// </summary>
+        [HttpGet("linux-installer")]
+        [AuthorizeIsAdmin]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)] // the bundle carries a bearer key
+        public IActionResult LinuxInstaller(Guid productId)
+        {
+            if (!_cache.TryGetProduct(productId, out var product))
+                return NotFound("Product not found.");
+
+            var key = AgentKeySelector.Select(product);
+            if (key is null)
+                return BadRequest("This product has no usable access key. Create one with send-data permission first.");
+
+            // Cheapest and most basic blocker first: a server without a staged package (the state until the
+            // first probe-v* release) answers 503 before anything else is looked at.
+            if (string.IsNullOrEmpty(_environment.WebRootPath))
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
+
+            var stagingDir = Path.Combine(_environment.WebRootPath, LinuxProbeInstallerBundle.StagingFolder);
+            string packageName;
+            try
+            {
+                packageName = LinuxProbeInstallerBundle.SelectStagedPackage(Directory.EnumerateFiles(stagingDir));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                packageName = null;
+            }
+
+            if (packageName is null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
+
+            var (address, port) = AgentConnectionResolver.Resolve(
+                _config.Agent.ExternalConnectionUrl, _config.Kestrel.SensorPort, Request.Scheme, Request.Host.Host);
+
+            var addressError = LinuxProbeInstallerBundle.ValidateServerAddress(address);
+            if (addressError is not null)
+                return BadRequest(addressError);
+
+            // Whose certificate the probe will verify: this server's only when Kestrel terminated the TLS
+            // the client saw. A request forwarded by a configured trusted proxy (the bundled Caddy, #1427)
+            // was terminated there, even though the proxy-to-Kestrel hop is HTTPS too.
+            // The certificate instance Kestrel installed at startup is read before IsBundledDefault, which
+            // its loading sets: a certificate saved in settings but not yet applied by a restart is ignored.
+            var serverTerminatesTls = LinuxProbeServerCa.ServerTerminatesClientTls(
+                HttpContext.Features.Get<ITlsHandshakeFeature>() is not null,
+                _config.Kestrel.TrustedProxies.Length > 0,
+                Request.Headers.ContainsKey(ForwardedHeadersDefaults.XOriginalForHeaderName));
+
+            var (caDecision, serverCa) = LinuxProbeServerCa.Resolve(
+                serverTerminatesTls,
+                () => (_config.ServerCertificate.Certificate, _config.ServerCertificate.IsBundledDefault));
+            if (caDecision == LinuxProbeCaDecision.RefuseBundledDefault)
+                return BadRequest(LinuxProbeServerCa.BundledDefaultMessage);
+            if (caDecision == LinuxProbeCaDecision.OmitUnreadable)
+                _logger.Warn($"Linux probe bundle for product '{product.DisplayName}' ({productId}) ships without server-ca.pem: the server certificate could not be read, so a probe will only connect if that certificate is already trusted on its host.");
+
+            byte[] package;
+            try
+            {
+                package = System.IO.File.ReadAllBytes(Path.Combine(stagingDir, packageName));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, LinuxProbeInstallerBundle.NotStagedMessage);
+            }
+
+            var bundle = LinuxProbeInstallerBundle.BuildTarGz(
+                LinuxProbeInstallerBundle.BundleFolderName(product.DisplayName), packageName, package,
+                new LinuxProbeBundleOptions(address, port, key.Id.ToString(), serverCa));
+
+            _logger.Info($"{CurrentUser?.Name} downloaded the HSM Linux probe bundle for product '{product.DisplayName}' ({productId}).");
+
+            return File(bundle, "application/gzip", LinuxProbeInstallerBundle.BundleFileName(product.DisplayName));
         }
 
 

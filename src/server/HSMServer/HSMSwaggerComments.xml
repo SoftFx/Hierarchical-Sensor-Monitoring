@@ -30,6 +30,14 @@
              (binary download, Key-header auth).
              </summary>
         </member>
+        <member name="M:HSMServer.Controllers.AgentController.LinuxInstaller(System.Guid)">
+            <summary>
+            Per-product Linux probe download (#1424): a .tar.gz with the byte-identical released .deb, a
+            generated config.json (no key inside), the key in its own file, the server's public leaf certificate
+            when this server terminates TLS itself, and install.sh/uninstall.sh. Same guard, key selection
+            and address resolution as the Windows <see cref="M:HSMServer.Controllers.AgentController.Installer(System.Guid)"/>.
+            </summary>
+        </member>
         <member name="M:HSMServer.Controllers.AgentController.GetVersion">
             <summary>
             Agent self-update manifest (epic #1174). Returns the version, SHA-256, and whether the
@@ -575,6 +583,158 @@
             "last resort": it would bake a credential that fails to authenticate at runtime into the
             bundle with no signal to the admin. Null instead lets the caller refuse the download
             (BadRequest) so the admin fixes the key first.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.Agent.LinuxProbeBundleOptions">
+            <summary>
+            Parameters baked into one per-product Linux probe bundle. <see cref="P:HSMServer.Model.Agent.LinuxProbeBundleOptions.AccessKey"/> goes into its
+            own <c>access-key</c> file, never into config.json. <see cref="P:HSMServer.Model.Agent.LinuxProbeBundleOptions.ServerCaPem"/> is the server's
+            public certificate, or null to leave <c>server-ca.pem</c> out of the bundle.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeBundleOptions.#ctor(System.String,System.Int32,System.String,System.String)">
+            <summary>
+            Parameters baked into one per-product Linux probe bundle. <see cref="P:HSMServer.Model.Agent.LinuxProbeBundleOptions.AccessKey"/> goes into its
+            own <c>access-key</c> file, never into config.json. <see cref="P:HSMServer.Model.Agent.LinuxProbeBundleOptions.ServerCaPem"/> is the server's
+            public certificate, or null to leave <c>server-ca.pem</c> out of the bundle.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.Agent.LinuxProbeInstallerBundle">
+            <summary>
+            Builds the downloadable HSM Linux probe bundle (#1424, initiative linux-docker-probe §4.6): a
+            .tar.gz of the byte-identical released .deb + a generated config.json (server address, no key) +
+            the product key in its own file + optionally the server's public leaf certificate + install/uninstall
+            scripts. The Linux sibling of <see cref="T:HSMServer.Model.Agent.AgentInstallerBundle"/>; pure and side-effect-free so it
+            is unit-tested without a web host.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.StagingFolder">
+            <summary>Directory under wwwroot the server build stages the pinned probe .deb into.</summary>
+        </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.AccessKeyCredentialPath">
+            <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
+        </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.AutoComputerName">
+            <summary>
+            The literal computer name the generated config carries. install.sh swaps it for the host's
+            name while installing the config, because the probe's config parser does not resolve "auto"
+            itself (it would send it verbatim as the computer node).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BundleFolderName(System.String)">
+            <summary>
+            The one top-level directory every entry sits in, so extracting never scatters files, a key
+            included, into the current directory or mixes two products' bundles.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BundleFileName(System.String)">
+            <summary>Download file name for a product.</summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.ShellSafeName(System.String)">
+            <summary>
+            The product name as it may appear in the folder the operator types into a root shell
+            (<c>sudo ./hsm-linux-probe-&lt;product&gt;/install.sh</c>). Product names allow ; &amp; * ( ) #,
+            so everything outside [A-Za-z0-9._-] becomes '_', runs collapse, leading '.'/'-' go (no hidden
+            folder, no option-like token), and an empty result falls back to "product".
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.SelectStagedPackage(System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Picks the staged package among the file names in wwwroot/probe/. Staging clears the folder
+            first, so exactly one <c>hsm-linux-probe_*.deb</c> is expected; none or several (an
+            ambiguous, half-cleaned folder) return null, which the endpoint reports as not staged.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.ValidateServerAddress(System.String)">
+            <summary>
+            Returns why the resolved address cannot be baked into a probe config, or null when it can.
+            The probe refuses plaintext (its config parser rejects http://), so a bundle pointing at an
+            http:// address would install and then never connect.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildConfigJson(HSMServer.Model.Agent.LinuxProbeBundleOptions)">
+            <summary>The generated config.json in the probe schema. It references the key by path only.</summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildInstallScript">
+            <summary>
+            The installer. Runs as root, installs the package, places config + key + CA, enables the unit.
+            The key is only ever handled as a file: never echoed, never an argument.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildUninstallScript">
+            <summary>
+            The uninstaller: stops and purges the probe, removes the key, config and CA it installed.
+            It never contacts the HSM server, so the sensor history stays where it is.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildTarGz(System.String,System.String,System.Byte[],HSMServer.Model.Agent.LinuxProbeBundleOptions)">
+            <summary>
+            Assembles the .tar.gz in memory under one <paramref name="folderName"/>/ directory: the
+            unmodified .deb (under its release file name), the generated config, the key file, the
+            optional CA certificate and both scripts (mode 0755). Fastest compression: the .deb, by far
+            the largest entry, is already compressed.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeCaDecision.Omit">
+            <summary>No server-ca.pem: a proxy terminates TLS, so the certificate clients see is the proxy's.</summary>
+        </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeCaDecision.OmitUnreadable">
+            <summary>
+            No server-ca.pem because the server's own certificate could not be read. The download still
+            works, but the caller must say so: a probe only connects if that certificate is already trusted.
+            </summary>
+        </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeCaDecision.Include">
+            <summary>Ship the server's own certificate as server-ca.pem.</summary>
+        </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeCaDecision.RefuseBundledDefault">
+            <summary>
+            Refuse the download: the server presents the bundled default certificate, whose private key
+            is in the repository. Trusting it would let anyone impersonate this server to the probe host.
+            </summary>
+        </member>
+        <member name="T:HSMServer.Model.Agent.LinuxProbeServerCa">
+            <summary>
+            Decides whether the Linux probe bundle carries <c>server-ca.pem</c> and produces its content: the
+            PUBLIC part of the certificate Kestrel presents, never a private key (#1424, §4.6). install.sh adds
+            it to the system trust store so the probe keeps peer and hostname verification on; the Linux probe
+            has no allow-untrusted switch.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.ServerTerminatesClientTls(System.Boolean,System.Boolean,System.Boolean)">
+            <summary>
+            Whether the TLS the probe will verify is terminated by this server. A Kestrel handshake on the
+            download connection says only that the admin's request was not plaintext: in the reference
+            deployment (docker-compose.yml, #1427) Caddy terminates the client's TLS with a public
+            certificate and re-encrypts to Kestrel, which still serves the bundled default. A request that
+            arrived through a configured trusted proxy is therefore proxy-terminated, whatever Kestrel did
+            on its own hop. <paramref name="forwardedByTrustedProxy"/> is the forwarded-headers middleware's
+            own verdict (it moves the consumed X-Forwarded-For into X-Original-For), and it counts only when
+            a trusted proxy is configured at all, so a header invented by a direct caller changes nothing.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.Decide(System.Boolean,System.Boolean,System.Boolean)">
+            <summary>
+            Pure decision. Behind a TLS-terminating proxy (plain-HTTP mode, Caddy + Let's Encrypt) the
+            certificate clients see is the proxy's and is already publicly trusted: nothing ships. When the
+            server terminates TLS itself, its certificate ships unless it is the bundled default (refused)
+            or cannot be read (omitted and reported; the download still works).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.ExportPem(System.Security.Cryptography.X509Certificates.X509Certificate2)">
+            <summary>
+            PEM of the served certificate, public part only. Only the leaf: an issuing CA would become a
+            trust anchor for every host the probe machine talks to, while the leaf vouches only for this
+            server. libcurl (which the collector's transport uses with its defaults) sets OpenSSL's
+            partial-chain flag, so a CA-issued leaf in the trust store verifies on its own; checked with
+            curl 8.14 / OpenSSL 3.5 on Debian 13.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeServerCa.Resolve(System.Boolean,System.Func{System.ValueTuple{System.Security.Cryptography.X509Certificates.X509Certificate2,System.Boolean}})">
+            <summary>
+            The decision plus the server-ca.pem content (null unless <see cref="F:HSMServer.Model.Agent.LinuxProbeCaDecision.Include"/>).
+            <paramref name="servedCertificate"/> returns the certificate Kestrel serves and whether it is the
+            bundled default; it is only evaluated when the server terminates TLS.
             </summary>
         </member>
         <member name="T:HSMServer.Model.Model.History.NodeChartRequest">
