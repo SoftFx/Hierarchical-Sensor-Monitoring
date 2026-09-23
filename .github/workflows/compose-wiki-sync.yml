@@ -1,0 +1,24 @@
+name: compose / wiki sync
+
+# wiki-git/Installation.md embeds docker-compose.yml verbatim as the reference HSM + Caddy
+# setup (#1411). Check it on the pull request that changes either file, instead of after merge
+# (where it used to run inside the server build that publishes the Docker image, #1431).
+
+# No paths filter on pull_request: a path-filtered check never reports on other PRs, so it could
+# not be made a required check. The whole job takes seconds.
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compose-wiki-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker-compose.yml matches the wiki reference copy
+        run: python3 scripts/check-compose-wiki-sync.py
