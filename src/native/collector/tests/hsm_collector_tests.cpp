@@ -3668,6 +3668,62 @@ namespace
         hsm_sensor_release(sensor);
     }
 
+    // #1428 review round 3: the two publishers of one push-fed bar - roll-on-add on a caller thread
+    // and the scheduler's tick roll / partial post - must be totally ordered, or the wire can carry a
+    // partial of window W+1 before the closed bar of W. The server persists on a NEW OpenTime, so that
+    // reordering reorders stored bars. Race-shaped by construction (a fast pusher against a 10 ms post
+    // cadence over 100 ms windows); the assertion is the invariant, not a timing.
+    void NativeBuiltInPushBarPublishesAreOrdered()
+    {
+        auto collector = CreateCollector();
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_test_create_sampled_bar_sensor(collector.value, "race/push/ordered", 1, 100, 10, 10, 0, &sensor) ==
+                HSM_RESULT_OK,
+            "create push-fed bar failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        std::atomic<bool> stop{ false };
+        std::atomic<int> pushed{ 0 };
+        std::thread pusher([&] {
+            while (!stop.load())
+            {
+                hsm_sensor_add_bar_int(sensor, ++pushed);
+                std::this_thread::sleep_for(std::chrono::microseconds(200));
+            }
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        stop.store(true);
+        pusher.join();
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        // Delivery order must never step back to an older window, and within one window every posted
+        // snapshot must be at least as complete as the previous one.
+        long long previous_open = -1;
+        std::map<long long, int> last_count;
+        const auto count = hsm_collector_sent_count(collector.value);
+        Require(count > 0, "the push-fed bar should have published");
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            const auto payload = SentJson(collector.value, index);
+            const auto open = std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs"));
+            const auto bar_count = std::stoi(NumberFieldFromPayload(payload, "Count"));
+
+            Require(open >= previous_open, ("a partial of a newer window overtook an older bar: " + payload).c_str());
+            previous_open = open;
+
+            const auto seen = last_count.find(open);
+            Require(
+                seen == last_count.end() || seen->second <= bar_count,
+                ("a stale snapshot of one window was published after a fuller one: " + payload).c_str());
+            last_count[open] = bar_count;
+        }
+
+        hsm_sensor_release(sensor);
+    }
+
     // Real-time bar-shape check for the live platform factories (#1428): every Total CPU payload is a
     // partial of an aligned 5-min bar, and posts inside one window share its OpenTime. Waits for
     // `posts` Total CPU payloads (15 s apart) — set HSM_LIVE_BAR_POSTS=22 to watch past a whole window.
@@ -6085,6 +6141,7 @@ namespace
             { "native_metric_bar_rolls_over_at_window_boundary", [](const std::string&) { NativeMetricBarRollsOverAtWindowBoundary(); } },
             { "native_metric_bar_flushes_partial_on_stop", [](const std::string&) { NativeMetricBarFlushesPartialOnStop(); } },
             { "native_built_in_push_bar_posts_partials", [](const std::string&) { NativeBuiltInPushBarPostsPartials(); } },
+            { "native_built_in_push_bar_publishes_are_ordered", [](const std::string&) { NativeBuiltInPushBarPublishesAreOrdered(); } },
 #if defined(_WIN32)
             { "native_windows_metric_sources_produce_live_value", [](const std::string&) { NativeWindowsMetricSourcesProduceLiveValue(); } },
             { "native_windows_process_metric_resolves_current_process",

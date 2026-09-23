@@ -266,7 +266,7 @@ managed `BarSensorOptions` defaults every default-bar prototype inherits:
 | Partial post | every `PostDataPeriod` (catalog 15 s), first at the next wall-clock multiple of it (a full period when Start is exactly on one); posts a copy of the in-progress bar, nothing when it is empty | same cadence and alignment (`post_period_ms` of the catalog row) |
 | Window boundary | the post falling on the boundary instant still carries the old bar (`CloseTime == now` is not past); the next sample tick publishes the closed bar again and opens the next window | identical |
 | Stop | flushes a non-empty partial bar, then opens a fresh one (no resend on stop → start → stop) | identical (`TryFlushBarJson`) |
-| Snapshot vs roll | `_sendValueInProgress`: a roll attempted while a partial is being sent is deferred (no newer closed bar can overtake the older partial) | `partial_send_in_progress_`: roll-on-add defers while a partial is between snapshot and enqueue; the next tick rolls |
+| Publish ordering | `_sendValueInProgress` + roll-only-on-confirmed-send serialize the two publishers of one bar | a per-sensor `publish_mutex_` held across snapshot **and** enqueue by roll-on-add, the tick roll and the partial post: the closed bar of a window is always published before any partial of the next one (the server persists on a NEW OpenTime, so a reordering here would reorder stored bars) |
 | Rounding | `Complete()` on a copy: double → `Math.Round(v, Precision=2, AwayFromZero)`; int → mean only | same serializer as the public bars |
 
 Every post of one window therefore carries the SAME `OpenTime`/`CloseTime` while `Count`, `Min`,
