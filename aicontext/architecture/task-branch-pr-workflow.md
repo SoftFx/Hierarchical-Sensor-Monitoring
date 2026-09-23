@@ -1,6 +1,6 @@
 # Task Branch And PR Workflow
 
-> Owner: shared | Last reviewed: 2026-05-28 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-09-23 | Canonical: yes
 
 Generic branch and pull request workflow for HSM.
 
@@ -31,6 +31,7 @@ focused re-review status.
 
 ## Review/Fix Loop
 
+- Before every push, review what the push adds: see the pre-push self-review rule in `CLAUDE.md` → Review Rules (the single copy of it). The PR bot (`claude-review.yml`) is the second reader, not the first.
 - Run role-based review when the PR touches compatibility-sensitive or shared behavior.
 - Fix confirmed blockers.
 - Rerun only focused roles after fixes.
