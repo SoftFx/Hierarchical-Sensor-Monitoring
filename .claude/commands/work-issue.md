@@ -48,14 +48,26 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ## 5. Review your own diff
 
+Each push reviews what it adds, after it is committed (a range sees committed work only).
+
+First push of the branch — the whole branch:
+
 ```
 git fetch origin master
-/code-review medium origin/master...HEAD     # or /matt:code-review for the standards + spec axes
+/code-review medium origin/master...HEAD     # or: /matt:code-review origin/master
 ```
 
-The range covers committed work only, which is why this comes after the commit. Fetch first: the range uses your local copy of `origin/master`, and a stale one puts the merge base too far back, so the diff picks up commits that are already in master. Name the range explicitly: without it the review compares against the upstream branch, which on a first push does not exist and on later pushes covers only the unpushed commits.
+Fetch first: the range uses your local copy of `origin/master`, and a stale one puts the merge base too far back, so the diff picks up commits that are already in master. The range must be named: before the first push there is no upstream branch to default to.
 
-Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — commit the fixes, then rebuild and re-run the narrowest tests for what you fixed. Re-review only when a fix goes beyond its finding; new work added after the review needs a review of its own. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
+Later pushes — only the new commits:
+
+```
+/code-review medium @{upstream}..HEAD
+```
+
+Already-reviewed commits are not reviewed again, so findings you declined do not come back.
+
+Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — commit the fixes, then rebuild and re-run the narrowest tests for what you fixed. Commits that only fix a review finding are re-verified, not re-reviewed; anything beyond the finding is new work and gets the later-push review. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
 
 ## 6. Push
 
