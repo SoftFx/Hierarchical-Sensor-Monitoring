@@ -1,4 +1,4 @@
-﻿# HSM Agent — an always-on Windows service that hosts the native collector and streams this
+# HSM Agent — an always-on Windows service that hosts the native collector and streams this
 # computer's metrics to an HSM server (epic #1167). It links the in-tree collector library.
 #
 # Target topology:

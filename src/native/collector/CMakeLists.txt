@@ -1,4 +1,4 @@
-﻿# 3.21 (matches CMakePresets.json) so PROJECT_IS_TOP_LEVEL is always defined — it gates the
+# 3.21 (matches CMakePresets.json) so PROJECT_IS_TOP_LEVEL is always defined — it gates the
 # install/example defaults below and is only auto-set from 3.21.
 cmake_minimum_required(VERSION 3.21)
 
