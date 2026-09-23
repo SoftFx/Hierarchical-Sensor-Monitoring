@@ -184,10 +184,19 @@ namespace hsm
             // Drive letter from a per-disk sensor name "... on <L> disk"; 0 if it can't be parsed.
             // The caller declines (registration-only) on 0 rather than guessing a volume — reporting a
             // different drive's space than the sensor name claims is the worst failure for monitoring.
+            //
+            // The letter must be a STANDALONE token, i.e. " <L> disk" with a space on BOTH sides. Without
+            // the left-hand check the letter-LESS Unix rows parse as drive N: — "Free space on disk" and
+            // "Free space on disk prediction" both end in "on disk", whose character before " disk" is the
+            // 'n' of "on". Those rows are registerable on a Windows host (the catalog ids are
+            // platform-agnostic), and binding them would report an unrelated volume's free space and
+            // prediction under a label that names the root filesystem — or, where no N: exists, fail on
+            // every post period. The Linux factory refuses the mirror case by exact name for the same
+            // reason; this is that rule's Windows half.
             wchar_t DiskLetter(const std::string& path)
             {
                 const auto pos = path.rfind(" disk");
-                if (pos != std::string::npos && pos >= 1)
+                if (pos != std::string::npos && pos >= 2 && path[pos - 2] == ' ')
                 {
                     const char c = path[pos - 1];
                     if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
