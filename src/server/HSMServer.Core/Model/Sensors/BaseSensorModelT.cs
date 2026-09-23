@@ -335,6 +335,15 @@ namespace HSMServer.Core.Model
                                 Storage.AddValue((T)value);
 
                             IsExpired = true;
+                            // Seed the resolution witness from the marker row:
+                            // the cold load restores the expired state WITHOUT
+                            // a transition, so an unseeded LastExpiryAt would
+                            // read as "never expired" and the first
+                            // out-of-window resolve would send a false
+                            // "recovered" Ok for a still-dead sensor. The
+                            // marker's ReceivingTime is the server's UtcNow at
+                            // the pre-restart transition that wrote it.
+                            LastExpiryAt = last.ReceivingTime;
                             foreach (var ttl in Policies.TTLPolicies)
                                 ttl.InitLastTtlTime(last.Time);
 

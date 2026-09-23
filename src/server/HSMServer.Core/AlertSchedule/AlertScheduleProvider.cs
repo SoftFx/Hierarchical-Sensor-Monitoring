@@ -64,28 +64,42 @@ namespace HSMServer.Core.Schedule
             // one overwritten slot thrashed on every ingested value and
             // AlertSchedule.IsWorkingTime ran twice per value under the
             // provider's lock. A few minute-keyed slots cover the hot path's
-            // distinct instants; the map stays bounded by clearing on overflow
-            // (a result's lifetime is one minute anyway).
+            // distinct instants; the map stays bounded by EVICTING the oldest
+            // inserted minute on overflow — a full wipe would degrade to a
+            // wipe-per-miss under a workload rotating more distinct minutes
+            // than there are slots (history replay, backfilled values, bar
+            // OpenTime/CloseTime spanning minutes) and never hold the hot path.
             private const int MaxCachedMinutes = 4;
 
             public AlertSchedule Schedule { get; set; }
 
             private readonly Dictionary<DateTime, bool> _workingTimeByMinute = new();
 
+            // Insertion order of the distinct minutes currently in the map
+            // (the eviction victim selector); its length never exceeds
+            // MaxCachedMinutes.
+            private readonly Queue<DateTime> _minuteInsertionOrder = new();
+
             public Dictionary<CacheEntryKey, bool> IntervalCache { get; set; } = new();
 
 
             public bool TryGetWorkingTime(DateTime time, out bool result) =>
-                _workingTimeByMinute.TryGetValue(RoundToMinute(time), out result);
+                _workingTimeByMinute.TryGetValue(NormalizeToUtcMinute(time), out result);
 
             public void AddWorkingTime(DateTime time, bool result)
             {
-                var minute = RoundToMinute(time);
+                var minute = NormalizeToUtcMinute(time);
 
+                // Defensive: unreachable today (called only on a TryGetWorkingTime
+                // miss, so the minute is never present), but the guard keeps the
+                // queue and the map in lockstep if a second caller ever appears —
+                // an unguarded re-add would enqueue a duplicate minute and evict
+                // one victim too many.
                 if (_workingTimeByMinute.Count >= MaxCachedMinutes && !_workingTimeByMinute.ContainsKey(minute))
-                    _workingTimeByMinute.Clear();
+                    _workingTimeByMinute.Remove(_minuteInsertionOrder.Dequeue());
 
-                _workingTimeByMinute[minute] = result;
+                if (_workingTimeByMinute.TryAdd(minute, result))
+                    _minuteInsertionOrder.Enqueue(minute);
             }
 
             public void AddIntervalToCache(DateTime startTime, DateTime endTime, bool result)
@@ -105,13 +119,26 @@ namespace HSMServer.Core.Schedule
             public void InvalidateCache()
             {
                 _workingTimeByMinute.Clear();
+                _minuteInsertionOrder.Clear();
                 IntervalCache.Clear();
             }
 
-            private static DateTime RoundToMinute(DateTime time)
+            // Dictionary<DateTime, bool> compares ticks and IGNORES Kind, but
+            // AlertSchedule.ConvertUtcToLocalTime treats a Local argument as
+            // its host-shifted UTC instant while Utc/Unspecified read the
+            // ticks as-is — so a Local-ticks-equal argument would inherit the
+            // other Kind's cached answer. Normalizing every key to its UTC
+            // instant (Kind included) keeps distinct instants in distinct
+            // slots; all production callers already pass Utc-kind timestamps,
+            // so the Local branch is a guard, not a hot path.
+            private static DateTime NormalizeToUtcMinute(DateTime time)
             {
-                return new DateTime(time.Year, time.Month, time.Day,
-                    time.Hour, time.Minute, 0, time.Kind);
+                var utc = time.Kind == DateTimeKind.Local
+                    ? time.ToUniversalTime()
+                    : DateTime.SpecifyKind(time, DateTimeKind.Utc);
+
+                return new DateTime(utc.Year, utc.Month, utc.Day,
+                    utc.Hour, utc.Minute, 0, DateTimeKind.Utc);
             }
         }
 
@@ -269,8 +296,12 @@ namespace HSMServer.Core.Schedule
             }
         }
 
-        // Timer callback; internal so tests can drive the prune deterministically.
-        internal void CleanupIntervalCache()
+        // Prunes IntervalCache only. _workingTimeByMinute is DELIBERATELY not
+        // pruned here: it is hard-bounded at MaxCachedMinutes (4) slots per
+        // schedule entry and self-evicts on overflow, so it needs no periodic
+        // cleanup; IntervalCache is the only unbounded structure (one entry
+        // per distinct (start, end) argument pair).
+        private void CleanupIntervalCache()
         {
             try
             {

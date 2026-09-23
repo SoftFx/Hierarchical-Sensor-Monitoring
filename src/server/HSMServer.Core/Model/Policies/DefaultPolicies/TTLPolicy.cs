@@ -17,6 +17,15 @@ namespace HSMServer.Core.Model.Policies
         private readonly TimeIntervalSettingProperty _ttl = new();
         private readonly OkPolicy _okPolicy;
 
+        // LOAD-BEARING initializer (#1405): DateTime.MinValue, NOT null. A
+        // null clock is a sentinel produced only by CancelNotification and
+        // the resolution arm — "the alert was live and its send state was
+        // reset" — and the never-sent bypass in ShouldResend delivers at
+        // once on it. MinValue means "loaded from storage / never sent",
+        // which the repeat-CADENCE gate must own instead. If this
+        // initializer ever becomes null, every scheduled policy on a stale
+        // sensor fires from the resend loop on the FIRST sweep after boot,
+        // bypassing the repeat-mode gate (Immediately included).
         private DateTime? _lastTTLNotificationTime = DateTime.MinValue;
 
         private bool IsActive => !_ttl.IsEmpty && !IsDisabled;
@@ -132,49 +141,42 @@ namespace HSMServer.Core.Model.Policies
 
         // Staleness is read INDEPENDENTLY of enablement (#1404): "time since
         // the last value exceeds the interval" has an answer even for a
-        // disabled policy, and the window-caused-resolution discriminator in
+        // disabled policy, and the per-policy recovery gate in
         // SetExpiredSnapshot needs that answer for every policy in the
         // snapshot — a disable on an expired sensor must not flip a
-        // window-caused resolution into a false recovery Ok. TTL-less reads
-        // as not stale (no interval — nothing to exceed).
+        // window-caused resolution into a false recovery Ok. A TTL-from-parent
+        // policy resolves _ttl.Value through the parent chain: with a parent
+        // interval present it READS THE PARENT'S VALUE and can be stale;
+        // "TTL-less reads as not stale" holds only when no interval resolves
+        // anywhere (the resolved model is None — nothing to exceed).
         internal bool IsStale(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
-        // The evaluation instant arrives from the caller (the sweep captures
-        // one per pass) so the window predicate and the repeat-interval
-        // comparison below read the SAME timestamp, not two fresh UtcNows
-        // (#1404). The provider arrives as a parameter (the policy owns no
-        // provider); fail-open is inherited from IsWorkingTime — an unknown
-        // schedule id reads as in-window (#1405). The TTL and data-policy
-        // schedule gates deliberately differ in their time argument — the
-        // "do not unify" rule: aicontext/features/server/alerts/feature.md.
+        // The IN-WINDOW remainder of the resend decision, PURE — no writes:
+        // the sweep (RunSensorTimeoutStep) owns the state machine and
+        // performs the out-of-window cancellation itself, so no Try*-shaped
+        // predicate hides an operator-visible clock reset from a second
+        // caller. Precondition: the caller has already established
+        // HasTimeout(time) and in-window — the window arm answering BEFORE
+        // this method is what keeps a resolved-then-out-of-window policy
+        // from delivering on every sweep tick (the zombie, #1405).
         //
-        // Not side-effect-free: the out-of-window arm cancels the
-        // notification state. The unsynchronized state writes are the
-        // tolerated trade-off (worst case one duplicate notification);
-        // details: aicontext/features/server/alerts/feature.md (#1405).
-        internal bool TryResendNotification(DateTime? time, IAlertScheduleProvider scheduleProvider, DateTime evaluationTime)
+        // The evaluation instant arrives from the caller (the sweep captures
+        // one per pass) so the repeat-interval comparison below reads the
+        // SAME timestamp as the window decision, not a fresh UtcNow (#1404).
+        // The unsynchronized state reads are the tolerated trade-off (worst
+        // case one duplicate notification); details:
+        // aicontext/features/server/alerts/feature.md (#1405).
+        internal bool ShouldResend(DateTime evaluationTime)
         {
-            if (!HasTimeout(time))
-                return false;
-
-            // Outside the window the repeat is CANCELLED, not paused (#1405):
-            // the state reset makes the next in-window evaluation deliver at
-            // once (fresh), instead of resuming yesterday's cadence.
-            if (IsOutsideSchedule(scheduleProvider, evaluationTime))
-            {
-                CancelNotification();
-                return false;
-            }
-
             // Never-sent bypass, SCHEDULED policies only (#1405): the null
-            // clock is produced only by the cancellation above or a
-            // resolution — the fresh delivery at window open must outrank
-            // the repeat-mode gate, or the DEFAULT mode (Immediately, whose
-            // Schedule.IsActive is false) loses the alert forever on the
-            // mixed-sensor shape. Schedule-less policies keep the master
-            // order (the repeat-mode gate first): their null clock pairs
-            // with a resolved sensor, and the re-expiry transition re-arms
-            // it before this loop runs.
+            // clock is produced only by the sweep's out-of-window
+            // cancellation or a resolution — the fresh delivery at window
+            // open must outrank the repeat-mode gate, or the DEFAULT mode
+            // (Immediately, whose Schedule.IsActive is false) loses the
+            // alert forever on the mixed-sensor shape. Schedule-less
+            // policies keep the master order (the repeat-mode gate first):
+            // their null clock pairs with a resolved sensor, and the
+            // re-expiry transition re-arms it before this loop runs.
             if (ScheduleId.HasValue && !_lastTTLNotificationTime.HasValue)
                 return true;
 

@@ -83,8 +83,8 @@ namespace HSMServer.Core.Tests.Schedule
         public void IsWorkingTime_ManyDistinctMinutes_BoundedMapStaysCorrect()
         {
             // More distinct minutes than the map's bound, interleaved with
-            // the always-open today: the overflow clear runs mid-pass and
-            // every minute must still answer for itself.
+            // the always-open today: single-minute EVICTION runs mid-pass
+            // and every minute must still answer for itself.
             var now = DateTime.UtcNow;
 
             _provider.SaveSchedule(BuildSchedule([new TimeWindow(TimeSpan.Zero, TimeSpan.FromDays(1))],
@@ -93,8 +93,36 @@ namespace HSMServer.Core.Tests.Schedule
             for (var i = 1; i <= 5; i++)
             {
                 Assert.False(_provider.IsWorkingTime(ScheduleId, now.AddDays(-i)));
-                Assert.True(_provider.IsWorkingTime(ScheduleId, now)); // re-answered after the clear too
+                Assert.True(_provider.IsWorkingTime(ScheduleId, now)); // re-answered after an eviction too
             }
+        }
+
+        [Fact]
+        public void IsWorkingTime_LocalKindArgument_AnsweredForItsOwnInstant()
+        {
+            // Dictionary<DateTime, bool> compares ticks and ignores Kind,
+            // but the schedule treats a Local argument as its host-shifted
+            // UTC instant: without key normalization a Local-ticks-equal
+            // query inherits the Utc query's cached answer. The oracle is
+            // the schedule itself, queried on a FRESH id before any
+            // same-ticks Utc query can populate the tested id's slot. (On a
+            // UTC-zoned host the two instants coincide and both read
+            // in-window — the pin is the non-poisoning, observable where
+            // the host offset is non-zero.)
+            var anchor = DateTime.UtcNow.Date.AddHours(12).AddSeconds(30);
+            var otherId = Guid.NewGuid();
+
+            _provider.SaveSchedule(BuildSchedule([new TimeWindow(anchor.TimeOfDay, anchor.AddMinutes(1).TimeOfDay)],
+                                                 days: [anchor.DayOfWeek]));
+            _provider.SaveSchedule(BuildSchedule([new TimeWindow(anchor.TimeOfDay, anchor.AddMinutes(1).TimeOfDay)],
+                                                 days: [anchor.DayOfWeek], id: otherId));
+
+            var localArg = DateTime.SpecifyKind(anchor, DateTimeKind.Local);
+            var expected = _provider.IsWorkingTime(otherId, localArg); // computed, cache cold
+
+            Assert.True(_provider.IsWorkingTime(ScheduleId, DateTime.SpecifyKind(anchor, DateTimeKind.Utc))); // caches the slot for these ticks
+
+            Assert.Equal(expected, _provider.IsWorkingTime(ScheduleId, localArg)); // its OWN instant, not the Utc answer
         }
 
         [Fact]
@@ -124,11 +152,12 @@ namespace HSMServer.Core.Tests.Schedule
         // UTC timezone makes the schedule deterministic at any host zone;
         // the window is anchored to the timeOfDay of the captured instant.
         private static AlertSchedule BuildSchedule(List<TimeWindow> windows,
-                                                   List<DateTime>? disabledDates = null,
-                                                   List<DayOfWeek>? days = null) => new()
+                                                   List<DateTime> disabledDates = null,
+                                                   List<DayOfWeek> days = null,
+                                                   Guid? id = null) => new()
         {
-            Id = ScheduleId,
-            Name = $"Provider cache schedule {ScheduleId:N}",
+            Id = id ?? ScheduleId,
+            Name = $"Provider cache schedule {(id ?? ScheduleId):N}",
             Timezone = TimeZoneInfo.Utc.Id,
             DaySchedules = [new DaySchedule { Days = days ?? Enum.GetValues<DayOfWeek>().ToList(), Windows = windows }],
             DisabledDates = disabledDates ?? [],
