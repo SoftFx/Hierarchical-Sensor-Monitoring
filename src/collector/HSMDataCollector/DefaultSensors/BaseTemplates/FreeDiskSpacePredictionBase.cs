@@ -59,7 +59,7 @@ namespace HSMDataCollector.DefaultSensors
         /// what it just measured, so a burst of writes no longer swings the prediction, while a
         /// genuine steady drain is reported exactly (the EMA of identical samples is that sample).
         /// </summary>
-        public const double SpeedSmoothingFactor = 1.0 / 37.0;
+        internal const double SpeedSmoothingFactor = 1.0 / 37.0;
 
         /// <summary>
         /// The ceiling for a posted prediction. Anything at or beyond it is reported as exactly this
@@ -67,7 +67,7 @@ namespace HSMDataCollector.DefaultSensors
         /// not fill within a year" — no estimate that far out is actionable, and clamping keeps
         /// <see cref="TimeSpan.FromSeconds(double)"/> from overflowing on a very small drain rate.
         /// </summary>
-        public static readonly TimeSpan MaxPrediction = TimeSpan.FromDays(365);
+        internal static readonly TimeSpan MaxPrediction = TimeSpan.FromDays(365);
 
         private static readonly double _maxPredictionSeconds = MaxPrediction.TotalSeconds;
 
@@ -138,7 +138,8 @@ namespace HSMDataCollector.DefaultSensors
                     Interlocked.Exchange(ref _samplesCount, 0L);
                     _state = PredictionState.Calibration;
 
-                    _workHandle.Start(UpdateDiskSpeed, utc.Ceil(_calculateSpeedDelay) - utc, _calculateSpeedDelay, HandleException);
+                    _workHandle.Start(
+                        UpdateDiskSpeed, FirstSampleDelay(_calculateSpeedDelay), _calculateSpeedDelay, HandleException);
                 }
             }
 
@@ -240,6 +241,21 @@ namespace HSMDataCollector.DefaultSensors
 
             return TimeSpan.FromSeconds(seconds);
         }
+
+        /// <summary>
+        /// How long after Start the FIRST free-space measurement is taken: a full sampling period,
+        /// never a wall-clock-aligned remainder (#1445).
+        ///
+        /// The first interval does not fold in at <see cref="SpeedSmoothingFactor"/> - it SEEDS the
+        /// estimate, and carries ~95 % of the weight of the first posted prediction. Aligning the
+        /// first tick to the next period boundary made that interval anything from a millisecond to
+        /// the whole period depending on when the host happened to start the agent, so a log flush
+        /// in the wrong three seconds would seed a wildly inflated rate that then decays with a
+        /// 4.22 h half-life - the #1445 symptom coming back on every restart. The native mirror
+        /// anchors its first refresh at <c>now + refresh_period_ms</c>, so waiting a full period is
+        /// also what repo rule #10 requires.
+        /// </summary>
+        internal static TimeSpan FirstSampleDelay(TimeSpan samplingPeriod) => samplingPeriod;
 
         internal void UpdateDiskSpeed()
         {

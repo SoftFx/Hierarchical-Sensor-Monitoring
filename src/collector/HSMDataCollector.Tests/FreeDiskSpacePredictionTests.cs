@@ -1,6 +1,7 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.DefaultSensors.SystemInfo;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
@@ -224,6 +225,26 @@ namespace HSMDataCollector.Tests
                     "Free space decreases by 0.0009765625 Mbytes/sec. More than 365 days left.",
                     post.Comment);
             }
+        }
+
+        [Fact]
+        public void The_first_free_space_sample_is_taken_a_full_period_after_start()
+        {
+            var period = TimeSpan.FromMinutes(10);
+
+            // The first interval SEEDS the six-hour estimate rather than folding into it, so its
+            // length is not a detail. Aligning the first tick to the next wall-clock boundary - what
+            // this used to do - made that interval as short as the agent's start time happened to
+            // leave, and a burst inside a few-second seed then dominated the sensor for most of a
+            // day. Native always waits a full refresh period, so alignment also broke rule #10.
+            Assert.Equal(period, FreeDiskSpacePredictionBase.FirstSampleDelay(period));
+
+            // What alignment would have given for a host that started just before the boundary.
+            var justBeforeABoundary = new DateTime(2026, 1, 1, 12, 9, 59, 990, DateTimeKind.Utc);
+
+            Assert.True(
+                justBeforeABoundary.Ceil(period) - justBeforeABoundary < TimeSpan.FromSeconds(1),
+                "the aligned first interval used to be able to last a few milliseconds");
         }
 
         [Fact]
