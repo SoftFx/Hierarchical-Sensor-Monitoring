@@ -31,7 +31,7 @@ Before writing code, confirm that the UI patterns, file paths or signatures the 
 
 Hand over to the trialled skills. Keep the change inside the issue's scope; build to verify compilation.
 
-## 4. Commit and push
+## 4. Commit
 
 ```
 git add <changed files>
@@ -42,12 +42,40 @@ Longer explanation if needed.
 Closes #$ARGUMENTS
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
-git push -u origin feature/$ARGUMENTS-<short-slug>
 ```
 
 `Closes #N` goes in before the PR is merged — added afterwards it does not close the issue.
 
-## 5. Open a draft PR
+## 5. Review your own diff
+
+The rule is in `CLAUDE.md` → Review Rules; the commands for this flow are below. Each push reviews what it adds, after it is committed (a range sees committed work only).
+
+First push of the branch — the whole branch:
+
+```
+git fetch origin master
+/code-review medium origin/master...HEAD     # or: /matt:code-review origin/master
+```
+
+Fetch first: the range uses your local copy of `origin/master`, and a stale one puts the merge base too far back, so the diff picks up commits that are already in master. The range must be named: before the first push there is no upstream branch to default to.
+
+Later pushes — only the new commits:
+
+```
+/code-review medium @{upstream}..HEAD
+```
+
+Already-reviewed commits are not reviewed again, so findings you declined do not come back. After a rebase onto master or a merge of master, `@{upstream}` no longer marks what is new: review the whole branch again with the first-push command.
+
+Adjudicate the findings the way you would the PR bot's — fix defects, decline "do what nobody asked" — commit the fixes, then rebuild and re-run the narrowest tests for what you fixed. Commits that only fix a review finding are re-verified, not re-reviewed. If a fix goes beyond its finding, run the same review again; findings you already declined may reappear — keep declining them. The bot is the second reader; a round of it costs an API call and a full rebuild/verify cycle.
+
+## 6. Push
+
+```
+git push -u origin feature/$ARGUMENTS-<short-slug>     # later pushes: git push; after a rebase: git push --force-with-lease
+```
+
+## 7. Open a draft PR (first push only)
 
 ```
 gh pr create --draft --base master --title "Short description" --body "..."
