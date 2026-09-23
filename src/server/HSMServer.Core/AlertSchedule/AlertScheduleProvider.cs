@@ -79,6 +79,11 @@ namespace HSMServer.Core.Schedule
             {
                 var minute = NormalizeToUtcMinute(time);
 
+                // Defensive: unreachable today (called only on a TryGetWorkingTime
+                // miss, so the minute is never present), but the guard keeps the
+                // queue and the map in lockstep if a second caller ever appears —
+                // an unguarded re-add would enqueue a duplicate minute and evict
+                // one victim too many.
                 if (_workingTimeByMinute.Count >= MaxCachedMinutes && !_workingTimeByMinute.ContainsKey(minute))
                     _workingTimeByMinute.Remove(_minuteInsertionOrder.Dequeue());
 

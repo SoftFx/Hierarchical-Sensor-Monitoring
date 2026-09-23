@@ -3085,6 +3085,21 @@ namespace HSMServer.Core.Cache
 
                 if (timeout && sensor.HasData)
                 {
+                    // The expiry instant, recorded on the transition ITSELF —
+                    // the witness the resolution discriminator below compares
+                    // against. It must be recorded even when the marker write
+                    // underneath is suppressed: the marker guard compares a
+                    // server stamp (LastTimeout.ReceivingTime) against the
+                    // CLIENT-stamped sensor.LastUpdate, so a lagging clock
+                    // (batched/bar sends, Time minutes behind ReceivingTime)
+                    // suppresses the rewrite and leaves the marker naming an
+                    // EARLIER expiry — a discriminator keyed on the marker
+                    // would then read a post-marker value as "new data" and
+                    // re-open the false "recovered" Ok that #1404 closed.
+                    // evaluationTime, not GetTimeoutValue's own UtcNow: one
+                    // instant shared with the window decisions below.
+                    sensor.LastExpiryAt = evaluationTime;
+
                     var value = sensor.GetTimeoutValue();
 
                     if ((sensor.LastTimeout is null || sensor.LastTimeout.ReceivingTime < sensor.LastUpdate) &&
@@ -3097,31 +3112,36 @@ namespace HSMServer.Core.Cache
                 // WHY the sensor resolved, decided ONCE before the loop: the
                 // cause is sensor-global. The discriminator is whether NEW
                 // DATA ARRIVED SINCE THE SENSOR EXPIRED, witnessed
-                // server-clock-side: the timeout marker above stamps
-                // ReceivingTime with the server's UtcNow at the expiry
-                // transition, and every ingested value stamps its own
-                // ReceivingTime the same way — comparing the two is immune
-                // to the client clock skew of value Time (batched/bar sends
-                // arriving minutes "behind" the wall clock), which the
-                // earlier per-policy-staleness discriminator was not: it let
-                // the SHORTEST out-of-window TTL suppress a longer
-                // schedule-less guard's genuine recovery Ok. With NO new
-                // data a resolution can only be window-caused (a scheduled
-                // policy dropping out of its window is what flipped
-                // anyTimeout) — the sensor did NOT recover, so NO policy may
-                // claim recovery for it: a schedule-less sibling is never
-                // out-of-window and would otherwise send a false "recovered"
-                // Ok at every session close. With new data it is a GENUINE
-                // recovery — every policy is then gated only by its own arm
-                // below, and the Ok flows out-of-window included. No marker
-                // (expired with an empty cache, or a marker write that lost
-                // the newest-wins race) reads as genuine: the value in force
-                // at expiry is not observable then, and a false recovery Ok
-                // beats a lost one.
+                // server-clock-side: LastExpiryAt above stamps the server's
+                // UtcNow at the expiry transition (the cold-load path seeds
+                // it from the restored marker row), and every ingested value
+                // stamps its own ReceivingTime the same way — comparing the
+                // two is immune to the client clock skew of value Time
+                // (batched/bar sends arriving minutes "behind" the wall
+                // clock), which the earlier per-policy-staleness
+                // discriminator was not: it let the SHORTEST out-of-window
+                // TTL suppress a longer schedule-less guard's genuine
+                // recovery Ok. With NO new data a resolution can only be
+                // window-caused (a scheduled policy dropping out of its
+                // window is what flipped anyTimeout) — the sensor did NOT
+                // recover, so NO policy may claim recovery for it: a
+                // schedule-less sibling is never out-of-window and would
+                // otherwise send a false "recovered" Ok at every session
+                // close. The silent arm is further scoped to sensors that
+                // own at least one SCHEDULED TTL policy: a sensor with no
+                // schedule at all cannot have been resolved by a window, so
+                // its non-data resolutions (TTL edited longer, alert
+                // disabled) keep their resolution Ok. With new data it is a
+                // GENUINE recovery — every policy is then gated only by its
+                // own arm below, and the Ok flows out-of-window included.
+                // No recorded expiry instant (expired with an empty cache)
+                // reads as genuine: the value in force at expiry is not
+                // observable then, and a false recovery Ok beats a lost one.
                 var newDataArrived = evaluatedValue is not null &&
-                                     (sensor.LastTimeout is null ||
-                                      evaluatedValue.ReceivingTime > sensor.LastTimeout.ReceivingTime);
-                var windowCaused = !timeout && !newDataArrived;
+                                     (sensor.LastExpiryAt is null ||
+                                      evaluatedValue.ReceivingTime > sensor.LastExpiryAt);
+                var windowCaused = !timeout && !newDataArrived &&
+                                   ttlSnapshot.Any(t => t.ScheduleId.HasValue);
 
                 // The per-policy window/staleness decisions, materialized
                 // ONCE before both consumers — the sensor-global cause above

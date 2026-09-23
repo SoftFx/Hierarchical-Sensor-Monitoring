@@ -48,6 +48,21 @@ namespace HSMServer.Core.Model
 
         internal bool IsExpired { get; set; }
 
+        // Server-clock instant of the last expiry TRANSITION that had a value
+        // to judge (#1404) — the witness the resolution discriminator
+        // (TreeValuesCache.SetExpiredSnapshot) compares evaluated-value
+        // receiving times against. Recorded on the transition itself and
+        // seeded from the marker row on the cold-load path, which restores
+        // IsExpired without a transition. Deliberately NOT the timeout
+        // marker's ReceivingTime: the marker-rewrite guard compares that
+        // server stamp against the CLIENT-stamped sensor.LastUpdate, so a
+        // lagging clock (batched/bar sends) suppresses the rewrite and
+        // leaves the marker naming an EARLIER expiry — keying the decision
+        // on it re-opens the false "recovered" Ok. In-memory like IsExpired
+        // (not persisted); the read/write races are the ones IsExpired
+        // already tolerates.
+        internal DateTime? LastExpiryAt { get; set; }
+
         public abstract SensorType Type { get; }
 
         public Dictionary<int, EnumOptionModel> EnumOptions { get; private set; } = new Dictionary<int, EnumOptionModel>();
