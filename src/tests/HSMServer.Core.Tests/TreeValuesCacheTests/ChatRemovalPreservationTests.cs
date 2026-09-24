@@ -43,10 +43,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         // (a) a regular alert with a schedule binding whose Custom destination
         // holds the removed chat, (b) a TTL alert with an explicit interval
         // and a schedule binding holding the chat, (c) a template-owned TTL
-        // alert holding the chat, (d) policies that never reference the chat;
-        // the product carries a TTL alert with an explicit interval holding
-        // the chat. Removing the chat from the folder must touch ONLY the
-        // destinations.
+        // alert holding the chat, (d) policies that never reference the chat,
+        // (e) a template-owned REGULAR alert holding the chat — the regular
+        // arm's template guards in SensorPolicyCollection are a distinct
+        // path from the TTL arm's; the product carries a TTL alert with an
+        // explicit interval holding the chat, and a SUB-product carries one
+        // with an interval and a schedule binding (sub-product updates route
+        // through the ROOT product's queue). Removing the chat from the
+        // folder must touch ONLY the destinations.
         [Fact]
         [Trait("Category", "Chat removal")]
         public async Task RemoveChatsFromPoliciesAsync_PreservesTtlIntervalsScheduleAndTemplateBindings()
@@ -58,6 +62,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var regularCarrierScheduleId = Guid.NewGuid();
             var regularScheduleId = Guid.NewGuid();
             var ttlScheduleId = Guid.NewGuid();
+            var subTtlScheduleId = Guid.NewGuid();
 
             var sensorPath = "sensorChatRemovalPreservation";
 
@@ -74,6 +79,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(template.Id, templateTtl.TemplateId);
             Assert.NotNull(templateTtl.TemplateAlertId);
 
+            // The template-owned regular alert: minted through the regular
+            // arm of template application, with the same ownership stamps.
+            var templateRegular = Assert.Single(sensor.Policies, p => p.TemplateId == template.Id);
+            Assert.NotNull(templateRegular.TemplateAlertId);
+
             // Seed the sensor's policies: full lists in one update (the
             // full-list semantics drop anything not re-asserted). The
             // template-owned TTL only gains a Custom destination with the
@@ -88,6 +98,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 [
                     RegularUpdate(force, regularCarrierScheduleId, ChatsDestination(chatToRemove, chatToKeep)),
                     RegularUpdate(force, regularScheduleId),
+                    // The template-owned regular must be re-asserted here too —
+                    // full-list semantics with a FORCE initiator drop any policy
+                    // absent from the list, template-owned or not.
+                    new PolicyUpdate(templateRegular, force)
+                    {
+                        Destination = ChatsDestination(chatToRemove, chatToKeep),
+                    },
                 ],
                 TTLPolicies =
                 [
@@ -116,9 +133,22 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             }, default);
             Assert.True(productSeed.IsOk, productSeed.Error);
 
+            // The sub-product arm: same shape, but with a schedule binding —
+            // the removal routes sub-product TTL updates through the ROOT
+            // product's queue (the product arm's dispatch contract).
+            var subProductSeed = await _valuesCache.UpdateProductAsync(new ProductUpdate
+            {
+                Id = _fixture.SubProductAId,
+                Initiator = force,
+                TTLPolicies = [TtlUpdate(force, TimeSpan.FromMinutes(20), subTtlScheduleId, ChatsDestination(chatToRemove, chatToKeep))],
+            }, default);
+            Assert.True(subProductSeed.IsOk, subProductSeed.Error);
+
             // Capture the live policies before the removal (updates apply
             // in place, so the references stay valid — re-locate by id after).
-            var regularCarrier = Assert.Single(sensor.Policies, p => p.Destination.Chats.ContainsKey(chatToRemove));
+            // templateRegular (captured above) also holds the chat now, so
+            // the manual carrier is singled out by its lack of a template.
+            var regularCarrier = Assert.Single(sensor.Policies, p => p.Destination.Chats.ContainsKey(chatToRemove) && p.TemplateId == null);
             var regularScheduled = Assert.Single(sensor.Policies, p => p.ScheduleId == regularScheduleId);
             var ttlCarrier = Assert.Single(sensor.Policies.TTLPolicies, t => t.ScheduleId == ttlScheduleId);
             var ttlUnaffected = Assert.Single(sensor.Policies.TTLPolicies, t => t.TTLInterval.Ticks == TimeSpan.FromMinutes(45).Ticks);
@@ -130,6 +160,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             Assert.True(_valuesCache.TryGetProduct(_fixture.ProductAId, out var productBefore));
             var productTtlId = Assert.Single(productBefore.Policies.TTLPolicies, t => t.Destination.Chats.ContainsKey(chatToRemove)).Id;
+
+            Assert.True(_valuesCache.TryGetProduct(_fixture.SubProductAId, out var subProductBefore));
+            var subTtlId = Assert.Single(subProductBefore.Policies.TTLPolicies).Id;
 
             await _valuesCache.RemoveChatsFromPoliciesAsync(_fixture.FolderId, [chatToRemove], initiator);
 
@@ -150,6 +183,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.NotNull(templateTtl.TemplateAlertId);
             Assert.Equal(TimeSpan.FromMinutes(10).Ticks, templateTtl.TTLTicks);
 
+            // The template-owned REGULAR policy rides through the regular
+            // arm's own template guards (force initiator) with its
+            // ownership intact.
+            Assert.DoesNotContain(chatToRemove, templateRegular.Destination.Chats.Keys);
+            Assert.Contains(chatToKeep, templateRegular.Destination.Chats.Keys);
+            Assert.Equal(template.Id, templateRegular.TemplateId);
+            Assert.NotNull(templateRegular.TemplateAlertId);
+
             // In-memory, the policies that NEVER referenced the chat are
             // untouched by the full-list re-assert.
             Assert.Equal(regularScheduleId, regularScheduled.ScheduleId);
@@ -161,6 +202,16 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.DoesNotContain(chatToRemove, productTtl.Destination.Chats.Keys);
             Assert.Equal(TimeSpan.FromMinutes(15).Ticks, productTtl.TTLTicks);
             Assert.False(productTtl.IsTTLFromParent);
+
+            // The sub-product TTL (dispatched through the root product's
+            // queue) keeps its interval and schedule binding.
+            Assert.True(_valuesCache.TryGetProduct(_fixture.SubProductAId, out var subProductAfter));
+            var subTtl = Assert.Single(subProductAfter.Policies.TTLPolicies, t => t.Id == subTtlId);
+            Assert.DoesNotContain(chatToRemove, subTtl.Destination.Chats.Keys);
+            Assert.Contains(chatToKeep, subTtl.Destination.Chats.Keys);
+            Assert.Equal(subTtlScheduleId, subTtl.ScheduleId);
+            Assert.Equal(TimeSpan.FromMinutes(20).Ticks, subTtl.TTLTicks);
+            Assert.False(subTtl.IsTTLFromParent);
 
             // Persisted: a restart must reload the same state — intervals,
             // schedule bindings and template ownership survive the writes
@@ -181,6 +232,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.NotEmpty(storedTemplateTtl.TemplateAlertId);
             Assert.Equal(TimeSpan.FromMinutes(10).Ticks, storedTemplateTtl.TTL);
 
+            var storedTemplateRegular = _databaseCoreManager.DatabaseCore.GetAllPolicies()
+                .First(p => new Guid(p.Id) == templateRegular.Id);
+            Assert.Equal(template.Id.ToByteArray(), storedTemplateRegular.TemplateId);
+            Assert.NotEmpty(storedTemplateRegular.TemplateAlertId);
+            Assert.DoesNotContain(chatToRemove.ToString(), storedTemplateRegular.Destination.Chats.Keys);
+
             var storedRegularCarrier = _databaseCoreManager.DatabaseCore.GetAllPolicies()
                 .First(p => new Guid(p.Id) == regularCarrier.Id);
             Assert.Equal(regularCarrierScheduleId.ToByteArray(), storedRegularCarrier.ScheduleId);
@@ -194,13 +251,33 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var storedProductTtl = storedProduct.TTLPolicies.First(p => new Guid(p.Id) == productTtlId);
             Assert.Equal(TimeSpan.FromMinutes(15).Ticks, storedProductTtl.TTL);
             Assert.DoesNotContain(chatToRemove.ToString(), storedProductTtl.Destination.Chats.Keys);
+
+            var storedSubProduct = _databaseCoreManager.DatabaseCore.GetProduct(_fixture.SubProductAId.ToString());
+            var storedSubTtl = Assert.Single(storedSubProduct.TTLPolicies, p => new Guid(p.Id) == subTtlId);
+            Assert.Equal(TimeSpan.FromMinutes(20).Ticks, storedSubTtl.TTL);
+            Assert.Equal(subTtlScheduleId.ToByteArray(), storedSubTtl.ScheduleId);
+            Assert.DoesNotContain(chatToRemove.ToString(), storedSubTtl.Destination.Chats.Keys);
         }
 
 
+        // A template with BOTH a TTL entry and a regular alert (distinct
+        // condition target, so the minted regular is unambiguous): sensor
+        // creation mints one policy per entry, each stamped with the
+        // template's Id as TemplateId and the entry's Id as TemplateAlertId.
         private AlertTemplateModel BuildIntegerTemplate(TimeSpan ttlInterval, string sensorPath)
         {
             var ttlSetting = new TimeIntervalSettingProperty();
             ttlSetting.TrySetValue(new TimeIntervalModel(ttlInterval.Ticks));
+
+            var regularTemplatePolicy = Policy.BuildPolicy((byte)SensorType.Integer);
+            regularTemplatePolicy.UpdatePolicy(new PolicyUpdate
+            {
+                ConfirmationPeriod = 0,
+                Conditions =
+                [
+                    new PolicyConditionUpdate(PolicyOperation.GreaterThan, PolicyProperty.Value, new TargetValue(TargetType.Const, "7")),
+                ],
+            });
 
             var model = new AlertTemplateModel
             {
@@ -212,6 +289,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 [
                     new TtlEntry(new TTLPolicy(ttlSetting, null), ttlSetting.Value ?? TimeIntervalModel.None),
                 ],
+                Policies = [regularTemplatePolicy],
             };
             model.TryApplyPathTemplates(out _);
             return model;

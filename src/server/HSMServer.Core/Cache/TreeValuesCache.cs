@@ -1394,11 +1394,8 @@ namespace HSMServer.Core.Cache
                     var productTtlUpdates = new List<PolicyUpdate>();
                     foreach (var ttl in product.Policies.TTLPolicies)
                     {
-                        // #1451: the full-list re-assert keeps the whole policy —
-                        // a bare copy constructor would drop the TTL interval (a
-                        // null TTL is an explicit FromParent reset here).
                         if (!TryGetPolicyUpdate(ttl, chatsHash, forceInitiator, out var ttlUpdate))
-                            ttlUpdate = BuildPolicyUpdate(ttl, new(ttl.Destination), forceInitiator);
+                            ttlUpdate = BuildFullPolicyCopy(ttl, forceInitiator);
 
                         productTtlUpdates.Add(ttlUpdate);
                     }
@@ -1768,11 +1765,8 @@ namespace HSMServer.Core.Cache
 
                 foreach (var ttl in sensor.Policies.TTLPolicies)
                 {
-                    // #1451: the full-list re-assert keeps the whole policy —
-                    // a bare copy constructor would drop the TTL interval (a
-                    // null TTL is an explicit FromParent reset here).
                     if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
-                        ttlUpdate = BuildPolicyUpdate(ttl, new(ttl.Destination), initiator);
+                        ttlUpdate = BuildFullPolicyCopy(ttl, initiator);
 
                     sensorTtlUpdates.Add(ttlUpdate);
                 }
@@ -1786,7 +1780,7 @@ namespace HSMServer.Core.Cache
                 foreach (var policy in sensor.Policies)
                 {
                     if (!TryGetPolicyUpdate(policy, chats, initiator, out var policyUpdate))
-                        policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), initiator);
+                        policyUpdate = BuildFullPolicyCopy(policy, initiator);
 
                     policiesUpdate.Add(policyUpdate);
                 }
@@ -2437,11 +2431,13 @@ namespace HSMServer.Core.Cache
         }
 
         // #1451: full copy of a policy for a full-list re-assert. The copy
-        // constructor carries Schedule/ScheduleId/TemplateId/TemplateAlertId
-        // but NOT TTL — and a null TTL in full-list semantics is an explicit
-        // FromParent reset — so the interval must be re-asserted here (an
-        // explicit Never degrades to FromParent). Callers override exactly
-        // the one field their flow mutates. See feature.md (#1409, #1451).
+        // constructor carries Destination/Schedule/ScheduleId/TemplateId/
+        // TemplateAlertId but NOT TTL — and a null TTL in full-list
+        // semantics is an explicit FromParent reset — so the interval must
+        // be re-asserted here (an explicit Never degrades to FromParent).
+        // Callers override only what their flow mutates; the chat-removal
+        // fallbacks for policies that never held the chat override nothing.
+        // See feature.md (#1409, #1451).
         private static PolicyUpdate BuildFullPolicyCopy(Policy policy, InitiatorInfo initiator) =>
             new(policy, initiator)
             {
