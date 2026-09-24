@@ -55,6 +55,19 @@ service_alive_beats_on_the_sensor_period|expect_sent_count|3
 service_alive_beats_on_the_sensor_period|expect_payload_type_counts|1|0|0|0|0
 service_alive_beats_on_the_sensor_period|expect_eventually_payload_contains|/Service alive","Value":false|5
 
+# Registering the collector-monitoring group on an ALREADY RUNNING collector must beat, not sit
+# registered-but-empty (#1453 follow-up). Managed starts a sensor added during Starting/Running
+# straight away (SensorsStorage), while the native self-monitor loop used to be armed only at Start
+# and nothing armed it afterwards — so the heartbeat stayed silent for the rest of the run and the
+# server turned its 1 min TTL into a Timeout alert on a healthy collector. The 60 s collect period
+# keeps everything queued until the graceful stop flushes it, exactly like the cases above.
+service_alive_beats_when_added_after_start|create_collector_with_limits|20000|50|60000
+service_alive_beats_when_added_after_start|start
+service_alive_beats_when_added_after_start|add_collector_monitoring_sensors
+service_alive_beats_when_added_after_start|sleep_ms|1500
+service_alive_beats_when_added_after_start|stop
+service_alive_beats_when_added_after_start|expect_eventually_payload_contains|/Service alive","Value":false|5
+
 # The start marker is armed once per SENSOR, not once per run: the beat after a restart is `true`.
 service_alive_beats_true_after_restart|create_collector_with_limits|20000|50|60000
 service_alive_beats_true_after_restart|add_collector_monitoring_sensors
