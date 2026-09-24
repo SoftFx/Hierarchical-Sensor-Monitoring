@@ -3897,7 +3897,7 @@ namespace
         // 49 100 MiB left at 0.5 MiB/sec = 98 200 s.
         Require(post.value_ms == 98200000, "unexpected steady-drain prediction");
         Require(post.status == 1, "a real estimate carries Ok");
-        Require(post.comment == "Free space decreases by 0.5 Mbytes/sec.", "unexpected steady-drain comment");
+        Require(post.comment == "Free space decreases by 1800.000 Mbytes/hour.", "unexpected steady-drain comment");
     }
 
     void NativeDiskPredictionDecaysWhenDrainStops()
@@ -3923,10 +3923,11 @@ namespace
         Require(relaxed.value_ms == 129152769, "unexpected decayed prediction");
         Require(relaxed.status == 1, "a decayed estimate is still a real estimate");
 
-        // The mantissa is left out on purpose: managed net472 renders 15 significant digits where
-        // net6.0 and this collector render the shortest round-trip form.
+        // 0.38017 MiB/sec is 1368.612 MiB/hour. The whole mantissa is pinned since #1460: the
+        // comment rounds the rate to three decimals with integer arithmetic, so managed net472,
+        // managed net6.0 and this collector all render it identically.
         Require(
-            StartsWith(relaxed.comment, "Free space decreases by 0.380169937438"),
+            relaxed.comment == "Free space decreases by 1368.612 Mbytes/hour.",
             "unexpected decayed-drain comment");
     }
 
@@ -3945,7 +3946,7 @@ namespace
         Require(post.value_ms == kCeilingMs, "a growing disk posts the ceiling");
         Require(post.status == 0, "a growing disk posts OffTime");
         Require(
-            post.comment == "Free space increases by 0.5 Mbytes/sec. Value cannot be calculated.",
+            post.comment == "Free space increases by 1800.000 Mbytes/hour. Value cannot be calculated.",
             "unexpected growth comment");
     }
 
@@ -4005,7 +4006,7 @@ namespace
         Require(post.value_ms == kCeilingMs, "an unrepresentable prediction is clamped to the ceiling");
         Require(post.status == 0, "a clamped prediction posts OffTime");
         Require(
-            post.comment == "Free space decreases by 0.0009765625 Mbytes/sec. More than 365 days left.",
+            post.comment == "Free space decreases by 3.516 Mbytes/hour. More than 365 days left.",
             "unexpected clamped-drain comment");
     }
 

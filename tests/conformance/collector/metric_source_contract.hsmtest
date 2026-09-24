@@ -31,13 +31,16 @@
 #   age of the samples behind the estimate at exactly 6 h (#1445). Fixtures shrink both periods; the
 #   factor is not a fixture knob, so a fixture asserts STATES and not smoothed numbers.
 # - Exactly one of five states is posted (#1445), and only the first carries a real estimate:
-#     draining below the ceiling  -> free_space / speed, Ok, "Free space decreases by X Mbytes/sec."
+#     draining below the ceiling  -> free_space / speed, Ok, "Free space decreases by X Mbytes/hour."
 #     draining beyond the ceiling -> 365.00:00:00, OffTime, "... More than 365 days left."
 #     not decreasing              -> 365.00:00:00, OffTime, "Free space is not decreasing. Value cannot be calculated."
-#     increasing                  -> 365.00:00:00, OffTime, "Free space increases by X Mbytes/sec. Value cannot be calculated."
+#     increasing                  -> 365.00:00:00, OffTime, "Free space increases by X Mbytes/hour. Value cannot be calculated."
 #     calibrating                 -> 365.00:00:00, OffTime, "Calibration request (n/N). Value cannot be calculated yet."
 #   The ceiling stands for "no actionable estimate"; 00:00:00 is reserved for a disk with no free
 #   space left and is never a placeholder, because an alert reads it as "full NOW".
+# - X is the rate in MB/HOUR with three fixed decimals (#1460), rounded from the same double by
+#   integer arithmetic in both collectors so the text is byte-identical; it used to be MB/sec in
+#   shortest-round-trip form, which rendered a slow drain as a 17-digit scientific literal.
 # - Calibration counts SAMPLES, not posts: (n/N) means n completed free-space measurements.
 # - The NUMBER of calibration posts is deliberately NOT pinned. Managed starts its send loop in
 #   InitAsync (first post due immediately) while the sampler's first tick is aligned to the next
@@ -130,6 +133,25 @@ disk_prediction_calibration_counts_samples_not_posts|expect_payload_not_contains
 # of magnitude past the ceiling, so no scheduling jitter can move the state. The drain is kept large
 # enough that a 250 ms interval is still a non-zero delta after the managed driver truncates free
 # space to a long - a zero delta would land the case in the "not decreasing" state instead.
+# The comment is OPERATOR-FACING text, so the rate has to be readable (#1460). It used to render
+# MB/sec through the payload's shortest-round-trip formatter, which printed a realistic idle drain
+# as "1.6574101944286661E-06 Mbytes/sec" - 17 digits of scientific notation in a sentence a human
+# reads. It is now MB/HOUR with three fixed decimals, rounded with integer arithmetic so both
+# collectors emit the same bytes. This case drives a drain of 100 units/sec, which is ~0.34 MB/hour:
+# small enough that the old format was scientific, large enough that a 250 ms interval survives the
+# managed driver's truncation of free space to a long. The free space is far past the ceiling, so
+# the state cannot drift. The DIGITS are not pinned (the EMA is wall-clock smoothed) - the SHAPE is:
+# a decimal number, no exponent, MB/hour.
+disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour|create_collector
+disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour|create_disk_prediction_sensor|contract/metric/prediction_slow_drain|2|500|250|1000000000000|100
+disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour|start
+disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour|sleep_ms|2600
+disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour|stop
+disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour|expect_payload_contains|-1|"Value":"365.00:00:00"
+disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour|expect_payload_contains|-1|"Comment":"Free space decreases by 0.
+disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour|expect_payload_contains|-1|Mbytes/hour. More than 365 days left.
+disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour|expect_payload_not_contains|-1|E-
+
 disk_prediction_clamps_a_trickle_drain_to_the_ceiling|create_collector
 disk_prediction_clamps_a_trickle_drain_to_the_ceiling|create_disk_prediction_sensor|contract/metric/prediction_ceiling|2|500|250|1000000000000000000|1000000
 disk_prediction_clamps_a_trickle_drain_to_the_ceiling|start

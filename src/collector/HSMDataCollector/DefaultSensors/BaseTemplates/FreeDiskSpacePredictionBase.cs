@@ -164,10 +164,6 @@ namespace HSMDataCollector.DefaultSensors
 
         protected sealed override string GetComment()
         {
-            // Invariant culture on purpose: the native collector renders the same number through its
-            // shortest-round-trip formatter, so plain interpolation (current culture) would make the two
-            // collectors emit "1,5" and "1.5" for identical input on a comma-decimal host — a drift in
-            // exactly the field repo rule #10 pins (#1426).
             var mbPerSec = _postedSpeed.BytesToMegabytesDouble();
 
             switch (_state)
@@ -176,17 +172,50 @@ namespace HSMDataCollector.DefaultSensors
                     return $"Calibration request ({_postedSamples}/{_calibrationRequests}). Value cannot be calculated yet.";
 
                 case PredictionState.Growing:
-                    return $"Free space increases by {(-mbPerSec).ToString(CultureInfo.InvariantCulture)} Mbytes/sec. Value cannot be calculated.";
+                    return $"Free space increases by {FormatRatePerHour(-mbPerSec)} Mbytes/hour. Value cannot be calculated.";
 
                 case PredictionState.NoDrain:
                     return "Free space is not decreasing. Value cannot be calculated.";
 
                 case PredictionState.BeyondCeiling:
-                    return $"Free space decreases by {mbPerSec.ToString(CultureInfo.InvariantCulture)} Mbytes/sec. More than 365 days left.";
+                    return $"Free space decreases by {FormatRatePerHour(mbPerSec)} Mbytes/hour. More than 365 days left.";
 
                 default:
-                    return $"Free space decreases by {mbPerSec.ToString(CultureInfo.InvariantCulture)} Mbytes/sec.";
+                    return $"Free space decreases by {FormatRatePerHour(mbPerSec)} Mbytes/hour.";
             }
+        }
+
+
+        /// <summary>
+        /// The operator-facing rate, in MEGABYTES PER HOUR with three fixed decimals (#1460).
+        /// Rendering MB/sec through the round-trip form printed a realistic idle drain as
+        /// "1.6574101944286661E-06" — 17 digits of scientific notation in a sentence an operator
+        /// reads. Per hour is the scale this sensor answers on anyway, and three decimals keep a
+        /// KB/h-sized trickle visible.
+        /// <para>
+        /// The digits come from INTEGER arithmetic on purpose: the native collector must emit
+        /// byte-identical text (repo rule #10), and a ToString("F3")/printf pair does not guarantee
+        /// that at a decimal midpoint (round-half-away-from-zero vs round-half-even). Scaling the
+        /// same IEEE double by 1000 and rounding half away from zero is defined identically on both
+        /// sides — native does std::llround. An absurd magnitude that would overflow the scaled
+        /// integer falls back to the invariant round-trip form, exactly as native does.
+        /// </para>
+        /// </summary>
+        private static string FormatRatePerHour(double mbPerSec)
+        {
+            var perHour = mbPerSec * 3600.0;
+            var scaled = perHour * 1000.0;
+
+            if (double.IsNaN(scaled) || double.IsInfinity(scaled) || Math.Abs(scaled) >= 9.0e15)
+                return perHour.ToString(CultureInfo.InvariantCulture);
+
+            var units = (long)Math.Round(scaled, MidpointRounding.AwayFromZero);
+            var magnitude = units < 0 ? (ulong)(-units) : (ulong)units;
+
+            var fraction = (magnitude % 1000UL).ToString(CultureInfo.InvariantCulture).PadLeft(3, '0');
+
+            return (units < 0 ? "-" : string.Empty) +
+                   (magnitude / 1000UL).ToString(CultureInfo.InvariantCulture) + "." + fraction;
         }
 
         protected sealed override SensorStatus GetStatus() =>

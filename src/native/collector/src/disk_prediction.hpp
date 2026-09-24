@@ -107,18 +107,19 @@ namespace hsm
                     return post;
                 }
 
-                // Managed divides the speed by 1 MiB and labels it "Mbytes/sec" whatever unit the
-                // platform's IDiskInfo reports in (bytes on Windows, kB on Unix). Mirrored rather
-                // than corrected: the two collectors must produce the same comment for the same
-                // host, and changing the managed label is a separate, user-visible decision.
+                // Managed divides the speed by 1 MiB whatever unit the platform's IDiskInfo reports
+                // in (bytes on Windows, kB on Unix). Mirrored rather than corrected: the two
+                // collectors must produce the same comment for the same host. The comment then
+                // renders this per HOUR (FormatRatePerHour, #1460) — both collectors changed
+                // together, since the corpus pins the text byte-for-byte.
                 const double mb_per_sec = change_speed_ / (1024.0 * 1024.0);
 
                 if (change_speed_ < 0.0)
                 {
                     post.value_ms = kMaxPredictionMs;
                     post.status = 0; // OffTime
-                    post.comment = "Free space increases by " + FormatSpeed(-mb_per_sec) +
-                                   " Mbytes/sec. Value cannot be calculated.";
+                    post.comment = "Free space increases by " + FormatRatePerHour(-mb_per_sec) +
+                                   " Mbytes/hour. Value cannot be calculated.";
                     return post;
                 }
 
@@ -138,13 +139,14 @@ namespace hsm
                     post.value_ms = kMaxPredictionMs;
                     post.status = 0; // OffTime
                     post.comment =
-                        "Free space decreases by " + FormatSpeed(mb_per_sec) + " Mbytes/sec. More than 365 days left.";
+                        "Free space decreases by " + FormatRatePerHour(mb_per_sec) +
+                        " Mbytes/hour. More than 365 days left.";
                     return post;
                 }
 
                 post.value_ms = SecondsToMilliseconds(seconds);
                 post.status = 1; // Ok
-                post.comment = "Free space decreases by " + FormatSpeed(mb_per_sec) + " Mbytes/sec.";
+                post.comment = "Free space decreases by " + FormatRatePerHour(mb_per_sec) + " Mbytes/hour.";
                 return post;
             }
 
@@ -160,9 +162,37 @@ namespace hsm
                 return ms >= static_cast<double>(kMaxPredictionMs) ? kMaxPredictionMs : static_cast<int64_t>(ms + 0.5);
             }
 
-            // double.ToString() on an invariant culture — the shortest round-trip form, which is what
-            // the managed comment interpolates.
-            static std::string FormatSpeed(double value) { return DoubleToInvariantString(value); }
+            // The operator-facing rate, in MEGABYTES PER HOUR with three fixed decimals (#1460).
+            // Rendering MB/sec through the payload formatter (shortest round-trip, which is what
+            // the managed comment interpolates) printed a realistic idle drain as
+            // "1.6574101944286661E-06" — 17 digits of scientific notation in a sentence an
+            // operator reads. Per hour is the scale this sensor answers on anyway, and three
+            // decimals keep a KB/h-sized trickle visible.
+            //
+            // The digits are produced by INTEGER arithmetic on purpose: the two collectors must
+            // emit byte-identical text, and a printf/ToString("F3") pair does not guarantee that
+            // at a decimal midpoint (round-half-even vs round-half-away-from-zero). Scaling the
+            // same IEEE double by 1000 and rounding half away from zero (std::llround; C# does
+            // Math.Round(x, MidpointRounding.AwayFromZero)) is defined identically on both sides.
+            // An absurd magnitude that would overflow the scaled integer falls back to the
+            // round-trip form rather than to undefined behavior — mirrored in managed.
+            static std::string FormatRatePerHour(double mb_per_sec)
+            {
+                const double per_hour = mb_per_sec * 3600.0;
+                const double scaled = per_hour * 1000.0;
+
+                if (!std::isfinite(scaled) || std::fabs(scaled) >= 9.0e15)
+                    return DoubleToInvariantString(per_hour);
+
+                const long long units = std::llround(scaled);
+                const unsigned long long magnitude =
+                    units < 0 ? 0ULL - static_cast<unsigned long long>(units) : static_cast<unsigned long long>(units);
+
+                std::string fraction = std::to_string(magnitude % 1000ULL);
+                fraction.insert(fraction.begin(), 3 - fraction.size(), '0');
+
+                return (units < 0 ? "-" : "") + std::to_string(magnitude / 1000ULL) + "." + fraction;
+            }
 
             const int64_t calibration_requests_;
 
