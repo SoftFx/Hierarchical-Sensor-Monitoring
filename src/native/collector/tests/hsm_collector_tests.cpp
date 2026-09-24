@@ -3923,8 +3923,8 @@ namespace
         Require(relaxed.value_ms == 129152769, "unexpected decayed prediction");
         Require(relaxed.status == 1, "a decayed estimate is still a real estimate");
 
-        // 0.38017 MiB/sec is 1368.612 MiB/hour. The whole mantissa is pinned since #1460: the
-        // comment rounds the rate to three decimals with integer arithmetic, so managed net472,
+        // 0.38017 MiB/sec is 1368.611775 MiB/hour. The whole mantissa is pinned since #1460: the
+        // comment rounds the rate to six decimals with integer arithmetic, so managed net472,
         // managed net6.0 and this collector all render it identically.
         Require(
             relaxed.comment == "Free space decreases by 1368.611775 Mbytes/hour.",

@@ -179,8 +179,9 @@ namespace hsm
             // The digits are produced by INTEGER arithmetic on purpose: the two collectors must
             // emit byte-identical text, and a printf/ToString("F3") pair does not guarantee that
             // at a decimal midpoint (round-half-even vs round-half-away-from-zero). Scaling the
-            // same IEEE double by 1000 and rounding half away from zero (std::llround; C# does
-            // Math.Round(x, MidpointRounding.AwayFromZero)) is defined identically on both sides.
+            // same IEEE double by 1 000 000 and rounding half away from zero (std::llround; C#
+            // does Math.Round(x, MidpointRounding.AwayFromZero)) is defined identically on both
+            // sides.
             // An absurd magnitude that would overflow the scaled integer falls back to the
             // round-trip form rather than to undefined behavior — mirrored in managed.
             static std::string FormatRatePerHour(double mb_per_sec)

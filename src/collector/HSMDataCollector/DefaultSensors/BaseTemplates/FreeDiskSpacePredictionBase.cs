@@ -203,9 +203,9 @@ namespace HSMDataCollector.DefaultSensors
         /// The digits come from INTEGER arithmetic on purpose: the native collector must emit
         /// byte-identical text (repo rule #10), and a ToString("F3")/printf pair does not guarantee
         /// that at a decimal midpoint (round-half-away-from-zero vs round-half-even). Scaling the
-        /// same IEEE double by 1000 and rounding half away from zero is defined identically on both
-        /// sides — native does std::llround. An absurd magnitude that would overflow the scaled
-        /// integer falls back to the invariant round-trip form, exactly as native does.
+        /// same IEEE double by 1 000 000 and rounding half away from zero is defined identically
+        /// on both sides — native does std::llround. An absurd magnitude that would overflow the
+        /// scaled integer falls back to the invariant round-trip form, exactly as native does.
         /// </para>
         /// </summary>
         private static string FormatRatePerHour(double mbPerSec)

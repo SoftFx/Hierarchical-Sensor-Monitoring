@@ -5176,18 +5176,22 @@ namespace
 
                 // Measure the package BEFORE the send: a sender is free to consume the batch
                 // (the recording sender moves every value out of it), which made the reported
-                // size 0 whatever the unit (#1459).
+                // size 0 whatever the unit (#1459). Only when the stats sensors exist — the flag
+                // is sticky, so reading it early is the same answer the post path would get, and a
+                // collector without the queue group does not walk the batch at all.
+                const bool measure_package = queue_diagnostics_enabled_.load(std::memory_order_acquire);
                 const size_t batch_values = batch.size();
                 size_t batch_bytes = 0;
-                for (const auto& json : batch)
-                    batch_bytes += json.size();
+                if (measure_package)
+                    for (const auto& json : batch)
+                        batch_bytes += json.size();
 
                 const auto send_start = std::chrono::steady_clock::now();
                 const auto sent = TrySendBatch(batch);
                 // Per-package queue stats — only on a real send (not the stop-flush drop path), posted
                 // here in the UNLOCKED window: bars only aggregate, so there's no re-entrancy on
                 // queue_mutex_ and no enqueue from within dispatch.
-                if (sent && queue_diagnostics_enabled_.load(std::memory_order_acquire) && !clear_remainder_on_failure)
+                if (sent && measure_package && !clear_remainder_on_failure)
                     PostPackageStats(batch_values, batch_bytes, std::chrono::steady_clock::now() - send_start);
                 lock.lock();
 

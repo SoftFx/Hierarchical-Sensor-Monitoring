@@ -136,8 +136,8 @@ namespace HSMDataCollector.Tests
                 Assert.Equal(129152769L, (long)relaxed.Value.TotalMilliseconds);
                 Assert.Equal(SensorStatus.Ok, relaxed.Status);
 
-                // 0.38017 MiB/sec is 1368.612 MiB/hour. The whole mantissa can be pinned since
-                // #1460: the comment now rounds the rate to three decimals with integer
+                // 0.38017 MiB/sec is 1368.611775 MiB/hour. The whole mantissa can be pinned since
+                // #1460: the comment now rounds the rate to six decimals with integer
                 // arithmetic, so net472 and net6.0 no longer render the same double differently.
                 Assert.Equal("Free space decreases by 1368.611775 Mbytes/hour.", relaxed.Comment);
             }
