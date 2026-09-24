@@ -362,6 +362,9 @@ set(NATIVE_REGRESSION_TESTS
     native_module_version_sensors_emit_start_value
     native_module_version_skips_product_when_missing
     native_collector_self_monitoring_emits
+    # #1453: the group may be registered after Start — the handle publish must be synchronized
+    # against the self-monitor thread (the TSan preset is what proves it).
+    native_self_monitor_handle_published_after_start_is_synchronized
     # #1433: .module start/stop markers mirror managed (first heartbeat false, version Start:/Stop:).
     native_service_alive_marks_the_first_beat
     native_version_sensor_marks_start_and_stop

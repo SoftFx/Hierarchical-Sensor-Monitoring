@@ -4970,6 +4970,45 @@ namespace
         Contains(beats[1], "\"Value\":true");
     }
 
+    // Registering the collector-monitoring group AFTER Start is allowed, and it publishes the
+    // heartbeat handle from the CALLER's thread while the self-monitor thread is already reading
+    // it — the data race #1453 (caught by the TSan lane, not by a functional assertion). The queue
+    // group is added first so the self-monitor thread is up and ticking on the 20 ms collect period
+    // before the late registration lands; the repeated re-registration widens the window so the
+    // sanitizer sees the two accesses in one run. The functional half of the assertion is that a
+    // late handle still beats: the heartbeat must not stay empty because it was wired after Start.
+    void NativeSelfMonitorHandlePublishedAfterStartIsSynchronized()
+    {
+        auto collector = CreateCollector();
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // Re-registration is idempotent and hands back the group's existing handle, so every call
+        // republishes it while the self-monitor loop reads it.
+        for (int attempt = 0; attempt < 50; ++attempt)
+        {
+            Require(
+                hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+                "add collector monitoring sensors failed");
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        bool beat = false;
+        while (!beat && std::chrono::steady_clock::now() < deadline)
+        {
+            beat = !PayloadsForPath(collector.value, "/Service alive\"").empty();
+            if (!beat)
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+
+        Require(beat, "a heartbeat registered after Start must still beat");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
     // ".module/Collector version" marks BOTH ends of every run: a "Start: dd/MM/yyyy HH:mm:ss"
     // comment on Start and a "Stop: dd/MM/yyyy HH:mm:ss" comment on Stop, exactly like managed
     // ProductVersionSensor.StartAsync/StopAsync. The Start instant is the sensor's creation time and
@@ -7256,6 +7295,8 @@ namespace
 #endif
             { "native_collector_self_monitoring_emits",
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
+            { "native_self_monitor_handle_published_after_start_is_synchronized",
+              [](const std::string&) { NativeSelfMonitorHandlePublishedAfterStartIsSynchronized(); } },
             { "native_service_alive_marks_the_first_beat",
               [](const std::string&) { NativeServiceAliveMarksTheFirstBeat(); } },
             { "native_version_sensor_marks_start_and_stop",
