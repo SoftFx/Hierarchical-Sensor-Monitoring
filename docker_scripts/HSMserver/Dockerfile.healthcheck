@@ -1,0 +1,56 @@
+# The HEALTHCHECK of the HSM server image, applied as one final layer on top of an image that is
+# already built (#1465). One definition, used by both publishing paths:
+#
+#   * .github/workflows/server-build.yml, job publish-docker-image, after the SDK publish
+#   * scripts/local-docker-build.ps1, after `docker build -f Dockerfile.local`
+#
+#       docker build --build-arg BASE_IMAGE=<image>:<tag> -t <image>:<tag> \
+#           -f docker_scripts/HSMserver/Dockerfile.healthcheck docker_scripts/HSMserver
+#
+# Why a separate layer: the image is produced by the .NET SDK's container publishing
+# (EnableSDKContainerSupport in src/server/HSMServer/HSMServer.csproj), which has no property for
+# a HEALTHCHECK. The request was closed as won't-do — "We're not going to lean into healthcheck
+# support in the SDK container tooling itself because this extension is Docker-only and has no
+# support in OCI images" (dotnet/sdk-container-builds#316). Nothing named health exists in the
+# SDK's container targets either (checked in 8.0.420 and 9.0.315; global.json pins 8.0.x).
+#
+# WHAT HEALTHY MEANS: the Sensor API answers an anonymous HTTPS GET from inside the container.
+# HSM opens its listeners only after startup finished — Program.cs awaits InitStorages(), which
+# resolves IUserManager and with it TreeValuesCache, whose constructor loads the tree from
+# LevelDB, before app.Run() — so a 200 says the database was loaded, the server certificate was
+# usable for the handshake, and the request pipeline is serving. The states this distinguishes:
+#
+#   starting (probe fails, connection refused)  process alive, still loading the database
+#   healthy  (200)                              listening AND serving requests
+#   unhealthy (timeout)                         listening but wedged: the socket stays open when
+#                                               the process is stopped or deadlocked, which the
+#                                               previous TCP-connect probe reported as healthy
+#   unhealthy (non-2xx, wget exit 8)            serving, but the endpoint is no longer answering
+#
+# /api/sensors/testConnection is the endpoint collectors already use to test a connection
+# (SensorsController, [AllowAnonymous], returns a constant Ok()): no key, no database read, no new
+# public surface. It deliberately does not report per-subsystem readiness; HSM has no state in
+# which it listens without the database loaded.
+#
+# TLS: Kestrel serves HTTPS on both ports with the server's own certificate, self-signed by
+# default (ApplicationServiceExtensions.KestrelListenOptions always calls UseHttps) and there is
+# no plaintext mode, so the probe must not require that certificate to be trusted inside the
+# container. It talks to 127.0.0.1 and never leaves the container, so the Caddy-fronted
+# (docker-compose.yml) and direct (docker-compose.direct.yml, plain `docker run`) deployments are
+# identical from its point of view.
+#
+# 44330 is Kestrel's default Sensor API port (KestrelConfig.DefaultSensorPort), like the port
+# hardcoded in the Caddyfile. A deployment that moves it in Config/appsettings.json overrides the
+# check (`healthcheck:` in compose, `--health-cmd` in `docker run`).
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# wget comes from the base deps image (.github/docker/dockerfile_deps) and the publishing lane
+# verifies it is still there. --timeout=4 keeps a stalled connection inside docker's 5 s budget,
+# so a wedged server fails the probe cleanly instead of being killed. Non-2xx exits 8.
+# --start-period: measured cold starts are ~10 s (empty database) and ~20 s (212 MB database) on
+# an SSD, see #1465; 10 min is the margin for a slow disk and a much larger database, and matches
+# the grace the compose file used before.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10m --retries=3 \
+    CMD wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null \
+        https://127.0.0.1:44330/api/sensors/testConnection || exit 1

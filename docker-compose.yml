@@ -34,15 +34,15 @@ services:
     restart: unless-stopped
     user: '0'
     # No ports: HSM is reachable only through caddy.
-    healthcheck:
-      # Kestrel opens its ports only after the database has loaded, so an open port means ready.
-      test: ['CMD', 'bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/44330']
-      interval: 10s
-      timeout: 5s
-      # "unhealthy" makes `up` skip caddy for good, so leave a generous budget: 10 min start
-      # period + 180 failed probes (30 min). Once open, the port stays open.
-      retries: 180
-      start_period: 10m
+    # No healthcheck here on purpose (#1465): the image carries one, so `docker ps` and
+    # `depends_on: service_healthy` work for every deployment, not only for this file. It is an
+    # HTTPS GET of /api/sensors/testConnection on 44330 inside the container, every 30s, timeout
+    # 5s, 3 retries, after a 10 min start period. Kestrel opens its ports only after the database
+    # has loaded, so a 200 means loaded and serving; unlike the TCP probe this replaces, a
+    # listening but wedged server is reported unhealthy. Repeating it here would only create a
+    # second definition to drift, so override it only if you moved the Sensor API port or need a
+    # longer start period (a `healthcheck:` here wins over the image's).
+    # Budget before caddy is skipped (see depends_on below): 10 min + 3 x 30 s.
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy,
       # so HSM records the real client IP (token audit, invalid-attempt limiter, key telemetry).

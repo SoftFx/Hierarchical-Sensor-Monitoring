@@ -166,15 +166,15 @@ services:
     restart: unless-stopped
     user: '0'
     # No ports: HSM is reachable only through caddy.
-    healthcheck:
-      # Kestrel opens its ports only after the database has loaded, so an open port means ready.
-      test: ['CMD', 'bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/44330']
-      interval: 10s
-      timeout: 5s
-      # "unhealthy" makes `up` skip caddy for good, so leave a generous budget: 10 min start
-      # period + 180 failed probes (30 min). Once open, the port stays open.
-      retries: 180
-      start_period: 10m
+    # No healthcheck here on purpose (#1465): the image carries one, so `docker ps` and
+    # `depends_on: service_healthy` work for every deployment, not only for this file. It is an
+    # HTTPS GET of /api/sensors/testConnection on 44330 inside the container, every 30s, timeout
+    # 5s, 3 retries, after a 10 min start period. Kestrel opens its ports only after the database
+    # has loaded, so a 200 means loaded and serving; unlike the TCP probe this replaces, a
+    # listening but wedged server is reported unhealthy. Repeating it here would only create a
+    # second definition to drift, so override it only if you moved the Sensor API port or need a
+    # longer start period (a `healthcheck:` here wins over the image's).
+    # Budget before caddy is skipped (see depends_on below): 10 min + 3 x 30 s.
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy,
       # so HSM records the real client IP (token audit, invalid-attempt limiter, key telemetry).
@@ -274,7 +274,7 @@ What must stay as it is, if you ever adapt it:
 | `tls_insecure_skip_verify` | HSM still serves HTTPS with its own self-signed certificate; Caddy connects to it inside the compose network without checking it. |
 | `import tls-{$HSM_CERTIFICATE}` with the `tls-letsencrypt` / `tls-self-signed` blocks | Exactly one certificate source, chosen in `.env`. There is no automatic fallback, so a failed Let's Encrypt renewal never replaces a still-valid certificate. |
 | `HSM_DOMAIN` / `HSM_CERTIFICATE` in the `environment` of `caddy` | Caddy reads them at start. Because they are environment variables, changing `.env` and running `docker compose up -d` recreates Caddy with the new values. |
-| `healthcheck` on `app` + `condition: service_healthy` | Caddy starts only when HSM has loaded its database. HSM gets up to 40 minutes for that. |
+| `condition: service_healthy` on `app` | Caddy starts only when HSM is serving. The check itself is in the HSM image (an HTTPS request to the Sensor API every 30 s; `docker ps` shows `starting`, then `healthy`), so `docker inspect` and your own monitoring see HSM's health in any deployment. HSM gets 10 minutes to load its database, plus 3 failed probes; past that `app` is `unhealthy`, `docker compose up` reports "dependency failed to start" and Caddy is not created. A database that needs longer: add a `healthcheck:` with a bigger `start_period` to `app`. |
 | `default_sni` / `fallback_sni` and the `https://:443`, `https://:44333`, `https://:44330` sites | Clients that reach the server by IP or by another name keep working. They receive the `HSM_DOMAIN` certificate, which does not match the name they use, so they need "allow untrusted certificate". |
 | Public ports `44330` and `44333` | Collectors and agents connect to `https://<host>:44330`; downloaded agent bundles use this port. |
 | Ports `80` and `443` | Required for `letsencrypt`: Let's Encrypt checks the domain through them. With `self-signed` you can remove both lines; the web UI is then available on `44333` only. |

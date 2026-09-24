@@ -1,6 +1,6 @@
 # Docker Setup
 
-> Owner: shared | Last reviewed: 2026-09-22 | Canonical: yes
+> Owner: shared | Last reviewed: 2026-09-24 | Canonical: yes
 
 ## Production Deployment
 
@@ -45,8 +45,38 @@ What the HSM side relies on behind Caddy:
 - **HSTS:** `AddHsts` (`Preload`, `IncludeSubDomains`) was always sent, but browsers ignore it over an untrusted certificate. With a Let's Encrypt certificate it now takes effect and pins `HSM_DOMAIN` and its subdomains to HTTPS for the max-age.
 - **No access log in Caddy on purpose:** the default JSON log records request headers, and the collector's `Key` header is not among Caddy's redacted ones, so every access key would land on disk. HSM itself records client IPs since #1427.
 - **HTTP/3 is off** (`servers { protocols h1 h2 }`): Caddy would advertise it via `Alt-Svc` on UDP ports the compose file does not publish, and every new browser connection would pay for a failed QUIC attempt.
-- **Startup (#1431):** `app` has a healthcheck (`bash` `/dev/tcp` to 44330; Kestrel opens its ports only after the database load), and `caddy` depends on it with `condition: service_healthy`, so `docker compose up` starts Caddy only when HSM is ready. Verified live. **The budget is the upper bound on database-load time:** `start_period` 10 min plus `retries` 180 × `interval` 10 s = 40 min. Past it, `app` is `unhealthy`, `up` fails with "dependency failed to start", and Caddy is never created; `restart` cannot help a container that never started. Hence the large `retries`: the port never closes once open, so the budget costs nothing in steady state. The probe needs `bash` in the server image (Debian-based `aspnet:8.0`, see `.github/docker/dockerfile_deps`) and hardcodes 44330, like the Caddyfile. This gates only the initial `up`; for a later restart of `app` alone, `lb_try_duration 30s` makes Caddy wait for it instead of answering 502. Retries cover dial failures, so no request is sent twice.
+- **Startup (#1431, #1465):** the healthcheck lives in the **image** (see "Image healthcheck" below), and `caddy` depends on it with `condition: service_healthy`, so `docker compose up` starts Caddy only when HSM serves. Verified live. **The budget is the upper bound on database-load time:** `start_period` 10 min plus `retries` 3 × `interval` 30 s = 11.5 min. Past it, `app` is `unhealthy`, `up` fails with "dependency failed to start", and Caddy is never created; `restart` cannot help a container that never started. The compose file no longer repeats the check, so there is nothing to drift; a deployment whose database needs longer adds a `healthcheck:` with a bigger `start_period` to `app` (compose merges it over the image's, so only the changed fields are needed — verified). This gates only the initial `up`; for a later restart of `app` alone, `lb_try_duration 30s` makes Caddy wait for it instead of answering 502. Retries cover dial failures, so no request is sent twice.
 - **HTTP on port 80:** Caddy redirects `http://<HSM_DOMAIN>/` to `https://<HSM_DOMAIN>/` (the UI on 443), verified live.
+
+## Image healthcheck (#1465)
+
+The published server image declares its own `HEALTHCHECK`, so `docker ps`, `depends_on: condition: service_healthy` and any orchestrator see HSM's health in **every** deployment — the bundled compose file, `docker-compose.direct.yml`, a hand-written compose, a plain `docker run`. Before this the only check was in this repo's compose file, so a host running an older compose (the real garage-server deployment) had no health at all.
+
+**Mechanism.** The .NET SDK's container publishing cannot emit a `HEALTHCHECK`: there is no such property in `Microsoft.NET.Build.Containers` (checked in SDK 8.0.420 and 9.0.315), and the feature request was closed as won't-do — "Docker-only and has no support in OCI images" (`dotnet/sdk-container-builds#316`). The check is therefore one final layer, `docker_scripts/HSMserver/Dockerfile.healthcheck`, built with `--build-arg BASE_IMAGE=<the image just built>` and re-tagged onto the same tags. **Both** publishing paths apply that one file: `server-build.yml`'s `publish-docker-image` job (after the SDK publish, before the guards, so what is verified is what is pushed) and `scripts/local-docker-build.ps1` (after `Dockerfile.local`). A CI step fails the lane if a pushed tag carries no HSM healthcheck or the base image lost `wget`. The alternative — putting `HEALTHCHECK` in the deps base image — was rejected: local builds pull the *published* deps image, so the local image would differ from the CI one until the deps image is republished.
+
+**The check** (`interval` 30 s, `timeout` 5 s, `retries` 3, `start_period` 10 min, per #1465):
+
+```
+wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null \
+    https://127.0.0.1:44330/api/sensors/testConnection
+```
+
+**What healthy means.** Kestrel starts listening only after startup completed: `Program.cs` awaits `InitStorages()`, which resolves `IUserManager` → `TreeValuesCache`, whose constructor loads the tree from LevelDB, before `app.Run()`. So a 200 means the database was loaded, the server certificate was usable for the handshake, and the request pipeline is serving.
+
+| Observed | `docker ps` | Meaning |
+|---|---|---|
+| connection refused | `starting` (then `unhealthy` past the budget) | process alive, still loading the database (or Kestrel failed to bind) |
+| 200 | `healthy` | listening **and** serving |
+| probe times out | `unhealthy` | listening but wedged (stopped or deadlocked process): the socket stays open, which the previous TCP-connect probe reported as healthy |
+| non-2xx (`wget` exit 8) | `unhealthy` | serving, but the endpoint no longer answers |
+
+`/api/sensors/testConnection` is the endpoint collectors already use for their connection test (`SensorsController`, `[AllowAnonymous]`, a constant `Ok()`): anonymous, no database read, no new public surface, no new key material inside the image. It reports no per-subsystem readiness on purpose — HSM has no state in which it listens without the database loaded, so there is nothing finer to report.
+
+**TLS.** Kestrel serves HTTPS on both ports with the server's own certificate, self-signed by default (`KestrelListenOptions` always calls `UseHttps`), and has no plaintext mode. The probe skips verification (`--no-check-certificate`) for its own loopback connection, so it never depends on the certificate being trusted inside the container and behaves the same in the Caddy-fronted and the direct deployments — it never leaves the container. `--timeout=4` keeps a stalled connection inside docker's 5 s budget, so a wedged server fails cleanly instead of being killed mid-probe.
+
+**Port.** 44330 is hardcoded, like the Caddyfile's (`KestrelConfig.DefaultSensorPort`). A deployment that moves the Sensor API port in `Config/appsettings.json` overrides the check (`healthcheck:` in compose, `--health-cmd` in `docker run`).
+
+**Measured cold starts** (local image, Docker Desktop on Windows, SSD): container start → first HTTP 200 was ~10 s with an empty `Databases` volume and ~20 s with a 212 MB copy of a real database. `start_period` 10 min is the margin for a slow disk and a much larger database; it also keeps the grace the compose file granted before.
 
 ## Ports
 
