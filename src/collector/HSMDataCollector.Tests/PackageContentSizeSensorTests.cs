@@ -43,12 +43,14 @@ namespace HSMDataCollector.Tests
 
 
         [Theory]
-        // ContentSize counts CHARS, so a char is two bytes on the way to kilobytes:
-        // 1024 chars = 2048 bytes = 2 KB. The middle row is the size from the issue — a ~2 KB
-        // package, which read as a flat 0.00 while the sensor was in MB.
-        [InlineData(1024, 2.0)]
-        [InlineData(1075, 2.1)]
-        [InlineData(512, 1.0)]
+        // ContentSize is the serialized body's char count, and the body is sent as UTF-8, so a
+        // char is a byte for this collector's ASCII JSON: 1024 chars = 1 KB. That is the same
+        // quantity the native collector reports (the bytes it hands the transport), which is
+        // what rule #10 requires. The middle row is the size from the issue — a ~2 KB package,
+        // which read as a flat 0.00 while the sensor was in MB.
+        [InlineData(1024, 1.0)]
+        [InlineData(2150, 2.1)]
+        [InlineData(512, 0.5)]
         public void Package_content_size_reports_kilobytes(double contentSize, double expectedKilobytes)
         {
             var options = new PackageContentSizePrototype().Get(null);

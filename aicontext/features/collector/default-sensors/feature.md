@@ -195,9 +195,9 @@ EMA засеялась бы огромным отрицательным знач
   structurally-zero reading the issue was about. Trailing zeros are trimmed with one decimal
   always kept, so a fast drain reads `1800.0` rather than `1800.000000`. The sensor VALUE is
   unaffected: only the comment text changed. The digits are produced by INTEGER arithmetic
-  (scale the same double by 1000, round half away from zero) rather than by `ToString("F3")` /
-  `printf("%.3f")`, because those two disagree at a decimal midpoint (half-away-from-zero vs
-  half-to-even) and the corpus pins this text byte-for-byte. As a side effect the mantissa is
+  (scale the same double by 1 000 000, round half away from zero) rather than by
+  `ToString("F6")` / `printf("%.6f")`, because those two disagree at a decimal midpoint
+  (half-away-from-zero vs half-to-even) and the corpus pins this text byte-for-byte. As a side effect the mantissa is
   now identical on net472 and net6.0, which the 15-digit/round-trip split used to make differ;
   an absurd magnitude that would overflow the scaled integer falls back to the round-trip form
   on both sides. Pinned by `metric_source_contract:disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour`
@@ -461,7 +461,7 @@ post was a separate, closed bar with its own `OpenTime`.
 **`Package content size` reports KILOBYTES (#1459, collector 3.5.4 / native 0.8.2).** It registered
 `Unit.MB` while a bar renders at 2-decimal precision, so a realistic package — a couple of kilobytes,
 0.002 MB — rounded to `0.00`: the sensor was structurally incapable of reporting anything but zero.
-Both collectors now divide by 1024 instead of 1024² and register `Unit.KB` (2). The unit is part of
+Both collectors now divide by 1024 instead of 1024² and register `Unit.KB` (2). They also had to be made to measure the SAME quantity (rule #10): managed multiplied the serialized body's char count by `sizeof(char)`, measuring the in-memory UTF-16 string, while the body goes on the wire as UTF-8 and native sums the bytes it sends — a 2x divergence that was invisible while both were stuck at `0.00`. Managed now reports the bytes sent, like native. The unit is part of
 the registration, so an existing node keeps showing MB until the sensor re-registers (which happens
 on the next collector start), while the VALUES switch immediately — a node that has not re-registered
 shows kilobyte numbers under an MB label until then. The native side additionally measures the
