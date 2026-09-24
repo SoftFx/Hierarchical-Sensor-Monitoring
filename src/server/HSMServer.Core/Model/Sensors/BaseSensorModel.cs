@@ -10,6 +10,7 @@ using HSMServer.Core.Model.Sensors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Model
@@ -49,19 +50,69 @@ namespace HSMServer.Core.Model
         internal bool IsExpired { get; set; }
 
         // Server-clock instant of the last expiry TRANSITION that had a value
-        // to judge (#1404) — the witness the resolution discriminator
-        // (TreeValuesCache.SetExpiredSnapshot) compares evaluated-value
-        // receiving times against. Recorded on the transition itself and
-        // seeded from the marker row on the cold-load path, which restores
+        // to judge (#1404) — recorded on the transition itself and seeded
+        // from the marker row on the cold-load path, which restores
         // IsExpired without a transition. Deliberately NOT the timeout
         // marker's ReceivingTime: the marker-rewrite guard compares that
         // server stamp against the CLIENT-stamped sensor.LastUpdate, so a
         // lagging clock (batched/bar sends) suppresses the rewrite and
         // leaves the marker naming an EARLIER expiry — keying the decision
-        // on it re-opens the false "recovered" Ok. In-memory like IsExpired
-        // (not persisted); the read/write races are the ones IsExpired
-        // already tolerates.
-        internal DateTime? LastExpiryAt { get; set; }
+        // on it re-opens the false "recovered" Ok.
+        //
+        // ATOMICITY (#1452): backed by a plain long (0 = none) published
+        // through Volatile, not by Nullable<DateTime>. The old auto-property
+        // was written from the sweep thread and read from the ingestion
+        // thread without a barrier, and Nullable<DateTime> is a 16-byte
+        // has-flag + ticks pair a torn read can split: HasValue == false over
+        // a written instant (the discriminator reads GENUINE -> a false
+        // recovery Ok) or HasValue == true over a stale instant (a wrong
+        // boundary) — the exact misclassifications this witness exists to
+        // prevent. Unlike IsExpired next to it ("tolerated like IsExpired"
+        // was the old justification), a bool write IS atomic; a 16-byte
+        // struct write is not. In-memory like IsExpired (not persisted); the
+        // DateTime? accessor shape is kept for the two writers (the
+        // transition itself and the cold-load seed) and the discriminator's
+        // "no expiry on record" gate.
+        private long _lastExpiryTicks;
+
+        internal DateTime? LastExpiryAt
+        {
+            get
+            {
+                var ticks = Volatile.Read(ref _lastExpiryTicks);
+                return ticks == 0L ? null : new DateTime(ticks, DateTimeKind.Utc);
+            }
+            set => Volatile.Write(ref _lastExpiryTicks, value?.ToUniversalTime().Ticks ?? 0L);
+        }
+
+        // Dispatch order of the update-queue item whose processing recorded
+        // the expiry above (#1452) — the ORDER half of the witness. The
+        // discriminator's original comparison, evaluatedValue.ReceivingTime
+        // > LastExpiryAt, set two server stamps taken at DIFFERENT pipeline
+        // stages against each other: a value's ReceivingTime is stamped when
+        // the API thread converts it (BEFORE enqueue), while LastExpiryAt is
+        // stamped when the sweep item RUNS (at dequeue). A value that
+        // arrives and is enqueued BEHIND the sweep therefore carries an
+        // EARLIER ReceivingTime than the expiry it follows, and the genuine
+        // recovery's Ok was cancelled. The sweep item and the value item run
+        // on the same single-reader product queue, so the queue's dispatch
+        // order — value.DeliverySequence > LastExpirySequence — answers "was
+        // this value delivered after the expiry decision" exactly. Volatile
+        // like the ticks: written on the product's queue thread (the
+        // transition), read on the same thread by the discriminator, with
+        // the barrier covering the maintenance/test threads that can reach
+        // the event outside a dispatch. 0 = none, always stamped together
+        // with _lastExpiryTicks above; values not delivered through the
+        // queue (deserialized history rows) also carry DeliverySequence 0
+        // and therefore never read as newer — the cold-load seed of
+        // LastExpiryAt expressed the same suppression in wall-clock terms.
+        private long _lastExpirySequence;
+
+        internal long LastExpirySequence
+        {
+            get => Volatile.Read(ref _lastExpirySequence);
+            set => Volatile.Write(ref _lastExpirySequence, value);
+        }
 
         public abstract SensorType Type { get; }
 

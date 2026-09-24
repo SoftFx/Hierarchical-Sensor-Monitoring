@@ -94,6 +94,17 @@ namespace HSMServer.Core.Cache
         // uncapped. Rationale: aicontext/features/server/overview.md.
         private const int MaxHistoryLoadRetriesPerSweep = 100;
 
+        // Monotone dispatch order of update-queue items across ALL product queues
+        // (#1452): incremented once at the start of each item's processing, read
+        // (Volatile, possibly advanced by other queues' concurrent items) wherever
+        // an order witness is stamped mid-processing. What the TTL resolution
+        // discriminator compares are per-item STAMPS, not this raw value: every
+        // item's increment precedes the stamps it takes, and a product's queue is
+        // single-reader, so for two items of the SAME queue the later item's stamp
+        // is always strictly greater — the strictness the old wall-clock
+        // comparison lost across pipeline stages.
+        private long _dispatchSequence;
+
         private readonly Logger _logger = LogManager.GetLogger(nameof(TreeValuesCache));
 
         private readonly ConfirmationManager _confirmationManager = new();
@@ -2573,6 +2584,8 @@ namespace HSMServer.Core.Cache
 
         void IUpdateHandler.ProcessRequest(IUpdatesQueue queue, IUpdateRequest item)
         {
+            Interlocked.Increment(ref _dispatchSequence);
+
             queue.Stopwatch.Restart();
 
             switch (item)
@@ -2679,6 +2692,15 @@ namespace HSMServer.Core.Cache
 
             if (sensor.State == SensorState.Blocked)
                 return true;
+
+            // Stamp the delivery order BEFORE TryAddValue (#1452): the resolution
+            // discriminator reachable inside (TryValidate -> SensorExpired ->
+            // SetExpiredSnapshot) compares this against the expiry sweep's stamp.
+            // Read mid-processing, not the item's own increment value: concurrent
+            // items on OTHER queues may advance the counter in between, which is
+            // harmless — the later of two same-queue stamps is still strictly
+            // greater (see _dispatchSequence).
+            request.BaseValue.DeliverySequence = Volatile.Read(ref _dispatchSequence);
 
             if (sensor.TryAddValue(request.BaseValue) && sensor.LastDbValue != null)
                SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
@@ -3556,6 +3578,13 @@ namespace HSMServer.Core.Cache
                     // evaluationTime, not GetTimeoutValue's own UtcNow: one
                     // instant shared with the window decisions below.
                     sensor.LastExpiryAt = evaluationTime;
+                    // The ORDER witness, stamped at the same transition (#1452):
+                    // the dispatch sequence of the item now running (the sweep,
+                    // or a data-path item whose value is itself too stale to
+                    // lift anyTimeout). Read like TryAddNewSensorValue reads it
+                    // — mid-processing, possibly ahead of this item's own
+                    // increment — so both stamps share one scale.
+                    sensor.LastExpirySequence = Volatile.Read(ref _dispatchSequence);
 
                     var value = sensor.GetTimeoutValue();
 
@@ -3569,34 +3598,52 @@ namespace HSMServer.Core.Cache
                 // WHY the sensor resolved, decided ONCE before the loop: the
                 // cause is sensor-global. The discriminator is whether NEW
                 // DATA ARRIVED SINCE THE SENSOR EXPIRED, witnessed
-                // server-clock-side: LastExpiryAt above stamps the server's
-                // UtcNow at the expiry transition (the cold-load path seeds
-                // it from the restored marker row), and every ingested value
-                // stamps its own ReceivingTime the same way — comparing the
-                // two is immune to the client clock skew of value Time
-                // (batched/bar sends arriving minutes "behind" the wall
-                // clock), which the earlier per-policy-staleness
-                // discriminator was not: it let the SHORTEST out-of-window
-                // TTL suppress a longer schedule-less guard's genuine
-                // recovery Ok. With NO new data a resolution can only be
-                // window-caused (a scheduled policy dropping out of its
-                // window is what flipped anyTimeout) — the sensor did NOT
-                // recover, so NO policy may claim recovery for it: a
-                // schedule-less sibling is never out-of-window and would
-                // otherwise send a false "recovered" Ok at every session
-                // close. The silent arm is further scoped to sensors that
-                // own at least one SCHEDULED TTL policy: a sensor with no
-                // schedule at all cannot have been resolved by a window, so
-                // its non-data resolutions (TTL edited longer, alert
-                // disabled) keep their resolution Ok. With new data it is a
-                // GENUINE recovery — every policy is then gated only by its
-                // own arm below, and the Ok flows out-of-window included.
-                // No recorded expiry instant (expired with an empty cache)
-                // reads as genuine: the value in force at expiry is not
-                // observable then, and a false recovery Ok beats a lost one.
+                // server-side on QUEUE ORDER (#1452): the expiry stamps
+                // LastExpirySequence above with the dispatch sequence of the
+                // item it ran in, every value delivered through a queue item
+                // stamps its DeliverySequence at that item (the sweep and
+                // the value travel the SAME single-reader product queue),
+                // and "the value's item was processed after the expiry's
+                // item" is exact. The pre-#1452 form compared wall-clock
+                // instants — value.ReceivingTime > LastExpiryAt — which set
+                // two stamps of DIFFERENT pipeline stages against each
+                // other: ReceivingTime is taken when the API thread converts
+                // the value (before enqueue), LastExpiryAt when the sweep
+                // item RUNS (at dequeue), so a value enqueued BEHIND the
+                // sweep still carried an earlier ReceivingTime and its
+                // genuine recovery Ok was cancelled — a window of one sweep
+                // iteration plus queue backlog, centred exactly on the TTL
+                // boundary. Queue order still witnesses nothing about the
+                // CLIENT clock, so the skew immunity of the original
+                // rationale stands (batched/bar sends minutes "behind" the
+                // wall clock cannot flip the comparison either way), and
+                // values that never rode a queue (deserialized history
+                // rows, DeliverySequence 0) never read as newer — the
+                // cold-load seed of LastExpiryAt expressed that suppression
+                // in wall-clock terms. LastExpiryAt itself stays as the
+                // "did an expiry with a judgeable value ever happen"
+                // witness (the null gate below) and keeps the marker-row
+                // seeding honest.
+                //
+                // With NO new data a resolution can only be window-caused
+                // (a scheduled policy dropping out of its window is what
+                // flipped anyTimeout) — the sensor did NOT recover, so NO
+                // policy may claim recovery for it: a schedule-less sibling
+                // is never out-of-window and would otherwise send a false
+                // "recovered" Ok at every session close. The silent arm is
+                // further scoped to sensors that own at least one SCHEDULED
+                // TTL policy: a sensor with no schedule at all cannot have
+                // been resolved by a window, so its non-data resolutions
+                // (TTL edited longer, alert disabled) keep their resolution
+                // Ok. With new data it is a GENUINE recovery — every policy
+                // is then gated only by its own arm below, and the Ok flows
+                // out-of-window included. No recorded expiry instant
+                // (expired with an empty cache) reads as genuine: the value
+                // in force at expiry is not observable then, and a false
+                // recovery Ok beats a lost one.
                 var newDataArrived = evaluatedValue is not null &&
                                      (sensor.LastExpiryAt is null ||
-                                      evaluatedValue.ReceivingTime > sensor.LastExpiryAt);
+                                      evaluatedValue.DeliverySequence > sensor.LastExpirySequence);
                 var windowCaused = !timeout && !newDataArrived &&
                                    ttlSnapshot.Any(t => t.ScheduleId.HasValue);
 

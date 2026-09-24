@@ -439,6 +439,73 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // === The value enqueued behind the sweep: queue order, not stamp stages (#1452) ===
+
+        [Fact]
+        public async Task WindowOpen_RecoveryValueEnqueuedBehindTheSweep_QueueOrderSendsTheOk()
+        {
+            // The #1452 interleaving: a value's ReceivingTime is stamped when
+            // the API thread converts it — BEFORE enqueue — while the expiry
+            // witness is stamped when the sweep item RUNS. A value that
+            // arrives and is enqueued BEHIND the sweep therefore carries an
+            // EARLIER ReceivingTime than the expiry's LastExpiryAt, and the
+            // pre-#1452 discriminator (ReceivingTime > LastExpiryAt) read the
+            // genuine recovery as window-caused and cancelled its Ok. The fix
+            // compares DISPATCH ORDER: both items run on the same
+            // single-reader product queue, so a value item processed after
+            // the expiry's item is new data regardless of when its
+            // ReceivingTime was stamped.
+            //
+            // Deterministic by construction: the public entry stamps
+            // ReceivingTime at conversion inside the very call that enqueues,
+            // so the ingest-then-sweep-then-deliver shape cannot be built
+            // through AddSensorValueAsync without racing the queue reader.
+            // The value is constructed directly (the SensorSelfDestroyTests
+            // pattern) with a ReceivingTime that predates the expiry, and its
+            // DeliverySequence is stamped exactly as the queue dispatch
+            // stamps it for an item ordered after the sweep's — the one
+            // production fact supplied by hand here.
+            var scheduleId = Guid.NewGuid();
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
+
+            var sensor = await CreateSensorWithStaleValueAsync("ttlBehindTheSweep", TimeSpan.FromMinutes(15));
+
+            var scheduled = AddTtlPolicy(sensor, scheduleId, TimeSpan.FromMinutes(5));
+
+            using var recorder = new SentMessagesRecorder(_valuesCache, sensor.Id);
+
+            // The sweep expires the sensor: LastExpiryAt and LastExpirySequence
+            // are stamped on this transition, and the alert fires.
+            _valuesCache.RunSensorTimeoutStep(sensor);
+
+            Assert.True(sensor.IsExpired);
+            Assert.Equal(1, recorder.CountFor(scheduled.Id));
+
+            Assert.NotNull(sensor.LastExpiryAt);
+            var expiryStamp = sensor.LastExpiryAt.Value;
+
+            var behind = new IntegerValue
+            {
+                Time = DateTime.UtcNow,                          // fresh: resolves the sensor
+                ReceivingTime = expiryStamp.AddSeconds(-1),      // stamped at INGESTION, before the sweep ran — the bug's premise
+                Status = SensorStatus.Ok,
+                Value = 42,
+                DeliverySequence = sensor.LastExpirySequence + 1, // the queue's stamp for an item ordered AFTER the sweep's
+            };
+
+            // Direct delivery (synchronous, no queue, no DB write) — the
+            // discriminator inside sees exactly the two stamps above.
+            Assert.True(sensor.TryAddValue(behind));
+
+            Assert.False(sensor.IsExpired);
+            Assert.False(sensor.LastValue.IsTimeout); // a real value, not a marker
+
+            // The GENUINE recovery Ok — the pin. Red before #1452: the
+            // stage-asymmetric ReceivingTime comparison cancelled it.
+            Assert.Equal(2, recorder.CountFor(scheduled.Id));
+        }
+
+
         // === The schedule-less resolution keeps its Ok (the default sensor shape) ===
 
         [Fact]

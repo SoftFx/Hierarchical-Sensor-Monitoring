@@ -200,7 +200,10 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             TestImmutableSensorData(expected, actual);
 
-            AssertModels(expected.LastValue, actual.LastValue);
+            // DeliverySequence is exempt like ReceivingTime below: per-delivery
+            // server dispatch metadata (#1452), not value content — the expected
+            // side is rebuilt from rows that never rode the update queue.
+            AssertModels(expected.LastValue, actual.LastValue, ["DeliverySequence"]);
             Assert.Equal(expected.LastUpdate, actual.LastUpdate);
             Assert.Equal(expected.HasData, actual.HasData);
         }
@@ -228,7 +231,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             else
                 Assert.Equal(parentProduct.Id, actual.Parent.Id);
 
-            AssertModels(expected.Convert(), actual.LastValue, ["ReceivingTime", "LastUpdateTime"]);
+            AssertModels(expected.Convert(), actual.LastValue, ["ReceivingTime", "LastUpdateTime", "DeliverySequence"]);
         }
 
         internal static void TestSensorModel(SensorUpdate expected, BaseSensorModel actual)
@@ -284,7 +287,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         }
 
         private static void AssertSensorValues<T>(BaseValue actual, BaseValue expected) =>
-            AssertModels((T)Convert.ChangeType(actual, typeof(T)), (T)Convert.ChangeType(expected, typeof(T)));
+            AssertModels((T)Convert.ChangeType(actual, typeof(T)), (T)Convert.ChangeType(expected, typeof(T)), ["DeliverySequence"]);
 
         private static BaseValue GetValue(byte[] valueBytes, SensorType type)
         {

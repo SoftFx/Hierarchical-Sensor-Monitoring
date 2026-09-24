@@ -69,6 +69,17 @@ namespace HSMCommon.Model
 
         public DateTime ReceivingTime { get; init; } = DateTime.UtcNow;
 
+        // Dispatch order of the update-queue item that delivered this value into the
+        // cache (#1452): stamped by TreeValuesCache while the item is being processed,
+        // so the TTL resolution discriminator can compare QUEUE ORDER (value item vs
+        // expiry sweep item on the same single-reader product queue) instead of two
+        // wall-clock instants stamped at different pipeline stages. Not persisted and
+        // not part of the client DTO surface: 0 = never delivered through the update
+        // queue (deserialized history rows, test-constructed values).
+        [JsonIgnore]
+        [MemoryPackIgnore]
+        public long DeliverySequence { get; set; }
+
         [JsonConverter(typeof(SensorStatusJsonConverter))]
         public SensorStatus Status { get; init; }
 
