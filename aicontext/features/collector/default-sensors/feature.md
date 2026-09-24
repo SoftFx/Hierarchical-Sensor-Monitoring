@@ -461,7 +461,7 @@ post was a separate, closed bar with its own `OpenTime`.
 **`Package content size` reports KILOBYTES (#1459, collector 3.5.4 / native 0.8.2).** It registered
 `Unit.MB` while a bar renders at 2-decimal precision, so a realistic package — a couple of kilobytes,
 0.002 MB — rounded to `0.00`: the sensor was structurally incapable of reporting anything but zero.
-Both collectors now divide by 1024 instead of 1024² and register `Unit.KB` (2). They also had to be made to measure the SAME quantity (rule #10): managed multiplied the serialized body's char count by `sizeof(char)`, measuring the in-memory UTF-16 string, while the body goes on the wire as UTF-8 and native sums the bytes it sends — a 2x divergence that was invisible while both were stuck at `0.00`. Managed now reports the bytes sent, like native. The unit is part of
+Both collectors now divide by 1024 instead of 1024² and register `Unit.KB` (2). They also had to be made to measure the SAME quantity (rule #10): managed multiplied the serialized body's char count by `sizeof(char)`, measuring the in-memory UTF-16 string, while the body goes on the wire as UTF-8 and native sums the bytes it sends — a 2x divergence that was invisible while both were stuck at `0.00`. Managed now reports the bytes sent, like native, and native counts the array brackets and separating commas the send path adds around its elements — without them the two stayed a systematic ~1% apart. The unit is part of
 the registration, so an existing node keeps showing MB until the sensor re-registers (which happens
 on the next collector start), while the VALUES switch immediately — a node that has not re-registered
 shows kilobyte numbers under an MB label until then. The native side additionally measures the

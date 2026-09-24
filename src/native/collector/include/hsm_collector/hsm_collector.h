@@ -1032,8 +1032,10 @@ hsm_result_t hsm_collector_get_sent_json(const hsm_collector_t* collector, size_
 
    THREAD CONTRACT (#1444): the returned pointer belongs to the CALLING THREAD, not to the
    collector. Its contents are refreshed on every call and remain valid until the same thread calls
-   this function again; a different thread's call never disturbs it. Copy the text if you need it
-   to outlive your next call. The pointer is never NULL.
+   this function again; a different thread's call never disturbs it. The buffer is one per THREAD
+   and shared by every collector handle, so a call for another collector on the same thread also
+   overwrites it. Copy the text if you need it to outlive your next call. The pointer is never
+   NULL, and a NULL handle returns a static literal.
    Reading the message from one thread while another fails an operation is therefore safe — which
    it was NOT before 0.8.2, when this returned an interior pointer the collector's own worker
    threads could reallocate under the reader. */

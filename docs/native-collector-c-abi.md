@@ -162,7 +162,10 @@ Version history:
   reallocate under a reader: the signature is unchanged and every existing caller becomes safe
   without recompiling against anything new, but the returned pointer is now documented as valid
   only until the SAME thread calls the function again (a caller that held it across another
-  thread's call was already reading freed memory). The self-monitoring sensor handles are
+  thread's call was already reading freed memory). The buffer is one per THREAD, shared by
+  every collector handle, so a call for one collector overwrites the text a previous call for
+  another returned on that thread; a NULL handle still returns the static literal it always
+  did. The self-monitoring sensor handles are
   published under a mutex, so adding the collector-monitoring or queue group after `Start` no
   longer races the self-monitor thread. `.module/Service alive` beats on the sensor's own post
   period instead of the package-collect period, and `.module/Collector queue stats/Package

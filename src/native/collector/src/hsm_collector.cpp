@@ -5182,9 +5182,17 @@ namespace
                 const bool measure_package = queue_diagnostics_enabled_.load(std::memory_order_acquire);
                 const size_t batch_values = batch.size();
                 size_t batch_bytes = 0;
-                if (measure_package)
+                if (measure_package && !batch.empty())
+                {
                     for (const auto& json : batch)
                         batch_bytes += json.size();
+
+                    // The body is the JSON ARRAY the send path builds from these elements, so
+                    // count the brackets and the separating commas too (n + 1 bytes). Managed
+                    // measures the serialized body, which includes them; leaving them out here
+                    // would keep the two collectors a systematic ~1% apart (rule #10).
+                    batch_bytes += batch.size() + 1;
+                }
 
                 const auto send_start = std::chrono::steady_clock::now();
                 const auto sent = TrySendBatch(batch);
@@ -7562,13 +7570,14 @@ const char* hsm_collector_last_error(const hsm_collector_t* collector)
     // could prevent that. The thread-local buffer is refreshed on every call and stays valid until
     // the SAME thread calls this function again: the classic C last-error contract, which fixes
     // every existing foreign-language wrapper without an ABI change or a wrapper change.
+    // ONE buffer per thread, shared by every collector handle: a call for collector B
+    // overwrites the text a previous call for collector A returned on this thread.
     static thread_local std::string buffer;
 
+    // A null handle keeps its static literal — nothing to copy, and a caller that kept that
+    // pointer across another call still reads the same text it did before 0.8.2.
     if (collector == nullptr)
-    {
-        buffer = "Collector handle is null.";
-        return buffer.c_str();
-    }
+        return "Collector handle is null.";
 
     buffer = collector->impl->LastErrorCopy();
     return buffer.c_str();
