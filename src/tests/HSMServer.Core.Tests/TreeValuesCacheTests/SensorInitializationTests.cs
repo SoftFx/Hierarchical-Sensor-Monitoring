@@ -28,6 +28,18 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         /// non-completion is the safe polarity: a loaded agent makes it more likely to hold.</summary>
         private static readonly TimeSpan _mustNotComplete = TimeSpan.FromMilliseconds(200);
 
+        /// <summary>Cap for polling the observable start of a Task.Run item (#1450): under the
+        /// full suite's parallel-startup storm a loaded agent's pool can be late by far more than
+        /// the old fixed 10 s bound, so the poll is generous — it fails only when the
+        /// precondition genuinely never materializes.</summary>
+        private static readonly TimeSpan _scheduleCap = TimeSpan.FromSeconds(60);
+
+        /// <summary>The gated load must outlive the theory's polling patience: after the load
+        /// enters, the theory may spend up to <see cref="_scheduleCap"/> waiting for the call
+        /// task to start and only then opens the gate. A 10 s gate would abort the load mid-wait
+        /// and flip the very asserts the patience fix protects (#1450).</summary>
+        private static readonly TimeSpan _loadGateCap = TimeSpan.FromSeconds(90);
+
 
         [Fact]
         [Trait("Category", "Initialization race")]
@@ -70,15 +82,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [InlineData(ValueGate.TryUpdateLastValue)]
         [InlineData(ValueGate.CheckTimeout)]
         [Trait("Category", "Initialization race")]
-        public void ValueGate_DuringHistoryLoad_WaitsForLoadedStorage(ValueGate gate)
+        public async Task ValueGate_DuringHistoryLoad_WaitsForLoadedStorage(ValueGate gate)
         {
             var historyTime = DateTime.UtcNow.AddMinutes(-5);
 
-            using var load = new GatedLoad(SensorTestFactory.History(historyTime, 1));
+            using var load = new GatedLoad(SensorTestFactory.History(historyTime, 1), _loadGateCap);
             var sensor = new IntegerSensorModel(SensorTestFactory.BuildEntity(), load.Database.Object, null);
 
             var init = Task.Run(sensor.Initialize);
-            Assert.True(load.Entered.Wait(_waitTimeout), "history load never started");
+            // Poll the observable precondition instead of imposing a fixed bound on the pool
+            // SCHEDULING the init task: under the full suite's parallel-startup storm the old
+            // 10 s bound failed this theory though the code under test was correct (#1450). A
+            // slow scheduler must delay the test, not fail it.
+            await UntilAsync(() => load.Entered.IsSet, "history load never started");
 
             using var callStarted = new ManualResetEventSlim(false);
             var observedFrom = DateTime.MaxValue;
@@ -103,7 +119,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 observedFrom = sensor.From;
             });
 
-            Assert.True(callStarted.Wait(_waitTimeout), $"{gate} task never started");
+            // Same class of wait as above: the call task's START is a precondition to pin, not
+            // a deadline the thread pool must meet.
+            await UntilAsync(() => callStarted.IsSet, $"{gate} task never started");
             Assert.False(call.Wait(_mustNotComplete),
                 $"{gate} completed while the history load was still in flight");
 
@@ -280,6 +298,26 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
 
         /// <summary>
+        /// Bounded polling wait on an observable precondition (the TtlScheduleWindowIntegrationTests
+        /// shape): unlike a fixed Wait(timeout) on a task's START, a slow scheduler merely delays
+        /// the test; Assert.Fail fires only when the precondition genuinely never materializes
+        /// within <see cref="_scheduleCap"/> (#1450).
+        /// </summary>
+        private static async Task UntilAsync(Func<bool> condition, string message, TimeSpan? timeout = null)
+        {
+            var deadline = DateTime.UtcNow + (timeout ?? _scheduleCap);
+
+            while (!condition())
+            {
+                if (DateTime.UtcNow >= deadline)
+                    Assert.Fail($"Timed out waiting for: {message}");
+
+                await Task.Delay(25);
+            }
+        }
+
+
+        /// <summary>
         /// A mocked database whose history read blocks until <see cref="Gate"/> is set, so a test can
         /// hold Initialize() mid-load and act while it is in flight. <see cref="Entered"/> signals
         /// that the load actually reached the database.
@@ -298,15 +336,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             /// this is false.</summary>
             public bool TimedOut { get; private set; }
 
+            private readonly TimeSpan _gateWait;
 
-            public GatedLoad(byte[] history)
+
+            public GatedLoad(byte[] history, TimeSpan? gateWait = null)
             {
+                _gateWait = gateWait ?? _waitTimeout;
+
                 Database.Setup(db => db.GetLatestValue(It.IsAny<Guid>(), It.IsAny<long>()))
                     .Returns(() =>
                     {
                         Entered.Set();
 
-                        if (!Gate.Wait(_waitTimeout))
+                        if (!Gate.Wait(_gateWait))
                         {
                             TimedOut = true;
                             throw new TimeoutException("the test never opened the load gate");
