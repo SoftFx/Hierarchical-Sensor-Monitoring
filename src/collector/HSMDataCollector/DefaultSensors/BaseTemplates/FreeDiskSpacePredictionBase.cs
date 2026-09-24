@@ -206,8 +206,18 @@ namespace HSMDataCollector.DefaultSensors
             var perHour = mbPerSec * 3600.0;
             var scaled = perHour * 1000.0;
 
-            if (double.IsNaN(scaled) || double.IsInfinity(scaled) || Math.Abs(scaled) >= 9.0e15)
-                return perHour.ToString(CultureInfo.InvariantCulture);
+            // Named explicitly so the native mirror can match: its round-trip formatter parses an
+            // exponent out of the digits and has none to parse for a non-finite value.
+            if (double.IsNaN(perHour))
+                return "NaN";
+
+            if (double.IsInfinity(perHour))
+                return perHour > 0.0 ? "Infinity" : "-Infinity";
+
+            // "R" (round-trip), not the default format: on net472 the default renders 15
+            // significant digits while native renders the shortest round-trip form.
+            if (double.IsInfinity(scaled) || Math.Abs(scaled) >= 9.0e15)
+                return perHour.ToString("R", CultureInfo.InvariantCulture);
 
             var units = (long)Math.Round(scaled, MidpointRounding.AwayFromZero);
             var magnitude = units < 0 ? (ulong)(-units) : (ulong)units;

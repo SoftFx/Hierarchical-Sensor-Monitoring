@@ -181,6 +181,14 @@ namespace hsm
                 const double per_hour = mb_per_sec * 3600.0;
                 const double scaled = per_hour * 1000.0;
 
+                // A non-finite rate cannot go through the round-trip formatter (it parses the
+                // exponent out of std::to_chars output, which has none for nan/inf), so name it the
+                // way managed double.ToString does on an invariant culture.
+                if (std::isnan(per_hour))
+                    return "NaN";
+                if (std::isinf(per_hour))
+                    return per_hour > 0.0 ? "Infinity" : "-Infinity";
+
                 if (!std::isfinite(scaled) || std::fabs(scaled) >= 9.0e15)
                     return DoubleToInvariantString(per_hour);
 
