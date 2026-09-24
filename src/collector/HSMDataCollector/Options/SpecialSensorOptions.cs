@@ -7,7 +7,7 @@ namespace HSMDataCollector.Options
 {
     public sealed class DiskSensorOptions : MonitoringInstantSensorOptions
     {
-        internal const int DefaultCalibrationRequests = 6;
+        internal const int DefaultCalibrationRequests = 3;
         internal const string DefaultTargetPath = @"C:\";
 
 
@@ -20,10 +20,10 @@ namespace HSMDataCollector.Options
 
         /// <summary>
         /// How often the disk-space prediction sensor samples free space to update its drain-speed
-        /// EMA, independently of how often it POSTS. Internal on purpose: the 30 s default is part of
-        /// the cross-collector contract (the native source uses the same constant), and only the
+        /// EMA, independently of how often it POSTS. Internal on purpose: the 10 min default is part
+        /// of the cross-collector contract (the native source uses the same constant), and only the
         /// conformance driver shortens it so a fixture can observe the calibration sequence in
-        /// seconds instead of half an hour (#1426).
+        /// seconds instead of half an hour (#1426, retuned in #1445).
         /// </summary>
         internal TimeSpan SpaceCheckPeriod { get; set; } =
             TimeSpan.FromSeconds(FreeDiskSpacePredictionBase.DefaultSpaceCheckPeriodInSec);

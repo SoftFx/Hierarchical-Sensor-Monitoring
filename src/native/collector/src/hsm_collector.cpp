@@ -5861,7 +5861,7 @@ namespace
 
     // Scheduler thread only. Runs the source's auxiliary refresh tick when one is configured and due
     // — the native shape of a managed sensor's own sampling loop (FreeDiskSpacePredictionBase samples
-    // free space every 30 s while posting every 5 min). Its outcome never produces a value; only a
+    // free space every 10 min while posting every 5 min). Its outcome never produces a value; only a
     // reported failure is surfaced, deduplicated like any other (#1426).
     void NativeSensor::RunMetricRefreshIfDue(const std::shared_ptr<NativeCollector>& collector)
     {

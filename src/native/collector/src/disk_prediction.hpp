@@ -1,25 +1,31 @@
-// Free-disk-space prediction math (#1426) — the portable half of the "Free space on disk
-// prediction" sensor, kept free of OS reads so it is unit-testable on any platform (the
+// Free-disk-space prediction math (#1426, reworked in #1445) — the portable half of the "Free space
+// on disk prediction" sensor, kept free of OS reads so it is unit-testable on any platform (the
 // proc_metrics.hpp / tcp_connection_stats.hpp precedent). The platform factories supply the free
 // space; this class owns the timing, the smoothing and the posted value/status/comment.
 //
 // It is a transcription of managed FreeDiskSpacePredictionBase, which is the contract (repo rule
 // #10 — one sensor, one acquisition mechanism, mirrored algorithm):
 //
-//   * a sampling loop every SpaceCheckPeriod (managed DefaultSpaceCheckPeriodInSec = 30 s) computes
-//     the drain speed over the interval and folds it into an EMA: first positive speed seeds it,
-//     every later positive speed is prev*0.9 + cur*0.1. A NEGATIVE or zero speed (free space grew
-//     or held) is NOT folded in — it only moves the baseline.
-//   * the post loop, every PostDataPeriod (5 min), publishes:
-//       - during calibration (the first CalibrationRequests reads): TimeSpan.Zero, status OffTime,
-//         comment "Calibration request (n/N)";
-//       - otherwise free_space / speed seconds when the speed is positive, else the PREVIOUS
-//         prediction (so a flat period repeats the last estimate rather than reporting zero).
+//   * a sampling loop every SpaceCheckPeriod (managed DefaultSpaceCheckPeriodInSec = 600 s) computes
+//     the SIGNED drain speed over the interval — positive when free space shrank, negative when it
+//     grew — and folds EVERY interval into an EMA: the first sample seeds it, every later one is
+//     prev*(1-a) + cur*a with a = 1/37. Folding the non-draining intervals too is what lets the
+//     estimate decay when the disk stops filling (#1445); the old code folded positive samples
+//     only, so one burst of writes pinned a high drain rate forever. The period and the factor are
+//     chosen together so the estimate spans SIX HOURS (mean sample age period*(1-a)/a = 36 periods)
+//     — the scale this sensor's answer lives on. A minute-scale window sampled write bursts
+//     instead of the drain.
+//   * the calibration counter advances on that SAMPLING clock, so "(n/3)" means three completed
+//     free-space measurements rather than three posts — the first estimate lands ~30 min after
+//     Start.
+//   * the post loop, every PostDataPeriod (5 min), publishes exactly one of five states. Only
+//     Draining carries a real estimate (free_space / speed, status Ok). Every other state posts the
+//     CEILING (365 days) with status OffTime and a comment naming the state, so a reader can tell
+//     "nothing is draining" from a genuine estimate. A zero value is reserved for its literal
+//     meaning — no free space left — and is never used as a placeholder.
 //
-// Managed's evaluation ORDER is part of the contract and is reproduced exactly: GetValue runs first
-// (and is what advances the calibration counter), then GetStatus, then GetComment. That is why the
-// FIRST post after calibration still carries TimeSpan.Zero while already reporting a non-calibration
-// status and comment — see NextPost.
+// Value, status and comment of one post always describe the same instant: NextPost computes all
+// three from one snapshot, whatever order the caller reads them in.
 
 #pragma once
 
@@ -43,6 +49,15 @@ namespace hsm
         class DiskSpacePrediction
         {
         public:
+            // Managed FreeDiskSpacePredictionBase.SpeedSmoothingFactor. Chosen together with the
+            // 10-minute sampling period so the mean age of the samples behind the estimate,
+            // period * (1 - a) / a, is exactly 36 periods = 6.0 h (#1445).
+            static constexpr double kSpeedSmoothingFactor = 1.0 / 37.0;
+
+            // Managed FreeDiskSpacePredictionBase.MaxPrediction = TimeSpan.FromDays(365).
+            static constexpr int64_t kMaxPredictionMs = 365LL * 24 * 60 * 60 * 1000;
+            static constexpr double kMaxPredictionSeconds = 365.0 * 24 * 60 * 60;
+
             // `calibration_requests` mirrors DiskSensorOptions.CalibrationRequests (managed default 6).
             explicit DiskSpacePrediction(int64_t calibration_requests)
                 : calibration_requests_(calibration_requests)
@@ -58,7 +73,7 @@ namespace hsm
                 if (!has_last_space_)
                 {
                     // The Start seed (managed StartAsync: _lastAvailableSpace = FreeSpace) — a baseline
-                    // only, no speed from it.
+                    // only, no speed and no calibration credit from it.
                     last_space_ = free_space;
                     has_last_space_ = true;
                     return;
@@ -67,73 +82,82 @@ namespace hsm
                 if (elapsed_seconds > 0.0)
                 {
                     const double speed = (last_space_ - free_space) / elapsed_seconds;
-                    if (speed > 0.0)
-                        change_speed_ = std::abs(change_speed_) > 0.0 ? change_speed_ * 0.9 + speed * 0.1 : speed;
+
+                    change_speed_ = samples_count_ == 0
+                                        ? speed
+                                        : change_speed_ * (1.0 - kSpeedSmoothingFactor) + speed * kSpeedSmoothingFactor;
+                    ++samples_count_;
                 }
 
                 last_space_ = free_space;
             }
 
-            // The post loop's tick, in managed's GetValue -> GetStatus -> GetComment order.
+            // The post loop's tick: one snapshot of the sampler state turned into value, status and
+            // comment together.
             DiskPredictionPost NextPost(double free_space)
             {
                 DiskPredictionPost post;
 
-                // ---- GetValue ----
-                if (requests_count_ <= calibration_requests_)
+                if (samples_count_ < calibration_requests_)
                 {
-                    ++requests_count_;
-                    post.value_ms = 0;
-                }
-                else
-                {
-                    off_time_ = change_speed_ < 0.0;
-
-                    if (change_speed_ > 0.0)
-                    {
-                        prev_prediction_ms_ = SecondsToMilliseconds(free_space / change_speed_);
-                    }
-
-                    post.value_ms = prev_prediction_ms_;
+                    post.value_ms = kMaxPredictionMs;
+                    post.status = 0; // OffTime
+                    post.comment = "Calibration request (" + std::to_string(samples_count_) + "/" +
+                                   std::to_string(calibration_requests_) + "). Value cannot be calculated yet.";
+                    return post;
                 }
 
-                // ---- GetStatus ---- (re-evaluates IsCalibration AFTER the counter moved)
-                const bool calibrating = requests_count_ <= calibration_requests_;
-                post.status = (calibrating || off_time_) ? 0 /*OffTime*/ : 1 /*Ok*/;
+                // Managed divides the speed by 1 MiB and labels it "Mbytes/sec" whatever unit the
+                // platform's IDiskInfo reports in (bytes on Windows, kB on Unix). Mirrored rather
+                // than corrected: the two collectors must produce the same comment for the same
+                // host, and changing the managed label is a separate, user-visible decision.
+                const double mb_per_sec = change_speed_ / (1024.0 * 1024.0);
 
-                // ---- GetComment ----
-                if (calibrating)
+                if (change_speed_ < 0.0)
                 {
-                    post.comment = "Calibration request (" + std::to_string(requests_count_) + "/" +
-                                   std::to_string(calibration_requests_) + ")";
-                }
-                else
-                {
-                    // Managed divides the speed by 1 MiB and labels it "Mbytes/sec" whatever unit the
-                    // platform's IDiskInfo reports in (bytes on Windows, kB on Unix). Mirrored rather
-                    // than corrected: the two collectors must produce the same comment for the same
-                    // host, and changing the managed label is a separate, user-visible decision.
-                    const double mb_per_sec = change_speed_ / (1024.0 * 1024.0);
-                    post.comment = off_time_
-                                       ? "Free space increases by " + FormatSpeed(-mb_per_sec) +
-                                             " Mbytes/sec. Value cannot be calculated."
-                                       : "Free space decreases by " + FormatSpeed(mb_per_sec) + " Mbytes/sec.";
+                    post.value_ms = kMaxPredictionMs;
+                    post.status = 0; // OffTime
+                    post.comment = "Free space increases by " + FormatSpeed(-mb_per_sec) +
+                                   " Mbytes/sec. Value cannot be calculated.";
+                    return post;
                 }
 
+                if (change_speed_ == 0.0)
+                {
+                    post.value_ms = kMaxPredictionMs;
+                    post.status = 0; // OffTime
+                    post.comment = "Free space is not decreasing. Value cannot be calculated.";
+                    return post;
+                }
+
+                const double seconds = free_space / change_speed_;
+
+                // Written so a NaN also takes the ceiling branch instead of producing a bogus value.
+                if (!(seconds < kMaxPredictionSeconds))
+                {
+                    post.value_ms = kMaxPredictionMs;
+                    post.status = 0; // OffTime
+                    post.comment =
+                        "Free space decreases by " + FormatSpeed(mb_per_sec) + " Mbytes/sec. More than 365 days left.";
+                    return post;
+                }
+
+                post.value_ms = SecondsToMilliseconds(seconds);
+                post.status = 1; // Ok
+                post.comment = "Free space decreases by " + FormatSpeed(mb_per_sec) + " Mbytes/sec.";
                 return post;
             }
 
         private:
-            // TimeSpan.FromSeconds rounds to the nearest millisecond and throws on a non-finite or
-            // out-of-range argument; the collector cannot throw across the C boundary, so an
-            // unrepresentable prediction is clamped to the largest TimeSpan instead.
+            // TimeSpan.FromSeconds rounds to the nearest millisecond. The caller has already bounded
+            // `seconds` below the ceiling, so this only has to reproduce that rounding.
             static int64_t SecondsToMilliseconds(double seconds)
             {
-                constexpr double kMaxMs = 922337203685477.0; // TimeSpan.MaxValue in whole ms
                 if (!std::isfinite(seconds) || seconds < 0.0)
                     return 0;
+
                 const double ms = seconds * 1000.0;
-                return ms >= kMaxMs ? static_cast<int64_t>(kMaxMs) : static_cast<int64_t>(ms + 0.5);
+                return ms >= static_cast<double>(kMaxPredictionMs) ? kMaxPredictionMs : static_cast<int64_t>(ms + 0.5);
             }
 
             // double.ToString() on an invariant culture — the shortest round-trip form, which is what
@@ -142,12 +166,10 @@ namespace hsm
 
             const int64_t calibration_requests_;
 
-            int64_t requests_count_ = 0;
-            int64_t prev_prediction_ms_ = 0;
+            int64_t samples_count_ = 0;
             double change_speed_ = 0.0;
             double last_space_ = 0.0;
             bool has_last_space_ = false;
-            bool off_time_ = false;
         };
     } // namespace collector
 } // namespace hsm

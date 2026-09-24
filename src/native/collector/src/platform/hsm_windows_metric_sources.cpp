@@ -35,8 +35,8 @@ namespace hsm
 
             // FreeDiskSpacePredictionBase: DefaultSpaceCheckPeriodInSec sampling,
             // DiskSensorOptions.DefaultCalibrationRequests calibration posts.
-            constexpr std::int64_t kSpaceCheckPeriodMs = 30000;
-            constexpr std::int64_t kCalibrationRequests = 6;
+            constexpr std::int64_t kSpaceCheckPeriodMs = 600000; // managed DefaultSpaceCheckPeriodInSec (#1445)
+            constexpr std::int64_t kCalibrationRequests = 3;     // managed DiskSensorOptions.CalibrationRequests
 
             // Backing store for the strings a read hands back through hsm_metric_sample_t. The
             // collector copies them during the call and every read runs on one scheduler thread, so
@@ -255,6 +255,23 @@ namespace hsm
                 return std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now().time_since_epoch())
                     .count();
+            }
+
+            // The factory binds during Start, so seeding here is managed's StartAsync
+            // (_lastAvailableSpace = FreeSpace) to the tick: without it the FIRST refresh would be
+            // spent establishing the baseline and calibration would run one sampling period behind
+            // managed, which now counts MEASUREMENTS (#1445). A failed read leaves the source
+            // unseeded, exactly as managed leaves _hasBaseline false.
+            void SeedDiskPrediction(DiskPredictionSource& source)
+            {
+                double free_bytes = 0.0;
+                std::string error;
+                if (!ReadFreeBytes(source.disk, free_bytes, error))
+                    return;
+
+                source.prediction.Sample(free_bytes, 0.0);
+                source.last_sample_ms = SteadyClockMilliseconds();
+                source.has_last_sample = true;
             }
 
             hsm_metric_read_t DiskPredictionRefresh(void* user_data, hsm_metric_sample_t* sample)
@@ -533,6 +550,7 @@ namespace hsm
                     return 0;
                 auto* source = new DiskPredictionSource();
                 source->disk.root = std::wstring(1, letter) + L":\\";
+                SeedDiskPrediction(*source);
                 return Finish(
                            source, &Guarded<DiskPredictionRead>, &DiskPredictionDispose, out_source,
                            &Guarded<DiskPredictionRefresh>, kSpaceCheckPeriodMs)

@@ -113,16 +113,74 @@ Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySens
 
 ## Free disk space prediction algorithm
 
-`DefaultSensors/BaseTemplates/FreeDiskSpacePredictionBase.cs`: sample free space every 30 s; speed EMA `0.9*old + 0.1*new`; first **6** requests are calibration (default `DiskSensorOptions.CalibrationRequests = 6`, configurable; returns OffTime); if space is shrinking → `TimeSpan = freeSpace / speed`, status Ok; if growing → previous prediction + OffTime ("cannot be calculated"). Read failures are sensor errors (Error value with message), not lifecycle failures — sampling continues and recovers.
+`DefaultSensors/BaseTemplates/FreeDiskSpacePredictionBase.cs` — "сколько продержится свободное место
+при наблюдаемой скорости расхода". Переписан в #1445 по двум причинам: старая формула на
+простаивающем хосте навечно залипала на скорости одного всплеска записи, а окно усреднения было
+минутным там, где ответ живёт на часах. На реальном хосте это выглядело так: соседние посты
+давали 19 ч, 2 д 6 ч, 14 ч, 1 д 12 ч (четырёхкратный разброс скорости за полчаса), причём
+свободное место за эти же полчаса РОСЛО, а истинная картина на часовом масштабе была ровная:
+−30.4 GB за 23.5 ч, то есть ~1.3 GB/ч и полтора дня до заполнения.
 
-Three details are part of the cross-collector contract and are reproduced verbatim by the native
-`src/disk_prediction.hpp` (#1426):
-- only a POSITIVE speed is folded into the EMA, so a refill moves the baseline without moving the
-  estimate — and `_isOffTime` (`_currentChangeSpeed < 0`) is therefore unreachable in practice;
-- the value, the status and the comment are evaluated in that order (`GetValue` → `GetStatus` →
-  `GetComment`) and only the value's branch consumes a calibration request, so the post right AFTER
-  calibration still carries `TimeSpan.Zero` while already reporting the running status and the speed
-  comment;
+**Сбор (sampling loop, каждые 10 минут).** `curSpeed = (lastFree - curFree) / elapsedSeconds` —
+ЗНАКОВАЯ величина (>0 — место убывает, <0 — освобождается). В EMA складывается **каждый** интервал:
+первый задаёт начальное значение, дальше `(1-a)*old + a*new` при `a = 1/37`.
+
+**Окно — шесть часов.** Веса замеров — геометрическая прогрессия, поэтому средний возраст
+замера за оценкой равен `period * (1-a) / a`. При 10 мин и `a = 1/37` это ровно 36 периодов =
+**6.0 ч**; экспоненциальная постоянная времени `period / a` = **6.17 ч**, а вес любого одного замера
+уменьшается вдвое каждые **4.22 ч**. Один интервал способен сдвинуть оценку не больше чем на
+`a` = 2.7 % расстояния до только что измеренной скорости.
+
+**Калибровка** считается по часам СБОРА, а не постинга: `(n/3)` — это n завершённых замеров
+свободного места (default `DiskSensorOptions.CalibrationRequests = 3` → первая оценка через ~30 минут
+после старта). Ровный расход репортится ТОЧНО сразу после калибровки: EMA одинаковых
+замеров равна самому замеру — окно в 6 ч стоит задержки только тогда, когда скорость МЕНЯЕТСЯ.
+
+**Постинг (каждые 5 мин).** Ровно одно из пяти состояний — вот что оператор видит в каждом:
+
+| Состояние | Условие | Value | Status | Comment |
+|---|---|---|---|---|
+| Draining | speed > 0, оценка ниже потолка | `freeSpace / speed` | **Ok** | `Free space decreases by X Mbytes/sec.` |
+| BeyondCeiling | speed > 0, но места хватит больше чем на год | `365.00:00:00` | OffTime | `Free space decreases by X Mbytes/sec. More than 365 days left.` |
+| NoDrain | speed == 0 | `365.00:00:00` | OffTime | `Free space is not decreasing. Value cannot be calculated.` |
+| Growing | speed < 0 | `365.00:00:00` | OffTime | `Free space increases by X Mbytes/sec. Value cannot be calculated.` |
+| Calibration | замеров меньше `CalibrationRequests` | `365.00:00:00` | OffTime | `Calibration request (n/N). Value cannot be calculated yet.` |
+
+Что это значит для оператора:
+- **Только `Ok` — реальная оценка.** Любой `OffTime` означает "оценки нет", а не "осталось ровно год".
+- **Потолок `365.00:00:00`** (`FreeDiskSpacePredictionBase.MaxPrediction`) читается как "при текущем
+  расходе диск в ближайший год не заполнится". Он же защищает от переполнения `TimeSpan.FromSeconds`
+  на очень маленькой скорости (раньше оно бросало исключение, и сенсор молча ничего не постил).
+- **`00:00:00` больше никогда не заглушка.** Ноль теперь означает ровно одно — свободного места нет
+  вообще. До #1445 ноль шлёл всю калибровку, и алерт читал его как "диск полон ПРЯМО СЕЙЧАС".
+- **Всплеск записи почти не двигает оценку.** Один десятиминутный интервал со скоростью в 4×
+  выше фона — ровно тот разброс, который наблюдался на живом хосте, — меняет горизонт на 9 %
+  вместо прежних почти четырёхкратных качелей (старые константы умножали скорость на 3.6 за те же
+  10 минут). Всплеск в 2× — около 3 %.
+- **Задержка детекта "расход прекратился" — часы, и это осознанная цена окна.** Если запись
+  остановилась, скорость падает вдвое каждые 4.22 ч, то есть горизонт удваивается каждые 4.22 ч.
+  С оценки в 1.47 дня порог `value <= 2 дней` перестаёт пробиваться через ~1.9 ч простоя, а потолок
+  достигается через ~34 ч. До #1445 это не происходило НИКОГДА — именно на это жаловался владелец,
+  но "часы" — это не "сразу". Сенсор отвечает на вопрос масштаба часов-суток; для секундной
+  реакции есть соседний сенсор "Free space on disk", который точен и мгновенен.
+- **Реальный простаивающий диск оседает в `BeyondCeiling`, а не в `NoDrain`.** `NoDrain` требует СТРОГО
+  `speed == 0.0`, то есть байт-в-байт одинакового свободного места на каждом замере — это случай скриптованного
+  диска в конформансе, а не живого тома. На живом хосте EMA затухает к крошечной, но ненулевой
+  скорости, и обе стороны постят `365.00:00:00` + OffTime с комментарием `... More than 365 days left.`
+  Для алерта разницы нет: значение и статус у этих двух состояний одинаковые.
+
+Read failures are sensor errors (Error value with message), not lifecycle failures — sampling
+continues and recovers. Это единственный путь, где сенсор всё ещё может отправить `00:00:00`: оба
+коллектора при провале чтения публикуют default-значение со статусом **Error** и текстом ошибки в
+комментарии — общий контракт всех value-сенсоров, а не заглушка этого; статус Error делает его
+громким. Провал первого чтения на Start НЕ становится baseline'ом ни в одном коллекторе (иначе знаковая
+EMA засеялась бы огромным отрицательным значением) — baseline ставит следующий успешный замер.
+
+Две детали часть cross-collector контракта и воспроизведены дословно в нативном
+`src/disk_prediction.hpp` (#1426, #1445):
+- value, status и comment одного поста считаются из ОДНОГО снимка состояния, так что тройка
+  всегда согласована (до #1445 счётчик калибровки двигался внутри `GetValue`, и пост СРАЗУ после
+  калибровки нёс `TimeSpan.Zero` с уже рабочими status и comment);
 - the comment divides the speed by 1 MiB and labels it `Mbytes/sec` whatever unit the platform's
   `IDiskInfo` reports in (bytes on Windows, kB on Unix). Mirrored rather than corrected: the two
   collectors must produce the same comment for the same host, and relabelling it is a separate,
@@ -130,10 +188,10 @@ Three details are part of the cross-collector contract and are reproduced verbat
   managed used plain interpolation, which on a comma-decimal host (`ru-RU`, `de-DE`, …) emitted
   `1,5` where native emits `1.5`; fixed in #1426 so the contract holds on every host.
 
-Known managed wrinkle: the send loop starts in `InitAsync` with a zero due time while `StartAsync`
-resets `_requestsCount` afterwards, so the opening post races that reset and the first calibration
-comment can repeat or read `(0/N)`. The conformance fixture therefore does not pin the NUMBER of
-calibration posts.
+Known managed wrinkle: the send loop starts in `InitAsync` with a zero due time while the sampler's
+first tick is aligned to the next period boundary, so how many posts precede the N-th measurement
+depends on scheduling. The conformance fixture therefore does not pin the NUMBER of calibration
+posts — только их форму.
 
 ## Perf-counter infrastructure
 
@@ -339,7 +397,7 @@ that is legitimately empty (a baseline seed, no elapsed jiffies, a sub-tick inte
 `NO_VALUE` and stays silent.
 
 `Free space on disk prediction` is backed by a live source since #1426: `statvfs("/")` sampled every
-30 s to feed the drain-speed EMA, and a TimeSpan posted on the sensor's own post period — the
+10 min to feed the drain-speed EMA (#1445), and a TimeSpan posted on the sensor's own post period — the
 `refresh` cadence on the typed seam is exactly this. It samples the free space in whole KILOBYTES,
 mirroring `UnixDiskInfo.FreeSpace` (`AvailableFreeSpace / 1024`); the unit cancels in the prediction's
 division, so Windows can sample bytes and both still produce the same TimeSpan. It binds by the same

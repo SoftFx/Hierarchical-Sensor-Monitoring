@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.8.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.8.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -375,6 +375,14 @@ set(NATIVE_REGRESSION_TESTS
     native_metric_sample_error_is_reported
     native_metric_timespan_source_posts_typed_value
     native_disk_prediction_calibrates_then_predicts
+    native_disk_prediction_decays_when_drain_stops
+    native_disk_prediction_reports_growth_when_space_is_freed
+    native_disk_prediction_relaxes_when_free_space_flaps
+    native_disk_prediction_reports_no_drain_on_idle_disk
+    native_disk_prediction_clamps_absurdly_slow_drain
+    native_disk_prediction_calibration_counts_measurements
+    native_disk_prediction_matches_the_reported_host
+    native_disk_prediction_barely_moves_on_a_ten_minute_burst
     # #1428: metric-driven default bars post partials of a 5-min bar (manual clock, managed-derived values).
     native_metric_bar_partial_posts_keep_open_time
     native_metric_bar_rolls_over_at_window_boundary

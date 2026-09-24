@@ -156,6 +156,11 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.8.1** (#1445) — no ABI change. The disk-space prediction math behind
+  `HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION` / `HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION` was
+  rewritten (signed drain EMA over a six-hour window sampled every 10 min, five explicit posted
+  states, a 365-day ceiling, calibration counted on the sampling clock) to mirror the managed fix. A host that only links the ABI sees the same
+  entry points; a host that reads those sensors' values sees the new states.
 - **0.8.0** (#1426) — additive typed metric sources. The double-only seam could not say WHY a read
   failed (so a broken source degraded silently, against root rule #8) and could not carry a
   non-double value (so the TimeSpan-typed disk-space prediction had no live value). Added:
