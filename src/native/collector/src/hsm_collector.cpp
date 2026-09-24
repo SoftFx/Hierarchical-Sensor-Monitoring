@@ -3893,11 +3893,23 @@ namespace
         // Start (it has nothing to post before a group exists), so a late registration would leave
         // the heartbeat registered-but-empty for the rest of the run — which the sensor's 1 min TTL
         // turns into a Timeout alert on a perfectly healthy collector. Arm it here instead.
-        // op_mutex_ serializes this against Start/Stop/Dispose, so a Stopped or Disposed collector
-        // can never have a thread resurrected behind the stop that just joined it.
+        //
+        // NOT under op_mutex_: a lifecycle listener runs with op_mutex_ held and is allowed to
+        // register sensors, so taking it here would self-deadlock that host. The arm/join pair has
+        // its own mutex, and the state is read inside it, so a Stop cannot leave a thread created
+        // behind its join.
         void EnsureSelfMonitorRunning()
         {
-            std::lock_guard<std::mutex> op_guard(op_mutex_);
+            std::lock_guard<std::mutex> lifecycle_guard(self_monitor_lifecycle_mutex_);
+
+            // Wake a loop that is ALREADY running: it may be sleeping out a long collect period
+            // with no heartbeat handle, and the handle just published has to beat now rather than
+            // a whole period from now.
+            {
+                std::lock_guard<std::mutex> guard(self_monitor_cv_mutex_);
+                self_monitor_wake_ = true;
+            }
+            self_monitor_cv_.notify_all();
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
@@ -3905,7 +3917,7 @@ namespace
                     return; // Not started yet: Start arms it. Stopped/Disposed: nothing to arm.
             }
 
-            StartSelfMonitor();
+            StartSelfMonitorLocked();
         }
 
     private:
@@ -4349,9 +4361,18 @@ namespace
             }
         }
 
-        // Caller holds op_mutex_ (Start, or EnsureSelfMonitorRunning for a group registered after
-        // Start). Idempotent: a loop that is already running is left alone.
+        // Arm the loop. Called from Start and, for a group registered later, from
+        // EnsureSelfMonitorRunning — which may run on a thread that is ALREADY inside a lifecycle
+        // callback and therefore already holds op_mutex_, so the arm/join pair has its own mutex
+        // rather than reusing that one.
         void StartSelfMonitor()
+        {
+            std::lock_guard<std::mutex> guard(self_monitor_lifecycle_mutex_);
+            StartSelfMonitorLocked();
+        }
+
+        // Caller holds self_monitor_lifecycle_mutex_. Idempotent: a running loop is left alone.
+        void StartSelfMonitorLocked()
         {
             if (self_monitor_thread_.joinable())
                 return;
@@ -4362,12 +4383,17 @@ namespace
             {
                 std::lock_guard<std::mutex> guard(self_monitor_cv_mutex_);
                 self_monitor_stop_ = false;
+                self_monitor_wake_ = false;
             }
             self_monitor_thread_ = std::thread([this] { RunSelfMonitorLoop(); });
         }
 
         void StopSelfMonitor()
         {
+            // Same mutex as the arm, so a group registered concurrently cannot leave a freshly
+            // created loop running behind the join.
+            std::lock_guard<std::mutex> lifecycle_guard(self_monitor_lifecycle_mutex_);
+
             {
                 std::lock_guard<std::mutex> guard(self_monitor_cv_mutex_);
                 self_monitor_stop_ = true;
@@ -4462,9 +4488,19 @@ namespace
                 std::unique_lock<std::mutex> lock(self_monitor_cv_mutex_);
                 if (self_monitor_stop_)
                     return;
+
+                // The wake flag is part of the predicate on purpose: wait_for with a predicate
+                // keeps sleeping through a plain notify, so a handle published mid-sleep would
+                // otherwise not be picked up until this deadline expired (which is a whole collect
+                // period when only the queue group armed the loop).
                 if (wait > std::chrono::steady_clock::duration::zero() &&
-                    self_monitor_cv_.wait_for(lock, wait, [this] { return self_monitor_stop_; }))
-                    return;
+                    self_monitor_cv_.wait_for(lock, wait, [this] { return self_monitor_stop_ || self_monitor_wake_; }))
+                {
+                    if (self_monitor_stop_)
+                        return;
+
+                    self_monitor_wake_ = false;
+                }
             }
         }
 
@@ -5370,10 +5406,16 @@ namespace
         // thread, whose creation and join carry the happens-before against Start/Stop.
         bool service_alive_first_beat_ = true;
         std::atomic<std::int64_t> queue_overflow_count_{ 0 };
+        // Guards the self-monitor thread's arm/join pair. Deliberately NOT op_mutex_: a lifecycle
+        // listener runs with op_mutex_ held and may register a sensor group, which arms the loop.
+        std::mutex self_monitor_lifecycle_mutex_;
         std::thread self_monitor_thread_;
         std::mutex self_monitor_cv_mutex_;
         std::condition_variable self_monitor_cv_;
         bool self_monitor_stop_ = false;
+        // Set when a group is registered while the loop is already sleeping, so the loop re-runs
+        // its tick at once instead of waiting out the current deadline.
+        bool self_monitor_wake_ = false;
 
         std::mutex hang_mutex_;
         std::condition_variable hang_cv_;

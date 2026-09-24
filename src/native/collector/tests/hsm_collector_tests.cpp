@@ -5065,6 +5065,73 @@ namespace
                 .c_str());
     }
 
+    // Registering the module group from a LIFECYCLE LISTENER must not wedge the collector. A
+    // listener runs with the op lock held and is allowed to add sensors (only Start/Stop/Dispose
+    // are forbidden), so arming the self-monitor loop from the capture path must not take that
+    // lock — doing so self-deadlocks Start on the listener's own thread.
+    void NativeSelfMonitoringGroupFromListenerDoesNotDeadlock()
+    {
+        auto collector = CreateCollector();
+
+        struct ListenerState
+        {
+            hsm_collector_t* collector = nullptr;
+            std::atomic<int> added{ 0 };
+        } listener_state;
+        listener_state.collector = collector.value;
+
+        const auto listener = [](hsm_collector_status_t status, void* user_data) {
+            auto* state = static_cast<ListenerState*>(user_data);
+            // Both a Running and a Stopped callback register: the first runs inside Start, the
+            // second inside Stop, and both held the op lock.
+            if (status == HSM_COLLECTOR_STATUS_RUNNING || status == HSM_COLLECTOR_STATUS_STOPPED)
+            {
+                if (hsm_collector_add_all_module_sensors(state->collector, "1.0.0.0") == HSM_RESULT_OK)
+                    state->added.fetch_add(1, std::memory_order_relaxed);
+            }
+        };
+
+        Require(
+            hsm_collector_add_lifecycle_listener(collector.value, listener, &listener_state) == HSM_RESULT_OK,
+            "add lifecycle listener failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        Require(
+            listener_state.added.load(std::memory_order_relaxed) >= 2,
+            "the listener must have registered the group from inside Start and Stop");
+    }
+
+    // A handle published while the loop is ALREADY sleeping must beat at once, not when the
+    // current deadline expires. With only the queue group armed at Start the loop sleeps out a
+    // whole package-collect period, so on a host that raised that period — the very configuration
+    // behind #1437 — a late heartbeat would stay silent past its 1 min TTL.
+    void NativeLateHeartbeatHandleWakesTheSleepingLoop()
+    {
+        auto collector = CreateMarkerCollector(); // package_collect_period_ms = 60000
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // Let the loop run its first tick and settle into the 60 s sleep.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "add collector monitoring sensors failed");
+
+        // Far below the collect period: only a wake can deliver a beat this soon.
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        Require(
+            !PayloadsForPath(collector.value, "/Service alive\"").empty(),
+            "a handle published mid-sleep must beat without waiting out the collect period");
+    }
+
     // A self-monitoring group registered AFTER Start must still beat. The self-monitor loop is
     // armed at Start, and before #1453 nothing armed it later, so a host that registered the
     // collector-monitoring group on a running collector — which the API allows — got a heartbeat
@@ -7421,6 +7488,10 @@ namespace
               [](const std::string&) { NativePackageContentSizeReportsKilobytes(); } },
             { "native_service_alive_beats_on_its_own_period",
               [](const std::string&) { NativeServiceAliveBeatsOnItsOwnPeriod(); } },
+            { "native_self_monitoring_group_from_listener_does_not_deadlock",
+              [](const std::string&) { NativeSelfMonitoringGroupFromListenerDoesNotDeadlock(); } },
+            { "native_late_heartbeat_handle_wakes_the_sleeping_loop",
+              [](const std::string&) { NativeLateHeartbeatHandleWakesTheSleepingLoop(); } },
             { "native_self_monitoring_added_after_start_arms_the_heartbeat",
               [](const std::string&) { NativeSelfMonitoringAddedAfterStartArmsTheHeartbeat(); } },
             { "native_self_monitor_handle_published_after_start_is_synchronized",

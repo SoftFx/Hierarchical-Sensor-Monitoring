@@ -372,6 +372,10 @@ set(NATIVE_REGRESSION_TESTS
     # ... and a group registered after Start arms the loop, instead of registering an
     # empty heartbeat whose 1 min TTL then alerts on a healthy collector.
     native_self_monitoring_added_after_start_arms_the_heartbeat
+    # ... arming must not take the lifecycle lock (a listener holding it may register a
+    # group), and a handle published mid-sleep must wake the loop instead of waiting it out.
+    native_self_monitoring_group_from_listener_does_not_deadlock
+    native_late_heartbeat_handle_wakes_the_sleeping_loop
     # #1437: the heartbeat follows the sensor's post period, not the package-collect period.
     native_service_alive_beats_on_its_own_period
     # #1459: a dispatched package must read as a non-zero size (KB, not MB).
