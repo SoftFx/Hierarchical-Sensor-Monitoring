@@ -27,6 +27,11 @@
 # publish it to this exact tag first:
 #   dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 \
 #     -p:PublishProfile=DefaultContainer -p:ContainerImageName=hsmonitoring/hierarchical_sensor_monitoring
+# That publish cannot carry the image's HEALTHCHECK (the .NET SDK has no property for it), so add
+# it the way CI does, or use scripts/local-docker-build.ps1, which does both steps:
+#   docker build --build-arg BASE_IMAGE=hsmonitoring/hierarchical_sensor_monitoring:latest \
+#     -t hsmonitoring/hierarchical_sensor_monitoring:latest \
+#     -f docker_scripts/HSMserver/Dockerfile.healthcheck docker_scripts/HSMserver
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
@@ -34,15 +39,24 @@ services:
     restart: unless-stopped
     user: '0'
     # No ports: HSM is reachable only through caddy.
-    # No healthcheck here on purpose (#1465): the image carries one, so `docker ps` and
-    # `depends_on: service_healthy` work for every deployment, not only for this file. It is an
-    # HTTPS GET of /api/sensors/testConnection on 44330 inside the container, every 30s, timeout
-    # 5s, 3 retries, after a 10 min start period. Kestrel opens its ports only after the database
-    # has loaded, so a 200 means loaded and serving; unlike the TCP probe this replaces, a
-    # listening but wedged server is reported unhealthy. Repeating it here would only create a
-    # second definition to drift, so override it only if you moved the Sensor API port or need a
-    # longer start period (a `healthcheck:` here wins over the image's).
-    # Budget before caddy is skipped (see depends_on below): 10 min + 3 x 30 s.
+    healthcheck:
+      # Byte-identical to the one the image itself now carries (#1465, see
+      # docker_scripts/HSMserver/Dockerfile.healthcheck); scripts/check-healthcheck-sync.py fails
+      # the build if the two ever differ. It is repeated here only so this file also works with an
+      # image published before #1465: `depends_on: service_healthy` below refuses to start caddy
+      # ("container hsm-server has no healthcheck configured") when neither the image nor this
+      # file defines one. Verified against the published 3.41.5, which has wget but no healthcheck.
+      # (An image older than ~3.41 has no wget either; with one of those, pin an older compose file.)
+      # Kestrel opens its ports only after the database has loaded, so a 200 means loaded AND
+      # serving; a listening but wedged server fails this probe, while the TCP connect used here
+      # before reported it healthy.
+      test: ['CMD-SHELL', 'wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null https://127.0.0.1:44330/api/sensors/testConnection || exit 1']
+      interval: 30s
+      timeout: 5s
+      # Budget before caddy is skipped for good (see depends_on below): 10 min + 3 x 30 s. A
+      # database that needs longer: raise start_period here (and in the image, or they drift).
+      retries: 3
+      start_period: 10m
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy,
       # so HSM records the real client IP (token audit, invalid-attempt limiter, key telemetry).
