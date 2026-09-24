@@ -369,6 +369,9 @@ set(NATIVE_REGRESSION_TESTS
     # #1453: the group may be registered after Start — the handle publish must be synchronized
     # against the self-monitor thread (the TSan preset is what proves it).
     native_self_monitor_handle_published_after_start_is_synchronized
+    # ... and a group registered after Start arms the loop, instead of registering an
+    # empty heartbeat whose 1 min TTL then alerts on a healthy collector.
+    native_self_monitoring_added_after_start_arms_the_heartbeat
     # #1437: the heartbeat follows the sensor's post period, not the package-collect period.
     native_service_alive_beats_on_its_own_period
     # #1459: a dispatched package must read as a non-zero size (KB, not MB).

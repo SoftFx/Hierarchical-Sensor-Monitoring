@@ -5065,6 +5065,33 @@ namespace
                 .c_str());
     }
 
+    // A self-monitoring group registered AFTER Start must still beat. The self-monitor loop is
+    // armed at Start, and before #1453 nothing armed it later, so a host that registered the
+    // collector-monitoring group on a running collector — which the API allows — got a heartbeat
+    // that never posted a value for the rest of the run, and a server that flipped its 1 min TTL
+    // to Timeout on a perfectly healthy collector.
+    void NativeSelfMonitoringAddedAfterStartArmsTheHeartbeat()
+    {
+        auto collector = CreateCollector();
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "add collector monitoring sensors failed");
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        bool beat = false;
+        while (!beat && std::chrono::steady_clock::now() < deadline)
+        {
+            beat = !PayloadsForPath(collector.value, "/Service alive\"").empty();
+            if (!beat)
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+
+        Require(beat, "a group registered after Start must arm the heartbeat");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
     // Registering the collector-monitoring group AFTER Start is allowed, and it publishes the
     // heartbeat handle from the CALLER's thread while the self-monitor thread is already reading
     // it — the data race #1453 (caught by the TSan lane, not by a functional assertion). The queue
@@ -7394,6 +7421,8 @@ namespace
               [](const std::string&) { NativePackageContentSizeReportsKilobytes(); } },
             { "native_service_alive_beats_on_its_own_period",
               [](const std::string&) { NativeServiceAliveBeatsOnItsOwnPeriod(); } },
+            { "native_self_monitoring_added_after_start_arms_the_heartbeat",
+              [](const std::string&) { NativeSelfMonitoringAddedAfterStartArmsTheHeartbeat(); } },
             { "native_self_monitor_handle_published_after_start_is_synchronized",
               [](const std::string&) { NativeSelfMonitorHandlePublishedAfterStartIsSynchronized(); } },
             { "native_service_alive_marks_the_first_beat",

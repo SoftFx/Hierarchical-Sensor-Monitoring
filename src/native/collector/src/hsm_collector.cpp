@@ -3859,6 +3859,7 @@ namespace
             }
 
             collector_monitoring_enabled_.store(true, std::memory_order_release);
+            EnsureSelfMonitorRunning();
         }
 
         // Capture the ".module/Collector queue stats" handles so the dispatch path + heartbeat thread
@@ -3885,6 +3886,26 @@ namespace
             }
 
             queue_diagnostics_enabled_.store(true, std::memory_order_release);
+            EnsureSelfMonitorRunning();
+        }
+
+        // A host may register a self-monitoring group AFTER Start, and the loop is only armed at
+        // Start (it has nothing to post before a group exists), so a late registration would leave
+        // the heartbeat registered-but-empty for the rest of the run — which the sensor's 1 min TTL
+        // turns into a Timeout alert on a perfectly healthy collector. Arm it here instead.
+        // op_mutex_ serializes this against Start/Stop/Dispose, so a Stopped or Disposed collector
+        // can never have a thread resurrected behind the stop that just joined it.
+        void EnsureSelfMonitorRunning()
+        {
+            std::lock_guard<std::mutex> op_guard(op_mutex_);
+
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (state_ != CollectorState::Starting && state_ != CollectorState::Running)
+                    return; // Not started yet: Start arms it. Stopped/Disposed: nothing to arm.
+            }
+
+            StartSelfMonitor();
         }
 
     private:
@@ -4328,8 +4349,13 @@ namespace
             }
         }
 
+        // Caller holds op_mutex_ (Start, or EnsureSelfMonitorRunning for a group registered after
+        // Start). Idempotent: a loop that is already running is left alone.
         void StartSelfMonitor()
         {
+            if (self_monitor_thread_.joinable())
+                return;
+
             if (!collector_monitoring_enabled_.load(std::memory_order_acquire) &&
                 !queue_diagnostics_enabled_.load(std::memory_order_acquire))
                 return;
