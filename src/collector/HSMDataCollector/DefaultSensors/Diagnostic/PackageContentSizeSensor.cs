@@ -11,7 +11,9 @@ namespace HSMDataCollector.DefaultSensors.Diagnostic
 
         internal void AddValue(PackageSendingInfo info)
         {
-            var contentSize = (info.ContentSize * sizeof(char)).BytesToMegabytesDouble();
+            // KILOBYTES (#1459): a real package is a couple of KB, and the bar's 2-decimal display
+            // precision turned every megabyte reading into a flat 0.00.
+            var contentSize = (info.ContentSize * sizeof(char)).BytesToKilobytesDouble();
 
             AddValue(contentSize);
         }

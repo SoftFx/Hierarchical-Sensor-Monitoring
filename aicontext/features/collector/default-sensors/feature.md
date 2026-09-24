@@ -100,7 +100,7 @@ Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySens
 | `AddQueueOverflow` | int bar of dropped/evicted counts per queue | `HandleEnqueueResult` + `ReportRequeueEviction` (never suppressed) |
 | `AddQueuePackageValuesCount` | int bar, values per package | `AddPackageInfo` after successful send |
 | `AddQueuePackageProcessTime` | double bar, avg time-in-queue | `AddPackageInfo` |
-| `AddQueuePackageContentSize` | double bar, package size (chars → MB) | `AddPackageSendingInfo` |
+| `AddQueuePackageContentSize` | double bar, package size (chars → **KB**, `Unit.KB`) | `AddPackageSendingInfo` |
 
 ## Group registration helpers
 
@@ -438,6 +438,18 @@ managed `BarSensorOptions` defaults every default-bar prototype inherits:
 Every post of one window therefore carries the SAME `OpenTime`/`CloseTime` while `Count`, `Min`,
 `Max`, `Mean` and `Last` grow. Before 0.7.1 the native bar window equalled the post period, so each 15 s
 post was a separate, closed bar with its own `OpenTime`.
+
+
+**`Package content size` reports KILOBYTES (#1459, collector 3.5.4 / native 0.8.2).** It registered
+`Unit.MB` while a bar renders at 2-decimal precision, so a realistic package — a couple of kilobytes,
+0.002 MB — rounded to `0.00`: the sensor was structurally incapable of reporting anything but zero.
+Both collectors now divide by 1024 instead of 1024² and register `Unit.KB` (2). The unit is part of
+the registration, so an existing node keeps showing MB until the sensor re-registers (which happens
+on the next collector start), while the VALUES switch immediately — a node that has not re-registered
+shows kilobyte numbers under an MB label until then. The native side additionally measures the
+package BEFORE handing it to the sender, which is free to consume the batch. Pinned by
+`default_sensors_contract:queue_content_size_registers_in_kilobytes` +
+`native_package_content_size_reports_kilobytes`.
 
 **Push-fed built-in bars** follow the same schedule without the sampling step (managed
 `PublicBarMonitoringSensor`, whose collect tick only runs `CheckCurrentBar`): the queue diagnostics

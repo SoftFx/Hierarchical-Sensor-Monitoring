@@ -3,12 +3,15 @@
     internal static class MemorySizeExtensions
     {
         private const int ByteToMbDivisor = 1 << 20;
+        private const int ByteToKbDivisor = 1 << 10;
         private const int KbToMbDivisor = 1 << 10;
 
 
         internal static int BytesToMegabytes(this double value) => (int)(value / ByteToMbDivisor);
 
         internal static double BytesToMegabytesDouble(this double value) => value / ByteToMbDivisor;
+
+        internal static double BytesToKilobytesDouble(this double value) => value / ByteToKbDivisor;
 
 
         internal static int BytesToMegabytes(this long value) => (int)(value / ByteToMbDivisor);

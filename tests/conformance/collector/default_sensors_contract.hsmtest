@@ -125,6 +125,18 @@ queue_overflow_registers|expect_registration_contains|0|.module/Collector queue 
 queue_overflow_registers|expect_registration_contains|0|"SensorType":4,
 queue_overflow_registers|expect_registration_contains|0|"OriginalUnit":1100,
 
+# Diagnostics: package content size — DoubleBar in KILOBYTES (#1459). It used to register MB, which
+# the bar's 2-decimal display precision rounded to 0.00 for every realistic package (a couple of KB),
+# so the sensor was structurally incapable of reporting anything but zero. Unit 2 = Unit.KB.
+queue_content_size_registers_in_kilobytes|create_collector
+queue_content_size_registers_in_kilobytes|add_default_sensor|queue_content_size
+queue_content_size_registers_in_kilobytes|start
+queue_content_size_registers_in_kilobytes|stop
+queue_content_size_registers_in_kilobytes|expect_registration_count|1
+queue_content_size_registers_in_kilobytes|expect_registration_contains|0|.module/Collector queue stats/Package content size"
+queue_content_size_registers_in_kilobytes|expect_registration_contains|0|"SensorType":5,
+queue_content_size_registers_in_kilobytes|expect_registration_contains|0|"OriginalUnit":2,
+
 # Network: established connections — Int, TTL 5 min, KeepHistory 90 d.
 network_established_registers|create_collector
 network_established_registers|add_default_sensor|network_established

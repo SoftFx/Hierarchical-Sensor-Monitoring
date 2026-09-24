@@ -1376,7 +1376,7 @@ namespace
         { HSM_DEFAULT_QUEUE_OVERFLOW, "Collector queue stats", "Queue overflow", HSM_SENSOR_TYPE_INT_BAR, true, false, 1100 /*Count*/, false, false, 0, true, 0, true, 15000, "Values evicted on queue overflow.", {} },
         { HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT, "Collector queue stats", "Items count in package", HSM_SENSOR_TYPE_INT_BAR, true, false, 1100, false, false, 0, true, 0, true, 15000, "Values per sent package.", {} },
         { HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME, "Collector queue stats", "Package process time", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 1011 /*Seconds*/, false, false, 0, true, 0, true, 15000, "Package processing time.", {} },
-        { HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, "Collector queue stats", "Package content size", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 3 /*MB*/, false, false, 0, true, 0, true, 15000, "Package body size.", {} },
+        { HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, "Collector queue stats", "Package content size", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 2 /*KB (#1459: MB at 2-decimal bar precision could only ever read 0)*/, false, false, 0, true, 0, true, 15000, "Package body size.", {} },
     };
 
     // The two TimeSpan-typed disk-prediction rows (Windows per-letter + the Unix letter-less one).
@@ -4301,7 +4301,10 @@ namespace
 
         // Per-package queue stats, posted from the dispatch send path's UNLOCKED window. Bars only
         // aggregate (AccumulateBar) — they never enqueue or touch queue_mutex_ — so this is safe there.
-        void PostPackageStats(const std::vector<std::string>& batch, std::chrono::steady_clock::duration send_duration)
+        void PostPackageStats(
+            size_t value_count,
+            size_t content_bytes,
+            std::chrono::steady_clock::duration send_duration)
         {
             try
             {
@@ -4309,15 +4312,14 @@ namespace
                 const SelfMonitorHandles handles = SelfMonitorSnapshot();
 
                 if (handles.queue_items)
-                    handles.queue_items->AddBarInt(static_cast<int32_t>(batch.size()));
+                    handles.queue_items->AddBarInt(static_cast<int32_t>(value_count));
                 if (handles.queue_time)
                     handles.queue_time->AddBarDouble(std::chrono::duration<double>(send_duration).count());
                 if (handles.queue_size)
                 {
-                    std::size_t bytes = 0;
-                    for (const auto& json : batch)
-                        bytes += json.size();
-                    handles.queue_size->AddBarDouble(static_cast<double>(bytes) / (1024.0 * 1024.0));
+                    // KILOBYTES (#1459): a real package is a couple of KB, and the bar's 2-decimal display
+                    // precision turned every megabyte reading into a flat 0.00.
+                    handles.queue_size->AddBarDouble(static_cast<double>(content_bytes) / 1024.0);
                 }
             }
             catch (...)
@@ -5102,13 +5104,22 @@ namespace
                 }
 
                 lock.unlock();
+
+                // Measure the package BEFORE the send: a sender is free to consume the batch
+                // (the recording sender moves every value out of it), which made the reported
+                // size 0 whatever the unit (#1459).
+                const size_t batch_values = batch.size();
+                size_t batch_bytes = 0;
+                for (const auto& json : batch)
+                    batch_bytes += json.size();
+
                 const auto send_start = std::chrono::steady_clock::now();
                 const auto sent = TrySendBatch(batch);
                 // Per-package queue stats — only on a real send (not the stop-flush drop path), posted
                 // here in the UNLOCKED window: bars only aggregate, so there's no re-entrancy on
                 // queue_mutex_ and no enqueue from within dispatch.
                 if (sent && queue_diagnostics_enabled_.load(std::memory_order_acquire) && !clear_remainder_on_failure)
-                    PostPackageStats(batch, std::chrono::steady_clock::now() - send_start);
+                    PostPackageStats(batch_values, batch_bytes, std::chrono::steady_clock::now() - send_start);
                 lock.lock();
 
                 if (!sent)

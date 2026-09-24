@@ -371,6 +371,8 @@ set(NATIVE_REGRESSION_TESTS
     native_self_monitor_handle_published_after_start_is_synchronized
     # #1437: the heartbeat follows the sensor's post period, not the package-collect period.
     native_service_alive_beats_on_its_own_period
+    # #1459: a dispatched package must read as a non-zero size (KB, not MB).
+    native_package_content_size_reports_kilobytes
     # #1433: .module start/stop markers mirror managed (first heartbeat false, version Start:/Stop:).
     native_service_alive_marks_the_first_beat
     native_version_sensor_marks_start_and_stop

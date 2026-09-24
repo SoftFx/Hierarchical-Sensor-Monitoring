@@ -5008,6 +5008,37 @@ namespace
         Contains(beats[1], "\"Value\":true");
     }
 
+    // Package content size must report a REAL package as a non-zero reading (#1459). It used to be
+    // measured in MB, and a bar renders at 2-decimal precision, so a 2 KB package was 0.002 MB ->
+    // "0.00": the sensor could not report anything but zero whatever the traffic. In KB the same
+    // package reads ~2.1. The bar is flushed by the graceful stop, so no wall-clock wait is needed.
+    void NativePackageContentSizeReportsKilobytes()
+    {
+        auto collector = CreateCollector(); // package_collect_period_ms = 20
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        auto sensor = CreateIntSensor(collector.value, "contract/queue/size");
+        for (int value = 0; value < 20; ++value)
+            Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+
+        // Wait for at least one package to be dispatched, which is what feeds the stats bar.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (hsm_collector_sent_count(collector.value) == 0 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto sizes = PayloadsForPath(collector.value, "/Package content size\"");
+        Require(!sizes.empty(), "the package-size bar must be flushed on stop");
+        Require(
+            sizes.back().find("\"Mean\":0,") == std::string::npos,
+            ("a dispatched package must not read as zero: " + sizes.back()).c_str());
+    }
+
     // The heartbeat follows the SENSOR's post period (15 s), not the collector's package-collect
     // period (#1437) — managed drives CollectorAlive from PostDataPeriod. The collector below
     // collects every 20 ms: before the fix that produced a beat every 20 ms (and, the other way
@@ -7358,6 +7389,8 @@ namespace
 #endif
             { "native_collector_self_monitoring_emits",
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
+            { "native_package_content_size_reports_kilobytes",
+              [](const std::string&) { NativePackageContentSizeReportsKilobytes(); } },
             { "native_service_alive_beats_on_its_own_period",
               [](const std::string&) { NativeServiceAliveBeatsOnItsOwnPeriod(); } },
             { "native_self_monitor_handle_published_after_start_is_synchronized",
