@@ -56,7 +56,8 @@ services:
       # Budget before caddy is skipped for good (see depends_on below): 10 min + 3 x 30 s. A
       # database that needs longer: raise start_period here (and in the image, or they drift).
       # One known case: an install with legacy SensorValues_* folders rewrites all of them before
-      # HSM listens. The migration continues in the container, so `docker compose up` again works.
+      # HSM listens. That migration continues in the container even after the budget runs out —
+      # wait for it to finish (`docker ps` shows healthy again), then `docker compose up -d` again.
       retries: 3
       start_period: 10m
     environment:

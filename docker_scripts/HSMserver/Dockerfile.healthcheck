@@ -61,8 +61,10 @@ FROM ${BASE_IMAGE}
 # history, whose interval databases open lazily. 10 min is the margin for a slow disk and a far
 # larger tree, and keeps the grace the compose file granted before. The exception is an install
 # that still has legacy SensorValues_* folders: TreeValuesCache.MigrateDatabseV2() rewrites every
-# old value before app.Run(), so that start grows with history and can outlast the budget; the
-# migration keeps running in the container, so a second `docker compose up` comes up.
+# old value before app.Run(), so that start grows with history and can outlast the budget. The
+# migration keeps running in the container: wait for "Now listening" in its log and for `docker ps`
+# to show healthy at the next probe, then `docker compose up -d` again. Repeating it earlier fails
+# the same way, because an unhealthy dependency is refused at once.
 # Note also that a probe failure inside the start period never marks the container unhealthy, so
 # this is also how long a wedge can hide right after a restart.
 # Kept on one line: a continuation inside CMD would land in the image config verbatim, and
