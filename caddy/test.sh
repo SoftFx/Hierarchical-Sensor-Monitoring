@@ -3,7 +3,8 @@ set -eu
 
 image="${1:-hsm-caddy:test}"
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+reload_container="hsm-caddy-reload-$$"
+trap 'if [ -n "$reload_container" ]; then docker rm -f "$reload_container" >/dev/null 2>&1 || true; fi; rm -rf "$tmp"' EXIT
 
 modules="$(docker run --rm --entrypoint caddy "$image" list-modules)"
 printf '%s\n' "$modules" | grep -Fx 'dns.providers.cloudflare' >/dev/null
@@ -52,6 +53,35 @@ if grep -F "$dynv6_secret" "$tmp/dns-dynv6.json" >/dev/null; then
     exit 1
 fi
 
+# `caddy validate` loads and provisions the TLS issuer and DNS provider, but does not
+# request a certificate. Network isolation keeps these checks offline and prevents DNS/CA calls.
+validate_dns_provider() {
+    name="$1"
+    shift
+    docker run --rm --network none "$@" "$image" caddy validate \
+        --config /etc/caddy/Caddyfile --adapter caddyfile >"$tmp/$name-validate.out" 2>&1 || {
+        cat "$tmp/$name-validate.out" >&2
+        echo "$name DNS provider failed runtime provisioning" >&2
+        exit 1
+    }
+    grep -F 'Valid configuration' "$tmp/$name-validate.out" >/dev/null
+}
+
+validate_dns_provider provision-cloudflare \
+    -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns \
+    -e HSM_DNS_PROVIDER=cloudflare -e CF_API_TOKEN=cfut_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+validate_dns_provider provision-dynv6 \
+    -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=letsencrypt-dns \
+    -e HSM_DNS_PROVIDER=dynv6 -e DYNV6_API_TOKEN=offline-test-token
+
+if docker run --rm --network none -e HSM_DOMAIN=hsm.example.com \
+    -e HSM_CERTIFICATE=letsencrypt-dns -e HSM_DNS_PROVIDER=cloudflare \
+    -e CF_API_TOKEN=invalid-test-token "$image" caddy validate \
+    --config /etc/caddy/Caddyfile --adapter caddyfile >"$tmp/invalid-cloudflare-token.out" 2>&1; then
+    echo 'Cloudflare provider accepted a malformed token during runtime provisioning' >&2
+    exit 1
+fi
+grep -F "API token 'invalid-test-token' appears invalid" "$tmp/invalid-cloudflare-token.out" >/dev/null
 mkdir "$tmp/certs"
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=hsm.example.com' \
     -keyout "$tmp/certs/key.pem" -out "$tmp/certs/cert.pem" >/dev/null 2>&1
@@ -61,7 +91,28 @@ docker run --rm -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=custom \
     -v "$tmp/certs:/certs:ro" "$image" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 grep -F '"certificate":"/certs/cert.pem"' "$tmp/custom.json" >/dev/null
 grep -F '"key":"/certs/key.pem"' "$tmp/custom.json" >/dev/null
-
+# Exercise the documented restart path with the real image entrypoint and an offline custom cert.
+docker run -d --name "$reload_container" --network none \
+    -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=custom \
+    -v "$tmp/certs:/certs:ro" "$image" >/dev/null
+docker restart "$reload_container" >/dev/null
+reload_succeeded=false
+attempt=1
+while [ "$attempt" -le 10 ]; do
+    if docker exec "$reload_container" hsm-caddy-entrypoint caddy reload \
+        --config /etc/caddy/Caddyfile --adapter caddyfile >"$tmp/reload.out" 2>&1; then
+        reload_succeeded=true
+        break
+    fi
+    sleep 1
+    attempt=$((attempt + 1))
+done
+if [ "$reload_succeeded" != true ]; then
+    echo 'entrypoint-wrapped Caddy reload did not succeed after restart' >&2
+    cat "$tmp/reload.out" >&2
+    docker logs "$reload_container" >&2
+    exit 1
+fi
 reject() {
     name="$1"
     expected="$2"

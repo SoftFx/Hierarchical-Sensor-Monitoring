@@ -6,6 +6,8 @@ on:
     paths:
       - caddy/**
       - .github/workflows/caddy-image.yml
+      - docker-compose.yml
+      - scripts/check-caddy-image-release.py
   pull_request:
     paths:
       - caddy/**
@@ -15,7 +17,15 @@ on:
       - aicontext/architecture/docker.md
       - docs/decisions/0007-bundled-dns-caddy-image.md
       - .github/workflows/caddy-image.yml
+      - scripts/check-caddy-image-release.py
+      - scripts/local-docker-build.ps1
+      - tests/test_caddy_image_release.py
+      - .gitignore
   workflow_dispatch:
+
+concurrency:
+  group: hsm-caddy-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -30,11 +40,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Test image release guards
+        run: python3 -m unittest tests/test_caddy_image_release.py
+
+      - name: Verify image version matches the reference compose
+        run: python3 scripts/check-caddy-image-release.py
+
       - name: Build image for runtime tests
         run: docker build --tag hsm-caddy:test caddy
 
       - name: Test modules, modes, validation, and secret handling
         run: sh caddy/test.sh hsm-caddy:test
+
+      - name: Refuse to overwrite an immutable version tag
+        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        run: python3 scripts/check-caddy-image-release.py --check-registry
 
       - name: Log in to Docker Hub
         if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')

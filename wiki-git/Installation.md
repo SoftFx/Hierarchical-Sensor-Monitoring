@@ -15,7 +15,9 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-1 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
 
-The image is published by the trusted-master CI workflow after its checks pass. First deployment of a new tag depends on that workflow completing after merge; a pull request does not publish the image. Wait for the successful master workflow before pulling it.
+Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only after a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
+
+Repository maintainers can use scripts/local-docker-build.ps1 to build the Caddy image locally as hsm-caddy:local for development; its generated Compose override selects that image. Normal installations use the published versioned image and do not build Caddy.
 
 Choose one certificate mode in .env. There is no automatic fallback:
 
@@ -39,6 +41,8 @@ curl -O https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/
 ~~~bash
 curl -o .env https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/.env.example
 ~~~
+
+Before the first docker compose up, edit .env: set HSM_DOMAIN to your real host name and, because the template defaults to Cloudflare DNS-01, provide CF_API_TOKEN. The copied template cannot start with its blank token. If inbound HTTP/TLS validation is available and you prefer it, change HSM_CERTIFICATE to letsencrypt-http instead.
 
 For Cloudflare DNS validation (the documented DNS-01 example), use a scoped API token with Zone:DNS:Edit and Zone:Zone:Read for the selected zone:
 
@@ -102,7 +106,7 @@ The issuer identifies the certificate authority; notAfter shows expiry. If there
 
 **letsencrypt-dns:** Caddy creates the required DNS TXT challenge using the selected provider token. Incoming HTTP challenge traffic is not required, so a trusted certificate can be issued when the server is behind CGNAT. DNS-01 proves control of the name for issuance only; it does not make HSM reachable from the internet. A/AAAA records, LAN routing, firewall rules, and the external access path remain separate network configuration.
 
-**self-signed:** Caddy issues and renews its internal certificate. Browsers warn unless the Caddy local CA is installed; collectors and agents need their untrusted-certificate option if the CA is not trusted.
+**self-signed:** Caddy issues and renews its internal certificate. Browsers warn unless the Caddy local CA is installed; collectors and agents need their untrusted-certificate option if the CA is not trusted. The CA certificate is stored beside the compose file at CaddyData/caddy/pki/authorities/local/root.crt.
 
 **custom:** Caddy serves the supplied PEM full chain and key. Renew externally and restart Caddy after replacing the files.
 
@@ -115,6 +119,35 @@ docker compose up -d
 ~~~
 
 Caddy is recreated and HSM data is untouched. There is no automatic fallback if issuance fails. Fix DNS or inbound reachability for HTTP-01, choose DNS-01 with a provider token, or deliberately select another mode. For custom certificates, install renewed files and restart Caddy. After trusted Let's Encrypt service, browsers may pin HSM_DOMAIN and its subdomains with HSTS for up to 30 days. If you switch to self-signed during that period, those browsers may refuse the web UI without a bypass; use a dedicated HSM hostname and plan certificate-mode changes accordingly.
+
+### Advanced Caddyfile customization
+
+The image includes the supported Caddyfile. The old inline Caddyfile from earlier compose setups is no longer part of the compose file, so copy any settings you still need into your own mounted Caddyfile. To restore customizations such as an ACME contact email, download the bundled file and edit your copy. Keep the global options and HSM routes, including the import that uses the entrypoint-selected HSM_TLS_SNIPPET. To set the ACME account contact email, add this directive inside the leading global options block:
+
+~~~bash
+curl -o Caddyfile https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/caddy/Caddyfile
+~~~
+
+~~~caddyfile
+email admin@example.com
+~~~
+
+Then create docker-compose.override.yml beside docker-compose.yml:
+
+~~~yaml
+services:
+  caddy:
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+~~~
+
+Compose automatically combines this override with the reference file. After changing the Caddyfile, the safest option is docker compose restart caddy. To reload without restarting, run the entrypoint wrapper so it selects and exports the configured TLS snippet:
+
+~~~bash
+docker exec hsm-caddy hsm-caddy-entrypoint caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+~~~
+
+A direct docker exec hsm-caddy caddy reload skips the entrypoint; HSM_TLS_SNIPPET is then unset and the Caddyfile cannot select the configured TLS mode. Keep the override file and mount in place for future Compose operations.
 
 ### Without Caddy
 
@@ -234,7 +267,7 @@ What must stay as it is, if you ever adapt it:
 
 ### Internal DNS name
 
-A publicly trusted Let's Encrypt certificate needs a publicly registered DNS name. DNS-01 can validate it using a TXT record even when the HSM host is behind CGNAT or has no inbound port 80. This validates the name for issuance only: external clients still need a working route, public address, firewall/NAT path, and matching A/AAAA records to reach the service. For a private-only name that Let's Encrypt cannot validate, use self-signed or a suitable custom certificate.
+A publicly trusted Let's Encrypt certificate needs a publicly registered DNS name. DNS-01 can validate it using a TXT record even when the HSM host is behind CGNAT or has no inbound port 80. This validates the name for issuance only: external clients still need a working route, public address, firewall/NAT path, and matching A/AAAA records to reach the service. For a private-only name that Let's Encrypt cannot validate, use self-signed or a suitable custom certificate. When clients need to trust Caddy's internal CA, install CaddyData/caddy/pki/authorities/local/root.crt on those clients.
 
 ### Moving an existing installation to Caddy
 

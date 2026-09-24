@@ -190,13 +190,20 @@ try {
     Write-Host ""
     Write-Host "Built: ${ImageName}:$ImageTag" -ForegroundColor Green
 
+    # Build the proxy from this checkout too. The published versioned image may not exist yet on a
+    # feature branch, and local validation must exercise the Caddyfile and modules being changed.
+    $localCaddyImage = "hsm-caddy:local"
+    Write-Host "Building bundled Caddy image $localCaddyImage ..."
+    docker build -t $localCaddyImage (Join-Path $repoRoot "caddy")
+    if ($LASTEXITCODE -ne 0) { throw "docker build failed for $localCaddyImage with exit code $LASTEXITCODE" }
+
     if ($NoRun) {
         Write-Host "-NoRun set - skipping docker compose up."
         return
     }
 
     # --- Ensure volume mount dirs exist (otherwise Docker creates them as root) ---
-    foreach ($vol in @("Logs", "Config", "Databases", "DatabasesBackups", "CaddyData")) {
+    foreach ($vol in @("Logs", "Config", "Databases", "DatabasesBackups", "CaddyData", "CaddyCertificates")) {
         New-Item -ItemType Directory -Force -Path (Join-Path $repoRoot $vol) | Out-Null
     }
 
@@ -214,6 +221,8 @@ services:
   app:
     image: '${ImageName}:${ImageTag}'
   caddy:
+    image: '$localCaddyImage'
+    pull_policy: never
     ports: !override
       - '127.0.0.1:44330:44330'
       - '127.0.0.1:44333:44333'
