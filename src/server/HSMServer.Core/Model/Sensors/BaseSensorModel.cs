@@ -97,7 +97,10 @@ namespace HSMServer.Core.Model
         // recovery's Ok was cancelled. The sweep item and the value item run
         // on the same single-reader product queue, so the queue's dispatch
         // order — value.DeliverySequence > LastExpirySequence — answers "was
-        // this value delivered after the expiry decision" exactly. Volatile
+        // this value delivered after the expiry decision" exactly, per ITEM
+        // (the scale of the stamp): the values of one batched item share
+        // its single stamp, so two values of the SAME item are never
+        // ordered against each other. Volatile
         // like the ticks: written on the product's queue thread (the
         // transition), read on the same thread by the discriminator, with
         // the barrier covering the maintenance/test threads that can reach

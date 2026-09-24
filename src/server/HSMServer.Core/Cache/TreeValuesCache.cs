@@ -880,7 +880,7 @@ namespace HSMServer.Core.Cache
                     if (request.Comment is not null && (!request.ChangeLast || lastValue is not null))
                     {
                         var value = request.BuildNewValue(sensor);
-                        var result = request.ChangeLast ? sensor.TryUpdateLastValue(value) : sensor.TryAddValue(value);
+                        var result = request.ChangeLast ? sensor.TryUpdateLastValue(value) : TryAddValueWithDeliveryStamp(sensor, value);
 
                         if (result)
                         {
@@ -2679,6 +2679,35 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        // The single gate a queue-delivered value passes through to enter the
+        // cache (#1452): stamp the delivering item's dispatch order onto the
+        // value, then add it. The TTL resolution discriminator reachable
+        // inside TryAddValue (TryValidate -> SensorTimeout -> SetExpiredSnapshot)
+        // compares this stamp against the expiry's LastExpirySequence, so an
+        // ingestion path that adds WITHOUT this gate silently reads as "never
+        // new data" and its recovery Ok is cancelled — the #1461 round-1
+        // review caught the UI add-value path (UpdateSensorValue) doing
+        // exactly that. The stamp is per ITEM, shared by every value of one
+        // batched AddSensorValuesRequest item: a stale value whose item
+        // performs the expiry and a fresh value resolving it in the SAME
+        // item both carry the item's sequence, and N > N reads false — the
+        // window-caused reading, same as the pre-#1452 wall-clock form
+        // (both values were stamped before the enqueue). Read mid-processing,
+        // not the item's own increment value: concurrent items on OTHER
+        // queues may advance the counter in between, which is harmless — the
+        // later of two same-queue stamps is still strictly greater (see
+        // _dispatchSequence). Deliberately NOT used by TryUpdateLastValue
+        // (ChangeLast): it replaces the last value and keeps the old value's
+        // timestamps — not new data under either witness — nor by the expiry
+        // marker's add in SetExpiredSnapshot: that add IS the expiry, not a
+        // delivery.
+        private bool TryAddValueWithDeliveryStamp(BaseSensorModel sensor, BaseValue value)
+        {
+            value.DeliverySequence = Volatile.Read(ref _dispatchSequence);
+
+            return sensor.TryAddValue(value);
+        }
+
         private bool TryAddNewSensorValue(AddSensorValueRequest request, out string error)
         {
             error = null;
@@ -2693,16 +2722,7 @@ namespace HSMServer.Core.Cache
             if (sensor.State == SensorState.Blocked)
                 return true;
 
-            // Stamp the delivery order BEFORE TryAddValue (#1452): the resolution
-            // discriminator reachable inside (TryValidate -> SensorExpired ->
-            // SetExpiredSnapshot) compares this against the expiry sweep's stamp.
-            // Read mid-processing, not the item's own increment value: concurrent
-            // items on OTHER queues may advance the counter in between, which is
-            // harmless — the later of two same-queue stamps is still strictly
-            // greater (see _dispatchSequence).
-            request.BaseValue.DeliverySequence = Volatile.Read(ref _dispatchSequence);
-
-            if (sensor.TryAddValue(request.BaseValue) && sensor.LastDbValue != null)
+            if (TryAddValueWithDeliveryStamp(sensor, request.BaseValue) && sensor.LastDbValue != null)
                SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
             SensorUpdateViewAndNotify(sensor);
@@ -3581,9 +3601,10 @@ namespace HSMServer.Core.Cache
                     // The ORDER witness, stamped at the same transition (#1452):
                     // the dispatch sequence of the item now running (the sweep,
                     // or a data-path item whose value is itself too stale to
-                    // lift anyTimeout). Read like TryAddNewSensorValue reads it
-                    // — mid-processing, possibly ahead of this item's own
-                    // increment — so both stamps share one scale.
+                    // lift anyTimeout). Read like the stamping gate reads it
+                    // (TryAddValueWithDeliveryStamp) — mid-processing, possibly
+                    // ahead of this item's own increment — so both stamps share
+                    // one scale.
                     sensor.LastExpirySequence = Volatile.Read(ref _dispatchSequence);
 
                     var value = sensor.GetTimeoutValue();
@@ -3600,11 +3621,18 @@ namespace HSMServer.Core.Cache
                 // DATA ARRIVED SINCE THE SENSOR EXPIRED, witnessed
                 // server-side on QUEUE ORDER (#1452): the expiry stamps
                 // LastExpirySequence above with the dispatch sequence of the
-                // item it ran in, every value delivered through a queue item
-                // stamps its DeliverySequence at that item (the sweep and
-                // the value travel the SAME single-reader product queue),
-                // and "the value's item was processed after the expiry's
-                // item" is exact. The pre-#1452 form compared wall-clock
+                // item it ran in, every queue-delivered value is stamped
+                // with its item's sequence by the one stamping gate
+                // (TryAddValueWithDeliveryStamp; the sweep and the value
+                // travel the SAME single-reader product queue), and "the
+                // value's ITEM was processed after the expiry's item" is
+                // exact — per ITEM, not per value: one batched
+                // AddSensorValuesRequest item stamps every value it holds
+                // alike, so a stale value whose item performs the expiry
+                // and a fresh value resolving it in the SAME item read
+                // N > N = false — the window-caused reading, same as the
+                // pre-#1452 wall-clock form (both values were stamped
+                // before the enqueue). The pre-#1452 form compared wall-clock
                 // instants — value.ReceivingTime > LastExpiryAt — which set
                 // two stamps of DIFFERENT pipeline stages against each
                 // other: ReceivingTime is taken when the API thread converts

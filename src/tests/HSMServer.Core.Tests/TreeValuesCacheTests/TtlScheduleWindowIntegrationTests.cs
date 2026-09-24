@@ -9,6 +9,7 @@ using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -336,6 +337,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.False(sensor.IsExpired);
             Assert.Equal(skewedTime, sensor.LastValue.Time);   // the resumed value actually landed
             Assert.False(sensor.LastValue.IsTimeout);          // a real value, not a marker
+            // The entry-point stamp on the REAL API path (the #1452 pin
+            // supplies its sequence by hand, so this asserts the invariant
+            // where it is produced): the delivering item's stamp must read
+            // newer than the expiry's.
+            Assert.True(sensor.LastValue.DeliverySequence > sensor.LastExpirySequence);
             Assert.Equal(-1, scheduled.RetryCount);            // cancelled on its OWN terms: outside AND stale
             Assert.Equal(1, recorder.CountFor(scheduled.Id));  // no second send for the scheduled policy
             Assert.Equal(2, recorder.CountFor(scheduleLess.Id)); // the GENUINE recovery Ok — the pin
@@ -502,6 +508,67 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             // The GENUINE recovery Ok — the pin. Red before #1452: the
             // stage-asymmetric ReceivingTime comparison cancelled it.
+            Assert.Equal(2, recorder.CountFor(scheduled.Id));
+        }
+
+
+        // === The UI add-value path: an operator's value IS new data (the #1461 round-1 review) ===
+
+        [Fact]
+        public async Task WindowOpen_SensorExpired_UiAddedValue_IsNewData_RecoveryOkSent()
+        {
+            // The round-1 regression pin: UpdateSensorValue (the UI's
+            // "add value" entry — HomeController.UpdateSensorStatus ->
+            // UpdateSensorValueAsync) builds the value itself and used to
+            // call TryAddValue WITHOUT the delivery stamp, so the value
+            // reached the discriminator with DeliverySequence 0 (a file
+            // sensor even carried the OLD value's sequence) and the
+            // operator's fresh value read as "no new data since the
+            // expiry" — its recovery Ok was cancelled, although the
+            // pre-#1452 wall-clock witness (ReceivingTime = UtcNow) had
+            // sent it. Every queue-delivered add must pass the same
+            // stamping gate as the API path.
+            var scheduleId = Guid.NewGuid();
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
+
+            var sensor = await CreateSensorWithStaleValueAsync("ttlUiAddedValue", TimeSpan.FromMinutes(15));
+
+            var scheduled = AddTtlPolicy(sensor, scheduleId, TimeSpan.FromMinutes(5));
+
+            using var recorder = new SentMessagesRecorder(_valuesCache, sensor.Id);
+
+            // In-window expiry: the alert fires and LastExpirySequence is
+            // stamped on the transition.
+            _valuesCache.RunSensorTimeoutStep(sensor);
+
+            Assert.True(sensor.IsExpired);
+            Assert.Equal(1, recorder.CountFor(scheduled.Id));
+
+            var expirySequence = sensor.LastExpirySequence;
+
+            // The UI request: ChangeLast = false ADDS a value (the comment
+            // is what makes the request carry one at all).
+            await _valuesCache.UpdateSensorValueAsync(new UpdateSensorValueRequestModel(sensor.Id, sensor.Path)
+            {
+                Id = sensor.Id,
+                Status = SensorStatus.Ok,
+                Comment = "operator-added value",
+                Value = "42",
+                ChangeLast = false,
+            });
+
+            await UntilAsync(() => !sensor.IsExpired, "the UI-added value must resolve the sensor on the data path");
+
+            Assert.False(sensor.IsExpired);
+            Assert.False(sensor.LastValue.IsTimeout); // a real value, not a marker
+
+            // The entry-point stamp on the UI path: the add's item ran
+            // after the expiry's stamp. Red without the fix — the built
+            // value entered with DeliverySequence 0.
+            Assert.True(sensor.LastValue.DeliverySequence > expirySequence);
+
+            // The GENUINE recovery Ok — the pin. Red without the fix: the
+            // window-caused reading cancelled it.
             Assert.Equal(2, recorder.CountFor(scheduled.Id));
         }
 
