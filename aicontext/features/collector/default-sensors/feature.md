@@ -298,6 +298,17 @@ production default factory is a no-op; two ready-made factories ship with the li
 `hsm_collector_install_linux_metric_sources` (`/proc` + `statvfs`, #1414). Each returns
 `HSM_RESULT_INVALID_STATE` off its platform and must be installed before `Start`.
 
+**`Free space on {letter} disk` posts WHOLE megabytes on Windows too (collector 0.8.2).** The
+Windows source divided the byte count as a double and posted the fraction
+(`51234.87109375`) where managed `WindowsDiskInfo.FreeSpaceMb` does an integer division
+(`BytesToMegabytes` → `(int)(value / (1 << 20))`) and posts `51234` — one sensor, two values on
+the same host, which is what rule #10 forbids; the Linux source already truncated the same way.
+The emitted value therefore changes on every Windows host on upgrade (it loses the fractional
+part). Found during #1426 and deferred then. Pinned by
+`native_windows_disk_binds_only_lettered_rows`, which now also requires a live read to be a
+whole number; the corpus cannot carry it, because the truncation lives in the platform reader
+the corpus deliberately replaces with a scripted source.
+
 ### Typed sources and read-failure reporting (#1426)
 
 The original seam carried a `double` and three outcomes, which left two gaps: a broken source could

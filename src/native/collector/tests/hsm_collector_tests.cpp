@@ -4569,6 +4569,26 @@ namespace
             "the opening prediction reads are calibration posts, which carry the 365-day ceiling "
             "rather than zero (#1445)");
 
+        // Free space is posted in WHOLE megabytes, like managed WindowsDiskInfo.FreeSpaceMb (an
+        // integer division of the byte count). The native source used to post the fraction, so the
+        // same sensor read 51234.87109375 here and 51234 from the managed collector on the same
+        // host — a rule #10 divergence on one sensor path.
+        double free_space[2] = { 0.0, 0.0 };
+        Require(
+            hsm_collector_test_drive_metric_source(
+                collector.value, "host/.computer/Disks monitoring/Free space on C disk", 2, free_space,
+                &recreated) == 2,
+            "the lettered free-disk row must read twice");
+        for (const double reading : free_space)
+        {
+            Require(reading > 0.0, "a live free-space read must be positive");
+            Require(
+                reading == std::floor(reading),
+                ("free space must be posted in whole megabytes, got: " +
+                 std::to_string(static_cast<long long>(reading * 1000.0)) + " (x1000)")
+                    .c_str());
+        }
+
         // The letter-less rows are asserted on the BINDING DECISION, not on how many samples they
         // produced. A count assertion cannot fail on a runner without an N: drive: the mis-bound row
         // reads nothing there either, and since #1426 a failing disk read answers SAMPLE_ERROR —
