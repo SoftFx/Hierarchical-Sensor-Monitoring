@@ -42,6 +42,8 @@ test('Alert template create, edit and remove', async ({ page }) => {
   // --- Remove ---
   const renamedRow = page.getByRole('row', { name: renamed });
   await renamedRow.locator('#actionButton').click();
-  await page.getByRole('link', { name: 'Remove' }).click();
+  // Remove is a POST+antiforgery form button, not a link (#1456 review) —
+  // same shape as the schedules table (#1409).
+  await page.getByRole('button', { name: 'Remove' }).click();
   await expect(page.getByRole('row', { name: renamed })).toHaveCount(0);
 });

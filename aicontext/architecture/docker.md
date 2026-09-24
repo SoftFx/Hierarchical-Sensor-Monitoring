@@ -4,26 +4,30 @@
 
 ## Production Deployment
 
-`docker-compose.yml` runs two services (#1411):
+docker-compose.yml runs HSM behind the published hsmonitoring/hsm-caddy:2.11.4-1 image:
 
-- `app`: the HSM server, unchanged. It serves HTTPS on both ports with its own certificate (see "TLS" below), publishes no ports, and is reachable only inside the compose network.
-- `caddy` (`caddy:2.11.4`, pinned): publishes `80`, `443`, `44330`, `44333` and obtains/renews the certificate clients see. It forwards to `https://app:44333` / `https://app:44330` with `tls_insecure_skip_verify`, because the upstream certificate is HSM's self-signed one. Its Caddyfile is inline in the compose file (`configs.content`, Docker Compose v2.23+), so the whole stack is one file.
-- Catch-all sites (`https://:443`, `https://:44333`, `https://:44330`) plus `default_sni`/`fallback_sni = HSM_DOMAIN` keep clients that address the host by IP (no SNI) or by another name working. Without them, Caddy refuses the TLS handshake and existing collectors and agent bundles go silent after a migration. Such clients receive the `HSM_DOMAIN` certificate, so they still need allow-untrusted. Verified live, and the per-port UI/Sensor-API split holds for them too. This certificate-selection behavior is why the image is pinned; re-verify IP / no-SNI / foreign-SNI requests when bumping it.
+- app serves HTTPS on ports 44330 and 44333 inside the compose network and publishes no ports.
+- caddy provides client-facing TLS, publishes ports 80, 443, 44330, and 44333, and proxies to the matching HSM listener. The image contains Caddy 2.11.4 with Cloudflare DNS module v0.2.4 and dynv6 module built from commit 71fad600afb29911aa04cbfd99f7d5d878c3bc48. Operators do not build it locally.
+- Pull requests build and test without publishing. The trusted-master workflow publishes only after checks pass. Versioned tags are immutable: each Caddy source/config/module change increments the workflow version and matching compose tag; existing tags cannot be overwritten. The latest tag advances only after a new version publishes.
+- For repository development, scripts/local-docker-build.ps1 builds caddy/ as hsm-caddy:local and uses a generated Compose override. Operator installs use the published versioned image and need no local Caddy build.
+- The Caddy configuration ships in the image as /etc/caddy/Caddyfile, with an entrypoint that validates settings and selects the TLS snippet. Compose configures image, environment, ports, and persistent data mounts.
+- Catch-all sites and default_sni/fallback_sni retain clients that use an IP address or another hostname. They receive the certificate for HSM_DOMAIN, which may not match their chosen address.
+- persist_config off prevents Caddy from saving expanded configuration. Caddy access logging is omitted because request headers can include HSM access keys.
 
-Two `.env` settings (next to the compose file) are **required**. Compose passes them to the `caddy` container as environment variables (`${VAR:?...}` there, so compose refuses to start without them), and the Caddyfile reads them as `{$VAR}`, written `{$$VAR}` in the compose file. They are deliberately **not** interpolated into `configs.content`: compose does not recreate a container when only an inline config's content changes. Verified: the same container kept the old mode. A changed environment does trigger the recreate, so "edit `.env`, `docker compose up -d`" really switches the mode (verified live: letsencrypt → self-signed → invalid value → self-signed).
+The required .env settings are HSM_DOMAIN and HSM_CERTIFICATE. The entrypoint validates them before Caddy starts. DNS challenge additionally needs HSM_DNS_PROVIDER=cloudflare with CF_API_TOKEN, or HSM_DNS_PROVIDER=dynv6 with DYNV6_API_TOKEN. Cloudflare's token needs Zone DNS Edit and Zone Zone Read for the selected zone. Tokens are read from the container environment and are not expanded into the Caddyfile or persisted Caddy state. However, docker compose config renders interpolated values; treat its output as secret.
 
-- `HSM_DOMAIN`: the address clients use. A default of `localhost` would be reachable remotely: a Caddy site address is a Host/SNI matcher, not a loopback bind.
-- `HSM_CERTIFICATE`: the certificate mode (#1431), chosen by the admin; nothing switches automatically.
-
-| Mode | Mechanism | Certificate |
+| Mode | Mechanism | Requirements and behavior |
 |---|---|---|
-| `HSM_CERTIFICATE=letsencrypt` | `import tls-letsencrypt` → `tls { issuer acme }` | Let's Encrypt only (HTTP-01 on 80 / TLS-ALPN on 443). If issuance fails there is no certificate and every handshake fails; a failed renewal keeps serving the still-valid certificate while Caddy retries. |
-| `HSM_CERTIFICATE=self-signed` | `import tls-self-signed` → `tls internal` | Caddy's internal CA, issued at start, cannot fail. Clients need allow-untrusted. |
-| without Caddy | `docker-compose.direct.yml` (only `app`, ports published) | HSM's own certificate, the pre-#1411 setup. Same data folders, so switching is lossless in both directions. |
+| letsencrypt-http | ACME HTTP-01/TLS-ALPN | Public DNS for HSM_DOMAIN must point to this host; ports 80/443 must be reachable. |
+| letsencrypt | Alias for letsencrypt-http | Preserves existing deployments. |
+| letsencrypt-dns | ACME DNS-01 via Cloudflare or dynv6 | Provider token required; inbound port 80 is not needed. DNS validation can issue behind CGNAT but does not provide external network access. |
+| self-signed | Caddy internal CA | Clients must trust that CA or allow untrusted TLS. |
+| custom | /certs/cert.pem and /certs/key.pem | Full chain and matching key mounted read-only from CaddyCertificates/; renewal is external and requires restarting Caddy. |
+| Without Caddy | docker-compose.direct.yml | HSM's existing PFX certificate is served directly; this workflow is unchanged. |
 
-A value other than those two fails Caddy's start ("File to import not found: tls-<value>"). **Why no automatic fallback:** #1434 first chained `issuer acme` → `issuer internal`. Issuers are tried in order on every obtain **and renewal**, so a transient Let's Encrypt failure at renewal time (30 days before expiry) could replace a still-valid trusted certificate with an internal one. Browsers that saw the trusted one keep HSTS for 30 days and would then refuse the UI with no click-through. The admin switches deliberately instead; `wiki-git/Installation.md` has the "situation → mode" table and the `openssl` check of the active issuer. Listing `issuer acme` explicitly drops no public CA: without an e-mail, Caddy 2.11.4's default is Let's Encrypt only (verified).
+There is no automatic fallback between certificate modes. A failed issuance does not silently select another certificate. Caddy state (ACME account and managed certificates) lives in ./CaddyData; its internal CA root is ./CaddyData/caddy/pki/authorities/local/root.crt. Custom certificate files are mounted from ./CaddyCertificates read-only.
 
-Caddy state (ACME account + certificates) lives in `./CaddyData` and must survive updates, or Let's Encrypt rate limits are hit on re-issue. The admin-facing guide is `wiki-git/Installation.md`. It embeds this compose file verbatim as the reference setup. `scripts/check-compose-wiki-sync.py` fails when the two differ, so change them together; it runs in `compose-wiki-sync.yml` on the pull request that touches either file (#1431). It replaced an xUnit test that ran only after merge, inside the server build that publishes the image. `scripts/local-docker-build.ps1` sets `HSM_DOMAIN=localhost` and publishes Caddy on `127.0.0.1` only.
+Advanced operators may mount a customized Caddyfile at /etc/caddy/Caddyfile through docker-compose.override.yml. Preserve the entrypoint-selected HSM_TLS_SNIPPET import. Restarting the service reruns the entrypoint. For an in-place reload, invoke the entrypoint wrapper: docker exec hsm-caddy hsm-caddy-entrypoint caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile. Calling caddy reload directly does not initialize the selected TLS snippet. The admin guide is wiki-git/Installation.md; its embedded compose reference must remain byte-for-byte synchronized with docker-compose.yml, enforced by scripts/check-compose-wiki-sync.py.
 
 What the HSM side relies on behind Caddy:
 
@@ -101,7 +105,7 @@ Two limits of a start period sized this way:
 | 44330 | Sensor API — DataCollector sends values here (`/api/sensors/*`) |
 | 44333 | Web UI — browser dashboard, user management, alerts |
 | 443 | Web UI on the standard port (compose/Caddy only) |
-| 80 | ACME challenge + redirect to HTTPS (compose/Caddy only) |
+| 80 | HTTP-01 challenge and HTTP-to-HTTPS redirect; not needed for DNS-01 issuance (compose/Caddy only) |
 
 ## Volumes
 
@@ -112,10 +116,11 @@ Two limits of a start period sized this way:
 | `Databases` | LevelDB data files (sensor history, metadata) |
 | `DatabasesBackups` | Automated SFTP backup snapshots |
 | `CaddyData` | Caddy certificates and ACME account (compose) |
+| `CaddyCertificates` | Optional custom certificate chain and key, mounted read-only at `/certs` |
 
 ## TLS
 
-Kestrel always serves HTTPS on both ports with `Config/<ServerCertificate.Name>` (PFX, optional `Key` password) or, when that file is absent, the bundled self-signed `default.server.pfx`. The certificate is loaded once at startup, so a renewed PFX needs a restart. Standalone `docker run` installs present this certificate to clients directly; in the compose setup only Caddy sees it.
+Kestrel continues to serve HTTPS on both ports with `Config/<ServerCertificate.Name>` (PFX, optional `Key` password) or, when absent, the bundled self-signed `default.server.pfx`. The direct compose file and standalone `docker run` continue to present that PFX certificate to clients. In the bundled compose setup, only Caddy sees the HSM certificate and presents the selected HTTP-ACME, DNS-ACME, internal, or custom PEM certificate to clients. The existing PFX workflow is unchanged.
 
 ## Notes
 

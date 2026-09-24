@@ -3,6 +3,7 @@
 ## Alerts and schedules
 * TTL alerts bound to a schedule gate on the schedule at evaluation time instead of the stale value's timestamp — fixes scheduled TTL alerts firing and re-sending overnight after a restart. Out-of-window repeats are cancelled per policy, window-caused resolutions stay silent, and a genuine recovery still sends its Ok.
 * Deleting an alert schedule now clears its references from sensor policies, product TTL policies and alert templates (persisted, restart-safe) instead of leaving dangling ids; missing-schedule lookups still fail open and are reported at most hourly per id. Migration note: creating, editing and deleting alert schedules is now admin-only; viewing stays open to all users.
+* Migration note: creating, editing and deleting alert templates is now admin-only, aligned with alert schedules; viewing (templates page, tree context) stays open to all users. The REST API is unchanged (own token grants).
 * Fixed a database race that could silently drop a policy from the index after concurrent template applies — alerts no longer vanish after a restart; orphaned rows self-heal at boot.
 
 ## API tokens
