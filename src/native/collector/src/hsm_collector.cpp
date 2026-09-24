@@ -3719,10 +3719,13 @@ namespace
             return HSM_RESULT_OK;
         }
 
-        const char* LastError() const
+        // A COPY, never an interior pointer (#1444): any thread may fail an operation and rewrite
+        // last_error_ while a host reads it, so the string is copied out under error_mutex_ and the
+        // C entry point hands the caller its own thread-local copy.
+        std::string LastErrorCopy() const
         {
-            std::lock_guard<std::mutex> guard(mutex_);
-            return last_error_.c_str();
+            std::lock_guard<std::mutex> guard(error_mutex_);
+            return last_error_;
         }
 
         // --- Top-CPU sampling (#1179) ---
@@ -3906,12 +3909,14 @@ namespace
 
         hsm_result_t SetError(hsm_result_t result, std::string message) const
         {
+            std::lock_guard<std::mutex> guard(error_mutex_);
             last_error_ = std::move(message);
             return result;
         }
 
         void ClearError() const
         {
+            std::lock_guard<std::mutex> guard(error_mutex_);
             last_error_.clear();
         }
 
@@ -5242,6 +5247,11 @@ namespace
         // emitted_start_epoch identifies the run its Start value went out for. Starts at 1 because
         // a fresh marker carries 0 = "never emitted".
         int64_t start_epoch_ = 0;
+        // The last failed operation's message. Written by SetError/ClearError from ANY thread —
+        // host calls and the collector's own workers alike — and read by hsm_collector_last_error,
+        // so it has its own LEAF mutex (#1444): it is taken while mutex_ is held, never the other
+        // way round, and nothing is called while it is held.
+        mutable std::mutex error_mutex_;
         mutable std::string last_error_;
 
         std::mutex queue_mutex_;
@@ -7410,10 +7420,23 @@ hsm_result_t hsm_collector_get_sent_json(const hsm_collector_t* collector, size_
 
 const char* hsm_collector_last_error(const hsm_collector_t* collector)
 {
-    if (collector == nullptr)
-        return "Collector handle is null.";
+    // The caller reads a pointer into THIS THREAD's copy of the message, never into the
+    // collector's own storage (#1444). Any thread — a host call or one of the collector's worker
+    // threads — can fail an operation and rewrite the stored string, so an interior pointer could
+    // be reallocated while the caller was still reading it, and no locking on the caller's side
+    // could prevent that. The thread-local buffer is refreshed on every call and stays valid until
+    // the SAME thread calls this function again: the classic C last-error contract, which fixes
+    // every existing foreign-language wrapper without an ABI change or a wrapper change.
+    static thread_local std::string buffer;
 
-    return collector->impl->LastError();
+    if (collector == nullptr)
+    {
+        buffer = "Collector handle is null.";
+        return buffer.c_str();
+    }
+
+    buffer = collector->impl->LastErrorCopy();
+    return buffer.c_str();
 }
 
 // ---- Alert builders -----------------------------------------------------------------------------

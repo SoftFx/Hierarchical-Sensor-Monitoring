@@ -298,6 +298,10 @@ add_test(NAME native_add_after_collector_destroy_is_rejected
 add_test(NAME native_sent_json_failure_reports_fresh_error
     COMMAND hsm_collector_tests native_sent_json_failure_reports_fresh_error
 )
+# #1444: the last-error string is read on one thread while another rewrites it (TSan proves it).
+add_test(NAME native_last_error_is_safe_under_concurrent_failures
+    COMMAND hsm_collector_tests native_last_error_is_safe_under_concurrent_failures
+)
 add_test(NAME native_wrapper_sent_json_missing_throws_message
     COMMAND hsm_collector_tests native_wrapper_sent_json_missing_throws_message
 )

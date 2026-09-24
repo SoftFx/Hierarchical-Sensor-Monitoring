@@ -15,6 +15,8 @@ The wrapper is a **thin convenience layer**: it adds no wire behavior. Every reg
 
 **Error strategy (resolved #1100):** exceptions. Every failing call throws `hsm::collector::Error` (carrying the collector's `last_error` for collector-scoped calls, or a static message + C result-code name for sensor-scoped calls). This matches the .NET wrapper's throwing style.
 
+**`hsm_collector_last_error` is thread-safe from 0.8.2 (#1444).** The stored message is written by whichever thread failed an operation — a host call or one of the collector's own worker threads — so the C entry point no longer returns an interior pointer into it: it copies the message (under a dedicated leaf mutex) into **thread-local** storage and returns a pointer into the caller's own copy, valid until *that thread* calls the function again. The classic C last-error contract, chosen over an additive `_ex`/caller-buffer entry point because it fixes every foreign-language wrapper (the Rust probe, the C++ wrapper, any host) **without an ABI change and without the wrapper changing a line** — a new entry point would only help callers that migrate to it, and would leave the unsafe one in place. The ABI is therefore unchanged (PATCH, not MINOR). Callers that need the text to outlive their next call must copy it, exactly as the C++ wrapper's `Collector::LastError()` already does.
+
 **Hosted by the HSM Agent (#1167).** The standalone Windows-service product `src/agent/` consumes this API to run the collector as an always-on service. See `agent/feature.md`.
 
 ---

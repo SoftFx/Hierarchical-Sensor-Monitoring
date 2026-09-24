@@ -2973,6 +2973,44 @@ namespace
         hsm_collector_destroy(collector);
     }
 
+    // hsm_collector_last_error must be readable while ANOTHER thread fails calls that rewrite the
+    // message (#1444). Before the fix the C entry point handed out an interior pointer into the
+    // collector's own std::string, which a failing call on any other thread could reallocate under
+    // the reader — a use-after-free no caller-side lock could prevent. The two messages below have
+    // different lengths on purpose, so the storage really is reallocated; the functional assertion
+    // is that a reader only ever sees a whole message, and the TSan lane proves the accesses are
+    // synchronized.
+    void NativeLastErrorIsSafeUnderConcurrentFailures()
+    {
+        auto collector = CreateCollector();
+        std::atomic<bool> stop{ false };
+
+        std::thread failing([&] {
+            while (!stop.load(std::memory_order_relaxed))
+            {
+                const char* json = nullptr;
+                hsm_collector_get_sent_json(collector.value, 999999, &json); // "Registration/payload not found."
+
+                hsm_sensor_t* sensor = nullptr;
+                hsm_collector_create_int_sensor(collector.value, "", &sensor); // "Sensor path must not be empty."
+            }
+        });
+
+        for (int read = 0; read < 5000; ++read)
+        {
+            const char* message = hsm_collector_last_error(collector.value);
+            Require(message != nullptr, "last error must never be null");
+
+            const std::string copy{ message };
+            Require(
+                copy.empty() || copy.back() == '.',
+                ("last error must be read as a whole message, got: " + copy).c_str());
+        }
+
+        stop.store(true, std::memory_order_relaxed);
+        failing.join();
+    }
+
     void NativeWrapperSentJsonMissingThrowsMessage()
     {
         hsm::collector::CollectorOptions options;
@@ -7357,6 +7395,8 @@ namespace
             { "native_invalid_argument_clears_out_params", [](const std::string&) { NativeInvalidArgumentClearsOutParams(); } },
             { "native_add_after_collector_destroy_is_rejected", [](const std::string&) { NativeAddAfterCollectorDestroyIsRejected(); } },
             { "native_sent_json_failure_reports_fresh_error", [](const std::string&) { NativeSentJsonFailureReportsFreshError(); } },
+            { "native_last_error_is_safe_under_concurrent_failures",
+              [](const std::string&) { NativeLastErrorIsSafeUnderConcurrentFailures(); } },
             { "native_wrapper_sent_json_missing_throws_message", [](const std::string&) { NativeWrapperSentJsonMissingThrowsMessage(); } },
             { "native_wrapper_registration_matches_abi", [](const std::string&) { NativeWrapperRegistrationMatchesAbi(); } },
             { "native_wrapper_alert_builder_matches_abi", [](const std::string&) { NativeWrapperAlertBuilderMatchesAbi(); } },
