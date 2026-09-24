@@ -2,6 +2,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Core.Model
 @using HSMServer.Extensions
+@using HSMServer.Model.Authentication
 @using HSMServer.Model.DataAlertTemplates
 @using HSMServer.Notifications.Chats
 
@@ -10,6 +11,15 @@
 @model DataAlertTemplateTableViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    // #1455: template MUTATION is admin-only ([AuthorizeIsAdmin] on
+    // AlertTemplate/Remove), so the Add Template link and the per-row
+    // Edit/Remove actions render for admins only — non-admins keep the
+    // read-only page instead of controls that answer 401 (same pattern as
+    // Views/AlertSchedules/Index.cshtml, #1409).
+    var userIsAdmin = Context.User is User user && user.IsAdmin;
+}
 
 <div class="container">
     <div class="row w-100 justify-content-center">
@@ -21,9 +31,12 @@
             <div class="d-flex justify-content-between my-2">
                 <h5>Alert Templates</h5>
                 <div class='d-flex col-md-auto'>
-                    <a href="@Html.Raw(Url.Action(nameof(AlertTemplatesController.New), ViewConstants.AlertTemplatesController))" class="btn btn-link p-0">
-                    <i class="fa-solid fa-plus"></i> Add Template
-                    </a>
+                    @if (userIsAdmin)
+                    {
+                        <a href="@Html.Raw(Url.Action(nameof(AlertTemplatesController.New), ViewConstants.AlertTemplatesController))" class="btn btn-link p-0">
+                        <i class="fa-solid fa-plus"></i> Add Template
+                        </a>
+                    }
                 </div>
             </div>
 
@@ -37,7 +50,10 @@
       <th scope="col">Name</th>
       <th scope="col">Path Template</th>
       <th scope="col">Affected Sensors</th>
-      <th scope="col">Actions</th>
+      @if (userIsAdmin)
+      {
+          <th scope="col">Actions</th>
+      }
     </tr>
   </thead>
   <tbody>
@@ -63,6 +79,8 @@
                                 <br />
                             }
                         }">@item.Sensors.Count</td>
+        @if (userIsAdmin)
+        {
         <td>
             <div>
                 <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
@@ -74,6 +92,7 @@
                 </div>
             </div>
         </td>
+        }
       </tr>
       }
 

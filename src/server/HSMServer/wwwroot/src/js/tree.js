@@ -684,7 +684,10 @@ function buildContextMenu(node) {
             };
         }
 
-        if (isSensor) {
+        // #1455: template mutation is admin-only — the context entry renders for
+        // admins only (curUserIsAdmin comes from Views/Tree/_Layout.cshtml), so a
+        // non-admin manager never reaches a form whose Save answers 401.
+        if (isSensor && curUserIsAdmin) {
             contextMenu["AlertTemplate"] = {
                 "label": `Add alert template...`,
                 separator_before: true,
