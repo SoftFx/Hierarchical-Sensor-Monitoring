@@ -57,10 +57,14 @@ FROM ${BASE_IMAGE}
 # so a wedged server fails the probe cleanly instead of being killed. Non-2xx exits 8.
 # --start-period: measured cold starts (#1465, local image on an SSD) are 1.4 s from container
 # start to "Now listening" with a 212 MB database of 34 products, and the same with an empty one
-# — the load is the tree (products, sensors, policies), not the history, whose interval databases
-# open lazily. 10 min is the margin for a slow disk and a far larger tree, and keeps the grace
-# the compose file granted before. Note that a probe failure inside the start period never marks
-# the container unhealthy, so this is also how long a wedge can hide right after a restart.
+# — for a current-format database the load is the tree (products, sensors, policies), not the
+# history, whose interval databases open lazily. 10 min is the margin for a slow disk and a far
+# larger tree, and keeps the grace the compose file granted before. The exception is an install
+# that still has legacy SensorValues_* folders: TreeValuesCache.MigrateDatabseV2() rewrites every
+# old value before app.Run(), so that start grows with history and can outlast the budget; the
+# migration keeps running in the container, so a second `docker compose up` comes up.
+# Note also that a probe failure inside the start period never marks the container unhealthy, so
+# this is also how long a wedge can hide right after a restart.
 # Kept on one line: a continuation inside CMD would land in the image config verbatim, and
 # `docker inspect` would print the padding as part of the command.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10m --retries=3 \

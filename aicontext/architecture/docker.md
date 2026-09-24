@@ -87,7 +87,12 @@ Verified live on the locally built image: `starting` → `healthy` at the first 
 | empty `Databases` | ~1.5 s | +5.2 s (first probe) |
 | 212 MB real database, 34 products | 1.4 s (`TreeValuesCache initialized` 0.4 s before it) | +5.1 s (first probe) |
 
-The startup cost is the tree — products, sensors, policies — not the history: the `SensorValuesV2_*` interval databases open lazily in the background. `start_period` 10 min is therefore a very large margin, kept for a slow disk and a much larger tree. Docker probes every 5 s inside the start period (its default `--start-interval`), so a healthy container is reported within seconds rather than after the first 30 s interval. The flip side: a probe failure inside the start period never marks the container unhealthy, so a wedge in the first 10 minutes after a restart stays invisible.
+For a current-format database the startup cost is the tree — products, sensors, policies — not the history: the `SensorValuesV2_*` interval databases open lazily in the background. `start_period` 10 min is therefore a very large margin, kept for a slow disk and a much larger tree. On Docker Engine 25 or newer the daemon probes every 5 s inside the start period (its default `--start-interval`), so a healthy container is reported within seconds; an older daemon waits for the first 30 s `interval` instead, which delays Caddy by that much.
+
+Two limits of a start period sized this way:
+
+- **Legacy-format history migrates before HSM listens.** `TreeValuesCache` calls `MigrateDatabseV2()` synchronously before `app.Run()`, and it reads and rewrites every value of every old `SensorValues_*` database, so that one start grows with history, not with the tree. On such an install the 11.5 min budget can run out: `app` goes `unhealthy` and `docker compose up` reports "dependency failed to start". The migration keeps running inside the container, so repeating `docker compose up` — or raising `start_period` in both copies beforehand — brings the stack up. The old 180-retry budget absorbed this without intervention; that is the price of #1465's timings.
+- **A probe failure inside the start period never marks the container unhealthy**, so a wedge in the first 10 minutes after a restart stays invisible.
 
 ## Ports
 

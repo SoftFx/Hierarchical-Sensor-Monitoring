@@ -187,6 +187,8 @@ services:
       timeout: 5s
       # Budget before caddy is skipped for good (see depends_on below): 10 min + 3 x 30 s. A
       # database that needs longer: raise start_period here (and in the image, or they drift).
+      # One known case: an install with legacy SensorValues_* folders rewrites all of them before
+      # HSM listens. The migration continues in the container, so `docker compose up` again works.
       retries: 3
       start_period: 10m
     environment:
@@ -288,7 +290,7 @@ What must stay as it is, if you ever adapt it:
 | `tls_insecure_skip_verify` | HSM still serves HTTPS with its own self-signed certificate; Caddy connects to it inside the compose network without checking it. |
 | `import tls-{$HSM_CERTIFICATE}` with the `tls-letsencrypt` / `tls-self-signed` blocks | Exactly one certificate source, chosen in `.env`. There is no automatic fallback, so a failed Let's Encrypt renewal never replaces a still-valid certificate. |
 | `HSM_DOMAIN` / `HSM_CERTIFICATE` in the `environment` of `caddy` | Caddy reads them at start. Because they are environment variables, changing `.env` and running `docker compose up -d` recreates Caddy with the new values. |
-| `healthcheck` on `app` + `condition: service_healthy` | Caddy starts only when HSM is serving. The check is an HTTPS request to the Sensor API every 30 s: `docker ps` shows `starting`, then `healthy`, and `unhealthy` if the server stops answering. From this version on the HSM image carries the same check itself, so any deployment — including `docker-compose.direct.yml` and a plain `docker run` — shows HSM's health; the copy here is kept identical so this file also works with an older image. HSM gets 10 minutes to load its database, plus 3 failed probes; past that `app` is `unhealthy`, `docker compose up` reports "dependency failed to start" and Caddy is not created. A database that needs longer: raise `start_period`. |
+| `healthcheck` on `app` + `condition: service_healthy` | Caddy starts only when HSM is serving. The check is an HTTPS request to the Sensor API every 30 s: `docker ps` shows `starting`, then `healthy`, and `unhealthy` if the server stops answering. From this version on the HSM image carries the same check itself, so any deployment — including `docker-compose.direct.yml` and a plain `docker run` — shows HSM's health; the copy here is kept identical so this file also works with an older image. HSM gets 10 minutes to load its database, plus 3 failed probes; past that `app` is `unhealthy`, `docker compose up` reports "dependency failed to start" and Caddy is not created. A database that needs longer: raise `start_period`. A very old installation converts its history on the first start of a new version, which can take longer than that; the conversion continues inside the container, so running `docker compose up -d` again brings the stack up. |
 | `default_sni` / `fallback_sni` and the `https://:443`, `https://:44333`, `https://:44330` sites | Clients that reach the server by IP or by another name keep working. They receive the `HSM_DOMAIN` certificate, which does not match the name they use, so they need "allow untrusted certificate". |
 | Public ports `44330` and `44333` | Collectors and agents connect to `https://<host>:44330`; downloaded agent bundles use this port. |
 | Ports `80` and `443` | Required for `letsencrypt`: Let's Encrypt checks the domain through them. With `self-signed` you can remove both lines; the web UI is then available on `44333` only. |
