@@ -162,12 +162,19 @@ namespace hsm
                 return ms >= static_cast<double>(kMaxPredictionMs) ? kMaxPredictionMs : static_cast<int64_t>(ms + 0.5);
             }
 
-            // The operator-facing rate, in MEGABYTES PER HOUR with three fixed decimals (#1460).
+            // The operator-facing rate, in MEGABYTES PER HOUR with up to SIX decimals (#1460).
             // Rendering MB/sec through the payload formatter (shortest round-trip, which is what
             // the managed comment interpolates) printed a realistic idle drain as
             // "1.6574101944286661E-06" — 17 digits of scientific notation in a sentence an
-            // operator reads. Per hour is the scale this sensor answers on anyway, and three
-            // decimals keep a KB/h-sized trickle visible.
+            // operator reads. Per hour is the scale this sensor answers on anyway.
+            //
+            // Six decimals, not three, because the "Mbytes" label is only accurate on Windows:
+            // the comment divides by 1 MiB whatever unit the platform reports free space in, and
+            // the Unix reader reports kB, so a Unix number is 1024x smaller than its label says.
+            // Three decimals turned an ordinary Unix drain back into "0.000" — the same
+            // structurally-zero reading this issue is about. Trailing zeros are trimmed (at least
+            // one decimal is always kept), so a fast drain still reads "1800.0" rather than
+            // "1800.000000".
             //
             // The digits are produced by INTEGER arithmetic on purpose: the two collectors must
             // emit byte-identical text, and a printf/ToString("F3") pair does not guarantee that
@@ -179,7 +186,7 @@ namespace hsm
             static std::string FormatRatePerHour(double mb_per_sec)
             {
                 const double per_hour = mb_per_sec * 3600.0;
-                const double scaled = per_hour * 1000.0;
+                const double scaled = per_hour * 1000000.0;
 
                 // A non-finite rate cannot go through the round-trip formatter (it parses the
                 // exponent out of std::to_chars output, which has none for nan/inf), so name it the
@@ -196,10 +203,12 @@ namespace hsm
                 const unsigned long long magnitude =
                     units < 0 ? 0ULL - static_cast<unsigned long long>(units) : static_cast<unsigned long long>(units);
 
-                std::string fraction = std::to_string(magnitude % 1000ULL);
-                fraction.insert(fraction.begin(), 3 - fraction.size(), '0');
+                std::string fraction = std::to_string(magnitude % 1000000ULL);
+                fraction.insert(fraction.begin(), 6 - fraction.size(), '0');
+                while (fraction.size() > 1 && fraction.back() == '0')
+                    fraction.pop_back();
 
-                return (units < 0 ? "-" : "") + std::to_string(magnitude / 1000ULL) + "." + fraction;
+                return (units < 0 ? "-" : "") + std::to_string(magnitude / 1000000ULL) + "." + fraction;
             }
 
             const int64_t calibration_requests_;

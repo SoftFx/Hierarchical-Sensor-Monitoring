@@ -38,9 +38,12 @@
 #     calibrating                 -> 365.00:00:00, OffTime, "Calibration request (n/N). Value cannot be calculated yet."
 #   The ceiling stands for "no actionable estimate"; 00:00:00 is reserved for a disk with no free
 #   space left and is never a placeholder, because an alert reads it as "full NOW".
-# - X is the rate in MB/HOUR with three fixed decimals (#1460), rounded from the same double by
-#   integer arithmetic in both collectors so the text is byte-identical; it used to be MB/sec in
-#   shortest-round-trip form, which rendered a slow drain as a 17-digit scientific literal.
+# - X is the rate in MB/HOUR with up to six decimals, trailing zeros trimmed to at least one
+#   (#1460), rounded from the same double by integer arithmetic in both collectors so the text
+#   is byte-identical; it used to be MB/sec in shortest-round-trip form, which rendered a slow
+#   drain as a 17-digit scientific literal. Six decimals because the "Mbytes" label is only
+#   accurate on Windows (the Unix reader reports kB, so a Unix number is 1024x smaller than its
+#   label), and three would round an ordinary Unix drain back to 0.000.
 # - Calibration counts SAMPLES, not posts: (n/N) means n completed free-space measurements.
 # - The NUMBER of calibration posts is deliberately NOT pinned. Managed starts its send loop in
 #   InitAsync (first post due immediately) while the sampler's first tick is aligned to the next
@@ -136,7 +139,7 @@ disk_prediction_calibration_counts_samples_not_posts|expect_payload_not_contains
 # The comment is OPERATOR-FACING text, so the rate has to be readable (#1460). It used to render
 # MB/sec through the payload's shortest-round-trip formatter, which printed a realistic idle drain
 # as "1.6574101944286661E-06 Mbytes/sec" - 17 digits of scientific notation in a sentence a human
-# reads. It is now MB/HOUR with three fixed decimals, rounded with integer arithmetic so both
+# reads. It is now MB/HOUR with up to six decimals, rounded with integer arithmetic so both
 # collectors emit the same bytes. This case drives a drain of 100 units/sec, which is ~0.34 MB/hour:
 # small enough that the old format was scientific, large enough that a 250 ms interval survives the
 # managed driver's truncation of free space to a long. The free space is far past the ceiling, so

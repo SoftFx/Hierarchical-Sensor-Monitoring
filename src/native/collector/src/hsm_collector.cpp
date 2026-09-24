@@ -3913,6 +3913,13 @@ namespace
 
             {
                 std::lock_guard<std::mutex> guard(mutex_);
+
+                // Starting counts on purpose: an Add racing Start (or made from a Starting
+                // listener) would otherwise fall between the two arming points — this one declines
+                // and Start's own StartSelfMonitor already read the flags — and leave the loop
+                // unarmed for the whole run. Arming during Starting can put the first beat in the
+                // queue ahead of the Start one-shot values; that is harmless, since the data gate
+                // accepts Starting and the worker drains whatever is queued once it is up.
                 if (state_ != CollectorState::Starting && state_ != CollectorState::Running)
                     return; // Not started yet: Start arms it. Stopped/Disposed: nothing to arm.
             }

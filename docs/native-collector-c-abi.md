@@ -167,7 +167,7 @@ Version history:
   longer races the self-monitor thread. `.module/Service alive` beats on the sensor's own post
   period instead of the package-collect period, and `.module/Collector queue stats/Package
   content size` registers `Unit.KB` and reports kilobytes. The disk-prediction COMMENT prints
-  the rate in MB/hour with three decimals (the sensor value is unchanged).
+  the rate in MB/hour with up to six decimals (the sensor value is unchanged).
 - **0.8.1** (#1445) — no ABI change. The disk-space prediction math behind
   `HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION` / `HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION` was
   rewritten (signed drain EMA over a six-hour window sampled every 10 min, five explicit posted

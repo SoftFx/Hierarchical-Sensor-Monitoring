@@ -184,11 +184,16 @@ EMA засеялась бы огромным отрицательным знач
 - the comment divides the speed by 1 MiB whatever unit the platform's `IDiskInfo` reports in
   (bytes on Windows, kB on Unix) — mirrored rather than corrected, because the two collectors
   must produce the same comment for the same host;
-- **the rate is printed in MB/HOUR with three fixed decimals (#1460, collector 3.5.4 / native
+- **the rate is printed in MB/HOUR with up to SIX decimals (#1460, collector 3.5.4 / native
   0.8.2).** It used to be MB/sec in the payload's shortest-round-trip form, so a realistic idle
   drain reached the operator as `Free space decreases by 1.6574101944286661E-06 Mbytes/sec.` —
   a 17-digit scientific literal in a sentence a human reads. Per hour is the scale a 365-day
-  sensor answers on, and three decimals keep a KB/h trickle visible. The sensor VALUE is
+  sensor answers on. Six decimals rather than three **because the `Mbytes` label above is only
+  accurate on Windows**: the comment divides by 1 MiB whatever unit the platform reports free
+  space in, and the Unix reader reports kB, so a Unix number is 1024x smaller than its label
+  says — at three decimals an ordinary Unix drain rounded back to `0.000`, the same
+  structurally-zero reading the issue was about. Trailing zeros are trimmed with one decimal
+  always kept, so a fast drain reads `1800.0` rather than `1800.000000`. The sensor VALUE is
   unaffected: only the comment text changed. The digits are produced by INTEGER arithmetic
   (scale the same double by 1000, round half away from zero) rather than by `ToString("F3")` /
   `printf("%.3f")`, because those two disagree at a decimal midpoint (half-away-from-zero vs

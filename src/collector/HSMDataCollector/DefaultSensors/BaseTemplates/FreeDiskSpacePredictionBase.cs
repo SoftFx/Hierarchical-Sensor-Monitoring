@@ -187,11 +187,18 @@ namespace HSMDataCollector.DefaultSensors
 
 
         /// <summary>
-        /// The operator-facing rate, in MEGABYTES PER HOUR with three fixed decimals (#1460).
+        /// The operator-facing rate, in MEGABYTES PER HOUR with up to six decimals (#1460).
         /// Rendering MB/sec through the round-trip form printed a realistic idle drain as
         /// "1.6574101944286661E-06" — 17 digits of scientific notation in a sentence an operator
-        /// reads. Per hour is the scale this sensor answers on anyway, and three decimals keep a
-        /// KB/h-sized trickle visible.
+        /// reads. Per hour is the scale this sensor answers on anyway.
+        /// <para>
+        /// Six decimals, not three, because the "Mbytes" label is only accurate on Windows: the
+        /// comment divides by 1 MiB whatever unit the platform's <see cref="IDiskInfo"/> reports
+        /// free space in, and the Unix reader reports kB, so a Unix number is 1024x smaller than
+        /// its label says. Three decimals turned an ordinary Unix drain back into "0.000" — the
+        /// same structurally-zero reading this issue is about. Trailing zeros are trimmed (one
+        /// decimal is always kept), so a fast drain still reads "1800.0".
+        /// </para>
         /// <para>
         /// The digits come from INTEGER arithmetic on purpose: the native collector must emit
         /// byte-identical text (repo rule #10), and a ToString("F3")/printf pair does not guarantee
@@ -204,7 +211,7 @@ namespace HSMDataCollector.DefaultSensors
         private static string FormatRatePerHour(double mbPerSec)
         {
             var perHour = mbPerSec * 3600.0;
-            var scaled = perHour * 1000.0;
+            var scaled = perHour * 1000000.0;
 
             // Named explicitly so the native mirror can match: its round-trip formatter parses an
             // exponent out of the digits and has none to parse for a non-finite value.
@@ -222,10 +229,15 @@ namespace HSMDataCollector.DefaultSensors
             var units = (long)Math.Round(scaled, MidpointRounding.AwayFromZero);
             var magnitude = units < 0 ? (ulong)(-units) : (ulong)units;
 
-            var fraction = (magnitude % 1000UL).ToString(CultureInfo.InvariantCulture).PadLeft(3, '0');
+            var fraction = (magnitude % 1000000UL).ToString(CultureInfo.InvariantCulture)
+                                                  .PadLeft(6, '0')
+                                                  .TrimEnd('0');
+
+            if (fraction.Length == 0)
+                fraction = "0";
 
             return (units < 0 ? "-" : string.Empty) +
-                   (magnitude / 1000UL).ToString(CultureInfo.InvariantCulture) + "." + fraction;
+                   (magnitude / 1000000UL).ToString(CultureInfo.InvariantCulture) + "." + fraction;
         }
 
         protected sealed override SensorStatus GetStatus() =>
