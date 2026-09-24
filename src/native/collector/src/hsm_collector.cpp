@@ -4349,21 +4349,54 @@ namespace
                 self_monitor_thread_.join();
         }
 
+        // The heartbeat's own post period: the ".module/Service alive" catalog row's PostDataPeriod
+        // (15 s), which is the knob managed drives CollectorAlive from (#1437).
+        static int64_t ServiceAliveBeatPeriodMs()
+        {
+            const DefaultSensorDef* def = FindDefaultSensorDef(HSM_DEFAULT_COLLECTOR_ALIVE);
+            return def != nullptr && def->post_period_ms > 0 ? def->post_period_ms : 15000;
+        }
+
         // Heartbeat + queue-overflow delta on a dedicated thread (no queue_mutex_ held, so AddBool —
-        // which enqueues — is safe). Posts Service alive immediately on start, then every collect period.
+        // which enqueues — is safe). Posts Service alive immediately on start, then every beat period.
         void RunSelfMonitorLoop()
         {
-            const auto period = std::chrono::milliseconds(collect_period_ms_);
+            // TWO independent cadences, each on its own knob (#1437). The heartbeat follows the
+            // SENSOR's post period, mirroring managed, where CollectorAlive is a MonitoringSensorBase
+            // driven by PostDataPeriod; the overflow counter is sampled once per package-collect
+            // cycle, because that is the cycle that evicts values. They default to the same 15 s,
+            // but they are different knobs: driving the beat from the collect period meant that
+            // raising the collect period above the sensor's registered 1 min TTL made the server
+            // call a healthy collector dead.
+            const auto beat_period = std::chrono::milliseconds(ServiceAliveBeatPeriodMs());
+            const auto overflow_period = std::chrono::milliseconds(collect_period_ms_);
+
+            // Both fire on the first pass: the immediate beat on Start is contractual.
+            auto next_beat = std::chrono::steady_clock::now();
+            auto next_overflow = next_beat;
+
             while (true)
             {
                 // One snapshot per tick (#1453): a host is allowed to add the collector-monitoring
                 // or queue group AFTER Start, which publishes these handles from another thread
                 // while this loop is already running.
                 const SelfMonitorHandles handles = SelfMonitorSnapshot();
+                const auto now = std::chrono::steady_clock::now();
+
+                // Both deadlines advance BEFORE anything is posted, so a throwing post cannot turn
+                // the loop into a spin. A handle that is not registered yet leaves ITS deadline in
+                // the past, so a group added after Start beats on the very next pass.
+                const bool beat_due = handles.service_alive && now >= next_beat;
+                if (beat_due)
+                    next_beat = now + beat_period;
+
+                const bool overflow_due = now >= next_overflow;
+                if (overflow_due)
+                    next_overflow = now + overflow_period;
 
                 try
                 {
-                    if (handles.service_alive)
+                    if (beat_due)
                     {
                         // The very first heartbeat of the sensor's life is `false` — a start
                         // marker the server renders as the boundary of a new collector run, then
@@ -4376,8 +4409,9 @@ namespace
                         handles.service_alive->AddBool(alive, HSM_SENSOR_STATUS_OK, nullptr);
                     }
 
-                    // Overflow since the last tick — post only when non-zero so the bar isn't all-zeros.
-                    if (handles.queue_overflow)
+                    // Overflow since the last collect cycle — post only when non-zero so the bar
+                    // isn't all-zeros.
+                    if (overflow_due && handles.queue_overflow)
                     {
                         const std::int64_t overflowed = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
                         if (overflowed > 0)
@@ -4389,8 +4423,19 @@ namespace
                     // A post must never let an exception escape this thread (-> std::terminate).
                 }
 
+                // Sleep to the earliest pending deadline. next_overflow is always in the future by
+                // now, so the wait is bounded even while the heartbeat handle is still unregistered.
+                auto wake = next_overflow;
+                if (handles.service_alive && next_beat < wake)
+                    wake = next_beat;
+
+                const auto wait = wake - std::chrono::steady_clock::now();
+
                 std::unique_lock<std::mutex> lock(self_monitor_cv_mutex_);
-                if (self_monitor_cv_.wait_for(lock, period, [this] { return self_monitor_stop_; }))
+                if (self_monitor_stop_)
+                    return;
+                if (wait > std::chrono::steady_clock::duration::zero() &&
+                    self_monitor_cv_.wait_for(lock, wait, [this] { return self_monitor_stop_; }))
                     return;
             }
         }

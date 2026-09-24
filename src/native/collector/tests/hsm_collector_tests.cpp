@@ -5008,6 +5008,31 @@ namespace
         Contains(beats[1], "\"Value\":true");
     }
 
+    // The heartbeat follows the SENSOR's post period (15 s), not the collector's package-collect
+    // period (#1437) — managed drives CollectorAlive from PostDataPeriod. The collector below
+    // collects every 20 ms: before the fix that produced a beat every 20 ms (and, the other way
+    // round, a collect period raised above the sensor's 1 min TTL starved the beat until the
+    // server called a healthy collector dead). One second is 15x below the beat period, so the
+    // immediate Start beat must still be the only one.
+    void NativeServiceAliveBeatsOnItsOwnPeriod()
+    {
+        auto collector = CreateCollector(); // package_collect_period_ms = 20
+
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "add collector monitoring sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto beats = PayloadsForPath(collector.value, "/Service alive\"");
+        Require(
+            beats.size() == 1,
+            ("the beat must follow the sensor period, not the collect period; beats: " +
+             std::to_string(beats.size()))
+                .c_str());
+    }
+
     // Registering the collector-monitoring group AFTER Start is allowed, and it publishes the
     // heartbeat handle from the CALLER's thread while the self-monitor thread is already reading
     // it — the data race #1453 (caught by the TSan lane, not by a functional assertion). The queue
@@ -7333,6 +7358,8 @@ namespace
 #endif
             { "native_collector_self_monitoring_emits",
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
+            { "native_service_alive_beats_on_its_own_period",
+              [](const std::string&) { NativeServiceAliveBeatsOnItsOwnPeriod(); } },
             { "native_self_monitor_handle_published_after_start_is_synchronized",
               [](const std::string&) { NativeSelfMonitorHandlePublishedAfterStartIsSynchronized(); } },
             { "native_service_alive_marks_the_first_beat",

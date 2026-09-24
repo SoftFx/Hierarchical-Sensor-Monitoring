@@ -13,13 +13,13 @@
 #                                         format cannot hide by dropping out of the count. The
 #                                         instant itself is wall-clock and is never compared.
 # Notes:
-# - The heartbeat period is each implementation's own post period (managed: the sensor's
-#   PostDataPeriod, 15 s; native: the collector's package-collect period). Every case therefore runs
-#   with a 60 s collect period and relies ONLY on the beat that fires immediately on Start; a second
-#   beat is provoked by RESTARTING, never by waiting one out. The same long period keeps everything
+# - The heartbeat period is the SENSOR's own post period (PostDataPeriod, 15 s) in BOTH collectors
+#   (#1437; the native beat used to follow the collector's package-collect period instead). Every
+#   case therefore relies ONLY on the beat that fires immediately on Start; a second beat is
+#   provoked by RESTARTING, never by waiting one out. The same long period keeps everything
 #   queued until the graceful stop flushes it, so every assertion runs after a stop.
 # - `sleep_ms` after each Start is the one wall-clock dependency, and it is NOT symmetric. Too many
-#   beats is impossible (1.5 s is 40x below the 60 s beat period), but too FEW is possible: the
+#   beats is impossible (1.5 s is 10x below the 15 s beat period), but too FEW is possible: the
 #   immediate beat is published from a scheduler callback, and a Stop landing mid-callback drops it
 #   for good (the managed lifecycle-epoch guard), which no amount of polling afterwards can recover.
 #   The window is therefore sized for a loaded CI agent, not for the observed latency.
@@ -38,6 +38,22 @@ service_alive_first_beat_is_false|stop
 service_alive_first_beat_is_false|expect_sent_count|3
 service_alive_first_beat_is_false|expect_payload_type_counts|1|0|0|0|0
 service_alive_first_beat_is_false|expect_eventually_payload_contains|/Service alive","Value":false,"Status":1,"Comment":""|5
+
+# The beat follows the SENSOR's own 15 s post period, NOT the collector's package-collect period
+# (#1437). The collect period here is 300 ms — 50x faster than the beat — so a collector that drove
+# the heartbeat off it would post ~5 beats in this window instead of the one Start beat. The two
+# knobs default to the same 15 s, which is why the divergence was invisible in production until a
+# host raised the collect period above the sensor's registered 1 min TTL and the server called a
+# healthy collector dead. Asymmetric like the cases above: too FEW beats is the flake mode, too
+# many is impossible (1.5 s is 10x below the beat period).
+service_alive_beats_on_the_sensor_period|create_collector_with_limits|20000|50|300
+service_alive_beats_on_the_sensor_period|add_collector_monitoring_sensors
+service_alive_beats_on_the_sensor_period|start
+service_alive_beats_on_the_sensor_period|sleep_ms|1500
+service_alive_beats_on_the_sensor_period|stop
+service_alive_beats_on_the_sensor_period|expect_sent_count|3
+service_alive_beats_on_the_sensor_period|expect_payload_type_counts|1|0|0|0|0
+service_alive_beats_on_the_sensor_period|expect_eventually_payload_contains|/Service alive","Value":false|5
 
 # The start marker is armed once per SENSOR, not once per run: the beat after a restart is `true`.
 service_alive_beats_true_after_restart|create_collector_with_limits|20000|50|60000
