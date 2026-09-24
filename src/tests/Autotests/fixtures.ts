@@ -61,7 +61,8 @@ export const cleanup = {
       const row = page.getByRole('row', { name });
       if (await row.count() === 0) return;
       await row.first().locator('#actionButton').click();
-      await page.getByRole('link', { name: 'Remove' }).click();
+      // Remove is a POST+antiforgery form button, not a link (#1456 review).
+      await page.getByRole('button', { name: 'Remove' }).click();
     } catch (e) {
       console.warn(`[cleanup] alertTemplate "${name}":`, e instanceof Error ? e.message : e);
     }

@@ -39,6 +39,10 @@
     var getSourceSettings = "@Url.Action(nameof(DashboardsController.GetSourceSettings), ViewConstants.DashboardsController)";
 
     var createAlertTemplate = "@Url.Action(nameof(AlertTemplatesController.New), ViewConstants.AlertTemplatesController)";
+    // #1455: creating an alert template is admin-only ([AuthorizeIsAdmin] on the
+    // AlertTemplatesController mutations) — the tree context entry renders for
+    // admins only, so a non-admin manager never reaches a form whose Save 401s.
+    var curUserIsAdmin = "@(user?.IsAdmin)" === "True";
 </script>
 
 
