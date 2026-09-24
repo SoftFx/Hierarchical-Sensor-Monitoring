@@ -1,6 +1,10 @@
 # Linux host + Docker Compose probe (garage-server)
 
-> Status: **accepted** (owner review, 2026-09-22). Epic: #1413; workstreams #1414–#1418, #1424.
+> Status: **phase 1 delivered and verified on the real host** (2026-09-24). Epic: #1413.
+> The probe runs on garage-server reporting exactly the managed Unix default set; the Docker,
+> disk and backup sensors this document planned are **not built** and are gated on a per-sensor
+> agreement with the owner (§4.2a). Releases are on hold by owner decision (§4.5).
+> See §9 for what shipped, §10 for what the work uncovered, §11 for what remains.
 > Source task: garage_administration `hsm/TASK-linux-docker-monitoring.md`.
 > Scope: a Linux probe that reports Debian host metrics, Docker Compose service metrics,
 > SSD/archive-disk capacity and backup-contract signals into the existing HSM server.
@@ -167,10 +171,35 @@ change**. An explicit `CollectorOptions::ca_file` → `CURLOPT_CAINFO` knob (tod
 lever is `allow_untrusted_server_certificate`, which disables both checks — banned by the
 task) is an optional small slice, not on the critical path.
 
-### 4.2 Sensor tree (computer=`garage-server`, module=`LinuxProbe`, dedicated product)
+### 4.2 Sensor tree — what the probe actually registers today
 
-Default-sensor paths/types/options are whatever the published collector registers — not
-redefined here. Probe-added sensors (all via the public API):
+**Owner rule, decided 2026-09-22 and overriding the original plan below: "first do everything
+the .NET collector already has; other sensors come later, agreed one by one."** The probe
+therefore registers **exactly** the set the managed collector registers on Linux and nothing of
+its own. The three probe-local sensors this document originally specified — load average,
+logical cores and per-source status — were implemented, then removed again before merge.
+
+The registered set is 15 paths, byte-identical in registration to managed (a 330 s capture of
+both collectors against one fake server; the table lives in `src/probe-linux/README.md` and a
+test pins the exact path list):
+
+- `.computer/Total CPU`, `.computer/Free RAM memory`
+- `.computer/Disks monitoring/Free space on disk` + `… prediction`
+- `.module/Process process/{Process CPU, Process memory, Process thread count}`
+- `.module/{Service alive, Collector version, Collector errors, Version}`
+- `.module/Collector queue stats/{Items count in package, Package content size, Package process time, Queue overflow}`
+
+Two deliberate differences from managed, both recorded in code: the process node keeps the
+fixed name `Process process` so one alert template matches every host (#1429), and
+`ThreadPool thread count` is absent because a native process has no CLR thread pool — the
+Windows agent behaves the same way.
+
+### 4.2a Proposed sensors — NOT built, each needs owner agreement first
+
+Everything in the table below is the original Stage-0 proposal. None of it exists. Per the owner
+rule above, each sensor is agreed individually before implementation, with its data source, what
+it costs in history, and whether it belongs in the shared collector catalog rather than in the
+probe. Workstreams #1416 (Docker) and #1417 (disks, backup contract) stay open for exactly this.
 
 | Path (under garage-server/LinuxProbe/) | Type | Period | TTL | Notes |
 |---|---|---|---|---|
@@ -188,6 +217,7 @@ redefined here. Probe-added sensors (all via the public API):
 | `Backup/<job>/{Last result, Duration min, Missed deadline}` | Enum/Double/Bool | on new result | job-specific | From the backup task's snapshot contract (§4.4). |
 | `Backup/<job>/Last success heartbeat` | Bool/TTL | only on *new* confirmed success | deadline-derived | Re-reading the same result never refreshes it; "never succeeded yet" is a distinct initial state. |
 | `Probe/Sources/<name> status` | Enum {ok, degraded, failed} | 60 s | 3 min | Per-source failure isolation made visible. |
+| `CPU/Load average {1m,5m,15m}`, `CPU/Logical cores` | — | — | — | Built and then **removed** under the owner rule in §4.2; revisit as catalog sensors shared with managed rather than probe-local ones. |
 
 Path identity: from `com.docker.compose.project`/`.service` labels — stable across
 recreate/upgrade. Normalization: `[A-Za-z0-9_-]` kept, others → `_`, collisions detected via
@@ -246,6 +276,16 @@ runbook) over > 20 min. SMART/temperature of archive disks is optional and must 
 standby-gated (`smartctl -n standby`).
 
 ### 4.5 Distribution & install channel
+
+> **Reality check (2026-09-24).** The `probe-v*` channel below is **not built yet** (#1418):
+> `src/server/HSMServer/probe-release.txt` is empty, so on an ordinary server the download
+> endpoint answers 503 by design. garage-server runs a hand-built trial package staged into a
+> locally built server image. The owner has put releases on hold, so no `probe-v*`, no
+> `agent-v*` and no NuGet push are made, even though master carries collector 0.8.1, HsmAgent
+> 0.5.35 and managed collector 3.5.3. One thing did publish: the `collector-v0.8.1` tag and its
+> vcpkg-registry entry. **Packaging lesson from the trial:** a version that sorts *below* the
+> installed one (`0.1.0~rc1` after `0.1.0~trial2`) makes `apt-get install` refuse the upgrade,
+> so the channel must guarantee forward-sorting versions.
 
 Ship as a **`.deb` package published through a GitHub Release**, mirroring the repo's
 existing release channels (`agent-v*`, `wrapper-v*`): tag `probe-v<version>` → CI workflow
@@ -336,7 +376,20 @@ product and the client runs one command and is connected
   container against a locally built `.deb`. The server pipeline guards (the Windows zip and the
   Docker image both contain the staged `.deb`) mirror the #1266 agent guards.
 
-## 5. Resource budget & retention (to validate in the PR)
+## 5. Resource budget & retention — measured on garage-server
+
+Measured over 24 h on the real host (Debian 13, i5-2500), not estimated:
+
+| | Target in the plan | Measured |
+|---|---|---|
+| Steady-state RSS | ≤ 64 MB | 3.9 MB reported by systemd right after start, 6.7 MB peak, 17–19 MB RSS including shared pages |
+| CPU | ≤ 0.5 % of one core | ~0.2 % (180 s of CPU time in 24 h) |
+| Restarts / errors | none | 0 restarts, 0 errors in the journal and on `.module/Collector errors` |
+| Sensors | ~100 planned with Docker | **15** in the parity-only phase |
+| History per bar sensor | — | 288 records/day (one 5-minute bar), against 5760/day before #1428 |
+
+The original projection below assumed the full Docker/disk set; it stays as the estimate to
+re-check when those sensors are agreed.
 
 - Process: 1 (native Rust binary, no managed runtime); threads: collector scheduler/sender +
   probe timers (plain threads, no async runtime needed at this scale); no busy loops; all
@@ -392,3 +445,67 @@ upgrade instead); porting Windows-only sensors (event logs, service status, netw
 top-CPU, OS info) to Linux; block I/O sensors (optional follow-up); external independent
 availability checker; changes to HSM server core, its container limits, compose file, backup
 scripts, Windows Scheduled Tasks, or `docs/initiatives/ai-manageable-control-plane.md`.
+
+
+## 9. What shipped (delivery log)
+
+Phase 1 is in `master`. The collector went 0.7.0 → 0.8.1 across six PRs, each with conformance
+coverage in both drivers and an agent version bump:
+
+| PR | What | Versions |
+|---|---|---|
+| #1419 | this document | — |
+| #1421 | Linux metric sources behind the existing factory seam; Unix registration on Linux | collector 0.7.0, agent 0.5.29 |
+| #1420 | the Rust probe (`src/probe-linux`): sys crate, safe wrapper, systemd unit, CI lane | — |
+| #1430 | built-in bars post partials of the catalog bar period instead of closing every 15 s | 0.7.2 / 0.5.31 |
+| #1435 | the stop drain actually delivers on HTTP; restart re-registration fixed | 0.7.3 / 0.5.32 |
+| #1436 | start/stop markers mirror managed; culture-invariant timestamps | 0.7.4 / 0.5.33, managed 3.5.1 |
+| #1425 | per-product download bundle + `install.sh` generated by the server | — |
+| #1438 | typed metric-source seam with error reporting; live disk prediction; `DiskLetter` fix | 0.8.0 / 0.5.34, managed 3.5.2 |
+| #1446 | the prediction tells the truth: signed EMA, 6 h window, explicit states | 0.8.1 / 0.5.35, managed 3.5.3 |
+
+**Verified live on garage-server**, not only in CI: installed through the server-generated
+bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
+the host (CPU, `MemAvailable`, `df`, process RSS and thread count all matched), one 5-minute bar
+per window instead of twenty, `Stop:` markers delivered across a restart, both archive HDDs
+still in standby before and after (checked with `smartctl -n standby -i`, since garage has no
+`hdparm`), RSS 4–19 MB against a 64 MB cap, and no errors in the journal or on
+`.module/Collector errors` over 24 h.
+
+## 10. What the parity work uncovered
+
+Building the probe was the cheap part. Comparing the two collectors byte-for-byte, and then
+watching the result on a real host, found defects that had been shipping for months — **most of
+them in the Windows agent as well**:
+
+| Defect | Who was affected | Where |
+|---|---|---|
+| Built-in bars closed every 15 s instead of posting partials of a 5-minute bar → 20× the history records, EMA and alerts on the wrong grid | every native host, incl. the Windows agent | #1428 |
+| The stop drain never delivered on the real HTTP transport (a cancel flag was never cleared) → data lost on every restart, **and** sensor re-registration broke after Stop→Start | same | #1432 |
+| `dd/MM/yyyy` rendered as `22.09.2026` on a localised host, because `/` and `:` are separator placeholders in a .NET custom format string | managed, on any non-invariant machine | #1433 |
+| The Windows factory bound letter-less disk rows to drive `N:` (the `n` of "on") | Windows hosts registering the Unix rows | #1426 |
+| The disk-space prediction only folded shrinking samples, never decayed, and sent `00:00:00` during calibration — "the disk is full now" to an alert | both collectors | #1445 |
+| Heartbeat thread / `last_error` data races, heartbeat driven by the wrong period, package size structurally always 0, scientific notation in an operator comment | native hosts | #1453, #1444, #1437, #1459, #1460 |
+
+The lesson worth keeping: a second implementation held to byte-identical parity is a very
+effective test of the first one, and a live host is a very effective test of both — three of the
+defects above (the `N:` binding, the locale format, the prediction) are invisible to CI, which
+runs on an invariant locale with no `N:` drive and a quiet disk.
+
+## 11. What remains
+
+**Needs an owner decision before any code:**
+- the Docker sensor set (#1416) and the disk/backup sensors (#1417) — per-sensor agreement, §4.2a;
+- whether load average and logical cores come back, and if so as shared catalog sensors;
+- when releases resume: `agent-v0.5.35` plus the `agent-release.txt` pin (without it none of the
+  Windows-affecting fixes above reach deployed agents), the managed NuGet push, and the
+  `probe-v*` channel (#1418).
+
+**Known and tracked, no decision needed:** the fixes batched in the current PR (#1453, #1444,
+#1437, #1459, #1460); the Windows `DiskRead` fractional-MB divergence; the managed
+`InitAsync`/`StartAsync` calibration race.
+
+**Operational note from the trial, unrelated to the probe:** garage-server's SSD was draining
+about 1.3 GB/h, driven by the `lingua-ci` docker-in-docker volume; at that rate the disk would
+have filled in under two days. It was found by reading the probe's own free-space history —
+which is, after all, the point of the exercise.
