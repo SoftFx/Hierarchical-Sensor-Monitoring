@@ -273,11 +273,14 @@ namespace HSMServer.Controllers
             return PartialView("_AlertTemplate", data);
         }
 
-        [HttpGet]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         // Admin-only (#1455): deleting a global template removes its policies
-        // from every matching sensor tree-wide. The GET verb is the page's
-        // pre-existing link shape — the authorization gate is the change, the
-        // verb is deliberately untouched.
+        // from every matching sensor tree-wide. POST + antiforgery mirrors
+        // AlertSchedulesController.Remove (#1409): the auth cookie is
+        // SameSite=Lax, which still rides top-level cross-site GET
+        // navigations — a GET delete would let an attacker's link strip a
+        // template's policies when an admin merely opens it.
         [AuthorizeIsAdmin]
         public async ValueTask<IActionResult> Remove(Guid id)
         {

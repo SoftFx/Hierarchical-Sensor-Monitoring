@@ -115,7 +115,20 @@ namespace HSMServer.Core.Tests.Controllers
                 Assert.NotNull(method);
                 Assert.True(method.IsDefined(typeof(AuthorizeIsAdminAttribute), inherit: false),
                     $"{action} is a mutating action and must carry [AuthorizeIsAdmin]");
+                Assert.True(method.IsDefined(typeof(HttpPostAttribute), inherit: false),
+                    $"{action} is a mutating action and must be POST-only");
             }
+
+            // #1456 review: Remove must additionally require an antiforgery
+            // token (AlertSchedulesController.Remove shape, #1409). The auth
+            // cookie is SameSite=Lax, which rides top-level cross-site GET
+            // navigations — a GET delete would let an attacker's link strip a
+            // template's policies tree-wide when an admin merely opens it.
+            var remove = controllerType.GetMethod(nameof(AlertTemplatesController.Remove), BindingFlags.Public | BindingFlags.Instance);
+
+            Assert.NotNull(remove);
+            Assert.True(remove.IsDefined(typeof(ValidateAntiForgeryTokenAttribute), inherit: false),
+                "Remove must require an antiforgery token");
 
             foreach (var action in new[]
             {

@@ -88,7 +88,14 @@
                 </button>
                 <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
                     <a class="dropdown-item text-decoration-none fw-normal button-link" href=@Url.Action(nameof(AlertTemplatesController.Edit), ViewConstants.AlertTemplatesController, new { id = @item.Id })>Edit</a>
-                    <a class="dropdown-item text-decoration-none fw-normal button-link" href=@Url.Action(nameof(AlertTemplatesController.Remove), ViewConstants.AlertTemplatesController, new { id = @item.Id })>Remove</a>
+                    @* #1456 review: Remove is POST + antiforgery (AlertSchedulesController.Remove shape,
+                       #1409) — SameSite=Lax rides cross-site GET navigations, so a link delete was
+                       cross-site-forgeable with the admin cookie alone. *@
+                    <form method="post" action="@Url.Action(nameof(AlertTemplatesController.Remove), ViewConstants.AlertTemplatesController)" style="display:inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <button type="submit" class="dropdown-item text-decoration-none fw-normal button-link border-0 bg-transparent w-100 text-start">Remove</button>
+                    </form>
                 </div>
             </div>
         </td>
