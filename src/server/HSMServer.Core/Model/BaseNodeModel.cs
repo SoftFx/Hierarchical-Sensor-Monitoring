@@ -147,7 +147,10 @@ namespace HSMServer.Core.Model
                         // unconditionally (pre-#1409 behaviour), including
                         // edits the change journal itself does not render
                         // (e.g. a chat-only Destination edit on a
-                        // template-cleared alert).
+                        // template-cleared alert). This loop stamps TTL
+                        // policies only; the regular-policy counterpart of
+                        // the opt-out is the stampOwnership gate on
+                        // CallJournal in SensorPolicyCollection.TryUpdate.
                         if (ttlUpdate.Id == Guid.Empty || ttlUpdate.PreserveChangeOwnership)
                             continue;
 

@@ -2444,9 +2444,13 @@ namespace HSMServer.Core.Cache
         // release the CanChange protection that blocks later template
         // applies — including on the chat-carrier updates, where the only
         // change is folder housekeeping (a chat dropped from the
-        // destination), not a user's policy edit. The USER editor path
-        // (UpdateSensorAsync with a user initiator) builds its own updates
-        // and still takes ownership. See
+        // destination), not a user's policy edit. The opt-out covers BOTH
+        // policy kinds: the TTL loop in BaseNodeModel.Update skips its
+        // stamp for flagged updates, and the regular arm gates the
+        // CallJournal stamp in SensorPolicyCollection.TryUpdate (the
+        // journal record for a real content change still fires). The USER
+        // editor path (UpdateSensorAsync with a user initiator) builds its
+        // own updates and still takes ownership. See
         // PolicyUpdate.PreserveChangeOwnership, feature.md (#1409, #1451).
         private static PolicyUpdate BuildFullPolicyCopy(Policy policy, InitiatorInfo initiator) =>
             new(policy, initiator)

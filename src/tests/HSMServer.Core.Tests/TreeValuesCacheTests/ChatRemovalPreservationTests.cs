@@ -388,6 +388,131 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // #1451 round-3 review: the REGULAR-policy sibling of the ownership
+        // test above. Regular sensor policies do not stamp through the TTL
+        // loop in BaseNodeModel.Update (the only PreserveChangeOwnership
+        // reader before this fix) — their owner is stamped by CallJournal
+        // from SensorPolicyCollection.TryUpdate whenever Policy.ToString()
+        // changes, and ToString renders Destination whenever the policy
+        // carries a message template. So the chat-removal destination edit
+        // re-stamped a template-created regular alert down to the System
+        // owner, releasing the CanChange protection: the next template
+        // apply passed the gate (0 <= 15) and silently overwrote the
+        // operator's edit — the exact release the TTL arm already opts out
+        // of. Disable is the only edit a plain user may make on a
+        // template-owned policy, and it is ownership-taking: the disable
+        // stamps the User owner that must survive the removal.
+        [Fact]
+        [Trait("Category", "Chat removal")]
+        public async Task RemoveChatsFromPoliciesAsync_PreservesRegularPolicyOwnership_TemplateApplyStaysBlocked()
+        {
+            var chatToRemove = Guid.NewGuid();
+            var chatToKeep = Guid.NewGuid();
+            var user = InitiatorInfo.AsUser("operator");
+            var force = InitiatorInfo.AsSystemForce("test_seed_chat_removal");
+
+            var sensorPath = "sensorChatRemovalRegularOwnership";
+
+            var template = BuildIntegerTemplate(TimeSpan.FromMinutes(10), sensorPath);
+            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            await CreateSensor(sensorPath);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensor));
+
+            var templateRegular = Assert.Single(sensor.Policies, p => p.TemplateId == template.Id);
+            Assert.NotNull(templateRegular.TemplateAlertId);
+
+            // Seed: give the template-minted regular alert a message template
+            // plus a Custom destination holding the removed chat. The message
+            // matters — Policy.ToString() renders Destination only when the
+            // message is non-empty, and the rendered change is what used to
+            // re-stamp the owner. The force re-assert records a System owner
+            // (the base state the asserts below reason about).
+            const string message = "$product $path regular carrier";
+            var seed = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = force,
+                Policies =
+                [
+                    new PolicyUpdate(templateRegular, force)
+                    {
+                        Template = message,
+                        Destination = ChatsDestination(chatToRemove, chatToKeep),
+                    },
+                ],
+            });
+            Assert.True(seed.IsOk, seed.Error);
+
+            Assert.Contains(chatToRemove, templateRegular.Destination.Chats.Keys);
+            Assert.Equal(InitiatorType.System, sensor.ChangeTable.Policies[templateRegular.Id.ToString()].Initiator.Type);
+
+            // The operator's edit: disable the alert. A plain user initiator
+            // may only toggle IsDisabled on a template-owned policy, and that
+            // toggle IS the edit — it stamps the User owner that blocks
+            // later template applies.
+            var handEdit = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = user,
+                Policies =
+                [
+                    new PolicyUpdate(templateRegular, user)
+                    {
+                        Template = message,
+                        Destination = ChatsDestination(chatToRemove, chatToKeep),
+                        IsDisabled = true,
+                    },
+                ],
+            });
+            Assert.True(handEdit.IsOk, handEdit.Error);
+
+            Assert.True(templateRegular.IsDisabled);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.Policies[templateRegular.Id.ToString()].Initiator.Type);
+
+            await _valuesCache.RemoveChatsFromPoliciesAsync(_fixture.FolderId, [chatToRemove], user);
+
+            // The removal itself worked: the chat is gone from the
+            // destination, everything else rides through.
+            Assert.DoesNotContain(chatToRemove, templateRegular.Destination.Chats.Keys);
+            Assert.Contains(chatToKeep, templateRegular.Destination.Chats.Keys);
+            Assert.Equal(message, templateRegular.Template);
+            Assert.Equal(template.Id, templateRegular.TemplateId);
+            Assert.NotNull(templateRegular.TemplateAlertId);
+            Assert.True(templateRegular.IsDisabled);
+
+            // The owner survives the regular arm too: the destination edit is
+            // folder housekeeping, not a user's policy edit, so the
+            // system-force initiator must not downgrade the User owner.
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.Policies[templateRegular.Id.ToString()].Initiator.Type);
+
+            // Consequence, pinned end-to-end (the round-2 shape, regular
+            // arm): a template-initiated apply (AlertTemplate, type 15)
+            // targeting the user-owned policy is rejected by the CanChange
+            // gate (100 <= 15 is false) — the operator's disable toggle
+            // survives the apply instead of being silently overwritten.
+            var templateApply = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Policies = [new PolicyUpdate(templateRegular, InitiatorInfo.AlertTemplate) { IsDisabled = false }],
+                Initiator = InitiatorInfo.AlertTemplate,
+            });
+            Assert.True(templateApply.IsOk, templateApply.Error);
+
+            Assert.True(templateRegular.IsDisabled);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.Policies[templateRegular.Id.ToString()].Initiator.Type);
+
+            // Persisted: the change table written by the removal keeps the
+            // recorded User owner — a restart reloads the protection, not
+            // just the in-memory stamp.
+            var storedSensor = _databaseCoreManager.DatabaseCore.GetAllSensors()
+                .First(e => e.Id == sensor.Id.ToString());
+
+            Assert.Equal((byte)InitiatorType.User, storedSensor.ChangeTable.Policies[templateRegular.Id.ToString()].Initiator.Type);
+        }
+
+
         // A template with BOTH a TTL entry and a regular alert (distinct
         // condition target, so the minted regular is unambiguous): sensor
         // creation mints one policy per entry, each stamped with the

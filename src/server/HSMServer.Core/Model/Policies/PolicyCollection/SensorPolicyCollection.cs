@@ -326,7 +326,17 @@ namespace HSMServer.Core.Model.Policies
 
                                 if (policy.TryUpdate(update, out var err))
                                 {
-                                    CallJournal(id, oldPolicy, policy.ToString(), initiator);
+                                    // #1409/#1451: an update carrying
+                                    // PreserveChangeOwnership (schedule
+                                    // detach, folder chat removal) is system
+                                    // housekeeping, not a user's policy edit —
+                                    // the journal record for the content
+                                    // change still fires, but the change-table
+                                    // owner must not be re-stamped down to the
+                                    // system initiator. Every other update
+                                    // stamps unconditionally, as before.
+                                    CallJournal(id, oldPolicy, policy.ToString(), initiator,
+                                        stampOwnership: !update.PreserveChangeOwnership);
                                     Uploaded?.Invoke(ActionType.Update, policy);
                                 }
                                 else

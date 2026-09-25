@@ -93,8 +93,11 @@ namespace HSMServer.Core.Cache.UpdateEntities
         // detach #1409, folder chat removal #1451), system-initiated
         // housekeeping that must not re-stamp the owner: a System initiator
         // would downgrade a recorded User owner and release the CanChange
-        // protection that blocks later template applies. See
-        // BaseNodeModel.Update.
+        // protection that blocks later template applies. Honoured by BOTH
+        // policy kinds: the TTL loop in BaseNodeModel.Update skips its
+        // stamp, and the regular arm gates the CallJournal stamp in
+        // SensorPolicyCollection.TryUpdate. The journal record itself is
+        // never suppressed — only the ownership stamp.
         internal bool PreserveChangeOwnership { get; init; }
 
         public PolicyUpdate() { }
