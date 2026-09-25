@@ -573,6 +573,57 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // === The batch entry: one AddSensorValuesRequest item carries the stamp too (#1461 round-2) ===
+
+        [Fact]
+        public async Task WindowOpen_RecoveryValueThroughTheBatchEntry_ItemStampReadsNewer()
+        {
+            // The round-2 pin: the BATCH entry (AddSensorValuesAsync ->
+            // AddNewSensorValues -> TryAddNewSensorValue) reaches the same
+            // TryAddValueWithDeliveryStamp gate as the single-value API and
+            // UI paths pinned above, but had no stamp assertion of its own —
+            // a refactor moving the batch loop past the gate would cancel
+            // every batch recovery Ok unnoticed. One item, two values: the
+            // resolving value must leave the item stamped newer than the
+            // expiry's.
+            var scheduleId = Guid.NewGuid();
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
+
+            var sensor = await CreateSensorWithStaleValueAsync("ttlBatchStamp", TimeSpan.FromMinutes(15));
+
+            var scheduled = AddTtlPolicy(sensor, scheduleId, TimeSpan.FromMinutes(5));
+
+            using var recorder = new SentMessagesRecorder(_valuesCache, sensor.Id);
+
+            // In-window expiry: LastExpirySequence is stamped on the transition.
+            _valuesCache.RunSensorTimeoutStep(sensor);
+
+            Assert.True(sensor.IsExpired);
+            Assert.Equal(1, recorder.CountFor(scheduled.Id));
+
+            // The batch entry — ONE queue item holding both values.
+            var batch = new[]
+            {
+                SensorValuesFactory.BuildSensorValue(SensorType.Integer, "ttlBatchStamp", DateTime.UtcNow),
+                SensorValuesFactory.BuildSensorValue(SensorType.Integer, "ttlBatchStamp", DateTime.UtcNow),
+            };
+            var response = await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, batch);
+
+            Assert.Empty(response); // premise: every batch value was accepted
+            await UntilAsync(() => !sensor.IsExpired, "the batch's fresh value must resolve the sensor on the data path");
+
+            Assert.False(sensor.IsExpired);
+            Assert.False(sensor.LastValue.IsTimeout); // a real value, not a marker
+
+            // The entry-point stamp on the BATCH path: the delivering item's
+            // stamp must read newer than the expiry's — the pin.
+            Assert.True(sensor.LastValue.DeliverySequence > sensor.LastExpirySequence);
+
+            // The GENUINE recovery Ok.
+            Assert.Equal(2, recorder.CountFor(scheduled.Id));
+        }
+
+
         // === The schedule-less resolution keeps its Ok (the default sensor shape) ===
 
         [Fact]

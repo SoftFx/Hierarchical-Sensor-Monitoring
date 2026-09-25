@@ -82,7 +82,14 @@ namespace HSMServer.Core.Model
                 var ticks = Volatile.Read(ref _lastExpiryTicks);
                 return ticks == 0L ? null : new DateTime(ticks, DateTimeKind.Utc);
             }
-            set => Volatile.Write(ref _lastExpiryTicks, value?.ToUniversalTime().Ticks ?? 0L);
+            // Ticks stored AS GIVEN — the caller contract is UTC in: both
+            // writers (the transition's evaluationTime and the cold-load
+            // seed, the marker's server-stamped ReceivingTime) pass
+            // DateTime.UtcNow, matching the Utc kind the getter
+            // reconstructs. Deliberately no ToUniversalTime() here: it
+            // treats an Unspecified-kind value as local and silently
+            // shifts the stored instant by the server's UTC offset.
+            set => Volatile.Write(ref _lastExpiryTicks, value?.Ticks ?? 0L);
         }
 
         // Dispatch order of the update-queue item whose processing recorded
@@ -104,11 +111,17 @@ namespace HSMServer.Core.Model
         // like the ticks: written on the product's queue thread (the
         // transition), read on the same thread by the discriminator, with
         // the barrier covering the maintenance/test threads that can reach
-        // the event outside a dispatch. 0 = none, always stamped together
-        // with _lastExpiryTicks above; values not delivered through the
-        // queue (deserialized history rows) also carry DeliverySequence 0
-        // and therefore never read as newer — the cold-load seed of
-        // LastExpiryAt expressed the same suppression in wall-clock terms.
+        // the event outside a dispatch. 0 = none; stamped together with
+        // _lastExpiryTicks on every TRANSITION, but NOT by the cold-load
+        // seed (BaseSensorModelT.LoadHistoryUnderLock sets LastExpiryAt
+        // alone and deliberately leaves this at 0) — LastExpiryAt stays
+        // the ONLY "expiry on record" gate: treating 0 here as "no expiry
+        // on record" would read a cold-loaded expired sensor as GENUINE
+        // and send the false recovery Ok that #1404 closed. Values not
+        // delivered through the queue (deserialized history rows) also
+        // carry DeliverySequence 0 and therefore never read as newer —
+        // the cold-load seed of LastExpiryAt expressed the same
+        // suppression in wall-clock terms.
         private long _lastExpirySequence;
 
         internal long LastExpirySequence
