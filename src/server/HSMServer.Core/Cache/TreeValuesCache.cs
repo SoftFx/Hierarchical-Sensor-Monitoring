@@ -95,14 +95,14 @@ namespace HSMServer.Core.Cache
         private const int MaxHistoryLoadRetriesPerSweep = 100;
 
         // Monotone dispatch order across ALL product queues (#1452), grown by
-        // Interlocked.Increment at the start of each item's processing AND at
-        // every order-witness stamp taken mid-processing (the delivery stamp of
-        // each value, the expiry stamp), so any two stamps are strictly ordered
-        // in PROGRAM ORDER. A product's queue is single-reader, so for two
-        // stamps taken on the SAME queue the later one is always strictly
-        // greater; items on other queues interleave increments that only widen
-        // the gaps, never reorder same-queue stamps — the strictness the old
-        // wall-clock comparison lost across pipeline stages.
+        // Interlocked.Increment at every order-witness stamp (the delivery
+        // stamp of each value, the expiry stamp), so any two stamps are
+        // strictly ordered in PROGRAM ORDER. A product's queue is
+        // single-reader, so for two stamps taken on the SAME queue the later
+        // one is always strictly greater; items on other queues interleave
+        // increments that only widen the gaps, never reorder same-queue
+        // stamps — the strictness the old wall-clock comparison lost across
+        // pipeline stages.
         private long _dispatchSequence;
 
         private readonly Logger _logger = LogManager.GetLogger(nameof(TreeValuesCache));
@@ -2584,8 +2584,6 @@ namespace HSMServer.Core.Cache
 
         void IUpdateHandler.ProcessRequest(IUpdatesQueue queue, IUpdateRequest item)
         {
-            Interlocked.Increment(ref _dispatchSequence);
-
             queue.Stopwatch.Restart();
 
             switch (item)
@@ -2684,10 +2682,11 @@ namespace HSMServer.Core.Cache
         // add it. The TTL resolution discriminator reachable inside TryAddValue
         // (TryValidate -> SensorTimeout -> SetExpiredSnapshot) compares this
         // stamp against the expiry's LastExpirySequence, so an ingestion path
-        // that adds WITHOUT this gate silently reads as "never new data" and
-        // its recovery Ok is cancelled — the #1461 round-1 review caught the
-        // UI add-value path (UpdateSensorValue) doing exactly that. The stamp
-        // is taken per VALUE by Interlocked.Increment, so stamps are strictly
+        // that adds a value WITHOUT this gate — the UI add-value request
+        // (UpdateSensorValue) builds its own value and must route through it
+        // like any other add — reads it as never-new-data and silently
+        // cancels its recovery Ok. The stamp is taken per VALUE by
+        // Interlocked.Increment, so stamps are strictly
         // ordered in PROGRAM ORDER (see _dispatchSequence): within one batched
         // AddSensorValuesRequest item, a stale value's add stamps BEFORE the
         // expiry it triggers and a fresh value resolving the sensor in the

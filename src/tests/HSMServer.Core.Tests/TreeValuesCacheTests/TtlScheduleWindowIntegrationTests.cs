@@ -512,22 +512,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        // === The UI add-value path: an operator's value IS new data (the #1461 round-1 review) ===
+        // === The UI add-value path: an operator's value IS new data ===
 
         [Fact]
         public async Task WindowOpen_SensorExpired_UiAddedValue_IsNewData_RecoveryOkSent()
         {
-            // The round-1 regression pin: UpdateSensorValue (the UI's
-            // "add value" entry — HomeController.UpdateSensorStatus ->
-            // UpdateSensorValueAsync) builds the value itself and used to
-            // call TryAddValue WITHOUT the delivery stamp, so the value
-            // reached the discriminator with DeliverySequence 0 (a file
-            // sensor even carried the OLD value's sequence) and the
-            // operator's fresh value read as "no new data since the
-            // expiry" — its recovery Ok was cancelled, although the
-            // pre-#1452 wall-clock witness (ReceivingTime = UtcNow) had
-            // sent it. Every queue-delivered add must pass the same
-            // stamping gate as the API path.
+            // The UI-path pin: UpdateSensorValue (the UI's "add value"
+            // entry — HomeController.UpdateSensorStatus ->
+            // UpdateSensorValueAsync) builds the value itself, so it must
+            // pass the same stamping gate as the API path — an ingestion
+            // path that adds the value WITHOUT the stamp reaches the
+            // discriminator with DeliverySequence 0 (a file sensor even
+            // carries the OLD value's sequence), reads as "no new data
+            // since the expiry", and its recovery Ok is silently cancelled,
+            // although the pre-#1452 wall-clock witness (ReceivingTime =
+            // UtcNow) had sent it.
             var scheduleId = Guid.NewGuid();
             _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
 
@@ -573,19 +572,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        // === The batch entry: every batched value passes the stamping gate (#1461 round-2) ===
+        // === The batch entry: every batched value passes the stamping gate ===
 
         [Fact]
         public async Task WindowOpen_RecoveryValueThroughTheBatchEntry_StampReadsNewer()
         {
-            // The round-2 pin: the BATCH entry (AddSensorValuesAsync ->
-            // AddNewSensorValues -> TryAddNewSensorValue) reaches the same
-            // TryAddValueWithDeliveryStamp gate as the single-value API and
-            // UI paths pinned above, but had no stamp assertion of its own —
-            // a refactor moving the batch loop past the gate would cancel
-            // every batch recovery Ok unnoticed. One item, two values: each
-            // carries its own per-value stamp (round-3), and the resolving
-            // value's must read newer than the expiry's.
+            // The BATCH-entry pin (AddSensorValuesAsync ->
+            // AddNewSensorValues -> TryAddNewSensorValue) asserts the stamp
+            // where the batch ingression produces it: the entry reaches the
+            // same TryAddValueWithDeliveryStamp gate as the single-value API
+            // and UI paths pinned above — a refactor moving the batch loop
+            // past the gate would cancel every batch recovery Ok unnoticed.
+            // One item, two values: each carries its own per-value stamp,
+            // and the resolving value's must read newer than the expiry's.
             var scheduleId = Guid.NewGuid();
             _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
 
@@ -624,12 +623,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        // === The same-batch expiry + resolve: per-value stamps, deterministic genuine (the #1461 round-3 review) ===
+        // === The same-batch expiry + resolve: per-value stamps, deterministic genuine ===
 
         [Fact]
         public async Task WindowOpen_BatchItem_ExpiresAndResolvesInOneItem_SameBatchResolveReadsGenuine_OkSent()
         {
-            // The round-3 pin: ONE AddSensorValuesRequest item holds
+            // The same-batch pin: ONE AddSensorValuesRequest item holds
             // [v1 stale (its TTL elapsed — the item itself performs the
             // expiry), v2 fresh (resolving the sensor in the same item)].
             // The stamps are per VALUE — fresh increments taken in program
@@ -637,11 +636,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // GENUINE: the recovery Ok IS sent, deterministically. That
             // matches the pre-#1452 wall-clock reading (AddNewSensorValues
             // converts values INSIDE the item, so v2's ReceivingTime
-            // postdated the expiry), while the per-Volatile.Read stamp this
-            // test was red under gave v2 the expiry's own sequence on a
-            // quiet server (N > N = false — the Ok cancelled, a regression)
-            // and a newer one only when unrelated queues' traffic happened
-            // to advance the shared counter between the two adds.
+            // postdated the expiry), while a per-read shared stamp instead
+            // gives v2 the expiry's own sequence on a quiet server
+            // (N > N = false — the Ok cancelled, a regression) and a newer
+            // one only when unrelated queues' traffic happens to advance
+            // the shared counter between the two adds.
             var scheduleId = Guid.NewGuid();
             _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
 
