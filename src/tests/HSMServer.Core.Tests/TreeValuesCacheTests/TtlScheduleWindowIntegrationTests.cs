@@ -496,7 +496,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 ReceivingTime = expiryStamp.AddSeconds(-1),      // stamped at INGESTION, before the sweep ran — the bug's premise
                 Status = SensorStatus.Ok,
                 Value = 42,
-                DeliverySequence = sensor.LastExpirySequence + 1, // the queue's stamp for an item ordered AFTER the sweep's
+                DeliverySequence = sensor.LastExpirySequence + 1, // the queue's stamp for a delivery ordered AFTER the sweep's expiry
             };
 
             // Direct delivery (synchronous, no queue, no DB write) — the
@@ -573,19 +573,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        // === The batch entry: one AddSensorValuesRequest item carries the stamp too (#1461 round-2) ===
+        // === The batch entry: every batched value passes the stamping gate (#1461 round-2) ===
 
         [Fact]
-        public async Task WindowOpen_RecoveryValueThroughTheBatchEntry_ItemStampReadsNewer()
+        public async Task WindowOpen_RecoveryValueThroughTheBatchEntry_StampReadsNewer()
         {
             // The round-2 pin: the BATCH entry (AddSensorValuesAsync ->
             // AddNewSensorValues -> TryAddNewSensorValue) reaches the same
             // TryAddValueWithDeliveryStamp gate as the single-value API and
             // UI paths pinned above, but had no stamp assertion of its own —
             // a refactor moving the batch loop past the gate would cancel
-            // every batch recovery Ok unnoticed. One item, two values: the
-            // resolving value must leave the item stamped newer than the
-            // expiry's.
+            // every batch recovery Ok unnoticed. One item, two values: each
+            // carries its own per-value stamp (round-3), and the resolving
+            // value's must read newer than the expiry's.
             var scheduleId = Guid.NewGuid();
             _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
 
@@ -615,12 +615,66 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.False(sensor.IsExpired);
             Assert.False(sensor.LastValue.IsTimeout); // a real value, not a marker
 
-            // The entry-point stamp on the BATCH path: the delivering item's
+            // The entry-point stamp on the BATCH path: the resolving value's
             // stamp must read newer than the expiry's — the pin.
             Assert.True(sensor.LastValue.DeliverySequence > sensor.LastExpirySequence);
 
             // The GENUINE recovery Ok.
             Assert.Equal(2, recorder.CountFor(scheduled.Id));
+        }
+
+
+        // === The same-batch expiry + resolve: per-value stamps, deterministic genuine (the #1461 round-3 review) ===
+
+        [Fact]
+        public async Task WindowOpen_BatchItem_ExpiresAndResolvesInOneItem_SameBatchResolveReadsGenuine_OkSent()
+        {
+            // The round-3 pin: ONE AddSensorValuesRequest item holds
+            // [v1 stale (its TTL elapsed — the item itself performs the
+            // expiry), v2 fresh (resolving the sensor in the same item)].
+            // The stamps are per VALUE — fresh increments taken in program
+            // order — so v1's add < v1's expiry < v2's add, and v2 reads
+            // GENUINE: the recovery Ok IS sent, deterministically. That
+            // matches the pre-#1452 wall-clock reading (AddNewSensorValues
+            // converts values INSIDE the item, so v2's ReceivingTime
+            // postdated the expiry), while the per-Volatile.Read stamp this
+            // test was red under gave v2 the expiry's own sequence on a
+            // quiet server (N > N = false — the Ok cancelled, a regression)
+            // and a newer one only when unrelated queues' traffic happened
+            // to advance the shared counter between the two adds.
+            var scheduleId = Guid.NewGuid();
+            _alertScheduleProvider.SaveSchedule(BuildAllWeekSchedule(scheduleId, open: true));
+
+            var sensor = await CreateSensorWithStaleValueAsync("ttlBatchExpiryResolve", TimeSpan.FromMinutes(15));
+
+            var scheduled = AddTtlPolicy(sensor, scheduleId, TimeSpan.FromMinutes(5));
+
+            using var recorder = new SentMessagesRecorder(_valuesCache, sensor.Id);
+
+            // NO sweep step: the expiry must be performed INSIDE the item by
+            // the stale value itself (6 min old against the 5 min TTL; the
+            // seeded value is 15 min old but nothing has evaluated it).
+            var batch = new[]
+            {
+                SensorValuesFactory.BuildSensorValue(SensorType.Integer, "ttlBatchExpiryResolve", DateTime.UtcNow - TimeSpan.FromMinutes(6)),
+                SensorValuesFactory.BuildSensorValue(SensorType.Integer, "ttlBatchExpiryResolve", DateTime.UtcNow),
+            };
+            var response = await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, batch);
+
+            Assert.Empty(response); // premise: every batch value was accepted
+            await UntilAsync(() => !sensor.IsExpired, "the batch's fresh value must resolve the sensor on the data path");
+
+            Assert.False(sensor.IsExpired);
+            Assert.False(sensor.LastValue.IsTimeout); // a real value, not a marker
+            Assert.NotNull(sensor.LastExpiryAt);      // v1's expiry ran INSIDE the item, not in a sweep
+
+            // The recovery Ok IS sent — the pin: one TTL alert (v1's expiry,
+            // in-window) plus one Ok (v2's genuine resolution).
+            Assert.Equal(2, recorder.CountFor(scheduled.Id));
+
+            // The per-value stamps: v2's delivery names a sequence strictly
+            // newer than the expiry its own batch sibling performed.
+            Assert.True(sensor.LastValue.DeliverySequence > sensor.LastExpirySequence);
         }
 
 

@@ -92,8 +92,8 @@ namespace HSMServer.Core.Model
             set => Volatile.Write(ref _lastExpiryTicks, value?.Ticks ?? 0L);
         }
 
-        // Dispatch order of the update-queue item whose processing recorded
-        // the expiry above (#1452) — the ORDER half of the witness. The
+        // Monotone dispatch stamp recorded together with the expiry above
+        // (#1452) — the ORDER half of the witness. The
         // discriminator's original comparison, evaluatedValue.ReceivingTime
         // > LastExpiryAt, set two server stamps taken at DIFFERENT pipeline
         // stages against each other: a value's ReceivingTime is stamped when
@@ -104,10 +104,11 @@ namespace HSMServer.Core.Model
         // recovery's Ok was cancelled. The sweep item and the value item run
         // on the same single-reader product queue, so the queue's dispatch
         // order — value.DeliverySequence > LastExpirySequence — answers "was
-        // this value delivered after the expiry decision" exactly, per ITEM
-        // (the scale of the stamp): the values of one batched item share
-        // its single stamp, so two values of the SAME item are never
-        // ordered against each other. Volatile
+        // this value delivered after the expiry decision" exactly: both
+        // stamps are monotone increments of the dispatch counter taken in
+        // program order, so two values of the SAME batched item are ordered
+        // too — the value whose add performed the expiry reads older, and a
+        // fresh value after it in the same item reads newer (genuine). Volatile
         // like the ticks: written on the product's queue thread (the
         // transition), read on the same thread by the discriminator, with
         // the barrier covering the maintenance/test threads that can reach
