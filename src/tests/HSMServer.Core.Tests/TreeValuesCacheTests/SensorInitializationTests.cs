@@ -32,7 +32,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         /// full suite's parallel-startup storm a loaded agent's pool can be late by far more than
         /// the old fixed 10 s bound, so the cap is raised to 60 s. This is a bigger budget, not
         /// a removed deadline — the deadline is only checked when a pool continuation runs, so
-        /// a starved pool still delays the check itself and can outlive the cap.</summary>
+        /// a starved pool still delays the check itself and can outlive the cap. Trade-off: a
+        /// genuinely broken precondition now takes up to the full 60 s to fail (10 s before
+        /// #1450) — do not lower the cap to speed up failing runs.</summary>
         private static readonly TimeSpan _scheduleCap = TimeSpan.FromSeconds(60);
 
         /// <summary>The gated load must outlive every wait performed while the load is parked:
@@ -94,11 +96,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var sensor = new IntegerSensorModel(SensorTestFactory.BuildEntity(), load.Database.Object, null);
 
             var init = Task.Run(sensor.Initialize);
-            // Poll the observable start precondition under a raised cap instead of the old
-            // fixed 10 s Wait: under the full suite's parallel-startup storm the pool can run
-            // this Task.Run item far later than 10 s, and the old bound failed the theory
-            // though the code under test was correct (#1450). The cap tolerates slow
-            // continuations — each poll's deadline is only checked when its continuation runs.
+            // see _scheduleCap (#1450)
             await TestWait.UntilAsync(() => load.Entered.IsSet, "history load never started", _scheduleCap);
 
             using var callStarted = new ManualResetEventSlim(false);
@@ -124,8 +122,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 observedFrom = sensor.From;
             });
 
-            // Same wait as above — the call task's START is a precondition pinned under the
-            // same raised cap, tolerant of slow pool continuations.
+            // see _scheduleCap (#1450)
             await TestWait.UntilAsync(() => callStarted.IsSet, $"{gate} task never started", _scheduleCap);
             Assert.False(call.Wait(_mustNotComplete),
                 $"{gate} completed while the history load was still in flight");
