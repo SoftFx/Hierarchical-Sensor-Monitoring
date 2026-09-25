@@ -343,6 +343,13 @@ namespace HSMServer.Core.Model
                             // "recovered" Ok for a still-dead sensor. The
                             // marker's ReceivingTime is the server's UtcNow at
                             // the pre-restart transition that wrote it.
+                            // LastExpirySequence needs no seed (#1452): rows
+                            // deserialized here carry DeliverySequence 0, which
+                            // never reads as newer than any stamp, and the
+                            // first post-restart value arrives through a real
+                            // queue item (sequence >= 1) — exactly what the
+                            // seeded wall-clock witness expressed before the
+                            // discriminator moved to queue order.
                             LastExpiryAt = last.ReceivingTime;
                             foreach (var ttl in Policies.TTLPolicies)
                                 ttl.InitLastTtlTime(last.Time);
