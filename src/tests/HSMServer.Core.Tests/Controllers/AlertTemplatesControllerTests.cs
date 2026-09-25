@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
@@ -86,6 +88,63 @@ namespace HSMServer.Core.Tests.Controllers
                 Id = Guid.NewGuid().ToString(),
                 Type = (byte)type,
             });
+
+
+        // ---- surface contract -----------------------------------------------------
+
+        // #1455: direct invocation bypasses the filter pipeline, so the admin gate is
+        // asserted as the surface contract it is (same pattern as
+        // ApiTokensAdminControllerTests): the two mutating actions carry
+        // [AuthorizeIsAdmin] individually while every viewing action stays open —
+        // the exact split AlertSchedulesController got in #1409 (templates are the
+        // same class of global cross-folder object with tree-wide mutation reach).
+        [Fact]
+        [Trait("Category", "Alert Template authoring")]
+        public void Mutation_Surface_IsAdminGated_ViewingOpen()
+        {
+            var controllerType = typeof(AlertTemplatesController);
+
+            foreach (var action in new[]
+            {
+                nameof(AlertTemplatesController.AlertTemplate), // POST create/edit
+                nameof(AlertTemplatesController.Remove),        // delete
+            })
+            {
+                var method = controllerType.GetMethod(action, BindingFlags.Public | BindingFlags.Instance);
+
+                Assert.NotNull(method);
+                Assert.True(method.IsDefined(typeof(AuthorizeIsAdminAttribute), inherit: false),
+                    $"{action} is a mutating action and must carry [AuthorizeIsAdmin]");
+                Assert.True(method.IsDefined(typeof(HttpPostAttribute), inherit: false),
+                    $"{action} is a mutating action and must be POST-only");
+            }
+
+            // #1456 review: Remove must additionally require an antiforgery
+            // token (AlertSchedulesController.Remove shape, #1409). The auth
+            // cookie is SameSite=Lax, which rides top-level cross-site GET
+            // navigations — a GET delete would let an attacker's link strip a
+            // template's policies tree-wide when an admin merely opens it.
+            var remove = controllerType.GetMethod(nameof(AlertTemplatesController.Remove), BindingFlags.Public | BindingFlags.Instance);
+
+            Assert.NotNull(remove);
+            Assert.True(remove.IsDefined(typeof(ValidateAntiForgeryTokenAttribute), inherit: false),
+                "Remove must require an antiforgery token");
+
+            foreach (var action in new[]
+            {
+                nameof(AlertTemplatesController.Index),          // table page
+                nameof(AlertTemplatesController.New),            // create form
+                nameof(AlertTemplatesController.Edit),           // edit form
+                nameof(AlertTemplatesController.UpdateTemplate), // live-form helper
+            })
+            {
+                var method = controllerType.GetMethod(action, BindingFlags.Public | BindingFlags.Instance);
+
+                Assert.NotNull(method);
+                Assert.False(method.IsDefined(typeof(AuthorizeIsAdminAttribute), inherit: false),
+                    $"{action} is a viewing action and must stay open to non-admins");
+            }
+        }
 
         private DataAlertTemplateViewModel BuildData(byte type, params string[] paths) => new()
         {

@@ -154,7 +154,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var fresh = SensorValuesFactory.BuildSensorValue(SensorType.Integer, "ttlWindowOpenTransition", DateTime.UtcNow);
             await _valuesCache.AddSensorValueAsync(_fixture.AccessKeyAId, _fixture.ProductAId, fresh);
-            await UntilAsync(() => !sensor.IsExpired, "the fresh value must resolve the sensor on the data path");
+            await TestWait.UntilAsync(() => !sensor.IsExpired, "the fresh value must resolve the sensor on the data path");
 
             Assert.False(sensor.IsExpired);
             Assert.False(sensor.LastValue.IsTimeout); // a real value, not a marker
@@ -268,7 +268,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // cancellation did not disarm its future alert. The poll runs the
             // shipped sweep step, which is exactly what the production timer
             // does per tick.
-            await UntilAsync(() =>
+            await TestWait.UntilAsync(() =>
             {
                 _valuesCache.RunSensorTimeoutStep(sensor);
                 return recorder.CountFor(scheduleLess.Id) == 2;
@@ -331,7 +331,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var skewedTime = DateTime.UtcNow.AddSeconds(-30);
             var skewed = SensorValuesFactory.BuildSensorValue(SensorType.Integer, "ttlSkewedResume", skewedTime);
             await _valuesCache.AddSensorValueAsync(_fixture.AccessKeyAId, _fixture.ProductAId, skewed);
-            await UntilAsync(() => !sensor.IsExpired, "the skewed fresh value must resolve the sensor on the data path");
+            await TestWait.UntilAsync(() => !sensor.IsExpired, "the skewed fresh value must resolve the sensor on the data path");
 
             Assert.False(sensor.IsExpired);
             Assert.Equal(skewedTime, sensor.LastValue.Time);   // the resumed value actually landed
@@ -392,7 +392,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var resumedTime = DateTime.UtcNow.AddSeconds(-30);
             var resumed = SensorValuesFactory.BuildSensorValue(SensorType.Integer, "ttlLaggingTwoExpiries", resumedTime);
             await _valuesCache.AddSensorValueAsync(_fixture.AccessKeyAId, _fixture.ProductAId, resumed);
-            await UntilAsync(() => !sensor.IsExpired, "the lagging fresh value must resolve the sensor on the data path");
+            await TestWait.UntilAsync(() => !sensor.IsExpired, "the lagging fresh value must resolve the sensor on the data path");
 
             Assert.False(sensor.IsExpired);
             Assert.Equal(resumedTime, sensor.LastValue.Time);  // the resumed value actually landed
@@ -539,28 +539,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // Poll, don't sleep: ingestion runs on the product's update queue
             // with a real LevelDB write in the path, and a fixed delay is a
             // coin flip on a loaded CI agent.
-            await UntilAsync(() => _valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var s) && s.HasData,
-                             $"the stale value for '{path}' must be ingested");
+            await TestWait.UntilAsync(() => _valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var s) && s.HasData,
+                                      $"the stale value for '{path}' must be ingested");
 
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, path, out var sensor));
             Assert.True(sensor.HasData);
 
             return sensor;
-        }
-
-        // Polls the condition up to a few seconds — async ingestion and the
-        // product update queue make any fixed Task.Delay a flake on CI.
-        private static async Task UntilAsync(Func<bool> condition, string message, TimeSpan? timeout = null)
-        {
-            var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(10));
-
-            while (!condition())
-            {
-                if (DateTime.UtcNow >= deadline)
-                    Assert.Fail($"Timed out waiting for: {message}");
-
-                await Task.Delay(25);
-            }
         }
 
         // Counts delivered messages per policy id on the cache's public

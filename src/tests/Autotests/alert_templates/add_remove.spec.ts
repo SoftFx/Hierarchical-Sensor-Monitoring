@@ -36,6 +36,10 @@ test('Create and remove an alert template', async ({ page }) => {
   // --- Remove ---
   const row = page.getByRole('row', { name: templateName });
   await row.locator('#actionButton').click();
-  await page.getByRole('link', { name: 'Remove' }).click();
+  // Remove is a POST+antiforgery form button, not a link (#1456 review) —
+  // same shape as the schedules table (#1409). Only the opened dropdown's
+  // Remove button is in the accessibility tree, so the page-wide locator
+  // stays unambiguous.
+  await page.getByRole('button', { name: 'Remove' }).click();
   await expect(page.getByRole('row', { name: templateName })).toHaveCount(0);
 });

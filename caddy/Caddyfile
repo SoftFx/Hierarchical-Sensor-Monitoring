@@ -1,0 +1,72 @@
+{
+	# HTTP/3 would be advertised (Alt-Svc) on UDP ports that are not published.
+	persist_config off
+	servers {
+		protocols h1 h2
+	}
+	# Clients that reach this host by IP (no SNI) or by another name get the
+	# HSM_DOMAIN certificate instead of a refused handshake.
+	default_sni {$HSM_DOMAIN}
+	fallback_sni {$HSM_DOMAIN}
+}
+
+# Exactly one certificate source is selected by the entrypoint. There is deliberately no
+# automatic fallback: a failed public-certificate renewal must not silently change trust.
+(tls-letsencrypt-http) {
+	tls {
+		issuer acme
+	}
+}
+(tls-dns-cloudflare) {
+	tls {
+		issuer acme {
+			dns cloudflare {env.CF_API_TOKEN}
+		}
+	}
+}
+(tls-dns-dynv6) {
+	tls {
+		issuer acme {
+			dns dynv6 {env.DYNV6_API_TOKEN}
+		}
+	}
+}
+(tls-self-signed) {
+	tls internal
+}
+(tls-custom) {
+	tls /certs/cert.pem /certs/key.pem
+}
+(hsm_upstream) {
+	transport http {
+		tls_insecure_skip_verify
+	}
+	# Wait for HSM while it starts (database load) instead of answering 502.
+	lb_try_duration 30s
+}
+
+{$HSM_DOMAIN}, {$HSM_DOMAIN}:44333 {
+	import {$HSM_TLS_SNIPPET}
+	reverse_proxy https://app:44333 {
+		import hsm_upstream
+	}
+}
+{$HSM_DOMAIN}:44330 {
+	import {$HSM_TLS_SNIPPET}
+	reverse_proxy https://app:44330 {
+		import hsm_upstream
+	}
+}
+
+# Preserve connections made by IP, short name, or an old CNAME. These clients receive the
+# HSM_DOMAIN certificate and may need "allow untrusted certificate" for a name mismatch.
+https://:443, https://:44333 {
+	reverse_proxy https://app:44333 {
+		import hsm_upstream
+	}
+}
+https://:44330 {
+	reverse_proxy https://app:44330 {
+		import hsm_upstream
+	}
+}

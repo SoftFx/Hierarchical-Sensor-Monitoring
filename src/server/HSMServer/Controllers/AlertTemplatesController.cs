@@ -1,5 +1,6 @@
 using HSMCommon.Model;
 using HSMServer.ApiObjectsConverters;
+using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
@@ -26,6 +27,15 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
 {
+    // #1455: template VIEWING (Index table, the New/Edit form pages, the
+    // UpdateTemplate live-form helper) is open to every authenticated user —
+    // the same split as AlertSchedulesController (#1409). Template MUTATION
+    // is a different class of action: templates are global cross-folder
+    // objects, and every save or removal rewrites or removes policies on
+    // every matching sensor tree-wide — so AlertTemplate (create/edit) and
+    // Remove carry [AuthorizeIsAdmin] individually, and the Index view plus
+    // the tree context-menu entry gate their controls on the same check
+    // (non-admins get the read-only page, not 401 buttons).
     [Authorize]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class AlertTemplatesController : BaseController
@@ -205,6 +215,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        // Admin-only (#1455): creating or editing a global template applies
+        // its policies to every matching sensor tree-wide — the same class of
+        // mutation as schedule SavePartial (#1409).
+        [AuthorizeIsAdmin]
         public async ValueTask<IActionResult> AlertTemplate(DataAlertTemplateViewModel data)
         {
             if (_cache.GetAlertTemplateModels().Any(x => x.Name == data.Name && x.Id != data.Id))
@@ -259,7 +273,15 @@ namespace HSMServer.Controllers
             return PartialView("_AlertTemplate", data);
         }
 
-        [HttpGet]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        // Admin-only (#1455): deleting a global template removes its policies
+        // from every matching sensor tree-wide. POST + antiforgery mirrors
+        // AlertSchedulesController.Remove (#1409): the auth cookie is
+        // SameSite=Lax, which still rides top-level cross-site GET
+        // navigations — a GET delete would let an attacker's link strip a
+        // template's policies when an admin merely opens it.
+        [AuthorizeIsAdmin]
         public async ValueTask<IActionResult> Remove(Guid id)
         {
             var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
