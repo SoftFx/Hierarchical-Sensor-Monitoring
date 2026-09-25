@@ -45,10 +45,31 @@
 	lb_try_duration 30s
 }
 
+# VictoriaLogs read-only exposure (docker-compose 'logs' profile). The entrypoint selects one
+# of the two snippets below through HSM_VL_SNIPPET and generates VL_UI_BCRYPT_HASH from
+# VL_UI_PASSWORD, so no plaintext secret ever reaches the Caddyfile. /select/vmui is the
+# built-in web UI and /select/logsql the query API in the pinned VictoriaLogs version; ingest
+# (/insert/...) is reachable only inside the compose network (Vector) and is not routed here.
+(victorialogs-routes) {
+	@victorialogs path /select/vmui /select/vmui/* /select/logsql /select/logsql/*
+	handle @victorialogs {
+		basic_auth {
+			{$VL_UI_USER} {$VL_UI_BCRYPT_HASH}
+		}
+		reverse_proxy victorialogs:9428
+	}
+}
+(victorialogs-off) {
+	# VictoriaLogs credentials are not configured: no routes are exposed.
+}
+
 {$HSM_DOMAIN}, {$HSM_DOMAIN}:44333 {
 	import {$HSM_TLS_SNIPPET}
-	reverse_proxy https://app:44333 {
-		import hsm_upstream
+	import {$HSM_VL_SNIPPET}
+	handle {
+		reverse_proxy https://app:44333 {
+			import hsm_upstream
+		}
 	}
 }
 {$HSM_DOMAIN}:44330 {
@@ -61,8 +82,11 @@
 # Preserve connections made by IP, short name, or an old CNAME. These clients receive the
 # HSM_DOMAIN certificate and may need "allow untrusted certificate" for a name mismatch.
 https://:443, https://:44333 {
-	reverse_proxy https://app:44333 {
-		import hsm_upstream
+	import {$HSM_VL_SNIPPET}
+	handle {
+		reverse_proxy https://app:44333 {
+			import hsm_upstream
+		}
 	}
 }
 https://:44330 {

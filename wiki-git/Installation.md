@@ -200,6 +200,11 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 # SWITCHING: edit .env and run `docker compose up -d` (Caddy is recreated; HSM data is untouched).
 # WITHOUT CADDY (HSM's own PFX certificate, as before): use docker-compose.direct.yml instead.
 # Collectors and agents always connect to https://<HSM_DOMAIN>:44330.
+#
+# LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database) and Vector (shipper for the
+# app's JSON log). Caddy exposes VictoriaLogs' UI (/select/vmui) and query API (/select/logsql)
+# with basic auth when VL_UI_USER/VL_UI_PASSWORD are set in .env. Disable by removing 'logs'
+# from COMPOSE_PROFILES and commenting out the VL_UI_* lines. See aicontext/architecture/docker.md.
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
@@ -219,14 +224,58 @@ services:
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy.
       Kestrel__TrustedProxies__0: 'attached-networks'
+      # Single-line JSON log target in nlog.config, tailed by Vector for VictoriaLogs.
+      HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-true}'
     volumes:
       - ./Logs:/app/Logs
       - ./Config:/app/Config
       - ./Databases:/app/Databases
       - ./DatabasesBackups:/app/DatabasesBackups
 
+  victorialogs:
+    # Log database (upstream image, version-pinned). Reached only inside the compose network:
+    # Vector inserts, Caddy exposes the read-only paths.
+    image: 'victoriametrics/victoria-logs:v1.52.0'
+    container_name: hsm-victorialogs
+    restart: unless-stopped
+    profiles: ['logs']
+    command:
+      - '-httpListenAddr=:9428'
+      - '-storageDataPath=/victoria-logs-data'
+      - '-retentionPeriod=${VL_RETENTION_PERIOD:-30d}'
+    # VictoriaLogs does not support a hard disk quota; watch the volume size (docker.md).
+    mem_limit: 512m
+    volumes:
+      - victorialogs-data:/victoria-logs-data
+    # No healthcheck: the image has no shell, so nothing can be probed in-container;
+    # /health exists on the HTTP port for external checks.
+
+  vector:
+    # Shipper: tails the app's JSON log from the shared ./Logs bind mount, buffers on disk,
+    # and inserts into VictoriaLogs over the compose network.
+    image: 'timberio/vector:0.58.0-alpine'
+    container_name: hsm-vector
+    restart: unless-stopped
+    profiles: ['logs']
+    depends_on:
+      victorialogs:
+        condition: service_started
+    healthcheck:
+      # Vector's local API (enabled in vector.toml).
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8686/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - ./vector/vector.toml:/etc/vector/vector.toml:ro
+      - ./Logs:/logs:ro
+      - vector-data:/vector-data
+    # The image ships no default command; point it at the mounted config.
+    command: ['--config', '/etc/vector/vector.toml']
+
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-1'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-2'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -240,6 +289,9 @@ services:
       HSM_DNS_PROVIDER: '${HSM_DNS_PROVIDER:-}'
       CF_API_TOKEN: '${CF_API_TOKEN:-}'
       DYNV6_API_TOKEN: '${DYNV6_API_TOKEN:-}'
+      # Basic auth for the VictoriaLogs UI and query API; the entrypoint hashes the password.
+      VL_UI_USER: '${VL_UI_USER:-}'
+      VL_UI_PASSWORD: '${VL_UI_PASSWORD:-}'
     ports:
       - '80:80'
       - '443:443'
@@ -248,6 +300,10 @@ services:
     volumes:
       - ./CaddyData:/data
       - ./CaddyCertificates:/certs:ro
+
+volumes:
+  victorialogs-data:
+  vector-data:
 ```
 
 What must stay as it is, if you ever adapt it:
@@ -262,7 +318,7 @@ What must stay as it is, if you ever adapt it:
 | persist_config off and no Caddy access log | Expanded configuration is not persisted, and request headers that may contain HSM access keys are not recorded. |
 | ./CaddyData:/data | Keeps ACME accounts and certificates across restarts and updates. |
 | ./CaddyCertificates:/certs:ro | Supplies custom PEM files without allowing the container to modify them. |
-| Pinned hsmonitoring/hsm-caddy:2.11.4-1 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules; users do not build locally. |
+| Pinned hsmonitoring/hsm-caddy:2.11.4-2 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules plus the VictoriaLogs read-only routes; users do not build locally. |
 | Published ports 44330 and 44333 | Collectors and downloaded agent bundles use Sensor API port 44330; the UI is also available on 44333. |
 
 ### Internal DNS name

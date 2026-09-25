@@ -53,6 +53,29 @@ if grep -F "$dynv6_secret" "$tmp/dns-dynv6.json" >/dev/null; then
     exit 1
 fi
 
+# VictoriaLogs routes: enabled only with VL_UI_USER/VL_UI_PASSWORD. The plaintext password is
+# hashed by the entrypoint and must never reach the adapted configuration (the bcrypt hash
+# does); the ingest endpoints (/insert/...) must never be routed through Caddy.
+vl_password='test-vl-password-not-for-network-use'
+adapt_ok vl-on -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \
+    -e VL_UI_USER=hsm-logs -e "VL_UI_PASSWORD=$vl_password"
+grep -F '"dial":"victorialogs:9428"' "$tmp/vl-on.json" >/dev/null
+grep -F '"username":"hsm-logs"' "$tmp/vl-on.json" >/dev/null
+if grep -F "$vl_password" "$tmp/vl-on.json" >/dev/null; then
+    echo 'VictoriaLogs password leaked into adapted configuration' >&2
+    exit 1
+fi
+if grep -F '/insert' "$tmp/vl-on.json" >/dev/null; then
+    echo 'VictoriaLogs ingest endpoint routed through Caddy' >&2
+    exit 1
+fi
+
+adapt_ok vl-off -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed
+if grep -F 'victorialogs' "$tmp/vl-off.json" >/dev/null; then
+    echo 'VictoriaLogs routes exposed without credentials' >&2
+    exit 1
+fi
+
 # `caddy validate` loads and provisions the TLS issuer and DNS provider, but does not
 # request a certificate. Network isolation keeps these checks offline and prevents DNS/CA calls.
 validate_dns_provider() {
@@ -134,5 +157,7 @@ reject blank-cloudflare-token 'CF_API_TOKEN is required' -e HSM_DOMAIN=hsm.examp
 reject missing-custom-files 'custom mode requires readable /certs/cert.pem' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=custom
 reject invalid-domain 'HSM_DOMAIN must be a bare DNS name or IP address' -e 'HSM_DOMAIN=https://hsm.example.com' -e HSM_CERTIFICATE=self-signed
 reject domain-with-port 'HSM_DOMAIN must be a bare DNS name or IP address' -e 'HSM_DOMAIN=hsm.example.com:443' -e HSM_CERTIFICATE=self-signed
+reject missing-vl-password 'VL_UI_PASSWORD is required' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_USER=hsm-logs
+reject missing-vl-user 'VL_UI_USER is required' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_PASSWORD=x
 
 echo 'hsm-caddy runtime configuration tests passed'

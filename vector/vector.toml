@@ -1,0 +1,68 @@
+# Vector shipper for the HSM structured log (docker-compose 'logs' profile, #1470).
+#
+# Tails the single-line JSON that nlog.config writes when HSM_STRUCTURED_LOGS=true,
+# maps the NLog attribute names onto the fields VictoriaLogs treats specially, and
+# ships to VictoriaLogs over the compose network (ingest is never exposed publicly).
+# File checkpoints and the on-disk buffer live in /vector-data (a named volume), so
+# already-shipped lines are never re-shipped and lines survive a VictoriaLogs outage.
+
+data_dir = "/vector-data"
+
+# Local API: used only by the compose healthcheck (GET /health).
+[api]
+enabled = true
+address = "127.0.0.1:8686"
+
+[sources.hsm_app_logs]
+type = "file"
+# The app writes ${basedir}/Logs inside its container; the compose file bind-mounts
+# the same host directory here read-only.
+include = ["/logs/HSM-structured-log-*.json"]
+# Ship the lines that already exist on the first start; checkpoints take over after that.
+read_from = "beginning"
+
+[transforms.hsm_to_victorialogs]
+type = "remap"
+inputs = ["hsm_app_logs"]
+# The file source emits the raw line in .message; parse it and map the NLog attribute
+# names onto the fields VictoriaLogs treats specially: _time drives time filters and
+# the UI's time column, _msg the message column. Every other field (level, logger,
+# thread, traceId) stays queryable as-is. A line that is not valid JSON is shipped
+# with the ingestion time and the raw text as _msg.
+source = '''
+parsed = parse_json(string!(.message)) ?? null
+if parsed != null {
+    . = parsed
+    ._time = parse_timestamp(string(.time) ?? "", format: "%Y-%m-%d %H:%M:%S%.f") ?? now()
+    del(.time)
+    ._msg = string(.msg) ?? ""
+    del(.msg)
+} else {
+    ._time = now()
+    ._msg = string!(.message)
+}
+'''
+
+[sinks.victorialogs]
+type = "http"
+inputs = ["hsm_to_victorialogs"]
+# Direct compose-network address: ingest is reachable only inside the network.
+# /insert/jsonline is VictoriaLogs' newline-delimited JSON ingest endpoint.
+uri = "http://victorialogs:9428/insert/jsonline"
+method = "post"
+
+[sinks.victorialogs.encoding]
+codec = "json"
+
+[sinks.victorialogs.framing]
+# One JSON object per line: exactly what /insert/jsonline expects (the default
+# 'bytes' framing would send the batch as a JSON array, which VL rejects).
+method = "newline_delimited"
+
+[sinks.victorialogs.request]
+compression = "gzip"
+
+[sinks.victorialogs.buffer]
+# Survives restarts and VictoriaLogs downtime without dropping shipped lines.
+type = "disk"
+max_size = 268435488 # 256 MiB

@@ -21,4 +21,6 @@ Use ADRs for durable decisions that future maintainers will ask about.
 | 0004 | Superseded by ADR-0005 | [No-expiration API tokens are the issuance default](0004-no-expiration-tokens-default.md) | 2026-09-09 |
 | 0005 | Accepted | [An API token is an eternal owner mirror with a read-only flag](0005-api-token-owner-mirror.md) | 2026-09-10 |
 | 0006 | Accepted | [Token usage sensors are keyed by owner login + token EntityId](0006-token-usage-sensors-keyed-by-owner-and-entityid.md) | 2026-09-16 |
+| 0007 | Accepted | [Distribute Caddy with DNS challenge modules as a pinned image](0007-bundled-dns-caddy-image.md) | 2026-09-24 |
+| 0008 | Accepted | [VictoriaLogs for HSM server log storage in the docker-compose deployment](0008-victorialogs-log-storage.md) | 2026-09-25 |
 | _template | Template | [ADR template](_TEMPLATE.md) | — |
