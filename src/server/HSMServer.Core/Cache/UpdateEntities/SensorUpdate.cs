@@ -88,11 +88,13 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public long? TTL { get; init; }
 
-        // #1409: opt-out from taking change-table ownership of the targeted
-        // policy — set by the schedule detach, whose only mutation
-        // (ScheduleId) is invisible to the change journal (Policy.ToString()
-        // does not render it), so the update must not re-stamp the owner
-        // either. See BaseNodeModel.Update.
+        // #1409/#1451: opt-out from taking change-table ownership of the
+        // targeted policy — set by the full-copy re-assert flows (schedule
+        // detach #1409, folder chat removal #1451), system-initiated
+        // housekeeping that must not re-stamp the owner: a System initiator
+        // would downgrade a recorded User owner and release the CanChange
+        // protection that blocks later template applies. See
+        // BaseNodeModel.Update.
         internal bool PreserveChangeOwnership { get; init; }
 
         public PolicyUpdate() { }

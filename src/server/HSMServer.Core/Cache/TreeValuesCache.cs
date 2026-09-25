@@ -2437,11 +2437,22 @@ namespace HSMServer.Core.Cache
         // be re-asserted here (an explicit Never degrades to FromParent).
         // Callers override only what their flow mutates; the chat-removal
         // fallbacks for policies that never held the chat override nothing.
-        // See feature.md (#1409, #1451).
+        // Every consumer is system-initiated housekeeping (chat removal
+        // #1451, schedule detach #1409) re-asserting content it does not
+        // own, so the copy also opts out of change-table ownership: a
+        // System initiator must not downgrade a recorded User owner and
+        // release the CanChange protection that blocks later template
+        // applies — including on the chat-carrier updates, where the only
+        // change is folder housekeeping (a chat dropped from the
+        // destination), not a user's policy edit. The USER editor path
+        // (UpdateSensorAsync with a user initiator) builds its own updates
+        // and still takes ownership. See
+        // PolicyUpdate.PreserveChangeOwnership, feature.md (#1409, #1451).
         private static PolicyUpdate BuildFullPolicyCopy(Policy policy, InitiatorInfo initiator) =>
             new(policy, initiator)
             {
                 TTL = policy is TTLPolicy { IsTTLFromParent: false } ttl ? ttl.TTLTicks : null,
+                PreserveChangeOwnership = true,
             };
 
         // #1409: full copy of the policy with the deleted schedule's reference
@@ -2450,14 +2461,12 @@ namespace HSMServer.Core.Cache
         // DIFFERENT schedule rides through unchanged. TTL must be re-asserted
         // explicitly (a null TTL in full-list semantics is an explicit
         // FromParent reset; an explicit Never degrades to FromParent). The
-        // update opts out of change-table ownership — see
-        // PolicyUpdate.PreserveChangeOwnership. Full mapping notes:
-        // feature.md (#1409).
+        // opt-out of change-table ownership is inherited from
+        // BuildFullPolicyCopy. Full mapping notes: feature.md (#1409).
         private static PolicyUpdate DetachFromSchedule(Policy policy, Guid scheduleId, InitiatorInfo initiator) =>
             BuildFullPolicyCopy(policy, initiator) with
             {
                 ScheduleId = policy.ScheduleId == scheduleId ? null : policy.ScheduleId,
-                PreserveChangeOwnership = true,
             };
 
         private static bool TryGetPolicyUpdate(Policy policy, HashSet<Guid> chats, InitiatorInfo initiator,
@@ -2489,6 +2498,8 @@ namespace HSMServer.Core.Cache
         // TTL = null), scheduled alerts silently became 24/7, and
         // template-owned policies became unmanaged orphans — for EVERY
         // policy of the affected entity, not just the one losing the chat.
+        // The change-ownership opt-out is inherited from BuildFullPolicyCopy:
+        // the dropped chat is folder housekeeping, not a user's policy edit.
         private static PolicyUpdate BuildPolicyUpdate(Policy policy, PolicyDestinationUpdate destination,
             InitiatorInfo initiator) =>
             BuildFullPolicyCopy(policy, initiator) with { Destination = destination };

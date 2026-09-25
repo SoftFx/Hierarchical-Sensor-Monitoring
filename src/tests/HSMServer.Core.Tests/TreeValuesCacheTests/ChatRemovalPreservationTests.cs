@@ -260,6 +260,134 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
+        // #1451 round-2 review: the removal runs under the system-force
+        // initiator, and the TTL stamp loop re-stamps EVERY policy of the
+        // re-asserted list — including policies that never held the chat —
+        // down to the System owner (type 0). With this PR keeping
+        // TemplateId/TemplateAlertId alive (the old lossy wipe orphaned the
+        // policy instead), that stamp RELEASED the CanChange protection
+        // from hand-edited policies: the next template apply (AlertTemplate,
+        // type 15) passed the gate (0 <= 15) and silently overwrote the
+        // operator's edit. Folder chat removal is System housekeeping — it
+        // must not take (or release) change-table ownership, exactly like
+        // the #1409 schedule detach. A USER editor save is a different
+        // flow (UpdateSensorAsync with a user initiator) and still takes
+        // ownership — pinned by ChatOnlyEdit_OnTemplateClearedTtlPolicy_
+        // TransfersOwnership in AlertScheduleDetachTests.
+        [Fact]
+        [Trait("Category", "Chat removal")]
+        public async Task RemoveChatsFromPoliciesAsync_PreservesChangeTableOwnership_TemplateApplyStaysBlocked()
+        {
+            var chatToRemove = Guid.NewGuid();
+            var chatToKeep = Guid.NewGuid();
+            var user = InitiatorInfo.AsUser("operator");
+            var force = InitiatorInfo.AsSystemForce("test_seed_chat_removal");
+
+            var sensorPath = "sensorChatRemovalOwnership";
+
+            // A template-minted TTL alert: the binding this PR keeps alive,
+            // which is what makes the ownership release dangerous.
+            var template = BuildIntegerTemplate(TimeSpan.FromMinutes(10), sensorPath);
+            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            await CreateSensor(sensorPath);
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensor));
+
+            var templateTtl = Assert.Single(sensor.Policies.TTLPolicies, t => t.TemplateId == template.Id);
+            Assert.Equal(TimeSpan.FromMinutes(10).Ticks, templateTtl.TTLTicks);
+
+            // Seed a chat carrier on the same sensor: a plain TTL policy
+            // whose Custom destination holds the removed chat. Its presence
+            // makes the removal re-assert the sensor's WHOLE TTL list,
+            // templateTtl included (it never holds the chat). The force
+            // re-assert of templateTtl also gives it a recorded System
+            // owner — creation runs under empty ids, which the stamp loop
+            // skips, and the asserts below reason about a recorded owner.
+            var seed = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = force,
+                TTLPolicies =
+                [
+                    new PolicyUpdate(templateTtl, force) { TTL = templateTtl.TTLTicks },
+                    TtlUpdate(force, TimeSpan.FromMinutes(30), destination: ChatsDestination(chatToRemove, chatToKeep)),
+                ],
+            });
+            Assert.True(seed.IsOk, seed.Error);
+
+            var carrier = Assert.Single(sensor.Policies.TTLPolicies, t => t.TemplateId == null);
+            Assert.Equal(InitiatorType.System, sensor.ChangeTable.TtlPolicies[templateTtl.Id.ToString()].Initiator.Type);
+
+            // The "hand edit" through the editor: a user-initiated save
+            // targeting the template-minted alert. A plain user initiator
+            // may only toggle IsDisabled on a template-owned policy — that
+            // toggle IS the operator's edit — and the stamp loop records
+            // the User owner, which is what blocks later template applies.
+            var handEdit = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = user,
+                TTLPolicies =
+                [
+                    new PolicyUpdate(templateTtl, user) { TTL = templateTtl.TTLTicks, IsDisabled = true },
+                    // Re-assert by id (the copy constructor carries it): the
+                    // TtlUpdate helper mints empty ids, and an empty id would
+                    // read as drop + recreate of the carrier.
+                    new PolicyUpdate(carrier, user) { TTL = carrier.TTLTicks },
+                ],
+            });
+            Assert.True(handEdit.IsOk, handEdit.Error);
+
+            Assert.True(templateTtl.IsDisabled);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[templateTtl.Id.ToString()].Initiator.Type);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[carrier.Id.ToString()].Initiator.Type);
+
+            await _valuesCache.RemoveChatsFromPoliciesAsync(_fixture.FolderId, [chatToRemove], user);
+
+            // The removal itself worked: the chat is gone from the carrier's
+            // destination, and the content rides through on both policies.
+            Assert.DoesNotContain(chatToRemove, carrier.Destination.Chats.Keys);
+            Assert.Contains(chatToKeep, carrier.Destination.Chats.Keys);
+            Assert.Equal(TimeSpan.FromMinutes(30).Ticks, carrier.TTLTicks);
+            Assert.Equal(template.Id, templateTtl.TemplateId);
+            Assert.Equal(TimeSpan.FromMinutes(10).Ticks, templateTtl.TTLTicks);
+            Assert.True(templateTtl.IsDisabled);
+
+            // The owner survives: on the policy that never held the chat
+            // (the no-op fallback copy) AND on the chat carrier (the
+            // destination edit — folder housekeeping, not a user's policy
+            // edit, so a System initiator must not downgrade a User owner).
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[templateTtl.Id.ToString()].Initiator.Type);
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[carrier.Id.ToString()].Initiator.Type);
+
+            // Consequence, pinned end-to-end (the #1409 shape): a
+            // template-initiated apply (AlertTemplate, type 15) targeting
+            // the user-owned policy is still rejected by the CanChange gate
+            // (100 <= 15 is false) — the interval and the operator's
+            // disable toggle survive.
+            var templateApply = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [new PolicyUpdate(templateTtl, InitiatorInfo.AlertTemplate) { TTL = TimeSpan.FromMinutes(99).Ticks }],
+                Initiator = InitiatorInfo.AlertTemplate,
+            });
+            Assert.True(templateApply.IsOk, templateApply.Error);
+
+            Assert.Equal(TimeSpan.FromMinutes(10).Ticks, templateTtl.TTLTicks);
+            Assert.True(templateTtl.IsDisabled);
+
+            // Persisted: the change table written by the removal keeps the
+            // recorded User owner for both policies — a restart reloads the
+            // protection, not just the in-memory stamp.
+            var storedSensor = _databaseCoreManager.DatabaseCore.GetAllSensors()
+                .First(e => e.Id == sensor.Id.ToString());
+
+            Assert.Equal((byte)InitiatorType.User, storedSensor.ChangeTable.TTLPolicies[templateTtl.Id.ToString()].Initiator.Type);
+            Assert.Equal((byte)InitiatorType.User, storedSensor.ChangeTable.TTLPolicies[carrier.Id.ToString()].Initiator.Type);
+        }
+
+
         // A template with BOTH a TTL entry and a regular alert (distinct
         // condition target, so the minted regular is unambiguous): sensor
         // creation mints one policy per entry, each stamped with the
