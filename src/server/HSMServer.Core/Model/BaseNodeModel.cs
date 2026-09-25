@@ -137,16 +137,20 @@ namespace HSMServer.Core.Model
 
                     foreach (var ttlUpdate in update.TTLPolicies)
                     {
-                        // #1409: updates carrying PreserveChangeOwnership (the
-                        // schedule detach) do not take ownership — the detach's
-                        // only mutation, ScheduleId, is not rendered by
-                        // Policy.ToString(), so the change journal records
-                        // nothing for it either and a later template apply must
-                        // stay blocked by the CanChange gate. Every OTHER
-                        // update stamps its targeted policies unconditionally
-                        // (pre-#1409 behaviour), including edits the change
-                        // journal itself does not render (e.g. a chat-only
-                        // Destination edit on a template-cleared alert).
+                        // #1409/#1451: updates carrying
+                        // PreserveChangeOwnership (the schedule detach, the
+                        // folder chat removal) do not take ownership — both
+                        // are system housekeeping that must not downgrade a
+                        // recorded User owner and release the CanChange
+                        // gate that keeps later template applies blocked.
+                        // Every OTHER update stamps its targeted policies
+                        // unconditionally (pre-#1409 behaviour), including
+                        // edits the change journal itself does not render
+                        // (e.g. a chat-only Destination edit on a
+                        // template-cleared alert). This loop stamps TTL
+                        // policies only; the regular-policy counterpart of
+                        // the opt-out is the stampOwnership gate on
+                        // CallJournal in SensorPolicyCollection.TryUpdate.
                         if (ttlUpdate.Id == Guid.Empty || ttlUpdate.PreserveChangeOwnership)
                             continue;
 

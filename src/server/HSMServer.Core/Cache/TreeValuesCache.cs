@@ -1395,7 +1395,7 @@ namespace HSMServer.Core.Cache
                     foreach (var ttl in product.Policies.TTLPolicies)
                     {
                         if (!TryGetPolicyUpdate(ttl, chatsHash, forceInitiator, out var ttlUpdate))
-                            ttlUpdate = new PolicyUpdate(ttl, forceInitiator);
+                            ttlUpdate = BuildFullPolicyCopy(ttl, forceInitiator);
 
                         productTtlUpdates.Add(ttlUpdate);
                     }
@@ -1766,7 +1766,7 @@ namespace HSMServer.Core.Cache
                 foreach (var ttl in sensor.Policies.TTLPolicies)
                 {
                     if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
-                        ttlUpdate = new PolicyUpdate(ttl, initiator);
+                        ttlUpdate = BuildFullPolicyCopy(ttl, initiator);
 
                     sensorTtlUpdates.Add(ttlUpdate);
                 }
@@ -1780,7 +1780,7 @@ namespace HSMServer.Core.Cache
                 foreach (var policy in sensor.Policies)
                 {
                     if (!TryGetPolicyUpdate(policy, chats, initiator, out var policyUpdate))
-                        policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), initiator);
+                        policyUpdate = BuildFullPolicyCopy(policy, initiator);
 
                     policiesUpdate.Add(policyUpdate);
                 }
@@ -2430,21 +2430,47 @@ namespace HSMServer.Core.Cache
                 .Select(c => $"{c.Property}:{c.Operation}:{c.Target}"));
         }
 
+        // #1451: full copy of a policy for a full-list re-assert. The copy
+        // constructor carries Destination/Schedule/ScheduleId/TemplateId/
+        // TemplateAlertId but NOT TTL — and a null TTL in full-list
+        // semantics is an explicit FromParent reset — so the interval must
+        // be re-asserted here (an explicit Never degrades to FromParent).
+        // Callers override only what their flow mutates; the chat-removal
+        // fallbacks for policies that never held the chat override nothing.
+        // Every consumer is system-initiated housekeeping (chat removal
+        // #1451, schedule detach #1409) re-asserting content it does not
+        // own, so the copy also opts out of change-table ownership: a
+        // System initiator must not downgrade a recorded User owner and
+        // release the CanChange protection that blocks later template
+        // applies — including on the chat-carrier updates, where the only
+        // change is folder housekeeping (a chat dropped from the
+        // destination), not a user's policy edit. The opt-out covers BOTH
+        // policy kinds: the TTL loop in BaseNodeModel.Update skips its
+        // stamp for flagged updates, and the regular arm gates the
+        // CallJournal stamp in SensorPolicyCollection.TryUpdate (the
+        // journal record for a real content change still fires). The USER
+        // editor path (UpdateSensorAsync with a user initiator) builds its
+        // own updates and still takes ownership. See
+        // PolicyUpdate.PreserveChangeOwnership, feature.md (#1409, #1451).
+        private static PolicyUpdate BuildFullPolicyCopy(Policy policy, InitiatorInfo initiator) =>
+            new(policy, initiator)
+            {
+                TTL = policy is TTLPolicy { IsTTLFromParent: false } ttl ? ttl.TTLTicks : null,
+                PreserveChangeOwnership = true,
+            };
+
         // #1409: full copy of the policy with the deleted schedule's reference
         // nulled — the copy keeps every other field (the full-list update
         // semantics re-assert the whole policy), so a ScheduleId bound to a
         // DIFFERENT schedule rides through unchanged. TTL must be re-asserted
         // explicitly (a null TTL in full-list semantics is an explicit
         // FromParent reset; an explicit Never degrades to FromParent). The
-        // update opts out of change-table ownership — see
-        // PolicyUpdate.PreserveChangeOwnership. Full mapping notes:
-        // feature.md (#1409).
+        // opt-out of change-table ownership is inherited from
+        // BuildFullPolicyCopy. Full mapping notes: feature.md (#1409).
         private static PolicyUpdate DetachFromSchedule(Policy policy, Guid scheduleId, InitiatorInfo initiator) =>
-            new(policy, initiator)
+            BuildFullPolicyCopy(policy, initiator) with
             {
                 ScheduleId = policy.ScheduleId == scheduleId ? null : policy.ScheduleId,
-                TTL = policy is TTLPolicy { IsTTLFromParent: false } ttl ? ttl.TTLTicks : null,
-                PreserveChangeOwnership = true,
             };
 
         private static bool TryGetPolicyUpdate(Policy policy, HashSet<Guid> chats, InitiatorInfo initiator,
@@ -2467,21 +2493,20 @@ namespace HSMServer.Core.Cache
         private static bool CanRemoveChatsFromPolicy(PolicyDestination destination, HashSet<Guid> chats) =>
             destination.IsCustom && destination.Chats.Any(pair => chats.Contains(pair.Key));
 
+        // #1451: chat removal is content-preserving — the full-list re-assert
+        // may change ONLY the destination (the removed chat dropped); TTL
+        // intervals, ScheduleIds and TemplateId/TemplateAlertId ride through
+        // on the full copy. The field-by-field construction this replaced
+        // left those fields null, and Policy.TryUpdate assigns them
+        // unconditionally: TTL intervals reset to FromParent (persisted as
+        // TTL = null), scheduled alerts silently became 24/7, and
+        // template-owned policies became unmanaged orphans — for EVERY
+        // policy of the affected entity, not just the one losing the chat.
+        // The change-ownership opt-out is inherited from BuildFullPolicyCopy:
+        // the dropped chat is folder housekeeping, not a user's policy edit.
         private static PolicyUpdate BuildPolicyUpdate(Policy policy, PolicyDestinationUpdate destination,
             InitiatorInfo initiator) =>
-            new()
-            {
-                Id = policy.Id,
-                Conditions = policy.Conditions.Select(c => new
-                    PolicyConditionUpdate(c.Operation, c.Property, c.Target, c.Combination)).ToList(),
-                ConfirmationPeriod = policy.ConfirmationPeriod,
-                Status = policy.Status,
-                Template = policy.Template,
-                Icon = policy.Icon,
-                IsDisabled = policy.IsDisabled,
-                Destination = destination,
-                Initiator = initiator,
-            };
+            BuildFullPolicyCopy(policy, initiator) with { Destination = destination };
 
 
         private bool TryGetSensorById(Guid id, out BaseSensorModel sensor)

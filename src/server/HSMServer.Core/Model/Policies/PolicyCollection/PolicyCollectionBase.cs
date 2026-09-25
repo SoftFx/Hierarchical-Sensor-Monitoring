@@ -235,7 +235,14 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        protected void CallJournal(Guid alertId, string oldValue, string newValue, InitiatorInfo initiator, bool isParentCall = false)
+        // stampOwnership=false carries PolicyUpdate.PreserveChangeOwnership
+        // (#1409/#1451): the JOURNAL record for the content change still
+        // fires, but the change-table owner is not re-stamped — a
+        // system-force housekeeping initiator (schedule detach, folder chat
+        // removal) would downgrade a recorded User owner and release the
+        // CanChange protection that blocks later template applies.
+        protected void CallJournal(Guid alertId, string oldValue, string newValue, InitiatorInfo initiator,
+            bool isParentCall = false, bool stampOwnership = true)
         {
             if (oldValue != newValue)
             {
@@ -250,7 +257,7 @@ namespace HSMServer.Core.Model.Policies
                     Path = _model.FullPath,
                 });
 
-                if (alertId != Guid.Empty)
+                if (alertId != Guid.Empty && stampOwnership)
                     AlertChangeTable[alertId.ToString()].SetUpdate(initiator);
             }
         }
