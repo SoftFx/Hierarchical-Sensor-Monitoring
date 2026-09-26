@@ -100,7 +100,7 @@ Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySens
 | `AddQueueOverflow` | int bar of dropped/evicted counts per queue | `HandleEnqueueResult` + `ReportRequeueEviction` (never suppressed) |
 | `AddQueuePackageValuesCount` | int bar, values per package | `AddPackageInfo` after successful send |
 | `AddQueuePackageProcessTime` | double bar, avg time-in-queue | `AddPackageInfo` |
-| `AddQueuePackageContentSize` | double bar, package size (chars → MB) | `AddPackageSendingInfo` |
+| `AddQueuePackageContentSize` | double bar, package size (chars → **KB**, `Unit.KB`) | `AddPackageSendingInfo` |
 
 ## Group registration helpers
 
@@ -140,10 +140,10 @@ Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySens
 
 | Состояние | Условие | Value | Status | Comment |
 |---|---|---|---|---|
-| Draining | speed > 0, оценка ниже потолка | `freeSpace / speed` | **Ok** | `Free space decreases by X Mbytes/sec.` |
-| BeyondCeiling | speed > 0, но места хватит больше чем на год | `365.00:00:00` | OffTime | `Free space decreases by X Mbytes/sec. More than 365 days left.` |
+| Draining | speed > 0, оценка ниже потолка | `freeSpace / speed` | **Ok** | `Free space decreases by X Mbytes/hour.` |
+| BeyondCeiling | speed > 0, но места хватит больше чем на год | `365.00:00:00` | OffTime | `Free space decreases by X Mbytes/hour. More than 365 days left.` |
 | NoDrain | speed == 0 | `365.00:00:00` | OffTime | `Free space is not decreasing. Value cannot be calculated.` |
-| Growing | speed < 0 | `365.00:00:00` | OffTime | `Free space increases by X Mbytes/sec. Value cannot be calculated.` |
+| Growing | speed < 0 | `365.00:00:00` | OffTime | `Free space increases by X Mbytes/hour. Value cannot be calculated.` |
 | Calibration | замеров меньше `CalibrationRequests` | `365.00:00:00` | OffTime | `Calibration request (n/N). Value cannot be calculated yet.` |
 
 Что это значит для оператора:
@@ -181,12 +181,30 @@ EMA засеялась бы огромным отрицательным знач
 - value, status и comment одного поста считаются из ОДНОГО снимка состояния, так что тройка
   всегда согласована (до #1445 счётчик калибровки двигался внутри `GetValue`, и пост СРАЗУ после
   калибровки нёс `TimeSpan.Zero` с уже рабочими status и comment);
-- the comment divides the speed by 1 MiB and labels it `Mbytes/sec` whatever unit the platform's
-  `IDiskInfo` reports in (bytes on Windows, kB on Unix). Mirrored rather than corrected: the two
-  collectors must produce the same comment for the same host, and relabelling it is a separate,
-  user-visible decision. The NUMBER in it is rendered with the invariant culture on both sides —
-  managed used plain interpolation, which on a comma-decimal host (`ru-RU`, `de-DE`, …) emitted
-  `1,5` where native emits `1.5`; fixed in #1426 so the contract holds on every host.
+- the comment divides the speed by 1 MiB whatever unit the platform's `IDiskInfo` reports in
+  (bytes on Windows, kB on Unix) — mirrored rather than corrected, because the two collectors
+  must produce the same comment for the same host;
+- **the rate is printed in MB/HOUR with up to SIX decimals (#1460, collector 3.5.4 / native
+  0.8.2).** It used to be MB/sec in the payload's shortest-round-trip form, so a realistic idle
+  drain reached the operator as `Free space decreases by 1.6574101944286661E-06 Mbytes/sec.` —
+  a 17-digit scientific literal in a sentence a human reads. Per hour is the scale a 365-day
+  sensor answers on. Six decimals rather than three **because the `Mbytes` label above is only
+  accurate on Windows**: the comment divides by 1 MiB whatever unit the platform reports free
+  space in, and the Unix reader reports kB, so a Unix number is 1024x smaller than its label
+  says — at three decimals an ordinary Unix drain rounded back to `0.000`, the same
+  structurally-zero reading the issue was about. Trailing zeros are trimmed with one decimal
+  always kept, so a fast drain reads `1800.0` rather than `1800.000000`. The sensor VALUE is
+  unaffected: only the comment text changed. The digits are produced by INTEGER arithmetic
+  (scale the same double by 1 000 000, round half away from zero) rather than by
+  `ToString("F6")` / `printf("%.6f")`, because those two disagree at a decimal midpoint
+  (half-away-from-zero vs half-to-even) and the corpus pins this text byte-for-byte. As a side effect the mantissa is
+  now identical on net472 and net6.0, which the 15-digit/round-trip split used to make differ;
+  an absurd magnitude that would overflow the scaled integer falls back to the round-trip form
+  on both sides. Pinned by `metric_source_contract:disk_prediction_comment_reads_a_slow_drain_in_mb_per_hour`
+  plus the mirrored unit tests (`FreeDiskSpacePredictionTests` / `native_disk_prediction_*`);
+- the NUMBER is rendered with the invariant culture on both sides — managed used plain
+  interpolation, which on a comma-decimal host (`ru-RU`, `de-DE`, …) emitted `1,5` where native
+  emits `1.5`; fixed in #1426 so the contract holds on every host.
 
 Known managed wrinkle: the send loop starts in `InitAsync` with a zero due time while the sampler's
 first tick is aligned to the next period boundary, so how many posts precede the N-th measurement
@@ -279,6 +297,17 @@ production default factory is a no-op; two ready-made factories ship with the li
 `hsm_collector_install_windows_metric_sources` (PDH/Win32, #1164) and
 `hsm_collector_install_linux_metric_sources` (`/proc` + `statvfs`, #1414). Each returns
 `HSM_RESULT_INVALID_STATE` off its platform and must be installed before `Start`.
+
+**`Free space on {letter} disk` posts WHOLE megabytes on Windows too (collector 0.8.2).** The
+Windows source divided the byte count as a double and posted the fraction
+(`51234.87109375`) where managed `WindowsDiskInfo.FreeSpaceMb` does an integer division
+(`BytesToMegabytes` → `(int)(value / (1 << 20))`) and posts `51234` — one sensor, two values on
+the same host, which is what rule #10 forbids; the Linux source already truncated the same way.
+The emitted value therefore changes on every Windows host on upgrade (it loses the fractional
+part). Found during #1426 and deferred then. Pinned by
+`native_windows_disk_binds_only_lettered_rows`, which now also requires a live read to be a
+whole number; the corpus cannot carry it, because the truncation lives in the platform reader
+the corpus deliberately replaces with a scripted source.
 
 ### Typed sources and read-failure reporting (#1426)
 
@@ -438,6 +467,18 @@ managed `BarSensorOptions` defaults every default-bar prototype inherits:
 Every post of one window therefore carries the SAME `OpenTime`/`CloseTime` while `Count`, `Min`,
 `Max`, `Mean` and `Last` grow. Before 0.7.1 the native bar window equalled the post period, so each 15 s
 post was a separate, closed bar with its own `OpenTime`.
+
+
+**`Package content size` reports KILOBYTES (#1459, collector 3.5.4 / native 0.8.2).** It registered
+`Unit.MB` while a bar renders at 2-decimal precision, so a realistic package — a couple of kilobytes,
+0.002 MB — rounded to `0.00`: the sensor was structurally incapable of reporting anything but zero.
+Both collectors now divide by 1024 instead of 1024² and register `Unit.KB` (2). They also had to be made to measure the SAME quantity (rule #10): managed multiplied the serialized body's char count by `sizeof(char)`, measuring the in-memory UTF-16 string, while the body goes on the wire as UTF-8 and native sums the bytes it sends — a 2x divergence that was invisible while both were stuck at `0.00`. Managed now reports the bytes sent, like native, and native counts the array brackets and separating commas the send path adds around its elements — without them the two stayed a systematic ~1% apart. The unit is part of
+the registration, so an existing node keeps showing MB until the sensor re-registers (which happens
+on the next collector start), while the VALUES switch immediately — a node that has not re-registered
+shows kilobyte numbers under an MB label until then. The native side additionally measures the
+package BEFORE handing it to the sender, which is free to consume the batch. Pinned by
+`default_sensors_contract:queue_content_size_registers_in_kilobytes` +
+`native_package_content_size_reports_kilobytes`.
 
 **Push-fed built-in bars** follow the same schedule without the sampling step (managed
 `PublicBarMonitoringSensor`, whose collect tick only runs `CheckCurrentBar`): the queue diagnostics

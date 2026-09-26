@@ -229,7 +229,14 @@ namespace hsm
                 if (!ReadFreeBytes(*source, free_bytes, error))
                     return Fail(sample, std::move(error));
 
-                sample->double_value = free_bytes / (1024.0 * 1024.0); // -> MB
+                // WHOLE megabytes, like managed WindowsDiskInfo.FreeSpaceMb — an INTEGER division of
+                // the byte count (BytesToMegabytes: (int)(value / (1 << 20))). Posting the fraction
+                // made the same sensor read 51234.87109375 here and 51234 from the managed collector
+                // on the same host, a rule #10 divergence on one sensor path; the Linux source
+                // already truncates the same way. The byte count is an exact integer in the double,
+                // so the cast reproduces the managed quotient exactly.
+                sample->double_value =
+                    static_cast<double>(static_cast<std::uint64_t>(free_bytes) / (1024ULL * 1024ULL));
                 return HSM_METRIC_READ_OK;
             }
 

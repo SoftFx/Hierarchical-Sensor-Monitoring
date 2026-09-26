@@ -1376,7 +1376,7 @@ namespace
         { HSM_DEFAULT_QUEUE_OVERFLOW, "Collector queue stats", "Queue overflow", HSM_SENSOR_TYPE_INT_BAR, true, false, 1100 /*Count*/, false, false, 0, true, 0, true, 15000, "Values evicted on queue overflow.", {} },
         { HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT, "Collector queue stats", "Items count in package", HSM_SENSOR_TYPE_INT_BAR, true, false, 1100, false, false, 0, true, 0, true, 15000, "Values per sent package.", {} },
         { HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME, "Collector queue stats", "Package process time", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 1011 /*Seconds*/, false, false, 0, true, 0, true, 15000, "Package processing time.", {} },
-        { HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, "Collector queue stats", "Package content size", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 3 /*MB*/, false, false, 0, true, 0, true, 15000, "Package body size.", {} },
+        { HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, "Collector queue stats", "Package content size", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 2 /*KB (#1459: MB at 2-decimal bar precision could only ever read 0)*/, false, false, 0, true, 0, true, 15000, "Package body size.", {} },
     };
 
     // The two TimeSpan-typed disk-prediction rows (Windows per-letter + the Unix letter-less one).
@@ -3719,10 +3719,13 @@ namespace
             return HSM_RESULT_OK;
         }
 
-        const char* LastError() const
+        // A COPY, never an interior pointer (#1444): any thread may fail an operation and rewrite
+        // last_error_ while a host reads it, so the string is copied out under error_mutex_ and the
+        // C entry point hands the caller its own thread-local copy.
+        std::string LastErrorCopy() const
         {
-            std::lock_guard<std::mutex> guard(mutex_);
-            return last_error_.c_str();
+            std::lock_guard<std::mutex> guard(error_mutex_);
+            return last_error_;
         }
 
         // --- Top-CPU sampling (#1179) ---
@@ -3841,34 +3844,119 @@ namespace
         // Capture the registered ".module/Service alive" handle and arm the heartbeat (#1198 follow-up):
         // its value was never posted, so the sensor sat registered-but-empty. Idempotent re-registration
         // returns the handle the collector group already created.
+        // Adding the group AFTER Start is allowed, so the handle is published under
+        // self_monitor_handles_mutex_ — the self-monitor thread is already reading it (#1453).
         void CaptureCollectorMonitoringHandles()
         {
             hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
-            if (AddDefaultSensor(HSM_DEFAULT_COLLECTOR_ALIVE, &params, service_alive_sensor_) == HSM_RESULT_OK)
-                collector_monitoring_enabled_ = true;
+            std::shared_ptr<NativeSensor> service_alive;
+            if (AddDefaultSensor(HSM_DEFAULT_COLLECTOR_ALIVE, &params, service_alive) != HSM_RESULT_OK)
+                return;
+
+            {
+                std::lock_guard<std::mutex> guard(self_monitor_handles_mutex_);
+                self_monitor_handles_.service_alive = std::move(service_alive);
+            }
+
+            collector_monitoring_enabled_.store(true, std::memory_order_release);
+            EnsureSelfMonitorRunning();
         }
 
         // Capture the ".module/Collector queue stats" handles so the dispatch path + heartbeat thread
-        // post live values instead of leaving the whole category registered-but-empty.
+        // post live values instead of leaving the whole category registered-but-empty. Published under
+        // the same mutex as the heartbeat handle, and for the same reason (#1453).
         void CaptureQueueDiagnosticHandles()
         {
             hsm_default_sensor_params_t params = hsm_default_sensor_params_default();
-            AddDefaultSensor(HSM_DEFAULT_QUEUE_OVERFLOW, &params, queue_overflow_sensor_);
-            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT, &params, queue_items_sensor_);
-            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME, &params, queue_time_sensor_);
-            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, &params, queue_size_sensor_);
-            queue_diagnostics_enabled_ = true;
+            std::shared_ptr<NativeSensor> overflow;
+            std::shared_ptr<NativeSensor> items;
+            std::shared_ptr<NativeSensor> time;
+            std::shared_ptr<NativeSensor> size;
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_OVERFLOW, &params, overflow);
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT, &params, items);
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME, &params, time);
+            AddDefaultSensor(HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, &params, size);
+
+            {
+                std::lock_guard<std::mutex> guard(self_monitor_handles_mutex_);
+                self_monitor_handles_.queue_overflow = std::move(overflow);
+                self_monitor_handles_.queue_items = std::move(items);
+                self_monitor_handles_.queue_time = std::move(time);
+                self_monitor_handles_.queue_size = std::move(size);
+            }
+
+            queue_diagnostics_enabled_.store(true, std::memory_order_release);
+            EnsureSelfMonitorRunning();
+        }
+
+        // A host may register a self-monitoring group AFTER Start, and the loop is only armed at
+        // Start (it has nothing to post before a group exists), so a late registration would leave
+        // the heartbeat registered-but-empty for the rest of the run — which the sensor's 1 min TTL
+        // turns into a Timeout alert on a perfectly healthy collector. Arm it here instead.
+        //
+        // NOT under op_mutex_: a lifecycle listener runs with op_mutex_ held and is allowed to
+        // register sensors, so taking it here would self-deadlock that host. The arm/join pair has
+        // its own mutex, and the state is read inside it, so a Stop cannot leave a thread created
+        // behind its join.
+        void EnsureSelfMonitorRunning()
+        {
+            std::lock_guard<std::mutex> lifecycle_guard(self_monitor_lifecycle_mutex_);
+
+            // Wake a loop that is ALREADY running: it may be sleeping out a long collect period
+            // with no heartbeat handle, and the handle just published has to beat now rather than
+            // a whole period from now.
+            {
+                std::lock_guard<std::mutex> guard(self_monitor_cv_mutex_);
+                self_monitor_wake_ = true;
+            }
+            self_monitor_cv_.notify_all();
+
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+
+                // Starting counts on purpose: an Add racing Start (or made from a Starting
+                // listener) would otherwise fall between the two arming points — this one declines
+                // and Start's own StartSelfMonitor already read the flags — and leave the loop
+                // unarmed for the whole run. Arming during Starting can put the first beat in the
+                // queue ahead of the Start one-shot values; that is harmless, since the data gate
+                // accepts Starting and the worker drains whatever is queued once it is up.
+                if (state_ != CollectorState::Starting && state_ != CollectorState::Running)
+                    return; // Not started yet: Start arms it. Stopped/Disposed: nothing to arm.
+            }
+
+            StartSelfMonitorLocked();
         }
 
     private:
+        // The self-monitoring sensor handles, published as one unit under
+        // self_monitor_handles_mutex_ and always read as a whole-struct copy (#1453).
+        struct SelfMonitorHandles
+        {
+            std::shared_ptr<NativeSensor> service_alive;
+            std::shared_ptr<NativeSensor> queue_overflow;
+            std::shared_ptr<NativeSensor> queue_items;
+            std::shared_ptr<NativeSensor> queue_time;
+            std::shared_ptr<NativeSensor> queue_size;
+        };
+
+        // One snapshot per use: the caller works on its own copy, so a group added after Start can
+        // publish new handles without racing the reader (and without holding the mutex over a post).
+        SelfMonitorHandles SelfMonitorSnapshot() const
+        {
+            std::lock_guard<std::mutex> guard(self_monitor_handles_mutex_);
+            return self_monitor_handles_;
+        }
+
         hsm_result_t SetError(hsm_result_t result, std::string message) const
         {
+            std::lock_guard<std::mutex> guard(error_mutex_);
             last_error_ = std::move(message);
             return result;
         }
 
         void ClearError() const
         {
+            std::lock_guard<std::mutex> guard(error_mutex_);
             last_error_.clear();
         }
 
@@ -4253,20 +4341,25 @@ namespace
 
         // Per-package queue stats, posted from the dispatch send path's UNLOCKED window. Bars only
         // aggregate (AccumulateBar) — they never enqueue or touch queue_mutex_ — so this is safe there.
-        void PostPackageStats(const std::vector<std::string>& batch, std::chrono::steady_clock::duration send_duration)
+        void PostPackageStats(
+            size_t value_count,
+            size_t content_bytes,
+            std::chrono::steady_clock::duration send_duration)
         {
             try
             {
-                if (queue_items_sensor_)
-                    queue_items_sensor_->AddBarInt(static_cast<int32_t>(batch.size()));
-                if (queue_time_sensor_)
-                    queue_time_sensor_->AddBarDouble(std::chrono::duration<double>(send_duration).count());
-                if (queue_size_sensor_)
+                // Snapshot first (#1453): the queue group may be added while this dispatch runs.
+                const SelfMonitorHandles handles = SelfMonitorSnapshot();
+
+                if (handles.queue_items)
+                    handles.queue_items->AddBarInt(static_cast<int32_t>(value_count));
+                if (handles.queue_time)
+                    handles.queue_time->AddBarDouble(std::chrono::duration<double>(send_duration).count());
+                if (handles.queue_size)
                 {
-                    std::size_t bytes = 0;
-                    for (const auto& json : batch)
-                        bytes += json.size();
-                    queue_size_sensor_->AddBarDouble(static_cast<double>(bytes) / (1024.0 * 1024.0));
+                    // KILOBYTES (#1459): a real package is a couple of KB, and the bar's 2-decimal display
+                    // precision turned every megabyte reading into a flat 0.00.
+                    handles.queue_size->AddBarDouble(static_cast<double>(content_bytes) / 1024.0);
                 }
             }
             catch (...)
@@ -4275,19 +4368,39 @@ namespace
             }
         }
 
+        // Arm the loop. Called from Start and, for a group registered later, from
+        // EnsureSelfMonitorRunning — which may run on a thread that is ALREADY inside a lifecycle
+        // callback and therefore already holds op_mutex_, so the arm/join pair has its own mutex
+        // rather than reusing that one.
         void StartSelfMonitor()
         {
-            if (!collector_monitoring_enabled_ && !queue_diagnostics_enabled_)
+            std::lock_guard<std::mutex> guard(self_monitor_lifecycle_mutex_);
+            StartSelfMonitorLocked();
+        }
+
+        // Caller holds self_monitor_lifecycle_mutex_. Idempotent: a running loop is left alone.
+        void StartSelfMonitorLocked()
+        {
+            if (self_monitor_thread_.joinable())
+                return;
+
+            if (!collector_monitoring_enabled_.load(std::memory_order_acquire) &&
+                !queue_diagnostics_enabled_.load(std::memory_order_acquire))
                 return;
             {
                 std::lock_guard<std::mutex> guard(self_monitor_cv_mutex_);
                 self_monitor_stop_ = false;
+                self_monitor_wake_ = false;
             }
             self_monitor_thread_ = std::thread([this] { RunSelfMonitorLoop(); });
         }
 
         void StopSelfMonitor()
         {
+            // Same mutex as the arm, so a group registered concurrently cannot leave a freshly
+            // created loop running behind the join.
+            std::lock_guard<std::mutex> lifecycle_guard(self_monitor_lifecycle_mutex_);
+
             {
                 std::lock_guard<std::mutex> guard(self_monitor_cv_mutex_);
                 self_monitor_stop_ = true;
@@ -4297,16 +4410,54 @@ namespace
                 self_monitor_thread_.join();
         }
 
+        // The heartbeat's own post period: the ".module/Service alive" catalog row's PostDataPeriod
+        // (15 s), which is the knob managed drives CollectorAlive from (#1437).
+        static int64_t ServiceAliveBeatPeriodMs()
+        {
+            const DefaultSensorDef* def = FindDefaultSensorDef(HSM_DEFAULT_COLLECTOR_ALIVE);
+            return def != nullptr && def->post_period_ms > 0 ? def->post_period_ms : 15000;
+        }
+
         // Heartbeat + queue-overflow delta on a dedicated thread (no queue_mutex_ held, so AddBool —
-        // which enqueues — is safe). Posts Service alive immediately on start, then every collect period.
+        // which enqueues — is safe). Posts Service alive immediately on start, then every beat period.
         void RunSelfMonitorLoop()
         {
-            const auto period = std::chrono::milliseconds(collect_period_ms_);
+            // TWO independent cadences, each on its own knob (#1437). The heartbeat follows the
+            // SENSOR's post period, mirroring managed, where CollectorAlive is a MonitoringSensorBase
+            // driven by PostDataPeriod; the overflow counter is sampled once per package-collect
+            // cycle, because that is the cycle that evicts values. They default to the same 15 s,
+            // but they are different knobs: driving the beat from the collect period meant that
+            // raising the collect period above the sensor's registered 1 min TTL made the server
+            // call a healthy collector dead.
+            const auto beat_period = std::chrono::milliseconds(ServiceAliveBeatPeriodMs());
+            const auto overflow_period = std::chrono::milliseconds(collect_period_ms_);
+
+            // Both fire on the first pass: the immediate beat on Start is contractual.
+            auto next_beat = std::chrono::steady_clock::now();
+            auto next_overflow = next_beat;
+
             while (true)
             {
+                // One snapshot per tick (#1453): a host is allowed to add the collector-monitoring
+                // or queue group AFTER Start, which publishes these handles from another thread
+                // while this loop is already running.
+                const SelfMonitorHandles handles = SelfMonitorSnapshot();
+                const auto now = std::chrono::steady_clock::now();
+
+                // Both deadlines advance BEFORE anything is posted, so a throwing post cannot turn
+                // the loop into a spin. A handle that is not registered yet leaves ITS deadline in
+                // the past, so a group added after Start beats on the very next pass.
+                const bool beat_due = handles.service_alive && now >= next_beat;
+                if (beat_due)
+                    next_beat = now + beat_period;
+
+                const bool overflow_due = now >= next_overflow;
+                if (overflow_due)
+                    next_overflow = now + overflow_period;
+
                 try
                 {
-                    if (service_alive_sensor_)
+                    if (beat_due)
                     {
                         // The very first heartbeat of the sensor's life is `false` — a start
                         // marker the server renders as the boundary of a new collector run, then
@@ -4316,15 +4467,16 @@ namespace
                         // NOT re-arm the marker, so only the first run after Add posts `false`.
                         const bool alive = !service_alive_first_beat_;
                         service_alive_first_beat_ = false;
-                        service_alive_sensor_->AddBool(alive, HSM_SENSOR_STATUS_OK, nullptr);
+                        handles.service_alive->AddBool(alive, HSM_SENSOR_STATUS_OK, nullptr);
                     }
 
-                    // Overflow since the last tick — post only when non-zero so the bar isn't all-zeros.
-                    if (queue_overflow_sensor_)
+                    // Overflow since the last collect cycle — post only when non-zero so the bar
+                    // isn't all-zeros.
+                    if (overflow_due && handles.queue_overflow)
                     {
                         const std::int64_t overflowed = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
                         if (overflowed > 0)
-                            queue_overflow_sensor_->AddBarInt(static_cast<int32_t>(std::min<std::int64_t>(overflowed, INT32_MAX)));
+                            handles.queue_overflow->AddBarInt(static_cast<int32_t>(std::min<std::int64_t>(overflowed, INT32_MAX)));
                     }
                 }
                 catch (...)
@@ -4332,9 +4484,30 @@ namespace
                     // A post must never let an exception escape this thread (-> std::terminate).
                 }
 
+                // Sleep to the earliest pending deadline. next_overflow is always in the future by
+                // now, so the wait is bounded even while the heartbeat handle is still unregistered.
+                auto wake = next_overflow;
+                if (handles.service_alive && next_beat < wake)
+                    wake = next_beat;
+
+                const auto wait = wake - std::chrono::steady_clock::now();
+
                 std::unique_lock<std::mutex> lock(self_monitor_cv_mutex_);
-                if (self_monitor_cv_.wait_for(lock, period, [this] { return self_monitor_stop_; }))
+                if (self_monitor_stop_)
                     return;
+
+                // The wake flag is part of the predicate on purpose: wait_for with a predicate
+                // keeps sleeping through a plain notify, so a handle published mid-sleep would
+                // otherwise not be picked up until this deadline expired (which is a whole collect
+                // period when only the queue group armed the loop).
+                if (wait > std::chrono::steady_clock::duration::zero() &&
+                    self_monitor_cv_.wait_for(lock, wait, [this] { return self_monitor_stop_ || self_monitor_wake_; }))
+                {
+                    if (self_monitor_stop_)
+                        return;
+
+                    self_monitor_wake_ = false;
+                }
             }
         }
 
@@ -5000,13 +5173,34 @@ namespace
                 }
 
                 lock.unlock();
+
+                // Measure the package BEFORE the send: a sender is free to consume the batch
+                // (the recording sender moves every value out of it), which made the reported
+                // size 0 whatever the unit (#1459). Only when the stats sensors exist — the flag
+                // is sticky, so reading it early is the same answer the post path would get, and a
+                // collector without the queue group does not walk the batch at all.
+                const bool measure_package = queue_diagnostics_enabled_.load(std::memory_order_acquire);
+                const size_t batch_values = batch.size();
+                size_t batch_bytes = 0;
+                if (measure_package && !batch.empty())
+                {
+                    for (const auto& json : batch)
+                        batch_bytes += json.size();
+
+                    // The body is the JSON ARRAY the send path builds from these elements, so
+                    // count the brackets and the separating commas too (n + 1 bytes). Managed
+                    // measures the serialized body, which includes them; leaving them out here
+                    // would keep the two collectors a systematic ~1% apart (rule #10).
+                    batch_bytes += batch.size() + 1;
+                }
+
                 const auto send_start = std::chrono::steady_clock::now();
                 const auto sent = TrySendBatch(batch);
                 // Per-package queue stats — only on a real send (not the stop-flush drop path), posted
                 // here in the UNLOCKED window: bars only aggregate, so there's no re-entrancy on
                 // queue_mutex_ and no enqueue from within dispatch.
-                if (sent && queue_diagnostics_enabled_ && !clear_remainder_on_failure)
-                    PostPackageStats(batch, std::chrono::steady_clock::now() - send_start);
+                if (sent && measure_package && !clear_remainder_on_failure)
+                    PostPackageStats(batch_values, batch_bytes, std::chrono::steady_clock::now() - send_start);
                 lock.lock();
 
                 if (!sent)
@@ -5190,6 +5384,11 @@ namespace
         // emitted_start_epoch identifies the run its Start value went out for. Starts at 1 because
         // a fresh marker carries 0 = "never emitted".
         int64_t start_epoch_ = 0;
+        // The last failed operation's message. Written by SetError/ClearError from ANY thread —
+        // host calls and the collector's own workers alike — and read by hsm_collector_last_error,
+        // so it has its own LEAF mutex (#1444): it is taken while mutex_ is held, never the other
+        // way round, and nothing is called while it is held.
+        mutable std::mutex error_mutex_;
         mutable std::string last_error_;
 
         std::mutex queue_mutex_;
@@ -5211,22 +5410,31 @@ namespace
         // are captured when the groups are added. Service alive (a heartbeat) and the queue-overflow
         // delta are posted by a dedicated thread; the per-package stats (items/time/size) are posted
         // from the dispatch send path in its UNLOCKED window (bars only aggregate, never enqueue).
-        bool collector_monitoring_enabled_ = false;
-        bool queue_diagnostics_enabled_ = false;
-        std::shared_ptr<NativeSensor> service_alive_sensor_;
+        //
+        // A host may add either group AFTER Start, so the handles are published by one thread while
+        // the self-monitor thread and the dispatch path already read them (#1453). They therefore
+        // live behind self_monitor_handles_mutex_, a LEAF mutex: a reader copies the whole struct
+        // and releases it before touching a sensor, so no collector lock is ever taken under it.
+        // The two "enabled" flags only gate work, never dereference, so they are plain atomics.
+        std::atomic<bool> collector_monitoring_enabled_{ false };
+        std::atomic<bool> queue_diagnostics_enabled_{ false };
+        mutable std::mutex self_monitor_handles_mutex_;
+        SelfMonitorHandles self_monitor_handles_;
         // First heartbeat of the sensor's life posts `false` as a start marker (#1433). Owned by
         // the collector so a Stop/Start cycle does not re-arm it; written only by the self-monitor
         // thread, whose creation and join carry the happens-before against Start/Stop.
         bool service_alive_first_beat_ = true;
-        std::shared_ptr<NativeSensor> queue_overflow_sensor_;
-        std::shared_ptr<NativeSensor> queue_items_sensor_;
-        std::shared_ptr<NativeSensor> queue_time_sensor_;
-        std::shared_ptr<NativeSensor> queue_size_sensor_;
         std::atomic<std::int64_t> queue_overflow_count_{ 0 };
+        // Guards the self-monitor thread's arm/join pair. Deliberately NOT op_mutex_: a lifecycle
+        // listener runs with op_mutex_ held and may register a sensor group, which arms the loop.
+        std::mutex self_monitor_lifecycle_mutex_;
         std::thread self_monitor_thread_;
         std::mutex self_monitor_cv_mutex_;
         std::condition_variable self_monitor_cv_;
         bool self_monitor_stop_ = false;
+        // Set when a group is registered while the loop is already sleeping, so the loop re-runs
+        // its tick at once instead of waiting out the current deadline.
+        bool self_monitor_wake_ = false;
 
         std::mutex hang_mutex_;
         std::condition_variable hang_cv_;
@@ -7355,10 +7563,24 @@ hsm_result_t hsm_collector_get_sent_json(const hsm_collector_t* collector, size_
 
 const char* hsm_collector_last_error(const hsm_collector_t* collector)
 {
+    // The caller reads a pointer into THIS THREAD's copy of the message, never into the
+    // collector's own storage (#1444). Any thread — a host call or one of the collector's worker
+    // threads — can fail an operation and rewrite the stored string, so an interior pointer could
+    // be reallocated while the caller was still reading it, and no locking on the caller's side
+    // could prevent that. The thread-local buffer is refreshed on every call and stays valid until
+    // the SAME thread calls this function again: the classic C last-error contract, which fixes
+    // every existing foreign-language wrapper without an ABI change or a wrapper change.
+    // ONE buffer per thread, shared by every collector handle: a call for collector B
+    // overwrites the text a previous call for collector A returned on this thread.
+    static thread_local std::string buffer;
+
+    // A null handle keeps its static literal — nothing to copy, and a caller that kept that
+    // pointer across another call still reads the same text it did before 0.8.2.
     if (collector == nullptr)
         return "Collector handle is null.";
 
-    return collector->impl->LastError();
+    buffer = collector->impl->LastErrorCopy();
+    return buffer.c_str();
 }
 
 // ---- Alert builders -----------------------------------------------------------------------------
