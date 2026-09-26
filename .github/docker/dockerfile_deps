@@ -1,4 +1,6 @@
-# The reference docker-compose.yml healthcheck runs `bash` (/dev/tcp probe): keep bash in the base image.
+# The server image's HEALTHCHECK (docker_scripts/HSMserver/Dockerfile.healthcheck, #1465) probes the
+# Sensor API with `wget`, so wget below is not only a build-time helper: keep it in the final image.
+# The publishing lane fails if it disappears ("Verify the image declares a HEALTHCHECK").
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 
 RUN apt-get update && \

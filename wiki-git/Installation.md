@@ -200,6 +200,16 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 # SWITCHING: edit .env and run `docker compose up -d` (Caddy is recreated; HSM data is untouched).
 # WITHOUT CADDY (HSM's own PFX certificate, as before): use docker-compose.direct.yml instead.
 # Collectors and agents always connect to https://<HSM_DOMAIN>:44330.
+#
+# The image is published by CI (server-build.yml). To run a build from local sources instead,
+# publish it to this exact tag first:
+#   dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 \
+#     -p:PublishProfile=DefaultContainer -p:ContainerImageName=hsmonitoring/hierarchical_sensor_monitoring
+# That publish cannot carry the image's HEALTHCHECK (the .NET SDK has no property for it), so add
+# it the way CI does, or use scripts/local-docker-build.ps1, which does both steps:
+#   docker build --build-arg BASE_IMAGE=hsmonitoring/hierarchical_sensor_monitoring:latest \
+#     -t hsmonitoring/hierarchical_sensor_monitoring:latest \
+#     -f docker_scripts/HSMserver/Dockerfile.healthcheck docker_scripts/HSMserver
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
@@ -208,13 +218,25 @@ services:
     user: '0'
     # No ports: HSM is reachable only through caddy.
     healthcheck:
-      # Kestrel opens its ports only after the database has loaded, so an open port means ready.
-      test: ['CMD', 'bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/44330']
-      interval: 10s
+      # Byte-identical to the one the image itself now carries (#1465, see
+      # docker_scripts/HSMserver/Dockerfile.healthcheck); scripts/check-healthcheck-sync.py fails
+      # the build if the two ever differ. It is repeated here only so this file also works with an
+      # image published before #1465: `depends_on: service_healthy` below refuses to start caddy
+      # ("container hsm-server has no healthcheck configured") when neither the image nor this
+      # file defines one. Verified against the published 3.41.5, which has wget but no healthcheck.
+      # (An image older than ~3.41 has no wget either; with one of those, pin an older compose file.)
+      # Kestrel opens its ports only after the database has loaded, so a 200 means loaded AND
+      # serving; a listening but wedged server fails this probe, while the TCP connect used here
+      # before reported it healthy.
+      test: ['CMD-SHELL', 'wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null https://127.0.0.1:44330/api/sensors/testConnection || exit 1']
+      interval: 30s
       timeout: 5s
-      # "unhealthy" makes `up` skip caddy for good, so leave a generous budget: 10 min start
-      # period + 180 failed probes (30 min). Once open, the port stays open.
-      retries: 180
+      # Budget before caddy is skipped for good (see depends_on below): 10 min + 3 x 30 s. A
+      # database that needs longer: raise start_period here (and in the image, or they drift).
+      # One known case: an install with legacy SensorValues_* folders rewrites all of them before
+      # HSM listens. That migration continues in the container even after the budget runs out —
+      # wait for it to finish (`docker ps` shows healthy again), then `docker compose up -d` again.
+      retries: 3
       start_period: 10m
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy.
@@ -255,6 +277,7 @@ What must stay as it is, if you ever adapt it:
 | Part | Why |
 |---|---|
 | No ports on app | HSM is reachable only through Caddy in this compose setup. |
+| `healthcheck` on `app` + `condition: service_healthy` | Caddy starts only when HSM is serving. The check is an HTTPS request to the Sensor API every 30 s: `docker ps` shows `starting`, then `healthy`, and `unhealthy` if the server stops answering. From this version on the HSM image carries the same check itself, so any deployment — including `docker-compose.direct.yml` and a plain `docker run` — shows HSM's health; the copy here is kept identical so this file also works with an older image. HSM gets 10 minutes to load its database, plus 3 failed probes; past that `app` is `unhealthy`, `docker compose up` reports "dependency failed to start" and Caddy is not created. A database that needs longer: raise `start_period`. A very old installation converts its history on the first start of a new version, which can take longer than that. The conversion keeps running inside the container: wait until `docker ps` shows `hsm-server` healthy again (`docker logs hsm-server` shows `Now listening`), then run `docker compose up -d` again — repeating it earlier gives the same error, and restarting the container only starts the conversion over. |
 | Separate reverse proxies to app:44333 and app:44330 | HSM distinguishes the web UI and Sensor API by listener port. |
 | tls_insecure_skip_verify on the upstream | HSM serves its own HTTPS certificate inside the compose network. |
 | HSM_DOMAIN and HSM_CERTIFICATE in Caddy's environment | The entrypoint validates the mode and selects exactly one TLS source. No automatic fallback is used. |

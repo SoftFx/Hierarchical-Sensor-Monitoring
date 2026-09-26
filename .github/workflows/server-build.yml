@@ -283,6 +283,43 @@ jobs:
       - name: Build Linux image for Docker
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
 
+      # The SDK's container publishing has no HEALTHCHECK property and will not get one
+      # (dotnet/sdk-container-builds#316, closed as won't-do), so the check is one final layer on
+      # top of what the SDK just produced (#1465). scripts/local-docker-build.ps1 applies the very
+      # same Dockerfile to the locally built image, so there is a single definition and the two
+      # paths cannot drift. Both tags the SDK wrote (ContainerImageTags = $(Version);latest) are
+      # re-tagged here, because both are pushed below. Build context is the small scripts folder:
+      # the file copies nothing.
+      - name: Add the image HEALTHCHECK layer
+        env:
+          IMAGE_VERSION: ${{ needs.build.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          docker build \
+            --build-arg "BASE_IMAGE=${DockerMainName}:${IMAGE_VERSION}" \
+            -t "${DockerMainName}:${IMAGE_VERSION}" \
+            -t "${DockerMainName}:${LATEST_TAG}" \
+            -f docker_scripts/HSMserver/Dockerfile.healthcheck \
+            docker_scripts/HSMserver
+
+      # Guard the shipped image the way the agent bundle is guarded: a base image that drops wget,
+      # or a publish step that re-tags over the layer, would silently take the health away again.
+      - name: Verify the image declares a HEALTHCHECK
+        env:
+          IMAGE_VERSION: ${{ needs.build.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          for tag in "${IMAGE_VERSION}" "${LATEST_TAG}"; do
+            img="${DockerMainName}:${tag}"
+            check="$(docker inspect --format '{{json .Config.Healthcheck}}' "$img")"
+            echo "$img healthcheck: $check"
+            case "$check" in
+              *testConnection*) ;;
+              *) echo "::error::$img carries no HSM HEALTHCHECK"; exit 1 ;;
+            esac
+            docker run --rm --entrypoint /bin/sh "$img" -c 'command -v wget'
+          done
+
       # Guard what the release actually ships — the image layer, not the publish folder it came from.
       # The app dir is read back from the image config instead of hardcoding /app, so retargeting
       # ContainerWorkingDirectory later cannot turn this guard into a no-op.
