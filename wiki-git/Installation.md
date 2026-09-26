@@ -255,7 +255,7 @@ What must stay as it is, if you ever adapt it:
 | Part | Why |
 |---|---|
 | No ports on app | HSM is reachable only through Caddy in this compose setup. |
-| Separate reverse proxies to app:44333 and app:44330 | HSM distinguishes the web UI and Sensor API by listener port. |
+| Separate reverse proxies to app:44333 and app:44330 | Not a split of the UI from the Sensor API — both listeners serve the same routes, and the API answers on 44333 as well. It keeps each published port mapped to the same HSM port, so collectors and agents already configured for 44330 keep working unchanged. Only the management API, MCP, Swagger and browser sign-in are restricted to the site port, so never send the web UI to 44330. |
 | tls_insecure_skip_verify on the upstream | HSM serves its own HTTPS certificate inside the compose network. |
 | HSM_DOMAIN and HSM_CERTIFICATE in Caddy's environment | The entrypoint validates the mode and selects exactly one TLS source. No automatic fallback is used. |
 | Provider tokens passed as container environment | The Caddyfile reads secrets from the process environment; they are not written into its configuration or persisted Caddy state. Compose-rendered config can reveal values, so do not share it. |
