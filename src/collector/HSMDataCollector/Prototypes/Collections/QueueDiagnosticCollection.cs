@@ -102,7 +102,10 @@ namespace HSMDataCollector.Prototypes.Collections
         public PackageContentSizePrototype() : base()
         {
             Description = $"The sensor sends information about the package body size. {GetBarOptionsInfo()}";
-            SensorUnit = Unit.MB;
+            // KB, not MB (#1459): a package is a couple of kilobytes, and the bar's 2-decimal
+            // precision rounded every megabyte reading to 0.00, so the sensor could never read
+            // anything but zero. Existing nodes keep the old unit until they re-register.
+            SensorUnit = Unit.KB;
         }
     }
 }

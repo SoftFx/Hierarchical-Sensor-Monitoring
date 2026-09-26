@@ -105,7 +105,7 @@ namespace HSMDataCollector.Tests
                 // 49 100 MiB left at 0.5 MiB/sec = 98 200 s (a day and three hours).
                 Assert.Equal(TimeSpan.FromSeconds(98200), post.Value);
                 Assert.Equal(SensorStatus.Ok, post.Status);
-                Assert.Equal("Free space decreases by 0.5 Mbytes/sec.", post.Comment);
+                Assert.Equal("Free space decreases by 1800.0 Mbytes/hour.", post.Comment);
             }
         }
 
@@ -136,11 +136,10 @@ namespace HSMDataCollector.Tests
                 Assert.Equal(129152769L, (long)relaxed.Value.TotalMilliseconds);
                 Assert.Equal(SensorStatus.Ok, relaxed.Status);
 
-                // The mantissa is left out of this assertion on purpose: net472 renders a double with
-                // 15 significant digits and net6.0 with the shortest round-trip form, a pre-existing
-                // divergence that the number-format conformance matrix already excludes.
-                Assert.StartsWith("Free space decreases by 0.380169937438", relaxed.Comment);
-                Assert.EndsWith(" Mbytes/sec.", relaxed.Comment);
+                // 0.38017 MiB/sec is 1368.611775 MiB/hour. The whole mantissa can be pinned since
+                // #1460: the comment now rounds the rate to six decimals with integer
+                // arithmetic, so net472 and net6.0 no longer render the same double differently.
+                Assert.Equal("Free space decreases by 1368.611775 Mbytes/hour.", relaxed.Comment);
             }
         }
 
@@ -158,7 +157,7 @@ namespace HSMDataCollector.Tests
                 Assert.Equal(FreeDiskSpacePredictionBase.MaxPrediction, post.Value);
                 Assert.Equal(SensorStatus.OffTime, post.Status);
                 Assert.Equal(
-                    "Free space increases by 0.5 Mbytes/sec. Value cannot be calculated.",
+                    "Free space increases by 1800.0 Mbytes/hour. Value cannot be calculated.",
                     post.Comment);
             }
         }
@@ -222,7 +221,7 @@ namespace HSMDataCollector.Tests
                 Assert.Equal(FreeDiskSpacePredictionBase.MaxPrediction, post.Value);
                 Assert.Equal(SensorStatus.OffTime, post.Status);
                 Assert.Equal(
-                    "Free space decreases by 0.0009765625 Mbytes/sec. More than 365 days left.",
+                    "Free space decreases by 3.515625 Mbytes/hour. More than 365 days left.",
                     post.Comment);
             }
         }
@@ -329,7 +328,7 @@ namespace HSMDataCollector.Tests
 
                 Assert.Equal(TimeSpan.FromSeconds(98800), post.Value);
                 Assert.Equal(SensorStatus.Ok, post.Status);
-                Assert.Equal("Free space decreases by 0.5 Mbytes/sec.", post.Comment);
+                Assert.Equal("Free space decreases by 1800.0 Mbytes/hour.", post.Comment);
             }
         }
 
