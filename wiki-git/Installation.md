@@ -232,7 +232,8 @@ services:
       interval: 30s
       timeout: 5s
       # Budget before caddy is skipped for good (see depends_on below): 10 min + 3 x 30 s. A
-      # database that needs longer: raise start_period here (and in the image, or they drift).
+      # database that needs longer: raise start_period HERE and nowhere else — the daemon keeps
+      # the image's other fields. (Moving the repo default means both copies, or the sync check fails.)
       # One known case: an install with legacy SensorValues_* folders rewrites all of them before
       # HSM listens. That migration continues in the container even after the budget runs out —
       # wait for it to finish (`docker ps` shows healthy again), then `docker compose up -d` again.
