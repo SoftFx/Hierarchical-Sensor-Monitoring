@@ -726,9 +726,12 @@ hsm_result_t hsm_collector_create_sensor_with_options(
    ServiceStatusPrototype shape (EnumOptions + AggregateData = true + an alert attached afterwards).
    hsm_collector_create_enum_sensor_with_options takes only a description; this one takes `options`
    (start from hsm_sensor_options_default(); its `description` is the sensor description). Like every
-   enum registration it emits DisplayUnit:null unless options->display_unit is set. `options` must not
-   be NULL; `enum_options` may be NULL only when enum_option_count is 0. The option strings are
-   borrowed for the call and copied. */
+   enum registration it emits DisplayUnit:null unless options->display_unit is set. NOTE: unlike the
+   managed EnumSensorOptions constructor, nothing defaults aggregate_data to true here — the default
+   options emit AggregateData:null, so a state sensor must set aggregate_data = 1 explicitly (the
+   options struct is shared by every sensor kind; its sentinel means "null" for all of them).
+   `options` must not be NULL; `enum_options` may be NULL only when enum_option_count is 0. The
+   option strings are borrowed for the call and copied. */
 hsm_result_t hsm_collector_create_enum_sensor_with_sensor_options(
     hsm_collector_t* collector,
     const char* path,

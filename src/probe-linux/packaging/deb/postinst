@@ -1,24 +1,38 @@
 #!/bin/sh
 set -e
-if [ "$1" = "configure" ]; then
-    # useradd/groupadd come from the Priority: required passwd package (no adduser dependency).
-    if ! getent group hsm-probe >/dev/null; then
-        groupadd --system hsm-probe
-    fi
-    if ! getent passwd hsm-probe >/dev/null; then
-        useradd --system --gid hsm-probe --no-create-home --home-dir /nonexistent \
-            --shell /usr/sbin/nologin --comment "HSM Linux probe" hsm-probe
-    fi
-    # A fresh install deliberately does NOT enable or start the unit: install.sh places config +
-    # key first, then runs `systemctl enable --now`.
-    if [ -d /run/systemd/system ]; then
-        systemctl daemon-reload >/dev/null || true
-        # An upgrade restarts a probe that was running before it (the old prerm left the marker;
-        # packages before 0.2.0 did not, so upgrading from those still needs a manual start).
-        if [ -e /run/hsm-linux-probe.restart-after-upgrade ]; then
-            rm -f /run/hsm-linux-probe.restart-after-upgrade
+
+# Start the unit again if the prerm of an upgrade stopped a running probe (it leaves this marker).
+# Used on configure (the upgrade went through) and on abort-upgrade (it was rolled back): either
+# way monitoring must not silently end. /run is tmpfs, so a stale marker dies with a reboot.
+restart_if_marked() {
+    if [ -e /run/hsm-linux-probe.restart-after-upgrade ]; then
+        rm -f /run/hsm-linux-probe.restart-after-upgrade
+        if [ -d /run/systemd/system ]; then
             systemctl start hsm-linux-probe.service >/dev/null || true
         fi
     fi
-fi
+}
+
+case "$1" in
+    configure)
+        # useradd/groupadd come from the Priority: required passwd package (no adduser dependency).
+        if ! getent group hsm-probe >/dev/null; then
+            groupadd --system hsm-probe
+        fi
+        if ! getent passwd hsm-probe >/dev/null; then
+            useradd --system --gid hsm-probe --no-create-home --home-dir /nonexistent \
+                --shell /usr/sbin/nologin --comment "HSM Linux probe" hsm-probe
+        fi
+        # A fresh install deliberately does NOT enable or start the unit: install.sh places
+        # config + key first, then runs `systemctl enable --now`.
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload >/dev/null || true
+        fi
+        # Packages before 0.2.0 left no marker, so upgrading from those still needs a manual start.
+        restart_if_marked
+        ;;
+    abort-upgrade)
+        restart_if_marked
+        ;;
+esac
 exit 0

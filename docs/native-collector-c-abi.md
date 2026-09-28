@@ -164,7 +164,9 @@ Version history:
   (EnumOptions + `AggregateData = true` + an alert). Until now an enum sensor could carry enum
   options (`hsm_collector_create_enum_sensor_with_options`, description only) or sensor options
   (`hsm_collector_create_sensor_with_options`, no enum options), never both. `options` must not be
-  NULL; the registration is the enum kind's (DisplayUnit null unless set). Fix:
+  NULL; the registration is the enum kind's (DisplayUnit null unless set). Unlike the managed
+  `EnumSensorOptions` constructor it does NOT default `AggregateData` to true — the default options
+  emit null, so a state sensor sets `aggregate_data = 1` explicitly. Fix:
   `hsm_collector_create_{int,double}_bar_sensor_with_options` and
   `hsm_collector_create_rate_sensor_with_options` now anchor the path by the options, as every
   instant sensor already did (`is_computer_sensor` ⇒ `<computer>/<path>`, `sensor_location` Product

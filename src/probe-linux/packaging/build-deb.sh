@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Build the hsm-linux-probe .deb reproducibly inside a plain debian:13 container.
+# Build the hsm-linux-probe .deb inside a plain debian:13 container: the same base image, the
+# crates pinned by Cargo.lock (--locked). The Rust toolchain is the current stable (or whatever the
+# cached volume holds), so two builds of one commit are equivalent but not byte-identical.
 #
 #   docker run --rm -v <repo>:/src -w /src/src/probe-linux \
 #       -v hsm-probe-cargo:/root/.cargo debian:13 bash packaging/build-deb.sh 0.2.0~trial1
