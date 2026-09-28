@@ -1,4 +1,5 @@
 using NLog.Config;
+using NLog.Layouts;
 using NLog.Targets;
 using NLog.Targets.Wrappers;
 using System;
@@ -9,39 +10,39 @@ using Xunit;
 namespace HSMServer.Core.Tests
 {
     // Loads the real src/server/HSMServer/nlog.config the way NLog does at server startup
-    // (#1470): a malformed file, an unresolvable extension assembly (NLog.Targets.WebService,
-    // HSMServer for ${hsm-redacted}), or a broken rule would otherwise surface only when the
-    // released app image boots. CI has no VictoriaLogs; loading the configuration needs none.
+    // (#1470): a malformed file, an unresolvable extension assembly (HSMServer for
+    // ${hsm-redacted}), or a broken rule would otherwise surface only when the released
+    // app image boots. CI has no VictoriaLogs/vlagent; loading the configuration needs none.
     public class NlogConfigTests
     {
         [Fact]
-        public void NlogConfigLoadsWithStructuredLogTargets()
+        public void NlogConfigLoadsWithStructuredLogTarget()
         {
             var config = new XmlLoggingConfiguration(RepoFile("src/server/HSMServer/nlog.config"));
 
+            // jsonfile is the single structured target: the archive file that vlagent
+            // (compose 'logs' profile) tails and ships to VictoriaLogs. The direct-post
+            // vl-web target is gone since the vlagent pivot.
             var jsonFile = config.FindTargetByName("jsonfile");
-            var vlWeb = config.FindTargetByName("vl-web");
             Assert.NotNull(jsonFile);
-            Assert.NotNull(vlWeb);
+            Assert.Null(config.FindTargetByName("vl-web"));
 
-            // vl-web wraps the WebService target that posts to VictoriaLogs (the targets-level
-            // async="true" adds its own wrapper on top); walk the chain without referencing the
-            // satellite package here.
-            var current = vlWeb;
-            var sawWebService = false;
+            // vlagent maps the JSON fields by name (msgField/timeField flags in
+            // docker-compose.yml), so the reserved names are a contract: _time and
+            // _msg must stay, everything else ships as an individual log field.
+            // (The targets-level async="true" adds its own wrapper on top; walk it.)
+            var current = jsonFile;
             for (var depth = 0; current is WrapperTargetBase wrapper && depth < 4; depth++)
-            {
                 current = wrapper.WrappedTarget;
-                if (current.GetType().Name == "WebServiceTarget")
-                    sawWebService = true;
-            }
-            Assert.True(sawWebService, "vl-web must wrap a WebService target");
+            var layout = ((FileTarget)current).Layout as JsonLayout;
+            Assert.NotNull(layout);
+            Assert.Contains(layout.Attributes, a => a.Name == "_time");
+            Assert.Contains(layout.Attributes, a => a.Name == "_msg");
 
-            // Both structured targets hang off one rule, so the HSM_STRUCTURED_LOGS gate
-            // (the rule's when-filter) covers the archive file and the direct posts together.
+            // The target hangs off the HSM_STRUCTURED_LOGS-gated rule (its when-filter),
+            // so non-compose deployments never write the JSON archive.
             var rule = config.LoggingRules.SingleOrDefault(r => r.Targets.Contains(jsonFile));
             Assert.NotNull(rule);
-            Assert.Contains(vlWeb, rule.Targets);
         }
 
         private static string RepoFile(string relative)
