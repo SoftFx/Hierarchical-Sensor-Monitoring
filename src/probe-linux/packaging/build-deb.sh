@@ -92,12 +92,13 @@ ROOT="$STAGE/$PACKAGE"
 
 echo "==> staging $PACKAGE"
 install -d -m 0755 "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/lib/systemd/system" \
-    "$ROOT/etc/hsm-linux-probe" "$ROOT/usr/share/doc/hsm-linux-probe"
+    "$ROOT/etc/hsm-linux-probe" "$ROOT/usr/share/doc/hsm-linux-probe" "$ROOT/usr/lib/hsm-linux-probe"
 install -m 0755 "$BINARY" "$ROOT/usr/bin/hsm-linux-probe"
 strip --strip-unneeded "$ROOT/usr/bin/hsm-linux-probe"
 install -m 0644 "$PACKAGING_DIR/hsm-linux-probe.service" "$ROOT/lib/systemd/system/"
 install -m 0644 "$PACKAGING_DIR/config.example.json" "$ROOT/etc/hsm-linux-probe/config.json"
 install -m 0644 "$PACKAGING_DIR/deb/copyright" "$ROOT/usr/share/doc/hsm-linux-probe/copyright"
+install -m 0755 "$PACKAGING_DIR/docker-access.sh" "$ROOT/usr/lib/hsm-linux-probe/docker-access.sh"
 for script in postinst prerm postrm; do
     install -m 0755 "$PACKAGING_DIR/deb/$script" "$ROOT/DEBIAN/$script"
 done
@@ -117,7 +118,7 @@ Homepage: https://github.com/SoftFx/Hierarchical-Sensor-Monitoring
 Description: HSM Linux host probe
  Systemd-hosted probe that reports Linux host metrics into an HSM server
  through the shared native collector: the managed-collector parity set plus
- the probe-only host and disk sensors. Built by
+ the probe-only host, disk and Docker Compose sensors. Built by
  src/probe-linux/packaging/build-deb.sh.
 EOF
 

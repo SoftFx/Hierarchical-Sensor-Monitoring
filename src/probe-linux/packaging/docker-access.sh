@@ -11,8 +11,10 @@
 # whose supplementary group does not exist, so hardcoding it would break the probe on every host
 # without Docker. This script writes the drop-in only when `getent group docker` succeeds.
 #
-# Called by the package's postinst (`install`) and postrm (`remove`, on remove/purge only). After
-# installing Docker on a host that already has the probe, run it by hand:
+# Installed as /usr/lib/hsm-linux-probe/docker-access.sh and called by the package's postinst
+# (`install`); postrm deletes the same drop-in itself on remove/purge (this script is gone by then),
+# and `remove` is here for an operator taking the socket away by hand. After installing Docker on a
+# host that already has the probe, run it by hand:
 #   sudo /usr/lib/hsm-linux-probe/docker-access.sh install && sudo systemctl restart hsm-linux-probe
 #
 # The caller reloads systemd; this script only writes or removes the file.
