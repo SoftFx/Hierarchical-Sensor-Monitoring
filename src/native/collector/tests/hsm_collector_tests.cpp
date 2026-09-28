@@ -2973,6 +2973,44 @@ namespace
         hsm_collector_destroy(collector);
     }
 
+    // hsm_collector_last_error must be readable while ANOTHER thread fails calls that rewrite the
+    // message (#1444). Before the fix the C entry point handed out an interior pointer into the
+    // collector's own std::string, which a failing call on any other thread could reallocate under
+    // the reader — a use-after-free no caller-side lock could prevent. The two messages below have
+    // different lengths on purpose, so the storage really is reallocated; the functional assertion
+    // is that a reader only ever sees a whole message, and the TSan lane proves the accesses are
+    // synchronized.
+    void NativeLastErrorIsSafeUnderConcurrentFailures()
+    {
+        auto collector = CreateCollector();
+        std::atomic<bool> stop{ false };
+
+        std::thread failing([&] {
+            while (!stop.load(std::memory_order_relaxed))
+            {
+                const char* json = nullptr;
+                hsm_collector_get_sent_json(collector.value, 999999, &json); // "Registration/payload not found."
+
+                hsm_sensor_t* sensor = nullptr;
+                hsm_collector_create_int_sensor(collector.value, "", &sensor); // "Sensor path must not be empty."
+            }
+        });
+
+        for (int read = 0; read < 5000; ++read)
+        {
+            const char* message = hsm_collector_last_error(collector.value);
+            Require(message != nullptr, "last error must never be null");
+
+            const std::string copy{ message };
+            Require(
+                copy.empty() || copy.back() == '.',
+                ("last error must be read as a whole message, got: " + copy).c_str());
+        }
+
+        stop.store(true, std::memory_order_relaxed);
+        failing.join();
+    }
+
     void NativeWrapperSentJsonMissingThrowsMessage()
     {
         hsm::collector::CollectorOptions options;
@@ -3859,7 +3897,7 @@ namespace
         // 49 100 MiB left at 0.5 MiB/sec = 98 200 s.
         Require(post.value_ms == 98200000, "unexpected steady-drain prediction");
         Require(post.status == 1, "a real estimate carries Ok");
-        Require(post.comment == "Free space decreases by 0.5 Mbytes/sec.", "unexpected steady-drain comment");
+        Require(post.comment == "Free space decreases by 1800.0 Mbytes/hour.", "unexpected steady-drain comment");
     }
 
     void NativeDiskPredictionDecaysWhenDrainStops()
@@ -3885,11 +3923,12 @@ namespace
         Require(relaxed.value_ms == 129152769, "unexpected decayed prediction");
         Require(relaxed.status == 1, "a decayed estimate is still a real estimate");
 
-        // The mantissa is left out on purpose: managed net472 renders 15 significant digits where
-        // net6.0 and this collector render the shortest round-trip form.
+        // 0.38017 MiB/sec is 1368.611775 MiB/hour. The whole mantissa is pinned since #1460: the
+        // comment rounds the rate to six decimals with integer arithmetic, so managed net472,
+        // managed net6.0 and this collector all render it identically.
         Require(
-            StartsWith(relaxed.comment, "Free space decreases by 0.380169937438"),
-            "unexpected decayed-drain comment");
+            relaxed.comment == "Free space decreases by 1368.611775 Mbytes/hour.",
+            ("unexpected decayed-drain comment: " + relaxed.comment).c_str());
     }
 
     void NativeDiskPredictionReportsGrowthWhenSpaceIsFreed()
@@ -3907,7 +3946,7 @@ namespace
         Require(post.value_ms == kCeilingMs, "a growing disk posts the ceiling");
         Require(post.status == 0, "a growing disk posts OffTime");
         Require(
-            post.comment == "Free space increases by 0.5 Mbytes/sec. Value cannot be calculated.",
+            post.comment == "Free space increases by 1800.0 Mbytes/hour. Value cannot be calculated.",
             "unexpected growth comment");
     }
 
@@ -3967,7 +4006,7 @@ namespace
         Require(post.value_ms == kCeilingMs, "an unrepresentable prediction is clamped to the ceiling");
         Require(post.status == 0, "a clamped prediction posts OffTime");
         Require(
-            post.comment == "Free space decreases by 0.0009765625 Mbytes/sec. More than 365 days left.",
+            post.comment == "Free space decreases by 3.515625 Mbytes/hour. More than 365 days left.",
             "unexpected clamped-drain comment");
     }
 
@@ -4530,6 +4569,26 @@ namespace
             "the opening prediction reads are calibration posts, which carry the 365-day ceiling "
             "rather than zero (#1445)");
 
+        // Free space is posted in WHOLE megabytes, like managed WindowsDiskInfo.FreeSpaceMb (an
+        // integer division of the byte count). The native source used to post the fraction, so the
+        // same sensor read 51234.87109375 here and 51234 from the managed collector on the same
+        // host — a rule #10 divergence on one sensor path.
+        double free_space[2] = { 0.0, 0.0 };
+        Require(
+            hsm_collector_test_drive_metric_source(
+                collector.value, "host/.computer/Disks monitoring/Free space on C disk", 2, free_space,
+                &recreated) == 2,
+            "the lettered free-disk row must read twice");
+        for (const double reading : free_space)
+        {
+            Require(reading > 0.0, "a live free-space read must be positive");
+            Require(
+                reading == std::floor(reading),
+                ("free space must be posted in whole megabytes, got: " +
+                 std::to_string(static_cast<long long>(reading * 1000.0)) + " (x1000)")
+                    .c_str());
+        }
+
         // The letter-less rows are asserted on the BINDING DECISION, not on how many samples they
         // produced. A count assertion cannot fail on a runner without an N: drive: the mis-bound row
         // reads nothing there either, and since #1426 a failing disk read answers SAMPLE_ERROR —
@@ -4968,6 +5027,195 @@ namespace
         beats = PayloadsForPath(collector.value, "/Service alive\"");
         Require(beats.size() == 2, "the restart must post exactly one more Service alive beat");
         Contains(beats[1], "\"Value\":true");
+    }
+
+    // Package content size must report a REAL package as a non-zero reading (#1459). It used to be
+    // measured in MB, and a bar renders at 2-decimal precision, so a 2 KB package was 0.002 MB ->
+    // "0.00": the sensor could not report anything but zero whatever the traffic. In KB the same
+    // package reads ~2.1. The bar is flushed by the graceful stop, so no wall-clock wait is needed.
+    void NativePackageContentSizeReportsKilobytes()
+    {
+        auto collector = CreateCollector(); // package_collect_period_ms = 20
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        auto sensor = CreateIntSensor(collector.value, "contract/queue/size");
+        for (int value = 0; value < 20; ++value)
+            Require(hsm_sensor_add_int(sensor.value, value, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+
+        // Wait for at least one package to be dispatched, which is what feeds the stats bar.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (hsm_collector_sent_count(collector.value) == 0 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto sizes = PayloadsForPath(collector.value, "/Package content size\"");
+        Require(!sizes.empty(), "the package-size bar must be flushed on stop");
+        Require(
+            sizes.back().find("\"Mean\":0,") == std::string::npos,
+            ("a dispatched package must not read as zero: " + sizes.back()).c_str());
+    }
+
+    // The heartbeat follows the SENSOR's post period (15 s), not the collector's package-collect
+    // period (#1437) — managed drives CollectorAlive from PostDataPeriod. The collector below
+    // collects every 20 ms: before the fix that produced a beat every 20 ms (and, the other way
+    // round, a collect period raised above the sensor's 1 min TTL starved the beat until the
+    // server called a healthy collector dead). One second is 15x below the beat period, so the
+    // immediate Start beat must still be the only one.
+    void NativeServiceAliveBeatsOnItsOwnPeriod()
+    {
+        auto collector = CreateCollector(); // package_collect_period_ms = 20
+
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "add collector monitoring sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto beats = PayloadsForPath(collector.value, "/Service alive\"");
+        Require(
+            beats.size() == 1,
+            ("the beat must follow the sensor period, not the collect period; beats: " +
+             std::to_string(beats.size()))
+                .c_str());
+    }
+
+    // Registering the module group from a LIFECYCLE LISTENER must not wedge the collector. A
+    // listener runs with the op lock held and is allowed to add sensors (only Start/Stop/Dispose
+    // are forbidden), so arming the self-monitor loop from the capture path must not take that
+    // lock — doing so self-deadlocks Start on the listener's own thread.
+    void NativeSelfMonitoringGroupFromListenerDoesNotDeadlock()
+    {
+        auto collector = CreateCollector();
+
+        struct ListenerState
+        {
+            hsm_collector_t* collector = nullptr;
+            std::atomic<int> added{ 0 };
+        } listener_state;
+        listener_state.collector = collector.value;
+
+        const auto listener = [](hsm_collector_status_t status, void* user_data) {
+            auto* state = static_cast<ListenerState*>(user_data);
+            // Both a Running and a Stopped callback register: the first runs inside Start, the
+            // second inside Stop, and both held the op lock.
+            if (status == HSM_COLLECTOR_STATUS_RUNNING || status == HSM_COLLECTOR_STATUS_STOPPED)
+            {
+                if (hsm_collector_add_all_module_sensors(state->collector, "1.0.0.0") == HSM_RESULT_OK)
+                    state->added.fetch_add(1, std::memory_order_relaxed);
+            }
+        };
+
+        Require(
+            hsm_collector_add_lifecycle_listener(collector.value, listener, &listener_state) == HSM_RESULT_OK,
+            "add lifecycle listener failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        Require(
+            listener_state.added.load(std::memory_order_relaxed) >= 2,
+            "the listener must have registered the group from inside Start and Stop");
+    }
+
+    // A handle published while the loop is ALREADY sleeping must beat at once, not when the
+    // current deadline expires. With only the queue group armed at Start the loop sleeps out a
+    // whole package-collect period, so on a host that raised that period — the very configuration
+    // behind #1437 — a late heartbeat would stay silent past its 1 min TTL.
+    void NativeLateHeartbeatHandleWakesTheSleepingLoop()
+    {
+        auto collector = CreateMarkerCollector(); // package_collect_period_ms = 60000
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // Let the loop run its first tick and settle into the 60 s sleep.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "add collector monitoring sensors failed");
+
+        // Far below the collect period: only a wake can deliver a beat this soon.
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        Require(
+            !PayloadsForPath(collector.value, "/Service alive\"").empty(),
+            "a handle published mid-sleep must beat without waiting out the collect period");
+    }
+
+    // A self-monitoring group registered AFTER Start must still beat. The self-monitor loop is
+    // armed at Start, and before #1453 nothing armed it later, so a host that registered the
+    // collector-monitoring group on a running collector — which the API allows — got a heartbeat
+    // that never posted a value for the rest of the run, and a server that flipped its 1 min TTL
+    // to Timeout on a perfectly healthy collector.
+    void NativeSelfMonitoringAddedAfterStartArmsTheHeartbeat()
+    {
+        auto collector = CreateCollector();
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(
+            hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+            "add collector monitoring sensors failed");
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        bool beat = false;
+        while (!beat && std::chrono::steady_clock::now() < deadline)
+        {
+            beat = !PayloadsForPath(collector.value, "/Service alive\"").empty();
+            if (!beat)
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+
+        Require(beat, "a group registered after Start must arm the heartbeat");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
+    // Registering the collector-monitoring group AFTER Start is allowed, and it publishes the
+    // heartbeat handle from the CALLER's thread while the self-monitor thread is already reading
+    // it — the data race #1453 (caught by the TSan lane, not by a functional assertion). The queue
+    // group is added first so the self-monitor thread is up and ticking on the 20 ms collect period
+    // before the late registration lands; the repeated re-registration widens the window so the
+    // sanitizer sees the two accesses in one run. The functional half of the assertion is that a
+    // late handle still beats: the heartbeat must not stay empty because it was wired after Start.
+    void NativeSelfMonitorHandlePublishedAfterStartIsSynchronized()
+    {
+        auto collector = CreateCollector();
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // Re-registration is idempotent and hands back the group's existing handle, so every call
+        // republishes it while the self-monitor loop reads it.
+        for (int attempt = 0; attempt < 50; ++attempt)
+        {
+            Require(
+                hsm_collector_add_collector_monitoring_sensors(collector.value) == HSM_RESULT_OK,
+                "add collector monitoring sensors failed");
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        bool beat = false;
+        while (!beat && std::chrono::steady_clock::now() < deadline)
+        {
+            beat = !PayloadsForPath(collector.value, "/Service alive\"").empty();
+            if (!beat)
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+
+        Require(beat, "a heartbeat registered after Start must still beat");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
     }
 
     // ".module/Collector version" marks BOTH ends of every run: a "Start: dd/MM/yyyy HH:mm:ss"
@@ -7256,6 +7504,18 @@ namespace
 #endif
             { "native_collector_self_monitoring_emits",
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
+            { "native_package_content_size_reports_kilobytes",
+              [](const std::string&) { NativePackageContentSizeReportsKilobytes(); } },
+            { "native_service_alive_beats_on_its_own_period",
+              [](const std::string&) { NativeServiceAliveBeatsOnItsOwnPeriod(); } },
+            { "native_self_monitoring_group_from_listener_does_not_deadlock",
+              [](const std::string&) { NativeSelfMonitoringGroupFromListenerDoesNotDeadlock(); } },
+            { "native_late_heartbeat_handle_wakes_the_sleeping_loop",
+              [](const std::string&) { NativeLateHeartbeatHandleWakesTheSleepingLoop(); } },
+            { "native_self_monitoring_added_after_start_arms_the_heartbeat",
+              [](const std::string&) { NativeSelfMonitoringAddedAfterStartArmsTheHeartbeat(); } },
+            { "native_self_monitor_handle_published_after_start_is_synchronized",
+              [](const std::string&) { NativeSelfMonitorHandlePublishedAfterStartIsSynchronized(); } },
             { "native_service_alive_marks_the_first_beat",
               [](const std::string&) { NativeServiceAliveMarksTheFirstBeat(); } },
             { "native_version_sensor_marks_start_and_stop",
@@ -7316,6 +7576,8 @@ namespace
             { "native_invalid_argument_clears_out_params", [](const std::string&) { NativeInvalidArgumentClearsOutParams(); } },
             { "native_add_after_collector_destroy_is_rejected", [](const std::string&) { NativeAddAfterCollectorDestroyIsRejected(); } },
             { "native_sent_json_failure_reports_fresh_error", [](const std::string&) { NativeSentJsonFailureReportsFreshError(); } },
+            { "native_last_error_is_safe_under_concurrent_failures",
+              [](const std::string&) { NativeLastErrorIsSafeUnderConcurrentFailures(); } },
             { "native_wrapper_sent_json_missing_throws_message", [](const std::string&) { NativeWrapperSentJsonMissingThrowsMessage(); } },
             { "native_wrapper_registration_matches_abi", [](const std::string&) { NativeWrapperRegistrationMatchesAbi(); } },
             { "native_wrapper_alert_builder_matches_abi", [](const std::string&) { NativeWrapperAlertBuilderMatchesAbi(); } },

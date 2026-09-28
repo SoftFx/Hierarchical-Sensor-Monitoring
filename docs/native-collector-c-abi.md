@@ -156,6 +156,21 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.8.2** (#1453, #1444, #1437, #1459, #1460) — no ABI change; four behavior fixes and one
+  thread-safety contract. `hsm_collector_last_error` now returns a pointer into a THREAD-LOCAL
+  copy of the message instead of into the collector's own storage, which its workers could
+  reallocate under a reader: the signature is unchanged and every existing caller becomes safe
+  without recompiling against anything new, but the returned pointer is now documented as valid
+  only until the SAME thread calls the function again (a caller that held it across another
+  thread's call was already reading freed memory). The buffer is one per THREAD, shared by
+  every collector handle, so a call for one collector overwrites the text a previous call for
+  another returned on that thread; a NULL handle still returns the static literal it always
+  did. The self-monitoring sensor handles are
+  published under a mutex, so adding the collector-monitoring or queue group after `Start` no
+  longer races the self-monitor thread. `.module/Service alive` beats on the sensor's own post
+  period instead of the package-collect period, and `.module/Collector queue stats/Package
+  content size` registers `Unit.KB` and reports kilobytes. The disk-prediction COMMENT prints
+  the rate in MB/hour with up to six decimals (the sensor value is unchanged).
 - **0.8.1** (#1445) — no ABI change. The disk-space prediction math behind
   `HSM_DEFAULT_FREE_DISK_SPACE_PREDICTION` / `HSM_DEFAULT_UNIX_FREE_DISK_SPACE_PREDICTION` was
   rewritten (signed drain EMA over a six-hour window sampled every 10 min, five explicit posted

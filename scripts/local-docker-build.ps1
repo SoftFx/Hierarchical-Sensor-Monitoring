@@ -187,6 +187,19 @@ try {
     docker build -t "${ImageName}:${ImageTag}" -f $dockerfile $publishDir
     if ($LASTEXITCODE -ne 0) { throw "docker build failed with exit code $LASTEXITCODE" }
 
+    # The image HEALTHCHECK (#1465) is one final layer, built from the same Dockerfile the CI lane
+    # uses, so the local image is health-identical to the published one. The SDK's container
+    # publishing cannot emit a HEALTHCHECK, which is why neither path gets it for free.
+    $healthDir = Split-Path -Parent $dockerfile
+    $healthDockerfile = Join-Path $healthDir "Dockerfile.healthcheck"
+    if (-not (Test-Path $healthDockerfile)) {
+        throw "Missing Dockerfile: $healthDockerfile"
+    }
+
+    Write-Host "Adding HEALTHCHECK layer to ${ImageName}:$ImageTag ..."
+    docker build -t "${ImageName}:${ImageTag}" --build-arg "BASE_IMAGE=${ImageName}:${ImageTag}" -f $healthDockerfile $healthDir
+    if ($LASTEXITCODE -ne 0) { throw "healthcheck layer build failed with exit code $LASTEXITCODE" }
+
     Write-Host ""
     Write-Host "Built: ${ImageName}:$ImageTag" -ForegroundColor Green
 

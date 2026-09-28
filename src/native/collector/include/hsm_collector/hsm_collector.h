@@ -18,7 +18,7 @@ extern "C"
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
 #define HSM_COLLECTOR_VERSION_MINOR 8
-#define HSM_COLLECTOR_VERSION_PATCH 1
+#define HSM_COLLECTOR_VERSION_PATCH 2
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -1028,6 +1028,17 @@ hsm_result_t hsm_collector_set_server_directive_handler(
 size_t hsm_collector_sent_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_sent_json(const hsm_collector_t* collector, size_t index, const char** out_json);
 
+/* The message of the last failed call on this collector, or "" when the last call succeeded.
+
+   THREAD CONTRACT (#1444): the returned pointer belongs to the CALLING THREAD, not to the
+   collector. Its contents are refreshed on every call and remain valid until the same thread calls
+   this function again; a different thread's call never disturbs it. The buffer is one per THREAD
+   and shared by every collector handle, so a call for another collector on the same thread also
+   overwrites it. Copy the text if you need it to outlive your next call. The pointer is never
+   NULL, and a NULL handle returns a static literal.
+   Reading the message from one thread while another fails an operation is therefore safe — which
+   it was NOT before 0.8.2, when this returned an interior pointer the collector's own worker
+   threads could reallocate under the reader. */
 const char* hsm_collector_last_error(const hsm_collector_t* collector);
 
 /* Enable per-process CPU-usage sensors (Windows only, #1179). Starts a background thread that

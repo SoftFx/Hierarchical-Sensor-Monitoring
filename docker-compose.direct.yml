@@ -7,6 +7,8 @@
 #   docker compose -f docker-compose.direct.yml down
 #   docker compose up -d
 # Collectors and agents keep using https://<host>:44330.
+# Health comes from the image itself (#1465), so `docker ps` shows starting/healthy/unhealthy here
+# too: see docker_scripts/HSMserver/Dockerfile.healthcheck.
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'

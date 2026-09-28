@@ -204,14 +204,23 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 # WITHOUT CADDY (HSM's own PFX certificate, as before): use docker-compose.direct.yml instead.
 # Collectors and agents always connect to https://<HSM_DOMAIN>:44330.
 #
-# LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database). The app ships its JSON log
-# to it directly: an env-gated NLog WebService target in the app's nlog.config posts each event
-# to the compose-network address below (the Logs/ files remain the durable archive; backfill
-# after an outage is one curl, see aicontext/architecture/docker.md). Caddy exposes VictoriaLogs'
-# UI (/select/vmui) and query API (/select/logsql) with basic auth only when VL_UI_USER/
-# VL_UI_PASSWORD are set in .env; .env.example ships them commented out, so a fresh install
-# stores logs but serves no public log routes until real credentials are set. Disable entirely
-# by removing 'logs' from COMPOSE_PROFILES. See aicontext/architecture/docker.md.
+# The image is published by CI (server-build.yml). To run a build from local sources instead,
+# publish it to this exact tag first:
+#   dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 \
+#     -p:PublishProfile=DefaultContainer -p:ContainerImageName=hsmonitoring/hierarchical_sensor_monitoring
+# That publish cannot carry the image's HEALTHCHECK (the .NET SDK has no property for it), so add
+# it the way CI does, or use scripts/local-docker-build.ps1, which does both steps:
+#   docker build --build-arg BASE_IMAGE=hsmonitoring/hierarchical_sensor_monitoring:latest \
+#     -t hsmonitoring/hierarchical_sensor_monitoring:latest \
+#     -f docker_scripts/HSMserver/Dockerfile.healthcheck docker_scripts/HSMserver
+#
+# LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database). The app writes its structured
+# JSON log to Logs/; the vlagent service tails that file and ships it to VictoriaLogs with durable
+# delivery (checkpoints + on-disk buffer; automatic replay after an outage — no manual backfill).
+# Caddy exposes VictoriaLogs' UI (/select/vmui) and query API (/select/logsql) with basic auth
+# only when VL_UI_USER/VL_UI_PASSWORD are set in .env; .env.example ships them commented out, so
+# a fresh install stores logs but serves no public log routes until real credentials are set.
+# Disable entirely by removing 'logs' from COMPOSE_PROFILES. See aicontext/architecture/docker.md.
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
@@ -220,18 +229,30 @@ services:
     user: '0'
     # No ports: HSM is reachable only through caddy.
     healthcheck:
-      # Kestrel opens its ports only after the database has loaded, so an open port means ready.
-      test: ['CMD', 'bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/44330']
-      interval: 10s
+      # Byte-identical to the one the image itself now carries (#1465, see
+      # docker_scripts/HSMserver/Dockerfile.healthcheck); scripts/check-healthcheck-sync.py fails
+      # the build if the two ever differ. It is repeated here only so this file also works with an
+      # image published before #1465: `depends_on: service_healthy` below refuses to start caddy
+      # ("container hsm-server has no healthcheck configured") when neither the image nor this
+      # file defines one. Verified against the published 3.41.5, which has wget but no healthcheck.
+      # (An image older than ~3.41 has no wget either; with one of those, pin an older compose file.)
+      # Kestrel opens its ports only after the database has loaded, so a 200 means loaded AND
+      # serving; a listening but wedged server fails this probe, while the TCP connect used here
+      # before reported it healthy.
+      test: ['CMD-SHELL', 'wget --quiet --tries=1 --timeout=4 --no-check-certificate --output-document=/dev/null https://127.0.0.1:44330/api/sensors/testConnection || exit 1']
+      interval: 30s
       timeout: 5s
-      # "unhealthy" makes `up` skip caddy for good, so leave a generous budget: 10 min start
-      # period + 180 failed probes (30 min). Once open, the port stays open.
-      retries: 180
+      # Budget before caddy is skipped for good (see depends_on below): 10 min + 3 x 30 s. A
+      # database that needs longer: raise start_period here (and in the image, or they drift).
+      # One known case: an install with legacy SensorValues_* folders rewrites all of them before
+      # HSM listens. That migration continues in the container even after the budget runs out —
+      # wait for it to finish (`docker ps` shows healthy again), then `docker compose up -d` again.
+      retries: 3
       start_period: 10m
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy.
       Kestrel__TrustedProxies__0: 'attached-networks'
-      # Structured JSON log in nlog.config: archive file plus direct posts to VictoriaLogs.
+      # Structured JSON log archive in nlog.config; vlagent ships it to VictoriaLogs.
       HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-true}'
     volumes:
       - ./Logs:/app/Logs
@@ -241,8 +262,7 @@ services:
 
   victorialogs:
     # Log database (upstream image, version-pinned). Reached only inside the compose network:
-    # the app posts its JSON log here directly (env-gated NLog WebService target), Caddy
-    # exposes the read-only paths.
+    # vlagent ships the app's JSON log here, Caddy exposes the read-only paths.
     image: 'victoriametrics/victoria-logs:v1.52.0'
     container_name: hsm-victorialogs
     restart: unless-stopped
@@ -257,6 +277,30 @@ services:
       - victorialogs-data:/victoria-logs-data
     # No healthcheck: the image has no shell, so nothing can be probed in-container;
     # /health exists on the HTTP port for external checks.
+
+  vlagent:
+    # VictoriaLogs' vendor-native agent: tails the app's JSON log file (read-only mount of
+    # ./Logs) and ships it to VictoriaLogs via the native insert endpoint. Reading-position
+    # checkpoints and the unsent-data buffer live in the vlagent-data volume, so delivery
+    # survives vlagent restarts and replays automatically after a VictoriaLogs outage.
+    # No published ports and no healthcheck: like victorialogs, the image has no shell
+    # (nothing to probe in-container); /health and metrics answer on :9429 inside the
+    # compose network only.
+    image: 'victoriametrics/vlagent:v1.52.0'
+    container_name: hsm-vlagent
+    restart: unless-stopped
+    profiles: ['logs']
+    command:
+      - '-fileCollector.glob=/logs/HSM-structured-log-*.json'
+      - '-fileCollector.msgField=_msg'
+      - '-fileCollector.timeField=_time'
+      - '-tmpDataPath=/vlagent-data'
+      - '-remoteWrite.url=http://victorialogs:9428/insert/native'
+      - '-remoteWrite.maxDiskUsagePerURL=1024MB'
+    mem_limit: 128m
+    volumes:
+      - './Logs:/logs:ro'
+      - 'vlagent-data:/vlagent-data'
 
   caddy:
     image: 'hsmonitoring/hsm-caddy:2.11.4-2'
@@ -287,6 +331,7 @@ services:
 
 volumes:
   victorialogs-data:
+  vlagent-data:
 ```
 
 What must stay as it is, if you ever adapt it:
@@ -294,7 +339,8 @@ What must stay as it is, if you ever adapt it:
 | Part | Why |
 |---|---|
 | No ports on app | HSM is reachable only through Caddy in this compose setup. |
-| Separate reverse proxies to app:44333 and app:44330 | HSM distinguishes the web UI and Sensor API by listener port. |
+| `healthcheck` on `app` + `condition: service_healthy` | Caddy starts only when HSM is serving. The check is an HTTPS request to the Sensor API every 30 s: `docker ps` shows `starting`, then `healthy`, and `unhealthy` if the server stops answering. From this version on the HSM image carries the same check itself, so any deployment — including `docker-compose.direct.yml` and a plain `docker run` — shows HSM's health; the copy here is kept identical so this file also works with an older image. HSM gets 10 minutes to load its database, plus 3 failed probes; past that `app` is `unhealthy`, `docker compose up` reports "dependency failed to start" and Caddy is not created. A database that needs longer: raise `start_period`. A very old installation converts its history on the first start of a new version, which can take longer than that. The conversion keeps running inside the container: wait until `docker ps` shows `hsm-server` healthy again (`docker logs hsm-server` shows `Now listening`), then run `docker compose up -d` again — repeating it earlier gives the same error, and restarting the container only starts the conversion over. |
+| Separate reverse proxies to app:44333 and app:44330 | Not a split of the UI from the Sensor API — both listeners serve the same routes, and the API answers on 44333 as well. It keeps each published port mapped to the same HSM port, so collectors and agents already configured for 44330 keep working unchanged. Only the management API, MCP, Swagger and browser sign-in are restricted to the site port, so never send the web UI to 44330. |
 | tls_insecure_skip_verify on the upstream | HSM serves its own HTTPS certificate inside the compose network. |
 | HSM_DOMAIN and HSM_CERTIFICATE in Caddy's environment | The entrypoint validates the mode and selects exactly one TLS source. No automatic fallback is used. |
 | Provider tokens passed as container environment | The Caddyfile reads secrets from the process environment; they are not written into its configuration or persisted Caddy state. Compose-rendered config can reveal values, so do not share it. |
@@ -302,7 +348,7 @@ What must stay as it is, if you ever adapt it:
 | ./CaddyData:/data | Keeps ACME accounts and certificates across restarts and updates. |
 | ./CaddyCertificates:/certs:ro | Supplies custom PEM files without allowing the container to modify them. |
 | Pinned hsmonitoring/hsm-caddy:2.11.4-2 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules plus the VictoriaLogs read-only routes; users do not build locally. |
-| HSM_STRUCTURED_LOGS=true on the app service | The app writes the structured JSON log archive and posts each event directly to VictoriaLogs on the compose network; the posting target is inert in non-compose deployments (the rule never fires there). |
+| HSM_STRUCTURED_LOGS=true on the app service | The app writes the structured JSON log archive that the vlagent service tails and ships to VictoriaLogs; the rule never fires in non-compose deployments, so the JSON file appears only in this stack. |
 | Published ports 44330 and 44333 | Collectors and downloaded agent bundles use Sensor API port 44330; the UI is also available on 44333. |
 
 ### Internal DNS name

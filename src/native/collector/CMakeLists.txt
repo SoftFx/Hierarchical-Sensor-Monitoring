@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.8.1 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.8.2 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -298,6 +298,10 @@ add_test(NAME native_add_after_collector_destroy_is_rejected
 add_test(NAME native_sent_json_failure_reports_fresh_error
     COMMAND hsm_collector_tests native_sent_json_failure_reports_fresh_error
 )
+# #1444: the last-error string is read on one thread while another rewrites it (TSan proves it).
+add_test(NAME native_last_error_is_safe_under_concurrent_failures
+    COMMAND hsm_collector_tests native_last_error_is_safe_under_concurrent_failures
+)
 add_test(NAME native_wrapper_sent_json_missing_throws_message
     COMMAND hsm_collector_tests native_wrapper_sent_json_missing_throws_message
 )
@@ -362,6 +366,20 @@ set(NATIVE_REGRESSION_TESTS
     native_module_version_sensors_emit_start_value
     native_module_version_skips_product_when_missing
     native_collector_self_monitoring_emits
+    # #1453: the group may be registered after Start — the handle publish must be synchronized
+    # against the self-monitor thread (the TSan preset is what proves it).
+    native_self_monitor_handle_published_after_start_is_synchronized
+    # ... and a group registered after Start arms the loop, instead of registering an
+    # empty heartbeat whose 1 min TTL then alerts on a healthy collector.
+    native_self_monitoring_added_after_start_arms_the_heartbeat
+    # ... arming must not take the lifecycle lock (a listener holding it may register a
+    # group), and a handle published mid-sleep must wake the loop instead of waiting it out.
+    native_self_monitoring_group_from_listener_does_not_deadlock
+    native_late_heartbeat_handle_wakes_the_sleeping_loop
+    # #1437: the heartbeat follows the sensor's post period, not the package-collect period.
+    native_service_alive_beats_on_its_own_period
+    # #1459: a dispatched package must read as a non-zero size (KB, not MB).
+    native_package_content_size_reports_kilobytes
     # #1433: .module start/stop markers mirror managed (first heartbeat false, version Start:/Stop:).
     native_service_alive_marks_the_first_beat
     native_version_sensor_marks_start_and_stop

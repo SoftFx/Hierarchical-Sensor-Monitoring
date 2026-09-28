@@ -59,7 +59,7 @@ TTL is "none" for every sensor except `Service alive`, which carries the inactiv
 | `.module/Collector version` | Version | 5 y | on Start and Stop → on Start | `3.5.0.0`, `Start:`/`Stop: dd/MM/yyyy HH:mm:ss` / `0.7.0`, `Start: <ISO-8601>` only | Value: intentional (independent collector version); **F4** comment/Stop; **F1** |
 | `.module/Collector errors` | String | — | on error → on error | none / none (clean run) | Parity |
 | `.module/Collector queue stats/Items count in package` | IntBar · count | — | 5-min bar, partial post every ~15 s → one post per 5-min bar, at its close | yes / only after 5 min | **Finding F2** |
-| `.module/Collector queue stats/Package content size` | DoubleBar · MB | — | as Items count | yes / only after 5 min | **Finding F2** |
+| `.module/Collector queue stats/Package content size` | DoubleBar · KB (MB until #1459) | — | as Items count | yes / only after 5 min | **Finding F2** |
 | `.module/Collector queue stats/Package process time` | DoubleBar · s | — | as Items count | yes / only after 5 min | **Finding F2** |
 | `.module/Collector queue stats/Queue overflow` | IntBar · count | — | on overflow → on overflow | none / none (no overflow) | Parity |
 | `.module/Version` | Version | 5 y | on Start and Stop → on Start and Stop (probe-posted) | `0.1.0`, `Start:`/`Stop: dd/MM/yyyy HH:mm:ss` / same format; the Stop post is lost to **F1** | Probe matches managed; **F1** |

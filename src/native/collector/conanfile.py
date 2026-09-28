@@ -18,7 +18,7 @@ class HsmCollectorConan(ConanFile):
     """
 
     name = "hsm-collector"
-    version = "0.8.1"
+    version = "0.8.2"
     license = "See repository (SoftFx/Hierarchical-Sensor-Monitoring)"
     url = "https://github.com/SoftFx/Hierarchical-Sensor-Monitoring"
     description = "Native C++ HSM DataCollector — stable C ABI core + header-only RAII C++ wrapper."
