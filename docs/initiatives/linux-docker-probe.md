@@ -491,7 +491,8 @@ bundle exactly as an operator would, 15 sensors registered, every value cross-ch
 the host (CPU, `MemAvailable`, `df`, process RSS and thread count all matched), one 5-minute bar
 per window instead of twenty, `Stop:` markers delivered across a restart, both archive HDDs
 still in standby before and after (checked with `smartctl -n standby -i`, since garage has no
-`hdparm`), RSS 4–19 MB against a 64 MB cap, and no errors in the journal or on
+`hdparm`), 3.9–6.7 MB by systemd's cgroup accounting and 17–19 MB RSS
+including shared pages, both against a 64 MB cap (§5), and no errors in the journal or on
 `.module/Collector errors` over 24 h.
 
 **Phase 2 — probe-only host/disk sensors (#1476, collector 0.9.0 / agent 0.5.37, probe 0.2.0).**
@@ -548,7 +549,7 @@ runs on an invariant locale with no `N:` drive and a quiet disk.
   Windows-affecting fixes above reach deployed agents), the managed NuGet push, and the
   `probe-v*` channel (#1418).
 
-**Known and tracked, no decision needed:** the fixes batched in the current PR (#1453, #1444,
+**Known and tracked, no decision needed:** the fixes batched in PR #1462, merged (#1453, #1444,
 #1437, #1459, #1460); the Windows `DiskRead` fractional-MB divergence; the managed
 `InitAsync`/`StartAsync` calibration race.
 

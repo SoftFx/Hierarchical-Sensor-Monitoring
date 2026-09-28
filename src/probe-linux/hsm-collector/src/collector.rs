@@ -536,8 +536,10 @@ impl Collector {
 
     /// The collector's last recorded error text.
     pub fn last_error(&self) -> String {
-        // SAFETY: valid handle; the ABI never returns NULL here, and the text is owned by the
-        // collector and copied out before any further call can replace it.
+        // SAFETY: valid handle; the ABI never returns NULL here. Since collector 0.8.2 (#1444)
+        // the text lives in the CALLING THREAD's buffer and stays valid until this thread calls
+        // hsm_collector_last_error again — another thread's error cannot overwrite it — so the
+        // copy below is enough.
         unsafe {
             let text = sys::hsm_collector_last_error(self.handle);
             if text.is_null() {
