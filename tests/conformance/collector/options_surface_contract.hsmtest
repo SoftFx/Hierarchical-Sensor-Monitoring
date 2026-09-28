@@ -72,3 +72,42 @@ default_alerts_disable_both|start
 default_alerts_disable_both|stop
 default_alerts_disable_both|expect_registration_count|1
 default_alerts_disable_both|expect_registration_contains|0|"DefaultAlertsOptions":3}
+
+# create_enum_sensor_full_options|path|ttl_ms|keep_history_ms|aggregate|grafana|is_computer|
+#     description|key:value:color:desc[;...]
+# An enum sensor carrying its EnumOptions AND the SensorOptions surface in one registration —
+# managed CreateEnumSensor(path, new EnumSensorOptions { ... }), native
+# hsm_collector_create_enum_sensor_with_sensor_options (0.9.0). Consumes staged alerts.
+enum_full_options_register_in_payload|create_collector
+enum_full_options_register_in_payload|create_enum_sensor_full_options|contract/opts/enum_full|60000|600000|1|0|true|svc|0:Stopped:16711680:stopped;4:Running:65280:running
+enum_full_options_register_in_payload|start
+enum_full_options_register_in_payload|stop
+enum_full_options_register_in_payload|expect_registration_count|1
+enum_full_options_register_in_payload|expect_registration_contains|0|"Path":"conformance-host/contract/opts/enum_full"
+enum_full_options_register_in_payload|expect_registration_contains|0|"SensorType":10,
+enum_full_options_register_in_payload|expect_registration_contains|0|"TTLTicks":[600000000]
+enum_full_options_register_in_payload|expect_registration_contains|0|"Description":"svc"
+enum_full_options_register_in_payload|expect_registration_contains|0|"EnumOptions":[{"Key":0,"Value":"Stopped","Color":16711680,"Description":"stopped"},{"Key":4,"Value":"Running","Color":65280,"Description":"running"}]
+enum_full_options_register_in_payload|expect_registration_contains|0|"KeepHistory":6000000000
+enum_full_options_register_in_payload|expect_registration_contains|0|"DisplayUnit":null
+enum_full_options_register_in_payload|expect_registration_contains|0|"IsSingletonSensor":true
+enum_full_options_register_in_payload|expect_registration_contains|0|"AggregateData":true
+enum_full_options_register_in_payload|expect_registration_contains|0|"EnableGrafana":false
+
+# The ServiceStatusPrototype shape a state source registers: aggregated enum + "value != Running
+# for 5 min" alert (Value NotEqual Const 4, 5-min confirmation), module-anchored, no TTL.
+enum_full_options_with_state_alert|create_collector
+enum_full_options_with_state_alert|alert_new|instant
+enum_full_options_with_state_alert|alert_condition|0|20|5|0|4
+enum_full_options_with_state_alert|alert_confirmation|300000
+enum_full_options_with_state_alert|alert_notification|not running|3
+enum_full_options_with_state_alert|alert_stage
+enum_full_options_with_state_alert|create_enum_sensor_full_options|contract/opts/enum_alert|0|0|1|-1|false|s|0:Stopped:16711680:stopped;4:Running:65280:running
+enum_full_options_with_state_alert|start
+enum_full_options_with_state_alert|stop
+enum_full_options_with_state_alert|expect_registration_count|1
+enum_full_options_with_state_alert|expect_registration_contains|0|"Path":"conformance-host/conformance-module/contract/opts/enum_alert"
+enum_full_options_with_state_alert|expect_registration_contains|0|"TTLTicks":null
+enum_full_options_with_state_alert|expect_registration_contains|0|"AggregateData":true
+enum_full_options_with_state_alert|expect_registration_contains|0|"EnableGrafana":null
+enum_full_options_with_state_alert|expect_registration_contains|0|"Alerts":[{"Conditions":[{"Combination":0,"Operation":5,"Property":20,"Target":{"Type":0,"Value":"4"}}],"Status":1,"DestinationMode":3,"Template":"not running","Icon":null,"IsDisabled":false,"ConfirmationPeriod":3000000000,"ScheduledNotificationTime":null,"ScheduledRepeatMode":null,"ScheduledInstantSend":null}]

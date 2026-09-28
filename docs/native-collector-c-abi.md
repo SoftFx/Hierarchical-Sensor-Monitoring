@@ -156,6 +156,24 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.9.0** (#1476) — one additive entry point and one path fix.
+  `hsm_collector_create_enum_sensor_with_sensor_options(collector, path, options, enum_options,
+  count, out)` registers an enum sensor with its option set AND the full `hsm_sensor_options_t`
+  surface (TTL, `aggregate_data`, `is_computer_sensor`, …) — the managed
+  `CreateEnumSensor(path, new EnumSensorOptions { … })`, e.g. the `Service status` shape
+  (EnumOptions + `AggregateData = true` + an alert). Until now an enum sensor could carry enum
+  options (`hsm_collector_create_enum_sensor_with_options`, description only) or sensor options
+  (`hsm_collector_create_sensor_with_options`, no enum options), never both. `options` must not be
+  NULL; the registration is the enum kind's (DisplayUnit null unless set). Fix:
+  `hsm_collector_create_{int,double}_bar_sensor_with_options` and
+  `hsm_collector_create_rate_sensor_with_options` now anchor the path by the options, as every
+  instant sensor already did (`is_computer_sensor` ⇒ `<computer>/<path>`, `sensor_location` Product
+  ⇒ the bare path). Before, those three always used `<computer>/<module>/<path>` and
+  `is_computer_sensor` only forced `IsSingletonSensor` — a divergence from the managed
+  `CalculateSystemPath`. No in-repo host set either flag on a bar or rate, so no deployed path
+  moves. Pinned by `options_surface_contract:enum_full_options_*`,
+  `bar_options_contract:bar_{computer,product}_sensor_*` and
+  `rate_options_contract:rate_{computer,product}_sensor_*` in both drivers.
 - **0.8.2** (#1453, #1444, #1437, #1459, #1460) — no ABI change; four behavior fixes and one
   thread-safety contract. `hsm_collector_last_error` now returns a pointer into a THREAD-LOCAL
   copy of the message instead of into the collector's own storage, which its workers could

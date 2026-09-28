@@ -1076,6 +1076,52 @@ namespace
             return;
         }
 
+        if (action == "create_enum_sensor_full_options")
+        {
+            // path|ttl_ms|keep_history_ms|aggregate|grafana|is_computer|description|options —
+            // enum options AND the SensorOptions surface in one registration; consumes the staged
+            // alerts like create_int_sensor_with_alerts.
+            Require(step.size() >= 9, "create_enum_sensor_full_options requires 8 args");
+            const auto path = ExpandTextToken(step[1]);
+            const auto description = ExpandTextToken(step[7]);
+
+            std::vector<std::vector<std::string>> parsed;
+            for (const auto& part : SplitBy(step[8], ';'))
+            {
+                auto fields = SplitBy(part, ':');
+                Require(fields.size() == 4, "enum option must be key:value:color:description");
+                parsed.push_back(std::move(fields));
+            }
+
+            std::vector<hsm_enum_option_t> enum_options;
+            enum_options.reserve(parsed.size());
+            for (const auto& fields : parsed)
+                enum_options.push_back(hsm_enum_option_t{
+                    ToInt(fields[0]), fields[1].c_str(), ToInt(fields[2]), fields[3].c_str() });
+
+            auto options = hsm_sensor_options_default();
+            options.ttl_ms = static_cast<int64_t>(std::stoll(step[2]));
+            options.keep_history_ms = static_cast<int64_t>(std::stoll(step[3]));
+            options.aggregate_data = ToInt(step[4]);
+            options.enable_grafana = ToInt(step[5]);
+            options.is_computer_sensor = ToBool(step[6]);
+            options.description = description.c_str();
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_enum_sensor_with_sensor_options(
+                    state.collector.value, path.c_str(), &options,
+                    enum_options.data(), enum_options.size(), &sensor.value) == HSM_RESULT_OK,
+                "create_enum_sensor_full_options failed");
+
+            for (auto* alert : state.pending_alerts)
+                Require(hsm_sensor_attach_alert(sensor.value, alert) == HSM_RESULT_OK, "attach pending alert failed");
+            state.pending_alerts.clear();
+
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
         if (action == "create_int_sensor_full_options")
         {
             Require(step.size() >= 13, "create_int_sensor_full_options requires 12 args");
@@ -2914,6 +2960,48 @@ namespace
             hsm_collector_get_sent_json(nullptr, 0, &json) == HSM_RESULT_INVALID_ARGUMENT,
             "sent json with null collector should fail");
         Require(json == nullptr, "sent json failure should clear out json");
+    }
+
+    // hsm_collector_create_enum_sensor_with_sensor_options (0.9.0): the argument contract the
+    // registration fixtures cannot reach — a NULL options struct and a NULL option array with a
+    // non-zero count are rejected and clear the out-param; an empty option set is accepted.
+    void NativeEnumSensorWithSensorOptionsValidatesArguments()
+    {
+        auto collector_options = TestOptions();
+        hsm_collector_t* collector = nullptr;
+        Require(hsm_collector_create(&collector_options, &collector) == HSM_RESULT_OK, "collector create failed");
+
+        const auto options = hsm_sensor_options_default();
+        const hsm_enum_option_t one{ 1, "One", 0, "one" };
+
+        auto* sensor = reinterpret_cast<hsm_sensor_t*>(static_cast<uintptr_t>(1));
+        Require(
+            hsm_collector_create_enum_sensor_with_sensor_options(collector, "native/api/enum/null-options", nullptr, &one, 1, &sensor) ==
+                HSM_RESULT_INVALID_ARGUMENT,
+            "NULL sensor options should be rejected");
+        Require(sensor == nullptr, "NULL sensor options should clear out sensor");
+
+        sensor = reinterpret_cast<hsm_sensor_t*>(static_cast<uintptr_t>(1));
+        Require(
+            hsm_collector_create_enum_sensor_with_sensor_options(collector, "native/api/enum/null-array", &options, nullptr, 2, &sensor) ==
+                HSM_RESULT_INVALID_ARGUMENT,
+            "NULL enum options with a non-zero count should be rejected");
+        Require(sensor == nullptr, "NULL enum options should clear out sensor");
+
+        Require(
+            hsm_collector_create_enum_sensor_with_sensor_options(nullptr, "native/api/enum/null-collector", &options, &one, 1, &sensor) ==
+                HSM_RESULT_INVALID_ARGUMENT,
+            "NULL collector should be rejected");
+        Require(sensor == nullptr, "NULL collector should clear out sensor");
+
+        Require(
+            hsm_collector_create_enum_sensor_with_sensor_options(collector, "native/api/enum/empty", &options, nullptr, 0, &sensor) ==
+                HSM_RESULT_OK,
+            "an empty option set should be accepted");
+        Require(sensor != nullptr, "an accepted create should return a handle");
+
+        hsm_sensor_release(sensor);
+        hsm_collector_destroy(collector);
     }
 
     void NativeAddAfterCollectorDestroyIsRejected()
@@ -7574,6 +7662,7 @@ namespace
             { "native_create_rejects_negative_option_fields", [](const std::string&) { NativeCreateRejectsNegativeOptionFields(); } },
             { "native_logger_sink_can_be_set_and_cleared", [](const std::string&) { NativeLoggerSinkCanBeSetAndCleared(); } },
             { "native_invalid_argument_clears_out_params", [](const std::string&) { NativeInvalidArgumentClearsOutParams(); } },
+            { "native_enum_sensor_with_sensor_options_validates_arguments", [](const std::string&) { NativeEnumSensorWithSensorOptionsValidatesArguments(); } },
             { "native_add_after_collector_destroy_is_rejected", [](const std::string&) { NativeAddAfterCollectorDestroyIsRejected(); } },
             { "native_sent_json_failure_reports_fresh_error", [](const std::string&) { NativeSentJsonFailureReportsFreshError(); } },
             { "native_last_error_is_safe_under_concurrent_failures",
