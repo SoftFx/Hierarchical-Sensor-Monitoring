@@ -66,39 +66,89 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
 
     // The shared catalog is sampled, queued and sent by the collector's own threads. Each
     // probe-only source gets a thread of its own (so one hung read cannot stall another), started
-    // only now: a value posted before Start would be dropped. The main thread only waits, and the
-    // scope joins the source threads before the collector is stopped.
+    // only now: a value posted before Start would be dropped. The main thread only waits.
     let stop_sources = StopSignal::new();
-    let source_count = probe_only_sources.len();
+    let (exited_tx, exited_rx) = std::sync::mpsc::channel::<&'static str>();
     std::thread::scope(|scope| {
+        let mut running = Vec::new();
         for source in probe_only_sources.iter_mut() {
-            let (stop, logger) = (&stop_sources, &logger);
+            let (stop, logger, exited) = (&stop_sources, &logger, exited_tx.clone());
             let name = source.name();
             let spawned = std::thread::Builder::new()
                 .name(format!("probe-{}", name.replace(' ', "-")))
                 .spawn_scoped(scope, move || {
-                    probe_only::run_source(source.as_mut(), stop, logger)
+                    probe_only::run_source(source.as_mut(), stop, logger);
+                    let _ = exited.send(name);
                 });
-            if let Err(error) = spawned {
-                logger.error(format!(
+            match spawned {
+                Ok(_) => running.push(name),
+                Err(error) => logger.error(format!(
                     "cannot start the '{name}' probe-only source thread: {error}"
-                ));
+                )),
             }
         }
-        if source_count > 0 {
-            logger.info(format!("{source_count} probe-only source(s) running"));
+        if !running.is_empty() {
+            logger.info(format!("{} probe-only source(s) running", running.len()));
         }
 
         while !shutdown::is_requested() {
             std::thread::sleep(TICK);
         }
+
+        // Stop the sources first, but only wait a bounded time for them: a source stuck inside a
+        // read (a statvfs on a hung filesystem) cannot be interrupted, and it must not keep the
+        // collector from draining what is already queued. The drain therefore runs INSIDE the
+        // scope; a stuck thread is joined afterwards, and systemd's TimeoutStopSec is the backstop.
         stop_sources.request();
+        await_sources(&exited_rx, running, &logger);
+        stop_collector(&collector, product_version.as_ref(), config, &logger);
     });
 
+    Ok(())
+}
+
+/// How long a stop waits for the probe-only source threads before draining without them.
+const SOURCE_STOP_WAIT: Duration = Duration::from_secs(2);
+
+/// Wait up to [`SOURCE_STOP_WAIT`] for every running source to report its exit; name any that did
+/// not, so a stuck read is visible in the log instead of a silent stall.
+fn await_sources(
+    exited: &std::sync::mpsc::Receiver<&'static str>,
+    mut running: Vec<&'static str>,
+    logger: &Logger,
+) {
+    let deadline = Instant::now() + SOURCE_STOP_WAIT;
+    while !running.is_empty() {
+        let left = deadline.saturating_duration_since(Instant::now());
+        match exited.recv_timeout(left) {
+            Ok(name) => {
+                if let Some(index) = running.iter().position(|running| *running == name) {
+                    running.swap_remove(index);
+                }
+            }
+            Err(_) => {
+                logger.error(format!(
+                    "probe-only source(s) {running:?} did not stop within {} ms (blocked in a \
+                     read?); draining the collector without them",
+                    SOURCE_STOP_WAIT.as_millis()
+                ));
+                return;
+            }
+        }
+    }
+}
+
+/// Post the `Stop:` version marker, then stop the collector with its bounded drain.
+fn stop_collector(
+    collector: &Collector,
+    product_version: Option<&VersionSensor<'_>>,
+    config: &Config,
+    logger: &Logger,
+) {
     // Before Stop, so the value is still accepted and goes out with the stop drain — as the
     // managed ProductVersionSensor.StopAsync does.
-    if let Some(sensor) = &product_version {
-        post_product_version(sensor, VersionEvent::Stop, &logger);
+    if let Some(sensor) = product_version {
+        post_product_version(sensor, VersionEvent::Stop, logger);
     }
 
     logger.info("stop requested; draining the collector");
@@ -118,8 +168,6 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
             config.shutdown_timeout().as_millis()
         ));
     }
-
-    Ok(())
 }
 
 fn build_collector(
@@ -575,6 +623,36 @@ mod tests {
             paths.iter().all(|path| !path.contains("ThreadPool")),
             "a native process has no CLR thread pool: {paths:#?}"
         );
+    }
+
+    #[test]
+    fn a_source_that_does_not_stop_is_named_and_does_not_block_the_drain() {
+        let lines = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let logger = Logger::with_sink(Level::Debug, {
+            let lines = Arc::clone(&lines);
+            move |line: &str| lines.lock().unwrap().push(line.to_string())
+        });
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send("disk").unwrap();
+        let started = Instant::now();
+        // "cpu temperature" never reports: the wait gives up at its deadline instead of hanging.
+        await_sources(&rx, vec!["cpu temperature", "disk"], &logger);
+        assert!(started.elapsed() < SOURCE_STOP_WAIT + Duration::from_secs(2));
+        let lines = lines.lock().unwrap();
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("\"cpu temperature\"") && !line.contains("\"disk\"")),
+            "{lines:#?}"
+        );
+
+        // All sources reporting in returns without an error line.
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send("disk").unwrap();
+        let quiet = Logger::with_sink(Level::Debug, |line: &str| {
+            panic!("nothing should be logged: {line}")
+        });
+        await_sources(&rx, vec!["disk"], &quiet);
     }
 
     #[test]

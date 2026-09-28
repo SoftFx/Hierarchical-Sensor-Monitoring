@@ -16,8 +16,9 @@
 #                                                    versions is unsafe with dpkg on a merged /usr)
 #   /etc/hsm-linux-probe/config.json                (conffile: operator edits survive upgrades)
 #   /usr/share/doc/hsm-linux-probe/copyright
-# postinst creates the hsm-probe system user/group and reloads systemd but does NOT enable or
-# start the unit; prerm stops it on upgrade and disables it on remove; postrm purges state/logs.
+# postinst creates the hsm-probe system user/group and reloads systemd; a fresh install does NOT
+# enable or start the unit, an upgrade restarts it if it was running (prerm leaves a /run marker);
+# prerm disables it on remove; postrm purges state/logs.
 #
 # The binary is built with the collector's Linux metric sources (--features
 # linux-default-sensors), i.e. the full managed-parity set plus the probe-only sensors.

@@ -9,10 +9,16 @@ if [ "$1" = "configure" ]; then
         useradd --system --gid hsm-probe --no-create-home --home-dir /nonexistent \
             --shell /usr/sbin/nologin --comment "HSM Linux probe" hsm-probe
     fi
-    # The unit is deliberately NOT enabled or started here: install.sh places config + key first,
-    # then runs `systemctl enable --now`.
+    # A fresh install deliberately does NOT enable or start the unit: install.sh places config +
+    # key first, then runs `systemctl enable --now`.
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload >/dev/null || true
+        # An upgrade restarts a probe that was running before it (the old prerm left the marker;
+        # packages before 0.2.0 did not, so upgrading from those still needs a manual start).
+        if [ -e /run/hsm-linux-probe.restart-after-upgrade ]; then
+            rm -f /run/hsm-linux-probe.restart-after-upgrade
+            systemctl start hsm-linux-probe.service >/dev/null || true
+        fi
     fi
 fi
 exit 0

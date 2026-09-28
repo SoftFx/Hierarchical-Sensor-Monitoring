@@ -6,6 +6,11 @@ if [ -d /run/systemd/system ]; then
             systemctl disable --now hsm-linux-probe.service >/dev/null 2>&1 || true
             ;;
         upgrade)
+            # Remember a running probe, so the new package's postinst starts it again: an upgrade
+            # must not silently end monitoring. (/run is tmpfs: a stale marker dies with a reboot.)
+            if systemctl is-active --quiet hsm-linux-probe.service; then
+                touch /run/hsm-linux-probe.restart-after-upgrade 2>/dev/null || true
+            fi
             systemctl stop hsm-linux-probe.service >/dev/null 2>&1 || true
             ;;
     esac
