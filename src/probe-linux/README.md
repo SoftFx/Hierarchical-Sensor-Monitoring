@@ -130,6 +130,11 @@ an inode count (`f_files == 0`) gets no inode sensor.
 
 **Isolation.** Each source runs on its own thread (a hung `statvfs` cannot stall the temperature
 samples), every sample runs under `catch_unwind`, and nothing is posted before the collector starts.
+The disk source's registration-time probing (`canonicalize` + one `statvfs`) runs on a helper
+thread with a 5 s deadline, so a hung mount cannot hold up the start of the parity set (the disk
+sensors are then not registered, with an ERROR line). On stop the sources get 2 s; stuck ones are
+named, the collector drains anyway, and the process exits without joining a thread still blocked
+in a read.
 
 **Configuration** — `probe.hostSensors` (all default `true`, so a config written before these
 sensors existed turns them on): `enabled` switches off all four; `cpuTemperature` and `disk` switch

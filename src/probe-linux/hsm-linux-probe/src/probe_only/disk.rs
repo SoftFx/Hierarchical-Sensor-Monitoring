@@ -183,37 +183,77 @@ fn existing_canonical(target: &Path) -> Option<PathBuf> {
     None
 }
 
+/// How long registration waits for [`discover`]. It runs before the collector starts, so a hung
+/// filesystem under the target must not be able to hold up the whole probe.
+const DISCOVERY_TIMEOUT: Duration = if cfg!(test) {
+    Duration::from_millis(300)
+} else {
+    Duration::from_secs(5)
+};
+
+/// Resolve the mount holding `target` and whether its filesystem counts inodes. Touches the
+/// filesystem (`canonicalize`, one `statvfs`), so it can block on a hung mount.
+fn discover(
+    target: &Path,
+    mountinfo_path: &Path,
+    statvfs: fn(&Path) -> std::io::Result<FsStats>,
+) -> Result<(Mount, bool), String> {
+    let canonical =
+        existing_canonical(target).ok_or_else(|| format!("cannot resolve {}", target.display()))?;
+    let mountinfo = std::fs::read_to_string(mountinfo_path)
+        .map_err(|error| format!("cannot read {}: {error}", mountinfo_path.display()))?;
+    let mounts = parse_mountinfo(&mountinfo);
+    let mount = mount_containing(&mounts, &canonical)
+        .cloned()
+        .ok_or_else(|| {
+            format!(
+                "no mount in {} contains {}",
+                mountinfo_path.display(),
+                canonical.display()
+            )
+        })?;
+    // One stat up front decides whether the filesystem counts inodes at all. A failure keeps the
+    // inode sensor: it may be transient, and sampling reports it.
+    let inodes_counted = statvfs(&mount.mount_point).map_or(true, |stats| stats.files > 0);
+    Ok((mount, inodes_counted))
+}
+
+/// [`discover`] on a helper thread, bounded by [`DISCOVERY_TIMEOUT`]. On a timeout the helper is
+/// left behind, blocked in the kernel; the probe carries on without the disk sensors.
+fn discover_with_deadline(environment: &HostEnvironment) -> Result<(Mount, bool), String> {
+    let (target, mountinfo, statvfs) = (
+        environment.disk_target.clone(),
+        environment.mountinfo.clone(),
+        environment.statvfs,
+    );
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("probe-disk-discover".into())
+        .spawn(move || {
+            let _ = tx.send(discover(&target, &mountinfo, statvfs));
+        })
+        .map_err(|error| format!("cannot start the discovery thread: {error}"))?;
+    rx.recv_timeout(DISCOVERY_TIMEOUT).unwrap_or_else(|_| {
+        Err(format!(
+            "resolving {} did not finish within {} s (a hung filesystem?)",
+            environment.disk_target.display(),
+            DISCOVERY_TIMEOUT.as_secs()
+        ))
+    })
+}
+
 pub fn register<'c>(
     collector: &'c Collector,
     environment: &HostEnvironment,
     logger: &Logger,
 ) -> Option<Box<dyn Source + 'c>> {
     let target = &environment.disk_target;
-    let Some(canonical) = existing_canonical(target) else {
-        logger.error(format!(
-            "disk sensors are not registered: cannot resolve {}",
-            target.display()
-        ));
-        return None;
-    };
-    let mountinfo = match std::fs::read_to_string(&environment.mountinfo) {
-        Ok(text) => text,
-        Err(error) => {
-            logger.error(format!(
-                "disk sensors are not registered: cannot read {}: {error}",
-                environment.mountinfo.display()
-            ));
+    let (mount, inodes_counted) = match discover_with_deadline(environment) {
+        Ok(found) => found,
+        Err(reason) => {
+            logger.error(format!("disk sensors are not registered: {reason}"));
             return None;
         }
-    };
-    let mounts = parse_mountinfo(&mountinfo);
-    let Some(mount) = mount_containing(&mounts, &canonical).cloned() else {
-        logger.error(format!(
-            "disk sensors are not registered: no mount in {} contains {}",
-            environment.mountinfo.display(),
-            canonical.display()
-        ));
-        return None;
     };
     logger.info(format!(
         "disk sensors: {} is on {} ({} {}){}",
@@ -227,13 +267,6 @@ pub fn register<'c>(
             " - NOT the root mount the collector's 'Free space on disk' reports"
         }
     ));
-
-    // One stat up front decides whether the filesystem counts inodes at all.
-    let inodes_counted = match (environment.statvfs)(&mount.mount_point) {
-        Ok(stats) => stats.files > 0,
-        // Keep the sensor: the failure may be transient, and sampling reports it.
-        Err(_) => true,
-    };
 
     let where_ = format!(
         "the filesystem holding {} (mount {}, {})",
@@ -489,6 +522,52 @@ mod tests {
             existing_canonical(&missing),
             Some(std::fs::canonicalize(&root).unwrap())
         );
+    }
+
+    fn environment_for(tree: &crate::probe_only::host::tests::FakeTree) -> HostEnvironment {
+        tree.file(
+            "mountinfo",
+            "22 1 8:33 / / rw,relatime shared:1 - ext4 /dev/sdc1 rw\n",
+        );
+        HostEnvironment {
+            sys_root: tree.0.join("sys"),
+            mountinfo: tree.0.join("mountinfo"),
+            disk_target: tree.0.clone(),
+            statvfs: |_| {
+                Ok(FsStats {
+                    blocks: 10,
+                    blocks_available: 5,
+                    files: 0,
+                    files_available: 0,
+                })
+            },
+            online_cpus: || Ok(1),
+        }
+    }
+
+    #[test]
+    fn discovery_finds_the_mount_and_notices_a_filesystem_without_inodes() {
+        let tree = crate::probe_only::host::tests::FakeTree::new("discover");
+        let (mount, inodes_counted) =
+            discover_with_deadline(&environment_for(&tree)).expect("discovered");
+        assert_eq!(mount.mount_point, PathBuf::from("/"));
+        assert!(!inodes_counted, "f_files == 0 means no inode sensor");
+    }
+
+    #[test]
+    fn a_hung_filesystem_cannot_hold_up_registration() {
+        // The statvfs never returns within the deadline: discovery gives up instead of blocking
+        // the probe's start (the helper thread is left behind, as it would be in the kernel).
+        let tree = crate::probe_only::host::tests::FakeTree::new("hung");
+        let mut environment = environment_for(&tree);
+        environment.statvfs = |_| {
+            std::thread::sleep(Duration::from_secs(30));
+            Err(std::io::Error::from(std::io::ErrorKind::TimedOut))
+        };
+        let started = std::time::Instant::now();
+        let error = discover_with_deadline(&environment).expect_err("must time out");
+        assert!(error.contains("did not finish"), "{error}");
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 
     #[cfg(target_os = "linux")]

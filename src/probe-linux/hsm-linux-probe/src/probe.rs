@@ -98,10 +98,17 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
         // Stop the sources first, but only wait a bounded time for them: a source stuck inside a
         // read (a statvfs on a hung filesystem) cannot be interrupted, and it must not keep the
         // collector from draining what is already queued. The drain therefore runs INSIDE the
-        // scope; a stuck thread is joined afterwards, and systemd's TimeoutStopSec is the backstop.
+        // scope, and with a stuck thread the process exits after the drain instead of joining it.
         stop_sources.request();
-        await_sources(&exited_rx, running, &logger);
+        let all_stopped = await_sources(&exited_rx, running, &logger);
         stop_collector(&collector, product_version.as_ref(), config, &logger);
+        if !all_stopped {
+            // The drain is done; leaving the scope would join the stuck thread and hold the
+            // process until systemd kills it. Exit instead: the collector is already stopped.
+            logger.error("exiting without joining the stuck probe-only source thread(s)");
+            logger.info("hsm-linux-probe stopped");
+            std::process::exit(0);
+        }
     });
 
     Ok(())
@@ -111,12 +118,12 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
 const SOURCE_STOP_WAIT: Duration = Duration::from_secs(2);
 
 /// Wait up to [`SOURCE_STOP_WAIT`] for every running source to report its exit; name any that did
-/// not, so a stuck read is visible in the log instead of a silent stall.
+/// not, so a stuck read is visible in the log instead of a silent stall. Returns whether all did.
 fn await_sources(
     exited: &std::sync::mpsc::Receiver<&'static str>,
     mut running: Vec<&'static str>,
     logger: &Logger,
-) {
+) -> bool {
     let deadline = Instant::now() + SOURCE_STOP_WAIT;
     while !running.is_empty() {
         let left = deadline.saturating_duration_since(Instant::now());
@@ -132,10 +139,11 @@ fn await_sources(
                      read?); draining the collector without them",
                     SOURCE_STOP_WAIT.as_millis()
                 ));
-                return;
+                return false;
             }
         }
     }
+    true
 }
 
 /// Post the `Stop:` version marker, then stop the collector with its bounded drain.
@@ -636,7 +644,11 @@ mod tests {
         tx.send("disk").unwrap();
         let started = Instant::now();
         // "cpu temperature" never reports: the wait gives up at its deadline instead of hanging.
-        await_sources(&rx, vec!["cpu temperature", "disk"], &logger);
+        assert!(!await_sources(
+            &rx,
+            vec!["cpu temperature", "disk"],
+            &logger
+        ));
         assert!(started.elapsed() < SOURCE_STOP_WAIT + Duration::from_secs(2));
         let lines = lines.lock().unwrap();
         assert!(
@@ -652,7 +664,7 @@ mod tests {
         let quiet = Logger::with_sink(Level::Debug, |line: &str| {
             panic!("nothing should be logged: {line}")
         });
-        await_sources(&rx, vec!["disk"], &quiet);
+        assert!(await_sources(&rx, vec!["disk"], &quiet));
     }
 
     #[test]
