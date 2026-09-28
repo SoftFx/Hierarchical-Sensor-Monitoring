@@ -1,9 +1,10 @@
 # Linux host + Docker Compose probe (garage-server)
 
 > Status: **phase 1 delivered and verified on the real host** (2026-09-24). Epic: #1413.
-> The probe runs on garage-server reporting exactly the managed Unix default set; the Docker,
-> disk and backup sensors this document planned are **not built** and are gated on a per-sensor
-> agreement with the owner (§4.2a). Releases are on hold by owner decision (§4.5).
+> The probe runs on garage-server reporting the managed Unix default set plus probe-only sensors
+> agreed with the owner one by one (§4.2a): host/disk (#1476) and Docker Compose (#1416); the
+> archive/backup sensors (#1417) are still to be agreed. Releases are on hold by owner decision
+> (§4.5).
 > See §9 for what shipped, §10 for what the work uncovered, §11 for what remains.
 > Source task: garage_administration `hsm/TASK-linux-docker-monitoring.md`.
 > Scope: a Linux probe that reports Debian host metrics, Docker Compose service metrics,
@@ -85,8 +86,9 @@ Probe host language — Rust vs C++ (both native, both consume the same collecto
 
 - **Rust (chosen):** owner preference; memory safety for the one root-equivalent-privileged
   daemon on the host; first-class fit for the probe-local work (serde_json for Docker/
-  backup JSON, the `curl` crate over the *same* libcurl for the unix-socket Engine API —
-  one HTTP stack in the process); small static binaries, trivial systemd hosting. The
+  backup JSON, and — as built in #1416 — a dependency-free HTTP/1.1 reader over
+  `UnixStream` for the local Engine API socket, so the process links one libcurl, the
+  collector's; §4.3); small static binaries, trivial systemd hosting. The
   collector's C ABI is a designed-for-FFI surface (the aggregator wrapper already consumes
   it from another toolchain), so this is intended use, not a workaround.
 - Accepted costs, stated openly: a new toolchain in repo + CI (cargo on the ubuntu lane,
@@ -112,8 +114,8 @@ Probe host language — Rust vs C++ (both native, both consume the same collecto
         │           (VERIFYPEER=1, VERIFYHOST=2; Debian system trust store via update-ca-certificates)
         ├── probe sources feeding the collector's public sensor API:
         │     ├── loadavg (60 s): /proc/loadavg — exists in no collector today
-        │     ├── docker (60 s): Docker Engine API over unix socket (curl UNIX_SOCKET_PATH,
-        │     │     one-shot stats; no `docker stats` stream, no external CLI)
+        │     ├── docker (stats 5 s, state 60 s): Docker Engine API over the unix socket
+        │     │     (HTTP/1.1 GET over UnixStream, one-shot stats; no stream, no external CLI)
         │     ├── ssd (5 min): statvfs on the filesystem containing /srv/docker
         │     └── backup/archive: timestamped JSON snapshots on SSD (never touches /mnt/*)
         └── probe state on SSD (restart counters, OOM latches, last-seen backup result)
@@ -223,28 +225,49 @@ Rejected: load average (Total CPU is already a 5-minute bar with an EMA). Deferr
 HDDs — they sleep and must never be polled, so they need the backup scripts to record free space
 into a state file first (the archive/backup part of #1417, still open).
 
-**Docker (#1416) and backups (#1417)** — the original Stage-0 proposal below, still subject to the
-same per-sensor agreement; the Docker rows are being reworked in #1416.
+**Docker Compose — agreed 2026-09-24, built in #1416** (garage_administration
+`hsm/SENSORS-DECISIONS.md` §2). All under one node in the probe's module:
+`<computer>/<module>/Docker/<project>/<service>/<sensor>`. Every number lives in
+`hsm-linux-probe/src/probe_only/docker/contract.rs`, every alert in `…/docker/alerts.rs`; the
+operator-facing table and the edge behavior are in the probe README ("Probe-only sensors").
+
+| Sensor | Type / cadence | Value | Alert (attached at registration) |
+|---|---|---|---|
+| `CPU` | DoubleBar, 5-min bar, sample every 5 s (`probe.docker.samplePeriodSec`) | % of the **whole host**, max 100 = Δ`total_usage` / Δ`system_cpu_usage` × 100 (not × `online_cpus`; the description says `docker stats` shows per-core %). First sample, counter reset, container-id change, interval outside ½…3× the period ⇒ skipped, never 0 | mean > 90 for 30 min → warning notification |
+| `Memory used %` | DoubleBar, same sampling | (`usage` − `inactive_file`) / limit × 100; unlimited ⇒ of host `MemTotal` | mean > 90 → warning notification |
+| `Memory limit` | Int, MB; at start and on change | the limit (host `MemTotal` when unlimited, with a comment) | none |
+| `Service status` | Enum, 60 s, AggregateData | the Windows `ServiceStatusPrototype` options byte-for-byte; running → Running; created, restarting → StartPending; paused → Paused; exited, dead, removing → Stopped; removed → Stopped for 7 days after last sighting. A service first seen with every container Exited (0) under restart policy `no` is a completed one-shot job: not registered, one INFO line; once it runs it is a service from then on (owner decision) | `IfValue NotEqual Running`, confirmation 5 min, instant-hourly notification — the Windows prototype's alert byte for byte |
+| `Health` | Enum {starting, healthy, unhealthy}, 60 s, AggregateData, only where a healthcheck exists | `State.Health.Status` | `unhealthy` for 5 min → notification |
+| `Restart count` | Int, 60 s, posted only on change | cumulative `RestartCount`; a new container id starts a new baseline (state on disk), never goes down | value changed → notification |
+| `OOM killed` | Bool, 60 s, AggregateData | `State.OOMKilled` latched 24 h (`probe.docker.oomLatchHours`), survives recreate | true → Error + notification |
+
+Replicas: CPU/memory summed (the limit sum capped at host memory), status and health worst-of,
+restarts summed. Budget ≈ 580 records/day per service, ≈ 4600 for eight. No empty nodes: stats
+sensors register once a service has run, `Health` only where a healthcheck is defined. Services
+present at start register before Start (alerts in the Start batch); a service that appears later
+registers at runtime — which needed a collector fix (0.9.1): public-API sensors created while the
+collector runs were recorded locally but never POSTed to `/commands`, and an alert attached after
+their creation never reached the registration.
+
+**Backups (#1417)** — the original Stage-0 proposal below, still subject to the same per-sensor
+agreement (the Stage-0 Docker rows are superseded by the table above).
 
 | Path (under garage-server/LinuxProbe/) | Type | Period | TTL | Notes |
 |---|---|---|---|---|
 | `Disk/archive/{wd4tb,mediacentr}/{Free GB, Snapshot age}` | Double | on snapshot change | ≥ backup window + slack (~26 h) | From SSD snapshot JSON only. Stale = TTL expiry, a distinct state. Deferred (see above). |
-| `Docker/<project>/<service>/CPU % one core` | DoubleBar | 60 s | 3 min | Δ cumulative cgroup counter between two *valid* samples; 100% = one core (host may show up to 400%). First sample / counter reset / container-id change / abnormal interval ⇒ skip, never 0. |
-| `Docker/<project>/<service>/Memory {usage,limit} bytes` | Double ×2 | 60 s | 3 min | usage = cgroup usage − `inactive_file` (docker-stats convention, fixture-pinned). Unlimited limit ⇒ host MemTotal as effective limit, flagged in comment — never 0. |
-| `Docker/<project>/<service>/Running` | Bool | 60 s | 3 min | Missing expected service ≠ running. |
-| `Docker/<project>/<service>/Replicas running` | Int | 60 s | 3 min | Service-level aggregate (CPU/mem summed, health worst-of); instance sensors deliberately absent in v1. |
-| `Docker/<project>/<service>/Health` | Enum {starting, healthy, unhealthy, none} | 60 s | 3 min | No healthcheck ⇒ `none`, never `healthy`. Stable enum options registered once. |
-| `Docker/<project>/<service>/OOM killed` | Bool | 60 s | 24 h | Latched on SSD for configurable retention (default 24 h); survives recreate. |
-| `Docker/<project>/<service>/Restart count` | Int | 60 s | 3 min | Service-level cumulative counter on SSD; only positive observed deltas; container-id change starts a new baseline (no negative deltas). |
 | `Backup/<job>/{Last result, Duration min, Missed deadline}` | Enum/Double/Bool | on new result | job-specific | From the backup task's snapshot contract (§4.4). |
 | `Backup/<job>/Last success heartbeat` | Bool/TTL | only on *new* confirmed success | deadline-derived | Re-reading the same result never refreshes it; "never succeeded yet" is a distinct initial state. |
 | `Probe/Sources/<name> status` | Enum {ok, degraded, failed} | 60 s | 3 min | Per-source failure isolation made visible. |
 
-Path identity: from `com.docker.compose.project`/`.service` labels — stable across
+Docker path identity: from `com.docker.compose.project`/`.service` labels — stable across
 recreate/upgrade. Normalization: `[A-Za-z0-9_-]` kept, others → `_`, collisions detected via
-a reverse map and disambiguated with a short stable hash; rule fixed by unit tests.
-Containers without compose labels: config `composeOnly: true` (default) skips them with a
-diagnostic; `false` puts them under `Docker/_standalone/<name>`.
+a reverse map and disambiguated with a short stable hash (FNV-1a, six hex digits, on the
+newcomer; a name needing no normalization keeps the plain segment; nodes are remembered in the
+state file and re-adopted after a restart, so they never move); rule fixed by unit tests.
+Containers without compose labels: config `probe.docker.composeOnly: true` (default) skips them
+with one deduplicated diagnostic per container; `false` puts them under
+`Docker/_standalone/<name>`. `docker compose run` one-offs (`com.docker.compose.oneoff=True`) are
+never counted as replicas.
 
 HSM-side templates (documented for the operator, thresholds configurable, nothing hardcoded
 in the probe or collector catalog): probe TTL 3 min; sustained CPU via HSM EMA; low SSD
@@ -261,9 +284,30 @@ plus hardening: `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, privat
 root-equivalent; the probe is the one privileged component and restricts itself to read-only
 endpoints (`/containers/json`, `/containers/{id}/stats?stream=false&one-shot=true`,
 `/containers/{id}/json`, `/version`) **by construction and review, not by the kernel**.
-Client: the Rust `curl` crate over `CURLOPT_UNIX_SOCKET_PATH` — the same libcurl the
-collector's HTTP transport links, one HTTP stack per process; JSON via serde_json. Both are
-probe-only dependencies, never added to the collector.
+
+Client (decided in #1416, replacing the `curl`-crate plan): a minimal hand-rolled HTTP/1.1
+`GET` client over `std::os::unix::net::UnixStream` (`hsm-linux-probe/src/probe_only/docker/http.rs`,
+~250 lines incl. `Content-Length`, chunked and close-delimited bodies, one 1.5 s deadline per call,
+a 4 MiB body cap), JSON via serde_json. The Engine API socket is local plaintext HTTP, so libcurl
+would contribute nothing, while the `curl` crate would bring `curl-sys` — whose build silently
+compiles its bundled libcurl when pkg-config does not find the system one, i.e. exactly the "two
+libcurls in one process" outcome the one-HTTP-stack argument was meant to prevent — plus
+`libz-sys`/`openssl-sys` on the link line, widening the package's `Depends`. The hand-rolled
+client adds no dependency, the process still links exactly one libcurl (the collector's, for
+HTTPS to HSM), and every framing path is unit-tested against raw bytes captured from the
+garage daemon. Read-only by construction: the client has only `GET`, and the request paths come
+from a closed enum of the four endpoints with container ids validated as hex. The API version is
+pinned in the path (1.45, the fixtures'), negotiated down to an older daemon's own version
+(≥ 1.41 for one-shot stats) or up to a newer daemon's `MinAPIVersion`.
+
+Socket access (decided in #1416): the unit does **not** carry `SupplementaryGroups=docker` —
+systemd refuses to start a unit whose supplementary group does not exist, so a hardcoded group
+would break the probe on every host without Docker. The package ships
+`/usr/lib/hsm-linux-probe/docker-access.sh`; postinst runs `install`, which writes the drop-in
+`/etc/systemd/system/hsm-linux-probe.service.d/docker.conf` (`SupplementaryGroups=docker`) only
+when `getent group docker` succeeds (and removes a stale one otherwise); postrm removes it on
+remove/purge. Connecting to the socket needs no write access to its filesystem, so
+`ProtectSystem=strict` stays; `RestrictAddressFamilies` already has `AF_UNIX`.
 
 Rejected: a docker-socket-proxy allowlist container — it moves the same root-equivalent
 trust into another standing privileged container on a 4-core host, and its lifecycle would
@@ -485,6 +529,7 @@ coverage in both drivers and an agent version bump:
 | #1438 | typed metric-source seam with error reporting; live disk prediction; `DiskLetter` fix | 0.8.0 / 0.5.34, managed 3.5.2 |
 | #1446 | the prediction tells the truth: signed EMA, 6 h window, explicit states | 0.8.1 / 0.5.35, managed 3.5.3 |
 | #1476 PR | alerts in the Rust wrapper; enum-with-options ABI; option-anchored bars/rates; probe-only host/disk sensors; `build-deb.sh` | 0.9.0 / 0.5.37, probe 0.2.0 |
+| #1416 PR | Docker Compose source (7 sensors per service, Engine API over the socket via a dependency-free HTTP/1.1 client, restart/OOM/vanished state on SSD, conditional socket drop-in); collector: sensors created while running are registered on the server, alerts attachable while running | 0.9.1 / 0.5.38, probe 0.3.0 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
