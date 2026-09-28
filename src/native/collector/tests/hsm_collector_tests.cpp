@@ -5673,7 +5673,9 @@ namespace
     // path, not just that HttpTransport can POST in isolation (the test above).
     void NativeHttpLiveSendPostsToCaptureServer()
     {
-        hsm::test::HttpCaptureServer server(200);
+        // The sensor is created while running, so its runtime registration (/commands, 0.9.1)
+        // precedes the value batch; capture the /list request.
+        hsm::test::HttpCaptureServer server(200, "/api/sensors/list");
 
         hsm_collector_options_t options{};
         options.access_key = "live-key";
@@ -5956,6 +5958,111 @@ namespace
         for (int value = 201; value <= 204; ++value)
             Require(ServerReceivedValue(server, value), ("each stop drain must deliver value " + std::to_string(value)).c_str());
         RequireNoStopDrop(logs);
+    }
+
+    // An instant alert on "Value > 42" with a notification — enough to recognize in a payload.
+    hsm_alert_t* RuntimeTestAlert(hsm_collector_t* collector)
+    {
+        hsm_alert_t* alert = nullptr;
+        Require(hsm_collector_create_alert(collector, HSM_ALERT_KIND_INSTANT, &alert) == HSM_RESULT_OK, "alert create");
+        hsm_alert_add_condition(alert, HSM_ALERT_COMBINATION_AND, HSM_ALERT_PROP_VALUE, HSM_ALERT_OP_GREATER_THAN, HSM_ALERT_TARGET_CONST, "42");
+        hsm_alert_set_notification(alert, "runtime-spike", HSM_ALERT_DESTINATION_FROM_PARENT);
+        return alert;
+    }
+
+    // Index of the first recorded request to `path` whose body holds every needle; -1 if none.
+    long FirstRequestWith(const hsm::test::HttpRecordingServer& server, const std::string& path,
+                          const std::vector<std::string>& needles)
+    {
+        const auto requests = server.Requests();
+        for (size_t i = 0; i < requests.size(); ++i)
+        {
+            if (requests[i].path != path)
+                continue;
+            bool all = true;
+            for (const auto& needle : needles)
+                all = all && requests[i].body.find(needle) != std::string::npos;
+            if (all)
+                return static_cast<long>(i);
+        }
+        return -1;
+    }
+
+    long WaitForRequestWith(const hsm::test::HttpRecordingServer& server, const std::string& path,
+                            const std::vector<std::string>& needles)
+    {
+        for (int attempt = 0; attempt < 500; ++attempt)
+        {
+            const long index = FirstRequestWith(server, path, needles);
+            if (index >= 0)
+                return index;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return -1;
+    }
+
+    // #1416: a sensor created while the collector runs is registered on the server — the Start
+    // batch has already gone — with the alerts attached right after its create call, and before
+    // its first value. (Before 0.9.1 the public create paths only recorded it locally.)
+    void NativeHttpRegistersSensorsCreatedWhileRunning()
+    {
+        hsm::test::HttpRecordingServer server;
+        CollectorHandle collector = CreateCollector(StopDrainOptions(server.Port(), 20));
+        hsm_collector_test_install_http_sender(collector.value);
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "runtime/int");
+        Require(hsm_sensor_attach_alert(sensor.value, RuntimeTestAlert(collector.value)) == HSM_RESULT_OK,
+                "attaching an alert while running must be accepted");
+        Require(hsm_sensor_add_int(sensor.value, 301, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add 301 failed");
+
+        const long registration = WaitForRequestWith(
+            server, "/api/sensors/commands", { "\"Path\":\"runtime/int\"", "runtime-spike" });
+        Require(registration >= 0, "the runtime sensor must be registered on the server with its alert");
+        long value = -1;
+        for (int attempt = 0; attempt < 500 && value < 0; ++attempt)
+        {
+            value = FirstRequestWith(server, "/api/sensors/list", { "\"Value\":301," });
+            if (value < 0)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        Require(value >= 0, "the value must be delivered");
+        Require(FirstRequestWith(server, "/api/sensors/commands", { "\"Path\":\"runtime/int\"" }) < value,
+                "the registration must reach the server before the sensor's first value");
+
+        // The recorded registration for this run is one entry, carrying the alert.
+        Require(hsm_collector_registration_count(collector.value) == 1, "one recorded registration");
+        const char* json = nullptr;
+        Require(hsm_collector_get_registration_json(collector.value, 0, &json) == HSM_RESULT_OK && json != nullptr,
+                "registration readable");
+        Require(std::string(json).find("runtime-spike") != std::string::npos, "the recorded registration carries the alert");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
+    // An alert attached AFTER the runtime registration went out re-registers the sensor, so the
+    // server still ends with the alert.
+    void NativeHttpAlertAttachedAfterRuntimeRegistrationReRegisters()
+    {
+        hsm::test::HttpRecordingServer server;
+        CollectorHandle collector = CreateCollector(StopDrainOptions(server.Port(), 20));
+        hsm_collector_test_install_http_sender(collector.value);
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "runtime/late-alert");
+        Require(WaitForRequestWith(server, "/api/sensors/commands", { "\"Path\":\"runtime/late-alert\"" }) >= 0,
+                "the runtime sensor must be registered");
+        Require(FirstRequestWith(server, "/api/sensors/commands", { "runtime-spike" }) < 0,
+                "no alert yet");
+
+        Require(hsm_sensor_attach_alert(sensor.value, RuntimeTestAlert(collector.value)) == HSM_RESULT_OK, "attach");
+        Require(WaitForRequestWith(server, "/api/sensors/commands", { "\"Path\":\"runtime/late-alert\"", "runtime-spike" }) >= 0,
+                "the late alert must re-register the sensor");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        // Exactly one runtime registration and one re-registration: a posted, unchanged
+        // registration is never sent again.
+        Require(server.CountPath("/api/sensors/commands") == 2, "one runtime registration and one re-registration");
     }
 #endif
 
@@ -7525,6 +7632,8 @@ namespace
             { "native_http_stop_is_bounded_against_hung_server", [](const std::string&) { NativeHttpStopIsBoundedAgainstHungServer(); } },
             { "native_http_dispose_is_bounded_against_hung_server", [](const std::string&) { NativeHttpDisposeIsBoundedAgainstHungServer(); } },
             { "native_http_stop_start_stop_delivers", [](const std::string&) { NativeHttpStopStartStopDelivers(); } },
+            { "native_http_registers_sensors_created_while_running", [](const std::string&) { NativeHttpRegistersSensorsCreatedWhileRunning(); } },
+            { "native_http_alert_after_runtime_registration_reregisters", [](const std::string&) { NativeHttpAlertAttachedAfterRuntimeRegistrationReRegisters(); } },
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },

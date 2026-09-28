@@ -2149,41 +2149,80 @@ namespace
         hsm_sensor_type_t Type() const;
         bool IsLastValue() const;
 
-        // Immutable after creation: set under the collector lock before the sensor is
-        // published into the registry, so it is safe to read under the collector lock
-        // without taking the sensor lock (the lock order stays one-way).
-        void SetRegistrationJson(std::string json) { registration_json_ = std::move(json); }
-        const std::string& RegistrationJson() const { return registration_json_; }
+        // The registration inputs and text are guarded by registration_mutex_, a leaf lock (nothing
+        // is ever acquired while holding it): AttachAlert may rebuild them while the collector runs
+        // (a sensor created at runtime gets its alerts right after its create call), concurrently
+        // with the Start snapshot and the worker's registration post reading them.
+        std::string RegistrationJson() const
+        {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            return registration_json_;
+        }
 
         // Store the registration inputs (full sensor path + options) and build the internal
         // registration text. Keeping the inputs lets AttachAlert rebuild the payload in place.
         void SetRegistration(std::string sensor_path, hsm_sensor_type_t type, RegistrationOptions options)
         {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
             registration_path_ = std::move(sensor_path);
             registration_type_ = type;
             registration_options_ = std::move(options);
             registration_json_ = BuildRegistrationJson(registration_path_, registration_type_, registration_options_);
+            ++registration_version_;
         }
 
-        // Attach a built alert and rebuild the registration. Must run before the registration is
-        // emitted (pre-Start, or pre-create-while-running). A TTL alert (IfInactivityPeriodIs) goes
-        // to TtlAlerts and drives TTLs; every other alert goes to Alerts.
+        // Attach a built alert and rebuild the registration. A TTL alert (IfInactivityPeriodIs) goes
+        // to TtlAlerts and drives TTLs; every other alert goes to Alerts. Before Start the rebuilt
+        // registration is what Start emits; while the collector runs, the caller (the ABI entry)
+        // has the collector re-emit it (NativeCollector::OnRegistrationChanged).
         hsm_result_t AttachAlert(const AlertData& alert)
         {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
             if (alert.kind == HSM_ALERT_KIND_TTL)
                 registration_options_.ttl_alerts.push_back(alert);
             else
                 registration_options_.alerts.push_back(alert);
 
             registration_json_ = BuildRegistrationJson(registration_path_, registration_type_, registration_options_);
+            ++registration_version_;
             return HSM_RESULT_OK;
         }
 
         // Real wire (System.Text.Json) registration payload, built on demand from the stored inputs.
         std::string WireRegistrationJson() const
         {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
             return BuildWireRegistrationJson(registration_path_, registration_type_, registration_options_);
         }
+
+        // The wire payload together with the registration version it reflects, so a successful
+        // post can record exactly what the server has seen (MarkRegistrationPosted).
+        std::pair<std::string, uint64_t> WireRegistrationSnapshot() const
+        {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            return { BuildWireRegistrationJson(registration_path_, registration_type_, registration_options_),
+                     registration_version_ };
+        }
+
+        void MarkRegistrationPosted(uint64_t version)
+        {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            posted_registration_version_ = (std::max)(posted_registration_version_, version);
+        }
+
+        // Whether the server has not yet seen the current registration (a runtime create, or an
+        // alert attached after the last post).
+        bool RegistrationPostPending() const
+        {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            return posted_registration_version_ < registration_version_;
+        }
+
+        // The sensor's slot in the collector's recorded registrations for the current run; only
+        // read and written under the collector lock. SIZE_MAX = not recorded in this run yet.
+        size_t registration_index_ = (std::numeric_limits<size_t>::max)();
+
+        std::shared_ptr<NativeCollector> OwningCollector() const { return collector_.lock(); }
 
         // Periodic scheduling clock (issue #1095 §13). Set under the collector lock at
         // registration; the periodic due-time and rate elapsed read through it so a test
@@ -2387,10 +2426,13 @@ namespace
         std::string file_name_;
         std::string file_extension_;
 
+        mutable std::mutex registration_mutex_;
         std::string registration_json_;
         std::string registration_path_;
         hsm_sensor_type_t registration_type_ = HSM_SENSOR_TYPE_INT;
         RegistrationOptions registration_options_;
+        uint64_t registration_version_ = 0;
+        uint64_t posted_registration_version_ = 0;
     };
 
     class NativeCollector : public std::enable_shared_from_this<NativeCollector>
@@ -2451,6 +2493,24 @@ namespace
             SetClock(std::make_shared<ManualClock>(base_ms, base_ms));
         }
 
+        // A sensor's registration was rebuilt (an alert attached). Before Start nothing is needed —
+        // Start records and posts the current payload. While the collector runs, the sensor's
+        // registration for this run is re-recorded in place (so a runtime-created sensor records
+        // ONE registration that carries its alerts, as the managed collector's does) and, on the
+        // live transport, queued for the server again.
+        void OnRegistrationChanged(const std::shared_ptr<NativeSensor>& sensor)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (!CanStartNewSensorsLocked())
+                return;
+            if (sensor->registration_index_ < registrations_.size())
+                registrations_[sensor->registration_index_] = sensor->RegistrationJson();
+#if defined(HSM_COLLECTOR_HTTP)
+            if (send_wire_)
+                QueueRuntimeRegistration(sensor);
+#endif
+        }
+
 #if defined(HSM_COLLECTOR_HTTP)
         // Public live transport (HTTP build): swap the in-memory recording sender for a real libcurl
         // POST to the server's batch /list route, and switch payloads to the .NET server WIRE format
@@ -2475,20 +2535,27 @@ namespace
         // "Type":0 Command discriminator the server's CommandRequestBaseDeserializationConverter
         // keys on. Best-effort: a failure is logged and Start proceeds (values would fail too if the
         // server is unreachable; the value queue's durable retry handles a transient outage).
-        // `runtime` = a sensor registered lazily AFTER Start (top-CPU process, network interface,
-        // service-status, TCP-rate) rather than the connect-time batch. It changes the log label
-        // (no "on connect") and level (Debug, so per-sample registrations do not spam the log).
-        void PostRegistrationsWire(const std::vector<std::shared_ptr<NativeSensor>>& sensors, bool runtime = false)
+        // `runtime` = a sensor registered AFTER Start — a built-in lazy source (top-CPU process,
+        // network interface, service-status, TCP-rate) or any sensor the host creates, or attaches
+        // an alert to, while the collector runs (FlushRuntimeRegistrations) — rather than the
+        // connect-time batch. It changes the log label (no "on connect") and level (Debug, so
+        // per-sample registrations do not spam the log). Returns whether the server accepted it;
+        // each sensor then records the registration version the server has seen.
+        bool PostRegistrationsWire(const std::vector<std::shared_ptr<NativeSensor>>& sensors, bool runtime = false)
         {
             if (sensors.empty())
-                return;
+                return true;
 
+            std::vector<uint64_t> versions;
+            versions.reserve(sensors.size());
             std::string body = "[";
             for (size_t i = 0; i < sensors.size(); ++i)
             {
                 if (i != 0)
                     body += ',';
-                body += sensors[i]->WireRegistrationJson();
+                auto snapshot = sensors[i]->WireRegistrationSnapshot();
+                body += snapshot.first;
+                versions.push_back(snapshot.second);
             }
             body += "]";
 
@@ -2498,7 +2565,20 @@ namespace
                 { "Content-Type", "application/json" },
             };
 
-            const auto response = http_transport_->Post(endpoints_.CommandsList(), body, headers);
+            // Inside the stop drain (a runtime registration flushed before the last values) the post
+            // gets only what is left of the stop budget, like the drain's value sends (#1432).
+            int64_t timeout_ms = request_timeout_ms_;
+            if (stop_drain_active_)
+            {
+                const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                           stop_drain_deadline_ - std::chrono::steady_clock::now())
+                                           .count();
+                if (remaining <= 0)
+                    return false;
+                timeout_ms = (std::min<int64_t>)(timeout_ms, remaining);
+            }
+
+            const auto response = http_transport_->Post(endpoints_.CommandsList(), body, headers, timeout_ms);
             // Name a single sensor by path; the connect batch by count.
             const std::string what = sensors.size() == 1 ? "sensor " + sensors.front()->Path()
                                                          : std::to_string(sensors.size()) + " sensor(s)";
@@ -2510,11 +2590,53 @@ namespace
                                                ? "HTTP " + std::to_string(response.status_code)
                                                : (response.error.empty() ? "no response" : response.error);
                 LogError("Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason);
+                return false;
             }
-            else if (runtime)
+
+            for (size_t i = 0; i < sensors.size(); ++i)
+                sensors[i]->MarkRegistrationPosted(versions[i]);
+            if (runtime)
                 LogMessage(HSM_LOG_LEVEL_DEBUG, "Registered " + what + ".");
             else
                 LogMessage(HSM_LOG_LEVEL_INFO, "Registered " + what + " on connect.");
+            return true;
+        }
+
+        // Queue a sensor whose registration the server has not seen yet: created, or given an
+        // alert, while the collector runs. The worker posts the queue at its next dispatch cycle,
+        // before that cycle's values — the native counterpart of the managed command queue, which
+        // sends a runtime AddOrUpdate on its own package period. Deferring to the cycle (instead of
+        // posting inside the create call) lets a host attach alerts right after creating the sensor
+        // and still register once, alerts included; an alert attached after the post re-queues the
+        // sensor, so the server always ends with the full registration. pending_registrations_mutex_
+        // is a leaf lock (taken under mutex_ from RegisterSensorLocked).
+        void QueueRuntimeRegistration(const std::shared_ptr<NativeSensor>& sensor)
+        {
+            std::lock_guard<std::mutex> guard(pending_registrations_mutex_);
+            for (const auto& pending : pending_registrations_)
+                if (pending == sensor)
+                    return;
+            pending_registrations_.push_back(sensor);
+        }
+
+        // Post every queued registration the server has not seen (worker cycle / stop drain). A
+        // failed post re-queues them for the next cycle; the failure itself is logged (dedup'd).
+        void FlushRuntimeRegistrations()
+        {
+            std::vector<std::shared_ptr<NativeSensor>> pending;
+            {
+                std::lock_guard<std::mutex> guard(pending_registrations_mutex_);
+                pending.swap(pending_registrations_);
+            }
+            std::vector<std::shared_ptr<NativeSensor>> due;
+            for (auto& sensor : pending)
+                if (sensor->RegistrationPostPending())
+                    due.push_back(std::move(sensor));
+            if (due.empty())
+                return;
+            if (!PostRegistrationsWire(due, /*runtime=*/true))
+                for (const auto& sensor : due)
+                    QueueRuntimeRegistration(sensor);
         }
 #endif
 
@@ -2650,6 +2772,7 @@ namespace
                 for (const auto& sensor : sensors_)
                 {
                     sensors_snapshot.push_back(sensor.second);
+                    sensor.second->registration_index_ = registrations_.size();
                     registrations_.push_back(sensor.second->RegistrationJson());
                 }
 
@@ -4181,7 +4304,15 @@ namespace
 
             if (CanStartNewSensorsLocked())
             {
+                sensor->registration_index_ = registrations_.size();
                 registrations_.push_back(sensor->RegistrationJson());
+#if defined(HSM_COLLECTOR_HTTP)
+                // Created while running: the Start batch has already gone, so the server learns
+                // of this sensor from the worker's next cycle (the managed collector registers a
+                // runtime sensor through its command queue the same way).
+                if (send_wire_)
+                    QueueRuntimeRegistration(sensor);
+#endif
 
                 // A periodic sensor created while running must post immediately: nudge the
                 // scheduler so it re-reads the due-time instead of waiting out its current sleep.
@@ -5102,6 +5233,18 @@ namespace
                     break;
 
                 dispatch_kick_ = false;
+#if defined(HSM_COLLECTOR_HTTP)
+                // Runtime registrations first, so the server knows a new sensor before its values.
+                // The queue lock is released around the POST, as around every send.
+                if (send_wire_)
+                {
+                    lock.unlock();
+                    FlushRuntimeRegistrations();
+                    lock.lock();
+                    if (worker_stop_)
+                        break;
+                }
+#endif
                 DispatchQueuedLocked(lock, /*clear_remainder_on_failure=*/false);
             }
         }
@@ -5138,6 +5281,13 @@ namespace
                 }
                 ~DrainWindow() { owner.stop_drain_active_ = false; }
             } drain_window(*this, terminal);
+
+#if defined(HSM_COLLECTOR_HTTP)
+            // A sensor created (or given an alert) since the worker's last cycle is registered
+            // before the drain sends its values; inside the drain window, so it is bounded too.
+            if (send_wire_)
+                FlushRuntimeRegistrations();
+#endif
 
             size_t dropped = 0;
             {
@@ -5471,6 +5621,9 @@ namespace
 #if defined(HSM_COLLECTOR_HTTP)
         std::unique_ptr<hsm::http::HttpTransport> http_transport_;
         hsm::http::Endpoints endpoints_;
+        // Runtime registrations awaiting the worker's next cycle (QueueRuntimeRegistration).
+        std::mutex pending_registrations_mutex_;
+        std::vector<std::shared_ptr<NativeSensor>> pending_registrations_;
 #endif
 
         // Periodic scheduler (issue #1095 §13): a single ScheduledTask worker that sleeps
@@ -7778,7 +7931,16 @@ hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert)
     if (sensor == nullptr || alert == nullptr)
         return HSM_RESULT_INVALID_ARGUMENT;
 
-    return sensor->impl->AttachAlert(*reinterpret_cast<AlertData*>(alert));
+    const hsm_result_t result = sensor->impl->AttachAlert(*reinterpret_cast<AlertData*>(alert));
+    // A sensor created while the collector runs is registered by the worker's next cycle; an alert
+    // attached now (typically right after the create call) rides that registration, or — if it
+    // already went out — re-registers the sensor, so a runtime sensor carries its alerts too.
+    if (result == HSM_RESULT_OK)
+    {
+        if (const auto collector = sensor->impl->OwningCollector())
+            collector->OnRegistrationChanged(sensor->impl);
+    }
+    return result;
 }
 
 // Test-only: the wire (System.Text.Json) registration payload of a built sensor, including any

@@ -1034,7 +1034,7 @@ pub(crate) mod tests {
             .into_iter()
             .find(|json| json.contains("Docker/gitea/db/Service status"))
             .expect("gitea/db registered at runtime");
-        assert!(status.contains("\"EnumOptions\":[{"), "{status}");
+        assert!(status.contains("$operation Running"), "{status}");
     }
 
     /// The garage tree primed before Start: everything registers in the Start batch.

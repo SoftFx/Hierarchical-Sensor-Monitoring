@@ -57,14 +57,18 @@ impl<'c> RawSensor<'c> {
             ));
         }
         self.collector.with_registration_lock(|| {
-            // The ABI rebuilds the registration payload in place and does no locking of its own;
-            // it is emitted at Start. Attaching to a started collector would silently register the
-            // sensor WITHOUT the alert (until a restart), so it is refused instead (rule #8).
-            if self.collector.status() != CollectorStatus::Stopped {
+            // Before Start the rebuilt registration is what Start emits. While the collector runs
+            // (collector >= 0.9.1) the ABI re-records it and re-posts it on the live transport, so
+            // a sensor created at runtime gets its alerts too. Only a collector on its way down
+            // (Stopping/Disposed) is refused: there the alert could never reach the server.
+            if !matches!(
+                self.collector.status(),
+                CollectorStatus::Stopped | CollectorStatus::Starting | CollectorStatus::Running
+            ) {
                 return Err(Error::from_code(
                     "attach alert",
                     sys::HSM_RESULT_INVALID_STATE,
-                    "alerts must be attached before the collector starts".into(),
+                    "alerts cannot be attached while the collector stops".into(),
                 ));
             }
             // SAFETY: both handles are live (borrowed from the same collector), and the lock
@@ -84,9 +88,10 @@ macro_rules! attachable {
     ($($name:ident),* $(,)?) => {
         $(
             impl $name<'_> {
-                /// Attach a built alert to this sensor's registration. Must run while the collector
-                /// is stopped (before [`Collector::start`]); the same alert may be attached to
-                /// several sensors.
+                /// Attach a built alert to this sensor's registration: before [`Collector::start`], or
+                /// while it runs (collector >= 0.9.1 re-registers the sensor with the alert — the
+                /// way to give a sensor created at runtime its alerts). Refused while the collector
+                /// stops. The same alert may be attached to several sensors.
                 pub fn attach_alert(&self, alert: &Alert<'_>) -> Result<()> {
                     self.0.attach_alert(alert)
                 }
