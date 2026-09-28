@@ -12,5 +12,12 @@
     "directory": "/var/log/hsm-linux-probe",
     "level": "info"
   },
+  "probe": {
+    "hostSensors": {
+      "enabled": true,
+      "cpuTemperature": true,
+      "disk": true
+    }
+  },
   "shutdownTimeoutSec": 10
 }

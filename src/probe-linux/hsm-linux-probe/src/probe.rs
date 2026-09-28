@@ -4,10 +4,13 @@
 //! collector: build options -> install the log sink -> select the transport -> install the metric
 //! sources -> register sensors -> start.
 //!
-//! In this phase the probe registers exactly the sensor set the managed HSMDataCollector registers
-//! on Linux (`UnixSensorsCollection.AddAllDefaultSensors`) and nothing of its own; the parity
-//! contract is the table in `src/probe-linux/README.md`. Probe-only sources (Docker, disks,
-//! backups) come in later workstreams.
+//! The probe registers two separately pinned sets:
+//!
+//! * the **parity set** — exactly what the managed HSMDataCollector registers on Linux
+//!   (`UnixSensorsCollection.AddAllDefaultSensors`); the contract is the parity table in
+//!   `src/probe-linux/README.md`;
+//! * the **probe-only set** — sensors that exist only in this probe, never in the shared catalog
+//!   (`crate::probe_only`; README "Probe-only sensors").
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -19,6 +22,7 @@ use hsm_collector::{
 
 use crate::config::Config;
 use crate::logging::{self, Logger};
+use crate::probe_only::{self, HostEnvironment, StopSignal};
 use crate::secret::{self, Secret};
 use crate::shutdown;
 
@@ -32,6 +36,13 @@ const TICK: Duration = Duration::from_millis(200);
 pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::error::Error>> {
     let collector = build_collector(config, Arc::clone(&logger))?;
     let product_version = register_sensors(&collector, &logger);
+    // After the parity set and before Start: their alerts are part of the registration.
+    let mut probe_only_sources = probe_only::register(
+        &collector,
+        &config.probe,
+        &HostEnvironment::system(),
+        &logger,
+    );
 
     logger.info(format!(
         "starting: collector {} -> {}:{} (module '{}', computer '{}')",
@@ -53,10 +64,36 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
         post_product_version(sensor, VersionEvent::Start, &logger);
     }
 
-    // Sampling, queuing and sending are the collector's own threads; the main thread only waits.
-    while !shutdown::is_requested() {
-        std::thread::sleep(TICK);
-    }
+    // The shared catalog is sampled, queued and sent by the collector's own threads. Each
+    // probe-only source gets a thread of its own (so one hung read cannot stall another), started
+    // only now: a value posted before Start would be dropped. The main thread only waits, and the
+    // scope joins the source threads before the collector is stopped.
+    let stop_sources = StopSignal::new();
+    let source_count = probe_only_sources.len();
+    std::thread::scope(|scope| {
+        for source in probe_only_sources.iter_mut() {
+            let (stop, logger) = (&stop_sources, &logger);
+            let name = source.name();
+            let spawned = std::thread::Builder::new()
+                .name(format!("probe-{}", name.replace(' ', "-")))
+                .spawn_scoped(scope, move || {
+                    probe_only::run_source(source.as_mut(), stop, logger)
+                });
+            if let Err(error) = spawned {
+                logger.error(format!(
+                    "cannot start the '{name}' probe-only source thread: {error}"
+                ));
+            }
+        }
+        if source_count > 0 {
+            logger.info(format!("{source_count} probe-only source(s) running"));
+        }
+
+        while !shutdown::is_requested() {
+            std::thread::sleep(TICK);
+        }
+        stop_sources.request();
+    });
 
     // Before Stop, so the value is still accepted and goes out with the stop drain — as the
     // managed ProductVersionSensor.StopAsync does.
@@ -260,6 +297,7 @@ fn parse_version(text: &str) -> (i32, i32, Option<i32>, Option<i32>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::ProbeConfig;
     use crate::logging::Level;
 
     fn test_collector(port: u16) -> Collector {
@@ -274,6 +312,19 @@ mod tests {
     /// — the `/commands` registration batch. No transport is installed, so the in-memory sender
     /// receives it and nothing leaves the test.
     fn registered_paths() -> Vec<String> {
+        registered_paths_with(&ProbeConfig::default(), false)
+    }
+
+    fn path_of(json: &str) -> Option<String> {
+        let start = json.find("\"Path\":\"")? + "\"Path\":\"".len();
+        let end = json[start..].find('"')? + start;
+        Some(json[start..end].to_string())
+    }
+
+    /// The registration JSON of every sensor the probe registers — the parity set, plus the
+    /// probe-only set against a fake host (a coretemp package sensor and a mounted target) when
+    /// `with_probe_only` is set, so the result does not depend on the machine running the test.
+    fn registrations_with(config: &ProbeConfig, with_probe_only: bool) -> Vec<String> {
         let collector = test_collector(1);
         let logger = Logger::new(Level::Error, None);
         let version = register_sensors(&collector, &logger);
@@ -281,21 +332,73 @@ mod tests {
             version.is_some(),
             "the product version sensor must register"
         );
+        let host = FakeHost::new();
+        let sources = if with_probe_only {
+            probe_only::register(&collector, config, &host.environment(), &logger)
+        } else {
+            Vec::new()
+        };
         collector.start().expect("start");
         let registrations = collector.registrations();
         collector.stop().expect("stop");
+        drop(sources);
+        registrations
+    }
 
-        let mut paths: Vec<String> = registrations
+    fn registered_paths_with(config: &ProbeConfig, with_probe_only: bool) -> Vec<String> {
+        let mut paths: Vec<String> = registrations_with(config, with_probe_only)
             .iter()
-            .filter_map(|json| {
-                let start = json.find("\"Path\":\"")? + "\"Path\":\"".len();
-                let end = json[start..].find('"')? + start;
-                Some(json[start..end].to_string())
-            })
+            .filter_map(|json| path_of(json))
             .collect();
         paths.sort();
         paths
     }
+
+    /// A fake host for the probe-only sources: sysfs with a coretemp package sensor, a mountinfo
+    /// whose root mount holds the disk target, and fixed statvfs/sysconf answers.
+    struct FakeHost {
+        tree: crate::probe_only::host::tests::FakeTree,
+    }
+
+    impl FakeHost {
+        fn new() -> Self {
+            let tree = crate::probe_only::host::tests::FakeTree::new("host");
+            tree.file("sys/class/hwmon/hwmon0/name", "coretemp\n");
+            tree.file("sys/class/hwmon/hwmon0/temp1_label", "Package id 0\n");
+            tree.file("sys/class/hwmon/hwmon0/temp1_input", "43000\n");
+            tree.file(
+                "mountinfo",
+                "22 1 8:33 / / rw,relatime shared:1 - ext4 /dev/sdc1 rw\n",
+            );
+            Self { tree }
+        }
+
+        fn environment(&self) -> HostEnvironment {
+            HostEnvironment {
+                sys_root: self.tree.0.join("sys"),
+                mountinfo: self.tree.0.join("mountinfo"),
+                disk_target: self.tree.0.clone(),
+                statvfs: |_| {
+                    Ok(crate::probe_only::disk::FsStats {
+                        blocks: 1000,
+                        blocks_available: 400,
+                        files: 100,
+                        files_available: 90,
+                    })
+                },
+                online_cpus: || Ok(4),
+            }
+        }
+    }
+
+    /// Sensors that exist only in this probe (README "Probe-only sensors"; owner decisions of
+    /// 2026-09-24): computer-level, so they sit under `<computer>/.computer/`, not the module.
+    const PROBE_ONLY_SET: &[&str] = &[
+        "garage-server/.computer/CPU temperature",
+        "garage-server/.computer/Disks monitoring/Free inodes %",
+        "garage-server/.computer/Disks monitoring/Free space on disk %",
+        "garage-server/.computer/Logical cores",
+    ];
 
     /// The module set: managed `AddAllModuleSensors` minus `Process ThreadPool thread count`
     /// (a CLR concept) and minus the metric-fed process sensors, which register only when
@@ -336,6 +439,115 @@ mod tests {
         expected.sort_unstable();
 
         assert_eq!(registered_paths(), expected);
+    }
+
+    fn parity_set() -> Vec<&'static str> {
+        #[allow(unused_mut)]
+        let mut expected: Vec<&str> = MODULE_SET.to_vec();
+        #[cfg(feature = "linux-default-sensors")]
+        expected.extend_from_slice(METRIC_FED_SET);
+        expected
+    }
+
+    #[test]
+    fn the_registered_set_is_the_parity_set_plus_the_probe_only_set() {
+        // The second pinned contract: nothing more, nothing less. A probe-only sensor added
+        // without updating PROBE_ONLY_SET (and the README table), or one that stops registering,
+        // fails here — and so does a probe-only path that collides with the parity set.
+        let mut expected = parity_set();
+        expected.extend_from_slice(PROBE_ONLY_SET);
+        expected.sort_unstable();
+        let registered = registered_paths_with(&ProbeConfig::default(), true);
+        assert_eq!(registered, expected);
+
+        let parity = parity_set();
+        assert!(
+            PROBE_ONLY_SET.iter().all(|path| !parity.contains(path)),
+            "a probe-only sensor must never shadow a parity sensor"
+        );
+    }
+
+    #[test]
+    fn host_sensors_switch_off_as_configured() {
+        let mut config = ProbeConfig::default();
+        config.host_sensors.enabled = false;
+        let mut parity = parity_set();
+        parity.sort_unstable();
+        assert_eq!(registered_paths_with(&config, true), parity);
+
+        let mut config = ProbeConfig::default();
+        config.host_sensors.cpu_temperature = false;
+        config.host_sensors.disk = false;
+        let mut expected = parity_set();
+        expected.push("garage-server/.computer/Logical cores");
+        expected.sort_unstable();
+        assert_eq!(registered_paths_with(&config, true), expected);
+    }
+
+    #[test]
+    fn probe_only_sensors_register_their_agreed_shape_and_alerts() {
+        let registrations = registrations_with(&ProbeConfig::default(), true);
+        let find = |path: &str| {
+            registrations
+                .iter()
+                .find(|json| path_of(json).as_deref() == Some(path))
+                .unwrap_or_else(|| panic!("{path} not registered"))
+                .clone()
+        };
+        let contains_all = |json: &str, parts: &[&str]| {
+            for part in parts {
+                assert!(json.contains(part), "missing {part} in {json}");
+            }
+        };
+
+        // Int, 48 h TTL, no alert.
+        contains_all(
+            &find("garage-server/.computer/Logical cores"),
+            &[
+                "\"SensorType\":1,",
+                "\"TTLTicks\":[1728000000000]",
+                "\"Alerts\":null",
+                "\"IsSingletonSensor\":true",
+            ],
+        );
+        // DoubleBar, no unit (°C has no code), Mean > 80 warning band + Mean > 90 error.
+        contains_all(
+            &find("garage-server/.computer/CPU temperature"),
+            &[
+                "\"SensorType\":5,",
+                "\"OriginalUnit\":null",
+                "{\"Combination\":0,\"Operation\":2,\"Property\":103,\"Target\":{\"Type\":0,\"Value\":\"80\"}},\
+                 {\"Combination\":0,\"Operation\":0,\"Property\":103,\"Target\":{\"Type\":0,\"Value\":\"90\"}}],\
+                 \"Status\":1,",
+                "\"Conditions\":[{\"Combination\":0,\"Operation\":2,\"Property\":103,\
+                 \"Target\":{\"Type\":0,\"Value\":\"90\"}}],\"Status\":3,",
+                "\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true",
+            ],
+        );
+        // Double, Percents, < 10 warning band + < 5 error.
+        contains_all(
+            &find("garage-server/.computer/Disks monitoring/Free space on disk %"),
+            &[
+                "\"SensorType\":2,",
+                "\"OriginalUnit\":100,",
+                "{\"Combination\":0,\"Operation\":1,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"10\"}},\
+                 {\"Combination\":0,\"Operation\":3,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"5\"}}],\
+                 \"Status\":1,",
+                "\"Conditions\":[{\"Combination\":0,\"Operation\":1,\"Property\":20,\
+                 \"Target\":{\"Type\":0,\"Value\":\"5\"}}],\"Status\":3,",
+            ],
+        );
+        // Double, Percents, < 10 warning only.
+        let inodes = find("garage-server/.computer/Disks monitoring/Free inodes %");
+        contains_all(
+            &inodes,
+            &[
+                "\"OriginalUnit\":100,",
+                "\"Conditions\":[{\"Combination\":0,\"Operation\":1,\"Property\":20,\
+                 \"Target\":{\"Type\":0,\"Value\":\"10\"}}],\"Status\":1,",
+            ],
+        );
+        assert!(!inodes.contains("\"Status\":3"), "{inodes}");
     }
 
     #[test]
