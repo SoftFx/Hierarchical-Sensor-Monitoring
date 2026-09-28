@@ -12,11 +12,14 @@ Architecture and rationale: [`docs/initiatives/linux-docker-probe.md`](../../doc
 shared collector, conformance-locked against the managed one (root `CLAUDE.md` rules #9/#10); a
 probe-local reimplementation would be a permanent semantic/wire divergence.
 
-**Phase 1 — parity first.** The probe registers exactly the sensor set the managed HSMDataCollector
-registers on Linux (`UnixSensorsCollection.AddAllDefaultSensors`: computer set + module set) and
-nothing of its own. Probe-only signals — Docker (#1416), disks and backups (#1417) — come later, and
-will go through the collector's public sensor API so wire format, queuing, batching, retry and TLS
-stay the library's.
+**Two sets, pinned separately.** The probe registers exactly the sensor set the managed
+HSMDataCollector registers on Linux (`UnixSensorsCollection.AddAllDefaultSensors`: computer set +
+module set — the [parity contract](#parity-contract)), **plus** a set of
+[probe-only sensors](#probe-only-sensors) agreed one by one with the owner. Probe-only sensors
+exist only here — never in the shared collector catalog, never on Windows — and go through the
+collector's public sensor API, so wire format, queuing, batching, retry and TLS stay the library's;
+only the acquisition (a sysfs read, a `statvfs`) and the schedule live in the probe. The Docker
+source (#1416) and the archive/backup part of #1417 are the next probe-only sources.
 
 The process node name is fixed as `.module/Process process`, the same as HsmAgent, so alert
 templates apply across hosts — do not rename it. As in `src/agent`, the process sensors are
@@ -84,15 +87,76 @@ TTL is "none" for every sensor except `Service alive`, which carries the inactiv
   `Stop:` value; managed writes `Start:`/`Stop: dd/MM/yyyy HH:mm:ss`. (The version *value* differs by
   design: the native collector reports its own independent version.)
 
+## Probe-only sensors
+
+Sensors that exist **only in this probe** (owner decisions of 2026-09-24, #1476). They are pinned
+separately from the parity set by
+`probe::tests::the_registered_set_is_the_parity_set_plus_the_probe_only_set` (`PROBE_ONLY_SET`,
+nothing more, nothing less), and their registration shape and alerts by
+`probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. All four are
+computer-level (`is_computer_sensor`), so they sit under `<computer>/.computer/…`.
+
+| Path | Type · unit | Period | Alerts (registered with the sensor) | Source | Records/day |
+|---|---|---|---|---|---|
+| `.computer/Logical cores` | Int | at start + every 24 h; TTL 48 h | — | `sysconf(_SC_NPROCESSORS_ONLN)` (what `nproc` shows) | ≈ 2 |
+| `.computer/CPU temperature` | DoubleBar · °C (no `Unit` code exists; said in the description) | a sample every 5 s into a 5-min bar (60 samples) | Mean in (80, 90] → warning; Mean > 90 → **Error** | rule below | 288 |
+| `.computer/Disks monitoring/Free space on disk %` | Double · Percents | every 5 min | value in [5, 10) → warning; value < 5 → **Error** | `statvfs`: `f_bavail / f_blocks` of the mount holding `/srv/docker` | 288 |
+| `.computer/Disks monitoring/Free inodes %` | Double · Percents | every 5 min | value < 10 → warning | `statvfs`: `f_favail / f_files`, same mount | 288 |
+
+**Alert semantics.** Every alert notifies (the managed "instant hourly" schedule: the first
+notification at once, repeats hourly while it holds — the same action as the managed default
+alerts). HSM alerts can only raise a sensor to **Error**; the server offers no "set Warning" action
+and neither does the managed alert DSL. So a *warning* is the notification with the ⚠ icon and no
+status change — exactly like the managed Total CPU / Free RAM alerts — and an *error* also sets the
+sensor to Error. The warning bands stop where the error band starts, so a single reading never
+sends both.
+
+**CPU temperature source rule** (deterministic, first match wins; `probe_only/host.rs`): hwmon
+`coretemp` `temp<N>_input` whose label is exactly `Package id 0` → `/sys/class/thermal` zone of type
+`x86_pkg_temp` → the first thermal zone whose type contains `cpu`. Directories are visited in
+numeric order. Millidegrees → °C. Only the `name`/`type`/`label` attributes of other devices are read,
+never their inputs (a `drivetemp` input would wake a sleeping disk). With no source the sensor is
+**not registered** (one INFO line). A failed read skips the sample — never a 0 °C — and is logged
+once until it recovers.
+
+**Disk mount rule** (`probe_only/disk.rs`): the mount whose mount point is the longest
+component-wise prefix of the canonical `/srv/docker` in `/proc/self/mountinfo` (the top one when
+mounts are stacked; a missing target is walked up to its nearest existing ancestor). Resolved once
+at registration and logged. The shared collector's `Free space on disk` always reports
+`statvfs("/")` (it mirrors the managed `UnixDiskInfo`); where `/srv/docker` is on the root
+filesystem — garage-server — both describe the same mount, and the log says so; where it is not,
+the probe logs that the two differ. Only that one mount is ever `statvfs`'d; a filesystem without
+an inode count (`f_files == 0`) gets no inode sensor.
+
+**Isolation.** Each source runs on its own thread (a hung `statvfs` cannot stall the temperature
+samples), every sample runs under `catch_unwind`, and nothing is posted before the collector starts.
+
+**Configuration** — `probe.hostSensors` (all default `true`, so a config written before these
+sensors existed turns them on): `enabled` switches off all four; `cpuTemperature` and `disk` switch
+off one source each. `Logical cores` has no switch of its own.
+
+**Seam for the Docker source (#1416):** a `probe_only::docker` module registering under
+`Docker/<project>/<service>/…` and returning its `Source`s to `probe_only::register`.
+
 ## Crate layout
 
 ```
 src/probe-linux/
   hsm-collector-sys/   raw FFI declarations for the ABI subset the probe uses + the CMake build
-  hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, log sink
+  hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, alerts, log sink
   hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, sensor registration
-  packaging/           systemd unit sample + config skeleton
+    src/probe_only/    probe-only sources (host.rs, disk.rs) and their per-source threads
+  packaging/           systemd unit, config skeleton, maintainer scripts, build-deb.sh
 ```
+
+**Alerts in the wrapper.** `Collector::alert(AlertKind)` returns an `AlertBuilder` (conditions,
+notification / scheduled notification, icon, `sensor_error`, confirmation / inactivity period,
+`disabled`, `build`); every sensor handle has `attach_alert(&Alert)`. An alert is part of the
+sensor's registration, which the collector emits at Start, so `attach_alert` is refused unless the
+collector is stopped — a late attach would otherwise register the sensor without its alert and
+nobody would notice. `instant_hourly_schedule_anchor()` reproduces the managed
+`ThenSendInstantHourlyScheduledNotification`. `Collector::enum_sensor_with_options` registers an
+enum sensor with both its options and `SensorOptions` (the `Service status` shape; collector 0.9.0).
 
 `hsm-collector-sys/build.rs` configures and builds `src/native/collector` with CMake
 (`HSM_COLLECTOR_HTTP=ON`, the same switch `src/agent` uses), links `hsm_collector_core` statically
@@ -168,6 +232,38 @@ cargo test
 ```
 
 The CI lane `.github/workflows/probe-linux.yml` runs exactly that on `ubuntu-latest`.
+
+### Building the `.deb`
+
+`packaging/build-deb.sh <version>` builds the package reproducibly inside a plain `debian:13`
+container — it installs the build dependencies and rustup itself, builds the release binary with
+`--locked --features linux-default-sensors`, checks that the binary loads no shared library outside
+the fixed `Depends`, and writes `dist/hsm-linux-probe_<version>_amd64.deb`. From the repository
+root on Windows (Git Bash; Docker Desktop):
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/src" -w /src/src/probe-linux \
+    -v hsm-probe-cargo:/root/.cargo debian:13 bash packaging/build-deb.sh 0.2.0~trial1
+```
+
+On Linux drop `MSYS_NO_PATHCONV=1` and use `$(pwd)`. The `hsm-probe-cargo` volume is optional; it
+caches the toolchain and crates between runs. The version is a parameter: trials use `~trialN`,
+which sorts **below** the plain release (`0.2.0~trial1 < 0.2.0`) and above every `0.1.0~…` —
+check with `dpkg --compare-versions 0.2.0~trial1 gt 0.1.0~trial3`.
+
+The package has the layout of the hand-built `0.1.0~trial*` packages: `/usr/bin/hsm-linux-probe`,
+`/lib/systemd/system/hsm-linux-probe.service` (kept under `/lib`, where the trials put it — moving a
+file between `/lib` and `/usr/lib` across versions is unsafe with dpkg on a merged `/usr`),
+`/etc/hsm-linux-probe/config.json` (a conffile, from `config.example.json`) and the copyright
+file; `Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`. The maintainer scripts
+are `packaging/deb/{postinst,prerm,postrm}`, reconstructed from the trial package: postinst creates
+the `hsm-probe` system user/group and reloads systemd, and on a fresh install does not enable or
+start the unit (`install.sh` does, once config and key are in place); prerm disables it on remove;
+postrm purges `/var/lib` and `/var/log` state. On upgrade prerm stops the unit and, **from 0.2.0 on**,
+leaves a marker in `/run` when it was running, so the new postinst starts it again — an upgrade
+does not end monitoring. (Upgrading *from* a `0.1.0~trial*` package runs that package's old prerm,
+which leaves no marker: start the unit by hand once.) The operator's config survives upgrades
+(`apt-get install -o Dpkg::Options::=--force-confold ./hsm-linux-probe_….deb`).
 
 ## Configuration
 
