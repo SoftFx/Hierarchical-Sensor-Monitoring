@@ -566,11 +566,12 @@ mod tests {
                 "\"IsSingletonSensor\":true",
             ],
         );
-        // DoubleBar, no unit (°C has no code), Mean > 80 warning band + Mean > 90 error.
+        // DoubleBar, 15 min TTL, no unit (°C has no code), Mean > 80 warning band + > 90 error.
         contains_all(
             &find("garage-server/.computer/CPU temperature"),
             &[
                 "\"SensorType\":5,",
+                "\"TTLTicks\":[9000000000]",
                 "\"OriginalUnit\":null",
                 "{\"Combination\":0,\"Operation\":2,\"Property\":103,\"Target\":{\"Type\":0,\"Value\":\"80\"}},\
                  {\"Combination\":0,\"Operation\":0,\"Property\":103,\"Target\":{\"Type\":0,\"Value\":\"90\"}}],\
@@ -580,11 +581,12 @@ mod tests {
                 "\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true",
             ],
         );
-        // Double, Percents, < 10 warning band + < 5 error.
+        // Double, Percents, 15 min TTL, < 10 warning band + < 5 error.
         contains_all(
             &find("garage-server/.computer/Disks monitoring/Free space on disk %"),
             &[
                 "\"SensorType\":2,",
+                "\"TTLTicks\":[9000000000]",
                 "\"OriginalUnit\":100,",
                 "{\"Combination\":0,\"Operation\":1,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"10\"}},\
                  {\"Combination\":0,\"Operation\":3,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"5\"}}],\
@@ -593,11 +595,12 @@ mod tests {
                  \"Target\":{\"Type\":0,\"Value\":\"5\"}}],\"Status\":3,",
             ],
         );
-        // Double, Percents, < 10 warning only.
+        // Double, Percents, 15 min TTL, < 10 warning only.
         let inodes = find("garage-server/.computer/Disks monitoring/Free inodes %");
         contains_all(
             &inodes,
             &[
+                "\"TTLTicks\":[9000000000]",
                 "\"OriginalUnit\":100,",
                 "\"Conditions\":[{\"Combination\":0,\"Operation\":1,\"Property\":20,\
                  \"Target\":{\"Type\":0,\"Value\":\"10\"}}],\"Status\":1,",

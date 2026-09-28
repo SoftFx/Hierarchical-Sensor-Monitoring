@@ -41,6 +41,9 @@ const TEMPERATURE_BAR_PERIOD: Duration = Duration::from_secs(300);
 /// of a custom bar, so the stored record is the closed 5-minute bar.
 const TEMPERATURE_POST_PERIOD: Duration = Duration::from_secs(15);
 const TEMPERATURE_PRECISION: i32 = 1;
+/// Three bar periods: a source that stops producing (a read that keeps failing, a hung thread)
+/// turns the sensor to Timeout on the server instead of leaving the last bar looking fresh.
+const TEMPERATURE_TTL: Duration = Duration::from_secs(3 * 300);
 
 /// Mean over a bar above which the alerts fire, °C.
 const TEMPERATURE_WARNING_ABOVE: &str = "80";
@@ -201,6 +204,7 @@ pub fn register_cpu_temperature<'c>(
 
     let options = SensorOptions::default()
         .with_is_computer_sensor(true)
+        .with_ttl(TEMPERATURE_TTL)
         .with_description(format!(
             "CPU package temperature in °C (the collector has no temperature unit): a 5-minute bar \
              of one sample every 5 s. Source on this host: {}.",

@@ -37,6 +37,9 @@ pub const FREE_SPACE_PATH: &str = ".computer/Disks monitoring/Free space on disk
 pub const FREE_INODES_PATH: &str = ".computer/Disks monitoring/Free inodes %";
 
 const PERIOD: Duration = Duration::from_secs(300);
+/// Three periods: a stuck or failing source turns both sensors to Timeout on the server, so the
+/// low-space alerts cannot silently stop protecting the host.
+const TTL: Duration = Duration::from_secs(3 * 300);
 /// `Unit.Percents` in the managed `Unit` enum.
 const UNIT_PERCENTS: i32 = 100;
 
@@ -334,6 +337,7 @@ fn register_percent_sensor<'c>(
 ) -> Option<DoubleSensor<'c>> {
     let options = SensorOptions::default()
         .with_is_computer_sensor(true)
+        .with_ttl(TTL)
         .with_unit(UNIT_PERCENTS)
         .with_description(description);
     let sensor = match collector.double_sensor(path, &options) {

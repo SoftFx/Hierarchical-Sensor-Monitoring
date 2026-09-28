@@ -96,12 +96,18 @@ nothing more, nothing less), and their registration shape and alerts by
 `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. All four are
 computer-level (`is_computer_sensor`), so they sit under `<computer>/.computer/…`.
 
-| Path | Type · unit | Period | Alerts (registered with the sensor) | Source | Records/day |
-|---|---|---|---|---|---|
-| `.computer/Logical cores` | Int | at start + every 24 h; TTL 48 h | — | `sysconf(_SC_NPROCESSORS_ONLN)` (what `nproc` shows) | ≈ 2 |
-| `.computer/CPU temperature` | DoubleBar · °C (no `Unit` code exists; said in the description) | a sample every 5 s into a 5-min bar (60 samples) | Mean in (80, 90] → warning; Mean > 90 → **Error** | rule below | 288 |
-| `.computer/Disks monitoring/Free space on disk %` | Double · Percents | every 5 min | value in [5, 10) → warning; value < 5 → **Error** | `statvfs`: `f_bavail / f_blocks` of the mount holding `/srv/docker` | 288 |
-| `.computer/Disks monitoring/Free inodes %` | Double · Percents | every 5 min | value < 10 → warning | `statvfs`: `f_favail / f_files`, same mount | 288 |
+| Path | Type · unit | Period | TTL | Alerts (registered with the sensor) | Source | Records/day |
+|---|---|---|---|---|---|---|
+| `.computer/Logical cores` | Int | at start + every 24 h | 48 h | — | `sysconf(_SC_NPROCESSORS_ONLN)` (what `nproc` shows) | ≈ 2 |
+| `.computer/CPU temperature` | DoubleBar · °C (no `Unit` code exists; said in the description) | a sample every 5 s into a 5-min bar (60 samples) | 15 min | Mean in (80, 90] → warning; Mean > 90 → **Error** | rule below | 288 |
+| `.computer/Disks monitoring/Free space on disk %` | Double · Percents | every 5 min | 15 min | value in [5, 10) → warning; value < 5 → **Error** | `statvfs`: `f_bavail / f_blocks` of the mount holding `/srv/docker` | 288 |
+| `.computer/Disks monitoring/Free inodes %` | Double · Percents | every 5 min | 15 min | value < 10 → warning | `statvfs`: `f_favail / f_files`, same mount | 288 |
+
+*Legend:* **warning** = a notification with the ⚠ icon and **no status change**; **Error** = a
+notification that also sets the sensor to Error. **TTL** = three periods (48 h for the daily cores
+value): a source that stops producing — a read that keeps failing, a thread stuck on a hung
+filesystem — turns the sensor to Timeout on the server instead of leaving its last value looking
+fresh.
 
 **Alert semantics.** Every alert notifies (the managed "instant hourly" schedule: the first
 notification at once, repeats hourly while it holds — the same action as the managed default

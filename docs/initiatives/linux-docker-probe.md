@@ -213,9 +213,9 @@ source rules, alert semantics and config in `src/probe-linux/README.md` "Probe-o
 | Path | Type · period | Alert | Source | Records/day |
 |---|---|---|---|---|
 | `.computer/Logical cores` | Int · at start + daily, TTL 48 h | — | `sysconf(_SC_NPROCESSORS_ONLN)` | ≈ 2 |
-| `.computer/CPU temperature` | DoubleBar °C · 5 s samples, 5-min bar | Mean > 80 warning, > 90 Error | hwmon coretemp `Package id 0` → thermal zone `x86_pkg_temp` → first `cpu` zone; not registered without one | 288 |
-| `.computer/Disks monitoring/Free space on disk %` | Double % · 5 min | < 10 warning, < 5 Error | `statvfs` `f_bavail/f_blocks` of the mount holding `/srv/docker` (resolved via `/proc/self/mountinfo`) | 288 |
-| `.computer/Disks monitoring/Free inodes %` | Double % · 5 min | < 10 warning | `statvfs` `f_favail/f_files`, same mount | 288 |
+| `.computer/CPU temperature` | DoubleBar °C · 5 s samples, 5-min bar, TTL 15 min | Mean > 80 warning, > 90 Error | hwmon coretemp `Package id 0` → thermal zone `x86_pkg_temp` → first `cpu` zone; not registered without one | 288 |
+| `.computer/Disks monitoring/Free space on disk %` | Double % · 5 min, TTL 15 min | < 10 warning, < 5 Error | `statvfs` `f_bavail/f_blocks` of the mount holding `/srv/docker` (resolved via `/proc/self/mountinfo`) | 288 |
+| `.computer/Disks monitoring/Free inodes %` | Double % · 5 min, TTL 15 min | < 10 warning | `statvfs` `f_favail/f_files`, same mount | 288 |
 
 "Warning" is a notification with the ⚠ icon and no status change: HSM alerts can only raise
 Error (the server's only status action), exactly like the managed Total CPU / Free RAM alerts.

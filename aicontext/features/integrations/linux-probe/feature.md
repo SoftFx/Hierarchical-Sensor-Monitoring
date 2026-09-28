@@ -75,7 +75,9 @@ Linux is the only supported target. The initiative is
 - **Probe-only sources are isolated.** Each registers its sensors (with their alerts) before Start
   and then samples on a thread of its own, so a read blocked on a hung filesystem cannot stall
   another source; every sample runs under `catch_unwind`; a failed read is skipped and logged
-  once until it recovers — never posted as a value (no 0 for "unknown"). Registration-time
+  once until it recovers — never posted as a value (no 0 for "unknown"). So that a source which
+  stops producing is visible on the server, every probe-only sensor carries a TTL of three periods
+  (15 min for the 5-minute sensors, 48 h for the daily `Logical cores`) and turns to Timeout. Registration-time
   filesystem probing that could block (the disk source's `canonicalize` + `statvfs`) runs on a
   helper thread with a deadline, so a hung mount cannot hold up Start of the parity set.
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at
