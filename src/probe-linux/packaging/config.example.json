@@ -12,5 +12,12 @@
     "directory": "/var/log/hsm-linux-probe",
     "level": "info"
   },
+  "docker": {
+    "enabled": true,
+    "socket": "/var/run/docker.sock",
+    "composeOnly": true,
+    "samplePeriodSec": 5,
+    "oomLatchHours": 24
+  },
   "shutdownTimeoutSec": 10
 }

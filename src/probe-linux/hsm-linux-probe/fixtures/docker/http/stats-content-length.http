@@ -1,0 +1,11 @@
+HTTP/1.1 200 OK
+Api-Version: 1.45
+Content-Type: application/json
+Docker-Experimental: false
+Ostype: linux
+Server: Docker/26.1.5+dfsg1 (linux)
+Date: Mon, 28 Sep 2026 11:14:08 GMT
+Content-Length: 1729
+Connection: close
+
+{"read":"2026-09-28T11:14:08.158450577Z","preread":"0001-01-01T00:00:00Z","pids_stats":{"current":6,"limit":19032},"blkio_stats":{"io_service_bytes_recursive":[{"major":8,"minor":32,"op":"read","value":57978880},{"major":8,"minor":32,"op":"write","value":152866816}],"io_serviced_recursive":null,"io_queue_recursive":null,"io_service_time_recursive":null,"io_wait_time_recursive":null,"io_merged_recursive":null,"io_time_recursive":null,"sectors_recursive":null},"num_procs":0,"storage_stats":{},"cpu_stats":{"cpu_usage":{"total_usage":125020295000,"usage_in_kernelmode":25473519000,"usage_in_usermode":99546776000},"system_cpu_usage":2740727280000000,"online_cpus":4,"throttling_data":{"periods":80346,"throttled_periods":13,"throttled_time":766874000}},"precpu_stats":{"cpu_usage":{"total_usage":0,"usage_in_kernelmode":0,"usage_in_usermode":0},"throttling_data":{"periods":0,"throttled_periods":0,"throttled_time":0}},"memory_stats":{"usage":36225024,"stats":{"active_anon":25411584,"active_file":8380416,"anon":24940544,"anon_thp":14680064,"file":10014720,"file_dirty":4096,"file_mapped":6815744,"file_writeback":0,"inactive_anon":53248,"inactive_file":1638400,"kernel_stack":98304,"pgactivate":533,"pgdeactivate":0,"pgfault":85264,"pglazyfree":0,"pglazyfreed":0,"pgmajfault":504,"pgrefill":7344,"pgscan":12520,"pgsteal":11917,"shmem":0,"slab":267416,"slab_reclaimable":75856,"slab_unreclaimable":191560,"sock":0,"thp_collapse_alloc":1214,"thp_fault_alloc":11,"unevictable":0,"workingset_activate":0,"workingset_nodereclaim":0,"workingset_refault":0},"limit":268435456},"networks":{"eth0":{"rx_bytes":6669039,"rx_packets":8115,"rx_errors":0,"rx_dropped":0,"tx_bytes":4920045,"tx_packets":5224,"tx_errors":0,"tx_dropped":0}}}

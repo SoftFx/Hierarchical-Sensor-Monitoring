@@ -4,10 +4,11 @@
 //! collector: build options -> install the log sink -> select the transport -> install the metric
 //! sources -> register sensors -> start.
 //!
-//! In this phase the probe registers exactly the sensor set the managed HSMDataCollector registers
-//! on Linux (`UnixSensorsCollection.AddAllDefaultSensors`) and nothing of its own; the parity
-//! contract is the table in `src/probe-linux/README.md`. Probe-only sources (Docker, disks,
-//! backups) come in later workstreams.
+//! The probe registers exactly the sensor set the managed HSMDataCollector registers on Linux
+//! (`UnixSensorsCollection.AddAllDefaultSensors`); the parity contract is the table in
+//! `src/probe-linux/README.md`. Probe-only sources start after the collector, from
+//! [`start_probe_only_sources`] — so far the Docker Compose source (#1416); disks and backups
+//! (#1417) come later.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -18,6 +19,7 @@ use hsm_collector::{
 };
 
 use crate::config::Config;
+use crate::docker;
 use crate::logging::{self, Logger};
 use crate::secret::{self, Secret};
 use crate::shutdown;
@@ -53,10 +55,15 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
         post_product_version(sensor, VersionEvent::Start, &logger);
     }
 
-    // Sampling, queuing and sending are the collector's own threads; the main thread only waits.
-    while !shutdown::is_requested() {
-        std::thread::sleep(TICK);
-    }
+    // Sampling, queuing and sending of the parity set are the collector's own threads; probe-only
+    // sources run on threads of their own, scoped so they are joined — and stop posting — before
+    // the collector is stopped below. The main thread only waits.
+    std::thread::scope(|scope| {
+        start_probe_only_sources(scope, &collector, config, &logger);
+        while !shutdown::is_requested() {
+            std::thread::sleep(TICK);
+        }
+    });
 
     // Before Stop, so the value is still accepted and goes out with the stop drain — as the
     // managed ProductVersionSensor.StopAsync does.
@@ -209,6 +216,60 @@ fn register_module_sensors<'c>(
     }
 }
 
+// ---- Probe-only sources ------------------------------------------------------------------------
+// The one place probe-only sources are started. Each registers its own sensors (lazily, while the
+// collector runs) on a thread of its own; none of them is part of the parity contract above.
+
+/// Start every enabled probe-only source on `scope`. A source that fails to start is logged and
+/// skipped: it must never take the parity set down with it (root rule #6).
+fn start_probe_only_sources<'scope, 'env>(
+    scope: &'scope std::thread::Scope<'scope, 'env>,
+    collector: &'env Collector,
+    config: &'env Config,
+    logger: &Arc<Logger>,
+) {
+    // Docker Compose services (#1416): `<module>/Docker/<project>/<service>/…`.
+    if config.docker.enabled {
+        let source_logger = Arc::clone(logger);
+        let spawned = std::thread::Builder::new()
+            .name("docker-source".into())
+            .spawn_scoped(scope, move || {
+                run_docker_source(collector, config, source_logger)
+            });
+        if let Err(error) = spawned {
+            logger.error(format!("cannot start the Docker source thread: {error}"));
+        }
+    } else {
+        logger.info("docker: source disabled (docker.enabled = false)");
+    }
+}
+
+fn run_docker_source(collector: &Collector, config: &Config, logger: Arc<Logger>) {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let state_path =
+            docker::state::default_state_path(std::env::var_os("STATE_DIRECTORY").as_deref());
+        let mut source = docker::DockerSource::new(
+            collector,
+            docker::Engine::new(config.docker.socket.clone()),
+            &config.docker,
+            Arc::clone(&logger),
+            Some(state_path),
+            docker::host_mem_total(),
+        );
+        logger.info(format!(
+            "docker: source started (socket {}, stats every {} s, state poll every {} s)",
+            config.docker.socket.display(),
+            config.docker.sample_period_sec,
+            docker::contract::STATE_POLL_PERIOD.as_secs()
+        ));
+        source.run(&shutdown::is_requested);
+    }));
+    if result.is_err() {
+        logger
+            .error("docker: the Docker source stopped after a panic; other sensors are unaffected");
+    }
+}
+
 /// When `.module/Version` is posted: the managed `ProductVersionSensor` posts on both.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum VersionEvent {
@@ -270,9 +331,11 @@ mod tests {
         Collector::new(&options).expect("create")
     }
 
-    /// The paths the probe registers, read back from the payloads the collector records at Start
-    /// — the `/commands` registration batch. No transport is installed, so the in-memory sender
-    /// receives it and nothing leaves the test.
+    /// The paths the probe registers, read back from the payloads the collector records — the
+    /// `/commands` registration batch at Start plus what the probe-only sources register while it
+    /// runs. The Docker source is fed the garage-server captures (its first ~10 s: one state poll,
+    /// two stats rounds). No transport is installed, so the in-memory sender receives everything
+    /// and nothing leaves the test.
     fn registered_paths() -> Vec<String> {
         let collector = test_collector(1);
         let logger = Logger::new(Level::Error, None);
@@ -282,6 +345,7 @@ mod tests {
             "the product version sensor must register"
         );
         collector.start().expect("start");
+        crate::docker::tests::drive_garage(&collector);
         let registrations = collector.registrations();
         collector.stop().expect("stop");
 
@@ -325,14 +389,96 @@ mod tests {
         "garage-server/LinuxProbe/.module/Process process/Process thread count",
     ];
 
+    /// The Docker source (#1416) on garage-server: 12 Compose services. Every service gets the
+    /// three state sensors; `Health` only the four with a healthcheck (seaweedfs, mongo, gitea,
+    /// db); the stats sensors only the eleven that ran — `lingua-ci/ci-image` is an exited one-shot
+    /// build container, so it has no CPU/memory nodes. 73 paths, no empty nodes.
+    const DOCKER_GARAGE_SET: &[&str] = &[
+        "garage-server/LinuxProbe/Docker/caddy/caddy/CPU",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/Memory limit",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/Memory used %",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/OOM killed",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/Restart count",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/Service status",
+        "garage-server/LinuxProbe/Docker/gitea/db/CPU",
+        "garage-server/LinuxProbe/Docker/gitea/db/Health",
+        "garage-server/LinuxProbe/Docker/gitea/db/Memory limit",
+        "garage-server/LinuxProbe/Docker/gitea/db/Memory used %",
+        "garage-server/LinuxProbe/Docker/gitea/db/OOM killed",
+        "garage-server/LinuxProbe/Docker/gitea/db/Restart count",
+        "garage-server/LinuxProbe/Docker/gitea/db/Service status",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/CPU",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Health",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Memory limit",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Memory used %",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/OOM killed",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Restart count",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Service status",
+        "garage-server/LinuxProbe/Docker/hsm/app/CPU",
+        "garage-server/LinuxProbe/Docker/hsm/app/Memory limit",
+        "garage-server/LinuxProbe/Docker/hsm/app/Memory used %",
+        "garage-server/LinuxProbe/Docker/hsm/app/OOM killed",
+        "garage-server/LinuxProbe/Docker/hsm/app/Restart count",
+        "garage-server/LinuxProbe/Docker/hsm/app/Service status",
+        "garage-server/LinuxProbe/Docker/lingua-ci/ci-image/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua-ci/ci-image/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua-ci/ci-image/Service status",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Service status",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Service status",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Service status",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Service status",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/CPU",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Health",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Service status",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/CPU",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Health",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Service status",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/CPU",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/Memory limit",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/Memory used %",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/OOM killed",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/Restart count",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/Service status",
+    ];
+
     #[test]
     fn the_registered_set_is_exactly_the_managed_unix_default_set() {
-        // The parity contract (README table): nothing more, nothing less. A probe-only sensor, or a
-        // managed sensor the probe stops registering, fails here.
+        // The parity contract (README table) plus the agreed probe-only Docker tree: nothing more,
+        // nothing less. An unagreed probe-only sensor, or a managed sensor the probe stops
+        // registering, fails here.
         #[allow(unused_mut)]
         let mut expected: Vec<&str> = MODULE_SET.to_vec();
         #[cfg(feature = "linux-default-sensors")]
         expected.extend_from_slice(METRIC_FED_SET);
+        expected.extend_from_slice(DOCKER_GARAGE_SET);
         expected.sort_unstable();
 
         assert_eq!(registered_paths(), expected);

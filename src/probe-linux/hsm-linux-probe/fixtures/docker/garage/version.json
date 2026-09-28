@@ -1,0 +1,52 @@
+{
+ "Platform": {
+  "Name": ""
+ },
+ "Components": [
+  {
+   "Name": "Engine",
+   "Version": "26.1.5+dfsg1",
+   "Details": {
+    "ApiVersion": "1.45",
+    "Arch": "amd64",
+    "BuildTime": "2026-08-13T05:35:47.000000000+00:00",
+    "Experimental": "false",
+    "GitCommit": "411e817",
+    "GoVersion": "go1.24.4",
+    "KernelVersion": "6.12.107+deb13-amd64",
+    "MinAPIVersion": "1.24",
+    "Os": "linux"
+   }
+  },
+  {
+   "Name": "containerd",
+   "Version": "1.7.24~ds1",
+   "Details": {
+    "GitCommit": "1.7.24~ds1-6+deb13u1"
+   }
+  },
+  {
+   "Name": "runc",
+   "Version": "1.1.15+ds1",
+   "Details": {
+    "GitCommit": "1.1.15+ds1-2+b4"
+   }
+  },
+  {
+   "Name": "docker-init",
+   "Version": "0.19.0",
+   "Details": {
+    "GitCommit": ""
+   }
+  }
+ ],
+ "Version": "26.1.5+dfsg1",
+ "ApiVersion": "1.45",
+ "MinAPIVersion": "1.24",
+ "GitCommit": "411e817",
+ "GoVersion": "go1.24.4",
+ "Os": "linux",
+ "Arch": "amd64",
+ "KernelVersion": "6.12.107+deb13-amd64",
+ "BuildTime": "2026-08-13T05:35:47.000000000+00:00"
+}
