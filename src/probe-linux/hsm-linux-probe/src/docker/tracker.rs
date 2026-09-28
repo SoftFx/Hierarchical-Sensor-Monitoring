@@ -123,6 +123,16 @@ impl Tracker {
         std::mem::take(&mut self.dirty)
     }
 
+    /// Remember the node a service was given, for re-adoption after a restart.
+    pub fn set_node(&mut self, key: &ServiceKey, node: &str) {
+        if let Some(record) = self.state.services.get_mut(key) {
+            if record.node.as_deref() != Some(node) {
+                record.node = Some(node.to_string());
+                self.dirty = true;
+            }
+        }
+    }
+
     /// Record that `value` reached the `Restart count` sensor.
     pub fn restart_posted(&mut self, key: &ServiceKey, value: u64) {
         if let Some(record) = self.state.services.get_mut(key) {

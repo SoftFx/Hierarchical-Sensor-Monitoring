@@ -239,10 +239,11 @@ sensors register once a service has run, `Health` only where a healthcheck is de
 Path identity: from `com.docker.compose.project`/`.service` labels — stable across
 recreate/upgrade. Normalization: `[A-Za-z0-9_-]` kept, others → `_`, collisions detected via
 a reverse map and disambiguated with a short stable hash (FNV-1a, six hex digits, on the
-newcomer; a name needing no normalization keeps the plain segment; nodes never move); rule fixed
-by unit tests. Containers without compose labels: config `composeOnly: true` (default) skips them
-with one deduplicated diagnostic per container; `false` puts them under
-`Docker/_standalone/<name>`.
+newcomer; a name needing no normalization keeps the plain segment; nodes are remembered in the
+state file and re-adopted after a restart, so they never move); rule fixed by unit tests.
+Containers without compose labels: config `composeOnly: true` (default) skips them with one
+deduplicated diagnostic per container; `false` puts them under `Docker/_standalone/<name>`.
+`docker compose run` one-offs (`com.docker.compose.oneoff=True`) are never counted as replicas.
 
 HSM-side templates (documented for the operator, thresholds configurable, nothing hardcoded
 in the probe or collector catalog): probe TTL 3 min; sustained CPU via HSM EMA; low SSD

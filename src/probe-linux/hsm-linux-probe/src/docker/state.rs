@@ -43,6 +43,10 @@ pub struct ServiceRecord {
     /// Unix seconds of the last poll that listed a container of this service.
     #[serde(default)]
     pub last_seen: i64,
+    /// The node this service was given (`Docker/<project>/<service>`), re-adopted after a restart
+    /// so a collision's outcome never changes and no sensor moves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node: Option<String>,
 }
 
 impl ServiceRecord {
@@ -180,6 +184,7 @@ mod tests {
         record.restart_posted = Some(5);
         record.oom_latch_until = Some(1_790_500_000);
         record.last_seen = 1_790_413_000;
+        record.node = Some("Docker/gitea/db".into());
         let mut state = State::default();
         state.services.insert(key, record);
         state

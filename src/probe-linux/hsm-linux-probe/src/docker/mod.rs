@@ -133,6 +133,18 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                  against the limit Docker reports",
             );
         }
+        // Re-adopt the nodes of the previous run before anything new is named.
+        let mut naming = Naming::default();
+        for record in state.services.values() {
+            if let Some(node) = &record.node {
+                if !naming.adopt(&record.key(), node) {
+                    logger.warn(format!(
+                        "docker: remembered node {node} for {} is unusable; naming it afresh",
+                        record.key()
+                    ));
+                }
+            }
+        }
         Self {
             collector,
             engine,
@@ -143,7 +155,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             state_path,
             host_mem_total,
             api: None,
-            naming: Naming::default(),
+            naming,
             tracker: Tracker::new(state),
             sensors: BTreeMap::new(),
             roster: BTreeMap::new(),
@@ -285,6 +297,17 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         for container in &containers {
             let key = match identity::membership(container, self.compose_only) {
                 Membership::Service(key) => key,
+                Membership::OneOff => {
+                    if self.log_once.raise(&format!("skip:{}", container.id)) {
+                        self.logger.info(format!(
+                            "docker: container '{}' ({}) is a `docker compose run` one-off; not \
+                             monitored as a replica of its service",
+                            container.name(),
+                            short_id(&container.id)
+                        ));
+                    }
+                    continue;
+                }
                 Membership::Skipped => {
                     if self.log_once.raise(&format!("skip:{}", container.id)) {
                         self.logger.info(format!(
@@ -309,7 +332,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                         health: inspect.state.health.map(|health| health.status),
                     })
                 }
-                Err(error) if error.is_unavailable() => return Err(error),
+                // A timeout here may be this one container wedged: skip it, keep the others.
+                Err(error) if error.is_unavailable() && !error.is_timeout() => return Err(error),
                 Err(error) => {
                     self.read_failure("inspect", &container.id, &key, &error);
                     None
@@ -339,6 +363,10 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         let outcome = self.tracker.observe(&services, unix_now(), self.oom_latch);
         self.naming
             .resolve_all(services.keys().chain(outcome.reports.keys()));
+        for key in outcome.reports.keys() {
+            let node = self.naming.node(key);
+            self.tracker.set_node(key, &node);
+        }
 
         for key in &outcome.forgotten {
             self.logger.info(format!(
@@ -429,7 +457,9 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                         self.clear_read_failure("stats", id);
                         stats
                     }
-                    Err(error) if error.is_unavailable() => return Err(error),
+                    Err(error) if error.is_unavailable() && !error.is_timeout() => {
+                        return Err(error)
+                    }
                     Err(error) => {
                         self.read_failure("stats", id, key, &error);
                         self.cpu.forget(id);
@@ -631,6 +661,8 @@ pub(crate) mod tests {
         pub rounds: Vec<HashMap<String, ContainerStats>>,
         pub round: usize,
         pub down: bool,
+        /// Container id prefix whose inspect and stats calls time out (a wedged container).
+        pub wedged: Option<&'static str>,
     }
 
     impl FixtureEngine {
@@ -651,6 +683,17 @@ pub(crate) mod tests {
                 ],
                 round: 0,
                 down: false,
+                wedged: None,
+            }
+        }
+
+        fn check_container(&self, id: &str) -> Result<(), EngineError> {
+            self.check()?;
+            match self.wedged {
+                Some(prefix) if id.starts_with(prefix) => {
+                    Err(EngineError::Unavailable(http::HttpError::Timeout))
+                }
+                _ => Ok(()),
             }
         }
 
@@ -675,7 +718,7 @@ pub(crate) mod tests {
             Ok(self.list.clone())
         }
         fn inspect(&mut self, id: &str) -> Result<ContainerInspect, EngineError> {
-            self.check()?;
+            self.check_container(id)?;
             self.inspects
                 .get(id)
                 .cloned()
@@ -685,7 +728,7 @@ pub(crate) mod tests {
                 })
         }
         fn stats(&mut self, id: &str) -> Result<ContainerStats, EngineError> {
-            self.check()?;
+            self.check_container(id)?;
             let round = &self.rounds[self.round.min(self.rounds.len() - 1)];
             round.get(id).cloned().ok_or_else(|| EngineError::Status {
                 status: 404,
@@ -875,6 +918,78 @@ pub(crate) mod tests {
                 .count();
             assert_eq!(standalone, expected, "composeOnly={compose_only}");
         }
+    }
+
+    #[test]
+    fn a_wedged_container_does_not_blank_the_others() {
+        // gitea-db's inspect and stats time out; every other service still reports, and db
+        // keeps its status (from the listing) but posts no guessed health or stats.
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut engine = FixtureEngine::garage();
+        engine.wedged = Some("abbd59dcacc8");
+        let mut source = DockerSource::new(
+            &collector,
+            engine,
+            &DockerConfig::default(),
+            quiet(),
+            None,
+            Some(GARAGE_MEM_TOTAL),
+        );
+        source
+            .poll(&|| false)
+            .expect("a timeout on one container is not an outage");
+        source.sample(&|| false).expect("nor in the stats tick");
+        let paths = registered(&collector);
+        let has = |p: &str| paths.iter().any(|x| x == p);
+        assert!(has(
+            "garage-server/LinuxProbe/Docker/gitea/db/Service status"
+        ));
+        assert!(!has("garage-server/LinuxProbe/Docker/gitea/db/Health"));
+        assert!(!has("garage-server/LinuxProbe/Docker/gitea/db/CPU"));
+        assert!(has("garage-server/LinuxProbe/Docker/gitea/gitea/Health"));
+        assert!(has("garage-server/LinuxProbe/Docker/gitea/gitea/CPU"));
+    }
+
+    #[test]
+    fn nodes_are_remembered_in_the_state_and_readopted() {
+        let dir =
+            std::env::temp_dir().join(format!("hsm-probe-docker-nodes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(state::STATE_FILE_NAME);
+        {
+            let collector = test_collector();
+            collector.start().expect("start");
+            let mut source = DockerSource::new(
+                &collector,
+                FixtureEngine::garage(),
+                &DockerConfig::default(),
+                quiet(),
+                Some(path.clone()),
+                Some(GARAGE_MEM_TOTAL),
+            );
+            source.poll(&|| false).expect("poll");
+        }
+        let (saved, _) = State::load(&path);
+        let db = &saved.services[&ServiceKey::new("gitea", "db")];
+        assert_eq!(db.node.as_deref(), Some("Docker/gitea/db"));
+
+        // A restarted source adopts every remembered node before naming anything.
+        let collector = test_collector();
+        let mut source = DockerSource::new(
+            &collector,
+            FixtureEngine::garage(),
+            &DockerConfig::default(),
+            quiet(),
+            Some(path.clone()),
+            Some(GARAGE_MEM_TOTAL),
+        );
+        assert_eq!(
+            source.naming.node(&ServiceKey::new("gitea", "db")),
+            "Docker/gitea/db"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

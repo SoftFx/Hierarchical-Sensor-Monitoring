@@ -122,9 +122,12 @@ Behavior at the edges:
 - **Identity** is the Compose `(project, service)` from the container labels — stable across
   recreate and upgrade. Segments keep `[A-Za-z0-9_-]`, anything else becomes `_`; two names that
   normalize alike are told apart by a six-hex-digit FNV hash suffix on the newcomer (a name that
-  needed no normalization keeps the plain segment, and assigned nodes never move).
+  needed no normalization keeps the plain segment). Assigned nodes never move: each service's node
+  is remembered in the state file and re-adopted after a restart.
 - **Unlabelled containers** (`docker run`): skipped with one log line per container while
   `docker.composeOnly` is `true` (default); with `false` they appear as `Docker/_standalone/<name>`.
+  **One-off containers** (`docker compose run`, `com.docker.compose.oneoff=True`) are never counted
+  as replicas of their service — a leftover exited one would otherwise pin it at `Stopped`.
 - **Replicas:** CPU and memory usage are summed (the memory limit sum is capped at the host's
   memory); status and health are worst-of (Stopped < StartPending < Paused < Running; unhealthy <
   starting < healthy); restart counts are summed.
@@ -133,9 +136,10 @@ Behavior at the edges:
   service with any skipped replica skips that sample.
 - **An unreachable daemon** is logged once (an info line when there is no socket at all, an error
   with a hint on `EACCES`), retried with a backoff doubling up to 60 s, and resumed silently;
-  nothing is posted meanwhile. A failed inspect or stats call skips that service's values (logged
-  once per container), never posts a guess. A panic in a tick is caught and logged.
-- **State** (restart baselines, last posted restart count, OOM latches, last-seen times) is one JSON
+  nothing is posted meanwhile. A failed or timed-out inspect or stats call skips that service's
+  values (logged once per container) without touching the other services, and never posts a
+  guess. A panic in a tick is caught and logged.
+- **State** (restart baselines, last posted restart count, OOM latches, last-seen times, nodes) is one JSON
   file, `$STATE_DIRECTORY/docker-state.json` (`/var/lib/hsm-linux-probe`), written atomically only
   when something changed (at most hourly for last-seen). A missing or corrupt file means a fresh
   start, logged once.

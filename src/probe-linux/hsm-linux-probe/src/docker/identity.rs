@@ -8,8 +8,14 @@
 //! can normalize to the same segment (`web.api` and `web_api`); a reverse map detects that and the
 //! newcomer gets a short stable hash suffix (`web_api-3f9a1c`). A name that needed no normalization
 //! always keeps its plain segment, and the initial batch is resolved in a fixed order, so which
-//! side gets the suffix does not depend on the daemon's listing order. Assignments are kept for the
-//! life of the process: a registered sensor never moves.
+//! side gets the suffix does not depend on the daemon's listing order. Assignments never move: the
+//! state file remembers each service's node, and a restarted probe re-adopts it
+//! ([`Naming::adopt`]) before naming anything new, so a collision's outcome does not depend on
+//! arrival history either.
+//!
+//! One-off containers (`docker compose run`, label `com.docker.compose.oneoff=True`) carry their
+//! service's labels but are not replicas of it: a leftover exited one would pin the service at
+//! `Stopped`. They are not monitored.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -18,6 +24,7 @@ use super::engine::ContainerSummary;
 
 pub const PROJECT_LABEL: &str = "com.docker.compose.project";
 pub const SERVICE_LABEL: &str = "com.docker.compose.service";
+pub const ONEOFF_LABEL: &str = "com.docker.compose.oneoff";
 
 /// The identity of one monitored service. For a standalone container (no Compose labels, and
 /// `docker.composeOnly` off) the project is [`contract::STANDALONE_PROJECT`] and the service is
@@ -49,9 +56,17 @@ pub enum Membership {
     Service(ServiceKey),
     /// No Compose labels and `composeOnly` is on: not monitored.
     Skipped,
+    /// A `docker compose run` one-off container: not a replica of its service, not monitored.
+    OneOff,
 }
 
 pub fn membership(container: &ContainerSummary, compose_only: bool) -> Membership {
+    if container
+        .label(ONEOFF_LABEL)
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+    {
+        return Membership::OneOff;
+    }
     match (
         container.label(PROJECT_LABEL),
         container.label(SERVICE_LABEL),
@@ -108,6 +123,19 @@ struct Namespace {
 }
 
 impl Namespace {
+    /// Whether `raw` may own `segment`: it already does, or neither is taken.
+    fn can_claim(&self, raw: &str, segment: &str) -> bool {
+        match self.by_raw.get(raw) {
+            Some(existing) => existing == segment,
+            None => !self.owner_of.contains_key(segment),
+        }
+    }
+
+    fn claim(&mut self, raw: &str, segment: &str) {
+        self.owner_of.insert(segment.to_string(), raw.to_string());
+        self.by_raw.insert(raw.to_string(), segment.to_string());
+    }
+
     fn segment(&mut self, raw: &str) -> String {
         if let Some(segment) = self.by_raw.get(raw) {
             return segment.clone();
@@ -142,6 +170,39 @@ pub struct Naming {
 }
 
 impl Naming {
+    /// Re-adopt the node a service was given in an earlier run (from the state file). Returns
+    /// false, adopting nothing, when the node is malformed or clashes with one already adopted;
+    /// the service is then named afresh.
+    pub fn adopt(&mut self, key: &ServiceKey, node: &str) -> bool {
+        if let Some(existing) = self.nodes.get(key) {
+            return existing == node;
+        }
+        let mut parts = node.split('/');
+        let (Some(root), Some(project), Some(service), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            return false;
+        };
+        let well_formed = |segment: &str| !segment.is_empty() && normalize(segment) == segment;
+        if root != contract::ROOT || !well_formed(project) || !well_formed(service) {
+            return false;
+        }
+        let service_free = self
+            .services
+            .get(&key.project)
+            .is_none_or(|namespace| namespace.can_claim(&key.service, service));
+        if !self.projects.can_claim(&key.project, project) || !service_free {
+            return false;
+        }
+        self.projects.claim(&key.project, project);
+        self.services
+            .entry(key.project.clone())
+            .or_default()
+            .claim(&key.service, service);
+        self.nodes.insert(key.clone(), node.to_string());
+        true
+    }
+
     /// Resolve a batch of keys. Keys already named keep their node; new ones are named in a fixed
     /// order — names that need no normalization first, then by raw name — so the outcome of a
     /// collision is independent of the order the daemon listed the containers in.
@@ -273,6 +334,44 @@ mod tests {
     }
 
     #[test]
+    fn an_adopted_node_survives_a_restart_whatever_the_arrival_order() {
+        // Run 1: `web.api` arrived first and took the plain segment; `web_api` came later.
+        let dotted = key("shop", "web.api");
+        let plain = key("shop", "web_api");
+        let mut first = Naming::default();
+        let dotted_node = first.node(&dotted);
+        let plain_node = first.node(&plain);
+        assert_eq!(dotted_node, "Docker/shop/web_api");
+
+        // Run 2 (probe restart): both arrive in one batch. Without adoption the plain name would
+        // now win the plain segment and the two services would swap histories.
+        let mut second = Naming::default();
+        assert!(second.adopt(&dotted, &dotted_node));
+        assert!(second.adopt(&plain, &plain_node));
+        second.resolve_all([&plain, &dotted]);
+        assert_eq!(second.node(&dotted), dotted_node);
+        assert_eq!(second.node(&plain), plain_node);
+    }
+
+    #[test]
+    fn a_malformed_or_clashing_adoption_is_refused() {
+        let mut naming = Naming::default();
+        for node in [
+            "",
+            "Docker/shop",
+            "Other/shop/web",
+            "Docker/shop/web/x",
+            "Docker/sh op/web",
+        ] {
+            assert!(!naming.adopt(&key("shop", "web"), node), "{node}");
+        }
+        assert!(naming.adopt(&key("shop", "web"), "Docker/shop/web"));
+        // Another service cannot take a segment that is already owned.
+        assert!(!naming.adopt(&key("shop", "web.x"), "Docker/shop/web"));
+        assert_eq!(naming.node(&key("shop", "web")), "Docker/shop/web");
+    }
+
+    #[test]
     fn same_service_name_in_two_projects_is_not_a_collision() {
         let mut naming = Naming::default();
         assert_eq!(naming.node(&key("gitea", "db")), "Docker/gitea/db");
@@ -312,6 +411,29 @@ mod tests {
         assert_eq!(
             membership(&bare, false),
             Membership::Service(key("_standalone", "adhoc"))
+        );
+        // A `docker compose run` one-off carries its service's labels but is not a replica.
+        let oneoff = summary(
+            "shop-web-run-1a2b",
+            &[
+                (PROJECT_LABEL, "shop"),
+                (SERVICE_LABEL, "web"),
+                (ONEOFF_LABEL, "True"),
+            ],
+        );
+        assert_eq!(membership(&oneoff, true), Membership::OneOff);
+        assert_eq!(membership(&oneoff, false), Membership::OneOff);
+        let replica = summary(
+            "shop-web-1",
+            &[
+                (PROJECT_LABEL, "shop"),
+                (SERVICE_LABEL, "web"),
+                (ONEOFF_LABEL, "False"),
+            ],
+        );
+        assert_eq!(
+            membership(&replica, true),
+            Membership::Service(key("shop", "web"))
         );
         // Half-labelled (a project but no service) is not a Compose service either.
         let half = summary("half", &[(PROJECT_LABEL, "p")]);

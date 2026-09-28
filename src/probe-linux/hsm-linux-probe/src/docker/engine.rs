@@ -121,6 +121,12 @@ impl EngineError {
             if error.kind() == std::io::ErrorKind::PermissionDenied)
     }
 
+    /// Whether one request ran past its deadline. For a per-container call that is a failed read
+    /// of that container (it may be the one wedged), not proof the whole daemon is gone.
+    pub fn is_timeout(&self) -> bool {
+        matches!(self, EngineError::Unavailable(HttpError::Timeout))
+    }
+
     /// Whether there is no socket at all — a host without Docker, which is not an error.
     pub fn is_socket_missing(&self) -> bool {
         matches!(self, EngineError::Unavailable(HttpError::Io(error))
