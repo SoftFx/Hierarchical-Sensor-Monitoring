@@ -104,8 +104,8 @@ computer-level (`is_computer_sensor`), so they sit under `<computer>/.computer/�
 | `.computer/Disks monitoring/Free inodes %` | Double · Percents | every 5 min | 15 min | value < 10 → warning | `statvfs`: `f_favail / f_files`, same mount | 288 |
 
 *Legend:* **warning** = a notification with the ⚠ icon and **no status change**; **Error** = a
-notification that also sets the sensor to Error. **TTL** = three periods (48 h for the daily cores
-value): a source that stops producing — a read that keeps failing, a thread stuck on a hung
+notification that also sets the sensor to Error. **TTL** = three periods for the 5-minute sensors (48 h, one
+missed day, for the daily cores value): a source that stops producing — a read that keeps failing, a thread stuck on a hung
 filesystem — turns the sensor to Timeout on the server instead of leaving its last value looking
 fresh.
 
