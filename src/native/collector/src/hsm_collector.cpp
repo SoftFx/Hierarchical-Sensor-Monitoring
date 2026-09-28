@@ -3028,7 +3028,11 @@ namespace
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
 
             std::lock_guard<std::mutex> guard(mutex_);
-            return RegisterBarSensorLocked(BuildSensorPath(path), type, bar_period_ms, precision, registration, out_sensor);
+            // The options decide the anchor (computer / module / product), as for an instant sensor.
+            // Until 0.9.0 this used the module path unconditionally, so is_computer_sensor only
+            // forced IsSingletonSensor and the bar still landed under <computer>/<module>/.
+            const auto sensor_path = CalculateSystemPath(path, registration);
+            return RegisterBarSensorLocked(sensor_path, type, bar_period_ms, precision, registration, out_sensor);
         }
 
         hsm_result_t CreatePeriodicSensor(
@@ -3046,7 +3050,12 @@ namespace
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
 
             std::lock_guard<std::mutex> guard(mutex_);
-            const auto sensor_path = BuildSensorPath(path);
+            // A rate-with-options registration carries the anchor (computer / module / product);
+            // the plain periodic creates have no options and stay module-anchored. (Before 0.9.0
+            // the override was ignored here, like the bar path above.)
+            const auto sensor_path = registration_override != nullptr
+                                         ? CalculateSystemPath(path, *registration_override)
+                                         : BuildSensorPath(path);
 
             // Registration is closed while Stopping/Disposed: reject without crashing the host
             // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
@@ -6931,6 +6940,56 @@ hsm_sensor_options_t hsm_sensor_options_default(void)
     return options;
 }
 
+// Copies the full SensorOptions surface onto a registration that already carries its kind's
+// defaults (InstantRegistrationDefaults / EnumRegistrationDefaults). Shared by the generic instant
+// create and the enum create, so the two cannot drift in how a sentinel maps to "null".
+static void ApplySensorOptions(RegistrationOptions& registration, const hsm_sensor_options_t& options)
+{
+    registration.ttl_ms = options.ttl_ms;
+    registration.unit = options.unit;
+    registration.description = CopyString(options.description);
+
+    if (options.keep_history_ms > 0)
+    {
+        registration.has_keep_history = true;
+        registration.keep_history_ms = options.keep_history_ms;
+    }
+    if (options.self_destroy_ms > 0)
+    {
+        registration.has_self_destroy = true;
+        registration.self_destroy_ms = options.self_destroy_ms;
+    }
+    if (options.display_unit >= 0)
+    {
+        registration.has_display_unit = true;
+        registration.display_unit = options.display_unit;
+    }
+    if (options.statistics >= 0)
+    {
+        registration.has_statistics = true;
+        registration.statistics = options.statistics;
+    }
+    registration.is_singleton = static_cast<TriBool>(options.is_singleton);
+    registration.aggregate_data = static_cast<TriBool>(options.aggregate_data);
+    registration.enable_grafana = static_cast<TriBool>(options.enable_grafana);
+    registration.is_computer_sensor = options.is_computer_sensor;
+    registration.sensor_location = options.sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
+    registration.default_alert_options = options.default_alert_options;
+}
+
+// Enum options are copied into the registration; the caller's strings are borrowed for the call only.
+static void CopyEnumOptions(RegistrationOptions& registration, const hsm_enum_option_t* enum_options, size_t enum_option_count)
+{
+    registration.has_enum_options = true;
+    registration.enum_options.reserve(enum_option_count);
+    for (size_t i = 0; i < enum_option_count; ++i)
+        registration.enum_options.push_back(EnumOptionData{
+            enum_options[i].key,
+            CopyString(enum_options[i].value),
+            enum_options[i].color,
+            CopyString(enum_options[i].description) });
+}
+
 hsm_result_t hsm_collector_create_sensor_with_options(
     hsm_collector_t* collector,
     const char* path,
@@ -6945,36 +7004,7 @@ hsm_result_t hsm_collector_create_sensor_with_options(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     auto registration = InstantRegistrationDefaults(); // has_description=true (instant default "")
-    registration.ttl_ms = options->ttl_ms;
-    registration.unit = options->unit;
-    registration.description = CopyString(options->description);
-
-    if (options->keep_history_ms > 0)
-    {
-        registration.has_keep_history = true;
-        registration.keep_history_ms = options->keep_history_ms;
-    }
-    if (options->self_destroy_ms > 0)
-    {
-        registration.has_self_destroy = true;
-        registration.self_destroy_ms = options->self_destroy_ms;
-    }
-    if (options->display_unit >= 0)
-    {
-        registration.has_display_unit = true;
-        registration.display_unit = options->display_unit;
-    }
-    if (options->statistics >= 0)
-    {
-        registration.has_statistics = true;
-        registration.statistics = options->statistics;
-    }
-    registration.is_singleton = static_cast<TriBool>(options->is_singleton);
-    registration.aggregate_data = static_cast<TriBool>(options->aggregate_data);
-    registration.enable_grafana = static_cast<TriBool>(options->enable_grafana);
-    registration.is_computer_sensor = options->is_computer_sensor;
-    registration.sensor_location = options->sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
-    registration.default_alert_options = options->default_alert_options;
+    ApplySensorOptions(registration, *options);
 
     return CreateSensor(collector, path, type, false, std::string{}, out_sensor, registration);
 }
@@ -6996,14 +7026,30 @@ hsm_result_t hsm_collector_create_enum_sensor_with_options(
 
     auto registration = EnumRegistrationDefaults();
     registration.description = CopyString(description);
-    registration.has_enum_options = true;
-    registration.enum_options.reserve(enum_option_count);
-    for (size_t i = 0; i < enum_option_count; ++i)
-        registration.enum_options.push_back(EnumOptionData{
-            enum_options[i].key,
-            CopyString(enum_options[i].value),
-            enum_options[i].color,
-            CopyString(enum_options[i].description) });
+    CopyEnumOptions(registration, enum_options, enum_option_count);
+
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_ENUM, false, std::string{}, out_sensor, registration);
+}
+
+hsm_result_t hsm_collector_create_enum_sensor_with_sensor_options(
+    hsm_collector_t* collector,
+    const char* path,
+    const hsm_sensor_options_t* options,
+    const hsm_enum_option_t* enum_options,
+    size_t enum_option_count,
+    hsm_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
+    if (options == nullptr || (enum_options == nullptr && enum_option_count > 0))
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    // The managed EnumSensorOptions is an InstantSensorOptions: the same options surface, with the
+    // enum kind's DisplayUnit:null default (EnumRegistrationDefaults) instead of the typed-instant 0.
+    auto registration = EnumRegistrationDefaults();
+    ApplySensorOptions(registration, *options);
+    CopyEnumOptions(registration, enum_options, enum_option_count);
 
     return CreateSensor(collector, path, HSM_SENSOR_TYPE_ENUM, false, std::string{}, out_sensor, registration);
 }

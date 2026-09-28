@@ -63,7 +63,13 @@ pub fn collector_message_level(level: LogLevel, message: &str) -> Level {
 pub struct Logger {
     min_level: Level,
     file: Option<Mutex<LogFile>>,
+    /// Test-only capture of every formatted line, so tests can assert on what was logged.
+    #[cfg(test)]
+    capture: Option<CaptureSink>,
 }
+
+#[cfg(test)]
+type CaptureSink = Box<dyn Fn(&str) + Send + Sync>;
 
 /// The open log file together with the UTC date it was opened for, so the daemon can roll instead
 /// of growing one file for as long as it runs.
@@ -96,7 +102,22 @@ impl Logger {
                 }
             }
         });
-        Self { min_level, file }
+        Self {
+            min_level,
+            file,
+            #[cfg(test)]
+            capture: None,
+        }
+    }
+
+    /// A logger that also hands every line to `sink` (tests only).
+    #[cfg(test)]
+    pub fn with_sink(min_level: Level, sink: impl Fn(&str) + Send + Sync + 'static) -> Self {
+        Self {
+            min_level,
+            file: None,
+            capture: Some(Box::new(sink)),
+        }
     }
 
     pub fn log(&self, level: Level, message: &str) {
@@ -106,6 +127,10 @@ impl Logger {
         let now = now_unix_seconds();
         let line = format!("{}|{}| {message}", utc_timestamp(now), level.as_str());
         eprintln!("{line}");
+        #[cfg(test)]
+        if let Some(capture) = &self.capture {
+            capture(&line);
+        }
 
         if let Some(file) = &self.file {
             let mut file = file.lock().unwrap_or_else(|poisoned| poisoned.into_inner());

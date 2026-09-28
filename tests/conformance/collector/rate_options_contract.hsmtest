@@ -43,3 +43,21 @@ rate_default_alerts_disable_status_change|start
 rate_default_alerts_disable_status_change|stop
 rate_default_alerts_disable_status_change|expect_registration_count|1
 rate_default_alerts_disable_status_change|expect_registration_contains|0|"DefaultAlertsOptions":2}
+
+# The options decide where a rate sensor is anchored (CalculateSystemPath), as for instant and bar
+# sensors. Native 0.9.0 fix — before it the options' anchor was ignored and the sensor always landed
+# under <computer>/<module>/.
+rate_computer_sensor_anchors_at_computer_node|create_collector
+rate_computer_sensor_anchors_at_computer_node|create_rate_sensor_full_options|.computer/contract/rate/computer|60000|0|-1|-1|0|0|-1|-1|-1|-1|true|0|c
+rate_computer_sensor_anchors_at_computer_node|start
+rate_computer_sensor_anchors_at_computer_node|stop
+rate_computer_sensor_anchors_at_computer_node|expect_registration_count|1
+rate_computer_sensor_anchors_at_computer_node|expect_registration_contains|0|"Path":"conformance-host/.computer/contract/rate/computer"
+rate_computer_sensor_anchors_at_computer_node|expect_registration_contains|0|"IsSingletonSensor":true
+
+rate_product_sensor_anchors_at_root|create_collector
+rate_product_sensor_anchors_at_root|create_rate_sensor_full_options|contract/rate/product|60000|0|-1|-1|0|0|-1|-1|-1|-1|false|1|p
+rate_product_sensor_anchors_at_root|start
+rate_product_sensor_anchors_at_root|stop
+rate_product_sensor_anchors_at_root|expect_registration_count|1
+rate_product_sensor_anchors_at_root|expect_registration_contains|0|"Path":"contract/rate/product"

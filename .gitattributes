@@ -10,3 +10,6 @@
 *.toml text eol=lf
 *.service text eol=lf
 Cargo.lock text eol=lf
+# Everything the .deb build copies into the package (maintainer scripts, copyright, the config
+# skeleton) runs or is parsed on Linux: a CR would break the #!/bin/sh line of a maintainer script.
+src/probe-linux/packaging/** text eol=lf

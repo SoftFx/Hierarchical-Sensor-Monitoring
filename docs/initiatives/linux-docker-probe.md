@@ -194,19 +194,41 @@ fixed name `Process process` so one alert template matches every host (#1429), a
 `ThreadPool thread count` is absent because a native process has no CLR thread pool — the
 Windows agent behaves the same way.
 
-### 4.2a Proposed sensors — NOT built, each needs owner agreement first
+**Second set — probe-only sensors (#1476).** On top of the parity set the probe registers sensors
+the owner agreed one by one, which by decision (2026-09-24) exist **only in the Linux probe** —
+never in the shared collector catalog, never on Windows; moving any of them into the catalog is a
+separate, later step. They are pinned by their own test (`PROBE_ONLY_SET`) next to the unchanged
+parity test, so the parity contract stays exactly the 15 paths above. On garage-server the probe
+therefore registers 19 sensors. The agreed host/disk rows are in §4.2a.
 
-Everything in the table below is the original Stage-0 proposal. None of it exists. Per the owner
-rule above, each sensor is agreed individually before implementation, with its data source, what
-it costs in history, and whether it belongs in the shared collector catalog rather than in the
-probe. Workstreams #1416 (Docker) and #1417 (disks, backup contract) stay open for exactly this.
+### 4.2a Probe-only sensors — agreed one by one
+
+Per the owner rule above, each sensor is agreed individually before implementation, with its data
+source, what it costs in history, and whether it belongs in the shared collector catalog rather
+than in the probe.
+
+**Host and disk — agreed 2026-09-24, built in #1476** (computer-level: `<computer>/.computer/…`;
+source rules, alert semantics and config in `src/probe-linux/README.md` "Probe-only sensors"):
+
+| Path | Type · period | Alert | Source | Records/day |
+|---|---|---|---|---|
+| `.computer/Logical cores` | Int · at start + daily, TTL 48 h | — | `sysconf(_SC_NPROCESSORS_ONLN)` | ≈ 2 |
+| `.computer/CPU temperature` | DoubleBar °C · 5 s samples, 5-min bar, TTL 15 min | Mean > 80 warning, > 90 Error | hwmon coretemp `Package id 0` → thermal zone `x86_pkg_temp` → first `cpu` zone; not registered without one | 288 |
+| `.computer/Disks monitoring/Free space on disk %` | Double % · 5 min, TTL 15 min | < 10 warning, < 5 Error | `statvfs` `f_bavail/f_blocks` of the mount holding `/srv/docker` (resolved via `/proc/self/mountinfo`) | 288 |
+| `.computer/Disks monitoring/Free inodes %` | Double % · 5 min, TTL 15 min | < 10 warning | `statvfs` `f_favail/f_files`, same mount | 288 |
+
+"Warning" is a notification with the ⚠ icon and no status change: HSM alerts can only raise
+Error (the server's only status action), exactly like the managed Total CPU / Free RAM alerts.
+Rejected: load average (Total CPU is already a 5-minute bar with an EMA). Deferred: the archive
+HDDs — they sleep and must never be polled, so they need the backup scripts to record free space
+into a state file first (the archive/backup part of #1417, still open).
+
+**Docker (#1416) and backups (#1417)** — the original Stage-0 proposal below, still subject to the
+same per-sensor agreement; the Docker rows are being reworked in #1416.
 
 | Path (under garage-server/LinuxProbe/) | Type | Period | TTL | Notes |
 |---|---|---|---|---|
-| `CPU/Load average {1m,5m,15m}` | Double ×3 | 60 s | 3 min | `/proc/loadavg`. Exists in no collector; graduation into the shared catalog is a separate rule-#9/#10 decision. |
-| `CPU/Logical cores` | Int | start + daily | 48 h | Host capacity, so operators read container % correctly. |
-| `Disk/srv-docker/{Free %, Free inodes}` | Double | 5 min | 15 min | statvfs on the mount actually containing `/srv/docker` (resolved, not assumed); free MB comes from the collector's disk sensor. |
-| `Disk/archive/{wd4tb,mediacentr}/{Free GB, Snapshot age}` | Double | on snapshot change | ≥ backup window + slack (~26 h) | From SSD snapshot JSON only. Stale = TTL expiry, a distinct state. |
+| `Disk/archive/{wd4tb,mediacentr}/{Free GB, Snapshot age}` | Double | on snapshot change | ≥ backup window + slack (~26 h) | From SSD snapshot JSON only. Stale = TTL expiry, a distinct state. Deferred (see above). |
 | `Docker/<project>/<service>/CPU % one core` | DoubleBar | 60 s | 3 min | Δ cumulative cgroup counter between two *valid* samples; 100% = one core (host may show up to 400%). First sample / counter reset / container-id change / abnormal interval ⇒ skip, never 0. |
 | `Docker/<project>/<service>/Memory {usage,limit} bytes` | Double ×2 | 60 s | 3 min | usage = cgroup usage − `inactive_file` (docker-stats convention, fixture-pinned). Unlimited limit ⇒ host MemTotal as effective limit, flagged in comment — never 0. |
 | `Docker/<project>/<service>/Running` | Bool | 60 s | 3 min | Missing expected service ≠ running. |
@@ -217,7 +239,6 @@ probe. Workstreams #1416 (Docker) and #1417 (disks, backup contract) stay open f
 | `Backup/<job>/{Last result, Duration min, Missed deadline}` | Enum/Double/Bool | on new result | job-specific | From the backup task's snapshot contract (§4.4). |
 | `Backup/<job>/Last success heartbeat` | Bool/TTL | only on *new* confirmed success | deadline-derived | Re-reading the same result never refreshes it; "never succeeded yet" is a distinct initial state. |
 | `Probe/Sources/<name> status` | Enum {ok, degraded, failed} | 60 s | 3 min | Per-source failure isolation made visible. |
-| `CPU/Load average {1m,5m,15m}`, `CPU/Logical cores` | — | — | — | Built and then **removed** under the owner rule in §4.2; revisit as catalog sensors shared with managed rather than probe-local ones. |
 
 Path identity: from `com.docker.compose.project`/`.service` labels — stable across
 recreate/upgrade. Normalization: `[A-Za-z0-9_-]` kept, others → `_`, collisions detected via
@@ -463,6 +484,7 @@ coverage in both drivers and an agent version bump:
 | #1425 | per-product download bundle + `install.sh` generated by the server | — |
 | #1438 | typed metric-source seam with error reporting; live disk prediction; `DiskLetter` fix | 0.8.0 / 0.5.34, managed 3.5.2 |
 | #1446 | the prediction tells the truth: signed EMA, 6 h window, explicit states | 0.8.1 / 0.5.35, managed 3.5.3 |
+| #1476 PR | alerts in the Rust wrapper; enum-with-options ABI; option-anchored bars/rates; probe-only host/disk sensors; `build-deb.sh` | 0.9.0 / 0.5.37, probe 0.2.0 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
@@ -471,6 +493,29 @@ per window instead of twenty, `Stop:` markers delivered across a restart, both a
 still in standby before and after (checked with `smartctl -n standby -i`, since garage has no
 `hdparm`), RSS 4–19 MB against a 64 MB cap, and no errors in the journal or on
 `.module/Collector errors` over 24 h.
+
+**Phase 2 — probe-only host/disk sensors (#1476, collector 0.9.0 / agent 0.5.37, probe 0.2.0).**
+The Rust wrapper gained alert support (`AlertBuilder`, `attach_alert` on every sensor handle) and
+`enum_sensor_with_options`, the foundation the Docker source (#1416) builds on. That needed one
+additive C entry point, `hsm_collector_create_enum_sensor_with_sensor_options` (the managed
+`Service status` shape: EnumOptions + AggregateData + alert), and exposed a native/managed
+divergence fixed in the same release: bar and rate sensors created with options ignored
+`is_computer_sensor` / `sensor_location` for the path. The probe registers the four sensors of
+§4.2a on its own threads, and the `.deb` is now built by `src/probe-linux/packaging/build-deb.sh`
+in a `debian:13` container instead of by hand; an upgrade restarts a running probe.
+
+Trial on garage-server, 2026-09-28, `0.1.0~trial3` → `0.2.0~trial1` → `0.2.0~trial2` with the
+existing config and credential untouched: `Registered 19 sensor(s) on connect` (15 + 4); `Logical
+cores` = 4 (`nproc` 4); `CPU temperature` read from hwmon coretemp `Package id 0`, full 5-minute
+bars of **60 samples** (12:00–12:05 UTC: mean 39.7 °C, min 32, max 50; the sensor read 43 °C at
+the same time); `Free space on disk %` = 43.31 and `Free inodes %` = 83.28, matching `df -P /` /
+`df -Pi /` (47159604 / 108897780 blocks, 5791935 / 6955008 inodes) on the same `/` mount the
+collector's `Free space on disk` reports (46 054 MB). Cost after 15 min: cgroup memory 5.4 MiB
+(peak 6.4 MiB) of 64 MiB, process RSS 18.5 MB, CPU 2.2 s in 883 s ≈ 0.25 % of one core against the
+5 % quota, 7 tasks of 32; no warnings or errors in the journal; both archive HDDs still in standby
+before and after. The server's Sensor API history shows a closed bar only once the next one
+arrives (it keeps the newest bar in memory as the partial "last value") — a server behavior, the
+UI shows the latest bar at once.
 
 ## 10. What the parity work uncovered
 
@@ -495,8 +540,10 @@ runs on an invariant locale with no `N:` drive and a quiet disk.
 ## 11. What remains
 
 **Needs an owner decision before any code:**
-- the Docker sensor set (#1416) and the disk/backup sensors (#1417) — per-sensor agreement, §4.2a;
-- whether load average and logical cores come back, and if so as shared catalog sensors;
+- the archive-HDD and backup sensors (#1417) — the disks sleep and must never be polled, so they
+  wait for the backup scripts to record free space into a state file the probe can read;
+- whether the probe-only host sensors (logical cores, CPU temperature) ever move into the shared
+  catalog and onto Windows — for now they stay Linux-probe-only (load average was rejected);
 - when releases resume: `agent-v0.5.35` plus the `agent-release.txt` pin (without it none of the
   Windows-affecting fixes above reach deployed agents), the managed NuGet push, and the
   `probe-v*` channel (#1418).

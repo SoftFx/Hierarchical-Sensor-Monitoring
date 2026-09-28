@@ -36,3 +36,21 @@ bar_default_alerts_none|stop
 bar_default_alerts_none|expect_registration_count|1
 bar_default_alerts_none|expect_registration_contains|0|"DisplayUnit":null
 bar_default_alerts_none|expect_registration_contains|0|"DefaultAlertsOptions":0}
+
+# The options decide where a bar is anchored, exactly as for an instant sensor (CalculateSystemPath):
+# is_computer => <computer>/<path>, sensor_location=1 (Product) => the bare path. Native 0.9.0 fix —
+# before it a bar always landed under <computer>/<module>/ and is_computer only forced the singleton.
+bar_computer_sensor_anchors_at_computer_node|create_collector
+bar_computer_sensor_anchors_at_computer_node|create_double_bar_sensor_full_options|.computer/contract/bar/computer|300000|0|2|0|-1|-1|0|0|-1|-1|-1|-1|true|0|c
+bar_computer_sensor_anchors_at_computer_node|start
+bar_computer_sensor_anchors_at_computer_node|stop
+bar_computer_sensor_anchors_at_computer_node|expect_registration_count|1
+bar_computer_sensor_anchors_at_computer_node|expect_registration_contains|0|"Path":"conformance-host/.computer/contract/bar/computer"
+bar_computer_sensor_anchors_at_computer_node|expect_registration_contains|0|"IsSingletonSensor":true
+
+bar_product_sensor_anchors_at_root|create_collector
+bar_product_sensor_anchors_at_root|create_double_bar_sensor_full_options|contract/bar/product|300000|0|2|0|-1|-1|0|0|-1|-1|-1|-1|false|1|p
+bar_product_sensor_anchors_at_root|start
+bar_product_sensor_anchors_at_root|stop
+bar_product_sensor_anchors_at_root|expect_registration_count|1
+bar_product_sensor_anchors_at_root|expect_registration_contains|0|"Path":"contract/bar/product"

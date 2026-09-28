@@ -26,6 +26,45 @@ pub struct Config {
     /// probe's guarantee that a `systemctl restart` is never held up.
     #[serde(default = "default_shutdown_timeout_sec")]
     pub shutdown_timeout_sec: u64,
+    /// Probe-only sensor sources (the sensors that exist only in this probe, not in the shared
+    /// collector catalog). Everything defaults to on.
+    #[serde(default)]
+    pub probe: ProbeConfig,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbeConfig {
+    #[serde(default)]
+    pub host_sensors: HostSensorsConfig,
+}
+
+/// `probe.hostSensors`: the host/disk probe-only sensors. `enabled: false` turns off all of them;
+/// `cpuTemperature` / `disk` turn off one source each (`Logical cores` has no switch of its own —
+/// it costs two records a day).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostSensorsConfig {
+    #[serde(default = "enabled_by_default")]
+    pub enabled: bool,
+    #[serde(default = "enabled_by_default")]
+    pub cpu_temperature: bool,
+    #[serde(default = "enabled_by_default")]
+    pub disk: bool,
+}
+
+impl Default for HostSensorsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cpu_temperature: true,
+            disk: true,
+        }
+    }
+}
+
+fn enabled_by_default() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -255,6 +294,10 @@ mod tests {
         let example = include_str!("../../packaging/config.example.json");
         let config = Config::parse(example).expect("the packaged example must parse");
         assert!(config.hsm.address.starts_with("https://"));
+        // The skeleton documents the probe-only switches, all on.
+        assert!(example.contains("\"hostSensors\""));
+        let host = &config.probe.host_sensors;
+        assert!(host.enabled && host.cpu_temperature && host.disk);
     }
 
     #[test]
@@ -268,6 +311,37 @@ mod tests {
         }"#;
         let config = Config::parse(old).expect("an old config must still parse");
         assert_eq!(config.hsm.port, 44330);
+    }
+
+    #[test]
+    fn host_sensors_default_to_on_when_the_section_is_absent() {
+        // A config written before the probe-only sensors existed (the deployed trial's) must turn
+        // them on, not fail and not silently leave them off.
+        let config = Config::parse(MINIMAL).expect("parse");
+        let host = &config.probe.host_sensors;
+        assert!(host.enabled && host.cpu_temperature && host.disk);
+    }
+
+    #[test]
+    fn each_host_source_can_be_turned_off_and_omitted_switches_stay_on() {
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "hostSensors": { "cpuTemperature": false } } }"#;
+        let host = Config::parse(text).expect("parse").probe.host_sensors;
+        assert!(host.enabled);
+        assert!(!host.cpu_temperature);
+        assert!(host.disk);
+
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "hostSensors": { "enabled": false } } }"#;
+        let host = Config::parse(text).expect("parse").probe.host_sensors;
+        assert!(!host.enabled);
+    }
+
+    #[test]
+    fn a_non_boolean_switch_is_rejected() {
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "hostSensors": { "disk": "no" } } }"#;
+        assert!(matches!(Config::parse(text), Err(ConfigError::Parse(_))));
     }
 
     #[test]

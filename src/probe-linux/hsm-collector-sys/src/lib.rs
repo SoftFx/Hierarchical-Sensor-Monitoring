@@ -55,6 +55,90 @@ pub const HSM_SENSOR_TYPE_INT_BAR: hsm_sensor_type_t = 4;
 pub const HSM_SENSOR_TYPE_DOUBLE_BAR: hsm_sensor_type_t = 5;
 pub const HSM_SENSOR_TYPE_ENUM: hsm_sensor_type_t = 10;
 
+/// Opaque alert builder handle. Owned by the collector and freed with it — there is no release.
+#[repr(C)]
+pub struct hsm_alert_t {
+    _private: [u8; 0],
+}
+
+// ---- Alert DSL enums (`hsm_alert_*_t`) ------------------------------------------------------
+// The numeric values are the managed AlertOperation/AlertProperty/... values the collector puts on
+// the wire, so they are frozen. `build.rs` asserts every one of them against the real header.
+
+pub type hsm_alert_kind_t = i32;
+pub const HSM_ALERT_KIND_INSTANT: hsm_alert_kind_t = 0;
+pub const HSM_ALERT_KIND_BAR: hsm_alert_kind_t = 1;
+pub const HSM_ALERT_KIND_TTL: hsm_alert_kind_t = 2;
+
+pub type hsm_alert_combination_t = i32;
+pub const HSM_ALERT_COMBINATION_AND: hsm_alert_combination_t = 0;
+pub const HSM_ALERT_COMBINATION_OR: hsm_alert_combination_t = 1;
+
+pub type hsm_alert_operation_t = i32;
+pub const HSM_ALERT_OP_LESS_THAN_OR_EQUAL: hsm_alert_operation_t = 0;
+pub const HSM_ALERT_OP_LESS_THAN: hsm_alert_operation_t = 1;
+pub const HSM_ALERT_OP_GREATER_THAN: hsm_alert_operation_t = 2;
+pub const HSM_ALERT_OP_GREATER_THAN_OR_EQUAL: hsm_alert_operation_t = 3;
+pub const HSM_ALERT_OP_EQUAL: hsm_alert_operation_t = 4;
+pub const HSM_ALERT_OP_NOT_EQUAL: hsm_alert_operation_t = 5;
+pub const HSM_ALERT_OP_IS_CHANGED: hsm_alert_operation_t = 20;
+pub const HSM_ALERT_OP_IS_ERROR: hsm_alert_operation_t = 21;
+pub const HSM_ALERT_OP_IS_OK: hsm_alert_operation_t = 22;
+pub const HSM_ALERT_OP_IS_CHANGED_TO_ERROR: hsm_alert_operation_t = 23;
+pub const HSM_ALERT_OP_IS_CHANGED_TO_OK: hsm_alert_operation_t = 24;
+pub const HSM_ALERT_OP_CONTAINS: hsm_alert_operation_t = 30;
+pub const HSM_ALERT_OP_STARTS_WITH: hsm_alert_operation_t = 31;
+pub const HSM_ALERT_OP_ENDS_WITH: hsm_alert_operation_t = 32;
+pub const HSM_ALERT_OP_RECEIVED_NEW_VALUE: hsm_alert_operation_t = 50;
+
+pub type hsm_alert_property_t = i32;
+pub const HSM_ALERT_PROP_STATUS: hsm_alert_property_t = 0;
+pub const HSM_ALERT_PROP_COMMENT: hsm_alert_property_t = 1;
+pub const HSM_ALERT_PROP_VALUE: hsm_alert_property_t = 20;
+pub const HSM_ALERT_PROP_MIN: hsm_alert_property_t = 101;
+pub const HSM_ALERT_PROP_MAX: hsm_alert_property_t = 102;
+pub const HSM_ALERT_PROP_MEAN: hsm_alert_property_t = 103;
+pub const HSM_ALERT_PROP_COUNT: hsm_alert_property_t = 104;
+pub const HSM_ALERT_PROP_LAST_VALUE: hsm_alert_property_t = 105;
+pub const HSM_ALERT_PROP_FIRST_VALUE: hsm_alert_property_t = 106;
+pub const HSM_ALERT_PROP_LENGTH: hsm_alert_property_t = 120;
+pub const HSM_ALERT_PROP_ORIGINAL_SIZE: hsm_alert_property_t = 151;
+pub const HSM_ALERT_PROP_NEW_SENSOR_DATA: hsm_alert_property_t = 200;
+pub const HSM_ALERT_PROP_EMA_VALUE: hsm_alert_property_t = 210;
+pub const HSM_ALERT_PROP_EMA_MIN: hsm_alert_property_t = 211;
+pub const HSM_ALERT_PROP_EMA_MAX: hsm_alert_property_t = 212;
+pub const HSM_ALERT_PROP_EMA_MEAN: hsm_alert_property_t = 213;
+pub const HSM_ALERT_PROP_EMA_COUNT: hsm_alert_property_t = 214;
+
+pub type hsm_alert_target_type_t = i32;
+pub const HSM_ALERT_TARGET_CONST: hsm_alert_target_type_t = 0;
+pub const HSM_ALERT_TARGET_LAST_VALUE: hsm_alert_target_type_t = 1;
+
+pub type hsm_alert_destination_mode_t = i32;
+pub const HSM_ALERT_DESTINATION_NOT_INITIALIZED: hsm_alert_destination_mode_t = 1;
+pub const HSM_ALERT_DESTINATION_EMPTY: hsm_alert_destination_mode_t = 2;
+pub const HSM_ALERT_DESTINATION_FROM_PARENT: hsm_alert_destination_mode_t = 3;
+pub const HSM_ALERT_DESTINATION_ALL_CHATS: hsm_alert_destination_mode_t = 200;
+
+pub type hsm_alert_repeat_mode_t = i32;
+pub const HSM_ALERT_REPEAT_FIVE_MINUTES: hsm_alert_repeat_mode_t = 5;
+pub const HSM_ALERT_REPEAT_TEN_MINUTES: hsm_alert_repeat_mode_t = 6;
+pub const HSM_ALERT_REPEAT_FIFTEEN_MINUTES: hsm_alert_repeat_mode_t = 7;
+pub const HSM_ALERT_REPEAT_THIRTY_MINUTES: hsm_alert_repeat_mode_t = 10;
+pub const HSM_ALERT_REPEAT_HOURLY: hsm_alert_repeat_mode_t = 20;
+pub const HSM_ALERT_REPEAT_DAILY: hsm_alert_repeat_mode_t = 50;
+pub const HSM_ALERT_REPEAT_WEEKLY: hsm_alert_repeat_mode_t = 100;
+
+pub type hsm_alert_icon_t = i32;
+pub const HSM_ALERT_ICON_OK: hsm_alert_icon_t = 0;
+pub const HSM_ALERT_ICON_WARNING: hsm_alert_icon_t = 1;
+pub const HSM_ALERT_ICON_ERROR: hsm_alert_icon_t = 2;
+pub const HSM_ALERT_ICON_PAUSE: hsm_alert_icon_t = 3;
+pub const HSM_ALERT_ICON_ARROW_UP: hsm_alert_icon_t = 10;
+pub const HSM_ALERT_ICON_ARROW_DOWN: hsm_alert_icon_t = 11;
+pub const HSM_ALERT_ICON_CLOCK: hsm_alert_icon_t = 100;
+pub const HSM_ALERT_ICON_HOURGLASS: hsm_alert_icon_t = 101;
+
 pub type hsm_log_level_t = i32;
 pub const HSM_LOG_LEVEL_DEBUG: hsm_log_level_t = 0;
 pub const HSM_LOG_LEVEL_INFO: hsm_log_level_t = 1;
@@ -284,6 +368,70 @@ extern "C" {
         out_sensor: *mut *mut hsm_sensor_t,
     ) -> hsm_result_t;
 
+    /// Enum sensor with BOTH its option set and the full sensor options (collector 0.9.0).
+    /// `options` must not be NULL; start it from [`hsm_sensor_options_default`].
+    pub fn hsm_collector_create_enum_sensor_with_sensor_options(
+        collector: *mut hsm_collector_t,
+        path: *const c_char,
+        options: *const hsm_sensor_options_t,
+        enum_options: *const hsm_enum_option_t,
+        enum_option_count: usize,
+        out_sensor: *mut *mut hsm_sensor_t,
+    ) -> hsm_result_t;
+
+    // ---- Alert builders ----------------------------------------------------------------------
+    // An alert handle is owned by the collector and freed when the collector is destroyed. Attach
+    // it to a sensor BEFORE the collector starts: attaching rebuilds the sensor's registration
+    // payload, which the collector emits at Start, so a later attach is not applied retroactively.
+
+    pub fn hsm_collector_create_alert(
+        collector: *mut hsm_collector_t,
+        kind: hsm_alert_kind_t,
+        out_alert: *mut *mut hsm_alert_t,
+    ) -> hsm_result_t;
+    /// `target_value` is the Const comparand as text; ignored (may be NULL) for a LastValue target.
+    pub fn hsm_alert_add_condition(
+        alert: *mut hsm_alert_t,
+        combination: hsm_alert_combination_t,
+        property: hsm_alert_property_t,
+        operation: hsm_alert_operation_t,
+        target_type: hsm_alert_target_type_t,
+        target_value: *const c_char,
+    ) -> hsm_result_t;
+    pub fn hsm_alert_set_notification(
+        alert: *mut hsm_alert_t,
+        notification_template: *const c_char,
+        destination: hsm_alert_destination_mode_t,
+    ) -> hsm_result_t;
+    /// `time_unix_ms` may be negative (the managed "instant hourly" anchor is 0001-01-01T12:00Z).
+    pub fn hsm_alert_set_scheduled_notification(
+        alert: *mut hsm_alert_t,
+        notification_template: *const c_char,
+        time_unix_ms: i64,
+        repeat_mode: hsm_alert_repeat_mode_t,
+        instant_send: bool,
+        destination: hsm_alert_destination_mode_t,
+    ) -> hsm_result_t;
+    pub fn hsm_alert_set_icon(alert: *mut hsm_alert_t, icon: hsm_alert_icon_t) -> hsm_result_t;
+    pub fn hsm_alert_set_icon_raw(
+        alert: *mut hsm_alert_t,
+        utf8_icon: *const c_char,
+    ) -> hsm_result_t;
+    pub fn hsm_alert_set_sensor_error(alert: *mut hsm_alert_t) -> hsm_result_t;
+    pub fn hsm_alert_set_confirmation_period(
+        alert: *mut hsm_alert_t,
+        period_ms: i64,
+    ) -> hsm_result_t;
+    pub fn hsm_alert_set_disabled(alert: *mut hsm_alert_t, disabled: bool) -> hsm_result_t;
+    pub fn hsm_alert_set_inactivity_period(alert: *mut hsm_alert_t, period_ms: i64)
+        -> hsm_result_t;
+    /// Copies the alert into the sensor's registration and rebuilds its payload. The collector does
+    /// no locking of its own here: the caller serializes it against Start.
+    pub fn hsm_sensor_attach_alert(
+        sensor: *mut hsm_sensor_t,
+        alert: *mut hsm_alert_t,
+    ) -> hsm_result_t;
+
     pub fn hsm_collector_create_double_bar_sensor_with_options(
         collector: *mut hsm_collector_t,
         path: *const c_char,
@@ -436,6 +584,89 @@ mod layout_tests {
         assert_eq!(offset_of!(hsm_default_sensor_params_t, process_name), 0);
         assert_eq!(offset_of!(hsm_default_sensor_params_t, is_host_service), 32);
         assert_eq!(offset_of!(hsm_default_sensor_params_t, product_version), 40);
+    }
+
+    // `ABI_ENUM_VALUES`: build.rs's ENUM_VALUES table, as asserted against the header.
+    include!(concat!(env!("OUT_DIR"), "/abi_enum_values.rs"));
+
+    #[test]
+    fn alert_enum_values_match_the_c_header() {
+        // build.rs asserted every entry of its ENUM_VALUES table against the header with a
+        // static_assert; this closes the Rust side against the same table, so a constant typed
+        // wrong here (or a value the collector renumbers) fails instead of reaching the wire.
+        macro_rules! rust_side {
+            ($($name:ident),* $(,)?) => { [$((stringify!($name), $name as i64)),*] };
+        }
+        let rust = rust_side![
+            HSM_ALERT_KIND_INSTANT,
+            HSM_ALERT_KIND_BAR,
+            HSM_ALERT_KIND_TTL,
+            HSM_ALERT_COMBINATION_AND,
+            HSM_ALERT_COMBINATION_OR,
+            HSM_ALERT_OP_LESS_THAN_OR_EQUAL,
+            HSM_ALERT_OP_LESS_THAN,
+            HSM_ALERT_OP_GREATER_THAN,
+            HSM_ALERT_OP_GREATER_THAN_OR_EQUAL,
+            HSM_ALERT_OP_EQUAL,
+            HSM_ALERT_OP_NOT_EQUAL,
+            HSM_ALERT_OP_IS_CHANGED,
+            HSM_ALERT_OP_IS_ERROR,
+            HSM_ALERT_OP_IS_OK,
+            HSM_ALERT_OP_IS_CHANGED_TO_ERROR,
+            HSM_ALERT_OP_IS_CHANGED_TO_OK,
+            HSM_ALERT_OP_CONTAINS,
+            HSM_ALERT_OP_STARTS_WITH,
+            HSM_ALERT_OP_ENDS_WITH,
+            HSM_ALERT_OP_RECEIVED_NEW_VALUE,
+            HSM_ALERT_PROP_STATUS,
+            HSM_ALERT_PROP_COMMENT,
+            HSM_ALERT_PROP_VALUE,
+            HSM_ALERT_PROP_MIN,
+            HSM_ALERT_PROP_MAX,
+            HSM_ALERT_PROP_MEAN,
+            HSM_ALERT_PROP_COUNT,
+            HSM_ALERT_PROP_LAST_VALUE,
+            HSM_ALERT_PROP_FIRST_VALUE,
+            HSM_ALERT_PROP_LENGTH,
+            HSM_ALERT_PROP_ORIGINAL_SIZE,
+            HSM_ALERT_PROP_NEW_SENSOR_DATA,
+            HSM_ALERT_PROP_EMA_VALUE,
+            HSM_ALERT_PROP_EMA_MIN,
+            HSM_ALERT_PROP_EMA_MAX,
+            HSM_ALERT_PROP_EMA_MEAN,
+            HSM_ALERT_PROP_EMA_COUNT,
+            HSM_ALERT_TARGET_CONST,
+            HSM_ALERT_TARGET_LAST_VALUE,
+            HSM_ALERT_DESTINATION_NOT_INITIALIZED,
+            HSM_ALERT_DESTINATION_EMPTY,
+            HSM_ALERT_DESTINATION_FROM_PARENT,
+            HSM_ALERT_DESTINATION_ALL_CHATS,
+            HSM_ALERT_REPEAT_FIVE_MINUTES,
+            HSM_ALERT_REPEAT_TEN_MINUTES,
+            HSM_ALERT_REPEAT_FIFTEEN_MINUTES,
+            HSM_ALERT_REPEAT_THIRTY_MINUTES,
+            HSM_ALERT_REPEAT_HOURLY,
+            HSM_ALERT_REPEAT_DAILY,
+            HSM_ALERT_REPEAT_WEEKLY,
+            HSM_ALERT_ICON_OK,
+            HSM_ALERT_ICON_WARNING,
+            HSM_ALERT_ICON_ERROR,
+            HSM_ALERT_ICON_PAUSE,
+            HSM_ALERT_ICON_ARROW_UP,
+            HSM_ALERT_ICON_ARROW_DOWN,
+            HSM_ALERT_ICON_CLOCK,
+            HSM_ALERT_ICON_HOURGLASS,
+        ];
+        // Same set on both sides: nothing bound here that build.rs did not check, and nothing
+        // checked there that is not bound.
+        assert_eq!(rust.len(), ABI_ENUM_VALUES.len());
+        for (name, value) in rust {
+            let expected = ABI_ENUM_VALUES
+                .iter()
+                .find(|(checked, _)| *checked == name)
+                .unwrap_or_else(|| panic!("{name} is not in build.rs ENUM_VALUES"));
+            assert_eq!(value, expected.1, "{name}");
+        }
     }
 
     #[test]

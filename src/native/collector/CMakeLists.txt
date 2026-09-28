@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.8.2 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.9.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -291,6 +291,9 @@ endif()
 
 add_test(NAME native_invalid_argument_clears_out_params
     COMMAND hsm_collector_tests native_invalid_argument_clears_out_params
+)
+add_test(NAME native_enum_sensor_with_sensor_options_validates_arguments
+    COMMAND hsm_collector_tests native_enum_sensor_with_sensor_options_validates_arguments
 )
 add_test(NAME native_add_after_collector_destroy_is_rejected
     COMMAND hsm_collector_tests native_add_after_collector_destroy_is_rejected

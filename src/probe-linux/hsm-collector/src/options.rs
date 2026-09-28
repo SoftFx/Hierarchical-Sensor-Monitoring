@@ -93,9 +93,38 @@ pub struct SensorOptions {
     /// Code from the managed `Unit` enum; `None` emits null.
     pub unit: Option<i32>,
     pub keep_history: Option<Duration>,
+    /// `AggregateData`: the server stores a value only when it differs from the previous one (the
+    /// managed state sensors, e.g. `Service status`). `None` emits null.
+    pub aggregate_data: Option<bool>,
+    /// `EnableGrafana`; `None` emits null.
+    pub enable_grafana: Option<bool>,
+    /// Anchor the path at the computer node (`<computer>/<path>`) instead of
+    /// `<computer>/<module>/<path>`; host sensors pass a `.computer/…` path. Also forces
+    /// `IsSingletonSensor` on the wire, as the managed `IsComputerSensor` does.
+    pub is_computer_sensor: bool,
 }
 
 impl SensorOptions {
+    pub fn with_keep_history(mut self, keep_history: Duration) -> Self {
+        self.keep_history = Some(keep_history);
+        self
+    }
+
+    pub fn with_aggregate_data(mut self, aggregate_data: bool) -> Self {
+        self.aggregate_data = Some(aggregate_data);
+        self
+    }
+
+    pub fn with_enable_grafana(mut self, enable_grafana: bool) -> Self {
+        self.enable_grafana = Some(enable_grafana);
+        self
+    }
+
+    pub fn with_is_computer_sensor(mut self, is_computer_sensor: bool) -> Self {
+        self.is_computer_sensor = is_computer_sensor;
+        self
+    }
+
     pub fn with_ttl(mut self, ttl: Duration) -> Self {
         self.ttl = Some(ttl);
         self
@@ -124,7 +153,19 @@ impl SensorOptions {
         if let Some(unit) = self.unit {
             raw.unit = unit;
         }
+        if let Some(aggregate_data) = self.aggregate_data {
+            raw.aggregate_data = tri_state(aggregate_data);
+        }
+        if let Some(enable_grafana) = self.enable_grafana {
+            raw.enable_grafana = tri_state(enable_grafana);
+        }
+        raw.is_computer_sensor = self.is_computer_sensor;
     }
+}
+
+/// The ABI's tri-state bool: -1 = null (left at the default sentinel), 0 = false, 1 = true.
+fn tri_state(value: bool) -> i32 {
+    i32::from(value)
 }
 
 /// One registered option of an enum sensor.
