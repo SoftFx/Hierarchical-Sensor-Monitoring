@@ -2,14 +2,17 @@
 //! kills under `<module>/Docker/<project>/<service>/…`, read from the Docker Engine API over its
 //! Unix socket.
 //!
-//! One thread, two cadences: stats every `docker.samplePeriodSec` (CPU and memory samples into
-//! 5-minute bars) and a 60-second state poll (listing + inspect: status, health, restart count,
-//! OOM). The contract — paths, types, cadences, thresholds — is [`contract`]; the per-service
+//! A probe-only [`Source`] on a thread of its own with two cadences: stats every
+//! `probe.docker.samplePeriodSec` (CPU and memory samples into 5-minute bars) and, on the first tick
+//! and every 60 s after, a state poll (listing + inspect: status, health, restart count, OOM).
+//! [`register`] primes the source before the collector starts: every service already running is
+//! registered in the Start batch, alerts included; a service that appears later is registered at
+//! runtime (the collector posts it, alerts included, from 0.9.1). The contract — paths, types, cadences, thresholds — is [`contract`]; the per-service
 //! state machines are [`tracker`]; naming is [`identity`]; math is [`stats`]; the durable memory is
 //! [`state`].
 //!
 //! Isolation (root rules #6/#8): the source never takes the probe down and never invents a value.
-//! A panic inside a tick is caught and logged; an unreachable daemon is logged once, retried with
+//! A panic inside a tick is caught by the probe-only runner; an unreachable daemon is logged once, retried with
 //! a bounded backoff and resumed silently; a failed read skips that value (logged, deduplicated)
 //! rather than posting 0, `false` or a stale state.
 
@@ -23,16 +26,15 @@ pub mod state;
 pub mod stats;
 pub mod tracker;
 
-use std::collections::{BTreeMap, HashSet};
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use hsm_collector::Collector;
 
 use crate::config::DockerConfig;
 use crate::logging::{Level, Logger};
+use crate::probe_only::Source;
 
 use engine::{ApiVersion, EngineApi, EngineError};
 use identity::{Membership, Naming, ServiceKey};
@@ -43,8 +45,24 @@ use tracker::{ContainerObservation, InspectFacts, Tracker};
 
 pub use engine::Engine;
 
-/// How often the source thread wakes to check the stop flag while idle.
-const TICK: Duration = Duration::from_millis(200);
+impl<T: EngineApi + ?Sized> EngineApi for Box<T> {
+    fn set_api_version(&mut self, api: ApiVersion) {
+        (**self).set_api_version(api)
+    }
+    fn version(&mut self) -> Result<engine::VersionInfo, EngineError> {
+        (**self).version()
+    }
+    fn containers(&mut self) -> Result<Vec<engine::ContainerSummary>, EngineError> {
+        (**self).containers()
+    }
+    fn inspect(&mut self, id: &str) -> Result<engine::ContainerInspect, EngineError> {
+        (**self).inspect(id)
+    }
+    fn stats(&mut self, id: &str) -> Result<engine::ContainerStats, EngineError> {
+        (**self).stats(id)
+    }
+}
+
 /// Bound on the log-once key set (the managed `MessageDeduplicator` lesson: diverse keys must not
 /// grow memory without limit). Past it the set is cleared, which at worst repeats a line.
 const LOG_ONCE_CAPACITY: usize = 1024;
@@ -78,7 +96,6 @@ impl LogOnce {
 pub struct DockerSource<'c, E: EngineApi> {
     collector: &'c Collector,
     engine: E,
-    logger: Arc<Logger>,
     sample_period: Duration,
     oom_latch: Duration,
     compose_only: bool,
@@ -93,6 +110,12 @@ pub struct DockerSource<'c, E: EngineApi> {
     cpu: CpuTracker,
     log_once: LogOnce,
     origin: Instant,
+    /// When the next state poll is due (the first tick polls).
+    next_poll: Instant,
+    /// While the daemon is unreachable: no call before this.
+    unavailable_until: Option<Instant>,
+    backoff: Duration,
+    should_stop: fn() -> bool,
 }
 
 impl<'c, E: EngineApi> DockerSource<'c, E> {
@@ -101,7 +124,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         collector: &'c Collector,
         engine: E,
         config: &DockerConfig,
-        logger: Arc<Logger>,
+        logger: &Logger,
         state_path: Option<PathBuf>,
         host_mem_total: Option<u64>,
     ) -> Self {
@@ -148,7 +171,6 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         Self {
             collector,
             engine,
-            logger,
             sample_period: config.sample_period(),
             oom_latch: config.oom_latch(),
             compose_only: config.compose_only,
@@ -162,107 +184,255 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             cpu: CpuTracker::default(),
             log_once: LogOnce::default(),
             origin: Instant::now(),
+            next_poll: Instant::now(),
+            unavailable_until: None,
+            backoff: config.sample_period(),
+            should_stop: crate::shutdown::is_requested,
         }
     }
 
-    /// Run until `should_stop` returns true. Never panics out: a panicking tick is logged and the
-    /// loop goes on.
-    pub fn run(&mut self, should_stop: &dyn Fn() -> bool) {
-        let mut next_poll = Instant::now();
-        let mut next_sample = next_poll + self.sample_period;
-        let mut backoff = self.sample_period;
-        let mut unavailable_until: Option<Instant> = None;
+    /// One scheduled tick: the state poll when it is due, then a stats round. An unreachable daemon
+    /// is logged once and backed off (doubling up to [`contract::MAX_BACKOFF`]); ticks inside the
+    /// backoff make no call at all. Nothing is posted for a failed read.
+    fn tick(&mut self, logger: &Logger) {
+        let now = Instant::now();
+        if self.unavailable_until.is_some_and(|until| now < until) {
+            return;
+        }
+        let should_stop = self.should_stop;
+        let mut failure = None;
+        if now >= self.next_poll {
+            failure = self.poll(logger, &should_stop).err();
+            self.next_poll = now + contract::STATE_POLL_PERIOD;
+        }
+        if failure.is_none() {
+            failure = self.sample_stats(logger, &should_stop).err();
+        }
 
-        while !should_stop() {
-            let now = Instant::now();
-            if unavailable_until.is_some_and(|until| now < until) {
-                std::thread::sleep(TICK);
-                continue;
-            }
-
-            let mut failure = None;
-            if now >= next_poll {
-                failure = self.guarded("poll", |source| source.poll(should_stop));
-                next_poll = advance(next_poll, contract::STATE_POLL_PERIOD, now);
-            }
-            if failure.is_none() && now >= next_sample {
-                failure = self.guarded("sample", |source| source.sample(should_stop));
-                next_sample = advance(next_sample, self.sample_period, now);
-            }
-
-            match failure {
-                Some(error) => {
-                    if self.log_once.raise("engine") {
-                        if error.is_socket_missing() {
-                            // A host without Docker: nothing is wrong, nothing to report.
-                            self.logger.info(format!(
-                                "docker: {error}; no Docker on this host? The Docker source waits \
-                                 for the socket (set docker.enabled = false to silence this)"
-                            ));
+        match failure {
+            Some(error) => {
+                if self.log_once.raise("engine") {
+                    if error.is_socket_missing() {
+                        // A host without Docker: nothing is wrong, nothing to report.
+                        logger.info(format!(
+                            "docker: {error}; no Docker on this host? The Docker source waits for \
+                             the socket (set probe.docker.enabled = false to silence this)"
+                        ));
+                    } else {
+                        let hint = if error.is_permission_denied() {
+                            " — the probe needs the docker group: see docker-access.sh / the \
+                             docker.conf drop-in in the README"
                         } else {
-                            let hint = if error.is_permission_denied() {
-                                " — the probe needs the docker group: see docker-access.sh / \
-                                 the docker.conf drop-in in the README"
-                            } else {
-                                ""
-                            };
-                            self.logger.error(format!(
-                                "docker: {error}{hint}; Docker values are skipped until it \
-                                 answers (retrying with backoff up to {} s)",
-                                contract::MAX_BACKOFF.as_secs()
-                            ));
-                        }
-                    }
-                    unavailable_until = Some(Instant::now() + backoff);
-                    backoff = (backoff * 2).min(contract::MAX_BACKOFF);
-                    // Re-list first thing after the outage.
-                    next_poll = Instant::now();
-                }
-                None => {
-                    unavailable_until = None;
-                    backoff = self.sample_period;
-                    if self.log_once.clear("engine") {
-                        self.logger
-                            .log(Level::Debug, "docker: the Engine API answers again");
+                            ""
+                        };
+                        logger.error(format!(
+                            "docker: {error}{hint}; Docker values are skipped until it answers \
+                             (retrying with backoff up to {} s)",
+                            contract::MAX_BACKOFF.as_secs()
+                        ));
                     }
                 }
+                self.unavailable_until = Some(Instant::now() + self.backoff);
+                self.backoff = (self.backoff * 2).min(contract::MAX_BACKOFF);
+                // Re-list first thing after the outage.
+                self.next_poll = Instant::now();
             }
-
-            let wake = next_poll.min(next_sample);
-            while !should_stop() && Instant::now() < wake {
-                std::thread::sleep(TICK.min(wake.saturating_duration_since(Instant::now())));
+            None => {
+                self.unavailable_until = None;
+                self.backoff = self.sample_period;
+                if self.log_once.clear("engine") {
+                    logger.log(Level::Debug, "docker: the Engine API answers again");
+                }
             }
         }
-
-        self.persist();
     }
 
-    /// Run one tick, containing a panic. Returns the error that should trigger backoff, if any.
-    fn guarded(
+    /// Register, before the collector starts, the sensors of every service the daemon lists now
+    /// (and of services remembered as recently removed), so they ride the Start registration with
+    /// their alerts. Posts nothing: a value before Start would be dropped, and the state machines
+    /// advance from the first tick. A daemon that does not answer is not an error here — the
+    /// services then register at runtime once it does.
+    pub fn prime(&mut self, logger: &Logger) -> Result<usize, EngineError> {
+        let Some((services, roster)) = self.observe(logger, &|| false)? else {
+            return Ok(0);
+        };
+        // (has a healthcheck, has run)
+        let present: BTreeMap<ServiceKey, (bool, bool)> = services
+            .iter()
+            .map(|(key, containers)| {
+                let health = containers
+                    .iter()
+                    .any(|c| c.inspect.as_ref().is_some_and(|i| i.health.is_some()));
+                (key.clone(), (health, roster.contains_key(key)))
+            })
+            .collect();
+
+        let now = unix_now();
+        let retention =
+            i64::try_from(contract::VANISHED_SERVICE_RETENTION.as_secs()).unwrap_or(i64::MAX);
+        let vanished: BTreeSet<ServiceKey> = self
+            .tracker
+            .state
+            .services
+            .values()
+            .filter(|record| now.saturating_sub(record.last_seen) <= retention)
+            .map(|record| record.key())
+            .filter(|key| !present.contains_key(key))
+            .collect();
+        self.naming
+            .resolve_all(present.keys().chain(vanished.iter()));
+
+        let collector = self.collector;
+        let mut registered = 0;
+        for (key, (has_health, has_run)) in &present {
+            let sensors = self.sensors_of(key);
+            let mut problems = sensors.ensure_state_sensors(collector, true, *has_health);
+            if *has_run {
+                problems.extend(sensors.ensure_stats_sensors(collector));
+            }
+            report_problems(logger, &mut self.log_once, &problems);
+            registered += 1;
+        }
+        for key in &vanished {
+            let problems = self
+                .sensors_of(key)
+                .ensure_state_sensors(collector, false, false);
+            report_problems(logger, &mut self.log_once, &problems);
+            registered += 1;
+        }
+        Ok(registered)
+    }
+
+    fn sensors_of(&mut self, key: &ServiceKey) -> &mut ServiceSensors<'c> {
+        let node = self.naming.node(key);
+        self.sensors
+            .entry(key.clone())
+            .or_insert_with(|| ServiceSensors::new(node))
+    }
+
+    /// The service a listed container belongs to, or `None` (logged once) when it is not
+    /// monitored: a `docker compose run` one-off, or unlabelled with `composeOnly`.
+    fn member(
         &mut self,
-        what: &str,
-        tick: impl FnOnce(&mut Self) -> Result<(), EngineError>,
-    ) -> Option<EngineError> {
-        match catch_unwind(AssertUnwindSafe(|| tick(self))) {
-            Ok(Ok(())) => None,
-            Ok(Err(error)) => Some(error),
-            Err(panic) => {
-                let message = panic
-                    .downcast_ref::<&str>()
-                    .map(|s| (*s).to_string())
-                    .or_else(|| panic.downcast_ref::<String>().cloned())
-                    .unwrap_or_else(|| "unknown panic".to_string());
-                if self.log_once.raise(&format!("panic:{what}")) {
-                    self.logger.error(format!(
-                        "docker: the {what} tick panicked ({message}); skipped"
+        logger: &Logger,
+        container: &engine::ContainerSummary,
+    ) -> Option<ServiceKey> {
+        let reason = match identity::membership(container, self.compose_only) {
+            Membership::Service(key) => return Some(key),
+            Membership::OneOff => {
+                "is a `docker compose run` one-off; not monitored as a replica of \
+                                   its service"
+            }
+            Membership::Skipped => {
+                "has no Compose labels; not monitored (probe.docker.composeOnly)"
+            }
+        };
+        if self.log_once.raise(&format!("skip:{}", container.id)) {
+            logger.info(format!(
+                "docker: container '{}' ({}) {reason}",
+                container.name(),
+                short_id(&container.id)
+            ));
+        }
+        None
+    }
+
+    /// List and inspect: every monitored container, grouped by service, plus the containers to
+    /// sample (running or paused). `None` when a stop was requested midway. Completed one-shot jobs
+    /// (see [`tracker::completed_job`]) that are not already known as services are left out.
+    #[allow(clippy::type_complexity)]
+    fn observe(
+        &mut self,
+        logger: &Logger,
+        should_stop: &dyn Fn() -> bool,
+    ) -> Result<
+        Option<(
+            BTreeMap<ServiceKey, Vec<ContainerObservation>>,
+            BTreeMap<ServiceKey, Vec<String>>,
+        )>,
+        EngineError,
+    > {
+        self.ensure_api(logger)?;
+        let containers = self.engine.containers()?;
+
+        let mut services: BTreeMap<ServiceKey, Vec<ContainerObservation>> = BTreeMap::new();
+        let mut roster: BTreeMap<ServiceKey, Vec<String>> = BTreeMap::new();
+        for container in &containers {
+            let Some(key) = self.member(logger, container) else {
+                continue;
+            };
+            if should_stop() {
+                return Ok(None);
+            }
+            let inspect = match self.engine.inspect(&container.id) {
+                Ok(inspect) => {
+                    self.clear_read_failure(logger, "inspect", &container.id);
+                    Some(InspectFacts {
+                        restart_count: inspect.restart_count,
+                        oom_killed: inspect.state.oom_killed,
+                        health: inspect.state.health.map(|health| health.status),
+                        exit_code: inspect.state.exit_code,
+                        restart_policy: inspect.host_config.restart_policy.name,
+                    })
+                }
+                // A timeout here may be this one container wedged: skip it, keep the others.
+                Err(error) if error.is_unavailable() && !error.is_timeout() => return Err(error),
+                Err(error) => {
+                    self.read_failure(logger, "inspect", &container.id, &key, &error);
+                    None
+                }
+            };
+            if matches!(container.state.as_str(), "running" | "paused") {
+                roster
+                    .entry(key.clone())
+                    .or_default()
+                    .push(container.id.clone());
+            }
+            if tracker::service_status_of(&container.state).is_none()
+                && self.log_once.raise(&format!("state:{}", container.state))
+            {
+                logger.warn(format!(
+                    "docker: unknown container state '{}' ({key}); not reflected in Service status",
+                    container.state
+                ));
+            }
+            services.entry(key).or_default().push(ContainerObservation {
+                id: container.id.clone(),
+                state: container.state.clone(),
+                inspect,
+            });
+        }
+
+        // A service first seen as a finished one-shot job is not a service. One that the state
+        // already knows stays a service (its Stopped is real), and a job whose container runs
+        // again becomes one from then on.
+        let jobs: Vec<ServiceKey> = services
+            .iter()
+            .filter(|(key, _)| !self.tracker.state.services.contains_key(*key))
+            .filter_map(
+                |(key, containers)| match tracker::completed_job(containers) {
+                    Some(false) => None,
+                    Some(true) => Some((key.clone(), true)),
+                    None => Some((key.clone(), false)),
+                },
+            )
+            .map(|(key, decided)| {
+                if decided && self.log_once.raise(&format!("job:{key}")) {
+                    logger.info(format!(
+                        "docker: {key}: completed job (exit 0, no restart policy), not monitored"
                     ));
                 }
-                None
-            }
+                key
+            })
+            .collect();
+        for key in &jobs {
+            services.remove(key);
+            roster.remove(key);
         }
+        Ok(Some((services, roster)))
     }
 
-    fn ensure_api(&mut self) -> Result<(), EngineError> {
+    fn ensure_api(&mut self, logger: &Logger) -> Result<(), EngineError> {
         if self.api.is_some() {
             return Ok(());
         }
@@ -279,7 +449,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         };
         let api = engine::negotiate_api_version(min, max)?;
         self.engine.set_api_version(api);
-        self.logger.info(format!(
+        logger.info(format!(
             "docker: Engine {} (API {min}..={max}); speaking API {api}",
             version.version
         ));
@@ -288,79 +458,17 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
     }
 
     /// The 60-second state poll: list, inspect, advance the state machines, post.
-    pub fn poll(&mut self, should_stop: &dyn Fn() -> bool) -> Result<(), EngineError> {
-        self.ensure_api()?;
-        let containers = self.engine.containers()?;
-
-        let mut services: BTreeMap<ServiceKey, Vec<ContainerObservation>> = BTreeMap::new();
-        let mut roster: BTreeMap<ServiceKey, Vec<String>> = BTreeMap::new();
-        for container in &containers {
-            let key = match identity::membership(container, self.compose_only) {
-                Membership::Service(key) => key,
-                Membership::OneOff => {
-                    if self.log_once.raise(&format!("skip:{}", container.id)) {
-                        self.logger.info(format!(
-                            "docker: container '{}' ({}) is a `docker compose run` one-off; not \
-                             monitored as a replica of its service",
-                            container.name(),
-                            short_id(&container.id)
-                        ));
-                    }
-                    continue;
-                }
-                Membership::Skipped => {
-                    if self.log_once.raise(&format!("skip:{}", container.id)) {
-                        self.logger.info(format!(
-                            "docker: container '{}' ({}) has no Compose labels; not monitored \
-                             (docker.composeOnly)",
-                            container.name(),
-                            short_id(&container.id)
-                        ));
-                    }
-                    continue;
-                }
-            };
-            if should_stop() {
-                return Ok(());
-            }
-            let inspect = match self.engine.inspect(&container.id) {
-                Ok(inspect) => {
-                    self.clear_read_failure("inspect", &container.id);
-                    Some(InspectFacts {
-                        restart_count: inspect.restart_count,
-                        oom_killed: inspect.state.oom_killed,
-                        health: inspect.state.health.map(|health| health.status),
-                    })
-                }
-                // A timeout here may be this one container wedged: skip it, keep the others.
-                Err(error) if error.is_unavailable() && !error.is_timeout() => return Err(error),
-                Err(error) => {
-                    self.read_failure("inspect", &container.id, &key, &error);
-                    None
-                }
-            };
-            if matches!(container.state.as_str(), "running" | "paused") {
-                roster
-                    .entry(key.clone())
-                    .or_default()
-                    .push(container.id.clone());
-            }
-            if tracker::service_status_of(&container.state).is_none()
-                && self.log_once.raise(&format!("state:{}", container.state))
-            {
-                self.logger.warn(format!(
-                    "docker: unknown container state '{}' ({key}); not reflected in Service status",
-                    container.state
-                ));
-            }
-            services.entry(key).or_default().push(ContainerObservation {
-                id: container.id.clone(),
-                state: container.state.clone(),
-                inspect,
-            });
-        }
+    pub fn poll(
+        &mut self,
+        logger: &Logger,
+        should_stop: &dyn Fn() -> bool,
+    ) -> Result<(), EngineError> {
+        let Some((services, roster)) = self.observe(logger, should_stop)? else {
+            return Ok(());
+        };
 
         let outcome = self.tracker.observe(&services, unix_now(), self.oom_latch);
+
         self.naming
             .resolve_all(services.keys().chain(outcome.reports.keys()));
         for key in outcome.reports.keys() {
@@ -369,7 +477,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         }
 
         for key in &outcome.forgotten {
-            self.logger.info(format!(
+            logger.info(format!(
                 "docker: forgetting {key}: not seen for more than {} days",
                 contract::VANISHED_SERVICE_RETENTION.as_secs() / 86_400
             ));
@@ -387,7 +495,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 report.present,
                 report.has_healthcheck,
             );
-            report_problems(&self.logger, &mut self.log_once, &problems);
+            report_problems(logger, &mut self.log_once, &problems);
 
             let mut posted_restart = None;
             let mut failures = Vec::new();
@@ -418,8 +526,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             }
             for failure in failures {
                 if self.log_once.raise(&format!("post:{node}:{failure}")) {
-                    self.logger
-                        .error(format!("docker: {node}: value not posted: {failure}"));
+                    logger.error(format!("docker: {node}: value not posted: {failure}"));
                 }
             }
         }
@@ -430,12 +537,16 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 .values()
                 .any(|ids| ids.iter().any(|listed| listed == id))
         });
-        self.persist_if_dirty();
+        self.persist_if_dirty(logger);
         Ok(())
     }
 
     /// The stats tick: one one-shot stats call per sampled container, CPU and memory into bars.
-    pub fn sample(&mut self, should_stop: &dyn Fn() -> bool) -> Result<(), EngineError> {
+    pub fn sample_stats(
+        &mut self,
+        logger: &Logger,
+        should_stop: &dyn Fn() -> bool,
+    ) -> Result<(), EngineError> {
         if self.api.is_none() {
             // No successful poll yet: nothing to sample.
             return Ok(());
@@ -454,14 +565,14 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 }
                 let stats = match self.engine.stats(id) {
                     Ok(stats) => {
-                        self.clear_read_failure("stats", id);
+                        self.clear_read_failure(logger, "stats", id);
                         stats
                     }
                     Err(error) if error.is_unavailable() && !error.is_timeout() => {
                         return Err(error)
                     }
                     Err(error) => {
-                        self.read_failure("stats", id, key, &error);
+                        self.read_failure(logger, "stats", id, key, &error);
                         self.cpu.forget(id);
                         cpu_valid = false;
                         memory_valid = false;
@@ -499,13 +610,13 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 .entry(key.clone())
                 .or_insert_with(|| ServiceSensors::new(node));
             let problems = sensors.ensure_stats_sensors(self.collector);
-            report_problems(&self.logger, &mut self.log_once, &problems);
+            report_problems(logger, &mut self.log_once, &problems);
 
             let mut failures = Vec::new();
             let memory = memory_valid
                 .then(|| stats::service_memory(&readings, self.host_mem_total))
                 .flatten();
-            self.logger.log(
+            logger.log(
                 Level::Debug,
                 &format!(
                     "docker: {}: CPU {}, memory {}",
@@ -548,39 +659,45 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let node = sensors.node.clone();
             for failure in failures {
                 if self.log_once.raise(&format!("post:{node}:{failure}")) {
-                    self.logger
-                        .error(format!("docker: {node}: value not posted: {failure}"));
+                    logger.error(format!("docker: {node}: value not posted: {failure}"));
                 }
             }
         }
         Ok(())
     }
 
-    fn read_failure(&mut self, what: &str, id: &str, key: &ServiceKey, error: &EngineError) {
+    fn read_failure(
+        &mut self,
+        logger: &Logger,
+        what: &str,
+        id: &str,
+        key: &ServiceKey,
+        error: &EngineError,
+    ) {
         if self.log_once.raise(&format!("{what}:{id}")) {
-            self.logger.warn(format!(
+            logger.warn(format!(
                 "docker: {what} of {key} container {} failed ({error}); its values are skipped",
                 short_id(id)
             ));
         }
     }
 
-    fn clear_read_failure(&mut self, what: &str, id: &str) {
+    fn clear_read_failure(&mut self, logger: &Logger, what: &str, id: &str) {
         if self.log_once.clear(&format!("{what}:{id}")) {
-            self.logger.log(
+            logger.log(
                 Level::Debug,
                 &format!("docker: {what} of container {} works again", short_id(id)),
             );
         }
     }
 
-    fn persist_if_dirty(&mut self) {
+    fn persist_if_dirty(&mut self, logger: &Logger) {
         if self.tracker.take_dirty() {
-            self.persist();
+            self.persist(logger);
         }
     }
 
-    fn persist(&mut self) {
+    fn persist(&mut self, logger: &Logger) {
         let Some(path) = &self.state_path else {
             return;
         };
@@ -590,7 +707,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             }
             Err(error) => {
                 if self.log_once.raise("state-save") {
-                    self.logger.error(format!(
+                    logger.error(format!(
                         "docker: cannot write the state file {} ({error}); restart baselines and \
                          OOM latches are kept in memory only",
                         path.display()
@@ -614,17 +731,6 @@ fn report_problems(logger: &Logger, log_once: &mut LogOnce, problems: &[String])
     }
 }
 
-/// The next due time: one period on, or one period from now if the tick ran late — never a burst
-/// of catch-up ticks.
-fn advance(due: Instant, period: Duration, now: Instant) -> Instant {
-    let next = due + period;
-    if next <= now {
-        now + period
-    } else {
-        next
-    }
-}
-
 fn short_id(id: &str) -> &str {
     id.get(..12).unwrap_or(id)
 }
@@ -634,6 +740,58 @@ fn unix_now() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|elapsed| i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX))
         .unwrap_or(0)
+}
+
+impl<E: EngineApi + Send> Source for DockerSource<'_, E> {
+    fn name(&self) -> &'static str {
+        "docker"
+    }
+
+    fn period(&self) -> Duration {
+        self.sample_period
+    }
+
+    fn sample(&mut self, logger: &Logger) {
+        self.tick(logger);
+    }
+}
+
+/// Build the Docker source, prime its registrations (before Start) and hand it to the probe-only
+/// runner. `None` when disabled.
+pub fn register<'c>(
+    collector: &'c Collector,
+    config: &DockerConfig,
+    engine: Box<dyn EngineApi + Send>,
+    state_path: Option<PathBuf>,
+    logger: &Logger,
+) -> Option<Box<dyn Source + 'c>> {
+    if !config.enabled {
+        logger.info("docker: source disabled (probe.docker.enabled = false)");
+        return None;
+    }
+    let mut source = DockerSource::new(
+        collector,
+        engine,
+        config,
+        logger,
+        state_path,
+        host_mem_total(),
+    );
+    match source.prime(logger) {
+        Ok(count) => logger.info(format!(
+            "docker: {count} Compose service(s) registered (socket {}, stats every {} s, state \
+             poll every {} s)",
+            config.socket.display(),
+            config.sample_period_sec,
+            contract::STATE_POLL_PERIOD.as_secs()
+        )),
+        // Logged once by the first tick with the right severity (missing socket vs permission).
+        Err(error) => logger.info(format!(
+            "docker: nothing registered before start ({error}); services register once the \
+             Engine API answers"
+        )),
+    }
+    Some(Box::new(source))
 }
 
 /// `MemTotal` of this host, bytes, from `/proc/meminfo`.
@@ -745,8 +903,28 @@ pub(crate) mod tests {
         Collector::new(&options).expect("create")
     }
 
-    fn quiet() -> Arc<Logger> {
-        Arc::new(Logger::new(Level::Error, None))
+    fn quiet() -> Logger {
+        Logger::new(Level::Error, None)
+    }
+
+    /// A source over the garage captures whose stop check never fires (the process-global
+    /// shutdown flag is set by another unit test).
+    pub(crate) fn garage_source<'c>(
+        collector: &'c Collector,
+        engine: FixtureEngine,
+        config: &DockerConfig,
+        state_path: Option<PathBuf>,
+    ) -> DockerSource<'c, FixtureEngine> {
+        let mut source = DockerSource::new(
+            collector,
+            engine,
+            config,
+            &quiet(),
+            state_path,
+            Some(GARAGE_MEM_TOTAL),
+        );
+        source.should_stop = || false;
+        source
     }
 
     const GARAGE_MEM_TOTAL: u64 = 16_298_872 * 1024;
@@ -754,24 +932,26 @@ pub(crate) mod tests {
     /// Drive the garage fixtures through one poll and two stats rounds, as the running source
     /// would over its first ~10 seconds.
     pub(crate) fn drive_garage(collector: &Collector) {
-        let mut source = DockerSource::new(
+        let mut source = garage_source(
             collector,
             FixtureEngine::garage(),
             &DockerConfig::default(),
-            quiet(),
             None,
-            Some(GARAGE_MEM_TOTAL),
         );
         let never = || false;
-        source.poll(&never).expect("poll");
-        source.sample(&never).expect("first stats round");
+        source.poll(&quiet(), &never).expect("poll");
+        source
+            .sample_stats(&quiet(), &never)
+            .expect("first stats round");
         source.engine.round = 1;
         // The captures are ~5.3 s apart; model that interval on the source's monotonic clock.
         source.origin = source
             .origin
             .checked_sub(Duration::from_millis(5_300))
             .expect("monotonic clock past 5 s");
-        source.sample(&never).expect("second stats round");
+        source
+            .sample_stats(&quiet(), &never)
+            .expect("second stats round");
     }
 
     fn registered(collector: &Collector) -> Vec<String> {
@@ -797,21 +977,19 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
 
         let docker: Vec<&String> = paths.iter().filter(|p| p.contains("/Docker/")).collect();
-        // 12 services × 3 state sensors + 4 healthchecks + 11 running services × 3 stats sensors.
-        assert_eq!(docker.len(), 12 * 3 + 4 + 11 * 3, "{docker:#?}");
+        // 11 services × 3 state sensors + 4 healthchecks + 11 × 3 stats sensors; the twelfth,
+        // lingua-ci/ci-image, is a completed one-shot job and not monitored at all.
+        assert_eq!(docker.len(), 11 * 3 + 4 + 11 * 3, "{docker:#?}");
         let has = |p: &str| paths.iter().any(|x| x == p);
         assert!(has(
             "garage-server/LinuxProbe/Docker/gitea/db/Service status"
         ));
         assert!(has("garage-server/LinuxProbe/Docker/gitea/db/Health"));
         assert!(has("garage-server/LinuxProbe/Docker/gitea/db/CPU"));
-        // The exited one-shot image: state sensors only — it never ran while watched.
-        assert!(has(
-            "garage-server/LinuxProbe/Docker/lingua-ci/ci-image/Service status"
-        ));
-        assert!(!has(
-            "garage-server/LinuxProbe/Docker/lingua-ci/ci-image/CPU"
-        ));
+        // The exited one-shot image build (Exited (0), restart "no"): a completed job, no node.
+        assert!(paths
+            .iter()
+            .all(|p| !p.contains("/Docker/lingua-ci/ci-image/")));
         // No healthcheck, no Health node.
         assert!(!has("garage-server/LinuxProbe/Docker/hsm/app/Health"));
     }
@@ -822,25 +1000,112 @@ pub(crate) mod tests {
         collector.start().expect("start");
         let mut engine = FixtureEngine::garage();
         engine.down = true;
-        let mut source = DockerSource::new(
-            &collector,
-            engine,
-            &DockerConfig::default(),
-            quiet(),
-            None,
-            Some(GARAGE_MEM_TOTAL),
-        );
-        let error = source.poll(&|| false).expect_err("down");
+        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        let error = source.poll(&quiet(), &|| false).expect_err("down");
         assert!(error.is_unavailable());
         assert!(
             registered(&collector).is_empty(),
             "no Docker sensor without Docker"
         );
-        // The loop turns that into backoff and exits promptly on stop.
-        let started = Instant::now();
-        let stop_after = Instant::now() + Duration::from_millis(300);
-        source.run(&|| Instant::now() >= stop_after);
-        assert!(started.elapsed() < Duration::from_secs(3));
+        // A scheduled tick turns that into a backoff: the next tick makes no call at all.
+        Source::sample(&mut source, &quiet());
+        let until = source.unavailable_until.expect("backing off");
+        assert!(until > Instant::now());
+        assert_eq!(
+            source.backoff,
+            Duration::from_secs(10),
+            "doubled from the 5 s period"
+        );
+        Source::sample(&mut source, &quiet());
+        assert_eq!(
+            source.unavailable_until,
+            Some(until),
+            "no retry inside the backoff"
+        );
+        // The daemon comes back: once the backoff has passed, the next tick recovers.
+        source.engine.down = false;
+        source.unavailable_until = Some(Instant::now());
+        Source::sample(&mut source, &quiet());
+        assert_eq!(source.unavailable_until, None);
+        assert_eq!(source.backoff, Duration::from_secs(5));
+        // Registered at runtime (the collector was already running), alerts included.
+        let status = collector
+            .registrations()
+            .into_iter()
+            .find(|json| json.contains("Docker/gitea/db/Service status"))
+            .expect("gitea/db registered at runtime");
+        assert!(status.contains("\"EnumOptions\":[{"), "{status}");
+    }
+
+    /// The garage tree primed before Start: everything registers in the Start batch.
+    #[test]
+    fn prime_registers_the_whole_tree_before_start_with_alerts() {
+        let collector = test_collector();
+        let mut source = garage_source(
+            &collector,
+            FixtureEngine::garage(),
+            &DockerConfig::default(),
+            None,
+        );
+        assert_eq!(source.prime(&quiet()).expect("prime"), 11);
+        collector.start().expect("start");
+        let registrations = collector.registrations();
+        collector.stop().expect("stop");
+        let docker: Vec<&String> = registrations
+            .iter()
+            .filter(|j| j.contains("/Docker/"))
+            .collect();
+        assert_eq!(docker.len(), 70);
+
+        let find = |path: &str| {
+            registrations
+                .iter()
+                .find(|json| {
+                    json.contains(&format!(
+                        "\"Path\":\"garage-server/LinuxProbe/Docker/{path}\""
+                    ))
+                })
+                .unwrap_or_else(|| panic!("{path} not registered"))
+                .clone()
+        };
+        // Service status: the Windows ServiceStatusPrototype alert, byte for byte (the same text
+        // the native collector's own service-status registration golden pins).
+        let status = find("gitea/db/Service status");
+        assert!(
+            status.contains(
+                "\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":5,\"Property\":20,\
+                 \"Target\":{\"Type\":0,\"Value\":\"4\"}}],\"Status\":1,\"DestinationMode\":3,\
+                 \"Template\":\"[$product]$path $operation Running\",\"Icon\":null,\"IsDisabled\":false,\
+                 \"ConfirmationPeriod\":3000000000,\"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\
+                 \"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true}]"
+            ),
+            "{status}"
+        );
+        for path in [
+            "gitea/db/CPU",
+            "gitea/db/Memory used %",
+            "gitea/db/Health",
+            "gitea/db/Restart count",
+            "gitea/db/OOM killed",
+        ] {
+            assert!(
+                find(path).contains("\"Alerts\":[{"),
+                "{path} carries its alert"
+            );
+        }
+        assert!(find("gitea/db/Memory limit").contains("\"Alerts\":null"));
+        // The state sensors store only changes on the server.
+        for path in [
+            "gitea/db/Service status",
+            "gitea/db/Health",
+            "gitea/db/OOM killed",
+        ] {
+            assert!(
+                find(path).contains("\"AggregateData\":true"),
+                "{path}: {}",
+                find(path)
+            );
+        }
     }
 
     #[test]
@@ -863,15 +1128,13 @@ pub(crate) mod tests {
         let path = dir.join(state::STATE_FILE_NAME);
         state.save(&path).unwrap();
 
-        let mut source = DockerSource::new(
+        let mut source = garage_source(
             &collector,
             engine,
             &DockerConfig::default(),
-            quiet(),
             Some(path.clone()),
-            Some(GARAGE_MEM_TOTAL),
         );
-        source.poll(&|| false).expect("poll");
+        source.poll(&quiet(), &|| false).expect("poll");
         let portainer: Vec<String> = registered(&collector)
             .into_iter()
             .filter(|p| p.contains("/Docker/portainer/"))
@@ -880,10 +1143,11 @@ pub(crate) mod tests {
             portainer,
             vec!["garage-server/LinuxProbe/Docker/portainer/portainer/Service status"]
         );
-        // The poll persisted the other services it met.
+        // The poll persisted the other services it met: 10 listed services (ci-image is a
+        // completed job) plus the remembered portainer.
         let (saved, _) = State::load(&path);
-        assert_eq!(saved.services.len(), 12);
-        assert_eq!(source.tracker().state.services.len(), 12);
+        assert_eq!(saved.services.len(), 11);
+        assert_eq!(source.tracker().state.services.len(), 11);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -910,8 +1174,8 @@ pub(crate) mod tests {
                 compose_only,
                 ..DockerConfig::default()
             };
-            let mut source = DockerSource::new(&collector, engine, &config, quiet(), None, None);
-            source.poll(&|| false).expect("poll");
+            let mut source = garage_source(&collector, engine, &config, None);
+            source.poll(&quiet(), &|| false).expect("poll");
             let standalone = registered(&collector)
                 .into_iter()
                 .filter(|p| p.contains("/Docker/_standalone/adhoc/"))
@@ -928,18 +1192,13 @@ pub(crate) mod tests {
         collector.start().expect("start");
         let mut engine = FixtureEngine::garage();
         engine.wedged = Some("abbd59dcacc8");
-        let mut source = DockerSource::new(
-            &collector,
-            engine,
-            &DockerConfig::default(),
-            quiet(),
-            None,
-            Some(GARAGE_MEM_TOTAL),
-        );
+        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
         source
-            .poll(&|| false)
+            .poll(&quiet(), &|| false)
             .expect("a timeout on one container is not an outage");
-        source.sample(&|| false).expect("nor in the stats tick");
+        source
+            .sample_stats(&quiet(), &|| false)
+            .expect("nor in the stats tick");
         let paths = registered(&collector);
         let has = |p: &str| paths.iter().any(|x| x == p);
         assert!(has(
@@ -961,15 +1220,13 @@ pub(crate) mod tests {
         {
             let collector = test_collector();
             collector.start().expect("start");
-            let mut source = DockerSource::new(
+            let mut source = garage_source(
                 &collector,
                 FixtureEngine::garage(),
                 &DockerConfig::default(),
-                quiet(),
                 Some(path.clone()),
-                Some(GARAGE_MEM_TOTAL),
             );
-            source.poll(&|| false).expect("poll");
+            source.poll(&quiet(), &|| false).expect("poll");
         }
         let (saved, _) = State::load(&path);
         let db = &saved.services[&ServiceKey::new("gitea", "db")];
@@ -977,18 +1234,78 @@ pub(crate) mod tests {
 
         // A restarted source adopts every remembered node before naming anything.
         let collector = test_collector();
-        let mut source = DockerSource::new(
+        let mut source = garage_source(
             &collector,
             FixtureEngine::garage(),
             &DockerConfig::default(),
-            quiet(),
             Some(path.clone()),
-            Some(GARAGE_MEM_TOTAL),
         );
         assert_eq!(
             source.naming.node(&ServiceKey::new("gitea", "db")),
             "Docker/gitea/db"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    const CI_IMAGE: &str = "garage-server/LinuxProbe/Docker/lingua-ci/ci-image/Service status";
+
+    fn set_ci_image_state(engine: &mut FixtureEngine, state: &str) {
+        let ci = engine
+            .list
+            .iter_mut()
+            .find(|c| c.label(identity::SERVICE_LABEL) == Some("ci-image"))
+            .expect("ci-image listed");
+        ci.state = state.into();
+    }
+
+    #[test]
+    fn a_completed_job_is_not_monitored_until_it_runs_again() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = garage_source(
+            &collector,
+            FixtureEngine::garage(),
+            &DockerConfig::default(),
+            None,
+        );
+        source.poll(&quiet(), &|| false).expect("poll");
+        assert!(!registered(&collector).iter().any(|p| p == CI_IMAGE));
+        let job = ServiceKey::new("lingua-ci", "ci-image");
+        assert!(!source.tracker().state.services.contains_key(&job));
+
+        // The job is rebuilt: a running container makes it a service from then on...
+        set_ci_image_state(&mut source.engine, "running");
+        source.poll(&quiet(), &|| false).expect("poll");
+        assert!(registered(&collector).iter().any(|p| p == CI_IMAGE));
+        // ...so its next Exited (0) is a real Stopped, not a job to forget.
+        set_ci_image_state(&mut source.engine, "exited");
+        source.poll(&quiet(), &|| false).expect("poll");
+        assert!(source.tracker().state.services.contains_key(&job));
+    }
+
+    #[test]
+    fn a_service_the_state_knows_stays_a_service_when_it_exits_zero() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut state = State::default();
+        let job = ServiceKey::new("lingua-ci", "ci-image");
+        let mut record = state::ServiceRecord::new(&job);
+        record.last_seen = unix_now() - 60;
+        state.services.insert(job, record);
+        let dir = std::env::temp_dir().join(format!("hsm-probe-docker-job-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(state::STATE_FILE_NAME);
+        state.save(&path).unwrap();
+
+        let mut source = garage_source(
+            &collector,
+            FixtureEngine::garage(),
+            &DockerConfig::default(),
+            Some(path),
+        );
+        source.poll(&quiet(), &|| false).expect("poll");
+        assert!(registered(&collector).iter().any(|p| p == CI_IMAGE));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1003,14 +1320,5 @@ pub(crate) mod tests {
             once.raise(&n.to_string());
         }
         assert!(once.active.len() <= LOG_ONCE_CAPACITY);
-    }
-
-    #[test]
-    fn late_ticks_do_not_burst() {
-        let start = Instant::now();
-        let period = Duration::from_secs(5);
-        assert_eq!(advance(start, period, start), start + period);
-        let late = start + Duration::from_secs(60);
-        assert_eq!(advance(start, period, late), late + period);
     }
 }

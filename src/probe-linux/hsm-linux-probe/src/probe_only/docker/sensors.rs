@@ -14,7 +14,7 @@ use hsm_collector::{
     SensorOptions, SensorStatus,
 };
 
-use super::alerts::{self, AlertTarget};
+use super::alerts::{self, Target};
 use super::contract::{self, health, service_status};
 
 /// The sensor handles of one service. `None` = not registered (yet).
@@ -177,27 +177,30 @@ fn enum_options(options: &[(i32, &str, &str, i32)]) -> Vec<EnumOption> {
         .collect()
 }
 
-// TODO(#1416): `Service status`, `Health` and `OOM killed` are specified with AggregateData = true
-// (the server stores only changes). The wrapper gains `SensorOptions::aggregate_data` and
-// `Collector::enum_sensor_with_options` in the foundation PR; switch these three over then.
+// `Service status`, `Health` and `OOM killed` are polled every minute but change rarely: with
+// AggregateData the server stores only the changes (the Windows service-status prototype does the
+// same), which is what keeps a service at ~580 records a day.
 
 fn register_service_status<'c>(collector: &'c Collector, path: &str) -> Registered<EnumSensor<'c>> {
-    let sensor = collector.enum_sensor(
+    let options = SensorOptions::default()
+        .with_description(SERVICE_STATUS_DESCRIPTION)
+        .with_aggregate_data(true);
+    let sensor = collector.enum_sensor_with_options(
         path,
-        Some(SERVICE_STATUS_DESCRIPTION),
+        &options,
         &enum_options(&service_status::OPTIONS),
     )?;
-    let alert = alerts::attach(collector, AlertTarget::ServiceStatus(&sensor));
+    let alert = alerts::attach(collector, Target::ServiceStatus(&sensor));
     Ok((sensor, alert))
 }
 
 fn register_health<'c>(collector: &'c Collector, path: &str) -> Registered<EnumSensor<'c>> {
-    let sensor = collector.enum_sensor(
-        path,
-        Some(HEALTH_DESCRIPTION),
-        &enum_options(&health::OPTIONS),
-    )?;
-    let alert = alerts::attach(collector, AlertTarget::Health(&sensor));
+    let options = SensorOptions::default()
+        .with_description(HEALTH_DESCRIPTION)
+        .with_aggregate_data(true);
+    let sensor =
+        collector.enum_sensor_with_options(path, &options, &enum_options(&health::OPTIONS))?;
+    let alert = alerts::attach(collector, Target::Health(&sensor));
     Ok((sensor, alert))
 }
 
@@ -206,14 +209,16 @@ fn register_restart_count<'c>(collector: &'c Collector, path: &str) -> Registere
         .with_description(RESTART_COUNT_DESCRIPTION)
         .with_unit(contract::UNIT_COUNT);
     let sensor = collector.int_sensor(path, &options)?;
-    let alert = alerts::attach(collector, AlertTarget::RestartCount(&sensor));
+    let alert = alerts::attach(collector, Target::RestartCount(&sensor));
     Ok((sensor, alert))
 }
 
 fn register_oom_killed<'c>(collector: &'c Collector, path: &str) -> Registered<BoolSensor<'c>> {
-    let options = SensorOptions::default().with_description(OOM_KILLED_DESCRIPTION);
+    let options = SensorOptions::default()
+        .with_description(OOM_KILLED_DESCRIPTION)
+        .with_aggregate_data(true);
     let sensor = collector.bool_sensor(path, &options)?;
-    let alert = alerts::attach(collector, AlertTarget::OomKilled(&sensor));
+    let alert = alerts::attach(collector, Target::OomKilled(&sensor));
     Ok((sensor, alert))
 }
 
@@ -228,7 +233,7 @@ fn register_cpu<'c>(collector: &'c Collector, path: &str) -> Registered<DoubleBa
         contract::BAR_PRECISION,
         &options,
     )?;
-    let alert = alerts::attach(collector, AlertTarget::Cpu(&sensor));
+    let alert = alerts::attach(collector, Target::Cpu(&sensor));
     Ok((sensor, alert))
 }
 
@@ -246,7 +251,7 @@ fn register_memory_used<'c>(
         contract::BAR_PRECISION,
         &options,
     )?;
-    let alert = alerts::attach(collector, AlertTarget::MemoryUsed(&sensor));
+    let alert = alerts::attach(collector, Target::MemoryUsed(&sensor));
     Ok((sensor, alert))
 }
 

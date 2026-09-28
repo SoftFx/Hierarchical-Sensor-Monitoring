@@ -201,6 +201,23 @@ pub struct ContainerInspect {
     pub restart_count: u64,
     #[serde(default)]
     pub state: InspectState,
+    #[serde(default)]
+    pub host_config: InspectHostConfig,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct InspectHostConfig {
+    #[serde(default)]
+    pub restart_policy: InspectRestartPolicy,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct InspectRestartPolicy {
+    /// `no` (or empty), `always`, `unless-stopped`, `on-failure`.
+    #[serde(default)]
+    pub name: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -208,6 +225,8 @@ pub struct ContainerInspect {
 pub struct InspectState {
     #[serde(default, rename = "OOMKilled")]
     pub oom_killed: bool,
+    #[serde(default)]
+    pub exit_code: i64,
     /// Present only when the image or compose file defines a healthcheck.
     #[serde(default)]
     pub health: Option<InspectHealth>,
@@ -344,11 +363,11 @@ impl EngineApi for Engine {
 pub(crate) mod tests {
     use super::*;
 
-    pub const VERSION: &str = include_str!("../../fixtures/docker/garage/version.json");
-    pub const CONTAINERS: &str = include_str!("../../fixtures/docker/garage/containers.json");
-    pub const INSPECT: &str = include_str!("../../fixtures/docker/garage/inspect.json");
-    pub const STATS_T0: &str = include_str!("../../fixtures/docker/garage/stats-t0.json");
-    pub const STATS_T1: &str = include_str!("../../fixtures/docker/garage/stats-t1.json");
+    pub const VERSION: &str = include_str!("../../../fixtures/docker/garage/version.json");
+    pub const CONTAINERS: &str = include_str!("../../../fixtures/docker/garage/containers.json");
+    pub const INSPECT: &str = include_str!("../../../fixtures/docker/garage/inspect.json");
+    pub const STATS_T0: &str = include_str!("../../../fixtures/docker/garage/stats-t0.json");
+    pub const STATS_T1: &str = include_str!("../../../fixtures/docker/garage/stats-t1.json");
 
     #[test]
     fn only_read_only_endpoints_can_be_built() {

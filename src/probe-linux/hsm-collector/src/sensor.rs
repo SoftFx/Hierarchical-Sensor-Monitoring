@@ -1,11 +1,11 @@
 use std::ffi::CString;
-use std::marker::PhantomData;
 use std::ptr;
 
 use hsm_collector_sys as sys;
 
+use crate::alert::Alert;
 use crate::error::{Error, Result};
-use crate::options::SensorStatus;
+use crate::options::{CollectorStatus, SensorStatus};
 use crate::Collector;
 
 /// An owned sensor handle.
@@ -15,7 +15,8 @@ use crate::Collector;
 /// instance that registered it — which the C ABI would treat as use-after-free.
 pub(crate) struct RawSensor<'c> {
     handle: *mut sys::hsm_sensor_t,
-    collector: PhantomData<&'c Collector>,
+    /// Kept (not just a `PhantomData`) so an attach can take the collector's registration lock.
+    collector: &'c Collector,
 }
 
 impl std::fmt::Debug for RawSensor<'_> {
@@ -33,19 +34,65 @@ impl std::fmt::Debug for RawSensor<'_> {
 unsafe impl Send for RawSensor<'_> {}
 unsafe impl Sync for RawSensor<'_> {}
 
-impl RawSensor<'_> {
+impl<'c> RawSensor<'c> {
     /// # Safety
     /// `handle` must be a non-null sensor handle obtained from `collector`, not yet released.
-    pub(crate) unsafe fn from_raw(handle: *mut sys::hsm_sensor_t) -> Self {
-        Self {
-            handle,
-            collector: PhantomData,
-        }
+    pub(crate) unsafe fn from_raw(
+        collector: &'c Collector,
+        handle: *mut sys::hsm_sensor_t,
+    ) -> Self {
+        Self { handle, collector }
     }
 
     pub(crate) fn as_ptr(&self) -> *mut sys::hsm_sensor_t {
         self.handle
     }
+
+    fn attach_alert(&self, alert: &Alert<'_>) -> Result<()> {
+        if !ptr::eq(alert.collector(), self.collector) {
+            return Err(Error::from_code(
+                "attach alert",
+                sys::HSM_RESULT_INVALID_ARGUMENT,
+                "the alert was built by a different collector".into(),
+            ));
+        }
+        self.collector.with_registration_lock(|| {
+            // The ABI rebuilds the registration payload in place and does no locking of its own;
+            // it is emitted at Start. Attaching to a started collector would silently register the
+            // sensor WITHOUT the alert (until a restart), so it is refused instead (rule #8).
+            if self.collector.status() != CollectorStatus::Stopped {
+                return Err(Error::from_code(
+                    "attach alert",
+                    sys::HSM_RESULT_INVALID_STATE,
+                    "alerts must be attached before the collector starts".into(),
+                ));
+            }
+            // SAFETY: both handles are live (borrowed from the same collector), and the lock
+            // serializes this against Start reading the registration.
+            let code = unsafe { sys::hsm_sensor_attach_alert(self.handle, alert.as_ptr()) };
+            if code == sys::HSM_RESULT_OK {
+                Ok(())
+            } else {
+                Err(Error::from_code("attach alert", code, String::new()))
+            }
+        })
+    }
+}
+
+/// `attach_alert` on every sensor handle type, so the call reads the same whatever the sensor kind.
+macro_rules! attachable {
+    ($($name:ident),* $(,)?) => {
+        $(
+            impl $name<'_> {
+                /// Attach a built alert to this sensor's registration. Must run while the collector
+                /// is stopped (before [`Collector::start`]); the same alert may be attached to
+                /// several sensors.
+                pub fn attach_alert(&self, alert: &Alert<'_>) -> Result<()> {
+                    self.0.attach_alert(alert)
+                }
+            }
+        )*
+    };
 }
 
 impl Drop for RawSensor<'_> {
@@ -176,6 +223,16 @@ impl DoubleBarSensor<'_> {
         }
     }
 }
+
+attachable!(
+    DoubleSensor,
+    IntSensor,
+    BoolSensor,
+    EnumSensor,
+    StringSensor,
+    DoubleBarSensor,
+    VersionSensor,
+);
 
 /// `Version` sensor (e.g. `.module/Version`).
 #[derive(Debug)]

@@ -37,6 +37,38 @@ pub struct InspectFacts {
     pub oom_killed: bool,
     /// `State.Health.Status`; `None` when the container has no healthcheck.
     pub health: Option<String>,
+    /// `State.ExitCode` (meaningful for an exited container).
+    pub exit_code: i64,
+    /// `HostConfig.RestartPolicy.Name`; empty means `no`.
+    pub restart_policy: String,
+}
+
+/// Whether a service is a **completed one-shot job** rather than a service (owner decision,
+/// #1416): every container exited with code 0 under restart policy `no`. Such a service is not
+/// monitored — a `Stopped` it can never leave would alert forever — unless it was already known as
+/// a service (the caller checks the state first). `None` when undecidable this poll (all exited but
+/// an inspect failed): the caller neither registers nor forgets it until it can tell.
+pub fn completed_job(containers: &[ContainerObservation]) -> Option<bool> {
+    if containers.is_empty() || containers.iter().any(|c| c.state != "exited") {
+        return Some(false);
+    }
+    let mut undecided = false;
+    for container in containers {
+        match &container.inspect {
+            None => undecided = true,
+            Some(facts) => {
+                let policy_no = facts.restart_policy.is_empty() || facts.restart_policy == "no";
+                if facts.exit_code != 0 || !policy_no {
+                    return Some(false);
+                }
+            }
+        }
+    }
+    if undecided {
+        None
+    } else {
+        Some(true)
+    }
 }
 
 /// What to post for one service after a poll. `None` fields are not posted this time.
@@ -332,6 +364,53 @@ mod tests {
                 tracker.restart_posted(key, value);
             }
         }
+    }
+
+    fn exited(id: &str, exit_code: i64, policy: &str) -> ContainerObservation {
+        ContainerObservation {
+            id: id.into(),
+            state: "exited".into(),
+            inspect: Some(InspectFacts {
+                exit_code,
+                restart_policy: policy.into(),
+                ..InspectFacts::default()
+            }),
+        }
+    }
+
+    #[test]
+    fn a_completed_job_is_every_container_exited_zero_without_a_restart_policy() {
+        // garage's lingua-ci/ci-image: Exited (0), restart policy "no".
+        assert_eq!(completed_job(&[exited("a", 0, "no")]), Some(true));
+        assert_eq!(
+            completed_job(&[exited("a", 0, "")]),
+            Some(true),
+            "empty = no"
+        );
+        assert_eq!(
+            completed_job(&[exited("a", 0, "no"), exited("b", 0, "no")]),
+            Some(true)
+        );
+        // A failure, or a policy that would restart it, is a stopped service.
+        assert_eq!(completed_job(&[exited("a", 1, "no")]), Some(false));
+        assert_eq!(completed_job(&[exited("a", 137, "no")]), Some(false));
+        assert_eq!(
+            completed_job(&[exited("a", 0, "unless-stopped")]),
+            Some(false)
+        );
+        assert_eq!(completed_job(&[exited("a", 0, "on-failure")]), Some(false));
+        // Anything not exited is a service.
+        assert_eq!(completed_job(&[container("a", "running", 0)]), Some(false));
+        assert_eq!(
+            completed_job(&[exited("a", 0, "no"), container("b", "running", 0)]),
+            Some(false)
+        );
+        assert_eq!(completed_job(&[container("a", "created", 0)]), Some(false));
+        // An exited container whose inspect failed: undecidable this poll.
+        let mut unknown = exited("a", 0, "no");
+        unknown.inspect = None;
+        assert_eq!(completed_job(&[unknown.clone()]), None);
+        assert_eq!(completed_job(&[unknown, exited("b", 1, "no")]), Some(false));
     }
 
     #[test]

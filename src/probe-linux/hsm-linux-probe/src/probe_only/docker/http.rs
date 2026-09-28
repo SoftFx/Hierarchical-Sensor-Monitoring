@@ -256,10 +256,10 @@ mod tests {
 
     // Raw bytes read off garage-server's /var/run/docker.sock (Docker 26.1.5, API 1.45) with a
     // plain socket client, headers and framing untouched.
-    const CHUNKED: &[u8] = include_bytes!("../../fixtures/docker/http/inspect-chunked.http");
+    const CHUNKED: &[u8] = include_bytes!("../../../fixtures/docker/http/inspect-chunked.http");
     const CONTENT_LENGTH: &[u8] =
-        include_bytes!("../../fixtures/docker/http/stats-content-length.http");
-    const NOT_FOUND: &[u8] = include_bytes!("../../fixtures/docker/http/missing-404.http");
+        include_bytes!("../../../fixtures/docker/http/stats-content-length.http");
+    const NOT_FOUND: &[u8] = include_bytes!("../../../fixtures/docker/http/missing-404.http");
 
     #[test]
     fn a_real_chunked_daemon_response_is_deframed() {

@@ -57,19 +57,14 @@ pub const DEFAULT_OOM_LATCH_HOURS: u64 = 24;
 // ---- Alert thresholds (attached at registration, see `alerts.rs`) ------------------------------
 
 /// CPU: bar mean above this → Warning + notification.
-#[allow(dead_code)] // TODO(#1416): read by alerts.rs once the wrapper alert API lands
 pub const CPU_ALERT_MEAN_PERCENT: f64 = 90.0;
 /// CPU: the condition must hold this long.
-#[allow(dead_code)] // TODO(#1416): read by alerts.rs once the wrapper alert API lands
 pub const CPU_ALERT_CONFIRMATION: Duration = Duration::from_secs(30 * 60);
 /// Memory used %: bar mean above this → Warning + notification.
-#[allow(dead_code)] // TODO(#1416): read by alerts.rs once the wrapper alert API lands
 pub const MEMORY_ALERT_MEAN_PERCENT: f64 = 90.0;
 /// Service status ≠ Running for this long → notification (the Windows service-status prototype).
-#[allow(dead_code)] // TODO(#1416): read by alerts.rs once the wrapper alert API lands
 pub const SERVICE_STATUS_ALERT_CONFIRMATION: Duration = Duration::from_secs(5 * 60);
 /// Health = unhealthy for this long → notification.
-#[allow(dead_code)] // TODO(#1416): read by alerts.rs once the wrapper alert API lands
 pub const HEALTH_ALERT_CONFIRMATION: Duration = Duration::from_secs(5 * 60);
 
 // ---- Units (managed `Unit` enum codes) ---------------------------------------------------------
@@ -89,8 +84,10 @@ pub const PINNED_API_VERSION: (u32, u32) = (1, 45);
 /// Oldest version the probe accepts: `one-shot=true` stats appeared in 1.41; before it a
 /// non-streaming stats call blocks for a second collecting a second sample.
 pub const OLDEST_API_VERSION: (u32, u32) = (1, 41);
-/// Per-request bound on connect + write + read. A hung daemon costs at most this per call.
-pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+/// Per-request bound on connect + write + read. A hung daemon costs at most this per call; on
+/// garage a one-shot stats call takes ~2 ms (p95 2.5 ms). Kept under the probe's 2 s stop wait for
+/// its source threads, so a stop never finds this thread stuck in a call.
+pub const REQUEST_TIMEOUT: Duration = Duration::from_millis(1500);
 /// Largest response body accepted. The garage list is ~30 KB, an inspect ~8 KB; the cap keeps a
 /// misbehaving peer from growing the probe towards its `MemoryMax=64M`.
 pub const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;

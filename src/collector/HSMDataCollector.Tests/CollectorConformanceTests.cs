@@ -212,6 +212,15 @@ namespace HSMDataCollector.Tests
                         }));
                     break;
 
+                case "create_enum_sensor_full_options":
+                    // Enum options AND the SensorOptions surface in one registration (the
+                    // ServiceStatusPrototype shape); consumes any staged alerts like
+                    // create_int_sensor_with_alerts does.
+                    AddSensor(state, state.EnumSensors, state.Collector.CreateEnumSensor(
+                        ExpandTextToken(step.Arg(0)),
+                        BuildEnumFullOptions(state, step)));
+                    break;
+
                 case "create_int_sensor_full_options":
                     AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(
                         ExpandTextToken(step.Arg(0)),
@@ -2133,6 +2142,35 @@ namespace HSMDataCollector.Tests
                 TTL = ttlMs > 0 ? TimeSpan.FromMilliseconds(ttlMs) : (TimeSpan?)null,
                 SensorUnit = unit >= 0 ? (Unit)unit : (Unit?)null,
                 Description = description,
+            };
+
+            var instant = state.PendingAlerts.Where(a => a.Kind != "ttl").Select(a => (InstantAlertTemplate)BuildAlertTemplate(a)).ToList();
+            var ttl = state.PendingAlerts.Where(a => a.Kind == "ttl").Select(a => (SpecialAlertTemplate)BuildAlertTemplate(a)).ToList();
+
+            if (instant.Count > 0)
+                options.Alerts = instant;
+
+            if (ttl.Count > 0)
+                options.TtlAlerts = ttl;
+
+            state.PendingAlerts.Clear();
+            return options;
+        }
+
+        // create_enum_sensor_full_options|path|ttl_ms|keep_history_ms|aggregate|grafana|is_computer|
+        //     description|key:value:color:description;...  — drains PendingAlerts like
+        // BuildInstantOptionsWithAlerts (instant/bar -> Alerts, ttl -> TtlAlerts).
+        private static EnumSensorOptions BuildEnumFullOptions(ContractState state, ContractStep step)
+        {
+            var options = new EnumSensorOptions
+            {
+                TTL = long.Parse(step.Arg(1)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))) : (TimeSpan?)null,
+                KeepHistory = long.Parse(step.Arg(2)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(2))) : (TimeSpan?)null,
+                AggregateData = ParseTriBool(step.Arg(3)),
+                EnableForGrafana = ParseTriBool(step.Arg(4)),
+                IsComputerSensor = bool.Parse(step.Arg(5)),
+                Description = ExpandTextToken(step.Arg(6)),
+                EnumOptions = ParseEnumOptions(step.Arg(7)),
             };
 
             var instant = state.PendingAlerts.Where(a => a.Kind != "ttl").Select(a => (InstantAlertTemplate)BuildAlertTemplate(a)).ToList();

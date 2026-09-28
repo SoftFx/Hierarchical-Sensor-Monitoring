@@ -12,12 +12,14 @@ Architecture and rationale: [`docs/initiatives/linux-docker-probe.md`](../../doc
 shared collector, conformance-locked against the managed one (root `CLAUDE.md` rules #9/#10); a
 probe-local reimplementation would be a permanent semantic/wire divergence.
 
-**Parity first, then agreed probe-only sensors.** The probe registers exactly the sensor set the
-managed HSMDataCollector registers on Linux (`UnixSensorsCollection.AddAllDefaultSensors`: computer
-set + module set), plus probe-only sensors that exist in no collector and were agreed with the owner
-one by one — so far the Docker Compose source (#1416, [below](#probe-only-sensors)); disks and
-backups (#1417) come later. Probe-only sensors go through the collector's public sensor API, so wire
-format, queuing, batching, retry and TLS stay the library's.
+**Two sets, pinned separately.** The probe registers exactly the sensor set the managed
+HSMDataCollector registers on Linux (`UnixSensorsCollection.AddAllDefaultSensors`: computer set +
+module set — the [parity contract](#parity-contract)), **plus** a set of
+[probe-only sensors](#probe-only-sensors) agreed one by one with the owner. Probe-only sensors
+exist only here — never in the shared collector catalog, never on Windows — and go through the
+collector's public sensor API, so wire format, queuing, batching, retry and TLS stay the library's;
+only the acquisition (a sysfs read, a `statvfs`) and the schedule live in the probe. The Docker
+source (#1416) and the archive/backup part of #1417 are the next probe-only sources.
 
 The process node name is fixed as `.module/Process process`, the same as HsmAgent, so alert
 templates apply across hosts — do not rename it. As in `src/agent`, the process sensors are
@@ -87,100 +89,85 @@ TTL is "none" for every sensor except `Service alive`, which carries the inactiv
 
 ## Probe-only sensors
 
-Sensors that exist in no collector, each agreed with the owner before it was built (initiative
-§4.2a). They are not part of the parity contract above; the pinned registration test lists them
-separately.
+Sensors that exist **only in this probe** (owner decisions of 2026-09-24, #1476). They are pinned
+separately from the parity set by
+`probe::tests::the_registered_set_is_the_parity_set_plus_the_probe_only_set` (`PROBE_ONLY_SET`,
+nothing more, nothing less), and their registration shape and alerts by
+`probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. All four are
+computer-level (`is_computer_sensor`), so they sit under `<computer>/.computer/…`.
 
-### Docker Compose services (#1416)
+| Path | Type · unit | Period | TTL | Alerts (registered with the sensor) | Source | Records/day |
+|---|---|---|---|---|---|---|
+| `.computer/Logical cores` | Int | at start + every 24 h | 48 h | — | `sysconf(_SC_NPROCESSORS_ONLN)` (what `nproc` shows) | ≈ 2 |
+| `.computer/CPU temperature` | DoubleBar · °C (no `Unit` code exists; said in the description) | a sample every 5 s into a 5-min bar (60 samples) | 15 min | Mean in (80, 90] → warning; Mean > 90 → **Error** | rule below | 288 |
+| `.computer/Disks monitoring/Free space on disk %` | Double · Percents | every 5 min | 15 min | value in [5, 10) → warning; value < 5 → **Error** | `statvfs`: `f_bavail / f_blocks` of the mount holding `/srv/docker` | 288 |
+| `.computer/Disks monitoring/Free inodes %` | Double · Percents | every 5 min | 15 min | value < 10 → warning | `statvfs`: `f_favail / f_files`, same mount | 288 |
 
-Everything lives under one node in the probe's module:
-`<computer>/<module>/Docker/<project>/<service>/<sensor>`, e.g.
-`garage-server/LinuxProbe/Docker/gitea/db/Service status`. Source: the Docker Engine API on
-`docker.socket` (default `/var/run/docker.sock`); every number below is in
-`hsm-linux-probe/src/docker/contract.rs`.
+*Legend:* **warning** = a notification with the ⚠ icon and **no status change**; **Error** = a
+notification that also sets the sensor to Error. **TTL** = three periods for the 5-minute sensors (48 h, one
+missed day, for the daily cores value): a source that stops producing — a read that keeps failing, a thread stuck on a hung
+filesystem — turns the sensor to Timeout on the server instead of leaving its last value looking
+fresh.
 
-| Sensor | Type · unit | Cadence | Value | Alert (at registration) | Records/day |
-|---|---|---|---|---|---|
-| `CPU` | DoubleBar · % | sample every 5 s (`docker.samplePeriodSec`), 5-min bar | % of the **whole host** (all cores = 100 %): Δ`cpu_usage.total_usage` / Δ`system_cpu_usage` × 100. Not × `online_cpus` — `docker stats` shows per-core % (up to 400 % on 4 cores) | mean > 90 → Warning + notification, confirmation 30 min | 288 |
-| `Memory used %` | DoubleBar · % | as CPU | (`usage` − `inactive_file`) / limit × 100; no limit ⇒ of the host's `MemTotal` | mean > 90 → Warning + notification | 288 |
-| `Memory limit` | Int · MB | at probe start and on change | the containers' limit; host `MemTotal` when unlimited (the value's comment says so) | none | ~2 |
-| `Service status` | Enum (the Windows `ServiceControllerStatus` options) | poll every 60 s, AggregateData | running → Running; created, restarting → StartPending; paused → Paused; exited, dead, removing → Stopped; removed → Stopped for 7 days after last seen | `IfValue NotEqual Running`, confirmation 5 min + notification (the Windows prototype's alert) | ~0 |
-| `Health` | Enum {starting, healthy, unhealthy} | poll every 60 s, AggregateData | `State.Health.Status`; registered **only** where a healthcheck exists | `unhealthy`, confirmation 5 min + notification | ~0 |
-| `Restart count` | Int · count | poll every 60 s, **posted only on change** | cumulative `RestartCount`, carried across recreates (never goes down) | new value + notification | ~0 |
-| `OOM killed` | Bool | poll every 60 s, AggregateData | `State.OOMKilled`, latched true for 24 h (`docker.oomLatchHours`), across recreates | true → Error + notification | ~0 |
+**Alert semantics.** Every alert notifies (the managed "instant hourly" schedule: the first
+notification at once, repeats hourly while it holds — the same action as the managed default
+alerts). HSM alerts can only raise a sensor to **Error**; the server offers no "set Warning" action
+and neither does the managed alert DSL. So a *warning* is the notification with the ⚠ icon and no
+status change — exactly like the managed Total CPU / Free RAM alerts — and an *error* also sets the
+sensor to Error. The warning bands stop where the error band starts, so a single reading never
+sends both.
 
-Cost: ≈ **580 records/day per service** (two bars + a handful of state changes), ≈ 4600/day for
-eight services — within the owner's budget. The stats sensors register only for a service that has
-run, `Health` only where a healthcheck is defined: no empty nodes.
+**CPU temperature source rule** (deterministic, first match wins; `probe_only/host.rs`): hwmon
+`coretemp` `temp<N>_input` whose label is exactly `Package id 0` → `/sys/class/thermal` zone of type
+`x86_pkg_temp` → the first thermal zone whose type contains `cpu`. Directories are visited in
+numeric order. Millidegrees → °C. Only the `name`/`type`/`label` attributes of other devices are read,
+never their inputs (a `drivetemp` input would wake a sleeping disk). With no source the sensor is
+**not registered** (one INFO line). A failed read skips the sample — never a 0 °C — and is logged
+once until it recovers.
 
-> **Pending (#1416):** alerts and `AggregateData` need the wrapper's alert API and
-> `SensorOptions::aggregate_data`, which land in the foundation PR. Until then the sensors register
-> without alerts and the three state sensors store every 60-second post.
+**Disk mount rule** (`probe_only/disk.rs`): the mount whose mount point is the longest
+component-wise prefix of the canonical `/srv/docker` in `/proc/self/mountinfo` (the top one when
+mounts are stacked; a missing target is walked up to its nearest existing ancestor). Resolved once
+at registration and logged. The shared collector's `Free space on disk` always reports
+`statvfs("/")` (it mirrors the managed `UnixDiskInfo`); where `/srv/docker` is on the root
+filesystem — garage-server — both describe the same mount, and the log says so; where it is not,
+the probe logs that the two differ. Only that one mount is ever `statvfs`'d; a filesystem without
+an inode count (`f_files == 0`) gets no inode sensor.
 
-Behavior at the edges:
+**Isolation.** Each source runs on its own thread (a hung `statvfs` cannot stall the temperature
+samples), every sample runs under `catch_unwind`, and nothing is posted before the collector starts.
+The disk source's registration-time probing (`canonicalize` + one `statvfs`) runs on a helper
+thread with a 5 s deadline, so a hung mount cannot hold up the start of the parity set (the disk
+sensors are then not registered, with an ERROR line). On stop the sources get 2 s; stuck ones are
+named, the collector drains anyway, and the process exits without joining a thread still blocked
+in a read.
 
-- **Identity** is the Compose `(project, service)` from the container labels — stable across
-  recreate and upgrade. Segments keep `[A-Za-z0-9_-]`, anything else becomes `_`; two names that
-  normalize alike are told apart by a six-hex-digit FNV hash suffix on the newcomer (a name that
-  needed no normalization keeps the plain segment). Assigned nodes never move: each service's node
-  is remembered in the state file and re-adopted after a restart.
-- **Unlabelled containers** (`docker run`): skipped with one log line per container while
-  `docker.composeOnly` is `true` (default); with `false` they appear as `Docker/_standalone/<name>`.
-  **One-off containers** (`docker compose run`, `com.docker.compose.oneoff=True`) are never counted
-  as replicas of their service — a leftover exited one would otherwise pin it at `Stopped`.
-- **Replicas:** CPU and memory usage are summed (the memory limit sum is capped at the host's
-  memory); status and health are worst-of (Stopped < StartPending < Paused < Running; unhealthy <
-  starting < healthy); restart counts are summed.
-- **CPU is never posted as 0 for lack of data:** a container's first sample, a counter that went
-  backwards, a new container id and an interval outside ½…3× the sample period are skipped. A
-  service with any skipped replica skips that sample.
-- **An unreachable daemon** is logged once (an info line when there is no socket at all, an error
-  with a hint on `EACCES`), retried with a backoff doubling up to 60 s, and resumed silently;
-  nothing is posted meanwhile. A failed or timed-out inspect or stats call skips that service's
-  values (logged once per container) without touching the other services, and never posts a
-  guess. A panic in a tick is caught and logged.
-- **State** (restart baselines, last posted restart count, OOM latches, last-seen times, nodes) is one JSON
-  file, `$STATE_DIRECTORY/docker-state.json` (`/var/lib/hsm-linux-probe`), written atomically only
-  when something changed (at most hourly for last-seen). A missing or corrupt file means a fresh
-  start, logged once.
+**Configuration** — `probe.hostSensors` (all default `true`, so a config written before these
+sensors existed turns them on): `enabled` switches off all four; `cpuTemperature` and `disk` switch
+off one source each. `Logical cores` has no switch of its own.
 
-**Engine API client.** A ~250-line HTTP/1.1 `GET` client over `std::os::unix::net::UnixStream`
-(`docker/http.rs`) with `Content-Length`, chunked and close-delimited bodies, a 5 s deadline per
-call and a 4 MiB body cap — not the `curl` crate: the socket is local plaintext HTTP, and `curl-sys`
-silently compiles its bundled libcurl when pkg-config misses the system one (two libcurls in one
-process) and drags `libz-sys`/`openssl-sys` into the link line. The probe still links exactly one
-libcurl, the collector's. The client can only build four requests, all `GET`: `/version`,
-`/v1.45/containers/json?all=true`, `/v1.45/containers/{id}/json`,
-`/v1.45/containers/{id}/stats?stream=false&one-shot=true` (container ids must be hex). The version
-is pinned in the path — 1.45, the fixtures' — and negotiated down to a daemon's own (≥ 1.41, for
-one-shot stats) or up to its `MinAPIVersion`.
-
-**Socket access.** The socket (`srw-rw---- root:docker`) is root-equivalent; the probe restricts
-itself to the four read-only GETs above by construction and review, not by the kernel. The unit
-does **not** name the group (`SupplementaryGroups=docker` stops a unit from starting on a host
-without that group); the package's postinst runs `/usr/lib/hsm-linux-probe/docker-access.sh
-install`, which writes the drop-in `/etc/systemd/system/hsm-linux-probe.service.d/docker.conf` only
-when `getent group docker` succeeds, and postrm removes it. After installing Docker on a host that
-already runs the probe: `sudo /usr/lib/hsm-linux-probe/docker-access.sh install && sudo systemctl
-daemon-reload && sudo systemctl restart hsm-linux-probe`.
-
-**Tests** run on captures from garage-server (Docker 26.1.5, API 1.45, 12 containers in 6 Compose
-projects) under `hsm-linux-probe/fixtures/docker/`: the listing, the inspects (trimmed to the
-fields the probe reads — `Config.Env` and mounts dropped), two stats rounds 5.3 s apart, and three
-raw HTTP responses (chunked, `Content-Length`, 404) byte for byte.
+**Seam for the Docker source (#1416):** a `probe_only::docker` module registering under
+`Docker/<project>/<service>/…` and returning its `Source`s to `probe_only::register`.
 
 ## Crate layout
 
 ```
 src/probe-linux/
   hsm-collector-sys/   raw FFI declarations for the ABI subset the probe uses + the CMake build
-  hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, log sink
+  hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, alerts, log sink
   hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, sensor registration
-    src/docker/        the Docker source: contract, http, engine, identity, stats, tracker, state,
-                       sensors, alerts
-    fixtures/docker/   Engine API captures from garage-server
-  packaging/           systemd unit sample, config skeleton, docker-access.sh (socket drop-in)
+    src/probe_only/    probe-only sources (host.rs, disk.rs) and their per-source threads
+  packaging/           systemd unit, config skeleton, maintainer scripts, build-deb.sh
 ```
+
+**Alerts in the wrapper.** `Collector::alert(AlertKind)` returns an `AlertBuilder` (conditions,
+notification / scheduled notification, icon, `sensor_error`, confirmation / inactivity period,
+`disabled`, `build`); every sensor handle has `attach_alert(&Alert)`. An alert is part of the
+sensor's registration, which the collector emits at Start, so `attach_alert` is refused unless the
+collector is stopped — a late attach would otherwise register the sensor without its alert and
+nobody would notice. `instant_hourly_schedule_anchor()` reproduces the managed
+`ThenSendInstantHourlyScheduledNotification`. `Collector::enum_sensor_with_options` registers an
+enum sensor with both its options and `SensorOptions` (the `Service status` shape; collector 0.9.0).
 
 `hsm-collector-sys/build.rs` configures and builds `src/native/collector` with CMake
 (`HSM_COLLECTOR_HTTP=ON`, the same switch `src/agent` uses), links `hsm_collector_core` statically
@@ -257,6 +244,38 @@ cargo test
 
 The CI lane `.github/workflows/probe-linux.yml` runs exactly that on `ubuntu-latest`.
 
+### Building the `.deb`
+
+`packaging/build-deb.sh <version>` builds the package reproducibly inside a plain `debian:13`
+container — it installs the build dependencies and rustup itself, builds the release binary with
+`--locked --features linux-default-sensors`, checks that the binary loads no shared library outside
+the fixed `Depends`, and writes `dist/hsm-linux-probe_<version>_amd64.deb`. From the repository
+root on Windows (Git Bash; Docker Desktop):
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/src" -w /src/src/probe-linux \
+    -v hsm-probe-cargo:/root/.cargo debian:13 bash packaging/build-deb.sh 0.2.0~trial1
+```
+
+On Linux drop `MSYS_NO_PATHCONV=1` and use `$(pwd)`. The `hsm-probe-cargo` volume is optional; it
+caches the toolchain and crates between runs. The version is a parameter: trials use `~trialN`,
+which sorts **below** the plain release (`0.2.0~trial1 < 0.2.0`) and above every `0.1.0~…` —
+check with `dpkg --compare-versions 0.2.0~trial1 gt 0.1.0~trial3`.
+
+The package has the layout of the hand-built `0.1.0~trial*` packages: `/usr/bin/hsm-linux-probe`,
+`/lib/systemd/system/hsm-linux-probe.service` (kept under `/lib`, where the trials put it — moving a
+file between `/lib` and `/usr/lib` across versions is unsafe with dpkg on a merged `/usr`),
+`/etc/hsm-linux-probe/config.json` (a conffile, from `config.example.json`) and the copyright
+file; `Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`. The maintainer scripts
+are `packaging/deb/{postinst,prerm,postrm}`, reconstructed from the trial package: postinst creates
+the `hsm-probe` system user/group and reloads systemd, and on a fresh install does not enable or
+start the unit (`install.sh` does, once config and key are in place); prerm disables it on remove;
+postrm purges `/var/lib` and `/var/log` state. On upgrade prerm stops the unit and, **from 0.2.0 on**,
+leaves a marker in `/run` when it was running, so the new postinst starts it again — an upgrade
+does not end monitoring. (Upgrading *from* a `0.1.0~trial*` package runs that package's old prerm,
+which leaves no marker: start the unit by hand once.) The operator's config survives upgrades
+(`apt-get install -o Dpkg::Options::=--force-confold ./hsm-linux-probe_….deb`).
+
 ## Configuration
 
 `packaging/config.example.json` is the skeleton; it is parsed by a unit test, so it cannot rot.
@@ -279,10 +298,6 @@ Placeholders only — **no secrets**:
   deliberately does not expose the ABI's `allow_untrusted_server_certificate` flag — it disables
   both peer and hostname verification, which §4.1/§4.3 ban. Trust a private CA by installing it
   with `update-ca-certificates`; libcurl/OpenSSL picks up the system store with verification on.
-* `docker` (optional; every key has a default): `enabled` (`true`), `socket`
-  (`/var/run/docker.sock`), `composeOnly` (`true`), `samplePeriodSec` (`5`, 1–300; the bars stay
-  5 minutes whatever it is) and `oomLatchHours` (`24`). A host without Docker needs no change: the
-  source logs one info line and waits for the socket; `enabled: false` turns it off entirely.
 
 ## Running
 
@@ -302,6 +317,6 @@ the collector's own file logger, so the two line up; the journal adds local time
 
 `packaging/hsm-linux-probe.service` carries the §4.3 hardening (`NoNewPrivileges`,
 `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `StateDirectory`, empty capability bounding
-set, `LoadCredential`) and the §5 budget (`MemoryMax=64M`, `CPUQuota=5%`). Docker socket access is
-not in the unit but in a drop-in written only where a docker group exists — see
-[Socket access](#docker-compose-services-1416).
+set, `LoadCredential`) and the §5 budget (`MemoryMax=64M`, `CPUQuota=5%`). `SupplementaryGroups=docker`
+is commented out on purpose: the Docker socket is root-equivalent and is granted only when the
+Docker source (#1416) exists to need it.

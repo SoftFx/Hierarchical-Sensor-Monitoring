@@ -1,1 +1,3 @@
 /target
+# .deb packages written by packaging/build-deb.sh
+/dist

@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: hsm-linux-probe
+Source: https://github.com/SoftFx/Hierarchical-Sensor-Monitoring
+
+Files: *
+Copyright: 2026 Soft-FX
+License: see-upstream
+ See the upstream repository for license terms.

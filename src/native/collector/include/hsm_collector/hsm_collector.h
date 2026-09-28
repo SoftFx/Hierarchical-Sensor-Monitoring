@@ -17,8 +17,8 @@ extern "C"
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 8
-#define HSM_COLLECTOR_VERSION_PATCH 2
+#define HSM_COLLECTOR_VERSION_MINOR 9
+#define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -719,6 +719,25 @@ hsm_result_t hsm_collector_create_sensor_with_options(
     const char* path,
     hsm_sensor_type_t type,
     const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor);
+
+/* Enum sensor carrying BOTH its option set and the full SensorOptions surface (0.9.0) — the managed
+   `CreateEnumSensor(path, new EnumSensorOptions { EnumOptions, AggregateData, TTL, ... })`, e.g. the
+   ServiceStatusPrototype shape (EnumOptions + AggregateData = true + an alert attached afterwards).
+   hsm_collector_create_enum_sensor_with_options takes only a description; this one takes `options`
+   (start from hsm_sensor_options_default(); its `description` is the sensor description). Like every
+   enum registration it emits DisplayUnit:null unless options->display_unit is set. NOTE: unlike the
+   managed EnumSensorOptions constructor, nothing defaults aggregate_data to true here — the default
+   options emit AggregateData:null, so a state sensor must set aggregate_data = 1 explicitly (the
+   options struct is shared by every sensor kind; its sentinel means "null" for all of them).
+   `options` must not be NULL; `enum_options` may be NULL only when enum_option_count is 0. The
+   option strings are borrowed for the call and copied. */
+hsm_result_t hsm_collector_create_enum_sensor_with_sensor_options(
+    hsm_collector_t* collector,
+    const char* path,
+    const hsm_sensor_options_t* options,
+    const hsm_enum_option_t* enum_options,
+    size_t enum_option_count,
     hsm_sensor_t** out_sensor);
 
 size_t hsm_collector_registration_count(const hsm_collector_t* collector);
