@@ -104,10 +104,10 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
         stop_collector(&collector, product_version.as_ref(), config, &logger);
         if !all_stopped {
             // The drain is done; leaving the scope would join the stuck thread and hold the
-            // process until systemd kills it. Exit instead: the collector is already stopped.
+            // process until systemd kills it. Exit instead: the collector is already stopped. A
+            // non-zero code, so the unit's state shows the hang, not only the journal.
             logger.error("exiting without joining the stuck probe-only source thread(s)");
-            logger.info("hsm-linux-probe stopped");
-            std::process::exit(0);
+            std::process::exit(1);
         }
     });
 

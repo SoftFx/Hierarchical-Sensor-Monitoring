@@ -173,7 +173,11 @@ Version history:
   ⇒ the bare path). Before, those three always used `<computer>/<module>/<path>` and
   `is_computer_sensor` only forced `IsSingletonSensor` — a divergence from the managed
   `CalculateSystemPath`. No in-repo host set either flag on a bar or rate, so no deployed path
-  moves. Pinned by `options_surface_contract:enum_full_options_*`,
+  moves. **Compatibility note:** an out-of-tree consumer that did set `is_computer_sensor` or
+  `sensor_location = Product` on a bar or rate created with options will see that sensor register
+  at the new, managed-parity path after upgrading (a new server node; history stays on the old
+  one). Shipped as a MINOR bump because the old path contradicted the documented meaning of those
+  option fields — a bug fix, not a changed contract. Pinned by `options_surface_contract:enum_full_options_*`,
   `bar_options_contract:bar_{computer,product}_sensor_*` and
   `rate_options_contract:rate_{computer,product}_sensor_*` in both drivers.
 - **0.8.2** (#1453, #1444, #1437, #1459, #1460) — no ABI change; four behavior fixes and one
