@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use hsm_collector_sys as sys;
 
+use crate::alert::{AlertBuilder, AlertKind};
 use crate::error::{Error, Result};
 use crate::options::{
     clamp_millis, clamp_millis_i32, CollectorOptions, CollectorStatus, EnumOption, LogLevel,
@@ -283,7 +284,7 @@ impl Collector {
         };
         self.check("add product version sensor", code)?;
         // SAFETY: the ABI returned OK, so the handle is live.
-        Ok(VersionSensor(unsafe { RawSensor::from_raw(handle) }))
+        Ok(VersionSensor(unsafe { RawSensor::from_raw(self, handle) }))
     }
 
     /// The canonical registration JSON of every sensor registered so far, in registration order.
@@ -366,27 +367,7 @@ impl Collector {
     ) -> Result<EnumSensor<'_>> {
         let path = cstring("sensor path", path)?;
         let description = optional_cstring("sensor description", description)?;
-
-        // The C strings must outlive the array of borrowed pointers below.
-        let mut values = Vec::with_capacity(options.len());
-        let mut descriptions = Vec::with_capacity(options.len());
-        for option in options {
-            values.push(cstring("enum option value", &option.value)?);
-            descriptions.push(optional_cstring(
-                "enum option description",
-                option.description.as_deref(),
-            )?);
-        }
-        let raw_options: Vec<sys::hsm_enum_option_t> = options
-            .iter()
-            .enumerate()
-            .map(|(index, option)| sys::hsm_enum_option_t {
-                key: option.key,
-                value: values[index].as_ptr(),
-                color: option.color,
-                description: as_ptr(&descriptions[index]),
-            })
-            .collect();
+        let enum_options = RawEnumOptions::new(options)?;
 
         let mut handle = ptr::null_mut();
         let _guard = self.lock();
@@ -396,14 +377,54 @@ impl Collector {
                 self.handle,
                 path.as_ptr(),
                 as_ptr(&description),
-                raw_options.as_ptr(),
-                raw_options.len(),
+                enum_options.as_ptr(),
+                enum_options.len(),
                 &mut handle,
             )
         };
         self.check("create enum sensor", code)?;
         // SAFETY: the ABI returned OK, so the handle is a live sensor of this collector.
-        Ok(EnumSensor(unsafe { RawSensor::from_raw(handle) }))
+        Ok(EnumSensor(unsafe { RawSensor::from_raw(self, handle) }))
+    }
+
+    /// Enum sensor with its option set AND the sensor options (TTL, `aggregate_data`, computer
+    /// anchoring, …) — the managed `CreateEnumSensor(path, new EnumSensorOptions { … })`, e.g. the
+    /// `Service status` shape: enum options + `aggregate_data = true` + an attached alert.
+    ///
+    /// Unlike the managed `EnumSensorOptions`, nothing defaults to `AggregateData = true` here:
+    /// `None` emits null, so a state sensor sets it explicitly.
+    pub fn enum_sensor_with_options(
+        &self,
+        path: &str,
+        options: &SensorOptions,
+        enum_options: &[EnumOption],
+    ) -> Result<EnumSensor<'_>> {
+        let path = cstring("sensor path", path)?;
+        let description = optional_cstring("sensor description", options.description.as_deref())?;
+        let enum_options = RawEnumOptions::new(enum_options)?;
+
+        // SAFETY: returns a plain value struct.
+        let mut raw = unsafe { sys::hsm_sensor_options_default() };
+        options.apply(&mut raw);
+        raw.description = as_ptr(&description);
+
+        let mut handle = ptr::null_mut();
+        let _guard = self.lock();
+        // SAFETY: path, the options struct and everything it points at outlive the call; the
+        // collector copies what it keeps.
+        let code = unsafe {
+            sys::hsm_collector_create_enum_sensor_with_sensor_options(
+                self.handle,
+                path.as_ptr(),
+                &raw,
+                enum_options.as_ptr(),
+                enum_options.len(),
+                &mut handle,
+            )
+        };
+        self.check("create enum sensor", code)?;
+        // SAFETY: the ABI returned OK, so the handle is a live sensor of this collector.
+        Ok(EnumSensor(unsafe { RawSensor::from_raw(self, handle) }))
     }
 
     /// `DoubleBar` sensor aggregating into `bar_period` windows.
@@ -439,7 +460,9 @@ impl Collector {
         };
         self.check("create double bar sensor", code)?;
         // SAFETY: the ABI returned OK, so the handle is live.
-        Ok(DoubleBarSensor(unsafe { RawSensor::from_raw(handle) }))
+        Ok(DoubleBarSensor(unsafe {
+            RawSensor::from_raw(self, handle)
+        }))
     }
 
     fn instant_sensor(
@@ -470,7 +493,7 @@ impl Collector {
         };
         self.check("create sensor", code)?;
         // SAFETY: the ABI returned OK, so the handle is live.
-        Ok(unsafe { RawSensor::from_raw(handle) })
+        Ok(unsafe { RawSensor::from_raw(self, handle) })
     }
 
     /// Start the collector: register every sensor and begin dispatching.
@@ -525,6 +548,24 @@ impl Collector {
         }
     }
 
+    /// Start building an alert. Attach the result with `attach_alert` on a sensor handle before
+    /// [`Collector::start`]; the alert is owned by this collector and freed with it.
+    pub fn alert(&self, kind: AlertKind) -> Result<AlertBuilder<'_>> {
+        let mut handle = ptr::null_mut();
+        // SAFETY: valid handle; the collector keeps the alert until it is destroyed.
+        let code =
+            unsafe { sys::hsm_collector_create_alert(self.handle, kind.as_raw(), &mut handle) };
+        self.check("create alert", code)?;
+        // SAFETY: the ABI returned OK, so the alert is live for this collector's lifetime.
+        Ok(unsafe { AlertBuilder::from_raw(handle, self) })
+    }
+
+    /// Run `action` under the lock that serializes registration and lifecycle transitions.
+    pub(crate) fn with_registration_lock<T>(&self, action: impl FnOnce() -> T) -> T {
+        let _guard = self.lock();
+        action()
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, ()> {
         // A poisoned lifecycle lock means some other thread panicked mid-transition. The collector
         // itself is unaffected (its state lives in C++), so recovering is strictly better than
@@ -564,6 +605,54 @@ fn wipe_cstring(value: CString) {
         // SAFETY-adjacent: write_volatile keeps the compiler from eliding a write to a buffer that
         // is about to be dropped.
         unsafe { std::ptr::write_volatile(byte, 0) };
+    }
+}
+
+/// An enum option set marshalled for the ABI: the C strings and the array of pointers into them,
+/// kept together so the pointers cannot outlive their storage.
+struct RawEnumOptions {
+    raw: Vec<sys::hsm_enum_option_t>,
+    // Only held so the pointers in `raw` stay valid; never read directly.
+    _values: Vec<CString>,
+    _descriptions: Vec<Option<CString>>,
+}
+
+impl RawEnumOptions {
+    fn new(options: &[EnumOption]) -> Result<Self> {
+        let mut values = Vec::with_capacity(options.len());
+        let mut descriptions = Vec::with_capacity(options.len());
+        for option in options {
+            values.push(cstring("enum option value", &option.value)?);
+            descriptions.push(optional_cstring(
+                "enum option description",
+                option.description.as_deref(),
+            )?);
+        }
+        // A CString's heap buffer does not move when the Vec holding it moves, so these pointers
+        // stay valid for as long as `values`/`descriptions` live inside this struct.
+        let raw = options
+            .iter()
+            .enumerate()
+            .map(|(index, option)| sys::hsm_enum_option_t {
+                key: option.key,
+                value: values[index].as_ptr(),
+                color: option.color,
+                description: as_ptr(&descriptions[index]),
+            })
+            .collect();
+        Ok(Self {
+            raw,
+            _values: values,
+            _descriptions: descriptions,
+        })
+    }
+
+    fn as_ptr(&self) -> *const sys::hsm_enum_option_t {
+        self.raw.as_ptr()
+    }
+
+    fn len(&self) -> usize {
+        self.raw.len()
     }
 }
 

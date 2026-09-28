@@ -1,7 +1,8 @@
 //! Safe RAII wrapper over the HSM native collector's stable C ABI.
 //!
-//! Scope: the subset the Linux probe needs — options, HTTP transport, lifecycle, a log sink, and
-//! instant / enum / double-bar sensors. Everything else stays behind [`hsm_collector_sys`].
+//! Scope: the subset the Linux probe needs — options, HTTP transport, lifecycle, a log sink,
+//! instant / enum / double-bar sensors, and alerts attached at registration. Everything else stays
+//! behind [`hsm_collector_sys`].
 //!
 //! # FFI rules this crate enforces
 //!
@@ -15,11 +16,16 @@
 //! * **Secrets stay out of diagnostics.** The access key is redacted from `Debug`, and error text
 //!   never echoes caller-supplied strings.
 
+mod alert;
 mod collector;
 mod error;
 mod options;
 mod sensor;
 
+pub use alert::{
+    instant_hourly_schedule_anchor, Alert, AlertBuilder, AlertCombination, AlertDestination,
+    AlertIcon, AlertKind, AlertOperation, AlertProperty, AlertRepeat, AlertTarget,
+};
 pub use collector::{Collector, DefaultSensor, LINUX_METRIC_SOURCES_AVAILABLE};
 pub use error::{Error, Result};
 pub use options::{
@@ -50,6 +56,7 @@ pub fn library_version_string() -> String {
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+    use std::time::Duration;
 
     fn test_options() -> CollectorOptions {
         // Port 1 with no transport installed: nothing is ever sent, so no listener is needed.
@@ -178,6 +185,283 @@ mod tests {
         state.add(1).expect("enum value");
         bar.add(0.25).expect("bar sample");
         collector.stop().expect("stop");
+    }
+
+    /// A collector with a fixed computer name, so registration paths are deterministic.
+    fn named_collector() -> Collector {
+        let mut options = test_options();
+        options.computer_name = Some("unit-host".into());
+        Collector::new(&options).expect("create")
+    }
+
+    /// The single registration recorded at Start, as the canonical text the conformance corpus
+    /// asserts on (`expect_registration_contains`).
+    fn only_registration(collector: &Collector) -> String {
+        collector.start().expect("start");
+        let registrations = collector.registrations();
+        collector.stop().expect("stop");
+        assert_eq!(registrations.len(), 1, "{registrations:#?}");
+        registrations.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn a_bar_alert_registers_in_the_managed_alert_shape() {
+        // The shape the probe's CPU temperature sensor uses. Compare with
+        // tests/conformance/collector/alert_registration_contract.hsmtest, which pins the same
+        // AlertUpdateRequest serialization across both collectors.
+        let collector = named_collector();
+        let bar = collector
+            .double_bar_sensor(
+                ".computer/bar",
+                Duration::from_secs(300),
+                Duration::from_secs(15),
+                2,
+                &SensorOptions::default().with_is_computer_sensor(true),
+            )
+            .expect("bar");
+        let alert = collector
+            .alert(AlertKind::Bar)
+            .and_then(|alert| {
+                alert.condition(
+                    AlertCombination::And,
+                    AlertProperty::Mean,
+                    AlertOperation::GreaterThan,
+                    AlertTarget::Const("80".into()),
+                )
+            })
+            .and_then(|alert| {
+                alert.condition(
+                    AlertCombination::And,
+                    AlertProperty::Mean,
+                    AlertOperation::LessThanOrEqual,
+                    AlertTarget::Const("90".into()),
+                )
+            })
+            .and_then(|alert| {
+                alert.scheduled_notification(
+                    "hot",
+                    instant_hourly_schedule_anchor(),
+                    AlertRepeat::Hourly,
+                    true,
+                    AlertDestination::FromParent,
+                )
+            })
+            .and_then(|alert| alert.icon(AlertIcon::Warning))
+            .expect("alert")
+            .build();
+        bar.attach_alert(&alert).expect("attach");
+
+        let json = only_registration(&collector);
+        assert!(
+            json.contains("\"Path\":\"unit-host/.computer/bar\""),
+            "{json}"
+        );
+        assert!(
+            json.contains(
+                "\"Alerts\":[{\"Conditions\":[\
+                 {\"Combination\":0,\"Operation\":2,\"Property\":103,\"Target\":{\"Type\":0,\"Value\":\"80\"}},\
+                 {\"Combination\":0,\"Operation\":0,\"Property\":103,\"Target\":{\"Type\":0,\"Value\":\"90\"}}],\
+                 \"Status\":1,\"DestinationMode\":3,\"Template\":\"hot\",\"Icon\":\"\\u26A0\",\
+                 \"IsDisabled\":false,\"ConfirmationPeriod\":null,\
+                 \"ScheduledNotificationTime\":\"0001-01-01T12:00:00Z\",\"ScheduledRepeatMode\":20,\
+                 \"ScheduledInstantSend\":true}]"
+            ),
+            "{json}"
+        );
+        assert!(json.contains("\"TtlAlerts\":null"), "{json}");
+    }
+
+    #[test]
+    fn an_error_alert_raises_the_status_and_a_ttl_alert_lands_in_ttl_alerts() {
+        let collector = named_collector();
+        let sensor = collector
+            .double_sensor("probe/free", &SensorOptions::default())
+            .expect("double");
+        let error = collector
+            .alert(AlertKind::Instant)
+            .and_then(|alert| {
+                alert.condition(
+                    AlertCombination::And,
+                    AlertProperty::Value,
+                    AlertOperation::LessThan,
+                    AlertTarget::Const("5".into()),
+                )
+            })
+            .and_then(|alert| alert.notification("low", AlertDestination::AllChats))
+            .and_then(|alert| alert.icon_raw("X"))
+            .and_then(|alert| alert.sensor_error())
+            .and_then(|alert| alert.confirmation_period(Duration::from_secs(300)))
+            .and_then(|alert| alert.disabled(true))
+            .expect("alert")
+            .build();
+        let inactive = collector
+            .alert(AlertKind::Ttl)
+            .and_then(|alert| alert.inactivity_period(Duration::from_secs(60)))
+            .and_then(|alert| alert.notification("gone", AlertDestination::FromParent))
+            .expect("ttl alert")
+            .build();
+        sensor.attach_alert(&error).expect("attach error alert");
+        sensor.attach_alert(&inactive).expect("attach ttl alert");
+
+        let json = only_registration(&collector);
+        assert!(
+            json.contains(
+                "\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":1,\"Property\":20,\
+                 \"Target\":{\"Type\":0,\"Value\":\"5\"}}],\"Status\":3,\"DestinationMode\":200,\
+                 \"Template\":\"low\",\"Icon\":\"X\",\"IsDisabled\":true,\
+                 \"ConfirmationPeriod\":3000000000,"
+            ),
+            "{json}"
+        );
+        assert!(
+            json.contains(
+                "\"TtlAlerts\":[{\"Conditions\":[],\"Status\":1,\"DestinationMode\":3,\
+                 \"Template\":\"gone\""
+            ),
+            "{json}"
+        );
+        assert!(json.contains("\"TTLTicks\":[600000000]"), "{json}");
+    }
+
+    #[test]
+    fn an_enum_sensor_with_options_registers_the_service_status_shape() {
+        // Mirrors the managed ServiceStatusPrototype (and the conformance case
+        // options_surface_contract:enum_full_options_with_state_alert): EnumOptions +
+        // AggregateData + "not Running for 5 minutes".
+        let collector = named_collector();
+        let running = EnumOption {
+            key: 4,
+            value: "Running".into(),
+            color: 0x00FF00,
+            description: Some("The service is running.".into()),
+        };
+        let stopped = EnumOption {
+            key: 1,
+            value: "Stopped".into(),
+            color: 0xFF0000,
+            description: Some("The service is stopped.".into()),
+        };
+        let state = collector
+            .enum_sensor_with_options(
+                "Docker/app/web/Service status",
+                &SensorOptions::default()
+                    .with_description("state")
+                    .with_aggregate_data(true)
+                    .with_enable_grafana(false)
+                    .with_ttl(Duration::from_secs(60)),
+                &[stopped, running],
+            )
+            .expect("enum");
+        let alert = collector
+            .alert(AlertKind::Instant)
+            .and_then(|alert| {
+                alert.condition(
+                    AlertCombination::And,
+                    AlertProperty::Value,
+                    AlertOperation::NotEqual,
+                    AlertTarget::Const("4".into()),
+                )
+            })
+            .and_then(|alert| alert.confirmation_period(Duration::from_secs(300)))
+            .and_then(|alert| {
+                alert.scheduled_notification(
+                    "down",
+                    instant_hourly_schedule_anchor(),
+                    AlertRepeat::Hourly,
+                    true,
+                    AlertDestination::FromParent,
+                )
+            })
+            .expect("alert")
+            .build();
+        state.attach_alert(&alert).expect("attach");
+
+        let json = only_registration(&collector);
+        for expected in [
+            "\"Path\":\"unit-host/UnitTest/Docker/app/web/Service status\"",
+            "\"SensorType\":10,",
+            "\"TTLTicks\":[600000000]",
+            "\"Description\":\"state\"",
+            "\"EnumOptions\":[{\"Key\":1,\"Value\":\"Stopped\",\"Color\":16711680,\
+             \"Description\":\"The service is stopped.\"},{\"Key\":4,\"Value\":\"Running\",\
+             \"Color\":65280,\"Description\":\"The service is running.\"}]",
+            "\"DisplayUnit\":null",
+            "\"AggregateData\":true",
+            "\"EnableGrafana\":false",
+            "\"Operation\":5,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"4\"}",
+            "\"ConfirmationPeriod\":3000000000",
+        ] {
+            assert!(json.contains(expected), "missing {expected} in {json}");
+        }
+    }
+
+    #[test]
+    fn computer_anchoring_and_null_tri_states_by_default() {
+        let collector = named_collector();
+        collector
+            .int_sensor(
+                ".computer/Logical cores",
+                &SensorOptions::default().with_is_computer_sensor(true),
+            )
+            .expect("int");
+        let json = only_registration(&collector);
+        assert!(
+            json.contains("\"Path\":\"unit-host/.computer/Logical cores\""),
+            "{json}"
+        );
+        assert!(json.contains("\"IsSingletonSensor\":true"), "{json}");
+        assert!(json.contains("\"AggregateData\":null"), "{json}");
+        assert!(json.contains("\"EnableGrafana\":null"), "{json}");
+        assert!(json.contains("\"Alerts\":null"), "{json}");
+    }
+
+    #[test]
+    fn attaching_after_start_is_refused_instead_of_silently_dropped() {
+        let collector = named_collector();
+        let sensor = collector
+            .int_sensor("probe/late", &SensorOptions::default())
+            .expect("int");
+        let alert = collector
+            .alert(AlertKind::Instant)
+            .and_then(|alert| alert.notification("n", AlertDestination::FromParent))
+            .expect("alert")
+            .build();
+        collector.start().expect("start");
+        let error = sensor
+            .attach_alert(&alert)
+            .expect_err("the registration was already emitted");
+        assert_eq!(
+            error.code(),
+            Some(hsm_collector_sys::HSM_RESULT_INVALID_STATE)
+        );
+        collector.stop().expect("stop");
+        // Stopped again: the next Start re-registers, so attaching is effective and allowed.
+        sensor.attach_alert(&alert).expect("attach while stopped");
+    }
+
+    #[test]
+    fn an_alert_from_another_collector_is_refused() {
+        let first = named_collector();
+        let second = named_collector();
+        let sensor = first
+            .int_sensor("probe/x", &SensorOptions::default())
+            .expect("int");
+        let foreign = second.alert(AlertKind::Instant).expect("alert").build();
+        let error = sensor.attach_alert(&foreign).expect_err("foreign alert");
+        assert_eq!(
+            error.code(),
+            Some(hsm_collector_sys::HSM_RESULT_INVALID_ARGUMENT)
+        );
+    }
+
+    #[test]
+    fn interior_nul_in_an_alert_template_is_rejected() {
+        let collector = named_collector();
+        let error = collector
+            .alert(AlertKind::Instant)
+            .and_then(|alert| alert.notification("bad\0template", AlertDestination::FromParent))
+            .expect_err("a NUL byte must be rejected");
+        assert!(matches!(error, Error::InteriorNul { .. }));
     }
 
     #[test]
