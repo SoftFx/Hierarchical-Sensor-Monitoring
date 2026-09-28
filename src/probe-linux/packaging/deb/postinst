@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    # useradd/groupadd come from the Priority: required passwd package (no adduser dependency).
+    if ! getent group hsm-probe >/dev/null; then
+        groupadd --system hsm-probe
+    fi
+    if ! getent passwd hsm-probe >/dev/null; then
+        useradd --system --gid hsm-probe --no-create-home --home-dir /nonexistent \
+            --shell /usr/sbin/nologin --comment "HSM Linux probe" hsm-probe
+    fi
+    # The unit is deliberately NOT enabled or started here: install.sh places config + key first,
+    # then runs `systemctl enable --now`.
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload >/dev/null || true
+    fi
+fi
+exit 0

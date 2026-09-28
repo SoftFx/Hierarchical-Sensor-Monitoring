@@ -1,7 +1,8 @@
-# Sample systemd unit for hsm-linux-probe (initiative docs/initiatives/linux-docker-probe.md §4.3, §5).
+# systemd unit for hsm-linux-probe (initiative docs/initiatives/linux-docker-probe.md §4.3, §5).
 #
-# Reference hardening, not yet an installed artifact: the .deb that ships it is workstream #1418.
-# Install manually for now:
+# The .deb built by packaging/build-deb.sh installs it as /lib/systemd/system/hsm-linux-probe.service
+# (its postinst creates the hsm-probe user; enabling the unit is left to the operator / install.sh).
+# Without the package, install it manually:
 #   useradd --system --home-dir /nonexistent --no-create-home --shell /usr/sbin/nologin hsm-probe
 #   install -m 0644 hsm-linux-probe.service /etc/systemd/system/
 #   systemctl daemon-reload && systemctl enable --now hsm-linux-probe

@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+if [ -d /run/systemd/system ]; then
+    case "$1" in
+        remove|deconfigure)
+            systemctl disable --now hsm-linux-probe.service >/dev/null 2>&1 || true
+            ;;
+        upgrade)
+            systemctl stop hsm-linux-probe.service >/dev/null 2>&1 || true
+            ;;
+    esac
+fi
+exit 0
