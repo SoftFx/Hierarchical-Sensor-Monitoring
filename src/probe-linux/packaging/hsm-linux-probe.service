@@ -36,9 +36,13 @@ Group=hsm-probe
 # Files the probe creates (logs, later its state) are not world-readable: 0640 files, 0750 dirs.
 # Without it the default 0022 umask produced a 0664 log file on the trial host.
 UMask=0027
-# Docker Engine API access arrives with the Docker source (#1416). The socket is root-equivalent,
-# so it is granted only once a source actually needs it — not pre-emptively.
-# SupplementaryGroups=docker
+# Docker Engine API access for the Docker source (#1416) is NOT granted here: SupplementaryGroups=
+# naming a group the host lacks stops the unit from starting, so a hardcoded "docker" would break
+# every host without Docker. The package's postinst runs /usr/lib/hsm-linux-probe/docker-access.sh,
+# which writes the drop-in /etc/systemd/system/hsm-linux-probe.service.d/docker.conf
+# (SupplementaryGroups=docker) only when `getent group docker` succeeds; postrm removes it. The
+# socket is root-equivalent; the probe restricts itself to four read-only GETs by construction and
+# review (initiative §4.3). Installed manually: run that script yourself, then daemon-reload.
 
 # Writable state (restart counters, OOM latches, last-seen backup result) under
 # /var/lib/hsm-linux-probe, created and owned by systemd. ProtectSystem=strict leaves the rest of
