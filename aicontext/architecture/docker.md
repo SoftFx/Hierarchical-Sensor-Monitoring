@@ -52,16 +52,28 @@ What the HSM side relies on behind Caddy:
 - **Startup (#1431):** `app` has a healthcheck (`bash` `/dev/tcp` to 44330; Kestrel opens its ports only after the database load), and `caddy` depends on it with `condition: service_healthy`, so `docker compose up` starts Caddy only when HSM is ready. Verified live. **The budget is the upper bound on database-load time:** `start_period` 10 min plus `retries` 180 × `interval` 10 s = 40 min. Past it, `app` is `unhealthy`, `up` fails with "dependency failed to start", and Caddy is never created; `restart` cannot help a container that never started. Hence the large `retries`: the port never closes once open, so the budget costs nothing in steady state. The probe needs `bash` in the server image (Debian-based `aspnet:8.0`, see `.github/docker/dockerfile_deps`) and hardcodes 44330, like the Caddyfile. This gates only the initial `up`; for a later restart of `app` alone, `lb_try_duration 30s` makes Caddy wait for it instead of answering 502. Retries cover dial failures, so no request is sent twice.
 - **HTTP on port 80:** Caddy redirects `http://<HSM_DOMAIN>/` to `https://<HSM_DOMAIN>/` (the UI on 443), verified live.
 
-## Log Storage (VictoriaLogs + Vector, #1470)
+## Log Storage (VictoriaLogs, #1470)
 
-The compose `logs` profile (`.env.example` ships `COMPOSE_PROFILES=logs`, so it is on by default) adds a searchable log store with zero .NET changes. ADR: `docs/decisions/0008-victorialogs-log-storage.md`.
+The compose `logs` profile (`.env.example` ships `COMPOSE_PROFILES=logs`, so it is on by default) adds a searchable log store with no shipper sidecar: the app posts its log events to VictoriaLogs directly from NLog. ADR: `docs/decisions/0008-victorialogs-log-storage.md`. Storage runs by default, but the public read routes are opt-in: `.env.example` ships `VL_UI_USER`/`VL_UI_PASSWORD` commented out, and Caddy serves no log routes until real credentials are set (the entrypoint also refuses the `change-me` placeholder and passwords shorter than 12 characters).
 
 - **victorialogs** — VictoriaLogs, upstream image `victoriametrics/victoria-logs` version-pinned, single container. Retention: `-retentionPeriod=${VL_RETENTION_PERIOD:-30d}` (minimum 1d). `mem_limit: 512m`; data in the named volume `victorialogs-data`. No ports are published: it is reachable only inside the compose network. The image contains no shell, so the compose file defines no healthcheck for it; its `/health` HTTP endpoint is available for external checks.
-- **vector** — Vector shipper, upstream image `timberio/vector` version-pinned (alpine variant). It tails `Logs/HSM-structured-log-*.json` through a read-only bind of the app's `Logs/` directory, maps NLog's attribute names onto VictoriaLogs' reserved fields (`_time` from `time`, `_msg` from `msg`; `level`, `logger`, `thread`, `traceId` stay queryable as-is), and POSTs gzip-compressed newline-delimited JSON to `http://victorialogs:9428/insert/jsonline` on the compose network. Its own named volume `vector-data` holds file checkpoints and a 256 MiB disk buffer: already-shipped lines are never re-shipped, and lines survive a VictoriaLogs outage or restarts. Vector 0.58 has no native `victoria_logs` sink; the generic `http` sink with `newline_delimited` framing is the wiring (config: `vector/vector.toml`). The compose healthcheck probes Vector's local API (`/health` on 127.0.0.1:8686, enabled in vector.toml).
-- **app** — writes the JSON log only when `HSM_STRUCTURED_LOGS=true` (set by the compose `app` service; default true there, unset everywhere else, so docker-compose.direct.yml, docker run, and non-Docker deployments never write it). The target is an env-gated rule in `nlog.config` with the same `${hsm-redacted}` credential redaction as the text targets and single-line JSON output (one event = one line).
-- **Deployment dependency:** the nlog.config change ships inside the app image, so log flow starts only with the first app image released after this change; the compose, Vector, and Caddy pieces deploy independently and simply see no JSON log until then.
+- **app** — two env-gated NLog targets in `nlog.config` (the rule fires only when `HSM_STRUCTURED_LOGS=true`, set by the compose `app` service; default true there, unset everywhere else, so docker-compose.direct.yml, docker run, and non-Docker deployments never enable it):
+  - **jsonfile** — the durable archive: `Logs/HSM-structured-log-<date>.json`, one JSON object per line, using VictoriaLogs' reserved field names (`_time`, `_msg`) so the file is directly ingestible.
+  - **vl-web** — direct ingestion: a WebService target (`NLog.Targets.WebService` package; JsonPost protocol, a single nameless parameter renders the same JsonLayout as the raw request body) POSTs each event to `http://victorialogs:9428/insert/jsonline` on the compose network. The URL is hardcoded because that name resolves only inside the compose network; everywhere else the rule never fires. A RetryingWrapper (3 retries) covers blips, and the targets-level `async="true"` isolates the app from slow HTTP.
+  - Delivery to the store is **best-effort**: a prolonged VictoriaLogs outage (or a network partition) leaves a gap, because events are dropped after the retries and the async queue overflow. The archive file keeps everything; closing the gap after VictoriaLogs is back is one command from the compose host (the store is not published, so the curl rides the compose network):
 
-**Read path** — through the existing Caddy on the web ports (same origin, same TLS), behind basic auth with `VL_UI_USER`/`VL_UI_PASSWORD` from `.env` (the caddy entrypoint bcrypt-hashes the password; the plaintext never reaches the Caddyfile):
+    ```bash
+    docker run --rm --network <compose-project>_default -v "$PWD/Logs:/logs:ro" curlimages/curl:8.16.0 \
+      --data-binary @/logs/HSM-structured-log-2026-09-28.json \
+      -H 'Content-Type: application/stream+json' \
+      http://victorialogs:9428/insert/jsonline
+    ```
+
+    (`<compose-project>_default` is the default network of the compose project — the directory the compose file lives in, suffixed with `_default`; `docker network ls` shows it.) Verified live against the pinned image: a 201-line archive file backfilled as 201 events with event times preserved. `application/json` (what NLog's JsonPost sends) is accepted by the same endpoint, as is a body without a trailing newline.
+  - The `_time` attribute is UTC round-trip ISO 8601 (`${date:universalTime=true:format=o}`, always `...Z`), so time filters stay correct even if the app container's `TZ` is not UTC. The same `${hsm-redacted}` credential redaction as the text targets wraps `_msg`.
+- **Deployment dependency:** the nlog.config and `NLog.Targets.WebService` changes ship inside the app image, so log flow starts only with the first app image released after this change; the compose and Caddy pieces deploy independently and simply see no events until then.
+
+**Read path** — through the existing Caddy on the web ports (same origin, same TLS), behind basic auth with `VL_UI_USER`/`VL_UI_PASSWORD` from `.env` (the caddy entrypoint bcrypt-hashes the password at cost 10 with a 12+ character minimum; the plaintext never reaches the Caddyfile):
 
 - Web UI: `https://<HSM_DOMAIN>/select/vmui` (VictoriaLogs' built-in UI; in the pinned version it is served under `/select/vmui`, older releases used `/vlui`)
 - Query API: `https://<HSM_DOMAIN>/select/logsql/*`
@@ -88,7 +100,7 @@ curl -sk -u "$VL_UI_USER:$VL_UI_PASSWORD" --get \
 docker run --rm --volumes-from hsm-victorialogs alpine du -sh /victoria-logs-data
 ```
 
-**Disabling:** remove `logs` from `COMPOSE_PROFILES` and comment out `VL_UI_USER`/`VL_UI_PASSWORD` in `.env`, then `docker compose up -d`. The two log containers stop and Caddy stops exposing the routes; HSM itself is unaffected (`HSM_STRUCTURED_LOGS` only adds one JSON file next to the existing text logs).
+**Disabling the read routes:** comment out `VL_UI_USER`/`VL_UI_PASSWORD` in `.env` (their default state) and run `docker compose up -d`: Caddy stops exposing the log routes while the store keeps receiving events. **Disabling everything:** also remove `logs` from `COMPOSE_PROFILES` (the VictoriaLogs container stops; set `HSM_STRUCTURED_LOGS=false` to stop the app posting). HSM itself is unaffected (`HSM_STRUCTURED_LOGS` only adds one JSON file next to the existing text logs).
 
 ## Ports
 
@@ -110,7 +122,6 @@ docker run --rm --volumes-from hsm-victorialogs alpine du -sh /victoria-logs-dat
 | `CaddyData` | Caddy certificates and ACME account (compose) |
 | `CaddyCertificates` | Optional custom certificate chain and key, mounted read-only at `/certs` |
 | `victorialogs-data` (named) | VictoriaLogs log storage (compose `logs` profile) |
-| `vector-data` (named) | Vector checkpoints and on-disk buffer (compose `logs` profile) |
 
 ## TLS
 
@@ -127,7 +138,6 @@ Kestrel continues to serve HTTPS on both ports with `Config/<ServerCertificate.N
 - `docker-compose.yml`
 - `docker_scripts/`
 - project Dockerfiles
-- `vector/vector.toml`
 - `nlog.config` / `collector.nlog.config`
 - native library paths under `src/lib/`
 - app/server configuration classes

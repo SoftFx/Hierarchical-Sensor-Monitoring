@@ -65,7 +65,22 @@ if [ -n "${VL_UI_USER:-}" ] || [ -n "${VL_UI_PASSWORD:-}" ]; then
     case "$VL_UI_USER" in
         *[[:space:]]*|*'{'*|*'}'*) fail 'VL_UI_USER must not contain whitespace or braces' ;;
     esac
-    VL_UI_BCRYPT_HASH="$(caddy hash-password --plaintext "$VL_UI_PASSWORD")"
+    # Refuse the published placeholder and short passwords outright: these routes sit on the
+    # public listeners, so a guessable credential exposes every shipped log line. A fresh
+    # install ships the credentials commented out (.env.example); a deploy that re-enables
+    # the placeholder gets a hard error naming the variable, not a public hole.
+    case "$(printf '%s' "$VL_UI_PASSWORD" | tr 'A-Z' 'a-z')" in
+        change-me) fail 'VL_UI_PASSWORD must be changed from the example placeholder before the log UI is exposed' ;;
+    esac
+    if [ "${#VL_UI_PASSWORD}" -lt 12 ]; then
+        fail 'VL_UI_PASSWORD must be at least 12 characters'
+    fi
+    # bcrypt cost 10, not Caddy's default 14: this Caddy also fronts sensor ingestion, and
+    # every failed basic-auth attempt pays the full bcrypt cost (only successful checks are
+    # cached), so the default would let unauthenticated traffic burn CPU and degrade
+    # ingestion. Cost 10 is tens of milliseconds; the compensating control is the required
+    # 12+ character random password.
+    VL_UI_BCRYPT_HASH="$(caddy hash-password --algorithm bcrypt --bcrypt-cost 10 --plaintext "$VL_UI_PASSWORD")"
     require_nonblank "${VL_UI_BCRYPT_HASH}" 'caddy hash-password produced no bcrypt hash'
     HSM_VL_SNIPPET=victorialogs-routes
 else

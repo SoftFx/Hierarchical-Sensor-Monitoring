@@ -55,12 +55,19 @@ fi
 
 # VictoriaLogs routes: enabled only with VL_UI_USER/VL_UI_PASSWORD. The plaintext password is
 # hashed by the entrypoint and must never reach the adapted configuration (the bcrypt hash
-# does); the ingest endpoints (/insert/...) must never be routed through Caddy.
+# does); the ingest endpoints (/insert/...) must never be routed through Caddy. The hash is
+# generated at cost 10 (not Caddy's default 14): this Caddy also fronts sensor ingestion, and
+# failed basic-auth attempts pay the full bcrypt cost, so the default is a CPU DoS lever.
 vl_password='test-vl-password-not-for-network-use'
 adapt_ok vl-on -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \
     -e VL_UI_USER=hsm-logs -e "VL_UI_PASSWORD=$vl_password"
 grep -F '"dial":"victorialogs:9428"' "$tmp/vl-on.json" >/dev/null
 grep -F '"username":"hsm-logs"' "$tmp/vl-on.json" >/dev/null
+grep -F '$2a$10$' "$tmp/vl-on.json" >/dev/null
+if grep -F '$2a$14$' "$tmp/vl-on.json" >/dev/null; then
+    echo 'VictoriaLogs bcrypt hash uses the default cost 14 instead of 10' >&2
+    exit 1
+fi
 if grep -F "$vl_password" "$tmp/vl-on.json" >/dev/null; then
     echo 'VictoriaLogs password leaked into adapted configuration' >&2
     exit 1
@@ -69,6 +76,11 @@ if grep -F '/insert' "$tmp/vl-on.json" >/dev/null; then
     echo 'VictoriaLogs ingest endpoint routed through Caddy' >&2
     exit 1
 fi
+
+# A 12-character password is the accepted minimum.
+adapt_ok vl-min-password -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \
+    -e VL_UI_USER=hsm-logs -e VL_UI_PASSWORD=twelve-chars
+grep -F '"username":"hsm-logs"' "$tmp/vl-min-password.json" >/dev/null
 
 adapt_ok vl-off -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed
 if grep -F 'victorialogs' "$tmp/vl-off.json" >/dev/null; then
@@ -159,5 +171,9 @@ reject invalid-domain 'HSM_DOMAIN must be a bare DNS name or IP address' -e 'HSM
 reject domain-with-port 'HSM_DOMAIN must be a bare DNS name or IP address' -e 'HSM_DOMAIN=hsm.example.com:443' -e HSM_CERTIFICATE=self-signed
 reject missing-vl-password 'VL_UI_PASSWORD is required' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_USER=hsm-logs
 reject missing-vl-user 'VL_UI_USER is required' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_PASSWORD=x
+reject placeholder-vl-password 'VL_UI_PASSWORD must be changed from the example placeholder' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_USER=hsm-logs -e VL_UI_PASSWORD=change-me
+reject placeholder-vl-password-case 'VL_UI_PASSWORD must be changed from the example placeholder' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_USER=hsm-logs -e VL_UI_PASSWORD=Change-Me
+reject short-vl-password 'VL_UI_PASSWORD must be at least 12 characters' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_USER=hsm-logs -e VL_UI_PASSWORD=short
+reject short-vl-password-boundary 'VL_UI_PASSWORD must be at least 12 characters' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_USER=hsm-logs -e VL_UI_PASSWORD=eleven-char
 
 echo 'hsm-caddy runtime configuration tests passed'

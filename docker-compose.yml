@@ -25,10 +25,14 @@
 # WITHOUT CADDY (HSM's own PFX certificate, as before): use docker-compose.direct.yml instead.
 # Collectors and agents always connect to https://<HSM_DOMAIN>:44330.
 #
-# LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database) and Vector (shipper for the
-# app's JSON log). Caddy exposes VictoriaLogs' UI (/select/vmui) and query API (/select/logsql)
-# with basic auth when VL_UI_USER/VL_UI_PASSWORD are set in .env. Disable by removing 'logs'
-# from COMPOSE_PROFILES and commenting out the VL_UI_* lines. See aicontext/architecture/docker.md.
+# LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database). The app ships its JSON log
+# to it directly: an env-gated NLog WebService target in the app's nlog.config posts each event
+# to the compose-network address below (the Logs/ files remain the durable archive; backfill
+# after an outage is one curl, see aicontext/architecture/docker.md). Caddy exposes VictoriaLogs'
+# UI (/select/vmui) and query API (/select/logsql) with basic auth only when VL_UI_USER/
+# VL_UI_PASSWORD are set in .env; .env.example ships them commented out, so a fresh install
+# stores logs but serves no public log routes until real credentials are set. Disable entirely
+# by removing 'logs' from COMPOSE_PROFILES. See aicontext/architecture/docker.md.
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
@@ -48,7 +52,7 @@ services:
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy.
       Kestrel__TrustedProxies__0: 'attached-networks'
-      # Single-line JSON log target in nlog.config, tailed by Vector for VictoriaLogs.
+      # Structured JSON log in nlog.config: archive file plus direct posts to VictoriaLogs.
       HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-true}'
     volumes:
       - ./Logs:/app/Logs
@@ -58,7 +62,8 @@ services:
 
   victorialogs:
     # Log database (upstream image, version-pinned). Reached only inside the compose network:
-    # Vector inserts, Caddy exposes the read-only paths.
+    # the app posts its JSON log here directly (env-gated NLog WebService target), Caddy
+    # exposes the read-only paths.
     image: 'victoriametrics/victoria-logs:v1.52.0'
     container_name: hsm-victorialogs
     restart: unless-stopped
@@ -73,30 +78,6 @@ services:
       - victorialogs-data:/victoria-logs-data
     # No healthcheck: the image has no shell, so nothing can be probed in-container;
     # /health exists on the HTTP port for external checks.
-
-  vector:
-    # Shipper: tails the app's JSON log from the shared ./Logs bind mount, buffers on disk,
-    # and inserts into VictoriaLogs over the compose network.
-    image: 'timberio/vector:0.58.0-alpine'
-    container_name: hsm-vector
-    restart: unless-stopped
-    profiles: ['logs']
-    depends_on:
-      victorialogs:
-        condition: service_started
-    healthcheck:
-      # Vector's local API (enabled in vector.toml).
-      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8686/health']
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    volumes:
-      - ./vector/vector.toml:/etc/vector/vector.toml:ro
-      - ./Logs:/logs:ro
-      - vector-data:/vector-data
-    # The image ships no default command; point it at the mounted config.
-    command: ['--config', '/etc/vector/vector.toml']
 
   caddy:
     image: 'hsmonitoring/hsm-caddy:2.11.4-2'
@@ -127,4 +108,3 @@ services:
 
 volumes:
   victorialogs-data:
-  vector-data:

@@ -13,7 +13,7 @@ HSM Server is distributed as a Docker image. This page covers all deployment met
 
 ## Method 1 — Docker Compose (recommended)
 
-The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-1 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
+The supported compose file runs HSM behind the ready-made hsmonitoring/hsm-caddy:2.11.4-2 image. You do not build Caddy or its DNS modules locally. Caddy terminates TLS and forwards requests to HSM, which remains reachable only inside the compose network.
 
 Pull requests build and test without publishing. The trusted-master CI workflow publishes only after its checks pass. Versioned image tags are immutable: a Caddy source, configuration, or module update requires a new workflow version and matching compose image tag. The workflow refuses to overwrite an existing version; latest moves only after a new version publishes. After merge, wait for the successful master workflow before deploying a newly introduced tag.
 
@@ -44,6 +44,8 @@ curl -o .env https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monito
 
 Before the first docker compose up, edit .env: set HSM_DOMAIN to your real host name and, because the template defaults to Cloudflare DNS-01, provide CF_API_TOKEN. The copied template cannot start with its blank token. If inbound HTTP/TLS validation is available and you prefer it, change HSM_CERTIFICATE to letsencrypt-http instead.
 
+The log storage (VictoriaLogs) also starts with the template defaults, but its web UI and query API stay off: VL_UI_USER and VL_UI_PASSWORD are commented out, and Caddy serves no log routes until they are set. To enable log access, uncomment both lines in .env and set your own long random password (at least 12 characters; the placeholder `change-me` and shorter passwords are refused at startup).
+
 For Cloudflare DNS validation (the documented DNS-01 example), use a scoped API token with Zone:DNS:Edit and Zone:Zone:Read for the selected zone:
 
 ~~~dotenv
@@ -69,6 +71,7 @@ HSM_CERTIFICATE=letsencrypt-http
 | HSM_DNS_PROVIDER | cloudflare or dynv6; required only for letsencrypt-dns. |
 | CF_API_TOKEN | Cloudflare token with DNS edit and zone read access; required only for Cloudflare. |
 | DYNV6_API_TOKEN | dynv6 token; required only for dynv6. |
+| VL_UI_USER / VL_UI_PASSWORD | Basic-auth credentials for the log UI (/select/vmui) and query API. Commented out in the template; uncomment both (with a 12+ character password) only when enabling log access. |
 
 Keep HSM_DOMAIN and HSM_CERTIFICATE in .env for Compose commands. DNS tokens are needed only for DNS-01.
 
@@ -201,10 +204,14 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 # WITHOUT CADDY (HSM's own PFX certificate, as before): use docker-compose.direct.yml instead.
 # Collectors and agents always connect to https://<HSM_DOMAIN>:44330.
 #
-# LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database) and Vector (shipper for the
-# app's JSON log). Caddy exposes VictoriaLogs' UI (/select/vmui) and query API (/select/logsql)
-# with basic auth when VL_UI_USER/VL_UI_PASSWORD are set in .env. Disable by removing 'logs'
-# from COMPOSE_PROFILES and commenting out the VL_UI_* lines. See aicontext/architecture/docker.md.
+# LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database). The app ships its JSON log
+# to it directly: an env-gated NLog WebService target in the app's nlog.config posts each event
+# to the compose-network address below (the Logs/ files remain the durable archive; backfill
+# after an outage is one curl, see aicontext/architecture/docker.md). Caddy exposes VictoriaLogs'
+# UI (/select/vmui) and query API (/select/logsql) with basic auth only when VL_UI_USER/
+# VL_UI_PASSWORD are set in .env; .env.example ships them commented out, so a fresh install
+# stores logs but serves no public log routes until real credentials are set. Disable entirely
+# by removing 'logs' from COMPOSE_PROFILES. See aicontext/architecture/docker.md.
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
@@ -224,7 +231,7 @@ services:
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy.
       Kestrel__TrustedProxies__0: 'attached-networks'
-      # Single-line JSON log target in nlog.config, tailed by Vector for VictoriaLogs.
+      # Structured JSON log in nlog.config: archive file plus direct posts to VictoriaLogs.
       HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-true}'
     volumes:
       - ./Logs:/app/Logs
@@ -234,7 +241,8 @@ services:
 
   victorialogs:
     # Log database (upstream image, version-pinned). Reached only inside the compose network:
-    # Vector inserts, Caddy exposes the read-only paths.
+    # the app posts its JSON log here directly (env-gated NLog WebService target), Caddy
+    # exposes the read-only paths.
     image: 'victoriametrics/victoria-logs:v1.52.0'
     container_name: hsm-victorialogs
     restart: unless-stopped
@@ -249,30 +257,6 @@ services:
       - victorialogs-data:/victoria-logs-data
     # No healthcheck: the image has no shell, so nothing can be probed in-container;
     # /health exists on the HTTP port for external checks.
-
-  vector:
-    # Shipper: tails the app's JSON log from the shared ./Logs bind mount, buffers on disk,
-    # and inserts into VictoriaLogs over the compose network.
-    image: 'timberio/vector:0.58.0-alpine'
-    container_name: hsm-vector
-    restart: unless-stopped
-    profiles: ['logs']
-    depends_on:
-      victorialogs:
-        condition: service_started
-    healthcheck:
-      # Vector's local API (enabled in vector.toml).
-      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8686/health']
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    volumes:
-      - ./vector/vector.toml:/etc/vector/vector.toml:ro
-      - ./Logs:/logs:ro
-      - vector-data:/vector-data
-    # The image ships no default command; point it at the mounted config.
-    command: ['--config', '/etc/vector/vector.toml']
 
   caddy:
     image: 'hsmonitoring/hsm-caddy:2.11.4-2'
@@ -303,7 +287,6 @@ services:
 
 volumes:
   victorialogs-data:
-  vector-data:
 ```
 
 What must stay as it is, if you ever adapt it:
@@ -319,6 +302,7 @@ What must stay as it is, if you ever adapt it:
 | ./CaddyData:/data | Keeps ACME accounts and certificates across restarts and updates. |
 | ./CaddyCertificates:/certs:ro | Supplies custom PEM files without allowing the container to modify them. |
 | Pinned hsmonitoring/hsm-caddy:2.11.4-2 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules plus the VictoriaLogs read-only routes; users do not build locally. |
+| HSM_STRUCTURED_LOGS=true on the app service | The app writes the structured JSON log archive and posts each event directly to VictoriaLogs on the compose network; the posting target is inert in non-compose deployments (the rule never fires there). |
 | Published ports 44330 and 44333 | Collectors and downloaded agent bundles use Sensor API port 44330; the UI is also available on 44333. |
 
 ### Internal DNS name

@@ -556,7 +556,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 ChangeLast = false,
             });
 
-            await UntilAsync(() => !sensor.IsExpired, "the UI-added value must resolve the sensor on the data path");
+            await TestWait.UntilAsync(() => !sensor.IsExpired, "the UI-added value must resolve the sensor on the data path");
 
             Assert.False(sensor.IsExpired);
             Assert.False(sensor.LastValue.IsTimeout); // a real value, not a marker
@@ -609,7 +609,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var response = await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, batch);
 
             Assert.Empty(response); // premise: every batch value was accepted
-            await UntilAsync(() => !sensor.IsExpired, "the batch's fresh value must resolve the sensor on the data path");
+            await TestWait.UntilAsync(() => !sensor.IsExpired, "the batch's fresh value must resolve the sensor on the data path");
 
             Assert.False(sensor.IsExpired);
             Assert.False(sensor.LastValue.IsTimeout); // a real value, not a marker
@@ -661,7 +661,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var response = await _valuesCache.AddSensorValuesAsync(_fixture.AccessKeyAId, _fixture.ProductAId, batch);
 
             Assert.Empty(response); // premise: every batch value was accepted
-            await UntilAsync(() => !sensor.IsExpired, "the batch's fresh value must resolve the sensor on the data path");
+            await TestWait.UntilAsync(() => !sensor.IsExpired, "the batch's fresh value must resolve the sensor on the data path");
 
             Assert.False(sensor.IsExpired);
             Assert.False(sensor.LastValue.IsTimeout); // a real value, not a marker
