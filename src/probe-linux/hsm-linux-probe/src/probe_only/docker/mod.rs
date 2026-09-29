@@ -397,6 +397,20 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let Some(key) = self.member(logger, container) else {
                 continue;
             };
+            // Excluded services (probe.docker.exclude): not monitored at all — not even inspected.
+            if self
+                .exclude
+                .iter()
+                .any(|pattern| identity::matches_pattern(pattern, &key))
+            {
+                self.tracker.forget(&key);
+                if self.log_once.raise(&format!("exclude:{key}")) {
+                    logger.info(format!(
+                        "docker: {key}: excluded by probe.docker.exclude, not monitored"
+                    ));
+                }
+                continue;
+            }
             if should_stop() {
                 return Ok(None);
             }
@@ -437,27 +451,6 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 state: container.state.clone(),
                 inspect,
             });
-        }
-
-        // Excluded services (probe.docker.exclude): not monitored at all.
-        let excluded: Vec<ServiceKey> = services
-            .keys()
-            .filter(|key| {
-                self.exclude
-                    .iter()
-                    .any(|pattern| identity::matches_pattern(pattern, key))
-            })
-            .cloned()
-            .collect();
-        for key in &excluded {
-            services.remove(key);
-            roster.remove(key);
-            self.tracker.forget(key);
-            if self.log_once.raise(&format!("exclude:{key}")) {
-                logger.info(format!(
-                    "docker: {key}: excluded by probe.docker.exclude, not monitored"
-                ));
-            }
         }
 
         // A service first seen as a finished one-shot job is not a service. One that the state

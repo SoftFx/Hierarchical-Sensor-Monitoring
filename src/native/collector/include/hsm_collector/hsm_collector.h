@@ -805,8 +805,10 @@ hsm_result_t hsm_alert_set_inactivity_period(hsm_alert_t* alert, int64_t period_
 /* Attach a built alert to a sensor and rebuild its registration payload. */
 hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert);
 
-/* Replace a sensor's registration description (NULL clears it to null) and rebuild its payload
-   (0.10.0). Same re-emission rules as hsm_sensor_attach_alert: before Start the new text is what
+/* Replace a sensor's registration description and rebuild its payload. NULL sets it to null, which
+   the server reads as "unchanged" — so NULL clears only a registration not yet sent; to clear a
+   description the server already has, pass "". Rebuilds the payload
+   (0.10.0) with the same re-emission rules as hsm_sensor_attach_alert: before Start the new text is what
    Start registers; while the collector runs the run's recorded registration is replaced in place
    and, on the HTTP transport, the sensor is re-registered at the worker's next cycle. For a host
    whose description carries live facts (the Linux probe's Docker memory limit). */

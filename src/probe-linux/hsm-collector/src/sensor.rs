@@ -130,9 +130,10 @@ macro_rules! attachable {
                     self.0.attach_alert(alert)
                 }
 
-                /// Replace this sensor's registration description (`None` clears it), with the
-                /// same rules as [`Self::attach_alert`]: before Start it is what Start registers;
-                /// while running the sensor is re-registered (collector >= 0.10.0).
+                /// Replace this sensor's registration description, with the same rules as
+                /// [`Self::attach_alert`]: before Start it is what Start registers; while running
+                /// the sensor is re-registered (collector >= 0.10.0). `None` emits null, which the
+                /// server reads as "unchanged"; pass `Some("")` to clear a sent description.
                 pub fn set_description(&self, description: Option<&str>) -> Result<()> {
                     self.0.set_description(description)
                 }
