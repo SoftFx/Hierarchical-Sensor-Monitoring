@@ -194,7 +194,8 @@ namespace HSMServer.ServerConfiguration
             }
         }
 
-        // Last match wins, as in the configuration provider.
+        // Last match wins on a case-variant duplicate (the configuration provider rejects
+        // duplicates outright; this read must not throw, so it takes the latest edit).
         private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value)
         {
             var found = false;
