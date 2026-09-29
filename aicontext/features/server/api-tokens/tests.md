@@ -53,7 +53,7 @@ the #1384 owner-mirrored model (eternal tokens, read-only flag, no grants/expiry
 - No/foreign credentials (missing header, Basic, bare Bearer, non-hsm bearer) are `NoResult` with no manager lookup — another scheme's business.
 - Duplicated `Authorization` values are `NoResult` with no manager lookup (the `", "`-joined string would parse as the first value's scheme and hide the bearer).
 - A credential claiming the `hsm_pat_` prefix but failing the shape check (short, no separator, foreign alphabet, wrong secret length) fails closed with no manager lookup.
-- `ApiTokens.Enabled = false` (kill switch) rejects even a valid credential before any parse or lookup — the manager decision is never reached while the channel is off.
+- `ApiTokens.Disabled = true` (kill switch) rejects even a valid credential before any parse or lookup — the manager decision is never reached while the channel is off.
 - Failure events carry a TokenId only when it is canonical: a shape-valid credential with an attacker-chosen id alphabet records the failure with a null TokenId; a canonical-shaped failure records the public id.
 - Manager rejection and deleted-owner both fail closed; challenge is a generic 401 with `WWW-Authenticate: Bearer` and no redirect.
 - Success marks the token used exactly once; every failure path never marks it.

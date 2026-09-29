@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.ServerConfiguration
 {
@@ -8,13 +9,19 @@ namespace HSMServer.ServerConfiguration
     // fine-granted model are gone.
     public sealed class ApiTokensConfig
     {
-        // Emergency authentication/issuance kill switch (initiative: "ApiTokens.Enabled =
-        // false ... all API-token authentication plus create/rename/rotate is denied
-        // immediately. Cookie-authenticated list/revoke and IsAdmin emergency revoke-user
-        // remain available for cleanup"). Default true: personal tokens are a standard
-        // feature with no UI toggle; the key is flipped in the config file only in an
-        // emergency.
-        public bool Enabled { get; set; } = true;
+        // Emergency authentication/issuance kill switch, config-file only (no UI toggle):
+        // ApiTokens.Disabled = true denies all API-token authentication plus
+        // create/rename/rotate immediately; cookie-authenticated list/revoke and IsAdmin
+        // emergency revoke-user remain available for cleanup. Default false: tokens are on.
+        public bool Disabled { get; set; }
+
+        // Code-facing view of Disabled. Never persisted, and deliberately NOT bindable
+        // (non-public setter — the configuration binder skips it): the earlier key
+        // "ApiTokens.Enabled" defaulted to false and ServerConfig resaves the whole file
+        // on every start, so every server that ran it holds "Enabled": false. Binding it
+        // would keep those upgraded servers dark with no UI left to turn tokens on.
+        [JsonIgnore]
+        public bool Enabled { get => !Disabled; internal set => Disabled = !value; }
 
         // Quota of LIVE tokens per user (not revoked, issued at the current global and
         // owner revocation generations — exactly what

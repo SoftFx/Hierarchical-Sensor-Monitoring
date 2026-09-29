@@ -147,11 +147,37 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
-        [Fact]
-        public void CreateToken_EmptyName_Denied()
+        [Theory]
+        [InlineData("   ", false)]
+        [InlineData(null, false)]
+        [InlineData("", true)]
+        public void CreateToken_BlankNote_GetsGeneratedDefault(string note, bool readOnly)
         {
             var request = BuildCreateRequest();
-            request.Name = "   ";
+            request.Name = note;
+            request.ReadOnly = readOnly;
+
+            var received = CreateCapturingName(request);
+
+            Assert.StartsWith(readOnly ? "Read-only token " : "Read/write token ", received);
+            Assert.EndsWith(" UTC", received);
+        }
+
+
+        [Fact]
+        public void DefaultTokenNote_IsStableFormat()
+        {
+            var note = ProfileController.DefaultTokenNote(true, new DateTime(2026, 9, 29, 14, 5, 0, DateTimeKind.Utc));
+
+            Assert.Equal("Read-only token 2026-09-29 14:05 UTC", note);
+        }
+
+
+        [Fact]
+        public void CreateToken_TooLongNote_Denied()
+        {
+            var request = BuildCreateRequest();
+            request.Name = new string('a', ProfileController.MaxNameLength + 1);
 
             var answer = Mutate(CreateController().CreateToken(request));
 
@@ -160,19 +186,38 @@ namespace HSMServer.Core.Tests.Controllers
         }
 
 
-        [Fact]
-        public void CreateToken_ControlOnlyName_DeniedAsInvalidName()
+        // Runs a create that must succeed and returns the name the manager received.
+        private string CreateCapturingName(CreateTokenRequest request)
         {
-            // The manager's Sanitize maps control characters to spaces before its own
-            // empty-name rejection; without mirroring that here the answer was a bare
-            // create_failed pointing at a server log that says nothing.
+            string received = null;
+
+            _tokens.Setup(t => t.TryCreateToken(OwnerId, It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string>(),
+                    out It.Ref<ApiTokenInfo>.IsAny, out It.Ref<string>.IsAny))
+                .Callback(new CreateTokenCallback((Guid _, string name, bool __, string ___,
+                    out ApiTokenInfo info, out string token) =>
+                {
+                    received = name;
+                    info = BuildInfo();
+                    token = "hsm_pat_v1_fulltoken";
+                }))
+                .Returns(true);
+
+            Assert.True(Mutate(CreateController().CreateToken(request)).Ok);
+
+            return received;
+        }
+
+
+        [Fact]
+        public void CreateToken_ControlOnlyNote_GetsGeneratedDefault()
+        {
+            // The manager's Sanitize maps control characters to spaces and rejects the
+            // resulting empty name; the surface must treat control-only input as blank
+            // and substitute the default before the manager call.
             var request = BuildCreateRequest();
-            request.Name = "";
+            request.Name = "\u0001\u0002";
 
-            var answer = Mutate(CreateController().CreateToken(request));
-
-            Assert.False(answer.Ok);
-            Assert.Equal("invalid_name", answer.Error);
+            Assert.StartsWith("Read/write token ", CreateCapturingName(request));
         }
 
 
