@@ -37,15 +37,17 @@ The probe registers **two separately pinned sets**:
    nothing less"), their registration and alerts by
    `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. Sources, periods,
    alerts and costs: README "Probe-only sensors".
-3. **The Docker Compose tree** (#1416, part of the probe-only set) — seven sensors per Compose
+3. **The Docker Compose tree** (#1416, part of the probe-only set) — six sensors per Compose
    service under `<module>/Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
-   of 5-second samples; CPU as % of the whole host), `Memory limit`, `Service status` (the Windows
+   of 5-second samples; CPU as % of the whole host; the memory limit is stated in the `Memory used %`
+   description and follows a changed limit), `Service status` (the Windows
    `ServiceControllerStatus` enum and its alert), `Health` (only where a healthcheck exists),
    `Restart count` (posted on change) and `OOM killed` (latched 24 h). Source: the Docker Engine
    API over its Unix socket (`probe_only/docker/`). Services present at start register before
    Start; later ones at runtime. A service first seen as a completed one-shot job (every
    container Exited (0), restart policy `no`) is not monitored until it runs. Pinned for
-   garage-server (12 Compose containers, 11 monitored services, 70 paths) by `DOCKER_GARAGE_SET`.
+   garage-server's captures (12 Compose containers, 11 monitored services, 59 paths) by
+   `DOCKER_GARAGE_SET`.
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,
 batching, retry and TLS stay the library's; only the acquisition (a sysfs read, a `statvfs`, an

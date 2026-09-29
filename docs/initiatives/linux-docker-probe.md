@@ -234,8 +234,7 @@ operator-facing table and the edge behavior are in the probe README ("Probe-only
 | Sensor | Type / cadence | Value | Alert (attached at registration) |
 |---|---|---|---|
 | `CPU` | DoubleBar, 5-min bar, sample every 5 s (`probe.docker.samplePeriodSec`) | % of the **whole host**, max 100 = Δ`total_usage` / Δ`system_cpu_usage` × 100 (not × `online_cpus`; the description says `docker stats` shows per-core %). First sample, counter reset, container-id change, interval outside ½…3× the period ⇒ skipped, never 0 | mean > 90 for 30 min → warning notification |
-| `Memory used %` | DoubleBar, same sampling | (`usage` − `inactive_file`) / limit × 100; unlimited ⇒ of host `MemTotal` | mean > 90 → warning notification |
-| `Memory limit` | Int, MB; at start and on change | the limit (host `MemTotal` when unlimited, with a comment) | none |
+| `Memory used %` | DoubleBar, same sampling | (`usage` − `inactive_file`) / limit × 100; unlimited ⇒ of host `MemTotal`. The limit is stated in the description and a changed limit re-registers it (`hsm_sensor_set_description`, collector 0.10.0); no separate `Memory limit` sensor (owner decision, 2026-09-29) | mean > 90 → warning notification |
 | `Service status` | Enum, 60 s, AggregateData | the Windows `ServiceStatusPrototype` options byte-for-byte; running → Running; created, restarting → StartPending; paused → Paused; exited, dead, removing → Stopped; removed → Stopped for 7 days after last sighting. A service first seen with every container Exited (0) under restart policy `no` is a completed one-shot job: not registered, one INFO line; once it runs it is a service from then on (owner decision) | `IfValue NotEqual Running`, confirmation 5 min, instant-hourly notification — the Windows prototype's alert byte for byte |
 | `Health` | Enum {starting, healthy, unhealthy}, 60 s, AggregateData, only where a healthcheck exists | `State.Health.Status` | `unhealthy` for 5 min → notification |
 | `Restart count` | Int, 60 s, posted only on change | cumulative `RestartCount`; a new container id starts a new baseline (state on disk), never goes down | value changed → notification |
@@ -533,7 +532,7 @@ coverage in both drivers and an agent version bump:
 | #1438 | typed metric-source seam with error reporting; live disk prediction; `DiskLetter` fix | 0.8.0 / 0.5.34, managed 3.5.2 |
 | #1446 | the prediction tells the truth: signed EMA, 6 h window, explicit states | 0.8.1 / 0.5.35, managed 3.5.3 |
 | #1476 PR | alerts in the Rust wrapper; enum-with-options ABI; option-anchored bars/rates; probe-only host/disk sensors; `build-deb.sh` | 0.9.0 / 0.5.37, probe 0.2.0 |
-| #1416 PR | Docker Compose source (7 sensors per service, Engine API over the socket via a dependency-free HTTP/1.1 client, restart/OOM/vanished state on SSD, conditional socket drop-in); collector: sensors created while running are registered on the server, alerts attachable while running | 0.10.0 / 0.5.38, probe 0.3.0 |
+| #1416 PR | Docker Compose source (6 sensors per service, Engine API over the socket via a dependency-free HTTP/1.1 client, restart/OOM/vanished state on SSD, conditional socket drop-in); collector: sensors created while running are registered on the server, alerts and descriptions changeable while running (`hsm_sensor_set_description`) | 0.10.0 / 0.5.38, probe 0.3.0 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
