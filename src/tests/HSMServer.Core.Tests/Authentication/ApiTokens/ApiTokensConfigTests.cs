@@ -55,6 +55,29 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.DoesNotContain("\"Enabled\"", json);
         }
 
+        [Fact]
+        public void KillSwitch_HandEditOfRunningConfig_AppliesWithoutRestart()
+        {
+            // The switch is config-file only: an edit must reach the bound singleton on
+            // reload, and survive a subsequent resave (any settings save) instead of the
+            // stale in-memory value being written back.
+            var memory = new Dictionary<string, string>();
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(memory).Build();
+            var server = new ServerConfig(configuration);
+            Assert.True(server.ApiTokens.Enabled);
+
+            configuration["ApiTokens:Disabled"] = "true";
+            configuration.Reload();
+            Assert.False(server.ApiTokens.Enabled);
+
+            server.ResaveSettings();
+            Assert.False(server.ApiTokens.Enabled);
+
+            configuration["ApiTokens:Disabled"] = "false";
+            configuration.Reload();
+            Assert.True(server.ApiTokens.Enabled);
+        }
+
         private static ApiTokensConfig Bind(params (string Key, string Value)[] values) =>
             new ConfigurationBuilder()
                 .AddInMemoryCollection(values.Select(v => new KeyValuePair<string, string>(v.Key, v.Value)))

@@ -1,6 +1,7 @@
 ﻿using HSMCommon;
 using HSMServer.Extensions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Primitives;
 using System;
 using System.IO;
 using System.Reflection;
@@ -106,6 +107,25 @@ namespace HSMServer.ServerConfiguration
             Kestrel.Validate();
 
             ResaveSettings();
+
+            // The API-token kill switch is config-file only (no UI toggle). Follow hand
+            // edits of the running file so it applies without a restart — and so a later
+            // ResaveSettings (any settings save) cannot write the stale value back.
+            ChangeToken.OnChange(_configuration.GetReloadToken, SyncApiTokensKillSwitch);
+        }
+
+        private void SyncApiTokensKillSwitch()
+        {
+            try
+            {
+                ApiTokens.Disabled = _configuration.GetSection(nameof(ApiTokens))
+                    .GetValue<bool?>(nameof(ApiTokensConfig.Disabled)) ?? false;
+            }
+            catch (InvalidOperationException)
+            {
+                // A malformed value in a half-written file: keep the current state; the
+                // next change notification re-reads it.
+            }
         }
 
         public void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
