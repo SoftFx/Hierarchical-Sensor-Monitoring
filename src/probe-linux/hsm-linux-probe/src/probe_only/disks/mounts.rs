@@ -103,6 +103,18 @@ pub struct Filesystem {
 /// The real filesystems in `mounts`, deduplicated by source device, minus those whose reported
 /// mount point matches an `exclude` pattern. Sorted by mount point.
 pub fn real_filesystems(mounts: &[Mount], exclude: &[String]) -> Vec<Filesystem> {
+    real_filesystems_keeping(mounts, exclude, &BTreeSet::new())
+}
+
+/// [`real_filesystems`], but a device mounted at one of the `keep` mount points (the ones already
+/// reported) is reported there while it stays mounted there: another mount of the same device
+/// appearing or disappearing elsewhere (a bind mount, a backup script mounting it at a shorter
+/// path) must not move its sensors to another name.
+pub fn real_filesystems_keeping(
+    mounts: &[Mount],
+    exclude: &[String],
+    keep: &BTreeSet<PathBuf>,
+) -> Vec<Filesystem> {
     // A mount with a later mount on the same mount point is hidden under it (mountinfo lists
     // mounts in mount order): `statvfs` of that path only reaches the one on top, so only the
     // visible mount of each path counts — otherwise two devices stacked on one path would share a
@@ -143,8 +155,9 @@ pub fn real_filesystems(mounts: &[Mount], exclude: &[String]) -> Vec<Filesystem>
         .into_iter()
         .filter_map(|(key, group)| {
             let best = group.iter().min_by(|a, b| {
-                (a.root != "/")
-                    .cmp(&(b.root != "/"))
+                (!keep.contains(&a.mount_point))
+                    .cmp(&!keep.contains(&b.mount_point))
+                    .then((a.root != "/").cmp(&(b.root != "/")))
                     .then(
                         a.mount_point
                             .components()
@@ -489,6 +502,33 @@ tmpfs         /home/cache     tmpfs   defaults          0 0
             .map(|fs| fs.mount_point.to_string_lossy().into_owned())
             .collect();
         assert_eq!(points, vec!["/", "/mnt/mediacentr"]);
+    }
+
+    #[test]
+    fn a_reported_mount_point_is_kept_while_its_device_stays_mounted_there() {
+        // A backup script mounts the mediacentr archive at a shorter path as well.
+        let text = format!(
+            "{GARAGE_MOUNTINFO}900 1 8:17 / /backup ro,nosuid,noatime - fuseblk /dev/sdb1 rw
+"
+        );
+        let mounts = parse_mountinfo(&text);
+        let point_of_sdb1 = |filesystems: Vec<Filesystem>| {
+            filesystems
+                .into_iter()
+                .find(|fs| fs.source == "/dev/sdb1")
+                .map(|fs| fs.mount_point)
+        };
+        // First seen with both mounts: the shorter path wins.
+        assert_eq!(
+            point_of_sdb1(real_filesystems(&mounts, &[])),
+            Some(PathBuf::from("/backup"))
+        );
+        // Already reported at /mnt/mediacentr: it stays there, its sensors keep their name.
+        let keep: BTreeSet<PathBuf> = [PathBuf::from("/mnt/mediacentr")].into();
+        assert_eq!(
+            point_of_sdb1(real_filesystems_keeping(&mounts, &[], &keep)),
+            Some(PathBuf::from("/mnt/mediacentr"))
+        );
     }
 
     #[test]

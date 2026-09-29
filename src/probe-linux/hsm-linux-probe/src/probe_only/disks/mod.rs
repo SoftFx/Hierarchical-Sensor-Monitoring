@@ -261,13 +261,23 @@ struct Disks<'c> {
 }
 
 impl<'c> Disks<'c> {
+    /// The mount points already reported: kept while their device stays mounted there.
+    fn mount_points(&self) -> BTreeSet<PathBuf> {
+        let nodes = self.nodes.lock().unwrap_or_else(|p| p.into_inner());
+        nodes
+            .iter()
+            .map(|node| node.fs.mount_point.clone())
+            .collect()
+    }
+
     /// Read the mount table and name what is new (persisting new names). `Err` when the table
     /// cannot be read.
     fn scan(&self, logger: &Logger) -> Result<Vec<(Filesystem, String)>, String> {
         let text = std::fs::read_to_string(&self.mountinfo)
             .map_err(|error| format!("cannot read {}: {error}", self.mountinfo.display()))?;
         let parsed = mounts::parse_mountinfo(&text);
-        let filesystems = mounts::real_filesystems(&parsed, &self.config.exclude);
+        let filesystems =
+            mounts::real_filesystems_keeping(&parsed, &self.config.exclude, &self.mount_points());
         {
             let mut reported = self
                 .hidden_reported
@@ -807,9 +817,10 @@ impl Source for SpaceSource<'_> {
         let live: BTreeMap<PathBuf, String> = match std::fs::read_to_string(&self.disks.mountinfo) {
             Ok(text) => {
                 self.live_failures.succeeded(logger, what);
-                mounts::real_filesystems(
+                mounts::real_filesystems_keeping(
                     &mounts::parse_mountinfo(&text),
                     &self.disks.config.exclude,
+                    &self.disks.mount_points(),
                 )
                 .into_iter()
                 .map(|fs| (fs.mount_point, fs.device))

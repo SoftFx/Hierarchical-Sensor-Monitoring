@@ -158,7 +158,9 @@ Mounts of one source device — bind mounts, sub-directory mounts, the read-only
 adds in the service's namespace — are **one** filesystem (a mount hidden under a later mount on the
 same path is ignored: `statvfs` only reaches the one on top), reported at a whole-filesystem mount
 (`root` field `/`) when there is one, then the shortest mount point: on garage-server
-`/mnt/.rw/wd4tb`, `/mnt/wd4tb` and `/mnt/wd4tb/backup` (all `/dev/sda2`) are one `wd4tb`. The set is
+`/mnt/.rw/wd4tb`, `/mnt/wd4tb` and `/mnt/wd4tb/backup` (all `/dev/sda2`) are one `wd4tb`. Once
+reported, a mount point is kept while its device stays mounted there — another mount of the same
+device appearing elsewhere (a backup script mounting it at a shorter path) does not move it. The set is
 resolved before the collector starts and **re-scanned every 10 minutes**: a new filesystem
 registers its sensors while the collector runs (collector ≥ 0.9.1 re-posts the registration,
 alerts included), one that goes away stops reporting (its sensors time out) and resumes under the
