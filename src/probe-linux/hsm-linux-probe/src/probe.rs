@@ -134,10 +134,15 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
         // scope, and with a stuck thread the process exits after the drain instead of joining it.
         stop_sources.request();
         let all_stopped = await_sources(&exited_rx, running, &logger);
-        for product in &products {
-            stop_product_collector(product, &logger);
-        }
-        stop_collector(&collector, product_version.as_ref(), config, &logger);
+        // The collectors drain in parallel: each drain is bounded, and one per product in a row
+        // would push the main product's drain past the unit's stop timeout.
+        std::thread::scope(|drains| {
+            for product in &products {
+                let logger = &logger;
+                drains.spawn(move || stop_product_collector(product, logger));
+            }
+            stop_collector(&collector, product_version.as_ref(), config, &logger);
+        });
         if !all_stopped {
             // The drain is done; leaving the scope would join the stuck thread and hold the
             // process until systemd kills it. Exit instead: the collector is already stopped. A
@@ -251,24 +256,45 @@ fn build_product_collectors(
         );
         return Ok(Vec::new());
     }
-    let mut by_key: Vec<(std::path::PathBuf, Vec<String>)> = Vec::new();
+    // Grouped by the key file they resolve to, so two spellings of one file are one product; the
+    // main product's own key is refused (its collector already reports there — a second one would
+    // double its self-sensors and could merge `Docker/<service>` with `Docker/<project>` nodes).
+    let credentials = std::env::var_os("CREDENTIALS_DIRECTORY");
+    let main_key =
+        secret::resolve_key_path(&config.hsm.access_key_file, credentials.as_deref()).ok();
+    // (resolved key file, configured spelling, projects)
+    let mut by_key: Vec<(std::path::PathBuf, std::path::PathBuf, Vec<String>)> = Vec::new();
     for product in &docker.products {
-        match by_key
-            .iter_mut()
-            .find(|(key_file, _)| *key_file == product.access_key_file)
-        {
-            Some((_, projects)) => projects.push(product.project.clone()),
+        let resolved = secret::resolve_key_path(&product.access_key_file, credentials.as_deref())
+            .map_err(|error| {
+            format!(
+                "probe.docker.products: project '{}': {error}; the probe does not start",
+                product.project
+            )
+        })?;
+        if main_key.as_ref() == Some(&resolved) {
+            return Err(format!(
+                "probe.docker.products: project '{}' is given the main product's key ({}); a \
+                 project reports into the main product without an entry; the probe does not start",
+                product.project,
+                product.access_key_file.display()
+            )
+            .into());
+        }
+        match by_key.iter_mut().find(|(key, _, _)| *key == resolved) {
+            Some((_, _, projects)) => projects.push(product.project.clone()),
             None => by_key.push((
+                resolved,
                 product.access_key_file.clone(),
                 vec![product.project.clone()],
             )),
         }
     }
     let mut collectors = Vec::with_capacity(by_key.len());
-    for (key_file, projects) in by_key {
+    for (resolved, key_file, projects) in by_key {
         let label = format!("product of Docker project(s) {}", projects.join(", "));
         let collector =
-            build_collector_with_key(config, &key_file, Arc::clone(logger), Some(&label)).map_err(
+            build_collector_with_key(config, &resolved, Arc::clone(logger), Some(&label)).map_err(
                 |error| {
                     format!("probe.docker.products: {label}: {error}; the probe does not start")
                 },
@@ -1033,6 +1059,13 @@ mod tests {
         assert!(error.contains("lingua"), "{error}");
         assert!(error.contains("/nonexistent/access-key-lingua"), "{error}");
         assert!(error.contains("does not start"), "{error}");
+        // The main product's own key is no product of its own.
+        let main_key = products_config(r#"[{ "project": "lingua", "accessKeyFile": "/k" }]"#);
+        let error = build_product_collectors(&main_key, &logger)
+            .err()
+            .expect("the main key is refused")
+            .to_string();
+        assert!(error.contains("main product's key"), "{error}");
         // A relative name outside systemd (no $CREDENTIALS_DIRECTORY) is an error too, never a
         // lookup in the working directory.
         if std::env::var_os("CREDENTIALS_DIRECTORY").is_none() {

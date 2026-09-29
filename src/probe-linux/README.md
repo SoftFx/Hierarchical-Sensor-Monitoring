@@ -335,7 +335,9 @@ Behavior at the edges:
   queue statistics. The state remembers each service's product: a project moved between products
   starts clean (new node, new baselines; its old nodes remain on the server as history for the
   operator to delete). A configured key file that cannot be read **stops the probe at start**
-  (logged, non-zero exit) rather than monitor the project into the wrong product.
+  (logged, non-zero exit) rather than monitor the project into the wrong product, and so does an
+  entry that names the main product's own key (a project reports into the main product without
+  an entry). On stop all collectors drain in parallel, each with its own bounded drain.
 - **Completed one-shot jobs** (owner decision): a Compose service whose containers have all exited
   with code 0 under restart policy `no` (garage's `lingua-ci/ci-image`, an image build) is a job
   that finished, not a service that stopped — no sensors, one INFO line
