@@ -455,6 +455,7 @@ mod tests {
                     Box::new(crate::probe_only::docker::tests::FixtureEngine::garage())
                 },
                 docker_state: None,
+                disk_names: None,
             }
         }
     }

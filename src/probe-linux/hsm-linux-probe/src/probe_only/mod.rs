@@ -63,6 +63,8 @@ pub struct HostEnvironment {
     /// The Docker source's state file (`$STATE_DIRECTORY/docker-state.json`); `None` keeps the
     /// state in memory only.
     pub docker_state: Option<PathBuf>,
+    /// The persisted disk names (`$STATE_DIRECTORY/disk-names.json`); `None` keeps them in memory.
+    pub disk_names: Option<PathBuf>,
 }
 
 impl HostEnvironment {
@@ -77,6 +79,10 @@ impl HostEnvironment {
             docker_state: Some(docker::state::default_state_path(
                 std::env::var_os("STATE_DIRECTORY").as_deref(),
             )),
+            disk_names: Some(
+                docker::state::default_state_path(std::env::var_os("STATE_DIRECTORY").as_deref())
+                    .with_file_name(disks::names::FILE_NAME),
+            ),
         }
     }
 }

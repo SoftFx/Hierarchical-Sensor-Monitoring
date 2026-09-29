@@ -40,10 +40,12 @@
 //! The set is resolved before the collector starts and re-scanned every 10 minutes. A new
 //! filesystem registers its sensors while the collector runs (collector ≥ 0.9.1 re-posts the
 //! registration, alerts included); one that disappears stops reporting (its sensors time out) and
-//! resumes under the same name if it comes back. Names, once given, never change.
+//! resumes under the same name if it comes back. Names, once given, never change: the mount point
+//! → name map is persisted ([`names`]), so they survive restarts too.
 
 pub mod diskstats;
 pub mod mounts;
+pub mod names;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -222,6 +224,9 @@ struct Node<'c> {
     free_mb: Option<DoubleSensor<'c>>,
     free_percent: Option<DoubleSensor<'c>>,
     free_inodes: Option<DoubleSensor<'c>>,
+    /// Whether the filesystem counts inodes is not known yet (the discovery `statvfs` failed):
+    /// decided — and the inode sensor registered or not — on the first successful sample.
+    inodes_pending: bool,
     write_speed: Option<DoubleBarSensor<'c>>,
     in_flight: Arc<AtomicBool>,
     failures: FailureLog,
@@ -232,7 +237,8 @@ struct Discovered {
     fs: Filesystem,
     name: String,
     disk: Option<String>,
-    inodes_counted: bool,
+    /// `None` when the discovery `statvfs` failed: decided on the first successful sample.
+    inodes_counted: Option<bool>,
     /// Carried into the node, so a `statvfs` left hanging by discovery is not repeated.
     in_flight: Arc<AtomicBool>,
 }
@@ -244,31 +250,47 @@ struct Disks<'c> {
     sys_root: PathBuf,
     mountinfo: PathBuf,
     statvfs: StatvfsFn,
-    /// key → name, for every filesystem ever named (names are never reused or changed).
+    /// Mount point → name for every filesystem ever named. Names are never reused or changed, and
+    /// the map is persisted in `names_path`, so they survive restarts too.
     names: Mutex<BTreeMap<String, String>>,
+    names_path: Option<PathBuf>,
     nodes: Mutex<Vec<Node<'c>>>,
 }
 
 impl<'c> Disks<'c> {
-    /// Read the mount table and name what is new. `Err` when the table cannot be read.
-    fn scan(&self) -> Result<Vec<(Filesystem, String)>, String> {
+    /// Read the mount table and name what is new (persisting new names). `Err` when the table
+    /// cannot be read.
+    fn scan(&self, logger: &Logger) -> Result<Vec<(Filesystem, String)>, String> {
         let text = std::fs::read_to_string(&self.mountinfo)
             .map_err(|error| format!("cannot read {}: {error}", self.mountinfo.display()))?;
         let filesystems =
             mounts::real_filesystems(&mounts::parse_mountinfo(&text), &self.config.exclude);
         let mut names = self.names.lock().unwrap_or_else(|p| p.into_inner());
+        let before = names.len();
         mounts::assign_names(&filesystems, &mut names);
+        if names.len() != before {
+            if let Some(path) = &self.names_path {
+                if let Err(error) = names::save(path, &names) {
+                    // Names stay stable for this run; only a restart could rename a filesystem
+                    // whose natural name collides with one that appears later.
+                    logger.error(format!(
+                        "disks: cannot save the disk names to {}: {error}",
+                        path.display()
+                    ));
+                }
+            }
+        }
         Ok(filesystems
             .into_iter()
             .map(|fs| {
-                let name = names[&fs.key].clone();
+                let name = names[&mounts::name_key(&fs)].clone();
                 (fs, name)
             })
             .collect())
     }
 
     /// The facts registration needs: the disk underneath and whether the filesystem counts
-    /// inodes (one bounded `statvfs`; a failure keeps the inode sensor — it may be transient).
+    /// inodes (one bounded `statvfs`; if it fails, the first successful sample decides).
     fn discover(&self, fs: Filesystem, name: String) -> Discovered {
         let disk = if self.config.write_speed {
             diskstats::whole_disk(&self.sys_root, &fs.device, &fs.source)
@@ -277,7 +299,8 @@ impl<'c> Disks<'c> {
         };
         let in_flight = Arc::new(AtomicBool::new(false));
         let inodes_counted = statvfs_bounded(&fs.mount_point, self.statvfs, &in_flight)
-            .map_or(true, |stats| stats.files > 0);
+            .ok()
+            .map(|stats| stats.files > 0);
         Discovered {
             fs,
             name,
@@ -327,7 +350,7 @@ impl<'c> Disks<'c> {
 
     /// Re-read the mount table: register what is new, mark what went away or came back.
     fn rescan(&self, logger: &Logger, failures: &mut FailureLog) {
-        let current = match self.scan() {
+        let current = match self.scan(logger) {
             Ok(current) => {
                 failures.succeeded(logger, "disks: mount table");
                 current
@@ -395,12 +418,7 @@ fn register_node<'c>(
         inodes_counted,
         in_flight,
     } = discovered;
-    let where_ = format!(
-        "the {} filesystem {} mounted at {}",
-        fs.fs_type,
-        fs.source,
-        fs.mount_point.display()
-    );
+    let where_ = where_(&fs);
     let options = |unit: i32, description: String| {
         SensorOptions::default()
             .with_is_computer_sensor(true)
@@ -438,27 +456,14 @@ fn register_node<'c>(
             percent_alert(collector, Band::Error, "5", None),
         ],
     );
-    let free_inodes = if inodes_counted {
-        register_double(
-            collector,
-            logger,
-            &free_inodes_percent_path(&name),
-            options(
-                UNIT_PERCENTS,
-                format!(
-                    "Free inodes on {where_}, in percent: statvfs f_favail / f_files. Running out \
-                 blocks file creation while space is still free. Every 5 minutes."
-                ),
-            ),
-            vec![percent_alert(collector, Band::Warning, "10", None)],
-        )
-    } else {
-        logger.info(format!(
-            "disks: '{name}' ({} {}) reports no inode count; no inode sensor",
-            fs.mount_point.display(),
-            fs.fs_type
-        ));
-        None
+    let free_inodes = match inodes_counted {
+        Some(true) => register_inodes(collector, logger, &name, &fs),
+        Some(false) => {
+            log_no_inodes(logger, &name, &fs);
+            None
+        }
+        // The discovery statvfs failed: the first successful sample decides.
+        None => None,
     };
     let write_speed = disk.as_ref().and_then(|disk| {
         let sharing = by_disk
@@ -513,10 +518,51 @@ fn register_node<'c>(
         free_mb,
         free_percent,
         free_inodes,
+        inodes_pending: inodes_counted.is_none(),
         write_speed,
         in_flight,
         failures: FailureLog::default(),
     }
+}
+
+fn where_(fs: &Filesystem) -> String {
+    format!(
+        "the {} filesystem {} mounted at {}",
+        fs.fs_type,
+        fs.source,
+        fs.mount_point.display()
+    )
+}
+
+fn register_inodes<'c>(
+    collector: &'c Collector,
+    logger: &Logger,
+    name: &str,
+    fs: &Filesystem,
+) -> Option<DoubleSensor<'c>> {
+    register_double(
+        collector,
+        logger,
+        &free_inodes_percent_path(name),
+        SensorOptions::default()
+            .with_is_computer_sensor(true)
+            .with_ttl(TTL)
+            .with_unit(UNIT_PERCENTS)
+            .with_description(format!(
+                "Free inodes on {}, in percent: statvfs f_favail / f_files. Running out blocks \
+                 file creation while space is still free. Every 5 minutes.",
+                where_(fs)
+            )),
+        vec![percent_alert(collector, Band::Warning, "10", None)],
+    )
+}
+
+fn log_no_inodes(logger: &Logger, name: &str, fs: &Filesystem) {
+    logger.info(format!(
+        "disks: '{name}' ({} {}) reports no inode count; no inode sensor",
+        fs.mount_point.display(),
+        fs.fs_type
+    ));
 }
 
 fn register_double<'c>(
@@ -613,11 +659,18 @@ fn build<'c>(
         sys_root: environment.sys_root.clone(),
         mountinfo: environment.mountinfo.clone(),
         statvfs: environment.statvfs,
-        names: Mutex::new(BTreeMap::new()),
+        names: Mutex::new(
+            environment
+                .disk_names
+                .as_deref()
+                .map(|path| names::load(path, logger))
+                .unwrap_or_default(),
+        ),
+        names_path: environment.disk_names.clone(),
         nodes: Mutex::new(Vec::new()),
     });
     let mut failures = FailureLog::default();
-    match disks.scan() {
+    match disks.scan(logger) {
         Ok(current) => {
             let found: Vec<Discovered> = current
                 .into_iter()
@@ -705,6 +758,16 @@ impl Source for SpaceSource<'_> {
             match result {
                 Ok(stats) => {
                     node.failures.succeeded(logger, &what);
+                    if node.inodes_pending {
+                        // The discovery statvfs failed; this first answer decides.
+                        node.inodes_pending = false;
+                        if stats.files > 0 {
+                            node.free_inodes =
+                                register_inodes(self.disks.collector, logger, &node.name, &node.fs);
+                        } else {
+                            log_no_inodes(logger, &node.name, &node.fs);
+                        }
+                    }
                     post(&node.free_mb, Some(stats.free_megabytes()), logger);
                     post(&node.free_percent, stats.free_space_percent(), logger);
                     post(&node.free_inodes, stats.free_inodes_percent(), logger);
@@ -933,6 +996,7 @@ pub mod tests {
             online_cpus: || Ok(1),
             docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
             docker_state: None,
+            disk_names: None,
         };
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
         options.allow_plaintext_transport = true;
@@ -981,6 +1045,53 @@ pub mod tests {
         assert!(!oldlinux.mounted);
         drop(nodes);
         collector.stop().expect("stop");
+    }
+
+    #[test]
+    fn names_survive_a_restart_with_a_different_set_of_mounts() {
+        use crate::logging::Level;
+        use crate::probe_only::host::tests::FakeTree;
+        use hsm_collector::CollectorOptions;
+
+        let tree = FakeTree::new("names-restart");
+        let names_path = tree.0.join(names::FILE_NAME);
+        let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
+        options.allow_plaintext_transport = true;
+        let collector = Collector::new(&options).expect("create");
+        let logger = Logger::new(Level::Error, None);
+        let disks = |mountinfo: &str| {
+            tree.file("mountinfo", mountinfo);
+            Disks {
+                collector: &collector,
+                config: DisksConfig::default(),
+                sys_root: tree.0.join("sys"),
+                mountinfo: tree.0.join("mountinfo"),
+                statvfs,
+                names: Mutex::new(names::load(&names_path, &logger)),
+                names_path: Some(names_path.clone()),
+                nodes: Mutex::new(Vec::new()),
+            }
+        };
+        let named = |disks: &Disks<'_>| -> BTreeMap<String, String> {
+            disks
+                .scan(&logger)
+                .expect("scan")
+                .into_iter()
+                .map(|(fs, name)| (fs.mount_point.to_string_lossy().into_owned(), name))
+                .collect()
+        };
+
+        // First run: only /srv/data, so it is `data`.
+        let first = named(&disks("1 0 8:2 / /srv/data rw - ext4 /dev/sda2 rw\n"));
+        assert_eq!(first["/srv/data"], "data");
+
+        // After a restart /mnt/data is mounted too. Without the persisted names both would fall
+        // back to their paths and /srv/data would move to `_srv_data`, splitting its history.
+        let second = named(&disks(
+            "1 0 8:2 / /srv/data rw - ext4 /dev/sda2 rw\n2 0 8:3 / /mnt/data rw - ext4 /dev/sda3 rw\n",
+        ));
+        assert_eq!(second["/srv/data"], "data");
+        assert_eq!(second["/mnt/data"], "_mnt_data");
     }
 
     #[cfg(target_os = "linux")]

@@ -133,8 +133,11 @@ once until it recovers.
 Four sensors per filesystem, named like the Windows per-drive sensors (`Free space on C disk`,
 `Average disk write speed on C disk` in the managed and native Windows collectors) with a name in
 place of the drive letter: **`root`** for `/`, else the **last segment** of the mount path; names
-that collide use the whole mount path with `/` → `_` (`/srv/data` → `_srv_data`). A name, once
-given, is kept for the life of the process. All under `.computer/Disks monitoring/`:
+that collide use the whole mount path with `/` → `_` (`/srv/data` → `_srv_data`), plus `_2`, `_3`
+if even that is taken. A name belongs to a mount point and, once given, is kept — across restarts
+too: the mount point → name map is persisted in `$STATE_DIRECTORY/disk-names.json`
+(`/var/lib/hsm-linux-probe`), so a mount that appears later never renames one that already has
+history. All under `.computer/Disks monitoring/`:
 
 | Sensor | Type · unit | Period | TTL | Alerts | Source |
 |---|---|---|---|---|---|
@@ -174,9 +177,11 @@ after and 35 s after `statvfs` on the FUSE-NTFS `/mnt/wd4tb` and `/mnt/mediacent
 their free space from a backup-snapshot file is dropped.
 
 **Moved in 0.4.0:** the two #1476 sensors `.computer/Disks monitoring/Free space on disk %` and
-`… /Free inodes %` are now `Free space on root disk %` and `Free inodes on root disk %`; the old
-paths stop receiving data. The managed-parity `Disks monitoring/Free space on disk` and its
-`prediction` (the .NET Unix set, `statvfs("/")`) are untouched.
+`… /Free inodes %` are now `Free space on root disk %` and `Free inodes on root disk %`. Nothing
+posts to the old paths any more, and since they were registered with a 15-minute TTL they turn to
+**Timeout** 15 minutes after the upgrade — expected, not a regression: **remove those two sensors
+on the server** after upgrading from 0.2.x/0.3.x. The managed-parity `Disks monitoring/Free space on
+disk` and its `prediction` (the .NET Unix set, `statvfs("/")`) are untouched.
 
 **Isolation.** Each source runs on its own thread; free space and write speed are two sources.
 Every `statvfs` runs on a helper thread with a 5 s deadline, and a filesystem whose previous

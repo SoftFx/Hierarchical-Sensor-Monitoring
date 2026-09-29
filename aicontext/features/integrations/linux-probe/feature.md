@@ -39,7 +39,9 @@ The probe registers **two separately pinned sets**:
    **Disks** (#1481, part of the probe-only set) — four sensors per mounted real filesystem under
    `.computer/Disks monitoring/`, named like the Windows per-drive sensors with a name for the
    letter (`root` for `/`, else the last mount-path segment; collisions → the whole path with
-   `/` → `_`): `Free space on <name> disk` (MB, EMA, no absolute-size alert), `… disk %`,
+   `/` → `_`, then a counter; the mount point → name map is persisted in
+   `$STATE_DIRECTORY/disk-names.json`, so names never change, restarts included):
+   `Free space on <name> disk` (MB, EMA, no absolute-size alert), `… disk %`,
    `Free inodes on <name> disk %`, `Average disk write speed on <name> disk` (MBytes_sec bar from
    `/proc/diskstats` of the whole disk). Block-backed types only, deduplicated by source device,
    re-scanned every 10 min (new mounts register at runtime; removed ones time out). The archives

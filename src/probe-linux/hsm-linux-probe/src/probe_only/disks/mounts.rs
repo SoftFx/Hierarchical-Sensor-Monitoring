@@ -10,8 +10,10 @@
 //! * **Names** follow the Windows per-drive naming (`Free space on C disk` →
 //!   `Free space on <name> disk`): `root` for `/`, else the last path segment. Names that collide
 //!   (with each other, with a name already in use, or a non-root mount whose last segment is
-//!   `root`) use the whole mount path with `/` → `_` instead. A name, once given, is kept for the
-//!   life of the process.
+//!   `root`) use the whole mount path with `/` → `_` instead, plus a counter if even that is taken.
+//!   A name belongs to a mount point and, once given, is kept — across restarts too: the caller
+//!   persists the mount point → name map, so a collision that appears later never renames a
+//!   filesystem that already has history.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -195,14 +197,15 @@ fn full_path_name(mount_point: &Path) -> String {
     mount_point.to_string_lossy().replace('/', "_")
 }
 
-/// Give every filesystem in `filesystems` without a name in `names` (key → name) a name, keeping
-/// the names already given. See the module docs for the rule.
+/// Give every filesystem in `filesystems` without a name in `names` (mount point → name) a name,
+/// keeping the names already given — `names` is persisted by the caller, so a name survives
+/// restarts too. See the module docs for the rule.
 pub fn assign_names(filesystems: &[Filesystem], names: &mut BTreeMap<String, String>) {
     let new: Vec<&Filesystem> = filesystems
         .iter()
-        .filter(|fs| !names.contains_key(&fs.key))
+        .filter(|fs| !names.contains_key(&name_key(fs)))
         .collect();
-    let taken: BTreeSet<String> = names.values().cloned().collect();
+    let mut taken: BTreeSet<String> = names.values().cloned().collect();
     let mut candidates: BTreeMap<String, usize> = BTreeMap::new();
     for fs in &new {
         *candidates.entry(natural_name(&fs.mount_point)).or_default() += 1;
@@ -212,13 +215,30 @@ pub fn assign_names(filesystems: &[Filesystem], names: &mut BTreeMap<String, Str
         let is_root = fs.mount_point == Path::new("/");
         let collides =
             candidates[&natural] > 1 || taken.contains(&natural) || (!is_root && natural == "root");
-        let name = if collides && !is_root {
+        let mut name = if collides && !is_root {
             full_path_name(&fs.mount_point)
         } else {
             natural
         };
-        names.insert(fs.key.clone(), name);
+        // The fallback can itself collide (`/mnt/_srv_data` vs `/srv/data`): two filesystems must
+        // never share a sensor, so a taken name gets a counter.
+        if taken.contains(&name) {
+            let base = name.clone();
+            let mut counter = 2;
+            while taken.contains(&name) {
+                name = format!("{base}_{counter}");
+                counter += 1;
+            }
+        }
+        taken.insert(name.clone());
+        names.insert(name_key(fs), name);
     }
+}
+
+/// Names follow the mount point, not the device: device names (`/dev/sdb1`) can swap between boots,
+/// the mount point is what the operator named and what the sensor describes.
+pub fn name_key(fs: &Filesystem) -> String {
+    fs.mount_point.to_string_lossy().into_owned()
 }
 
 #[cfg(test)]
@@ -339,11 +359,32 @@ pub mod tests {
     fn garage_names_are_root_and_last_segments() {
         let mut names = BTreeMap::new();
         assign_names(&garage(), &mut names);
-        assert_eq!(names["/dev/sdc1"], "root");
-        assert_eq!(names["/dev/sda2"], "wd4tb");
-        assert_eq!(names["/dev/sdb1"], "mediacentr");
-        assert_eq!(names["/dev/sdb5"], "oldlinux");
+        assert_eq!(names["/"], "root");
+        assert_eq!(names["/mnt/wd4tb"], "wd4tb");
+        assert_eq!(names["/mnt/mediacentr"], "mediacentr");
+        assert_eq!(names["/mnt/oldlinux"], "oldlinux");
         assert_eq!(names.len(), 4);
+    }
+
+    #[test]
+    fn a_fallback_name_that_is_taken_gets_a_counter() {
+        // `/mnt/_srv_data` is named `_srv_data` first; later `/srv/data` and `/mnt/data` collide
+        // and fall back to their whole paths — `_srv_data` for `/srv/data` is taken.
+        let first = "1 0 8:1 / /mnt/_srv_data rw - ext4 /dev/sda1 rw\n";
+        let mut names = BTreeMap::new();
+        let mut all = real_filesystems(&parse_mountinfo(first), &[]);
+        assign_names(&all, &mut names);
+        let later = "\
+2 0 8:2 / /srv/data rw - ext4 /dev/sda2 rw
+3 0 8:3 / /mnt/data rw - ext4 /dev/sda3 rw
+";
+        all.extend(real_filesystems(&parse_mountinfo(later), &[]));
+        assign_names(&all, &mut names);
+        assert_eq!(names["/mnt/_srv_data"], "_srv_data");
+        assert_eq!(names["/srv/data"], "_srv_data_2");
+        assert_eq!(names["/mnt/data"], "_mnt_data");
+        let unique: BTreeSet<&String> = names.values().collect();
+        assert_eq!(unique.len(), names.len(), "no two filesystems share a name");
     }
 
     #[test]
@@ -357,10 +398,10 @@ pub mod tests {
         let filesystems = real_filesystems(&parse_mountinfo(text), &[]);
         let mut names = BTreeMap::new();
         assign_names(&filesystems, &mut names);
-        assert_eq!(names["/dev/sda1"], "root");
-        assert_eq!(names["/dev/sda2"], "_srv_data");
-        assert_eq!(names["/dev/sda3"], "_mnt_data");
-        assert_eq!(names["/dev/sda4"], "_mnt_root");
+        assert_eq!(names["/"], "root");
+        assert_eq!(names["/srv/data"], "_srv_data");
+        assert_eq!(names["/mnt/data"], "_mnt_data");
+        assert_eq!(names["/mnt/root"], "_mnt_root");
 
         // A later mount whose natural name is already taken gets the whole path; the existing
         // names do not change.
@@ -371,9 +412,9 @@ pub mod tests {
         let mut all = filesystems.clone();
         all.extend(real_filesystems(&parse_mountinfo(later), &[]));
         assign_names(&all, &mut names);
-        assert_eq!(names["/dev/sda2"], "_srv_data");
-        assert_eq!(names["/dev/sda5"], "_backup__srv_data");
-        assert_eq!(names["/dev/sdb1"], "usb");
+        assert_eq!(names["/srv/data"], "_srv_data");
+        assert_eq!(names["/backup/_srv_data"], "_backup__srv_data");
+        assert_eq!(names["/media/usb"], "usb");
     }
 
     #[test]
