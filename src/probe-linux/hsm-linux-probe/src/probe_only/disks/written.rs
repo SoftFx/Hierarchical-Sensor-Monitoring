@@ -56,6 +56,14 @@ pub fn local_time(unix_ms: i64) -> (i64, i64) {
 
 #[cfg(unix)]
 fn utc_offset(seconds: i64) -> Option<i64> {
+    // glibc's localtime_r reads the zone once per process; tzset re-reads TZ and /etc/localtime
+    // (a stat when unchanged), so a `timedatectl set-timezone` applies without a restart.
+    extern "C" {
+        // POSIX <time.h>; not bound by the libc crate.
+        fn tzset();
+    }
+    // SAFETY: tzset takes no arguments and only updates libc's own zone state.
+    unsafe { tzset() };
     let time = libc::time_t::try_from(seconds).ok()?;
     // SAFETY: `tm` is plain data; localtime_r only writes into it.
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };

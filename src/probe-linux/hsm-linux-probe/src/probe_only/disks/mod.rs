@@ -78,6 +78,8 @@ const WRITE_BAR_PERIOD: Duration = Duration::from_secs(300);
 /// Carried by the ABI for parity with the managed `PostDataPeriod`.
 const WRITE_BAR_POST_PERIOD: Duration = Duration::from_secs(15);
 const WRITE_BAR_PRECISION: i32 = 2;
+/// `Written today`'s final reading is posted in the day's last this many sample periods.
+const FINAL_READING_PERIODS: i64 = 6;
 /// Three periods of the 5-minute sensors.
 const TTL: Duration = Duration::from_secs(3 * 300);
 /// How long one `statvfs` may take before that filesystem's sample is given up.
@@ -1248,10 +1250,14 @@ impl Source for WriteSpeedSource<'_> {
             );
         }
         // Every 5 minutes (half a sample period of slack absorbs scheduling jitter), and once more
-        // in the last two sample periods before local midnight: the day's final reading.
+        // near local midnight: the day's final reading.
         let (day, second) = (self.local)(now_ms);
         let period = i64::try_from(WRITE_SAMPLE_PERIOD.as_secs()).unwrap_or(5);
-        let day_ends = second + 2 * period >= 86_400 && self.final_post_day != Some(day);
+        // Six sample periods (30 s): one slow read or a late tick still lands in it. Only a
+        // suspend (or a stopped probe) over the whole window misses it — then the last minutes
+        // go into the next day's first delta, and a gap across midnight is dropped and logged.
+        let day_ends =
+            second + FINAL_READING_PERIODS * period >= 86_400 && self.final_post_day != Some(day);
         if day_ends || self.last_post.elapsed() + WRITE_SAMPLE_PERIOD / 2 >= SPACE_PERIOD {
             if day_ends {
                 self.final_post_day = Some(day);
@@ -1669,8 +1675,8 @@ pub mod tests {
                 .0,
             2.048
         );
-        // 23:59:53: the day's final reading is posted although the 5-minute post is not due.
-        let late = written::tests::MIDNIGHT + 86_393_000;
+        // 23:59:33: the day's final reading is posted although the 5-minute post is not due.
+        let late = written::tests::MIDNIGHT + 86_373_000;
         NOW_MS.with(|now| now.set(late));
         write.last_post = Instant::now();
         write.sample(&logger);

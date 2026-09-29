@@ -154,8 +154,9 @@ garage-server has four (`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 5 760/day
 
 **Written today — the midnight rules.** Each 5-s sample adds the disk's delta to the current local
 day; the first sample after local midnight starts the new day from 0. Besides the 5-minute
-posts, the day's final reading is posted in its last 10 seconds, so the day's last minutes are
-not lost to the reset. The first sample, a counter
+posts, the day's final reading is posted in its last 30 seconds (six samples, so one slow read or a
+late tick still lands in it), so the day's last minutes are not lost to the reset. A timezone
+change (`timedatectl set-timezone`) applies without a restart. The first sample, a counter
 that went backwards and a clock that went backwards only set a baseline; a gap longer than three
 samples that crosses midnight cannot be split between the days and is dropped (a gap inside the
 day counts in full). Never an invented 0: a day with no measured delta yet is not posted, and a
@@ -290,7 +291,9 @@ member really is written (the wear this sensor is for). A container restarted wi
 also while the probe was down — is recognised by its new `State.StartedAt` and only sets a
 baseline (logged once), since its counter began again from 0. A host that does not account block
 I/O per container reports no counter and gets no sensor: Docker Desktop (WSL2) answers an empty
-list for every container.
+list for every container. On a host that does (some container reports a counter), a running
+container that has not written yet — `io.stat` lists a device only after its first I/O — starts
+from a zero baseline tied to its start time, so its first write counts in full.
 
 **Registration.** Before the collector starts, the source lists the daemon once and registers
 every service it finds (and every service remembered as recently removed), so they ride the Start

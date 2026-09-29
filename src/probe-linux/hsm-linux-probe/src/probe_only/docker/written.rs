@@ -358,6 +358,32 @@ impl WriteRecord {
             .min(HOUR_MS as u64);
     }
 
+    /// A running container that has done no block I/O yet (its stats list no device) on a host
+    /// that does account I/O: its counter is 0 since it started, so that is its baseline — its
+    /// first write then counts in full instead of becoming the baseline. A real counter of the
+    /// same start is kept; one of an earlier start (restarted, not written since) is replaced.
+    pub fn zero_baseline(&mut self, container_id: &str, now_ms: i64, started_at: &str) {
+        let keep = self.baselines.get(container_id).is_some_and(|baseline| {
+            let same_start = baseline
+                .started_at
+                .as_deref()
+                .is_none_or(|s| s == started_at)
+                || baseline.ignored_started_at.as_deref() == Some(started_at);
+            baseline.bytes > 0 && same_start
+        });
+        if !keep {
+            self.baselines.insert(
+                container_id.to_string(),
+                Baseline {
+                    bytes: 0,
+                    at_ms: now_ms,
+                    started_at: Some(started_at.to_string()),
+                    ..Baseline::default()
+                },
+            );
+        }
+    }
+
     /// Forget one container's baseline (its counter is gone); whether there was one.
     pub fn forget(&mut self, container_id: &str) -> bool {
         self.baselines.remove(container_id).is_some()
@@ -751,6 +777,30 @@ mod tests {
         assert_eq!(
             record.sample("a", 20, H13 + 50 * MIN, PERIOD, None),
             Err(Skip::ClockBackwards)
+        );
+    }
+
+    #[test]
+    fn an_idle_containers_first_write_counts_in_full() {
+        let mut record = WriteRecord::new(H13);
+        let started = "2026-09-29T12:00:00Z";
+        // Running, no device in io.stat yet: a zero baseline, refreshed while it stays idle.
+        record.zero_baseline("a", H13 + 5_000, started);
+        record.zero_baseline("a", H13 + 10_000, started);
+        // Its first burst: 1 GB, all of it counted.
+        assert_eq!(
+            record.sample("a", 1_000_000_000, H13 + 15_000, PERIOD, Some(started)),
+            Ok((1_000_000_000, 5_000))
+        );
+        // A real counter of the same start is never replaced by a zero.
+        record.zero_baseline("a", H13 + 20_000, started);
+        assert_eq!(record.baselines["a"].bytes, 1_000_000_000);
+        // Restarted and idle since: its counter is 0 again, and its first write counts too.
+        let again = "2026-09-29T13:30:00Z";
+        record.zero_baseline("a", H13 + 31 * MIN, again);
+        assert_eq!(
+            record.sample("a", 2_048, H13 + 31 * MIN + 5_000, PERIOD, Some(again)),
+            Ok((2_048, 5_000))
         );
     }
 

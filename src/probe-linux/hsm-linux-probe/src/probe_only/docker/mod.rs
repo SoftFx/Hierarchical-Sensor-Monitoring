@@ -133,6 +133,9 @@ pub struct DockerSource<'c, E: EngineApi> {
     /// Each listed container's `State.StartedAt` from the last inspect: a change means a restart,
     /// whose write counter began again from 0.
     started_at: std::collections::HashMap<String, String>,
+    /// Some container on this host has reported a block-I/O write counter: the host accounts
+    /// I/O per container, so a running container without one simply has not written yet.
+    counters_seen: bool,
 }
 
 impl<'c, E: EngineApi> DockerSource<'c, E> {
@@ -226,6 +229,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             clock: unix_now_ms,
             stacking: written::Stacking::default(),
             started_at: std::collections::HashMap::new(),
+            counters_seen: false,
         }
     }
 
@@ -783,6 +787,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 };
                 let now_ms = (self.clock)();
                 let counter = written::written_bytes(&stats, &mut self.stacking);
+                let running = stats.cpu_stats.system_cpu_usage.is_some();
+                self.counters_seen |= counter.is_some();
                 let started_at = self.started_at.get(id).map(String::as_str);
                 let mut restarted = false;
                 let mut discarded: Option<&str> = None;
@@ -824,6 +830,15 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                                 ),
                                 Err(_) => {}
                             }
+                        }
+                        // Running, and this host accounts block I/O (another container reported a
+                        // counter): nothing written yet, so its counter is 0 since it started.
+                        None if self.counters_seen && running && started_at.is_some() => {
+                            let accumulator = record
+                                .written
+                                .get_or_insert_with(|| WriteRecord::new(now_ms));
+                            accumulator.zero_baseline(id, now_ms, started_at.unwrap_or_default());
+                            self.written_dirty = true;
                         }
                         None => {
                             if let Some(accumulator) = record.written.as_mut() {
@@ -1938,6 +1953,49 @@ pub(crate) mod tests {
             .iter()
             .any(|p| p == "garage-server/LinuxProbe/Docker/gitea/db/Disk written per hour"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_idle_containers_first_burst_is_counted() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut engine = FixtureEngine::garage();
+        let set = |engine: &mut FixtureEngine, round: usize, value: Option<u64>| {
+            let stats = engine.rounds[round]
+                .iter_mut()
+                .find(|(id, _)| id.starts_with(GITEA_DB))
+                .unwrap()
+                .1;
+            let entries = stats
+                .blkio_stats
+                .io_service_bytes_recursive
+                .as_mut()
+                .unwrap();
+            match value {
+                None => entries.clear(),
+                Some(value) => {
+                    entries.iter_mut().find(|e| e.op == "write").unwrap().value = value;
+                }
+            }
+        };
+        // gitea/db has done no block I/O yet (io.stat lists no device), then writes 4 KiB.
+        set(&mut engine, 0, None);
+        set(&mut engine, 1, Some(4_096));
+        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        source.clock = test_clock;
+        two_rounds(&mut source, H13 + 10 * 60_000, 5_000);
+        set_clock(H13 + 60 * 60_000 + 1_000);
+        let posted = source.roll_written_hours(&quiet());
+        collector.stop().expect("stop");
+        let db = posted
+            .iter()
+            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .expect("posted")
+            .1;
+        assert_eq!(
+            db.bytes, 4_096,
+            "the first write counts, it is not the baseline"
+        );
     }
 
     #[test]
