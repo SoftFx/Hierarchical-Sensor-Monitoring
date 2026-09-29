@@ -156,17 +156,20 @@ fn register_disk_sources<'c>(
     environment: &HostEnvironment,
     logger: &Logger,
 ) -> Vec<Box<dyn Source + 'c>> {
-    // `probe.hostSensors.disk` (0.2.x) moved to `probe.disks.enabled`; an explicit false in an
-    // older config is still honoured, so an upgrade does not switch the disk sensors back on.
-    if config.host_sensors.disk == Some(false) {
+    if config.host_sensors.disk.is_some() {
         logger.warn(
-            "probe.hostSensors.disk is deprecated (use probe.disks.enabled); honouring its \
-             false: disk sensors disabled",
+            "probe.hostSensors.disk is deprecated; use probe.disks.enabled (an explicit false is \
+             still honoured while probe.disks.enabled is not set)",
+        );
+    }
+    // Before 0.4.0 the host switches covered the disk sensor, so without an explicit
+    // `probe.disks.enabled` they still do: an upgrade never switches the disks back on.
+    if !config.disks_enabled() {
+        logger.info(
+            "disks: disabled (probe.disks.enabled = false, or hostSensors.enabled / hostSensors.disk \
+             = false without a probe.disks.enabled)",
         );
         return Vec::new();
-    }
-    if config.host_sensors.disk.is_some() {
-        logger.warn("probe.hostSensors.disk is deprecated and ignored; use probe.disks.enabled");
     }
     disks::register(collector, &config.disks, environment, logger)
 }

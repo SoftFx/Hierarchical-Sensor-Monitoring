@@ -647,7 +647,7 @@ mod tests {
     fn host_sensors_switch_off_as_configured() {
         let mut config = ProbeConfig::default();
         config.host_sensors.enabled = false;
-        config.disks.enabled = false;
+        config.disks.enabled = Some(false);
         config.docker.enabled = false;
         let mut parity = parity_set();
         parity.sort_unstable();
@@ -655,7 +655,7 @@ mod tests {
 
         let mut config = ProbeConfig::default();
         config.host_sensors.cpu_temperature = false;
-        config.disks.enabled = false;
+        config.disks.enabled = Some(false);
         config.docker.enabled = false;
         let mut expected = parity_set();
         expected.push("garage-server/.computer/Logical cores");
@@ -671,9 +671,11 @@ mod tests {
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
 
-        // Excluded mounts and the write-speed switch.
+        // Excluded mounts and the write-speed switch; an explicit probe.disks.enabled wins over
+        // the host switch that used to cover the disks.
         let mut config = ProbeConfig::default();
         config.host_sensors.enabled = false;
+        config.disks.enabled = Some(true);
         config.docker.enabled = false;
         config.disks.exclude = vec!["/mnt/*".into()];
         config.disks.write_speed = false;
@@ -686,12 +688,12 @@ mod tests {
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
 
-        // The Docker source and the disks have their own switches, independent of the host
-        // sensors.
+        // The Docker source has its own switch, independent of the host sensors. Without a
+        // probe.disks.enabled, hostSensors.enabled = false still covers the disks (as before
+        // 0.4.0), so an upgraded config does not switch them back on.
         let mut config = ProbeConfig::default();
         config.host_sensors.enabled = false;
         let mut expected = parity_set();
-        expected.extend_from_slice(DISKS_GARAGE_SET);
         expected.extend_from_slice(DOCKER_GARAGE_SET);
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
@@ -738,8 +740,9 @@ mod tests {
                 "\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true",
             ],
         );
-        // Every filesystem, e.g. the archive: Double, MB, EMA, 15 min TTL, and the managed
-        // `Free space on <X> disk` alert verbatim (EMA value <= 20 GB -> Error, down arrow).
+        // Every filesystem, e.g. the archive: Double, MB, EMA, 15 min TTL, and no absolute-size
+        // alert (a fixed 20 GB threshold would hold a small /boot/efi in Error; the % sensor
+        // carries the alerts).
         contains_all(
             &find("garage-server/.computer/Disks monitoring/Free space on wd4tb disk"),
             &[
@@ -748,11 +751,7 @@ mod tests {
                 "\"OriginalUnit\":3,",
                 "\"Statistics\":1",
                 "\"IsSingletonSensor\":true",
-                "\"Conditions\":[{\"Combination\":0,\"Operation\":0,\"Property\":210,\
-                 \"Target\":{\"Type\":0,\"Value\":\"20480\"}}],\"Status\":3,",
-                "\"Template\":\"[$product] Free space on wd4tb disk is running out. Current free \
-                 space is $value $unit\"",
-                "\"Icon\":\"\\u2B07\"",
+                "\"Alerts\":null",
             ],
         );
         // DoubleBar, MBytes_sec, EMA, 15 min TTL, no alert (the Windows row has none); the

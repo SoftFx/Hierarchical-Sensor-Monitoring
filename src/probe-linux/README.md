@@ -138,7 +138,7 @@ given, is kept for the life of the process. All under `.computer/Disks monitorin
 
 | Sensor | Type · unit | Period | TTL | Alerts | Source |
 |---|---|---|---|---|---|
-| `Free space on <name> disk` | Double · MB (whole MB), EMA | every 5 min | 15 min | the managed `Free space on <X> disk` alert verbatim: EMA value ≤ 20 480 MB → **Error** (⬇) | `statvfs` `f_bavail × f_frsize` |
+| `Free space on <name> disk` | Double · MB (whole MB), EMA | every 5 min | 15 min | — (a fixed 20 GB threshold, as on Windows, would hold a small `/boot/efi` in Error; the % sensor carries the alerts, and `/` keeps the 20 GB alert on the parity `Free space on disk`) | `statvfs` `f_bavail × f_frsize` |
 | `Free space on <name> disk %` | Double · Percents | every 5 min | 15 min | [5, 10) → warning; < 5 → **Error** | `statvfs` `f_bavail / f_blocks` (what `df` shows a non-root user) |
 | `Free inodes on <name> disk %` | Double · Percents | every 5 min | 15 min | < 10 → warning | `statvfs` `f_favail / f_files`; not registered when the filesystem has no inode count |
 | `Average disk write speed on <name> disk` | DoubleBar · MBytes_sec, EMA | a sample every 5 s into a 5-min bar | 15 min | — (the Windows sensor has none) | `/proc/diskstats` sectors written × 512 of the **whole disk** under the filesystem, MB = 1024² |
@@ -190,9 +190,10 @@ still blocked in a read.
 (`enabled` switches off both; `Logical cores` has no switch of its own) and
 `probe.disks { enabled, exclude, writeSpeed }` for the disks: `exclude` is a list of mount-point
 patterns (`*` = any run of characters) matched against the mount point a filesystem is named
-after, `writeSpeed: false` drops the write-speed sensors. All default on. The 0.2.x switch
-`probe.hostSensors.disk` is deprecated: an explicit `false` still turns the disks off (with a
-warning), `true` is ignored.
+after, `writeSpeed: false` drops the write-speed sensors. All default on. Before 0.4.0 the host
+switches covered the disk sensor, so **while `probe.disks.enabled` is not set** a
+`hostSensors.enabled: false` or the deprecated `hostSensors.disk: false` still turns the disks off
+— an upgrade never switches them back on; an explicit `probe.disks.enabled` always wins.
 
 ### Docker Compose services (#1416)
 

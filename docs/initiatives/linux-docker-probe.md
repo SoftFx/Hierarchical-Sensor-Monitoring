@@ -239,7 +239,7 @@ Per filesystem, under `.computer/Disks monitoring/`, named like the Windows per-
 
 | Sensor | Type · period | Alert | Source |
 |---|---|---|---|
-| `Free space on <name> disk` | Double MB, EMA · 5 min, TTL 15 min | the managed/Windows `EmaValue ≤ 20 480 MB` → Error, verbatim | `statvfs` `f_bavail × f_frsize` |
+| `Free space on <name> disk` | Double MB, EMA · 5 min, TTL 15 min | — (the % sensor carries the alerts; a fixed 20 GB one would hold a small `/boot/efi` in Error) | `statvfs` `f_bavail × f_frsize` |
 | `Free space on <name> disk %` | Double % · 5 min, TTL 15 min | < 10 warning, < 5 Error | `f_bavail / f_blocks` |
 | `Free inodes on <name> disk %` | Double % · 5 min, TTL 15 min | < 10 warning | `f_favail / f_files` |
 | `Average disk write speed on <name> disk` | DoubleBar MBytes_sec, EMA · 5 s samples, 5-min bar, TTL 15 min | — (as on Windows) | `/proc/diskstats` of the whole disk under the partition |

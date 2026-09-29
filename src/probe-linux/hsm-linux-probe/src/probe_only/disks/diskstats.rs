@@ -162,6 +162,11 @@ pub mod tests {
         }
     }
 
+    /// Symlinks need a Unix host; elsewhere (the probe is Linux-only) the fake sysfs stays empty
+    /// and the write-speed sensors simply do not register.
+    #[cfg(not(unix))]
+    pub fn garage_sysfs(_tree: &FakeTree) {}
+
     #[cfg(unix)]
     #[test]
     fn partitions_map_to_their_whole_disk() {

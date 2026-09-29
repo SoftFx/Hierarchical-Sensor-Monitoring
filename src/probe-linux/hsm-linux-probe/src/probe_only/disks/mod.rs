@@ -87,9 +87,6 @@ const UNIT_MB: i32 = 3;
 const UNIT_PERCENTS: i32 = 100;
 const UNIT_MBYTES_SEC: i32 = 2103;
 
-/// The managed free-space alert threshold (`FreeSpaceOnDiskPrototype`: EMA value ≤ 20 GB).
-const MANAGED_FREE_SPACE_ALERT_MB: &str = "20480";
-
 pub const CATEGORY: &str = ".computer/Disks monitoring";
 
 pub fn free_space_path(name: &str) -> String {
@@ -421,7 +418,10 @@ fn register_node<'c>(
              user. Every 5 minutes."
         ))
         .with_statistics(STATISTICS_EMA),
-        vec![managed_free_space_alert(collector, &name)],
+        // No absolute-size alert: the managed 20 GB threshold would hold a /boot/efi of 512 MB in
+        // Error forever. The percent sensor carries the alerts, which scale with the filesystem;
+        // `/` keeps the 20 GB alert on the managed-parity `Free space on disk`.
+        Vec::new(),
     );
     let free_percent = register_double(
         collector,
@@ -541,35 +541,6 @@ fn register_double<'c>(
     Some(sensor)
 }
 
-/// The managed/Windows `Free space on <X> disk` alert, verbatim: EMA value ≤ 20 GB → Error, with
-/// the instant-hourly notification and the down-arrow icon.
-fn managed_free_space_alert<'c>(
-    collector: &'c Collector,
-    name: &str,
-) -> hsm_collector::Result<Alert<'c>> {
-    Ok(collector
-        .alert(AlertKind::Instant)?
-        .condition(
-            AlertCombination::And,
-            AlertProperty::EmaValue,
-            AlertOperation::LessThanOrEqual,
-            AlertTarget::Const(MANAGED_FREE_SPACE_ALERT_MB.into()),
-        )?
-        .scheduled_notification(
-            &format!(
-                "[$product] Free space on {name} disk is running out. Current free space is $value \
-                 $unit"
-            ),
-            instant_hourly_schedule_anchor(),
-            AlertRepeat::Hourly,
-            true,
-            AlertDestination::FromParent,
-        )?
-        .icon(AlertIcon::ArrowDown)?
-        .sensor_error()?
-        .build())
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Band {
     Warning,
@@ -613,16 +584,15 @@ fn percent_alert<'c>(
 }
 
 /// Register the disk sensors of every real filesystem (before Start) and return the space and
-/// write-speed sources. Empty when disabled.
+/// write-speed sources. The caller decides whether the disks are enabled
+/// (`ProbeConfig::disks_enabled`).
 pub fn register<'c>(
     collector: &'c Collector,
     config: &DisksConfig,
     environment: &HostEnvironment,
     logger: &Logger,
 ) -> Vec<Box<dyn Source + 'c>> {
-    let Some((space, write)) = build(collector, config, environment, logger) else {
-        return Vec::new();
-    };
+    let (space, write) = build(collector, config, environment, logger);
     let mut sources: Vec<Box<dyn Source + 'c>> = vec![Box::new(space)];
     if let Some(write) = write {
         sources.push(Box::new(write));
@@ -630,17 +600,13 @@ pub fn register<'c>(
     sources
 }
 
-/// [`register`] with the concrete sources; `None` when disabled.
+/// [`register`] with the concrete sources.
 fn build<'c>(
     collector: &'c Collector,
     config: &DisksConfig,
     environment: &HostEnvironment,
     logger: &Logger,
-) -> Option<(SpaceSource<'c>, Option<WriteSpeedSource<'c>>)> {
-    if !config.enabled {
-        logger.info("disks: disabled (probe.disks.enabled = false)");
-        return None;
-    }
+) -> (SpaceSource<'c>, Option<WriteSpeedSource<'c>>) {
     let disks = Arc::new(Disks {
         collector,
         config: config.clone(),
@@ -685,7 +651,7 @@ fn build<'c>(
         logger.info("disks: write speed disabled (probe.disks.writeSpeed = false)");
         None
     };
-    Some((space, write))
+    (space, write)
 }
 
 /// Free space and inodes every 5 minutes, and the 10-minute mount re-scan.
@@ -974,8 +940,7 @@ pub mod tests {
         let collector = Collector::new(&options).expect("create");
         let logger = Logger::new(Level::Error, None);
 
-        let (mut space, write) =
-            build(&collector, &DisksConfig::default(), &environment, &logger).expect("enabled");
+        let (mut space, write) = build(&collector, &DisksConfig::default(), &environment, &logger);
         let mut write = write.expect("write speed on by default");
         collector.start().expect("start");
         // One /proc/diskstats read meters each of the three whole disks once.
