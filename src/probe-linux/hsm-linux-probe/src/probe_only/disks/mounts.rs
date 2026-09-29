@@ -103,10 +103,17 @@ pub struct Filesystem {
 /// The real filesystems in `mounts`, deduplicated by source device, minus those whose reported
 /// mount point matches an `exclude` pattern. Sorted by mount point.
 pub fn real_filesystems(mounts: &[Mount], exclude: &[String]) -> Vec<Filesystem> {
+    // A mount with a later mount on the same mount point is hidden under it (mountinfo lists
+    // mounts in mount order): `statvfs` of that path only reaches the one on top, so only the
+    // visible mount of each path counts — otherwise two devices stacked on one path would share a
+    // name and mix their numbers.
+    let visible = mounts.iter().enumerate().filter(|(index, mount)| {
+        !mounts[index + 1..]
+            .iter()
+            .any(|later| later.mount_point == mount.mount_point)
+    });
     let mut groups: BTreeMap<String, Vec<&Mount>> = BTreeMap::new();
-    for mount in mounts
-        .iter()
-        .filter(|mount| BLOCK_FS_TYPES.contains(&mount.fs_type.as_str()))
+    for (_, mount) in visible.filter(|(_, mount)| BLOCK_FS_TYPES.contains(&mount.fs_type.as_str()))
     {
         let key = if mount.source.starts_with("/dev/") {
             mount.source.clone()
@@ -307,6 +314,26 @@ pub mod tests {
         let filesystems = real_filesystems(&parse_mountinfo(text), &[]);
         assert_eq!(filesystems.len(), 1);
         assert_eq!(filesystems[0].mount_point, PathBuf::from("/data"));
+    }
+
+    #[test]
+    fn a_device_mounted_over_another_hides_it() {
+        // A second stick mounted over /media/usb without unmounting the first: only the one on top
+        // is reachable (and statvfs'd), so only it is a filesystem; a tmpfs over a disk hides the
+        // disk entirely.
+        let text = "\
+1 0 8:1 / / rw - ext4 /dev/sda1 rw
+2 1 8:49 / /media/usb rw - vfat /dev/sdd1 rw
+3 1 8:65 / /media/usb rw - vfat /dev/sde1 rw
+4 1 8:81 / /data rw - ext4 /dev/sdf1 rw
+5 1 0:60 / /data rw - tmpfs tmpfs rw
+";
+        let filesystems = real_filesystems(&parse_mountinfo(text), &[]);
+        let sources: Vec<&str> = filesystems.iter().map(|fs| fs.source.as_str()).collect();
+        assert_eq!(sources, vec!["/dev/sda1", "/dev/sde1"]);
+        let mut names = BTreeMap::new();
+        assign_names(&filesystems, &mut names);
+        assert_eq!(names["/media/usb"], "usb");
     }
 
     #[test]

@@ -393,12 +393,32 @@ impl<'c> Disks<'c> {
                             fs.source
                         ));
                     }
-                    if fs.device != node.fs.device && self.config.write_speed {
-                        // Another device behind the same mount point: follow its disk.
-                        node.disk = diskstats::whole_disk(&self.sys_root, &fs.device, &fs.source);
-                    }
+                    let swapped = fs.device != node.fs.device;
                     node.mounted = true;
                     node.fs = (*fs).clone();
+                    if swapped {
+                        // Another device behind the same mount point: follow its disk, add the
+                        // write-speed sensor if the first device had none, and let the next good
+                        // sample decide the inode sensor again. (Descriptions keep the first
+                        // device's text; registrations cannot be removed.)
+                        node.inodes_pending = true;
+                        if self.config.write_speed {
+                            node.disk =
+                                diskstats::whole_disk(&self.sys_root, &fs.device, &fs.source);
+                            if node.write_speed.is_none() {
+                                if let Some(disk) = node.disk.clone() {
+                                    node.write_speed = register_write_speed(
+                                        self.collector,
+                                        logger,
+                                        &node.name,
+                                        &node.fs,
+                                        &disk,
+                                        &[],
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
                 None if node.mounted => {
                     node.mounted = false;
@@ -487,39 +507,7 @@ fn register_node<'c>(
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        let shared = if sharing.is_empty() {
-            String::new()
-        } else {
-            format!(
-                " The disk is shared, so this is also the write speed of: {}.",
-                sharing.join(", ")
-            )
-        };
-        let options = SensorOptions::default()
-            .with_is_computer_sensor(true)
-            .with_ttl(TTL)
-            .with_unit(UNIT_MBYTES_SEC)
-            .with_statistics(STATISTICS_EMA)
-            .with_description(format!(
-                "Average write speed of the whole disk {disk} under {where_}, in MB/s: \
-                 /proc/diskstats sectors written, one sample every 5 s into a 5-minute bar.{shared}"
-            ));
-        match collector.double_bar_sensor(
-            &write_speed_path(&name),
-            WRITE_BAR_PERIOD,
-            WRITE_BAR_POST_PERIOD,
-            WRITE_BAR_PRECISION,
-            &options,
-        ) {
-            Ok(sensor) => Some(sensor),
-            Err(error) => {
-                logger.error(format!(
-                    "cannot register {}: {error}",
-                    write_speed_path(&name)
-                ));
-                None
-            }
-        }
+        register_write_speed(collector, logger, &name, &fs, disk, &sharing)
     });
     Node {
         name,
@@ -566,6 +554,48 @@ fn register_inodes<'c>(
             )),
         vec![percent_alert(collector, Band::Warning, "10", None)],
     )
+}
+
+fn register_write_speed<'c>(
+    collector: &'c Collector,
+    logger: &Logger,
+    name: &str,
+    fs: &Filesystem,
+    disk: &str,
+    sharing: &[String],
+) -> Option<DoubleBarSensor<'c>> {
+    let shared = if sharing.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " The disk is shared, so this is also the write speed of: {}.",
+            sharing.join(", ")
+        )
+    };
+    let options = SensorOptions::default()
+        .with_is_computer_sensor(true)
+        .with_ttl(TTL)
+        .with_unit(UNIT_MBYTES_SEC)
+        .with_statistics(STATISTICS_EMA)
+        .with_description(format!(
+            "Average write speed of the whole disk {disk} under {}, in MB/s: /proc/diskstats \
+             sectors written, one sample every 5 s into a 5-minute bar.{shared}",
+            where_(fs)
+        ));
+    let path = write_speed_path(name);
+    match collector.double_bar_sensor(
+        &path,
+        WRITE_BAR_PERIOD,
+        WRITE_BAR_POST_PERIOD,
+        WRITE_BAR_PRECISION,
+        &options,
+    ) {
+        Ok(sensor) => Some(sensor),
+        Err(error) => {
+            logger.error(format!("cannot register {path}: {error}"));
+            None
+        }
+    }
 }
 
 fn log_no_inodes(logger: &Logger, name: &str, fs: &Filesystem) {
@@ -770,13 +800,25 @@ impl Source for SpaceSource<'_> {
                 Ok(stats) => {
                     node.failures.succeeded(logger, &what);
                     if node.inodes_pending {
-                        // The discovery statvfs failed; this first answer decides.
+                        // The discovery statvfs failed, or another device took the mount point:
+                        // this first good answer decides.
                         node.inodes_pending = false;
-                        if stats.files > 0 {
-                            node.free_inodes =
-                                register_inodes(self.disks.collector, logger, &node.name, &node.fs);
-                        } else {
-                            log_no_inodes(logger, &node.name, &node.fs);
+                        match (stats.files > 0, node.free_inodes.is_some()) {
+                            (true, false) => {
+                                node.free_inodes = register_inodes(
+                                    self.disks.collector,
+                                    logger,
+                                    &node.name,
+                                    &node.fs,
+                                );
+                            }
+                            (false, false) => log_no_inodes(logger, &node.name, &node.fs),
+                            (false, true) => logger.info(format!(
+                                "disks: '{}' now reports no inode count; its inode sensor stops \
+                                 reporting and times out",
+                                node.name
+                            )),
+                            (true, true) => {}
                         }
                     }
                     post(&node.free_mb, Some(stats.free_megabytes()), logger);

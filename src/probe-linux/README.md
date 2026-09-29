@@ -155,7 +155,8 @@ reports under that point's name. All under `.computer/Disks monitoring/`:
 `/proc/self/mountinfo` — ext2/3/4, xfs, btrfs, vfat, exfat, ntfs3, fuseblk, f2fs; everything else
 (tmpfs, overlay, squashfs, proc, sysfs, cgroup, devtmpfs, autofs, nfs, cifs, …) is skipped.
 Mounts of one source device — bind mounts, sub-directory mounts, the read-only re-mounts systemd
-adds in the service's namespace — are **one** filesystem, reported at a whole-filesystem mount
+adds in the service's namespace — are **one** filesystem (a mount hidden under a later mount on the
+same path is ignored: `statvfs` only reaches the one on top), reported at a whole-filesystem mount
 (`root` field `/`) when there is one, then the shortest mount point: on garage-server
 `/mnt/.rw/wd4tb`, `/mnt/wd4tb` and `/mnt/wd4tb/backup` (all `/dev/sda2`) are one `wd4tb`. The set is
 resolved before the collector starts and **re-scanned every 10 minutes**: a new filesystem
