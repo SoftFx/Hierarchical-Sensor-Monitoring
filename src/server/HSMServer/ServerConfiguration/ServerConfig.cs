@@ -56,6 +56,12 @@ namespace HSMServer.ServerConfiguration
         [JsonIgnore]
         public string TrustedProxiesIgnoredInSettingsFile { get; }
 
+        // The settings file held the pre-rename kill switch "ApiTokens.Enabled": false and
+        // no "Disabled" key. It is ignored (it was also the old persisted default, the two
+        // cannot be told apart), so tokens are ON after the upgrade — Program logs a warning.
+        [JsonIgnore]
+        public bool LegacyApiTokensKillSwitchIgnored { get; }
+
         public MonitoringOptions MonitoringOptions { get; }
 
         public AgentConfig Agent { get; }
@@ -101,6 +107,11 @@ namespace HSMServer.ServerConfiguration
             Kestrel.TrustedProxies = KestrelConfig.ReadTrustedProxies(new ConfigurationBuilder().AddEnvironmentVariables().Build());
             TrustedProxiesIgnoredInSettingsFile = KestrelConfig.FindTrustedProxiesInSettingsFile(configuration);
 
+            var apiTokensSection = configuration.GetSection(nameof(ApiTokens));
+            LegacyApiTokensKillSwitchIgnored = apiTokensSection["Enabled"] is { } legacy
+                && string.Equals(legacy.Trim(), "false", StringComparison.OrdinalIgnoreCase)
+                && apiTokensSection[nameof(ApiTokensConfig.Disabled)] is null;
+
             // Startup validation with actionable errors (initiative, section
             // "Configuration"). Throws before the server starts serving.
             ApiTokens.Validate();
@@ -118,8 +129,14 @@ namespace HSMServer.ServerConfiguration
         {
             try
             {
-                ApiTokens.Disabled = _configuration.GetSection(nameof(ApiTokens))
-                    .GetValue<bool?>(nameof(ApiTokensConfig.Disabled)) ?? false;
+                // No section at all means the file is missing or empty mid-save (editors
+                // and config tools delete+rename): keep the current state rather than
+                // failing open, which a settings save in that window would persist.
+                var section = _configuration.GetSection(nameof(ApiTokens));
+                if (!section.Exists())
+                    return;
+
+                ApiTokens.Disabled = section.GetValue<bool?>(nameof(ApiTokensConfig.Disabled)) ?? false;
             }
             catch (InvalidOperationException)
             {

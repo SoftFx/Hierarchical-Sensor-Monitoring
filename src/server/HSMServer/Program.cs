@@ -130,6 +130,10 @@ try
         logger.Error($"{KestrelConfig.TrustedProxiesKey} = [{ignoredProxies}] in {ServerConfig.ConfigName} is IGNORED and has been removed from the file: " +
                      "it is read from the environment only (Kestrel__TrustedProxies=...), because the settings file is rewritten on every start.");
 
+    if (serverConfig.LegacyApiTokensKillSwitchIgnored)
+        logger.Warn($"ApiTokens.Enabled = false in {ServerConfig.ConfigName} is IGNORED and has been removed from the file: " +
+                    "API tokens are now ON. Set ApiTokens.Disabled = true to keep them off, or run the emergency revoke-all.");
+
     if (serverConfig.Kestrel.TrustedProxies.Length > 0)
         forwardedHeaders = TrustedProxyOptionsFactory.Build(serverConfig.Kestrel.TrustedProxies);
 

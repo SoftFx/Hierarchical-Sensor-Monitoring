@@ -55,27 +55,66 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             Assert.DoesNotContain("\"Enabled\"", json);
         }
 
+        // The ServerConfig tests below construct a real ServerConfig, whose constructor
+        // (and ResaveSettings) writes Config/<settings file> under the test working
+        // directory. They live in one class, which xUnit runs sequentially; keep any
+        // further ServerConfig-constructing test here so the file is never raced.
+
         [Fact]
         public void KillSwitch_HandEditOfRunningConfig_AppliesWithoutRestart()
         {
             // The switch is config-file only: an edit must reach the bound singleton on
             // reload, and survive a subsequent resave (any settings save) instead of the
             // stale in-memory value being written back.
-            var memory = new Dictionary<string, string>();
-            var configuration = new ConfigurationBuilder().AddInMemoryCollection(memory).Build();
-            var server = new ServerConfig(configuration);
+            var source = new MutableConfigurationSource();
+            source.Data["ApiTokens:MaxTokensPerUser"] = "10";
+            var server = new ServerConfig(new ConfigurationBuilder().Add(source).Build());
             Assert.True(server.ApiTokens.Enabled);
 
-            configuration["ApiTokens:Disabled"] = "true";
-            configuration.Reload();
+            source.Data["ApiTokens:Disabled"] = "true";
+            source.FireReload();
             Assert.False(server.ApiTokens.Enabled);
 
             server.ResaveSettings();
             Assert.False(server.ApiTokens.Enabled);
 
-            configuration["ApiTokens:Disabled"] = "false";
-            configuration.Reload();
+            // A missing/empty file mid-save must not fail open.
+            source.Data.Clear();
+            source.FireReload();
+            Assert.False(server.ApiTokens.Enabled);
+
+            source.Data["ApiTokens:Disabled"] = "false";
+            source.FireReload();
             Assert.True(server.ApiTokens.Enabled);
+        }
+
+        [Theory]
+        [InlineData("false", null, true)]
+        [InlineData("False", null, true)]
+        [InlineData("false", "true", false)]
+        [InlineData("true", null, false)]
+        [InlineData(null, null, false)]
+        public void LegacyKillSwitch_DetectedOnlyWhenDisabledKeyAbsent(string legacyEnabled, string disabled, bool expected)
+        {
+            var source = new MutableConfigurationSource();
+            if (legacyEnabled is not null)
+                source.Data["ApiTokens:Enabled"] = legacyEnabled;
+            if (disabled is not null)
+                source.Data["ApiTokens:Disabled"] = disabled;
+
+            var server = new ServerConfig(new ConfigurationBuilder().Add(source).Build());
+
+            Assert.Equal(expected, server.LegacyApiTokensKillSwitchIgnored);
+            Assert.Equal(disabled != "true", server.ApiTokens.Enabled);
+        }
+
+        private sealed class MutableConfigurationSource : ConfigurationProvider, IConfigurationSource
+        {
+            public new IDictionary<string, string> Data => base.Data;
+
+            public IConfigurationProvider Build(IConfigurationBuilder builder) => this;
+
+            public void FireReload() => OnReload();
         }
 
         private static ApiTokensConfig Bind(params (string Key, string Value)[] values) =>
