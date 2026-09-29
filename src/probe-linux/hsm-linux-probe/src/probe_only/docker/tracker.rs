@@ -155,6 +155,13 @@ impl Tracker {
         std::mem::take(&mut self.dirty)
     }
 
+    /// Drop a service from the state (an exclusion): it is neither reported nor remembered.
+    pub fn forget(&mut self, key: &ServiceKey) -> bool {
+        let removed = self.state.services.remove(key).is_some();
+        self.dirty |= removed;
+        removed
+    }
+
     /// Remember the node a service was given, for re-adoption after a restart.
     pub fn set_node(&mut self, key: &ServiceKey, node: &str) {
         if let Some(record) = self.state.services.get_mut(key) {

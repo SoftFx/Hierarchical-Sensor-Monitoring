@@ -81,6 +81,40 @@ impl<'c> RawSensor<'c> {
             }
         })
     }
+
+    fn set_description(&self, description: Option<&str>) -> Result<()> {
+        let description = description
+            .map(CString::new)
+            .transpose()
+            .map_err(|err| Error::nul("description", err))?;
+        self.collector.with_registration_lock(|| {
+            // Same lifecycle rule as an attach: re-emitted while running, refused while stopping.
+            if !matches!(
+                self.collector.status(),
+                CollectorStatus::Stopped | CollectorStatus::Starting | CollectorStatus::Running
+            ) {
+                return Err(Error::from_code(
+                    "set description",
+                    sys::HSM_RESULT_INVALID_STATE,
+                    "the description cannot change while the collector stops".into(),
+                ));
+            }
+            // SAFETY: live handle; the string outlives the call and is copied by the collector.
+            let code = unsafe {
+                sys::hsm_sensor_set_description(
+                    self.handle,
+                    description
+                        .as_ref()
+                        .map_or(ptr::null(), |text| text.as_ptr()),
+                )
+            };
+            if code == sys::HSM_RESULT_OK {
+                Ok(())
+            } else {
+                Err(Error::from_code("set description", code, String::new()))
+            }
+        })
+    }
 }
 
 /// `attach_alert` on every sensor handle type, so the call reads the same whatever the sensor kind.
@@ -94,6 +128,14 @@ macro_rules! attachable {
                 /// stops. The same alert may be attached to several sensors.
                 pub fn attach_alert(&self, alert: &Alert<'_>) -> Result<()> {
                     self.0.attach_alert(alert)
+                }
+
+                /// Replace this sensor's registration description, with the same rules as
+                /// [`Self::attach_alert`]: before Start it is what Start registers; while running
+                /// the sensor is re-registered (collector >= 0.10.0). `None` emits null, which the
+                /// server reads as "unchanged"; pass `Some("")` to clear a sent description.
+                pub fn set_description(&self, description: Option<&str>) -> Result<()> {
+                    self.0.set_description(description)
                 }
             }
         )*

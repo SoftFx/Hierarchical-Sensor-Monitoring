@@ -99,6 +99,8 @@ pub struct DockerSource<'c, E: EngineApi> {
     sample_period: Duration,
     oom_latch: Duration,
     compose_only: bool,
+    /// `probe.docker.exclude` patterns.
+    exclude: Vec<String>,
     state_path: Option<PathBuf>,
     host_mem_total: Option<u64>,
     api: Option<ApiVersion>,
@@ -156,9 +158,24 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                  against the limit Docker reports",
             );
         }
+        // An excluded service is neither reported (no Stopped for it) nor remembered.
+        let mut tracker = Tracker::new(state);
+        let remembered: Vec<ServiceKey> = tracker.state.services.keys().cloned().collect();
+        for key in remembered {
+            if config
+                .exclude
+                .iter()
+                .any(|pattern| identity::matches_pattern(pattern, &key))
+                && tracker.forget(&key)
+            {
+                logger.info(format!(
+                    "docker: {key}: excluded by probe.docker.exclude; dropped from the state"
+                ));
+            }
+        }
         // Re-adopt the nodes of the previous run before anything new is named.
         let mut naming = Naming::default();
-        for record in state.services.values() {
+        for record in tracker.state.services.values() {
             if let Some(node) = &record.node {
                 if !naming.adopt(&record.key(), node) {
                     logger.warn(format!(
@@ -174,11 +191,12 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             sample_period: config.sample_period(),
             oom_latch: config.oom_latch(),
             compose_only: config.compose_only,
+            exclude: config.exclude.clone(),
             state_path,
             host_mem_total,
             api: None,
             naming,
-            tracker: Tracker::new(state),
+            tracker,
             sensors: BTreeMap::new(),
             roster: BTreeMap::new(),
             cpu: CpuTracker::default(),
@@ -285,10 +303,16 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         let collector = self.collector;
         let mut registered = 0;
         for (key, (has_health, has_run)) in &present {
+            // One stats read per running container, so `Memory used %` registers stating its limit.
+            let limit = if *has_run {
+                roster.get(key).and_then(|ids| self.memory_limit_of(ids))
+            } else {
+                None
+            };
             let sensors = self.sensors_of(key);
             let mut problems = sensors.ensure_state_sensors(collector, true, *has_health);
             if *has_run {
-                problems.extend(sensors.ensure_stats_sensors(collector));
+                problems.extend(sensors.ensure_stats_sensors(collector, limit));
             }
             report_problems(logger, &mut self.log_once, &problems);
             registered += 1;
@@ -301,6 +325,18 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             registered += 1;
         }
         Ok(registered)
+    }
+
+    /// The service's memory limit (MB, unlimited) from one stats read of each container; `None`
+    /// when a read fails (the first stats round then sets it).
+    fn memory_limit_of(&mut self, ids: &[String]) -> Option<(i32, bool)> {
+        let mut readings = Vec::with_capacity(ids.len());
+        for id in ids {
+            let stats = self.engine.stats(id).ok()?;
+            readings.push(stats::memory_reading(&stats, self.host_mem_total)?);
+        }
+        stats::service_memory(&readings, self.host_mem_total)
+            .map(|memory| (stats::limit_megabytes(memory.limit_bytes), memory.unlimited))
     }
 
     fn sensors_of(&mut self, key: &ServiceKey) -> &mut ServiceSensors<'c> {
@@ -361,6 +397,20 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let Some(key) = self.member(logger, container) else {
                 continue;
             };
+            // Excluded services (probe.docker.exclude): not monitored at all — not even inspected.
+            if self
+                .exclude
+                .iter()
+                .any(|pattern| identity::matches_pattern(pattern, &key))
+            {
+                self.tracker.forget(&key);
+                if self.log_once.raise(&format!("exclude:{key}")) {
+                    logger.info(format!(
+                        "docker: {key}: excluded by probe.docker.exclude, not monitored"
+                    ));
+                }
+                continue;
+            }
             if should_stop() {
                 return Ok(None);
             }
@@ -609,13 +659,14 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 .sensors
                 .entry(key.clone())
                 .or_insert_with(|| ServiceSensors::new(node));
-            let problems = sensors.ensure_stats_sensors(self.collector);
-            report_problems(logger, &mut self.log_once, &problems);
-
-            let mut failures = Vec::new();
             let memory = memory_valid
                 .then(|| stats::service_memory(&readings, self.host_mem_total))
                 .flatten();
+            let limit = memory.map(|m| (stats::limit_megabytes(m.limit_bytes), m.unlimited));
+            let problems = sensors.ensure_stats_sensors(self.collector, limit);
+            report_problems(logger, &mut self.log_once, &problems);
+
+            let mut failures = Vec::new();
             logger.log(
                 Level::Debug,
                 &format!(
@@ -650,10 +701,10 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                         failures.push(format!("Memory used %: {error}"));
                     }
                 }
-                if let Err(error) = sensors
-                    .post_memory_limit(stats::limit_megabytes(memory.limit_bytes), memory.unlimited)
-                {
-                    failures.push(format!("Memory limit: {error}"));
+                if let Some(limit) = limit {
+                    if let Err(error) = sensors.follow_memory_limit(limit) {
+                        failures.push(format!("Memory used % description: {error}"));
+                    }
                 }
             }
             let node = sensors.node.clone();
@@ -932,6 +983,14 @@ pub(crate) mod tests {
     /// Drive the garage fixtures through one poll and two stats rounds, as the running source
     /// would over its first ~10 seconds.
     pub(crate) fn drive_garage(collector: &Collector) {
+        drive_garage_on(collector, |_| {});
+    }
+
+    /// `drive_garage`, then `more` on the same source.
+    fn drive_garage_on(
+        collector: &Collector,
+        more: impl FnOnce(&mut DockerSource<'_, FixtureEngine>),
+    ) {
         let mut source = garage_source(
             collector,
             FixtureEngine::garage(),
@@ -952,6 +1011,7 @@ pub(crate) mod tests {
         source
             .sample_stats(&quiet(), &never)
             .expect("second stats round");
+        more(&mut source);
     }
 
     fn registered(collector: &Collector) -> Vec<String> {
@@ -977,9 +1037,10 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
 
         let docker: Vec<&String> = paths.iter().filter(|p| p.contains("/Docker/")).collect();
-        // 11 services × 3 state sensors + 4 healthchecks + 11 × 3 stats sensors; the twelfth,
+        // 11 services × 3 state sensors + 4 healthchecks + 11 × 2 stats sensors; the twelfth,
         // lingua-ci/ci-image, is a completed one-shot job and not monitored at all.
-        assert_eq!(docker.len(), 11 * 3 + 4 + 11 * 3, "{docker:#?}");
+        assert_eq!(docker.len(), 11 * 3 + 4 + 11 * 2, "{docker:#?}");
+        assert!(paths.iter().all(|p| !p.ends_with("/Memory limit")));
         let has = |p: &str| paths.iter().any(|x| x == p);
         assert!(has(
             "garage-server/LinuxProbe/Docker/gitea/db/Service status"
@@ -1055,7 +1116,7 @@ pub(crate) mod tests {
             .iter()
             .filter(|j| j.contains("/Docker/"))
             .collect();
-        assert_eq!(docker.len(), 70);
+        assert_eq!(docker.len(), 59);
 
         let find = |path: &str| {
             registrations
@@ -1093,7 +1154,12 @@ pub(crate) mod tests {
                 "{path} carries its alert"
             );
         }
-        assert!(find("gitea/db/Memory limit").contains("\"Alerts\":null"));
+        // The limit lives in the Memory used % description (gitea/db: 1 GiB).
+        assert!(
+            find("gitea/db/Memory used %").contains("**1024 MB** on this host"),
+            "{}",
+            find("gitea/db/Memory used %")
+        );
         // The state sensors store only changes on the server.
         for path in [
             "gitea/db/Service status",
@@ -1245,6 +1311,86 @@ pub(crate) mod tests {
             "Docker/gitea/db"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn excluded_services_are_not_monitored_and_leave_the_state() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        // portainer was monitored before (it is in the state); now both it and janitor are excluded.
+        let mut state = State::default();
+        let portainer = ServiceKey::new("portainer", "portainer");
+        let mut record = state::ServiceRecord::new(&portainer);
+        record.last_seen = unix_now() - 60;
+        state.services.insert(portainer.clone(), record);
+        let dir =
+            std::env::temp_dir().join(format!("hsm-probe-docker-exclude-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(state::STATE_FILE_NAME);
+        state.save(&path).unwrap();
+
+        let config = DockerConfig {
+            exclude: vec!["portainer/*".into(), "lingua-ci/janitor".into()],
+            ..DockerConfig::default()
+        };
+        let mut source = garage_source(
+            &collector,
+            FixtureEngine::garage(),
+            &config,
+            Some(path.clone()),
+        );
+        assert!(
+            !source.tracker().state.services.contains_key(&portainer),
+            "dropped from the state at start: no Stopped, no alerts"
+        );
+        source.poll(&quiet(), &|| false).expect("poll");
+        source.sample_stats(&quiet(), &|| false).expect("stats");
+        let paths = registered(&collector);
+        assert!(paths.iter().all(|p| !p.contains("/Docker/portainer/")));
+        assert!(paths
+            .iter()
+            .all(|p| !p.contains("/Docker/lingua-ci/janitor/")));
+        assert!(paths
+            .iter()
+            .any(|p| p.contains("/Docker/lingua-ci/runner-heavy/")));
+        let (saved, _) = State::load(&path);
+        assert!(!saved.services.contains_key(&portainer));
+        assert!(!saved
+            .services
+            .contains_key(&ServiceKey::new("lingua-ci", "janitor")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_changed_memory_limit_rewrites_the_memory_used_description() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        drive_garage_on(&collector, |source| {
+            // hsm/app's container is recreated with mem_limit 512m.
+            for round in &mut source.engine.rounds {
+                for (id, stats) in round.iter_mut() {
+                    if id.starts_with("c5abbadb3674") {
+                        stats.memory_stats.limit = Some(512 * 1024 * 1024);
+                    }
+                }
+            }
+            source.origin = source
+                .origin
+                .checked_sub(Duration::from_millis(5_300))
+                .expect("clock");
+            source
+                .sample_stats(&quiet(), &|| false)
+                .expect("third round");
+        });
+        let registrations = collector.registrations();
+        collector.stop().expect("stop");
+        let app: Vec<&String> = registrations
+            .iter()
+            .filter(|json| json.contains("Docker/hsm/app/Memory used %"))
+            .collect();
+        assert_eq!(app.len(), 1, "re-registered in place, not added");
+        assert!(app[0].contains("**512 MB** on this host"), "{}", app[0]);
     }
 
     const CI_IMAGE: &str = "garage-server/LinuxProbe/Docker/lingua-ci/ci-image/Service status";

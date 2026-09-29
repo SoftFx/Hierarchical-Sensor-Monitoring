@@ -13,7 +13,8 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-/// Default location of the config file (a dpkg conffile, so operator edits survive upgrades).
+/// Default location of the config file. Owned by the operator: the package seeds it once from
+/// `/usr/share/hsm-linux-probe/config.example.json` when absent and never touches it on upgrade.
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/hsm-linux-probe/config.json";
 
 #[derive(Clone, Debug, Deserialize)]
@@ -52,6 +53,10 @@ pub struct DockerConfig {
     /// How long `OOM killed` stays true after an OOM kill was last seen.
     #[serde(default = "default_docker_oom_latch_hours")]
     pub oom_latch_hours: u64,
+    /// `project/service` patterns (`*` matches within one segment) whose services are not
+    /// monitored, e.g. `portainer/*`, `lingua-ci/janitor`.
+    #[serde(default)]
+    pub exclude: Vec<String>,
 }
 
 impl Default for DockerConfig {
@@ -62,6 +67,7 @@ impl Default for DockerConfig {
             compose_only: true,
             sample_period_sec: default_docker_sample_period_sec(),
             oom_latch_hours: default_docker_oom_latch_hours(),
+            exclude: Vec::new(),
         }
     }
 }
@@ -281,6 +287,14 @@ impl DockerConfig {
                 "probe.docker.oomLatchHours must be greater than zero",
             ));
         }
+        for pattern in &self.exclude {
+            if !crate::probe_only::docker::identity::is_valid_pattern(pattern) {
+                return Err(ConfigError::invalid(format!(
+                    "probe.docker.exclude entries are 'project/service' patterns with '*' \
+                     wildcards (got '{pattern}')"
+                )));
+            }
+        }
         Ok(())
     }
 }
@@ -391,6 +405,7 @@ mod tests {
             config.probe.docker.oom_latch_hours,
             defaults.oom_latch_hours
         );
+        assert_eq!(config.probe.docker.exclude, defaults.exclude);
         // The skeleton documents the probe-only switches, all on.
         assert!(example.contains("\"hostSensors\""));
         let host = &config.probe.host_sensors;
@@ -583,6 +598,25 @@ mod tests {
         assert!(!docker.compose_only);
         assert_eq!(docker.sample_period_sec, 10);
         assert_eq!(docker.oom_latch_hours, 48);
+    }
+
+    #[test]
+    fn docker_exclusions_parse_and_are_validated() {
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "docker": { "exclude": ["portainer/*", "lingua-ci/janitor"] } } }"#;
+        let docker = Config::parse(text).expect("parse").probe.docker;
+        assert_eq!(docker.exclude, vec!["portainer/*", "lingua-ci/janitor"]);
+        assert!(DockerConfig::default().exclude.is_empty());
+        for bad in ["portainer", "a/b/c", "/db", "gitea/", ""] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
+                     "probe": {{ "docker": {{ "exclude": ["{bad}"] }} }} }}"#
+            );
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::Invalid(_))),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

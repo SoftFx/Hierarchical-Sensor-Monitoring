@@ -161,8 +161,7 @@ Everything lives under one node in the probe's module:
 | Sensor | Type · unit | Cadence | Value | Alert (at registration) | Records/day |
 |---|---|---|---|---|---|
 | `CPU` | DoubleBar · % | sample every 5 s (`probe.docker.samplePeriodSec`), 5-min bar | % of the **whole host** (all cores = 100 %): Δ`cpu_usage.total_usage` / Δ`system_cpu_usage` × 100. Not × `online_cpus` — `docker stats` shows per-core % (up to 400 % on 4 cores) | mean > 90 for 30 min → warning notification | 288 |
-| `Memory used %` | DoubleBar · % | as CPU | (`usage` − `inactive_file`) / limit × 100; no limit ⇒ of the host's `MemTotal` | mean > 90 → warning notification | 288 |
-| `Memory limit` | Int · MB | at probe start and on change | the containers' limit; host `MemTotal` when unlimited (the value's comment says so) | none | ~2 |
+| `Memory used %` | DoubleBar · % | as CPU | (`usage` − `inactive_file`) / limit × 100; no limit ⇒ of the host's `MemTotal`. **The limit is stated in the description** ("… **1024 MB** on this host", or "no memory limit is set … MemTotal (15917 MB)") and a changed limit re-registers the sensor with the new text — there is no separate limit sensor (owner decision) | mean > 90 → warning notification | 288 |
 | `Service status` | Enum (the Windows `ServiceControllerStatus` options) | poll every 60 s, AggregateData | running → Running; created, restarting → StartPending; paused → Paused; exited, dead, removing → Stopped; removed → Stopped for 7 days after last seen. A service first seen as a **completed one-shot job** — every container Exited (0) under restart policy `no` — is not monitored at all (see below) | `IfValue NotEqual Running`, confirmation 5 min, notification repeated hourly — the Windows `ServiceStatusPrototype` alert byte for byte (test-pinned) | ~0 |
 | `Health` | Enum {starting, healthy, unhealthy} | poll every 60 s, AggregateData | `State.Health.Status`; registered **only** where a healthcheck exists | `unhealthy` for 5 min → notification, repeated hourly | ~0 |
 | `Restart count` | Int · count | poll every 60 s, **posted only on change** | cumulative `RestartCount`, carried across recreates (never goes down) | value changed (`IsChanged`, so a new service's first baseline post does not notify) → notification | ~0 |
@@ -189,6 +188,11 @@ Behavior at the edges:
   `probe.docker.composeOnly` is `true` (default); with `false` they appear as `Docker/_standalone/<name>`.
   **One-off containers** (`docker compose run`, `com.docker.compose.oneoff=True`) are never counted
   as replicas of their service — a leftover exited one would otherwise pin it at `Stopped`.
+- **Excluded services** (`probe.docker.exclude`, owner decision): a service matching a
+  `project/service` pattern (`*` matches within one segment, never across `/`) is not monitored —
+  no sensors, one INFO line (`<project>/<service>: excluded by probe.docker.exclude, not
+  monitored`). A service the state remembers that is now excluded is dropped from the state at
+  start (no `Stopped`, no alert). Only an exclude list: whatever is not excluded is monitored.
 - **Completed one-shot jobs** (owner decision): a Compose service whose containers have all exited
   with code 0 under restart policy `no` (garage's `lingua-ci/ci-image`, an image build) is a job
   that finished, not a service that stopped — no sensors, one INFO line
@@ -358,16 +362,19 @@ check with `dpkg --compare-versions 0.2.0~trial1 gt 0.1.0~trial3`.
 The package has the layout of the hand-built `0.1.0~trial*` packages: `/usr/bin/hsm-linux-probe`,
 `/lib/systemd/system/hsm-linux-probe.service` (kept under `/lib`, where the trials put it — moving a
 file between `/lib` and `/usr/lib` across versions is unsafe with dpkg on a merged `/usr`),
-`/etc/hsm-linux-probe/config.json` (a conffile, from `config.example.json`) and the copyright
-file; `Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`. The maintainer scripts
+`/usr/share/hsm-linux-probe/config.example.json` (the skeleton), `/usr/lib/hsm-linux-probe/docker-access.sh`
+and the copyright file; `Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`. The maintainer scripts
 are `packaging/deb/{postinst,prerm,postrm}`, reconstructed from the trial package: postinst creates
 the `hsm-probe` system user/group and reloads systemd, and on a fresh install does not enable or
 start the unit (`install.sh` does, once config and key are in place); prerm disables it on remove;
 postrm purges `/var/lib` and `/var/log` state. On upgrade prerm stops the unit and, **from 0.2.0 on**,
 leaves a marker in `/run` when it was running, so the new postinst starts it again — an upgrade
 does not end monitoring. (Upgrading *from* a `0.1.0~trial*` package runs that package's old prerm,
-which leaves no marker: start the unit by hand once.) The operator's config survives upgrades
-(`apt-get install -o Dpkg::Options::=--force-confold ./hsm-linux-probe_….deb`).
+which leaves no marker: start the unit by hand once.) The operator's config is **not** a conffile (from 0.3.1): postinst
+seeds `/etc/hsm-linux-probe/config.json` from the skeleton only when it is absent, and no upgrade
+touches it or stops at a prompt (a conffile-era file becomes an obsolete conffile: kept, never
+prompted about; purge removes it). The upgrade command keeps `--force-confold` as belt and braces:
+`sudo apt-get install -y -o Dpkg::Options::=--force-confold ./hsm-linux-probe_….deb`.
 
 ## Configuration
 
@@ -391,9 +398,10 @@ Placeholders only — **no secrets**:
   deliberately does not expose the ABI's `allow_untrusted_server_certificate` flag — it disables
   both peer and hostname verification, which §4.1/§4.3 ban. Trust a private CA by installing it
   with `update-ca-certificates`; libcurl/OpenSSL picks up the system store with verification on.
-* `docker` (optional; every key has a default): `enabled` (`true`), `socket`
+* `probe.docker` (optional; every key has a default): `enabled` (`true`), `socket`
   (`/var/run/docker.sock`), `composeOnly` (`true`), `samplePeriodSec` (`5`, 1–300; the bars stay
-  5 minutes whatever it is) and `oomLatchHours` (`24`). A host without Docker needs no change: the
+  5 minutes whatever it is), `oomLatchHours` (`24`) and `exclude` (`[]`: `project/service`
+  patterns, `*` within a segment, e.g. `"portainer/*"`, `"lingua-ci/janitor"`). A host without Docker needs no change: the
   source logs one info line and waits for the socket; `enabled: false` turns it off entirely.
 
 ## Running

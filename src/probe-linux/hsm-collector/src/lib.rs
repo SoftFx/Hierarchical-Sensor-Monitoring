@@ -416,6 +416,29 @@ mod tests {
     }
 
     #[test]
+    fn a_description_changed_while_running_replaces_the_registration() {
+        let collector = named_collector();
+        let sensor = collector
+            .int_sensor(
+                "probe/described",
+                &SensorOptions::default().with_description("limit 1024 MB"),
+            )
+            .expect("int");
+        collector.start().expect("start");
+        sensor
+            .set_description(Some("limit 2048 MB"))
+            .expect("set while running");
+        let registrations = collector.registrations();
+        assert_eq!(registrations.len(), 1, "replaced in place");
+        assert!(
+            registrations[0].contains("limit 2048 MB"),
+            "{registrations:?}"
+        );
+        assert!(sensor.set_description(Some("bad\0text")).is_err());
+        collector.stop().expect("stop");
+    }
+
+    #[test]
     fn an_alert_attached_while_running_reaches_the_registration() {
         // Collector 0.9.1: a sensor created while the collector runs (a service the probe sees
         // after start) takes its alerts right after creation, and its registration for the run

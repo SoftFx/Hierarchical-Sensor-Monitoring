@@ -1379,6 +1379,19 @@ namespace
             return;
         }
 
+        // Native-only (hsm_sensor_set_description, 0.10.0): the managed driver marks it unsupported
+        // until #1482 gives the managed collector a counterpart, so no corpus scenario uses it yet.
+        if (action == "set_sensor_description")
+        {
+            Require(step.size() >= 3, "set_sensor_description requires sensor index and description");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto description = ExpandTextToken(step[2]);
+            Require(hsm_sensor_set_description(state.sensors[sensor_index].value, description.c_str()) == HSM_RESULT_OK,
+                    "set_sensor_description failed");
+            return;
+        }
+
         if (action == "create_last_int_sensor")
         {
             Require(step.size() >= 3, "create_last_int_sensor requires path and default value");
@@ -3002,6 +3015,37 @@ namespace
 
         hsm_sensor_release(sensor);
         hsm_collector_destroy(collector);
+    }
+
+    // hsm_sensor_set_description (0.10.0): before Start the new text is what Start registers;
+    // while running the run's recorded registration is replaced in place (no second record).
+    void NativeSetDescriptionRebuildsTheRegistration()
+    {
+        CollectorHandle collector = CreateCollector();
+        SensorHandle sensor;
+        Require(hsm_collector_create_int_sensor_with_options(collector.value, "desc/int", 0, -1, "first", &sensor.value) == HSM_RESULT_OK,
+                "create");
+        Require(hsm_sensor_set_description(nullptr, "x") == HSM_RESULT_INVALID_ARGUMENT, "NULL sensor rejected");
+        Require(hsm_sensor_set_description(sensor.value, "second") == HSM_RESULT_OK, "set before start");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        Require(hsm_collector_registration_count(collector.value) == 1, "one registration at Start");
+        const char* json = nullptr;
+        Require(hsm_collector_get_registration_json(collector.value, 0, &json) == HSM_RESULT_OK, "read");
+        const char* at_start = json; // the raw pointer the ABI handed out, kept across the change
+        Require(std::string(at_start).find("\"Description\":\"second\"") != std::string::npos, at_start);
+
+        Require(hsm_sensor_set_description(sensor.value, "third") == HSM_RESULT_OK, "set while running");
+        Require(hsm_collector_registration_count(collector.value) == 1, "replaced in place, not appended");
+        Require(hsm_collector_get_registration_json(collector.value, 0, &json) == HSM_RESULT_OK, "read");
+        Require(std::string(json).find("\"Description\":\"third\"") != std::string::npos, json);
+        // The text handed out before the change is still readable through the same pointer
+        // (kept, not freed — ASan would flag a use-after-free here).
+        Require(std::string(at_start).find("\"Description\":\"second\"") != std::string::npos, "old text intact");
+
+        Require(hsm_sensor_set_description(sensor.value, nullptr) == HSM_RESULT_OK, "clear");
+        Require(hsm_collector_get_registration_json(collector.value, 0, &json) == HSM_RESULT_OK, "read");
+        Require(std::string(json).find("\"Description\":null") != std::string::npos, json);
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
     }
 
     void NativeAddAfterCollectorDestroyIsRejected()
@@ -6078,10 +6122,15 @@ namespace
         Require(WaitForRequestWith(server, "/api/sensors/commands", { "\"Path\":\"runtime/late-alert\"", "runtime-spike" }) >= 0,
                 "the late alert must re-register the sensor");
 
+        // A changed description re-registers the same way (0.10.0).
+        Require(hsm_sensor_set_description(sensor.value, "limit-2048") == HSM_RESULT_OK, "set description");
+        Require(WaitForRequestWith(server, "/api/sensors/commands", { "\"Path\":\"runtime/late-alert\"", "limit-2048" }) >= 0,
+                "the new description must re-register the sensor");
+
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
-        // Exactly one runtime registration and one re-registration: a posted, unchanged
+        // Exactly one runtime registration and two re-registrations: a posted, unchanged
         // registration is never sent again.
-        Require(server.CountPath("/api/sensors/commands") == 2, "one runtime registration and one re-registration");
+        Require(server.CountPath("/api/sensors/commands") == 3, "one runtime registration and two re-registrations");
     }
 #endif
 
@@ -7793,6 +7842,7 @@ namespace
             { "native_invalid_argument_clears_out_params", [](const std::string&) { NativeInvalidArgumentClearsOutParams(); } },
             { "native_enum_sensor_with_sensor_options_validates_arguments", [](const std::string&) { NativeEnumSensorWithSensorOptionsValidatesArguments(); } },
             { "native_add_after_collector_destroy_is_rejected", [](const std::string&) { NativeAddAfterCollectorDestroyIsRejected(); } },
+            { "native_set_description_rebuilds_the_registration", [](const std::string&) { NativeSetDescriptionRebuildsTheRegistration(); } },
             { "native_sent_json_failure_reports_fresh_error", [](const std::string&) { NativeSentJsonFailureReportsFreshError(); } },
             { "native_last_error_is_safe_under_concurrent_failures",
               [](const std::string&) { NativeLastErrorIsSafeUnderConcurrentFailures(); } },

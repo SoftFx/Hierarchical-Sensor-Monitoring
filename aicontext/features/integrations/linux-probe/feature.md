@@ -37,15 +37,17 @@ The probe registers **two separately pinned sets**:
    nothing less"), their registration and alerts by
    `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. Sources, periods,
    alerts and costs: README "Probe-only sensors".
-3. **The Docker Compose tree** (#1416, part of the probe-only set) — seven sensors per Compose
+3. **The Docker Compose tree** (#1416, part of the probe-only set) — six sensors per Compose
    service under `<module>/Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
-   of 5-second samples; CPU as % of the whole host), `Memory limit`, `Service status` (the Windows
+   of 5-second samples; CPU as % of the whole host; the memory limit is stated in the `Memory used %`
+   description and follows a changed limit), `Service status` (the Windows
    `ServiceControllerStatus` enum and its alert), `Health` (only where a healthcheck exists),
    `Restart count` (posted on change) and `OOM killed` (latched 24 h). Source: the Docker Engine
    API over its Unix socket (`probe_only/docker/`). Services present at start register before
    Start; later ones at runtime. A service first seen as a completed one-shot job (every
    container Exited (0), restart policy `no`) is not monitored until it runs. Pinned for
-   garage-server (12 Compose containers, 11 monitored services, 70 paths) by `DOCKER_GARAGE_SET`.
+   garage-server's captures (12 Compose containers, 11 monitored services, 59 paths) by
+   `DOCKER_GARAGE_SET`.
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,
 batching, retry and TLS stay the library's; only the acquisition (a sysfs read, a `statvfs`, an
@@ -64,11 +66,15 @@ change, as in the managed Total CPU / Free RAM defaults. Enum state sensors use
 `Service status` shape; `aggregate_data` must be set explicitly (it is not defaulted to true).
 
 **Configuration.** `probe.hostSensors.{enabled, cpuTemperature, disk}` and
-`probe.docker.{enabled, socket, composeOnly, samplePeriodSec, oomLatchHours}`, switches all
+`probe.docker.{enabled, socket, composeOnly, samplePeriodSec, oomLatchHours, exclude}` (`exclude`:
+`project/service` patterns with `*` wildcards, not monitored and dropped from the state), switches all
 default `true`, so a config written before the probe-only sensors turns them on.
 
 **Packaging.** `src/probe-linux/packaging/build-deb.sh <version>` builds the `.deb` in a plain
-`debian:13` container (layout `/usr/bin`, `/lib/systemd/system`, the `/etc` conffile; `Depends:
+`debian:13` container (layout `/usr/bin`, `/lib/systemd/system`, the skeleton at
+`/usr/share/hsm-linux-probe/config.example.json` — **no conffile** since 0.3.1: postinst seeds
+`/etc/hsm-linux-probe/config.json` only when it is absent, so no upgrade stops at a prompt or touches
+the operator's file; purge removes it; `Depends:
 libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`, checked against the binary's shared
 libraries). A fresh install creates the `hsm-probe` user and does not start the unit; an upgrade
 restarts it if it was running (prerm leaves a `/run` marker, postinst starts it). Docker socket

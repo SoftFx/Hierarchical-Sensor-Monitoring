@@ -2,7 +2,7 @@
 //!
 //! No empty nodes: the state sensors (`Service status`, `Restart count`, `OOM killed`) register on
 //! a service's first sighting; `Health` only for a service whose container defines a healthcheck;
-//! `CPU`, `Memory used %` and `Memory limit` once the service first yields stats (it has run). A
+//! `CPU` and `Memory used %` once the service first yields stats (it has run). A
 //! service remembered from the state file but no longer listed registers `Service status` alone —
 //! the only value it still reports.
 //!
@@ -11,7 +11,7 @@
 
 use hsm_collector::{
     BoolSensor, Collector, DoubleBarSensor, EnumOption, EnumSensor, IntSensor, Result,
-    SensorOptions, SensorStatus,
+    SensorOptions,
 };
 
 use super::alerts::{self, Target};
@@ -26,9 +26,8 @@ pub struct ServiceSensors<'c> {
     pub health: Option<EnumSensor<'c>>,
     pub cpu: Option<DoubleBarSensor<'c>>,
     pub memory_used: Option<DoubleBarSensor<'c>>,
-    pub memory_limit: Option<IntSensor<'c>>,
-    /// The last posted `Memory limit` (MB, unlimited): posted at start and on change only.
-    pub last_limit: Option<(i32, bool)>,
+    /// The memory limit (MB, unlimited) the `Memory used %` description currently states.
+    pub described_limit: Option<(i32, bool)>,
 }
 
 impl<'c> ServiceSensors<'c> {
@@ -41,8 +40,7 @@ impl<'c> ServiceSensors<'c> {
             health: None,
             cpu: None,
             memory_used: None,
-            memory_limit: None,
-            last_limit: None,
+            described_limit: None,
         }
     }
 
@@ -99,8 +97,13 @@ impl<'c> ServiceSensors<'c> {
         problems
     }
 
-    /// Register `CPU`, `Memory used %` and `Memory limit` on the service's first stats.
-    pub fn ensure_stats_sensors(&mut self, collector: &'c Collector) -> Vec<String> {
+    /// Register `CPU` and `Memory used %` on the service's first stats. `limit` is the memory
+    /// limit the percentage is taken against (MB, unlimited), stated in the description.
+    pub fn ensure_stats_sensors(
+        &mut self,
+        collector: &'c Collector,
+        limit: Option<(i32, bool)>,
+    ) -> Vec<String> {
         let mut problems = Vec::new();
         if self.cpu.is_none() {
             let path = self.path(contract::CPU);
@@ -115,34 +118,29 @@ impl<'c> ServiceSensors<'c> {
             let path = self.path(contract::MEMORY_USED);
             keep(
                 &mut self.memory_used,
-                register_memory_used(collector, &path),
+                register_memory_used(collector, &path, limit),
                 &path,
                 &mut problems,
             );
-        }
-        if self.memory_limit.is_none() {
-            let path = self.path(contract::MEMORY_LIMIT);
-            keep(
-                &mut self.memory_limit,
-                register_memory_limit(collector, &path),
-                &path,
-                &mut problems,
-            );
+            if self.memory_used.is_some() {
+                self.described_limit = limit;
+            }
         }
         problems
     }
 
-    /// Post `Memory limit` if it is new or changed.
-    pub fn post_memory_limit(&mut self, megabytes: i32, unlimited: bool) -> Result<()> {
-        let Some(sensor) = &self.memory_limit else {
+    /// Keep the `Memory used %` description on the current limit: a changed limit (a recreated
+    /// container with a new `mem_limit`) re-registers the sensor with the new text. The limit is
+    /// no sensor of its own (owner decision): it is what the percentage means.
+    pub fn follow_memory_limit(&mut self, limit: (i32, bool)) -> Result<()> {
+        let Some(sensor) = &self.memory_used else {
             return Ok(());
         };
-        if self.last_limit == Some((megabytes, unlimited)) {
+        if self.described_limit == Some(limit) {
             return Ok(());
         }
-        let comment = unlimited.then_some("no memory limit set: the host's total memory");
-        sensor.add_with(megabytes, SensorStatus::Ok, comment)?;
-        self.last_limit = Some((megabytes, unlimited));
+        sensor.set_description(Some(&memory_used_description(Some(limit))))?;
+        self.described_limit = Some(limit);
         Ok(())
     }
 }
@@ -240,9 +238,10 @@ fn register_cpu<'c>(collector: &'c Collector, path: &str) -> Registered<DoubleBa
 fn register_memory_used<'c>(
     collector: &'c Collector,
     path: &str,
+    limit: Option<(i32, bool)>,
 ) -> Registered<DoubleBarSensor<'c>> {
     let options = SensorOptions::default()
-        .with_description(MEMORY_USED_DESCRIPTION)
+        .with_description(memory_used_description(limit))
         .with_unit(contract::UNIT_PERCENTS);
     let sensor = collector.double_bar_sensor(
         path,
@@ -255,14 +254,6 @@ fn register_memory_used<'c>(
     Ok((sensor, alert))
 }
 
-fn register_memory_limit<'c>(collector: &'c Collector, path: &str) -> Registered<IntSensor<'c>> {
-    let options = SensorOptions::default()
-        .with_description(MEMORY_LIMIT_DESCRIPTION)
-        .with_unit(contract::UNIT_MB);
-    // Informational: no alert by contract.
-    Ok((collector.int_sensor(path, &options)?, Ok(())))
-}
-
 const CPU_DESCRIPTION: &str = "CPU used by the Compose service's containers, as a percentage of \
 the **whole host** (all cores together = 100 %), replicas summed. Sampled every few seconds \
 (docker.samplePeriodSec, 5 s by default) from the Docker Engine API and aggregated into \
@@ -271,15 +262,29 @@ divide its figure by the host's core count to compare. A sample that cannot give
 (first sample, counter reset, recreated container, irregular interval) is skipped, never sent \
 as 0.";
 
-const MEMORY_USED_DESCRIPTION: &str = "Memory used by the Compose service's containers as a \
-percentage of their memory limit: (usage − inactive_file) / limit, the `docker stats` \
-convention. A container **without a memory limit** is measured against the host's total memory \
-(MemTotal); `Memory limit` then carries a comment saying so. Replicas: summed usage over summed \
-limits, capped at the host's memory. 5-minute bars of samples taken every few seconds.";
-
-const MEMORY_LIMIT_DESCRIPTION: &str = "The memory limit `Memory used %` is measured against, in \
-MB: the containers' limit, or the host's total memory when no limit is set (the value's comment \
-says so). Posted at probe start and when it changes.";
+/// The `Memory used %` description, stating the limit the percentage is taken against — the
+/// container's own limit, or the host's total memory when none is set. `None` before the limit is
+/// known (the first stats round replaces it).
+pub fn memory_used_description(limit: Option<(i32, bool)>) -> String {
+    let basis = match limit {
+        Some((megabytes, false)) => {
+            format!("of the containers' memory limit — **{megabytes} MB** on this host")
+        }
+        Some((megabytes, true)) => format!(
+            "of the host's total memory — **no memory limit is set**, so the basis is MemTotal \
+             ({megabytes} MB)"
+        ),
+        None => "of the containers' memory limit (or of the host's total memory when no limit \
+                 is set)"
+            .to_string(),
+    };
+    format!(
+        "Memory used by the Compose service's containers as a percentage {basis}: \
+         (usage − inactive_file) / limit, the `docker stats` convention. Replicas: summed usage \
+         over summed limits, capped at the host's memory. 5-minute bars of samples taken every \
+         few seconds. The description follows a changed limit."
+    )
+}
 
 const SERVICE_STATUS_DESCRIPTION: &str = "State of the Compose service's containers, on the same \
 status scale as a Windows service: running → Running; created, restarting → StartPending; \
@@ -300,3 +305,17 @@ const OOM_KILLED_DESCRIPTION: &str = "True when a container of the service was k
 kernel for running out of memory (`State.OOMKilled`). Latched for 24 hours by default \
 (docker.oomLatchHours), across container recreates, so a quick restart does not hide it. Polled \
 every minute.";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_memory_used_description_states_the_limit() {
+        assert!(memory_used_description(Some((1024, false))).contains("**1024 MB** on this host"));
+        let unlimited = memory_used_description(Some((15917, true)));
+        assert!(unlimited.contains("**no memory limit is set**"));
+        assert!(unlimited.contains("MemTotal (15917 MB)"));
+        assert!(memory_used_description(None).contains("or of the host's total memory"));
+    }
+}

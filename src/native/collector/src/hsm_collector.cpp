@@ -2188,6 +2188,19 @@ namespace
             return HSM_RESULT_OK;
         }
 
+        // Replace the registration's description (null emits "Description":null, which the server
+        // reads as "unchanged"; "" clears) and rebuild the payload. Same re-emission rules as
+        // AttachAlert.
+        hsm_result_t SetDescription(const char* description)
+        {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            registration_options_.has_description = description != nullptr;
+            registration_options_.description = description != nullptr ? description : "";
+            registration_json_ = BuildRegistrationJson(registration_path_, registration_type_, registration_options_);
+            ++registration_version_;
+            return HSM_RESULT_OK;
+        }
+
         // Real wire (System.Text.Json) registration payload, built on demand from the stored inputs.
         std::string WireRegistrationJson() const
         {
@@ -2493,28 +2506,51 @@ namespace
             SetClock(std::make_shared<ManualClock>(base_ms, base_ms));
         }
 
+        // Why a registration was rebuilt: the two carry different pointer-lifetime contracts for the
+        // text hsm_collector_get_registration_json handed out (see RetireRegistrationLocked).
+        enum class RegistrationChange
+        {
+            AlertAttached,
+            DescriptionChanged,
+        };
+
         // A sensor's registration was rebuilt (an alert attached). Before Start nothing is needed —
         // Start records and posts the current payload. While the collector runs, the sensor's
         // registration for this run is re-recorded in place (so a runtime-created sensor records
         // ONE registration that carries its alerts, as the managed collector's does) and, on the
         // live transport, queued for the server again.
-        void OnRegistrationChanged(const std::shared_ptr<NativeSensor>& sensor)
+        void OnRegistrationChanged(const std::shared_ptr<NativeSensor>& sensor, RegistrationChange change)
         {
             std::lock_guard<std::mutex> guard(mutex_);
             if (!CanStartNewSensorsLocked())
                 return;
             if (sensor->registration_index_ < registrations_.size())
             {
-                // hsm_collector_get_registration_json hands out pointers into these strings; keep
-                // the replaced text alive until the collector is destroyed instead of freeing it
-                // under a caller (bounded by the number of attaches).
-                retired_registrations_.push_back(std::move(registrations_[sensor->registration_index_]));
+                RetireRegistrationLocked(std::move(registrations_[sensor->registration_index_]), change);
                 registrations_[sensor->registration_index_] = sensor->RegistrationJson();
             }
 #if defined(HSM_COLLECTOR_HTTP)
             if (send_wire_)
                 QueueRuntimeRegistration(sensor);
 #endif
+        }
+
+        // hsm_collector_get_registration_json hands out pointers into registrations_, so a replaced
+        // text is kept rather than freed under a caller. An alert attach keeps it until the
+        // collector is destroyed (the 0.9.1 contract; attaches are bounded by the host's alerts). A
+        // description change (0.10.0, a new API with its own documented rule) keeps the latest
+        // kRetiredDescriptionTexts only: a host re-describing a sensor on every replica change must
+        // not grow memory without limit.
+        void RetireRegistrationLocked(std::string text, RegistrationChange change)
+        {
+            if (change == RegistrationChange::AlertAttached)
+            {
+                retired_registrations_.push_back(std::move(text));
+                return;
+            }
+            retired_description_texts_.push_back(std::move(text));
+            if (retired_description_texts_.size() > kRetiredDescriptionTexts)
+                retired_description_texts_.pop_front();
         }
 
 #if defined(HSM_COLLECTOR_HTTP)
@@ -5550,6 +5586,9 @@ namespace
         // Registration texts replaced in place by an attach while running (OnRegistrationChanged),
         // kept so a pointer returned by RegistrationJson(index) never dangles.
         std::vector<std::string> retired_registrations_;
+        // Texts replaced by hsm_sensor_set_description: the latest kRetiredDescriptionTexts only.
+        std::deque<std::string> retired_description_texts_;
+        static constexpr size_t kRetiredDescriptionTexts = 256;
         // One-shot values queued (pre-formatted wire/record JSON) while not yet accepting data, drained
         // into the send queue on the next Start. Lets a sensor registered pre-Start emit an initial
         // value on connect (mirrors managed SensorBase.StartAsync) instead of having it dropped by the
@@ -7945,6 +7984,22 @@ hsm_result_t hsm_alert_set_inactivity_period(hsm_alert_t* alert, int64_t period_
     return HSM_RESULT_OK;
 }
 
+hsm_result_t hsm_sensor_set_description(hsm_sensor_t* sensor, const char* description)
+{
+    if (sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const hsm_result_t result = sensor->impl->SetDescription(description);
+    // Re-emitted exactly like an attach: before Start nothing to do, while running the run's
+    // recorded registration is replaced and the sensor re-queued for the server.
+    if (result == HSM_RESULT_OK)
+    {
+        if (const auto collector = sensor->impl->OwningCollector())
+            collector->OnRegistrationChanged(sensor->impl, NativeCollector::RegistrationChange::DescriptionChanged);
+    }
+    return result;
+}
+
 hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert)
 {
     if (sensor == nullptr || alert == nullptr)
@@ -7957,7 +8012,7 @@ hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert)
     if (result == HSM_RESULT_OK)
     {
         if (const auto collector = sensor->impl->OwningCollector())
-            collector->OnRegistrationChanged(sensor->impl);
+            collector->OnRegistrationChanged(sensor->impl, NativeCollector::RegistrationChange::AlertAttached);
     }
     return result;
 }

@@ -3,7 +3,7 @@ resolver = "2"
 members = ["hsm-collector-sys", "hsm-collector", "hsm-linux-probe"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 # Verified against 1.83 (the floor) and current stable; the lockfile format needs >= 1.78.
 rust-version = "1.83"
@@ -11,8 +11,8 @@ license = "MIT"
 repository = "https://github.com/SoftFx/Hierarchical-Sensor-Monitoring"
 
 [workspace.dependencies]
-hsm-collector-sys = { path = "hsm-collector-sys", version = "0.3.0" }
-hsm-collector = { path = "hsm-collector", version = "0.3.0" }
+hsm-collector-sys = { path = "hsm-collector-sys", version = "0.3.1" }
+hsm-collector = { path = "hsm-collector", version = "0.3.1" }
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
