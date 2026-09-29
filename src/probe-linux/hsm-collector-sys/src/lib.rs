@@ -431,8 +431,9 @@ extern "C" {
         sensor: *mut hsm_sensor_t,
         alert: *mut hsm_alert_t,
     ) -> hsm_result_t;
-    /// Replaces the sensor's registration description (NULL clears it) and rebuilds its payload,
-    /// with the re-emission rules of `hsm_sensor_attach_alert` (collector 0.10.0).
+    /// Replaces the sensor's registration description and rebuilds its payload, with the
+    /// re-emission rules of `hsm_sensor_attach_alert` (collector 0.10.0). NULL emits null (the
+    /// server reads it as "unchanged"); pass "" to clear a description the server already has.
     pub fn hsm_sensor_set_description(
         sensor: *mut hsm_sensor_t,
         description: *const c_char,

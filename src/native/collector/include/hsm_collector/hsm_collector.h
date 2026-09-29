@@ -741,9 +741,10 @@ hsm_result_t hsm_collector_create_enum_sensor_with_sensor_options(
     hsm_sensor_t** out_sensor);
 
 /* The recorded registrations (one per sensor per Start, plus runtime creates). The text behind a
-   returned pointer stays valid until the collector is destroyed or until 256 later in-place
-   replacements (an alert attach or description change while running, 0.9.1/0.10.0) have
-   happened, whichever comes first — read and copy the text promptly. */
+   returned pointer stays valid until the collector is destroyed — also when an alert attach while
+   running (0.9.1) replaces that entry. Exception (0.10.0): when hsm_sensor_set_description
+   replaces an entry, its previous text is kept only until 256 later description changes, so copy
+   text read around description changes promptly. */
 size_t hsm_collector_registration_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_registration_json(
     const hsm_collector_t* collector,
