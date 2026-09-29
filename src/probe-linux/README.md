@@ -164,8 +164,8 @@ registers its sensors while the collector runs (collector ≥ 0.9.1 re-posts the
 alerts included), one that goes away stops reporting (its sensors time out) and resumes under the
 same name when it comes back. Before every 5-minute sample the mount table is read again and only
 filesystems mounted at that moment are `statvfs`'d — an unmounted mount point would answer for the
-filesystem underneath it. **Automounted filesystems** (an `autofs` trigger on the path, e.g.
-`x-systemd.automount`) are never reported: `statfs(2)` follows automount points, so polling one
+filesystem underneath it. **Automounted filesystems** (an `autofs` trigger on or above the path —
+`x-systemd.automount` or an indirect map) are never reported: `statfs(2)` follows automount points, so polling one
 would remount it after its idle unmount and wake the disk. Names and sensors are never removed, so
 on a host that auto-mounts removable media under per-volume paths (`/media/<user>/<LABEL>`,
 `/run/media/…`) every new stick leaves sensors behind in Timeout — add those paths to

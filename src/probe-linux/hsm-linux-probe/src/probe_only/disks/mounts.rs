@@ -121,9 +121,15 @@ pub fn real_filesystems(mounts: &[Mount], exclude: &[String]) -> Vec<Filesystem>
         .map(|mount| mount.mount_point.as_path())
         .collect();
     let mut groups: BTreeMap<String, Vec<&Mount>> = BTreeMap::new();
+    // On the trigger itself (a direct map, `x-systemd.automount`) or below one (an indirect map:
+    // `autofs` on `/misc`, the filesystem on `/misc/foo`).
+    let automounted = |mount: &Mount| {
+        automount_points
+            .iter()
+            .any(|point| mount.mount_point.starts_with(point))
+    };
     for (_, mount) in visible.filter(|(_, mount)| {
-        BLOCK_FS_TYPES.contains(&mount.fs_type.as_str())
-            && !automount_points.contains(mount.mount_point.as_path())
+        BLOCK_FS_TYPES.contains(&mount.fs_type.as_str()) && !automounted(mount)
     }) {
         let key = if mount.source.starts_with("/dev/") {
             mount.source.clone()
@@ -334,6 +340,8 @@ pub mod tests {
 1 0 8:1 / / rw - ext4 /dev/sda1 rw
 2 1 0:50 / /mnt/archive rw,relatime - autofs systemd-1 rw,fd=51,pgrp=1,timeout=600
 3 2 8:17 / /mnt/archive rw,relatime - ext4 /dev/sdb1 rw
+4 1 0:51 / /misc rw,relatime - autofs /etc/auto.misc rw,fd=7,pgrp=1,timeout=300,indirect
+5 4 8:33 / /misc/foo rw,relatime - ext4 /dev/sdc1 rw
 ";
         let filesystems = real_filesystems(&parse_mountinfo(text), &[]);
         let points: Vec<String> = filesystems

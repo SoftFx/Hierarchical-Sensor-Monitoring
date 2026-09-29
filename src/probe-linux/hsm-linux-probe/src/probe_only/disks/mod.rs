@@ -733,6 +733,7 @@ fn build<'c>(
         disks: Arc::clone(&disks),
         last_scan: Instant::now(),
         scan_failures: failures,
+        live_failures: FailureLog::default(),
     };
     let write = if config.write_speed {
         Some(WriteSpeedSource {
@@ -753,6 +754,8 @@ struct SpaceSource<'c> {
     disks: Arc<Disks<'c>>,
     last_scan: Instant,
     scan_failures: FailureLog,
+    /// The per-sample mount-table read, logged separately from the re-scan.
+    live_failures: FailureLog,
 }
 
 impl Source for SpaceSource<'_> {
@@ -774,18 +777,22 @@ impl Source for SpaceSource<'_> {
         // Only statvfs what is mounted right now: an unmounted mount point would answer for the
         // filesystem underneath it (posting `/`'s numbers under another name), and an automount
         // point would mount itself again. Checked on every sample, not only at the 10-min re-scan.
-        let live: BTreeSet<PathBuf> = match std::fs::read_to_string(&self.disks.mountinfo) {
-            Ok(text) => mounts::real_filesystems(
-                &mounts::parse_mountinfo(&text),
-                &self.disks.config.exclude,
-            )
-            .into_iter()
-            .map(|fs| fs.mount_point)
-            .collect(),
+        let what = "disks: mount table (per sample)";
+        let live: BTreeMap<PathBuf, String> = match std::fs::read_to_string(&self.disks.mountinfo) {
+            Ok(text) => {
+                self.live_failures.succeeded(logger, what);
+                mounts::real_filesystems(
+                    &mounts::parse_mountinfo(&text),
+                    &self.disks.config.exclude,
+                )
+                .into_iter()
+                .map(|fs| (fs.mount_point, fs.device))
+                .collect()
+            }
             Err(error) => {
-                self.scan_failures.failed(
+                self.live_failures.failed(
                     logger,
-                    "disks: mount table",
+                    what,
                     &format!(
                         "cannot read {}: {error}; nothing sampled",
                         self.disks.mountinfo.display()
@@ -798,15 +805,28 @@ impl Source for SpaceSource<'_> {
         // statvfs runs without the nodes lock held, so the write-speed thread is never held up.
         let targets: Vec<(usize, PathBuf, Arc<AtomicBool>)> = {
             let mut nodes = self.disks.nodes.lock().unwrap_or_else(|p| p.into_inner());
-            for node in nodes.iter_mut().filter(|node| node.mounted) {
-                if !live.contains(&node.fs.mount_point) {
-                    node.mounted = false;
-                    logger.info(format!(
-                        "disks: '{}' ({}) is no longer mounted; its sensors stop reporting and \
-                         time out",
-                        node.name,
-                        node.fs.mount_point.display()
-                    ));
+            for node in nodes.iter_mut() {
+                match live.get(&node.fs.mount_point) {
+                    None if node.mounted => {
+                        node.mounted = false;
+                        logger.info(format!(
+                            "disks: '{}' ({}) is no longer mounted; its sensors stop reporting \
+                             and time out",
+                            node.name,
+                            node.fs.mount_point.display()
+                        ));
+                    }
+                    // Back (a quick replug) with the same device: resume now, not at the next
+                    // re-scan. Another device behind the mount point is the re-scan's to adopt.
+                    Some(device) if !node.mounted && *device == node.fs.device => {
+                        node.mounted = true;
+                        logger.info(format!(
+                            "disks: '{}' is mounted again at {}",
+                            node.name,
+                            node.fs.mount_point.display()
+                        ));
+                    }
+                    _ => {}
                 }
             }
             nodes
