@@ -141,6 +141,7 @@ pub fn register<'c>(
         &config.docker,
         (environment.docker_engine)(&config.docker),
         environment.docker_state.clone(),
+        environment.sys_root.clone(),
         logger,
     ));
     sources

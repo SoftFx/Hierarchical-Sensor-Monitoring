@@ -260,6 +260,10 @@ pub struct BlkioStats {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct BlkioEntry {
+    #[serde(default)]
+    pub major: u64,
+    #[serde(default)]
+    pub minor: u64,
     /// `read`/`write` on cgroup v2; `Read`/`Write`/`Sync`/`Async`/`Discard`/`Total` on cgroup v1.
     #[serde(default)]
     pub op: String,

@@ -853,6 +853,7 @@ fn build<'c>(
             boot_id,
             ledger_dirty: false,
             last_post: Instant::now(),
+            final_post_day: None,
             clock: unix_now_ms,
             local: written::local_time,
             save_failures: FailureLog::default(),
@@ -1026,6 +1027,9 @@ struct WriteSpeedSource<'c> {
     ledger_dirty: bool,
     /// When `Written today` was last posted.
     last_post: Instant,
+    /// The local day whose last-seconds post was made: the day's final reading, so the last
+    /// 5 minutes before midnight are not lost to the reset.
+    final_post_day: Option<i64>,
     /// The wall clock, Unix milliseconds, and the host's local calendar (seams for tests).
     clock: fn() -> i64,
     local: LocalTime,
@@ -1174,8 +1178,15 @@ impl Source for WriteSpeedSource<'_> {
                 &format!("{} not in {}", missing.join(", "), self.diskstats.display()),
             );
         }
-        // Every 5 minutes; half a sample period of slack absorbs scheduling jitter.
-        if self.last_post.elapsed() + WRITE_SAMPLE_PERIOD / 2 >= SPACE_PERIOD {
+        // Every 5 minutes (half a sample period of slack absorbs scheduling jitter), and once more
+        // in the last two sample periods before local midnight: the day's final reading.
+        let (day, second) = (self.local)(now_ms);
+        let period = i64::try_from(WRITE_SAMPLE_PERIOD.as_secs()).unwrap_or(5);
+        let day_ends = second + 2 * period >= 86_400 && self.final_post_day != Some(day);
+        if day_ends || self.last_post.elapsed() + WRITE_SAMPLE_PERIOD / 2 >= SPACE_PERIOD {
+            if day_ends {
+                self.final_post_day = Some(day);
+            }
             self.last_post = Instant::now();
             self.post_written_today(&nodes, logger);
         }
@@ -1483,7 +1494,16 @@ pub mod tests {
             mountinfo: tree.0.join("mountinfo"),
             fstab: tree.0.join("fstab"),
             diskstats: tree.0.join("diskstats"),
-            statvfs: recording_statvfs,
+            // Not `recording_statvfs`: its call log belongs to the per-sample test.
+            statvfs: |_| {
+                Ok(FsStats {
+                    fragment_size: 4096,
+                    blocks: 100,
+                    blocks_available: 50,
+                    files: 10,
+                    files_available: 5,
+                })
+            },
             online_cpus: || Ok(1),
             docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
             docker_state: None,
@@ -1580,6 +1600,16 @@ pub mod tests {
                 .0,
             2.048
         );
+        // 23:59:53: the day's final reading is posted although the 5-minute post is not due.
+        let late = written::tests::MIDNIGHT + 86_393_000;
+        NOW_MS.with(|now| now.set(late));
+        write.last_post = Instant::now();
+        write.sample(&logger);
+        assert_eq!(write.final_post_day, Some(written::tests::utc(late).0));
+        let posted_at = write.last_post;
+        NOW_MS.with(|now| now.set(late + 5_000));
+        write.sample(&logger);
+        assert_eq!(write.last_post, posted_at, "once per day");
         collector.stop().expect("stop");
     }
 

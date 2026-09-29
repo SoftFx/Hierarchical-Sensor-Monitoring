@@ -5,7 +5,9 @@
 //! reads every sample period: a cumulative counter per container, op `write` (cgroup v2, which
 //! Docker fills from the cgroup's `io.stat`) or `Write` (cgroup v1), summed over devices. These are
 //! writes that reached a block device: data still in the page cache counts when it is flushed, and
-//! tmpfs never counts.
+//! tmpfs never counts. A write through a stacked device (LVM, dm-crypt, md) is accounted both on
+//! that device and on the disk under it; a stacked device is therefore left out whenever a disk
+//! under it is listed too ([`Stacking`]), so a write counts once, on the physical disk.
 //!
 //! **Accounting.** Every sample adds the container's delta since its previous sample to the
 //! service's current clock hour (UTC). A delta that cannot be honest is dropped and the counter
@@ -22,7 +24,8 @@
 //! baseline — lives in the state file, so a probe restart continues the hour, and the writes made
 //! while the probe was down count too when the container and its counter survived.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -37,19 +40,107 @@ pub fn hour_start(unix_ms: i64) -> i64 {
     unix_ms.div_euclid(HOUR_MS) * 3600
 }
 
+/// Which block devices are stacked on which, read from sysfs: `major:minor` → the whole disks
+/// under it (`/sys/dev/block/<M:m>/slaves`, followed down to the bottom; a partition stands for its
+/// disk). A plain disk has none. Cached; [`Stacking::refresh`] drops the cache (every state poll).
+#[derive(Debug, Default)]
+pub struct Stacking {
+    sys_root: Option<PathBuf>,
+    under: HashMap<String, Vec<String>>,
+}
+
+impl Stacking {
+    /// `None`: nothing is known to be stacked (every device counts).
+    pub fn new(sys_root: Option<PathBuf>) -> Self {
+        Self {
+            sys_root,
+            under: HashMap::new(),
+        }
+    }
+
+    pub fn refresh(&mut self) {
+        self.under.clear();
+    }
+
+    /// The whole disks under `device` (`major:minor`); empty for a plain disk or when unknown.
+    pub fn under(&mut self, device: &str) -> &[String] {
+        let sys_root = self.sys_root.clone();
+        self.under
+            .entry(device.to_string())
+            .or_insert_with(|| match &sys_root {
+                Some(sys) => disks_under(sys, device, 0),
+                None => Vec::new(),
+            })
+    }
+}
+
+/// Stacks deeper than this are not followed (a guard against a sysfs loop).
+const MAX_STACK_DEPTH: usize = 8;
+
+fn disks_under(sys: &Path, device: &str, depth: usize) -> Vec<String> {
+    if depth >= MAX_STACK_DEPTH {
+        return Vec::new();
+    }
+    let Ok(slaves) = std::fs::read_dir(sys.join("dev/block").join(device).join("slaves")) else {
+        return Vec::new();
+    };
+    let mut disks = Vec::new();
+    for slave in slaves.flatten() {
+        let entry = sys.join("class/block").join(slave.file_name());
+        let Some(number) = read_dev(&entry) else {
+            continue;
+        };
+        let deeper = disks_under(sys, &number, depth + 1);
+        if !deeper.is_empty() {
+            disks.extend(deeper);
+            continue;
+        }
+        // A partition stands for its disk: io.stat accounts whole disks.
+        let whole = if entry.join("partition").exists() {
+            read_dev(&entry.join("..")).unwrap_or(number)
+        } else {
+            number
+        };
+        if !disks.contains(&whole) {
+            disks.push(whole);
+        }
+    }
+    disks
+}
+
+fn read_dev(entry: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(entry.join("dev")).ok()?;
+    let number = text.trim();
+    (!number.is_empty()).then(|| number.to_string())
+}
+
 /// Bytes the container has written to block devices since it started; `None` when the stats carry
 /// no write counter: a stopped container (`null`), one that has done no block I/O yet, or a host
 /// that does not account block I/O per container — Docker Desktop answers `[]` for every
-/// container (checked 2026-09-29, Engine 29.6.2 on WSL2), so no sensor registers there.
-pub fn written_bytes(stats: &ContainerStats) -> Option<u64> {
+/// container (checked 2026-09-29, Engine 29.6.2 on WSL2), so no sensor registers there. A stacked
+/// device whose disk is listed as well is not counted: the disk already carries that write.
+pub fn written_bytes(stats: &ContainerStats, stacking: &mut Stacking) -> Option<u64> {
     let entries = stats.blkio_stats.io_service_bytes_recursive.as_ref()?;
-    let mut total: Option<u64> = None;
-    for entry in entries {
-        if entry.op.eq_ignore_ascii_case("write") {
-            total = Some(total.unwrap_or(0).saturating_add(entry.value));
+    let writes: Vec<(String, u64)> = entries
+        .iter()
+        .filter(|entry| entry.op.eq_ignore_ascii_case("write"))
+        .map(|entry| (format!("{}:{}", entry.major, entry.minor), entry.value))
+        .collect();
+    if writes.is_empty() {
+        return None;
+    }
+    let listed: HashSet<&str> = writes.iter().map(|(device, _)| device.as_str()).collect();
+    let mut total = 0u64;
+    for (device, value) in &writes {
+        let counted_below = stacking
+            .under(device)
+            .iter()
+            .any(|disk| listed.contains(disk.as_str()));
+        if !counted_below {
+            total = total.saturating_add(*value);
         }
     }
-    total
+    Some(total)
 }
 
 /// A container's counter at its last sample.
@@ -245,16 +336,20 @@ mod tests {
         let t1 = garage_stats(STATS_T1);
         // gitea/db on 8:32: 11_377_098_752 → 11_377_262_592 bytes written in 5.3 s; its reads
         // (2_881_179_648) are not counted.
+        let mut plain = Stacking::default();
         assert_eq!(
-            written_bytes(by_prefix(&t0, "abbd59dcacc8")),
+            written_bytes(by_prefix(&t0, "abbd59dcacc8"), &mut plain),
             Some(11_377_098_752)
         );
         assert_eq!(
-            written_bytes(by_prefix(&t1, "abbd59dcacc8")),
+            written_bytes(by_prefix(&t1, "abbd59dcacc8"), &mut plain),
             Some(11_377_262_592)
         );
         // The exited ci-image has `io_service_bytes_recursive: null`: no counter, not 0.
-        assert_eq!(written_bytes(by_prefix(&t0, "3537ef2ee867")), None);
+        assert_eq!(
+            written_bytes(by_prefix(&t0, "3537ef2ee867"), &mut plain),
+            None
+        );
     }
 
     #[test]
@@ -268,23 +363,70 @@ mod tests {
             ] }
         }))
         .unwrap();
-        assert_eq!(written_bytes(&stats), Some(150));
+        let mut plain = Stacking::default();
+        assert_eq!(written_bytes(&stats, &mut plain), Some(150));
         let empty: ContainerStats =
             serde_json::from_value(serde_json::json!({ "blkio_stats": {} })).unwrap();
-        assert_eq!(written_bytes(&empty), None);
+        assert_eq!(written_bytes(&empty, &mut plain), None);
         // Docker Desktop's shape: every list present and empty.
         let desktop: ContainerStats = serde_json::from_value(serde_json::json!({
             "blkio_stats": { "io_service_bytes_recursive": [], "sectors_recursive": [] }
         }))
         .unwrap();
-        assert_eq!(written_bytes(&desktop), None);
+        assert_eq!(written_bytes(&desktop, &mut plain), None);
         let reads_only: ContainerStats = serde_json::from_value(serde_json::json!({
             "blkio_stats": { "io_service_bytes_recursive": [
                 { "major": 8, "minor": 0, "op": "read", "value": 7 }
             ] }
         }))
         .unwrap();
-        assert_eq!(written_bytes(&reads_only), None);
+        assert_eq!(written_bytes(&reads_only, &mut plain), None);
+    }
+
+    /// A root on LVM over `sda2`: `dm-0` (253:0) sits on the partition, the partition on `sda`.
+    #[cfg(unix)]
+    fn lvm_sysfs() -> crate::probe_only::host::tests::FakeTree {
+        let tree = crate::probe_only::host::tests::FakeTree::new("stacking");
+        tree.file("sys/devices/virtual/block/dm-0/dev", "253:0\n");
+        tree.file("sys/devices/block/sda/dev", "8:0\n");
+        tree.file("sys/devices/block/sda/sda2/dev", "8:2\n");
+        tree.file("sys/devices/block/sda/sda2/partition", "2\n");
+        tree.link("sys/dev/block/253:0", "../../devices/virtual/block/dm-0");
+        tree.link("sys/dev/block/8:0", "../../devices/block/sda");
+        tree.link("sys/class/block/sda2", "../../devices/block/sda/sda2");
+        tree.link("sys/class/block/dm-0", "../../devices/virtual/block/dm-0");
+        tree.link(
+            "sys/devices/virtual/block/dm-0/slaves/sda2",
+            "../../../../block/sda/sda2",
+        );
+        tree
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_write_through_lvm_counts_once_on_the_disk() {
+        let tree = lvm_sysfs();
+        let mut stacking = Stacking::new(Some(tree.0.join("sys")));
+        assert_eq!(stacking.under("253:0"), ["8:0".to_string()]);
+        assert!(stacking.under("8:0").is_empty());
+        // The kernel accounts the container's write on dm-0 and again on sda.
+        let both: ContainerStats = serde_json::from_value(serde_json::json!({
+            "blkio_stats": { "io_service_bytes_recursive": [
+                { "major": 253, "minor": 0, "op": "write", "value": 4096 },
+                { "major": 8, "minor": 0, "op": "write", "value": 4096 },
+                { "major": 8, "minor": 16, "op": "write", "value": 100 }
+            ] }
+        }))
+        .unwrap();
+        assert_eq!(written_bytes(&both, &mut stacking), Some(4096 + 100));
+        // A kernel that lists only the stacked device: it is all there is, so it counts.
+        let top_only: ContainerStats = serde_json::from_value(serde_json::json!({
+            "blkio_stats": { "io_service_bytes_recursive": [
+                { "major": 253, "minor": 0, "op": "write", "value": 4096 }
+            ] }
+        }))
+        .unwrap();
+        assert_eq!(written_bytes(&top_only, &mut stacking), Some(4096));
     }
 
     #[test]

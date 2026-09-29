@@ -128,6 +128,8 @@ pub struct DockerSource<'c, E: EngineApi> {
     should_stop: fn() -> bool,
     /// The wall clock, Unix milliseconds (a seam for the hour-boundary tests).
     clock: fn() -> i64,
+    /// Stacked block devices (LVM, dm-crypt, md), so a write is counted once.
+    stacking: written::Stacking,
 }
 
 impl<'c, E: EngineApi> DockerSource<'c, E> {
@@ -219,6 +221,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             saved_at: Instant::now(),
             should_stop: crate::shutdown::is_requested,
             clock: unix_now_ms,
+            stacking: written::Stacking::default(),
         }
     }
 
@@ -360,7 +363,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 complete = false;
                 continue;
             };
-            writes |= written::written_bytes(&stats).is_some();
+            writes |= written::written_bytes(&stats, &mut self.stacking).is_some();
             match stats::memory_reading(&stats, self.host_mem_total) {
                 Some(reading) => readings.push(reading),
                 None => complete = false,
@@ -628,6 +631,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         };
 
         let outcome = self.tracker.observe(&services, unix_now(), self.oom_latch);
+        // Stacks change rarely (an LVM volume added); re-read them once a poll.
+        self.stacking.refresh();
 
         self.naming
             .resolve_all(services.keys().chain(outcome.reports.keys()));
@@ -754,12 +759,13 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                     }
                 };
                 let now_ms = (self.clock)();
+                let counter = written::written_bytes(&stats, &mut self.stacking);
                 if let Some(record) = self.tracker.state.services.get_mut(key) {
                     let accumulator = record
                         .written
                         .get_or_insert_with(|| WriteRecord::new(now_ms));
                     self.written_dirty = true;
-                    match written::written_bytes(&stats) {
+                    match counter {
                         Some(counter) => {
                             any_writes = true;
                             if let Ok((_, gap)) =
@@ -984,6 +990,7 @@ pub fn register<'c>(
     config: &DockerConfig,
     engine: Box<dyn EngineApi + Send>,
     state_path: Option<PathBuf>,
+    sys_root: PathBuf,
     logger: &Logger,
 ) -> Option<Box<dyn Source + 'c>> {
     if !config.enabled {
@@ -998,6 +1005,7 @@ pub fn register<'c>(
         state_path,
         host_mem_total(),
     );
+    source.stacking = written::Stacking::new(Some(sys_root));
     match source.prime(logger) {
         Ok(count) => logger.info(format!(
             "docker: {count} Compose service(s) registered (socket {}, stats every {} s, state \

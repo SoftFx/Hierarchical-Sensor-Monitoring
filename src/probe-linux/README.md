@@ -153,7 +153,9 @@ reports under that point's name. All under `.computer/Disks monitoring/`:
 garage-server has four (`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 5 760/day.
 
 **Written today — the midnight rules.** Each 5-s sample adds the disk's delta to the current local
-day; the first sample after local midnight starts the new day from 0. The first sample, a counter
+day; the first sample after local midnight starts the new day from 0. Besides the 5-minute
+posts, the day's final reading is posted in its last 10 seconds, so the day's last minutes are
+not lost to the reset. The first sample, a counter
 that went backwards and a clock that went backwards only set a baseline; a gap longer than three
 samples that crosses midnight cannot be split between the days and is dropped (a gap inside the
 day counts in full). Never an invented 0: a day with no measured delta yet is not posted, and a
@@ -268,8 +270,12 @@ file (written at most every 5 minutes, at every posted hour and on stop), so a p
 continues the hour — and the writes made while the probe was down count too, when the container
 and its counter survived and the hour did not change. A gap that crosses an hour boundary cannot
 be split between the two hours and is dropped; an hour that ended while the probe was not running
-is dropped, not posted hours late. A host that does not account block I/O per container reports
-no counter and gets no sensor: Docker Desktop (WSL2) answers an empty list for every container.
+is dropped, not posted hours late. A write through a stacked device (LVM, dm-crypt, md) is
+accounted by the kernel on that device and again on the disk under it; the probe resolves the
+stack in `/sys/dev/block/*/slaves` and leaves the stacked device out whenever a disk under it is
+listed too, so each write counts once, on the physical disk. A host that does not account block
+I/O per container reports no counter and gets no sensor: Docker Desktop (WSL2) answers an empty
+list for every container.
 
 **Registration.** Before the collector starts, the source lists the daemon once and registers
 every service it finds (and every service remembered as recently removed), so they ride the Start
