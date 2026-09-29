@@ -12,5 +12,10 @@ if [ -d /run/systemd/system ]; then
 fi
 if [ "$1" = "purge" ]; then
     rm -rf /var/lib/hsm-linux-probe /var/log/hsm-linux-probe
+    # The config postinst seeded (no longer a conffile, so dpkg does not purge it) and any
+    # leftovers of the conffile era; the access key placed by install.sh is the operator's.
+    rm -f /etc/hsm-linux-probe/config.json /etc/hsm-linux-probe/config.json.dpkg-dist \
+        /etc/hsm-linux-probe/config.json.dpkg-old /etc/hsm-linux-probe/config.json.dpkg-new
+    rmdir /etc/hsm-linux-probe 2>/dev/null || true
 fi
 exit 0

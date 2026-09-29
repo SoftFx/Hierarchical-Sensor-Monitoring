@@ -13,7 +13,8 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-/// Default location of the config file (a dpkg conffile, so operator edits survive upgrades).
+/// Default location of the config file. Owned by the operator: the package seeds it once from
+/// `/usr/share/hsm-linux-probe/config.example.json` when absent and never touches it on upgrade.
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/hsm-linux-probe/config.json";
 
 #[derive(Clone, Debug, Deserialize)]

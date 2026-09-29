@@ -68,7 +68,10 @@ change, as in the managed Total CPU / Free RAM defaults. Enum state sensors use
 default `true`, so a config written before the probe-only sensors turns them on.
 
 **Packaging.** `src/probe-linux/packaging/build-deb.sh <version>` builds the `.deb` in a plain
-`debian:13` container (layout `/usr/bin`, `/lib/systemd/system`, the `/etc` conffile; `Depends:
+`debian:13` container (layout `/usr/bin`, `/lib/systemd/system`, the skeleton at
+`/usr/share/hsm-linux-probe/config.example.json` — **no conffile** since 0.3.0: postinst seeds
+`/etc/hsm-linux-probe/config.json` only when it is absent, so no upgrade stops at a prompt or touches
+the operator's file; purge removes it; `Depends:
 libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`, checked against the binary's shared
 libraries). A fresh install creates the `hsm-probe` user and does not start the unit; an upgrade
 restarts it if it was running (prerm leaves a `/run` marker, postinst starts it). Docker socket

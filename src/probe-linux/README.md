@@ -358,16 +358,19 @@ check with `dpkg --compare-versions 0.2.0~trial1 gt 0.1.0~trial3`.
 The package has the layout of the hand-built `0.1.0~trial*` packages: `/usr/bin/hsm-linux-probe`,
 `/lib/systemd/system/hsm-linux-probe.service` (kept under `/lib`, where the trials put it — moving a
 file between `/lib` and `/usr/lib` across versions is unsafe with dpkg on a merged `/usr`),
-`/etc/hsm-linux-probe/config.json` (a conffile, from `config.example.json`) and the copyright
-file; `Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`. The maintainer scripts
+`/usr/share/hsm-linux-probe/config.example.json` (the skeleton), `/usr/lib/hsm-linux-probe/docker-access.sh`
+and the copyright file; `Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`. The maintainer scripts
 are `packaging/deb/{postinst,prerm,postrm}`, reconstructed from the trial package: postinst creates
 the `hsm-probe` system user/group and reloads systemd, and on a fresh install does not enable or
 start the unit (`install.sh` does, once config and key are in place); prerm disables it on remove;
 postrm purges `/var/lib` and `/var/log` state. On upgrade prerm stops the unit and, **from 0.2.0 on**,
 leaves a marker in `/run` when it was running, so the new postinst starts it again — an upgrade
 does not end monitoring. (Upgrading *from* a `0.1.0~trial*` package runs that package's old prerm,
-which leaves no marker: start the unit by hand once.) The operator's config survives upgrades
-(`apt-get install -o Dpkg::Options::=--force-confold ./hsm-linux-probe_….deb`).
+which leaves no marker: start the unit by hand once.) The operator's config is **not** a conffile (from 0.3.0): postinst
+seeds `/etc/hsm-linux-probe/config.json` from the skeleton only when it is absent, and no upgrade
+touches it or stops at a prompt (a conffile-era file becomes an obsolete conffile: kept, never
+prompted about; purge removes it). The upgrade command keeps `--force-confold` as belt and braces:
+`sudo apt-get install -y -o Dpkg::Options::=--force-confold ./hsm-linux-probe_….deb`.
 
 ## Configuration
 

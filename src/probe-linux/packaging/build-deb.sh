@@ -16,7 +16,11 @@
 #   /lib/systemd/system/hsm-linux-probe.service     (kept under /lib, where the trials put it:
 #                                                    moving a file between /lib and /usr/lib across
 #                                                    versions is unsafe with dpkg on a merged /usr)
-#   /etc/hsm-linux-probe/config.json                (conffile: operator edits survive upgrades)
+#   /usr/share/hsm-linux-probe/config.example.json  (the skeleton; NOT a conffile - postinst seeds
+#                                                    /etc/hsm-linux-probe/config.json from it only
+#                                                    when that file is absent, so no upgrade ever
+#                                                    stops at a conffile prompt or touches it)
+#   /usr/lib/hsm-linux-probe/docker-access.sh
 #   /usr/share/doc/hsm-linux-probe/copyright
 # postinst creates the hsm-probe system user/group and reloads systemd; a fresh install does NOT
 # enable or start the unit, an upgrade restarts it if it was running (prerm leaves a /run marker);
@@ -92,17 +96,19 @@ ROOT="$STAGE/$PACKAGE"
 
 echo "==> staging $PACKAGE"
 install -d -m 0755 "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/lib/systemd/system" \
-    "$ROOT/etc/hsm-linux-probe" "$ROOT/usr/share/doc/hsm-linux-probe" "$ROOT/usr/lib/hsm-linux-probe"
+    "$ROOT/usr/share/hsm-linux-probe" "$ROOT/usr/share/doc/hsm-linux-probe" "$ROOT/usr/lib/hsm-linux-probe"
 install -m 0755 "$BINARY" "$ROOT/usr/bin/hsm-linux-probe"
 strip --strip-unneeded "$ROOT/usr/bin/hsm-linux-probe"
 install -m 0644 "$PACKAGING_DIR/hsm-linux-probe.service" "$ROOT/lib/systemd/system/"
-install -m 0644 "$PACKAGING_DIR/config.example.json" "$ROOT/etc/hsm-linux-probe/config.json"
+install -m 0644 "$PACKAGING_DIR/config.example.json" "$ROOT/usr/share/hsm-linux-probe/config.example.json"
 install -m 0644 "$PACKAGING_DIR/deb/copyright" "$ROOT/usr/share/doc/hsm-linux-probe/copyright"
 install -m 0755 "$PACKAGING_DIR/docker-access.sh" "$ROOT/usr/lib/hsm-linux-probe/docker-access.sh"
 for script in postinst prerm postrm; do
     install -m 0755 "$PACKAGING_DIR/deb/$script" "$ROOT/DEBIAN/$script"
 done
-echo "/etc/hsm-linux-probe/config.json" >"$ROOT/DEBIAN/conffiles"
+# No DEBIAN/conffiles: the operator's /etc/hsm-linux-probe/config.json belongs to the operator
+# (seeded once by postinst). Packages before 0.3.0 shipped it as a conffile; dpkg keeps such a file
+# as an "obsolete" conffile on upgrade - never deleted, never prompted about - and purge removes it.
 
 INSTALLED_SIZE="$(du -sk --exclude=DEBIAN "$ROOT" | cut -f1)"
 cat >"$ROOT/DEBIAN/control" <<EOF

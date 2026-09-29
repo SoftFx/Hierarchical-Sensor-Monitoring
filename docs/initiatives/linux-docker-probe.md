@@ -413,10 +413,13 @@ product and the client runs one command and is connected
   beside it as `config.json.dpkg-dist` (observed on the live install). `install.sh` will not
   overwrite an existing config unless `--force-config` is passed. Ownership is therefore split by
   design — the bundle owns the live file, the package owns the skeleton — and the consequence is
-  that a later package upgrade treats the config as a locally modified conffile: dpkg keeps the
-  operator's file and leaves the new skeleton as `.dpkg-dist` rather than upgrading it silently.
-  A future release may move the generated file out of the conffile path (or use `ucf`) so the two
-  mechanisms stop overlapping. It writes `access-key` as root:root
+  that a later package upgrade treated the config as a locally modified conffile — and on the
+  0.3.0~trial1 upgrade on garage dpkg stopped at the conffile prompt with the probe down. **Fixed
+  in #1416 (0.3.0):** the config is no longer a conffile. The package ships the skeleton as
+  `/usr/share/hsm-linux-probe/config.example.json`; postinst seeds `/etc/hsm-linux-probe/config.json`
+  from it only when absent; upgrades never touch the operator's file. A conffile-era file becomes an
+  obsolete conffile (kept, never prompted about); purge removes it. `install.sh` keeps
+  `--force-confold` as belt and braces. It writes `access-key` as root:root
   0400. It installs the certificate as `/usr/local/share/ca-certificates/hsm-server.crt` and runs
   `update-ca-certificates`, then verifies that the anchor actually took effect instead of trusting
   the exit code. Note the accepted cost: this trusts the HSM server certificate for **every** TLS
