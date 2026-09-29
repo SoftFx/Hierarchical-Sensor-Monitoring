@@ -185,6 +185,9 @@ pub enum Skip {
     ClockBackwards,
     /// The probe missed samples across an hour boundary: the bytes cannot be placed in an hour.
     GapAcrossHours,
+    /// The clock passed the running hour's end before the tick rolled it: nothing is counted and
+    /// the baseline is kept, so the next sample credits these bytes to the new hour.
+    HourNotRolled,
 }
 
 /// An hour that ended, with what was measured in it.
@@ -279,6 +282,11 @@ impl WriteRecord {
             self.bytes = 0;
             self.covered_ms = 0;
             self.deltas = 0;
+        }
+        // A sample read after the boundary, in a tick that rolled before it: leave everything for
+        // the next tick, which rolls first — no write of the new hour goes into the old one.
+        if hour_start(now_ms) > self.hour_start {
+            return Err(Skip::HourNotRolled);
         }
         let (ignored, ignored_since) = self
             .baselines
@@ -744,6 +752,32 @@ mod tests {
             record.sample("a", 20, H13 + 50 * MIN, PERIOD, None),
             Err(Skip::ClockBackwards)
         );
+    }
+
+    #[test]
+    fn a_sample_after_the_boundary_waits_for_the_roll() {
+        let mut record = WriteRecord::new(H13);
+        record
+            .sample("a", 0, H13 + 60 * MIN - 3_000, PERIOD, None)
+            .ok();
+        // 14:00:02, but the tick rolled at 13:59:59.9.
+        assert_eq!(
+            record.sample("a", 700, H13 + 60 * MIN + 2_000, PERIOD, None),
+            Err(Skip::HourNotRolled)
+        );
+        assert_eq!(
+            (record.bytes, record.deltas),
+            (0, 0),
+            "not credited to 13:00"
+        );
+        assert_eq!(record.baselines["a"].bytes, 0, "baseline kept");
+        // The next tick rolls first; its sample credits the bytes to 14:00.
+        assert_eq!(record.roll(H13 + 60 * MIN + 7_000), None);
+        assert_eq!(
+            record.sample("a", 800, H13 + 60 * MIN + 7_000, PERIOD, None),
+            Ok((800, 10_000))
+        );
+        assert_eq!(record.hour_start * 1000, H13 + 60 * MIN);
     }
 
     #[test]

@@ -190,8 +190,21 @@ impl Ledger {
             };
             return Err(Skip::OtherDisk);
         }
-        if record.day != day {
-            // Local midnight passed: a new day starts from 0.
+        // Checked before the day turns: a clock stepped back across midnight must not wipe the
+        // day it came from (and re-post a small total for a day already posted in full).
+        if let Some(previous) = record.baseline.as_ref() {
+            if now_ms < previous.at_ms {
+                record.baseline = Some(Baseline {
+                    sectors,
+                    at_ms: now_ms,
+                    day,
+                });
+                return Err(Skip::ClockBackwards);
+            }
+        }
+        if day > record.day {
+            // Local midnight passed: a new day starts from 0. (A clock behind the day keeps
+            // counting into it; nothing is posted until the clock reaches it again.)
             record.day = day;
             record.bytes = 0;
             record.measured = false;
@@ -459,6 +472,36 @@ pub mod tests {
         assert_eq!(
             ledger.sample("sdc", Some("wwid:sdc"), 400, t, utc, PERIOD),
             Err(Skip::ClockBackwards)
+        );
+    }
+
+    #[test]
+    fn a_clock_stepped_back_across_midnight_does_not_wipe_the_day() {
+        let mut ledger = Ledger::default();
+        let d = Some("wwid:sdc");
+        let after = MIDNIGHT + 24 * HOUR + 60_000; // 00:01 of the next day
+        ledger.sample("sdc", d, 0, after - 5_000, utc, PERIOD).ok();
+        ledger
+            .sample("sdc", d, 2_000_000, after, utc, PERIOD)
+            .unwrap();
+        let today = ledger.disks["sdc"].day;
+        // NTP steps the clock back to 23:58 the day before.
+        let back = MIDNIGHT + 24 * HOUR - 2 * 60_000;
+        assert_eq!(
+            ledger.sample("sdc", d, 2_000_100, back, utc, PERIOD),
+            Err(Skip::ClockBackwards)
+        );
+        assert_eq!(ledger.disks["sdc"].day, today, "the day is not turned back");
+        assert_eq!(ledger.disks["sdc"].bytes, 1_024_000_000, "nor wiped");
+        // Counting goes on into that day; nothing is posted while the clock is behind it.
+        ledger
+            .sample("sdc", d, 2_000_200, back + 5_000, utc, PERIOD)
+            .unwrap();
+        assert_eq!(ledger.today("sdc", back + 5_000, utc), None);
+        assert_eq!(
+            ledger.today("sdc", after + 5_000, utc).unwrap().0,
+            1.024,
+            "posted again once the clock is back in its day"
         );
     }
 

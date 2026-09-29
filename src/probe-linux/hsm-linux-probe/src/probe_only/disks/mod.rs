@@ -1187,7 +1187,8 @@ impl Source for WriteSpeedSource<'_> {
             // Today's volume: every sample, whatever the rate makes of it (a long gap inside the
             // day still counts; the ledger has its own rules).
             let identity = self.identity_of(disk, &nodes);
-            if let Err(written::Skip::OtherDisk) = self.ledger.sample(
+            // Each of these skips sets a new baseline, so it is logged once per event.
+            match self.ledger.sample(
                 disk,
                 identity.as_deref(),
                 written,
@@ -1195,10 +1196,19 @@ impl Source for WriteSpeedSource<'_> {
                 self.local,
                 WRITE_SAMPLE_PERIOD,
             ) {
-                logger.info(format!(
+                Err(written::Skip::OtherDisk) => logger.info(format!(
                     "disks: {disk} is not the disk that had this name before (or it cannot be \
                      told after a reboot); its Written today starts afresh"
-                ));
+                )),
+                Err(written::Skip::ClockBackwards) => logger.info(format!(
+                    "disks: {disk}: the clock went backwards; the writes since the previous \
+                     sample are not counted in Written today"
+                )),
+                Err(written::Skip::GapAcrossDays) => logger.info(format!(
+                    "disks: {disk}: no sample across local midnight (the probe was not running); \
+                     the writes in that gap are not counted in Written today"
+                )),
+                _ => {}
             }
             self.ledger_dirty = true;
             let rate = self

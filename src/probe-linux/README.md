@@ -277,8 +277,11 @@ first tick after it ends. The running hour and each container's last counter liv
 file (written at most every 5 minutes, at every posted hour and on stop), so a probe restart
 continues the hour — and the writes made while the probe was down count too, when the container
 and its counter survived and the hour did not change. A gap that crosses an hour boundary cannot
-be split between the two hours and is dropped; an hour that ended while the probe was not running
-is dropped, not posted hours late. A write through a stacked device (LVM, dm-crypt, md) is
+be split between the two hours and is dropped. The hour that has just ended is posted on the first
+tick after it — also when that tick is the first after a restart, since its bytes were measured;
+an hour older than that (the probe was not running at the next boundary) is dropped, with an INFO
+line. A skip that discards measured bytes (a clock that went backwards, a gap across an hour) is
+logged once. A write through a stacked device (LVM, dm-crypt, md) is
 accounted by the kernel on that device and again on the disk under it; the probe resolves the
 stack in `/sys/dev/block/*/slaves` and leaves the stacked device out whenever a disk under it is
 listed too. The sensor therefore reports **physical** writes: through LVM or dm-crypt a write

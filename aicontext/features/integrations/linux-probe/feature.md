@@ -170,9 +170,11 @@ Linux is the only supported target. The initiative is
   is `$STATE_DIRECTORY/docker-state.json`, written atomically and only on change (the running
   `Disk written per hour` accumulator at most every 5 minutes, at each posted hour and on stop).
 - **An hourly total is posted once, for the hour that just ended.** It is written to the state
-  file right after posting (no double post after a restart); an hour that ended while the probe
-  was down is dropped, never posted late; an hour without a single measured delta is skipped,
-  never 0.
+  file right after posting (no double post after a restart). The hour that has just ended is
+  posted on the first tick after it, also when that tick is the first after a restart (its bytes
+  were measured); an older hour is dropped with an INFO line; an hour without a single measured
+  delta is skipped, never 0. A sample read after the boundary in a tick that rolled before it
+  waits for the next tick, so no write of a new hour is credited to the old one.
 
 ---
 

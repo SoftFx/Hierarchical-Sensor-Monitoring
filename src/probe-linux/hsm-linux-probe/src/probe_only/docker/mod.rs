@@ -412,8 +412,9 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let node = record.node.clone().unwrap_or_else(|| self.naming.node(key));
             if done.hour_start + 3600 != current {
                 logger.info(format!(
-                    "docker: {node}: Disk written per hour for {} not posted: the probe was not \
-                     running when that hour ended",
+                    "docker: {node}: Disk written per hour for {} not posted: it ended more \
+                     than an hour ago (the probe was not running at the next hour boundary); only \
+                     the hour that has just ended is posted after a restart",
                     done.comment()
                 ));
                 continue;
@@ -784,6 +785,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 let counter = written::written_bytes(&stats, &mut self.stacking);
                 let started_at = self.started_at.get(id).map(String::as_str);
                 let mut restarted = false;
+                let mut discarded: Option<&str> = None;
                 if let Some(record) = self.tracker.state.services.get_mut(key) {
                     match counter {
                         // Only a host that reports write counters keeps (and rewrites) a record.
@@ -804,6 +806,22 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                                     written_gap = Some(written_gap.unwrap_or(0).max(gap));
                                 }
                                 Err(written::Skip::Restarted) => restarted = true,
+                                Err(written::Skip::ClockBackwards) => {
+                                    discarded = Some("the clock went backwards")
+                                }
+                                Err(written::Skip::GapAcrossHours) => {
+                                    discarded = Some(
+                                        "no sample across an hour boundary (the probe was not \
+                                         running or the daemon did not answer)",
+                                    )
+                                }
+                                Err(written::Skip::HourNotRolled) => logger.log(
+                                    Level::Debug,
+                                    &format!(
+                                        "docker: {key}: write sample after the hour boundary \
+                                         left for the next tick"
+                                    ),
+                                ),
                                 Err(_) => {}
                             }
                         }
@@ -812,6 +830,19 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                                 self.written_dirty |= accumulator.forget(id);
                             }
                         }
+                    }
+                }
+                if let Some(reason) = discarded {
+                    // Once per service, reason and hour: the skip only sets a new baseline.
+                    let hour = written::hour_start(now_ms);
+                    if self
+                        .log_once
+                        .raise(&format!("written-skip:{key}:{reason}:{hour}"))
+                    {
+                        logger.info(format!(
+                            "docker: {key}: a Disk written per hour sample was discarded \
+                             ({reason}); the writes since the previous sample are not counted"
+                        ));
                     }
                 }
                 if restarted
