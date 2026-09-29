@@ -30,6 +30,7 @@ pub use collector::{Collector, DefaultSensor, LINUX_METRIC_SOURCES_AVAILABLE};
 pub use error::{Error, Result};
 pub use options::{
     CollectorOptions, CollectorStatus, EnumOption, LogLevel, SensorOptions, SensorStatus,
+    STATISTICS_EMA,
 };
 pub use sensor::{
     BoolSensor, DoubleBarSensor, DoubleSensor, EnumSensor, IntSensor, StringSensor, VersionSensor,
