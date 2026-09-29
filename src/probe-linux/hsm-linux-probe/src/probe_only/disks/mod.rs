@@ -1289,8 +1289,8 @@ pub mod tests {
         ("oldlinux", "sdb"),
     ];
 
-    /// Every disk sensor path garage-server registers.
-    pub fn garage_paths(computer: &str) -> Vec<String> {
+    /// Every disk sensor path garage-server registers (at the product root, #1493).
+    pub fn garage_paths() -> Vec<String> {
         GARAGE_NODES
             .iter()
             .flat_map(|(name, _)| {
@@ -1302,7 +1302,7 @@ pub mod tests {
                     written_today_path(name),
                 ]
             })
-            .map(|path| format!("{computer}/{path}"))
+            .map(|path| path.to_string())
             .collect()
     }
 
@@ -1482,7 +1482,6 @@ pub mod tests {
         };
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
         options.allow_plaintext_transport = true;
-        options.computer_name = Some("garage-server".into());
         let collector = Collector::new(&options).expect("create");
         let logger = Logger::new(Level::Error, None);
 
@@ -1596,7 +1595,6 @@ pub mod tests {
 
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
         options.allow_plaintext_transport = true;
-        options.computer_name = Some("garage-server".into());
         let logger = Logger::new(Level::Error, None);
         {
             let collector = Collector::new(&options).expect("create");

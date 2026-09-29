@@ -45,16 +45,11 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
     );
 
     logger.info(format!(
-        "starting: collector {} -> {}:{} (module '{}', computer '{}')",
+        "starting: collector {} -> {}:{} (sensors under {})",
         hsm_collector::library_version_string(),
         config.hsm.address,
         config.hsm.port,
-        config.hsm.module,
-        if config.hsm.computer_name.is_empty() {
-            "<auto>"
-        } else {
-            config.hsm.computer_name.as_str()
-        }
+        tree_root(&config.hsm.computer_name, &config.hsm.module)
     ));
 
     collector.start()?;
@@ -197,7 +192,11 @@ fn build_collector(
 
     let mut options =
         CollectorOptions::new(key.expose(), config.hsm.address.trim(), config.hsm.port);
-    options.module = Some(config.hsm.module.clone());
+    // Both empty by default (#1493): the collector then leaves the segments out and the tree sits
+    // directly under the product.
+    if !config.hsm.module.is_empty() {
+        options.module = Some(config.hsm.module.clone());
+    }
     if !config.hsm.computer_name.is_empty() {
         options.computer_name = Some(config.hsm.computer_name.clone());
     }
@@ -219,6 +218,23 @@ fn build_collector(
 
     collector.use_http_transport()?;
     Ok(collector)
+}
+
+/// Where the tree sits, for the start log: "the product root", or the nodes a non-empty
+/// `computerName`/`module` re-introduce.
+fn tree_root(computer_name: &str, module: &str) -> String {
+    let nodes: Vec<&str> = [computer_name, module]
+        .into_iter()
+        .filter(|segment| !segment.is_empty())
+        .collect();
+    if nodes.is_empty() {
+        "the product root".to_string()
+    } else {
+        format!(
+            "'{}/' (computerName/module set; not recommended)",
+            nodes.join("/")
+        )
+    }
 }
 
 /// Register the managed Unix default set (`AddAllDefaultSensors` = computer set + module set) and
@@ -359,8 +375,6 @@ mod tests {
     fn test_collector(port: u16) -> Collector {
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", port);
         options.allow_plaintext_transport = true;
-        options.computer_name = Some("garage-server".into());
-        options.module = Some("LinuxProbe".into());
         Collector::new(&options).expect("create")
     }
 
@@ -464,50 +478,48 @@ mod tests {
     }
 
     /// Sensors that exist only in this probe (README "Probe-only sensors"; owner decisions of
-    /// 2026-09-24): computer-level, so they sit under `<computer>/.computer/`, not the module.
-    const PROBE_ONLY_SET: &[&str] = &[
-        "garage-server/.computer/CPU temperature",
-        "garage-server/.computer/Logical cores",
-    ];
+    /// 2026-09-24): computer-level, so they sit under `.computer/` at the product root (or under
+    /// `computerName` when it is set), not the module.
+    const PROBE_ONLY_SET: &[&str] = &[".computer/CPU temperature", ".computer/Logical cores"];
 
     /// The disk sensors garage-server registers (#1481), pinned literally: four real filesystems
     /// (`/` on sdc1, the FUSE-NTFS archives on sda2 and sdb1, ext4 on sdb5), deduplicated from
     /// eleven mounts, named after the Windows per-drive pattern; five sensors each (20 paths).
     const DISKS_GARAGE_SET: &[&str] = &[
-        "garage-server/.computer/Disks monitoring/Average disk write speed on mediacentr disk",
-        "garage-server/.computer/Disks monitoring/Average disk write speed on oldlinux disk",
-        "garage-server/.computer/Disks monitoring/Average disk write speed on root disk",
-        "garage-server/.computer/Disks monitoring/Average disk write speed on wd4tb disk",
-        "garage-server/.computer/Disks monitoring/Free inodes on mediacentr disk %",
-        "garage-server/.computer/Disks monitoring/Free inodes on oldlinux disk %",
-        "garage-server/.computer/Disks monitoring/Free inodes on root disk %",
-        "garage-server/.computer/Disks monitoring/Free inodes on wd4tb disk %",
-        "garage-server/.computer/Disks monitoring/Free space on mediacentr disk",
-        "garage-server/.computer/Disks monitoring/Free space on mediacentr disk %",
-        "garage-server/.computer/Disks monitoring/Free space on oldlinux disk",
-        "garage-server/.computer/Disks monitoring/Free space on oldlinux disk %",
-        "garage-server/.computer/Disks monitoring/Free space on root disk",
-        "garage-server/.computer/Disks monitoring/Free space on root disk %",
-        "garage-server/.computer/Disks monitoring/Free space on wd4tb disk",
-        "garage-server/.computer/Disks monitoring/Free space on wd4tb disk %",
-        "garage-server/.computer/Disks monitoring/Written today on mediacentr disk",
-        "garage-server/.computer/Disks monitoring/Written today on oldlinux disk",
-        "garage-server/.computer/Disks monitoring/Written today on root disk",
-        "garage-server/.computer/Disks monitoring/Written today on wd4tb disk",
+        ".computer/Disks monitoring/Average disk write speed on mediacentr disk",
+        ".computer/Disks monitoring/Average disk write speed on oldlinux disk",
+        ".computer/Disks monitoring/Average disk write speed on root disk",
+        ".computer/Disks monitoring/Average disk write speed on wd4tb disk",
+        ".computer/Disks monitoring/Free inodes on mediacentr disk %",
+        ".computer/Disks monitoring/Free inodes on oldlinux disk %",
+        ".computer/Disks monitoring/Free inodes on root disk %",
+        ".computer/Disks monitoring/Free inodes on wd4tb disk %",
+        ".computer/Disks monitoring/Free space on mediacentr disk",
+        ".computer/Disks monitoring/Free space on mediacentr disk %",
+        ".computer/Disks monitoring/Free space on oldlinux disk",
+        ".computer/Disks monitoring/Free space on oldlinux disk %",
+        ".computer/Disks monitoring/Free space on root disk",
+        ".computer/Disks monitoring/Free space on root disk %",
+        ".computer/Disks monitoring/Free space on wd4tb disk",
+        ".computer/Disks monitoring/Free space on wd4tb disk %",
+        ".computer/Disks monitoring/Written today on mediacentr disk",
+        ".computer/Disks monitoring/Written today on oldlinux disk",
+        ".computer/Disks monitoring/Written today on root disk",
+        ".computer/Disks monitoring/Written today on wd4tb disk",
     ];
 
     /// The module set: managed `AddAllModuleSensors` minus `Process ThreadPool thread count`
     /// (a CLR concept) and minus the metric-fed process sensors, which register only when
     /// the build can feed them (`METRIC_FED_SET`).
     const MODULE_SET: &[&str] = &[
-        "garage-server/LinuxProbe/.module/Collector errors",
-        "garage-server/LinuxProbe/.module/Collector queue stats/Items count in package",
-        "garage-server/LinuxProbe/.module/Collector queue stats/Package content size",
-        "garage-server/LinuxProbe/.module/Collector queue stats/Package process time",
-        "garage-server/LinuxProbe/.module/Collector queue stats/Queue overflow",
-        "garage-server/LinuxProbe/.module/Collector version",
-        "garage-server/LinuxProbe/.module/Service alive",
-        "garage-server/LinuxProbe/.module/Version",
+        ".module/Collector errors",
+        ".module/Collector queue stats/Items count in package",
+        ".module/Collector queue stats/Package content size",
+        ".module/Collector queue stats/Package process time",
+        ".module/Collector queue stats/Queue overflow",
+        ".module/Collector version",
+        ".module/Service alive",
+        ".module/Version",
     ];
 
     /// Everything the metric-source factory feeds: the computer set (managed
@@ -515,13 +527,13 @@ mod tests {
     /// has the Linux metric sources (#1414); without them these would be empty nodes.
     #[cfg(feature = "linux-default-sensors")]
     const METRIC_FED_SET: &[&str] = &[
-        "garage-server/.computer/Disks monitoring/Free space on disk",
-        "garage-server/.computer/Disks monitoring/Free space on disk prediction",
-        "garage-server/.computer/Free RAM memory",
-        "garage-server/.computer/Total CPU",
-        "garage-server/LinuxProbe/.module/Process process/Process CPU",
-        "garage-server/LinuxProbe/.module/Process process/Process memory",
-        "garage-server/LinuxProbe/.module/Process process/Process thread count",
+        ".computer/Disks monitoring/Free space on disk",
+        ".computer/Disks monitoring/Free space on disk prediction",
+        ".computer/Free RAM memory",
+        ".computer/Total CPU",
+        ".module/Process process/Process CPU",
+        ".module/Process process/Process memory",
+        ".module/Process process/Process thread count",
     ];
 
     /// The Docker source (#1416) on garage-server: 12 Compose containers, 11 monitored services, all
@@ -532,76 +544,76 @@ mod tests {
     /// `lingua-ci/ci-image` — Exited (0) under restart policy `no` — is a completed one-shot job
     /// and not monitored (owner decision). 70 paths, no empty nodes.
     const DOCKER_GARAGE_SET: &[&str] = &[
-        "garage-server/LinuxProbe/Docker/caddy/caddy/CPU",
-        "garage-server/LinuxProbe/Docker/caddy/caddy/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/caddy/caddy/Memory used %",
-        "garage-server/LinuxProbe/Docker/caddy/caddy/OOM killed",
-        "garage-server/LinuxProbe/Docker/caddy/caddy/Restart count",
-        "garage-server/LinuxProbe/Docker/caddy/caddy/Service status",
-        "garage-server/LinuxProbe/Docker/gitea/db/CPU",
-        "garage-server/LinuxProbe/Docker/gitea/db/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/gitea/db/Health",
-        "garage-server/LinuxProbe/Docker/gitea/db/Memory used %",
-        "garage-server/LinuxProbe/Docker/gitea/db/OOM killed",
-        "garage-server/LinuxProbe/Docker/gitea/db/Restart count",
-        "garage-server/LinuxProbe/Docker/gitea/db/Service status",
-        "garage-server/LinuxProbe/Docker/gitea/gitea/CPU",
-        "garage-server/LinuxProbe/Docker/gitea/gitea/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/gitea/gitea/Health",
-        "garage-server/LinuxProbe/Docker/gitea/gitea/Memory used %",
-        "garage-server/LinuxProbe/Docker/gitea/gitea/OOM killed",
-        "garage-server/LinuxProbe/Docker/gitea/gitea/Restart count",
-        "garage-server/LinuxProbe/Docker/gitea/gitea/Service status",
-        "garage-server/LinuxProbe/Docker/hsm/app/CPU",
-        "garage-server/LinuxProbe/Docker/hsm/app/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/hsm/app/Memory used %",
-        "garage-server/LinuxProbe/Docker/hsm/app/OOM killed",
-        "garage-server/LinuxProbe/Docker/hsm/app/Restart count",
-        "garage-server/LinuxProbe/Docker/hsm/app/Service status",
-        "garage-server/LinuxProbe/Docker/lingua-ci/dind/CPU",
-        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Memory used %",
-        "garage-server/LinuxProbe/Docker/lingua-ci/dind/OOM killed",
-        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Restart count",
-        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Service status",
-        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/CPU",
-        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Memory used %",
-        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/OOM killed",
-        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Restart count",
-        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Service status",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/CPU",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Memory used %",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/OOM killed",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Restart count",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Service status",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/CPU",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Memory used %",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/OOM killed",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Restart count",
-        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Service status",
-        "garage-server/LinuxProbe/Docker/lingua/mongo/CPU",
-        "garage-server/LinuxProbe/Docker/lingua/mongo/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/lingua/mongo/Health",
-        "garage-server/LinuxProbe/Docker/lingua/mongo/Memory used %",
-        "garage-server/LinuxProbe/Docker/lingua/mongo/OOM killed",
-        "garage-server/LinuxProbe/Docker/lingua/mongo/Restart count",
-        "garage-server/LinuxProbe/Docker/lingua/mongo/Service status",
-        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/CPU",
-        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Health",
-        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Memory used %",
-        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/OOM killed",
-        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Restart count",
-        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Service status",
-        "garage-server/LinuxProbe/Docker/portainer/portainer/CPU",
-        "garage-server/LinuxProbe/Docker/portainer/portainer/Disk written per hour",
-        "garage-server/LinuxProbe/Docker/portainer/portainer/Memory used %",
-        "garage-server/LinuxProbe/Docker/portainer/portainer/OOM killed",
-        "garage-server/LinuxProbe/Docker/portainer/portainer/Restart count",
-        "garage-server/LinuxProbe/Docker/portainer/portainer/Service status",
+        "Docker/caddy/caddy/CPU",
+        "Docker/caddy/caddy/Disk written per hour",
+        "Docker/caddy/caddy/Memory used %",
+        "Docker/caddy/caddy/OOM killed",
+        "Docker/caddy/caddy/Restart count",
+        "Docker/caddy/caddy/Service status",
+        "Docker/gitea/db/CPU",
+        "Docker/gitea/db/Disk written per hour",
+        "Docker/gitea/db/Health",
+        "Docker/gitea/db/Memory used %",
+        "Docker/gitea/db/OOM killed",
+        "Docker/gitea/db/Restart count",
+        "Docker/gitea/db/Service status",
+        "Docker/gitea/gitea/CPU",
+        "Docker/gitea/gitea/Disk written per hour",
+        "Docker/gitea/gitea/Health",
+        "Docker/gitea/gitea/Memory used %",
+        "Docker/gitea/gitea/OOM killed",
+        "Docker/gitea/gitea/Restart count",
+        "Docker/gitea/gitea/Service status",
+        "Docker/hsm/app/CPU",
+        "Docker/hsm/app/Disk written per hour",
+        "Docker/hsm/app/Memory used %",
+        "Docker/hsm/app/OOM killed",
+        "Docker/hsm/app/Restart count",
+        "Docker/hsm/app/Service status",
+        "Docker/lingua-ci/dind/CPU",
+        "Docker/lingua-ci/dind/Disk written per hour",
+        "Docker/lingua-ci/dind/Memory used %",
+        "Docker/lingua-ci/dind/OOM killed",
+        "Docker/lingua-ci/dind/Restart count",
+        "Docker/lingua-ci/dind/Service status",
+        "Docker/lingua-ci/janitor/CPU",
+        "Docker/lingua-ci/janitor/Disk written per hour",
+        "Docker/lingua-ci/janitor/Memory used %",
+        "Docker/lingua-ci/janitor/OOM killed",
+        "Docker/lingua-ci/janitor/Restart count",
+        "Docker/lingua-ci/janitor/Service status",
+        "Docker/lingua-ci/runner-heavy/CPU",
+        "Docker/lingua-ci/runner-heavy/Disk written per hour",
+        "Docker/lingua-ci/runner-heavy/Memory used %",
+        "Docker/lingua-ci/runner-heavy/OOM killed",
+        "Docker/lingua-ci/runner-heavy/Restart count",
+        "Docker/lingua-ci/runner-heavy/Service status",
+        "Docker/lingua-ci/runner-light/CPU",
+        "Docker/lingua-ci/runner-light/Disk written per hour",
+        "Docker/lingua-ci/runner-light/Memory used %",
+        "Docker/lingua-ci/runner-light/OOM killed",
+        "Docker/lingua-ci/runner-light/Restart count",
+        "Docker/lingua-ci/runner-light/Service status",
+        "Docker/lingua/mongo/CPU",
+        "Docker/lingua/mongo/Disk written per hour",
+        "Docker/lingua/mongo/Health",
+        "Docker/lingua/mongo/Memory used %",
+        "Docker/lingua/mongo/OOM killed",
+        "Docker/lingua/mongo/Restart count",
+        "Docker/lingua/mongo/Service status",
+        "Docker/lingua/seaweedfs/CPU",
+        "Docker/lingua/seaweedfs/Disk written per hour",
+        "Docker/lingua/seaweedfs/Health",
+        "Docker/lingua/seaweedfs/Memory used %",
+        "Docker/lingua/seaweedfs/OOM killed",
+        "Docker/lingua/seaweedfs/Restart count",
+        "Docker/lingua/seaweedfs/Service status",
+        "Docker/portainer/portainer/CPU",
+        "Docker/portainer/portainer/Disk written per hour",
+        "Docker/portainer/portainer/Memory used %",
+        "Docker/portainer/portainer/OOM killed",
+        "Docker/portainer/portainer/Restart count",
+        "Docker/portainer/portainer/Service status",
     ];
 
     #[test]
@@ -648,7 +660,7 @@ mod tests {
             "a probe-only sensor must never shadow a parity sensor"
         );
         // The literal list and the module's own path builders agree.
-        let mut built = crate::probe_only::disks::tests::garage_paths("garage-server");
+        let mut built = crate::probe_only::disks::tests::garage_paths();
         built.sort_unstable();
         assert_eq!(built, DISKS_GARAGE_SET);
     }
@@ -668,7 +680,7 @@ mod tests {
         config.disks.enabled = Some(false);
         config.docker.enabled = false;
         let mut expected = parity_set();
-        expected.push("garage-server/.computer/Logical cores");
+        expected.push(".computer/Logical cores");
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
 
@@ -691,9 +703,9 @@ mod tests {
         config.disks.write_speed = false;
         let mut expected = parity_set();
         expected.extend_from_slice(&[
-            "garage-server/.computer/Disks monitoring/Free inodes on root disk %",
-            "garage-server/.computer/Disks monitoring/Free space on root disk",
-            "garage-server/.computer/Disks monitoring/Free space on root disk %",
+            ".computer/Disks monitoring/Free inodes on root disk %",
+            ".computer/Disks monitoring/Free space on root disk",
+            ".computer/Disks monitoring/Free space on root disk %",
         ]);
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
@@ -727,7 +739,7 @@ mod tests {
 
         // Int, 48 h TTL, no alert.
         contains_all(
-            &find("garage-server/.computer/Logical cores"),
+            &find(".computer/Logical cores"),
             &[
                 "\"SensorType\":1,",
                 "\"TTLTicks\":[1728000000000]",
@@ -737,7 +749,7 @@ mod tests {
         );
         // DoubleBar, 15 min TTL, no unit (°C has no code), Mean > 80 warning band + > 90 error.
         contains_all(
-            &find("garage-server/.computer/CPU temperature"),
+            &find(".computer/CPU temperature"),
             &[
                 "\"SensorType\":5,",
                 "\"TTLTicks\":[9000000000]",
@@ -754,7 +766,7 @@ mod tests {
         // alert (a fixed 20 GB threshold would hold a small /boot/efi in Error; the % sensor
         // carries the alerts).
         contains_all(
-            &find("garage-server/.computer/Disks monitoring/Free space on wd4tb disk"),
+            &find(".computer/Disks monitoring/Free space on wd4tb disk"),
             &[
                 "\"SensorType\":2,",
                 "\"TTLTicks\":[9000000000]",
@@ -766,9 +778,7 @@ mod tests {
         );
         // DoubleBar, MBytes_sec, EMA, 15 min TTL, no alert (the Windows row has none); the
         // description names the whole disk and the filesystem sharing it.
-        let write = find(
-            "garage-server/.computer/Disks monitoring/Average disk write speed on mediacentr disk",
-        );
+        let write = find(".computer/Disks monitoring/Average disk write speed on mediacentr disk");
         contains_all(
             &write,
             &[
@@ -783,7 +793,7 @@ mod tests {
         );
         // Double, Percents, 15 min TTL, < 10 warning band + < 5 error.
         contains_all(
-            &find("garage-server/.computer/Disks monitoring/Free space on root disk %"),
+            &find(".computer/Disks monitoring/Free space on root disk %"),
             &[
                 "\"SensorType\":2,",
                 "\"TTLTicks\":[9000000000]",
@@ -796,7 +806,7 @@ mod tests {
             ],
         );
         // Double, Percents, 15 min TTL, < 10 warning only.
-        let inodes = find("garage-server/.computer/Disks monitoring/Free inodes on root disk %");
+        let inodes = find(".computer/Disks monitoring/Free inodes on root disk %");
         contains_all(
             &inodes,
             &[
@@ -817,7 +827,7 @@ mod tests {
         // applies to all of them. A per-process name would silently detach hosts from it.
         let paths = registered_paths();
         for sensor in ["Process CPU", "Process memory", "Process thread count"] {
-            let expected = format!("garage-server/LinuxProbe/.module/Process process/{sensor}");
+            let expected = format!(".module/Process process/{sensor}");
             assert!(
                 paths.iter().any(|path| path == &expected),
                 "missing {expected} in {paths:#?}"
@@ -826,8 +836,8 @@ mod tests {
         assert!(
             paths
                 .iter()
-                .filter(|path| path.contains("/.module/Process "))
-                .all(|path| path.contains("/.module/Process process/")),
+                .filter(|path| path.starts_with(".module/Process "))
+                .all(|path| path.starts_with(".module/Process process/")),
             "no other process node may be registered: {paths:#?}"
         );
         assert!(
@@ -868,6 +878,19 @@ mod tests {
             panic!("nothing should be logged: {line}")
         });
         assert!(await_sources(&rx, vec!["disk"], &quiet));
+    }
+
+    #[test]
+    fn the_start_log_says_where_the_tree_sits() {
+        assert_eq!(tree_root("", ""), "the product root");
+        assert_eq!(
+            tree_root("garage-server", "LinuxProbe"),
+            "'garage-server/LinuxProbe/' (computerName/module set; not recommended)"
+        );
+        assert_eq!(
+            tree_root("", "LinuxProbe"),
+            "'LinuxProbe/' (computerName/module set; not recommended)"
+        );
     }
 
     #[test]
@@ -913,8 +936,6 @@ mod tests {
             std::env::var("HSM_PARITY_ADDRESS").unwrap_or_else(|_| "http://127.0.0.1".into());
         let mut options = CollectorOptions::new("native-parity-key", address, port);
         options.allow_plaintext_transport = true;
-        options.computer_name = Some("garage-server".into());
-        options.module = Some("LinuxProbe".into());
         let collector = Collector::new(&options).expect("create");
         let logger = Arc::new(Logger::new(Level::Debug, None));
         let sink = Arc::clone(&logger);

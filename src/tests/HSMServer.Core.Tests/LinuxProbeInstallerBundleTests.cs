@@ -72,8 +72,10 @@ namespace HSMServer.Core.Tests
             Assert.Equal("https://hsm.example.com", hsm.GetProperty("address").GetString());
             Assert.Equal(44330, hsm.GetProperty("port").GetInt32());
             Assert.Equal("/run/credentials/hsm-linux-probe.service/access-key", hsm.GetProperty("accessKeyFile").GetString());
-            Assert.Equal("LinuxProbe", hsm.GetProperty("module").GetString());
-            Assert.Equal("auto", hsm.GetProperty("computerName").GetString());
+            // One product = one host (#1493): no computer node and no module node, so the config
+            // carries neither and the probe's sensors sit directly under the product.
+            Assert.False(hsm.TryGetProperty("module", out _));
+            Assert.False(hsm.TryGetProperty("computerName", out _));
 
             Assert.False(hsm.TryGetProperty("accessKey", out _));
             Assert.False(hsm.TryGetProperty("allowUntrustedCertificate", out _));
@@ -150,21 +152,16 @@ namespace HSMServer.Core.Tests
             Assert.True(trap > 0);
             Assert.True(trap < script.IndexOf("install -m 0400", System.StringComparison.Ordinal));
 
-            // A computerName substitution that matched nothing fails loudly instead of installing "auto".
-            Assert.Contains("could not set computerName", script);
+            // The bundle's config is installed as is: no host name is written into it any more.
+            Assert.DoesNotContain("computerName", script);
+            Assert.DoesNotContain("hostname", script);
+            // The layout has no host node, so the rule that keeps two hosts apart is said out loud.
+            Assert.Contains("one product per host", script);
+            Assert.Contains("install -m 0644 -o root -g root config.json \"$CONFIG_DIR/config.json\"", script);
 
             // The key is only moved as a file: never printed or read into a variable.
             Assert.DoesNotContain("cat access-key", script);
             Assert.DoesNotContain("$(< access-key", script);
-        }
-
-        [Fact]
-        public void InstallScript_ReplacesTheExactAutoComputerNameTheConfigCarries()
-        {
-            // install.sh swaps "computerName": "auto" for the host name with sed; pin the literal it
-            // matches to what BuildConfigJson actually writes, so a serializer format change fails here.
-            Assert.Contains("\"computerName\": \"auto\"", LinuxProbeInstallerBundle.BuildConfigJson(_options));
-            Assert.Contains("s/\\\"computerName\\\": \\\"auto\\\"/", LinuxProbeInstallerBundle.BuildInstallScript());
         }
 
         [Fact]

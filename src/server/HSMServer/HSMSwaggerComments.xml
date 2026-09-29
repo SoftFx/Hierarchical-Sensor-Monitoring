@@ -614,13 +614,6 @@
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.AccessKeyCredentialPath">
             <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
         </member>
-        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.AutoComputerName">
-            <summary>
-            The literal computer name the generated config carries. install.sh swaps it for the host's
-            name while installing the config, because the probe's config parser does not resolve "auto"
-            itself (it would send it verbatim as the computer node).
-            </summary>
-        </member>
         <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BundleFolderName(System.String)">
             <summary>
             The one top-level directory every entry sits in, so extracting never scatters files, a key
@@ -653,7 +646,11 @@
             </summary>
         </member>
         <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildConfigJson(HSMServer.Model.Agent.LinuxProbeBundleOptions)">
-            <summary>The generated config.json in the probe schema. It references the key by path only.</summary>
+            <summary>
+            The generated config.json in the probe schema. It references the key by path only, and
+            carries no computerName and no module: one product = one host, so the probe's sensors sit
+            directly under the product (#1493).
+            </summary>
         </member>
         <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildInstallScript">
             <summary>

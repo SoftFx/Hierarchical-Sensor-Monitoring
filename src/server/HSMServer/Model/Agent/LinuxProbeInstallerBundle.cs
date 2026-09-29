@@ -39,15 +39,6 @@ namespace HSMServer.Model.Agent
         /// <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
         public const string AccessKeyCredentialPath = "/run/credentials/hsm-linux-probe.service/access-key";
 
-        public const string ModuleName = "LinuxProbe";
-
-        /// <summary>
-        /// The literal computer name the generated config carries. install.sh swaps it for the host's
-        /// name while installing the config, because the probe's config parser does not resolve "auto"
-        /// itself (it would send it verbatim as the computer node).
-        /// </summary>
-        public const string AutoComputerName = "auto";
-
         public const string NotStagedMessage =
             "The Linux probe package is not available on this server yet. The server build stages it from the probe-v* release pinned in probe-release.txt into wwwroot/probe/.";
 
@@ -125,7 +116,11 @@ namespace HSMServer.Model.Agent
                    "Set Configuration > Agent > Agent connection URL to the https:// address clients reach the Sensor API at.";
         }
 
-        /// <summary>The generated config.json in the probe schema. It references the key by path only.</summary>
+        /// <summary>
+        /// The generated config.json in the probe schema. It references the key by path only, and
+        /// carries no computerName and no module: one product = one host, so the probe's sensors sit
+        /// directly under the product (#1493).
+        /// </summary>
         public static string BuildConfigJson(LinuxProbeBundleOptions options)
         {
             var config = new
@@ -135,8 +130,6 @@ namespace HSMServer.Model.Agent
                     address = options.ServerAddress,
                     port = options.Port,
                     accessKeyFile = AccessKeyCredentialPath,
-                    computerName = AutoComputerName,
-                    module = ModuleName,
                 },
             };
 
@@ -155,6 +148,8 @@ namespace HSMServer.Model.Agent
                 "#   tar xzf hsm-linux-probe-<product>.tar.gz && sudo ./hsm-linux-probe-<product>/install.sh",
                 "# Re-running it upgrades the package and keeps an existing /etc/hsm-linux-probe/config.json;",
                 "# pass --force-config to replace that config with the one in this bundle.",
+                "# One product per host: the probe reports at the product root, so a second host with the",
+                "# same product's bundle would write into the same sensors.",
                 "set -euo pipefail",
                 "",
                 "UNIT=hsm-linux-probe",
@@ -197,22 +192,8 @@ namespace HSMServer.Model.Agent
                 "",
                 "# Config and key go in BEFORE the package, so the unit's first start already finds them.",
                 "if [ ! -f \"$CONFIG_DIR/" + ConfigName + "\" ] || [ \"$force_config\" -eq 1 ]; then",
-                "  # The probe does not resolve computerName \"" + AutoComputerName + "\" itself; name the node after this host.",
-                "  host=$(hostname -s 2>/dev/null || cat /proc/sys/kernel/hostname)",
-                "  host=${host%%.*}",
-                "  case \"$host\" in",
-                "    ''|*[!A-Za-z0-9._-]*) echo \"ERROR: cannot use host name '$host' as the computer name; edit " + ConfigName + " by hand.\" >&2; exit 1 ;;",
-                "  esac",
-                "  config_tmp=$(mktemp)",
-                "  sed \"s/\\\"computerName\\\": \\\"" + AutoComputerName + "\\\"/\\\"computerName\\\": \\\"$host\\\"/\" " + ConfigName + " > \"$config_tmp\"",
-                "  if ! grep -q \"\\\"computerName\\\": \\\"$host\\\"\" \"$config_tmp\"; then",
-                "    rm -f \"$config_tmp\"",
-                "    echo \"ERROR: could not set computerName in " + ConfigName + "; edit it by hand and re-run.\" >&2",
-                "    exit 1",
-                "  fi",
-                "  install -m 0644 -o root -g root \"$config_tmp\" \"$CONFIG_DIR/" + ConfigName + "\"",
-                "  rm -f \"$config_tmp\"",
-                "  echo \"Config installed to $CONFIG_DIR/" + ConfigName + " (computer name: $host).\"",
+                "  install -m 0644 -o root -g root " + ConfigName + " \"$CONFIG_DIR/" + ConfigName + "\"",
+                "  echo \"Config installed to $CONFIG_DIR/" + ConfigName + ".\"",
                 "else",
                 "  echo \"Keeping the existing $CONFIG_DIR/" + ConfigName + " (pass --force-config to replace it).\"",
                 "fi",
@@ -258,6 +239,7 @@ namespace HSMServer.Model.Agent
                 "systemctl status --no-pager \"$UNIT\" || true",
                 "if systemctl is-active --quiet \"$UNIT\"; then",
                 "  echo \"HSM Linux probe installed and running.\"",
+                "  echo \"NOTE: one product per host: its sensors sit at the product root; do not install this product's bundle on a second host.\"",
                 "  echo \"NOTE: the downloaded hsm-linux-probe-*.tar.gz still contains the access key; delete it (shred -u <file>).\"",
                 "else",
                 "  echo \"WARNING: $UNIT is not active; see: journalctl -u $UNIT\" >&2",
