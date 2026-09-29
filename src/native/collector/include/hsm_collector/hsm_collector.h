@@ -17,8 +17,8 @@ extern "C"
    returns the packed value at runtime; HSM_COLLECTOR_VERSION_STRING is the "MAJOR.MINOR.PATCH" form
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 9
-#define HSM_COLLECTOR_VERSION_PATCH 1
+#define HSM_COLLECTOR_VERSION_MINOR 10
+#define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -742,7 +742,7 @@ hsm_result_t hsm_collector_create_enum_sensor_with_sensor_options(
 
 /* The recorded registrations (one per sensor per Start, plus runtime creates). The text behind a
    returned pointer stays valid until the collector is destroyed; a later attach while running
-   replaces the entry at that index with new text (0.9.1) but never frees the old one. */
+   replaces the entry at that index with new text (0.10.0) but never frees the old one. */
 size_t hsm_collector_registration_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_registration_json(
     const hsm_collector_t* collector,
@@ -753,7 +753,7 @@ hsm_result_t hsm_collector_get_registration_json(
    Lifetime: an alert handle is owned by the collector and freed when the collector is destroyed
    (no separate release). Build conditions/actions, then attach to a sensor with
    hsm_sensor_attach_alert — attaching rebuilds the sensor's registration payload. Before Start, the
-   rebuilt payload is what Start registers. While the collector runs (0.9.1), attaching also works:
+   rebuilt payload is what Start registers. While the collector runs (0.10.0), attaching also works:
    a sensor created at runtime is registered on the server by the worker's next dispatch cycle (the
    managed command-queue cadence), so alerts attached right after its create call ride that one
    registration; an alert attached after it went out re-registers the sensor. Either way the
@@ -804,6 +804,13 @@ hsm_result_t hsm_alert_set_inactivity_period(hsm_alert_t* alert, int64_t period_
 
 /* Attach a built alert to a sensor and rebuild its registration payload. */
 hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert);
+
+/* Replace a sensor's registration description (NULL clears it to null) and rebuild its payload
+   (0.10.0). Same re-emission rules as hsm_sensor_attach_alert: before Start the new text is what
+   Start registers; while the collector runs the run's recorded registration is replaced in place
+   and, on the HTTP transport, the sensor is re-registered at the worker's next cycle. For a host
+   whose description carries live facts (the Linux probe's Docker memory limit). */
+hsm_result_t hsm_sensor_set_description(hsm_sensor_t* sensor, const char* description);
 
 hsm_result_t hsm_collector_create_last_value_int_sensor(
     hsm_collector_t* collector,

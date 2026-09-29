@@ -2188,6 +2188,18 @@ namespace
             return HSM_RESULT_OK;
         }
 
+        // Replace the registration's description (null clears it) and rebuild the payload. Same
+        // re-emission rules as AttachAlert.
+        hsm_result_t SetDescription(const char* description)
+        {
+            std::lock_guard<std::mutex> guard(registration_mutex_);
+            registration_options_.has_description = description != nullptr;
+            registration_options_.description = description != nullptr ? description : "";
+            registration_json_ = BuildRegistrationJson(registration_path_, registration_type_, registration_options_);
+            ++registration_version_;
+            return HSM_RESULT_OK;
+        }
+
         // Real wire (System.Text.Json) registration payload, built on demand from the stored inputs.
         std::string WireRegistrationJson() const
         {
@@ -7943,6 +7955,22 @@ hsm_result_t hsm_alert_set_inactivity_period(hsm_alert_t* alert, int64_t period_
     data->has_inactivity = true;
     data->inactivity_ms = period_ms;
     return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_sensor_set_description(hsm_sensor_t* sensor, const char* description)
+{
+    if (sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    const hsm_result_t result = sensor->impl->SetDescription(description);
+    // Re-emitted exactly like an attach: before Start nothing to do, while running the run's
+    // recorded registration is replaced and the sensor re-queued for the server.
+    if (result == HSM_RESULT_OK)
+    {
+        if (const auto collector = sensor->impl->OwningCollector())
+            collector->OnRegistrationChanged(sensor->impl);
+    }
+    return result;
 }
 
 hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert)

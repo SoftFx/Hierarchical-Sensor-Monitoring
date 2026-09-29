@@ -175,7 +175,7 @@ run, `Health` only where a healthcheck is defined: no empty nodes.
 **Registration.** Before the collector starts, the source lists the daemon once and registers
 every service it finds (and every service remembered as recently removed), so they ride the Start
 registration with their alerts. A service that appears later is registered at runtime: the
-collector (0.9.1) posts a sensor created while it runs at its next dispatch cycle, and an alert
+collector (0.10.0) posts a sensor created while it runs at its next dispatch cycle, and an alert
 attached right after the create call rides that registration.
 
 Behavior at the edges:
@@ -257,7 +257,7 @@ src/probe-linux/
 notification / scheduled notification, icon, `sensor_error`, confirmation / inactivity period,
 `disabled`, `build`); every sensor handle has `attach_alert(&Alert)`. An alert is part of the
 sensor's registration. Before Start it rides the Start batch; while the collector runs (collector
-0.9.1) attaching re-records the registration and the live transport re-posts it, which is how a
+0.10.0) attaching re-records the registration and the live transport re-posts it, which is how a
 sensor created at runtime gets its alerts. Attaching is refused only while the collector stops. `instant_hourly_schedule_anchor()` reproduces the managed
 `ThenSendInstantHourlyScheduledNotification`. `Collector::enum_sensor_with_options` registers an
 enum sensor with both its options and `SensorOptions` (the `Service status` shape; collector 0.9.0).

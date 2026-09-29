@@ -38,7 +38,7 @@ pub enum Target<'a, 'c> {
 
 /// Attach the contract alert to a newly registered sensor. Before Start it rides the Start
 /// registration; for a sensor created while the collector runs (a service seen after start) the
-/// collector (0.9.1) posts the registration at its next cycle with the alert included.
+/// collector (0.10.0) posts the registration at its next cycle with the alert included.
 pub fn attach(collector: &Collector, target: Target<'_, '_>) -> Result<()> {
     match target {
         Target::Cpu(sensor) => sensor.attach_alert(&cpu(collector)?),

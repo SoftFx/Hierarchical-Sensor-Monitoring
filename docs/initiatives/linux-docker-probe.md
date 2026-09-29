@@ -245,7 +245,7 @@ Replicas: CPU/memory summed (the limit sum capped at host memory), status and he
 restarts summed. Budget ≈ 580 records/day per service, ≈ 4600 for eight. No empty nodes: stats
 sensors register once a service has run, `Health` only where a healthcheck is defined. Services
 present at start register before Start (alerts in the Start batch); a service that appears later
-registers at runtime — which needed a collector fix (0.9.1): public-API sensors created while the
+registers at runtime — which needed a collector fix (0.10.0): public-API sensors created while the
 collector runs were recorded locally but never POSTed to `/commands`, and an alert attached after
 their creation never reached the registration.
 
@@ -533,7 +533,7 @@ coverage in both drivers and an agent version bump:
 | #1438 | typed metric-source seam with error reporting; live disk prediction; `DiskLetter` fix | 0.8.0 / 0.5.34, managed 3.5.2 |
 | #1446 | the prediction tells the truth: signed EMA, 6 h window, explicit states | 0.8.1 / 0.5.35, managed 3.5.3 |
 | #1476 PR | alerts in the Rust wrapper; enum-with-options ABI; option-anchored bars/rates; probe-only host/disk sensors; `build-deb.sh` | 0.9.0 / 0.5.37, probe 0.2.0 |
-| #1416 PR | Docker Compose source (7 sensors per service, Engine API over the socket via a dependency-free HTTP/1.1 client, restart/OOM/vanished state on SSD, conditional socket drop-in); collector: sensors created while running are registered on the server, alerts attachable while running | 0.9.1 / 0.5.38, probe 0.3.0 |
+| #1416 PR | Docker Compose source (7 sensors per service, Engine API over the socket via a dependency-free HTTP/1.1 client, restart/OOM/vanished state on SSD, conditional socket drop-in); collector: sensors created while running are registered on the server, alerts attachable while running | 0.10.0 / 0.5.38, probe 0.3.0 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against

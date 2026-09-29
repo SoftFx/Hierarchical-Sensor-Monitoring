@@ -3004,6 +3004,36 @@ namespace
         hsm_collector_destroy(collector);
     }
 
+    // hsm_sensor_set_description (0.10.0): before Start the new text is what Start registers;
+    // while running the run's recorded registration is replaced in place (no second record).
+    void NativeSetDescriptionRebuildsTheRegistration()
+    {
+        CollectorHandle collector = CreateCollector();
+        SensorHandle sensor;
+        Require(hsm_collector_create_int_sensor_with_options(collector.value, "desc/int", 0, -1, "first", &sensor.value) == HSM_RESULT_OK,
+                "create");
+        Require(hsm_sensor_set_description(nullptr, "x") == HSM_RESULT_INVALID_ARGUMENT, "NULL sensor rejected");
+        Require(hsm_sensor_set_description(sensor.value, "second") == HSM_RESULT_OK, "set before start");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start");
+        Require(hsm_collector_registration_count(collector.value) == 1, "one registration at Start");
+        const char* json = nullptr;
+        Require(hsm_collector_get_registration_json(collector.value, 0, &json) == HSM_RESULT_OK, "read");
+        const std::string at_start = json;
+        Require(at_start.find("\"Description\":\"second\"") != std::string::npos, at_start.c_str());
+
+        Require(hsm_sensor_set_description(sensor.value, "third") == HSM_RESULT_OK, "set while running");
+        Require(hsm_collector_registration_count(collector.value) == 1, "replaced in place, not appended");
+        Require(hsm_collector_get_registration_json(collector.value, 0, &json) == HSM_RESULT_OK, "read");
+        Require(std::string(json).find("\"Description\":\"third\"") != std::string::npos, json);
+        // The text handed out before the change is still readable (kept, not freed).
+        Require(at_start.find("second") != std::string::npos, "old text intact");
+
+        Require(hsm_sensor_set_description(sensor.value, nullptr) == HSM_RESULT_OK, "clear");
+        Require(hsm_collector_get_registration_json(collector.value, 0, &json) == HSM_RESULT_OK, "read");
+        Require(std::string(json).find("\"Description\":null") != std::string::npos, json);
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop");
+    }
+
     void NativeAddAfterCollectorDestroyIsRejected()
     {
         auto options = TestOptions();
@@ -5673,7 +5703,7 @@ namespace
     // path, not just that HttpTransport can POST in isolation (the test above).
     void NativeHttpLiveSendPostsToCaptureServer()
     {
-        // The sensor is created while running, so its runtime registration (/commands, 0.9.1)
+        // The sensor is created while running, so its runtime registration (/commands, 0.10.0)
         // precedes the value batch; capture the /list request.
         hsm::test::HttpCaptureServer server(200, "/api/sensors/list");
 
@@ -6003,7 +6033,7 @@ namespace
 
     // #1416: a sensor created while the collector runs is registered on the server — the Start
     // batch has already gone — with the alerts attached right after its create call, and before
-    // its first value. (Before 0.9.1 the public create paths only recorded it locally.)
+    // its first value. (Before 0.10.0 the public create paths only recorded it locally.)
     void NativeHttpRegistersSensorsCreatedWhileRunning()
     {
         hsm::test::HttpRecordingServer server;
@@ -6078,10 +6108,15 @@ namespace
         Require(WaitForRequestWith(server, "/api/sensors/commands", { "\"Path\":\"runtime/late-alert\"", "runtime-spike" }) >= 0,
                 "the late alert must re-register the sensor");
 
+        // A changed description re-registers the same way (0.10.0).
+        Require(hsm_sensor_set_description(sensor.value, "limit-2048") == HSM_RESULT_OK, "set description");
+        Require(WaitForRequestWith(server, "/api/sensors/commands", { "\"Path\":\"runtime/late-alert\"", "limit-2048" }) >= 0,
+                "the new description must re-register the sensor");
+
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
-        // Exactly one runtime registration and one re-registration: a posted, unchanged
+        // Exactly one runtime registration and two re-registrations: a posted, unchanged
         // registration is never sent again.
-        Require(server.CountPath("/api/sensors/commands") == 2, "one runtime registration and one re-registration");
+        Require(server.CountPath("/api/sensors/commands") == 3, "one runtime registration and two re-registrations");
     }
 #endif
 
@@ -7793,6 +7828,7 @@ namespace
             { "native_invalid_argument_clears_out_params", [](const std::string&) { NativeInvalidArgumentClearsOutParams(); } },
             { "native_enum_sensor_with_sensor_options_validates_arguments", [](const std::string&) { NativeEnumSensorWithSensorOptionsValidatesArguments(); } },
             { "native_add_after_collector_destroy_is_rejected", [](const std::string&) { NativeAddAfterCollectorDestroyIsRejected(); } },
+            { "native_set_description_rebuilds_the_registration", [](const std::string&) { NativeSetDescriptionRebuildsTheRegistration(); } },
             { "native_sent_json_failure_reports_fresh_error", [](const std::string&) { NativeSentJsonFailureReportsFreshError(); } },
             { "native_last_error_is_safe_under_concurrent_failures",
               [](const std::string&) { NativeLastErrorIsSafeUnderConcurrentFailures(); } },
