@@ -423,10 +423,16 @@ mod tests {
             tree.file("sys/class/hwmon/hwmon0/name", "coretemp\n");
             tree.file("sys/class/hwmon/hwmon0/temp1_label", "Package id 0\n");
             tree.file("sys/class/hwmon/hwmon0/temp1_input", "43000\n");
+            // garage-server's mounts and block devices (captured 2026-09-29).
             tree.file(
                 "mountinfo",
-                "22 1 8:33 / / rw,relatime shared:1 - ext4 /dev/sdc1 rw\n",
+                crate::probe_only::disks::mounts::tests::GARAGE_MOUNTINFO,
             );
+            tree.file(
+                "diskstats",
+                crate::probe_only::disks::diskstats::tests::GARAGE_DISKSTATS,
+            );
+            crate::probe_only::disks::diskstats::tests::garage_sysfs(&tree);
             Self { tree }
         }
 
@@ -434,9 +440,10 @@ mod tests {
             HostEnvironment {
                 sys_root: self.tree.0.join("sys"),
                 mountinfo: self.tree.0.join("mountinfo"),
-                disk_target: self.tree.0.clone(),
+                diskstats: self.tree.0.join("diskstats"),
                 statvfs: |_| {
-                    Ok(crate::probe_only::disk::FsStats {
+                    Ok(crate::probe_only::disks::FsStats {
+                        fragment_size: 4096,
                         blocks: 1000,
                         blocks_available: 400,
                         files: 100,
@@ -456,9 +463,29 @@ mod tests {
     /// 2026-09-24): computer-level, so they sit under `<computer>/.computer/`, not the module.
     const PROBE_ONLY_SET: &[&str] = &[
         "garage-server/.computer/CPU temperature",
-        "garage-server/.computer/Disks monitoring/Free inodes %",
-        "garage-server/.computer/Disks monitoring/Free space on disk %",
         "garage-server/.computer/Logical cores",
+    ];
+
+    /// The disk sensors garage-server registers (#1481), pinned literally: four real filesystems
+    /// (`/` on sdc1, the FUSE-NTFS archives on sda2 and sdb1, ext4 on sdb5), deduplicated from
+    /// eleven mounts, named after the Windows per-drive pattern.
+    const DISKS_GARAGE_SET: &[&str] = &[
+        "garage-server/.computer/Disks monitoring/Average disk write speed on mediacentr disk",
+        "garage-server/.computer/Disks monitoring/Average disk write speed on oldlinux disk",
+        "garage-server/.computer/Disks monitoring/Average disk write speed on root disk",
+        "garage-server/.computer/Disks monitoring/Average disk write speed on wd4tb disk",
+        "garage-server/.computer/Disks monitoring/Free inodes on mediacentr disk %",
+        "garage-server/.computer/Disks monitoring/Free inodes on oldlinux disk %",
+        "garage-server/.computer/Disks monitoring/Free inodes on root disk %",
+        "garage-server/.computer/Disks monitoring/Free inodes on wd4tb disk %",
+        "garage-server/.computer/Disks monitoring/Free space on mediacentr disk",
+        "garage-server/.computer/Disks monitoring/Free space on mediacentr disk %",
+        "garage-server/.computer/Disks monitoring/Free space on oldlinux disk",
+        "garage-server/.computer/Disks monitoring/Free space on oldlinux disk %",
+        "garage-server/.computer/Disks monitoring/Free space on root disk",
+        "garage-server/.computer/Disks monitoring/Free space on root disk %",
+        "garage-server/.computer/Disks monitoring/Free space on wd4tb disk",
+        "garage-server/.computer/Disks monitoring/Free space on wd4tb disk %",
     ];
 
     /// The module set: managed `AddAllModuleSensors` minus `Process ThreadPool thread count`
@@ -595,6 +622,7 @@ mod tests {
         // fails here — and so does a probe-only path that collides with the parity set.
         let mut expected = parity_set();
         expected.extend_from_slice(PROBE_ONLY_SET);
+        expected.extend_from_slice(DISKS_GARAGE_SET);
         expected.extend_from_slice(DOCKER_GARAGE_SET);
         expected.sort_unstable();
         let registered = registered_paths_with(&ProbeConfig::default(), true);
@@ -604,16 +632,22 @@ mod tests {
         assert!(
             PROBE_ONLY_SET
                 .iter()
+                .chain(DISKS_GARAGE_SET)
                 .chain(DOCKER_GARAGE_SET)
                 .all(|path| !parity.contains(path)),
             "a probe-only sensor must never shadow a parity sensor"
         );
+        // The literal list and the module's own path builders agree.
+        let mut built = crate::probe_only::disks::tests::garage_paths("garage-server");
+        built.sort_unstable();
+        assert_eq!(built, DISKS_GARAGE_SET);
     }
 
     #[test]
     fn host_sensors_switch_off_as_configured() {
         let mut config = ProbeConfig::default();
         config.host_sensors.enabled = false;
+        config.disks.enabled = false;
         config.docker.enabled = false;
         let mut parity = parity_set();
         parity.sort_unstable();
@@ -621,17 +655,43 @@ mod tests {
 
         let mut config = ProbeConfig::default();
         config.host_sensors.cpu_temperature = false;
-        config.host_sensors.disk = false;
+        config.disks.enabled = false;
         config.docker.enabled = false;
         let mut expected = parity_set();
         expected.push("garage-server/.computer/Logical cores");
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
 
-        // The Docker source has its own switch, independent of the host sensors.
+        // The deprecated 0.2.x switch still turns the disks off.
+        let mut config = ProbeConfig::default();
+        config.host_sensors.disk = Some(false);
+        config.docker.enabled = false;
+        let mut expected = parity_set();
+        expected.extend_from_slice(PROBE_ONLY_SET);
+        expected.sort_unstable();
+        assert_eq!(registered_paths_with(&config, true), expected);
+
+        // Excluded mounts and the write-speed switch.
+        let mut config = ProbeConfig::default();
+        config.host_sensors.enabled = false;
+        config.docker.enabled = false;
+        config.disks.exclude = vec!["/mnt/*".into()];
+        config.disks.write_speed = false;
+        let mut expected = parity_set();
+        expected.extend_from_slice(&[
+            "garage-server/.computer/Disks monitoring/Free inodes on root disk %",
+            "garage-server/.computer/Disks monitoring/Free space on root disk",
+            "garage-server/.computer/Disks monitoring/Free space on root disk %",
+        ]);
+        expected.sort_unstable();
+        assert_eq!(registered_paths_with(&config, true), expected);
+
+        // The Docker source and the disks have their own switches, independent of the host
+        // sensors.
         let mut config = ProbeConfig::default();
         config.host_sensors.enabled = false;
         let mut expected = parity_set();
+        expected.extend_from_slice(DISKS_GARAGE_SET);
         expected.extend_from_slice(DOCKER_GARAGE_SET);
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
@@ -678,9 +738,43 @@ mod tests {
                 "\"ScheduledRepeatMode\":20,\"ScheduledInstantSend\":true",
             ],
         );
+        // Every filesystem, e.g. the archive: Double, MB, EMA, 15 min TTL, and the managed
+        // `Free space on <X> disk` alert verbatim (EMA value <= 20 GB -> Error, down arrow).
+        contains_all(
+            &find("garage-server/.computer/Disks monitoring/Free space on wd4tb disk"),
+            &[
+                "\"SensorType\":2,",
+                "\"TTLTicks\":[9000000000]",
+                "\"OriginalUnit\":3,",
+                "\"Statistics\":1",
+                "\"IsSingletonSensor\":true",
+                "\"Conditions\":[{\"Combination\":0,\"Operation\":0,\"Property\":210,\
+                 \"Target\":{\"Type\":0,\"Value\":\"20480\"}}],\"Status\":3,",
+                "\"Template\":\"[$product] Free space on wd4tb disk is running out. Current free \
+                 space is $value $unit\"",
+                "\"Icon\":\"\\u2B07\"",
+            ],
+        );
+        // DoubleBar, MBytes_sec, EMA, 15 min TTL, no alert (the Windows row has none); the
+        // description names the whole disk and the filesystem sharing it.
+        let write = find(
+            "garage-server/.computer/Disks monitoring/Average disk write speed on mediacentr disk",
+        );
+        contains_all(
+            &write,
+            &[
+                "\"SensorType\":5,",
+                "\"TTLTicks\":[9000000000]",
+                "\"OriginalUnit\":2103,",
+                "\"Statistics\":1",
+                "\"Alerts\":null",
+                "whole disk sdb",
+                "also the write speed of: oldlinux",
+            ],
+        );
         // Double, Percents, 15 min TTL, < 10 warning band + < 5 error.
         contains_all(
-            &find("garage-server/.computer/Disks monitoring/Free space on disk %"),
+            &find("garage-server/.computer/Disks monitoring/Free space on root disk %"),
             &[
                 "\"SensorType\":2,",
                 "\"TTLTicks\":[9000000000]",
@@ -693,7 +787,7 @@ mod tests {
             ],
         );
         // Double, Percents, 15 min TTL, < 10 warning only.
-        let inodes = find("garage-server/.computer/Disks monitoring/Free inodes %");
+        let inodes = find("garage-server/.computer/Disks monitoring/Free inodes on root disk %");
         contains_all(
             &inodes,
             &[

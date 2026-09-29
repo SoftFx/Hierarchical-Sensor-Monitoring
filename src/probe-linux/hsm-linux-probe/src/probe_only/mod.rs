@@ -15,7 +15,9 @@
 //! collector starts) and returns a [`Source`] that the probe drives on a thread of its own:
 //!
 //! * [`host`] — `.computer/Logical cores`, `.computer/CPU temperature`;
-//! * [`disk`] — `.computer/Disks monitoring/Free space on disk %`, `… /Free inodes %`;
+//! * [`disks`] — per mounted real filesystem, `.computer/Disks monitoring/Free space on <name>
+//!   disk` (MB, %), `Free inodes on <name> disk %` and `Average disk write speed on <name> disk`
+//!   (#1481); new mounts register at runtime;
 //! * [`docker`] — `<module>/Docker/<project>/<service>/…`, per Compose service (#1416). It
 //!   registers the services it finds before Start and any that appear later at runtime.
 //!
@@ -27,7 +29,7 @@
 //! * A failed read is never posted as a value (no 0 for "unknown"): the sample is skipped and the
 //!   failure is logged once, deduplicated by [`FailureLog`] until the source recovers.
 
-pub mod disk;
+pub mod disks;
 pub mod docker;
 pub mod host;
 
@@ -49,10 +51,10 @@ pub struct HostEnvironment {
     pub sys_root: PathBuf,
     /// This process's mount table (`/proc/self/mountinfo`).
     pub mountinfo: PathBuf,
-    /// The path whose filesystem the disk sensors report (`/srv/docker`).
-    pub disk_target: PathBuf,
+    /// The kernel's per-device I/O counters (`/proc/diskstats`).
+    pub diskstats: PathBuf,
     /// Filesystem statistics for a path (`statvfs(3)`); injectable for tests.
-    pub statvfs: fn(&std::path::Path) -> std::io::Result<disk::FsStats>,
+    pub statvfs: fn(&std::path::Path) -> std::io::Result<disks::FsStats>,
     /// Online logical CPUs (`sysconf(_SC_NPROCESSORS_ONLN)`); injectable for tests.
     pub online_cpus: fn() -> std::io::Result<i32>,
     /// The Docker Engine API client for a config (the socket); injectable for tests.
@@ -68,8 +70,8 @@ impl HostEnvironment {
         Self {
             sys_root: PathBuf::from("/sys"),
             mountinfo: PathBuf::from("/proc/self/mountinfo"),
-            disk_target: PathBuf::from(disk::DEFAULT_TARGET),
-            statvfs: disk::statvfs,
+            diskstats: PathBuf::from("/proc/diskstats"),
+            statvfs: disks::statvfs,
             online_cpus: host::online_cpus,
             docker_engine: |config| Box::new(docker::Engine::new(config.socket.clone())),
             docker_state: Some(docker::state::default_state_path(
@@ -101,6 +103,12 @@ pub fn register<'c>(
 ) -> Vec<Box<dyn Source + 'c>> {
     let mut sources: Vec<Box<dyn Source + 'c>> = Vec::new();
     sources.extend(register_host_sources(
+        collector,
+        config,
+        environment,
+        logger,
+    ));
+    sources.extend(register_disk_sources(
         collector,
         config,
         environment,
@@ -139,12 +147,28 @@ fn register_host_sources<'c>(
     } else {
         logger.info("CPU temperature sensor disabled (probe.hostSensors.cpuTemperature = false)");
     }
-    if host.disk {
-        sources.extend(disk::register(collector, environment, logger));
-    } else {
-        logger.info("disk sensors disabled (probe.hostSensors.disk = false)");
-    }
     sources
+}
+
+fn register_disk_sources<'c>(
+    collector: &'c Collector,
+    config: &ProbeConfig,
+    environment: &HostEnvironment,
+    logger: &Logger,
+) -> Vec<Box<dyn Source + 'c>> {
+    // `probe.hostSensors.disk` (0.2.x) moved to `probe.disks.enabled`; an explicit false in an
+    // older config is still honoured, so an upgrade does not switch the disk sensors back on.
+    if config.host_sensors.disk == Some(false) {
+        logger.warn(
+            "probe.hostSensors.disk is deprecated (use probe.disks.enabled); honouring its \
+             false: disk sensors disabled",
+        );
+        return Vec::new();
+    }
+    if config.host_sensors.disk.is_some() {
+        logger.warn("probe.hostSensors.disk is deprecated and ignored; use probe.disks.enabled");
+    }
+    disks::register(collector, &config.disks, environment, logger)
 }
 
 /// Stop request shared by the source threads; waking a sleeping thread is immediate.
