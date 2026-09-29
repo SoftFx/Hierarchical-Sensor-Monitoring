@@ -188,6 +188,11 @@ Behavior at the edges:
   `probe.docker.composeOnly` is `true` (default); with `false` they appear as `Docker/_standalone/<name>`.
   **One-off containers** (`docker compose run`, `com.docker.compose.oneoff=True`) are never counted
   as replicas of their service — a leftover exited one would otherwise pin it at `Stopped`.
+- **Excluded services** (`probe.docker.exclude`, owner decision): a service matching a
+  `project/service` pattern (`*` matches within one segment, never across `/`) is not monitored —
+  no sensors, one INFO line (`<project>/<service>: excluded by probe.docker.exclude, not
+  monitored`). A service the state remembers that is now excluded is dropped from the state at
+  start (no `Stopped`, no alert). Only an exclude list: whatever is not excluded is monitored.
 - **Completed one-shot jobs** (owner decision): a Compose service whose containers have all exited
   with code 0 under restart policy `no` (garage's `lingua-ci/ci-image`, an image build) is a job
   that finished, not a service that stopped — no sensors, one INFO line
@@ -393,9 +398,10 @@ Placeholders only — **no secrets**:
   deliberately does not expose the ABI's `allow_untrusted_server_certificate` flag — it disables
   both peer and hostname verification, which §4.1/§4.3 ban. Trust a private CA by installing it
   with `update-ca-certificates`; libcurl/OpenSSL picks up the system store with verification on.
-* `docker` (optional; every key has a default): `enabled` (`true`), `socket`
+* `probe.docker` (optional; every key has a default): `enabled` (`true`), `socket`
   (`/var/run/docker.sock`), `composeOnly` (`true`), `samplePeriodSec` (`5`, 1–300; the bars stay
-  5 minutes whatever it is) and `oomLatchHours` (`24`). A host without Docker needs no change: the
+  5 minutes whatever it is), `oomLatchHours` (`24`) and `exclude` (`[]`: `project/service`
+  patterns, `*` within a segment, e.g. `"portainer/*"`, `"lingua-ci/janitor"`). A host without Docker needs no change: the
   source logs one info line and waits for the socket; `enabled: false` turns it off entirely.
 
 ## Running

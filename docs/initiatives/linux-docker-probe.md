@@ -266,7 +266,9 @@ state file and re-adopted after a restart, so they never move); rule fixed by un
 Containers without compose labels: config `probe.docker.composeOnly: true` (default) skips them
 with one deduplicated diagnostic per container; `false` puts them under
 `Docker/_standalone/<name>`. `docker compose run` one-offs (`com.docker.compose.oneoff=True`) are
-never counted as replicas.
+never counted as replicas. `probe.docker.exclude` (owner decision, 2026-09-29) lists
+`project/service` patterns with `*` wildcards whose services are not monitored at all; an excluded
+service is also dropped from the state (no `Stopped`, no alert). No include list.
 
 HSM-side templates (documented for the operator, thresholds configurable, nothing hardcoded
 in the probe or collector catalog): probe TTL 3 min; sustained CPU via HSM EMA; low SSD

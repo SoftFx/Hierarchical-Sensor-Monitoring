@@ -23,7 +23,8 @@
       "socket": "/var/run/docker.sock",
       "composeOnly": true,
       "samplePeriodSec": 5,
-      "oomLatchHours": 24
+      "oomLatchHours": 24,
+      "exclude": []
     }
   },
   "shutdownTimeoutSec": 10

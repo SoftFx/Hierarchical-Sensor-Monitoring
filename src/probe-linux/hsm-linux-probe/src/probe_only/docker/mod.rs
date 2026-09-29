@@ -99,6 +99,8 @@ pub struct DockerSource<'c, E: EngineApi> {
     sample_period: Duration,
     oom_latch: Duration,
     compose_only: bool,
+    /// `probe.docker.exclude` patterns.
+    exclude: Vec<String>,
     state_path: Option<PathBuf>,
     host_mem_total: Option<u64>,
     api: Option<ApiVersion>,
@@ -156,9 +158,24 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                  against the limit Docker reports",
             );
         }
+        // An excluded service is neither reported (no Stopped for it) nor remembered.
+        let mut tracker = Tracker::new(state);
+        let remembered: Vec<ServiceKey> = tracker.state.services.keys().cloned().collect();
+        for key in remembered {
+            if config
+                .exclude
+                .iter()
+                .any(|pattern| identity::matches_pattern(pattern, &key))
+                && tracker.forget(&key)
+            {
+                logger.info(format!(
+                    "docker: {key}: excluded by probe.docker.exclude; dropped from the state"
+                ));
+            }
+        }
         // Re-adopt the nodes of the previous run before anything new is named.
         let mut naming = Naming::default();
-        for record in state.services.values() {
+        for record in tracker.state.services.values() {
             if let Some(node) = &record.node {
                 if !naming.adopt(&record.key(), node) {
                     logger.warn(format!(
@@ -174,11 +191,12 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             sample_period: config.sample_period(),
             oom_latch: config.oom_latch(),
             compose_only: config.compose_only,
+            exclude: config.exclude.clone(),
             state_path,
             host_mem_total,
             api: None,
             naming,
-            tracker: Tracker::new(state),
+            tracker,
             sensors: BTreeMap::new(),
             roster: BTreeMap::new(),
             cpu: CpuTracker::default(),
@@ -419,6 +437,27 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 state: container.state.clone(),
                 inspect,
             });
+        }
+
+        // Excluded services (probe.docker.exclude): not monitored at all.
+        let excluded: Vec<ServiceKey> = services
+            .keys()
+            .filter(|key| {
+                self.exclude
+                    .iter()
+                    .any(|pattern| identity::matches_pattern(pattern, key))
+            })
+            .cloned()
+            .collect();
+        for key in &excluded {
+            services.remove(key);
+            roster.remove(key);
+            self.tracker.forget(key);
+            if self.log_once.raise(&format!("exclude:{key}")) {
+                logger.info(format!(
+                    "docker: {key}: excluded by probe.docker.exclude, not monitored"
+                ));
+            }
         }
 
         // A service first seen as a finished one-shot job is not a service. One that the state
@@ -1278,6 +1317,55 @@ pub(crate) mod tests {
             source.naming.node(&ServiceKey::new("gitea", "db")),
             "Docker/gitea/db"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn excluded_services_are_not_monitored_and_leave_the_state() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        // portainer was monitored before (it is in the state); now both it and janitor are excluded.
+        let mut state = State::default();
+        let portainer = ServiceKey::new("portainer", "portainer");
+        let mut record = state::ServiceRecord::new(&portainer);
+        record.last_seen = unix_now() - 60;
+        state.services.insert(portainer.clone(), record);
+        let dir =
+            std::env::temp_dir().join(format!("hsm-probe-docker-exclude-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(state::STATE_FILE_NAME);
+        state.save(&path).unwrap();
+
+        let config = DockerConfig {
+            exclude: vec!["portainer/*".into(), "lingua-ci/janitor".into()],
+            ..DockerConfig::default()
+        };
+        let mut source = garage_source(
+            &collector,
+            FixtureEngine::garage(),
+            &config,
+            Some(path.clone()),
+        );
+        assert!(
+            !source.tracker().state.services.contains_key(&portainer),
+            "dropped from the state at start: no Stopped, no alerts"
+        );
+        source.poll(&quiet(), &|| false).expect("poll");
+        source.sample_stats(&quiet(), &|| false).expect("stats");
+        let paths = registered(&collector);
+        assert!(paths.iter().all(|p| !p.contains("/Docker/portainer/")));
+        assert!(paths
+            .iter()
+            .all(|p| !p.contains("/Docker/lingua-ci/janitor/")));
+        assert!(paths
+            .iter()
+            .any(|p| p.contains("/Docker/lingua-ci/runner-heavy/")));
+        let (saved, _) = State::load(&path);
+        assert!(!saved.services.contains_key(&portainer));
+        assert!(!saved
+            .services
+            .contains_key(&ServiceKey::new("lingua-ci", "janitor")));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -66,7 +66,8 @@ change, as in the managed Total CPU / Free RAM defaults. Enum state sensors use
 `Service status` shape; `aggregate_data` must be set explicitly (it is not defaulted to true).
 
 **Configuration.** `probe.hostSensors.{enabled, cpuTemperature, disk}` and
-`probe.docker.{enabled, socket, composeOnly, samplePeriodSec, oomLatchHours}`, switches all
+`probe.docker.{enabled, socket, composeOnly, samplePeriodSec, oomLatchHours, exclude}` (`exclude`:
+`project/service` patterns with `*` wildcards, not monitored and dropped from the state), switches all
 default `true`, so a config written before the probe-only sensors turns them on.
 
 **Packaging.** `src/probe-linux/packaging/build-deb.sh <version>` builds the `.deb` in a plain

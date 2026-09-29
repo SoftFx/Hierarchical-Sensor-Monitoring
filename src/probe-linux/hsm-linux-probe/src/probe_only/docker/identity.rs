@@ -87,6 +87,33 @@ pub fn membership(container: &ContainerSummary, compose_only: bool) -> Membershi
     }
 }
 
+/// Whether `pattern` is a valid `probe.docker.exclude` entry: `project/service`, both segments
+/// non-empty, `*` allowed anywhere.
+pub fn is_valid_pattern(pattern: &str) -> bool {
+    matches!(pattern.split_once('/'), Some((project, service))
+        if !project.is_empty() && !service.is_empty() && !service.contains('/'))
+}
+
+/// Whether a service matches an exclude pattern. Segment-wise: `*` matches any run of characters
+/// within its segment (never across the `/`), so `portainer/*` is every service of `portainer`.
+pub fn matches_pattern(pattern: &str, key: &ServiceKey) -> bool {
+    match pattern.split_once('/') {
+        Some((project, service)) => {
+            glob(project.as_bytes(), key.project.as_bytes())
+                && glob(service.as_bytes(), key.service.as_bytes())
+        }
+        None => false,
+    }
+}
+
+fn glob(pattern: &[u8], text: &[u8]) -> bool {
+    match pattern.split_first() {
+        None => text.is_empty(),
+        Some((b'*', rest)) => (0..=text.len()).any(|skip| glob(rest, &text[skip..])),
+        Some((first, rest)) => text.first() == Some(first) && glob(rest, &text[1..]),
+    }
+}
+
 /// `[A-Za-z0-9_-]` kept, everything else → `_`; an empty name becomes `_`.
 pub fn normalize(raw: &str) -> String {
     if raw.is_empty() {
@@ -369,6 +396,31 @@ mod tests {
         // Another service cannot take a segment that is already owned.
         assert!(!naming.adopt(&key("shop", "web.x"), "Docker/shop/web"));
         assert_eq!(naming.node(&key("shop", "web")), "Docker/shop/web");
+    }
+
+    #[test]
+    fn exclude_patterns_match_segment_wise() {
+        let portainer = key("portainer", "portainer");
+        let janitor = key("lingua-ci", "janitor");
+        assert!(matches_pattern("portainer/*", &portainer));
+        assert!(matches_pattern("*/portainer", &portainer));
+        assert!(matches_pattern("lingua-ci/janitor", &janitor));
+        assert!(matches_pattern("lingua-ci/*tor", &janitor));
+        assert!(matches_pattern("*/*", &janitor));
+        assert!(
+            !matches_pattern("lingua/*", &janitor),
+            "a project prefix is not a match"
+        );
+        assert!(!matches_pattern("lingua-ci/jan", &janitor));
+        assert!(!matches_pattern("*", &janitor), "no '/', no match");
+        assert!(matches_pattern(
+            "_standalone/adhoc",
+            &key("_standalone", "adhoc")
+        ));
+        assert!(is_valid_pattern("portainer/*"));
+        for bad in ["portainer", "a/b/c", "/x", "x/", ""] {
+            assert!(!is_valid_pattern(bad), "{bad}");
+        }
     }
 
     #[test]
