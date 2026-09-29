@@ -378,8 +378,9 @@ mod tests {
     }
 
     /// The registration JSON of every sensor the probe registers — the parity set, plus the
-    /// probe-only set against a fake host (a coretemp package sensor and a mounted target) when
-    /// `with_probe_only` is set, so the result does not depend on the machine running the test.
+    /// probe-only set against a fake host (a coretemp package sensor, a mounted target, and a
+    /// Docker daemon serving the garage-server captures) when `with_probe_only` is set, so the
+    /// result does not depend on the machine running the test.
     fn registrations_with(config: &ProbeConfig, with_probe_only: bool) -> Vec<String> {
         let collector = test_collector(1);
         let logger = Logger::new(Level::Error, None);
@@ -443,6 +444,10 @@ mod tests {
                     })
                 },
                 online_cpus: || Ok(4),
+                docker_engine: |_| {
+                    Box::new(crate::probe_only::docker::tests::FixtureEngine::garage())
+                },
+                docker_state: None,
             }
         }
     }
@@ -484,6 +489,84 @@ mod tests {
         "garage-server/LinuxProbe/.module/Process process/Process thread count",
     ];
 
+    /// The Docker source (#1416) on garage-server: 12 Compose containers, 11 monitored services, all
+    /// registered before Start. Every service gets the three state sensors, the four with a
+    /// healthcheck (seaweedfs, mongo, gitea, db) `Health`, and all eleven (all running) the three
+    /// stats sensors. `lingua-ci/ci-image` — Exited (0) under restart policy `no` — is a completed
+    /// one-shot job and not monitored (owner decision). 70 paths, no empty nodes.
+    const DOCKER_GARAGE_SET: &[&str] = &[
+        "garage-server/LinuxProbe/Docker/caddy/caddy/CPU",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/Memory limit",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/Memory used %",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/OOM killed",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/Restart count",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/Service status",
+        "garage-server/LinuxProbe/Docker/gitea/db/CPU",
+        "garage-server/LinuxProbe/Docker/gitea/db/Health",
+        "garage-server/LinuxProbe/Docker/gitea/db/Memory limit",
+        "garage-server/LinuxProbe/Docker/gitea/db/Memory used %",
+        "garage-server/LinuxProbe/Docker/gitea/db/OOM killed",
+        "garage-server/LinuxProbe/Docker/gitea/db/Restart count",
+        "garage-server/LinuxProbe/Docker/gitea/db/Service status",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/CPU",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Health",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Memory limit",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Memory used %",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/OOM killed",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Restart count",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Service status",
+        "garage-server/LinuxProbe/Docker/hsm/app/CPU",
+        "garage-server/LinuxProbe/Docker/hsm/app/Memory limit",
+        "garage-server/LinuxProbe/Docker/hsm/app/Memory used %",
+        "garage-server/LinuxProbe/Docker/hsm/app/OOM killed",
+        "garage-server/LinuxProbe/Docker/hsm/app/Restart count",
+        "garage-server/LinuxProbe/Docker/hsm/app/Service status",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Service status",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Service status",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Service status",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Service status",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/CPU",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Health",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Service status",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/CPU",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Health",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Memory limit",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Memory used %",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/OOM killed",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Restart count",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Service status",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/CPU",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/Memory limit",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/Memory used %",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/OOM killed",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/Restart count",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/Service status",
+    ];
+
     #[test]
     fn the_registered_set_is_exactly_the_managed_unix_default_set() {
         // The parity contract (README table): nothing more, nothing less. A probe-only sensor, or a
@@ -512,13 +595,17 @@ mod tests {
         // fails here — and so does a probe-only path that collides with the parity set.
         let mut expected = parity_set();
         expected.extend_from_slice(PROBE_ONLY_SET);
+        expected.extend_from_slice(DOCKER_GARAGE_SET);
         expected.sort_unstable();
         let registered = registered_paths_with(&ProbeConfig::default(), true);
         assert_eq!(registered, expected);
 
         let parity = parity_set();
         assert!(
-            PROBE_ONLY_SET.iter().all(|path| !parity.contains(path)),
+            PROBE_ONLY_SET
+                .iter()
+                .chain(DOCKER_GARAGE_SET)
+                .all(|path| !parity.contains(path)),
             "a probe-only sensor must never shadow a parity sensor"
         );
     }
@@ -527,6 +614,7 @@ mod tests {
     fn host_sensors_switch_off_as_configured() {
         let mut config = ProbeConfig::default();
         config.host_sensors.enabled = false;
+        config.docker.enabled = false;
         let mut parity = parity_set();
         parity.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), parity);
@@ -534,8 +622,17 @@ mod tests {
         let mut config = ProbeConfig::default();
         config.host_sensors.cpu_temperature = false;
         config.host_sensors.disk = false;
+        config.docker.enabled = false;
         let mut expected = parity_set();
         expected.push("garage-server/.computer/Logical cores");
+        expected.sort_unstable();
+        assert_eq!(registered_paths_with(&config, true), expected);
+
+        // The Docker source has its own switch, independent of the host sensors.
+        let mut config = ProbeConfig::default();
+        config.host_sensors.enabled = false;
+        let mut expected = parity_set();
+        expected.extend_from_slice(DOCKER_GARAGE_SET);
         expected.sort_unstable();
         assert_eq!(registered_paths_with(&config, true), expected);
     }

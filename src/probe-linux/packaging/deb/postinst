@@ -23,6 +23,14 @@ case "$1" in
             useradd --system --gid hsm-probe --no-create-home --home-dir /nonexistent \
                 --shell /usr/sbin/nologin --comment "HSM Linux probe" hsm-probe
         fi
+        # Docker socket access for the Docker source (#1416): a drop-in with
+        # SupplementaryGroups=docker, written only where a docker group exists (a unit naming a
+        # missing group would not start). Only on a fresh install or the upgrade that introduces it:
+        # an operator who removed the drop-in (the socket is root-equivalent) keeps it removed across
+        # upgrades. Never fatal: without it the source logs one error.
+        if [ -z "$2" ] || dpkg --compare-versions "$2" lt "0.3.0~"; then
+            /usr/lib/hsm-linux-probe/docker-access.sh install || true
+        fi
         # A fresh install deliberately does NOT enable or start the unit: install.sh places
         # config + key first, then runs `systemctl enable --now`.
         if [ -d /run/systemd/system ]; then

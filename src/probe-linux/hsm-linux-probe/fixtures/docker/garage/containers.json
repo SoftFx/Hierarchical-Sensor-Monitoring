@@ -1,0 +1,535 @@
+[
+ {
+  "Id": "c76f47b82f9c710b3b7bafd1bf34240e734138d313118b1a7258a1ba09cb1261",
+  "Names": [
+   "/lingua-seaweedfs"
+  ],
+  "Image": "chrislusf/seaweedfs:3.68",
+  "ImageID": "sha256:f439911d40e63d91d60af1c28e16291f466f6fb55243b569143b64102dba1533",
+  "Command": "/entrypoint.sh server -dir=/data -ip.bind=0.0.0.0 -master.volumeSizeLimitMB=1024 -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json",
+  "Created": 1790418513,
+  "Ports": [
+   {
+    "IP": "127.0.0.1",
+    "PrivatePort": 8888,
+    "PublicPort": 8888,
+    "Type": "tcp"
+   },
+   {
+    "IP": "127.0.0.1",
+    "PrivatePort": 9333,
+    "PublicPort": 9333,
+    "Type": "tcp"
+   },
+   {
+    "PrivatePort": 18080,
+    "Type": "tcp"
+   },
+   {
+    "PrivatePort": 18888,
+    "Type": "tcp"
+   },
+   {
+    "PrivatePort": 19333,
+    "Type": "tcp"
+   },
+   {
+    "PrivatePort": 7333,
+    "Type": "tcp"
+   },
+   {
+    "PrivatePort": 8080,
+    "Type": "tcp"
+   },
+   {
+    "IP": "192.168.88.165",
+    "PrivatePort": 8333,
+    "PublicPort": 8333,
+    "Type": "tcp"
+   }
+  ],
+  "Labels": {
+   "author": "Chris Lu",
+   "com.docker.compose.config-hash": "2f2dd9eef78725ac37649134f98d943b78dba8dbf6aa3e6f221fc611f153a045",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "",
+   "com.docker.compose.image": "sha256:f439911d40e63d91d60af1c28e16291f466f6fb55243b569143b64102dba1533",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "lingua",
+   "com.docker.compose.project.config_files": "/srv/docker/lingua/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/lingua",
+   "com.docker.compose.service": "seaweedfs",
+   "com.docker.compose.version": "2.26.1",
+   "org.opencontainers.image.created": "2024-06-10T04:16:54.538Z",
+   "org.opencontainers.image.description": "SeaweedFS is a distributed storage system for blobs, objects, files, and data lake, to store and serve billions of files fast!",
+   "org.opencontainers.image.licenses": "Apache-2.0",
+   "org.opencontainers.image.revision": "a9cd9b0542ef9e2c795baf063d3f7db395ff209b",
+   "org.opencontainers.image.source": "https://github.com/seaweedfs/seaweedfs",
+   "org.opencontainers.image.title": "seaweedfs",
+   "org.opencontainers.image.url": "https://github.com/seaweedfs/seaweedfs",
+   "org.opencontainers.image.vendor": "Chris Lu",
+   "org.opencontainers.image.version": "3.68"
+  },
+  "State": "running",
+  "Status": "Up 2 days (healthy)",
+  "HostConfig": {
+   "NetworkMode": "lingua_default"
+  }
+ },
+ {
+  "Id": "c5abbadb3674293572f199c8082b06f6e55c5dbaa2606139fb280ec9fc2f056b",
+  "Names": [
+   "/hsm-app-1"
+  ],
+  "Image": "hsm-server-rc:0.8.1-trial3",
+  "ImageID": "sha256:68a47d096fbb70184f06e7121daf6575b28f9efe59c1fdc390feac4753f00dc5",
+  "Command": "./HSMServer",
+  "Created": 1790382088,
+  "Ports": [
+   {
+    "PrivatePort": 44330,
+    "Type": "tcp"
+   },
+   {
+    "PrivatePort": 44333,
+    "Type": "tcp"
+   }
+  ],
+  "Labels": {
+   "com.docker.compose.config-hash": "6f2f3c8df3e62f5a5d5180f4b2d81c683c3b20e0ad55314abaf32e9869170525",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "",
+   "com.docker.compose.image": "sha256:68a47d096fbb70184f06e7121daf6575b28f9efe59c1fdc390feac4753f00dc5",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "hsm",
+   "com.docker.compose.project.config_files": "/srv/docker/hsm/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/hsm",
+   "com.docker.compose.replace": "5f6c7b65527344b6fb716f6bd8894e68be3b685e5f28c72b69bc8361fcb3d47d",
+   "com.docker.compose.service": "app",
+   "com.docker.compose.version": "2.26.1"
+  },
+  "State": "running",
+  "Status": "Up 2 days",
+  "HostConfig": {
+   "NetworkMode": "hsm_default"
+  }
+ },
+ {
+  "Id": "8a83c2a538bfd074fe7d57f8cfda1b4552f930c8702473511d3ce7a952aed0ae",
+  "Names": [
+   "/caddy-caddy-1"
+  ],
+  "Image": "garage-caddy:2.11.4-dynv6",
+  "ImageID": "sha256:6cdcaf64e69d20b0109ffe04d1693b427dfd8bd213544887482b770ba01ed063",
+  "Command": "caddy run --config /etc/caddy/Caddyfile --adapter caddyfile",
+  "Created": 1790286250,
+  "Ports": [
+   {
+    "PrivatePort": 2019,
+    "Type": "tcp"
+   },
+   {
+    "IP": "0.0.0.0",
+    "PrivatePort": 443,
+    "PublicPort": 443,
+    "Type": "tcp"
+   },
+   {
+    "IP": "::",
+    "PrivatePort": 443,
+    "PublicPort": 443,
+    "Type": "tcp"
+   },
+   {
+    "IP": "0.0.0.0",
+    "PrivatePort": 443,
+    "PublicPort": 443,
+    "Type": "udp"
+   },
+   {
+    "IP": "::",
+    "PrivatePort": 443,
+    "PublicPort": 443,
+    "Type": "udp"
+   },
+   {
+    "IP": "0.0.0.0",
+    "PrivatePort": 80,
+    "PublicPort": 80,
+    "Type": "tcp"
+   },
+   {
+    "IP": "::",
+    "PrivatePort": 80,
+    "PublicPort": 80,
+    "Type": "tcp"
+   }
+  ],
+  "Labels": {
+   "com.docker.compose.config-hash": "6cddbf453081f150e0b9897b6fcf09c629b0845487ee30d59f03e18fca1e2033",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "",
+   "com.docker.compose.image": "sha256:6cdcaf64e69d20b0109ffe04d1693b427dfd8bd213544887482b770ba01ed063",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "caddy",
+   "com.docker.compose.project.config_files": "/srv/docker/caddy/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/caddy",
+   "com.docker.compose.replace": "0538e1541d42089d32eef8bb3c04651cb1c82ef7f7c757bb751f66dce5dce177",
+   "com.docker.compose.service": "caddy",
+   "com.docker.compose.version": "2.26.1",
+   "org.opencontainers.image.description": "a powerful, enterprise-ready, open source web server with automatic HTTPS written in Go",
+   "org.opencontainers.image.documentation": "https://caddyserver.com/docs",
+   "org.opencontainers.image.licenses": "Apache-2.0",
+   "org.opencontainers.image.source": "https://github.com/caddyserver/caddy-docker",
+   "org.opencontainers.image.title": "Caddy",
+   "org.opencontainers.image.url": "https://caddyserver.com",
+   "org.opencontainers.image.vendor": "Light Code Labs",
+   "org.opencontainers.image.version": "v2.11.4"
+  },
+  "State": "running",
+  "Status": "Up 3 days",
+  "HostConfig": {
+   "NetworkMode": "caddy_default"
+  }
+ },
+ {
+  "Id": "82274bb7d70e0e462117d8d1ec10b4b5d3a34ff442f557c1015d21743f3ddd7e",
+  "Names": [
+   "/lingua-mongo"
+  ],
+  "Image": "mongo:7.0",
+  "ImageID": "sha256:1b70d5bf141c2c93946a8f8e39f3f22a0a04a6d24e22cf47472b703856c715de",
+  "Command": "docker-entrypoint.sh mongod --bind_ip_all --wiredTigerCacheSizeGB 0.5",
+  "Created": 1790201665,
+  "Ports": [
+   {
+    "IP": "192.168.88.165",
+    "PrivatePort": 27017,
+    "PublicPort": 27017,
+    "Type": "tcp"
+   }
+  ],
+  "Labels": {
+   "com.docker.compose.config-hash": "dd13368f5152e0a8fd592179167fef8f39f8ab7981544b95698a6201ca347db4",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "",
+   "com.docker.compose.image": "sha256:1b70d5bf141c2c93946a8f8e39f3f22a0a04a6d24e22cf47472b703856c715de",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "lingua",
+   "com.docker.compose.project.config_files": "/srv/docker/lingua/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/lingua",
+   "com.docker.compose.replace": "67a7521cc52a1cf4a2d6b5b07588750eb2204120efe7acd59904e00acc8ad001",
+   "com.docker.compose.service": "mongo",
+   "com.docker.compose.version": "2.26.1",
+   "org.opencontainers.image.version": "22.04"
+  },
+  "State": "running",
+  "Status": "Up 4 days (healthy)",
+  "HostConfig": {
+   "NetworkMode": "lingua_default"
+  }
+ },
+ {
+  "Id": "e54f7714803250e93ce2ad7e83312fc9c9ed1abb8a3873fb5b1eb29bcbe20ba2",
+  "Names": [
+   "/lingua-ci-runner-heavy-1"
+  ],
+  "Image": "gitea/act_runner:0.6.1",
+  "ImageID": "sha256:c7804c7d73ab152cc0aa128e1a009360931820aa37fd8bb3821d133eec71ab14",
+  "Command": "/sbin/tini -- run.sh",
+  "Created": 1790161859,
+  "Ports": [],
+  "Labels": {
+   "com.docker.compose.config-hash": "e74ebb65f0776aba793f7ad50edcfe93948efa447775a983c2ce987bb68a8be3",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "ci-image:service_completed_successfully:false,dind:service_started:false",
+   "com.docker.compose.image": "sha256:c7804c7d73ab152cc0aa128e1a009360931820aa37fd8bb3821d133eec71ab14",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "lingua-ci",
+   "com.docker.compose.project.config_files": "/srv/docker/lingua-ci/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/lingua-ci",
+   "com.docker.compose.replace": "c5aec7275d7037f673737455f5bcd5b65bf641b9d7661fd3ea937c2bed5bc036",
+   "com.docker.compose.service": "runner-heavy",
+   "com.docker.compose.version": "2.26.1"
+  },
+  "State": "running",
+  "Status": "Up 5 days",
+  "HostConfig": {
+   "NetworkMode": "lingua-ci"
+  }
+ },
+ {
+  "Id": "3537ef2ee8672b7d4a2791ab988f31b057efc625262768633e70223e97aea595",
+  "Names": [
+   "/lingua-ci-ci-image-1"
+  ],
+  "Image": "docker:29-cli",
+  "ImageID": "sha256:2af014a97c42d6012400b628d7ee8db188e22fc03ce75385eb04e4f346f2348e",
+  "Command": "sh -c 'i=0; until docker info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 90 ] && { echo 'dind is not answering' >&2; exit 1; }; sleep 2; done; docker build -t lingua-ci-dotnet-playwright:8.0-pw1.44 /ctx'",
+  "Created": 1790161859,
+  "Ports": [],
+  "Labels": {
+   "com.docker.compose.config-hash": "02c5ab9c3f5c8dc6d9f131bcd3c76bdad7fdc012116e9b593b206ac426cdb696",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "dind:service_started:false",
+   "com.docker.compose.image": "sha256:2af014a97c42d6012400b628d7ee8db188e22fc03ce75385eb04e4f346f2348e",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "lingua-ci",
+   "com.docker.compose.project.config_files": "/srv/docker/lingua-ci/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/lingua-ci",
+   "com.docker.compose.replace": "25b7dc2cb05e6b1fdbfe8c083d53cf07e56db835b165da09ca65c89b5d220965",
+   "com.docker.compose.service": "ci-image",
+   "com.docker.compose.version": "2.26.1"
+  },
+  "State": "exited",
+  "Status": "Exited (0) 5 days ago",
+  "HostConfig": {
+   "NetworkMode": "lingua-ci"
+  }
+ },
+ {
+  "Id": "e9d7ff6f1b1ef4638583ec94273fecb813883a0407224f212e4f5151e18cea00",
+  "Names": [
+   "/lingua-ci-janitor-1"
+  ],
+  "Image": "docker:29-cli",
+  "ImageID": "sha256:2af014a97c42d6012400b628d7ee8db188e22fc03ce75385eb04e4f346f2348e",
+  "Command": "sh -c 'echo '30 5 * * * /bin/sh /janitor.sh > /proc/1/fd/1 2>&1' | crontab - && exec crond -f -l 8'",
+  "Created": 1790161859,
+  "Ports": [],
+  "Labels": {
+   "com.docker.compose.config-hash": "a248409d16383e77957144a5eaec446e52f400f19b6442ac7b4c9cf4383b4bdd",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "dind:service_started:false",
+   "com.docker.compose.image": "sha256:2af014a97c42d6012400b628d7ee8db188e22fc03ce75385eb04e4f346f2348e",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "lingua-ci",
+   "com.docker.compose.project.config_files": "/srv/docker/lingua-ci/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/lingua-ci",
+   "com.docker.compose.replace": "44b0b092a77e5013bd7d0ada277b6cfe7ec0f6d51f3b1cde48d53b3b3f85c8cf",
+   "com.docker.compose.service": "janitor",
+   "com.docker.compose.version": "2.26.1"
+  },
+  "State": "running",
+  "Status": "Up 5 days",
+  "HostConfig": {
+   "NetworkMode": "lingua-ci"
+  }
+ },
+ {
+  "Id": "32cd82c25d05fb9506dd220e20122f357301bd8cc6bbf95fcbf0810d718b84bf",
+  "Names": [
+   "/lingua-ci-runner-light-1"
+  ],
+  "Image": "gitea/act_runner:0.6.1",
+  "ImageID": "sha256:c7804c7d73ab152cc0aa128e1a009360931820aa37fd8bb3821d133eec71ab14",
+  "Command": "/sbin/tini -- run.sh",
+  "Created": 1790159215,
+  "Ports": [],
+  "Labels": {
+   "com.docker.compose.config-hash": "088df84dc9576f07a01a2356ac7c8f9fd1caac7d8f54de08859c3a9cf87c38bb",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "dind:service_started:false",
+   "com.docker.compose.image": "sha256:c7804c7d73ab152cc0aa128e1a009360931820aa37fd8bb3821d133eec71ab14",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "lingua-ci",
+   "com.docker.compose.project.config_files": "/srv/docker/lingua-ci/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/lingua-ci",
+   "com.docker.compose.service": "runner-light",
+   "com.docker.compose.version": "2.26.1"
+  },
+  "State": "running",
+  "Status": "Up 5 days",
+  "HostConfig": {
+   "NetworkMode": "lingua-ci"
+  }
+ },
+ {
+  "Id": "7b65f26233fc7b3093e9bfdd8672223bc721490caadbd2be1240ed3f65657824",
+  "Names": [
+   "/lingua-ci-dind-1"
+  ],
+  "Image": "docker:29-dind",
+  "ImageID": "sha256:90f854ec83e3eb2208ddbfe5fe7d9413d82f79a4201f3b15943381480b1b03dd",
+  "Command": "dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker.sock --host=unix:///run/ci-docker/docker.sock --insecure-registry=garage.lan:13002 --log-opt=max-size=10m --log-opt=max-file=3",
+  "Created": 1790158423,
+  "Ports": [
+   {
+    "PrivatePort": 2375,
+    "Type": "tcp"
+   },
+   {
+    "PrivatePort": 2376,
+    "Type": "tcp"
+   }
+  ],
+  "Labels": {
+   "com.docker.compose.config-hash": "d2d1993c0837079e4057ba62d846f0cf8f0c14a8e68ff0b920fd49406254085d",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "",
+   "com.docker.compose.image": "sha256:90f854ec83e3eb2208ddbfe5fe7d9413d82f79a4201f3b15943381480b1b03dd",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "lingua-ci",
+   "com.docker.compose.project.config_files": "/srv/docker/lingua-ci/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/lingua-ci",
+   "com.docker.compose.service": "dind",
+   "com.docker.compose.version": "2.26.1"
+  },
+  "State": "running",
+  "Status": "Up 5 days",
+  "HostConfig": {
+   "NetworkMode": "lingua-ci"
+  }
+ },
+ {
+  "Id": "e439368923a59b79d2112605338fa3e87bd51e53aa2bed968b74cf0e452cb319",
+  "Names": [
+   "/gitea-gitea-1"
+  ],
+  "Image": "docker.gitea.com/gitea:1.26",
+  "ImageID": "sha256:028a5a345719fa4dfc58e69d1d07bada20e1010b436b23ebc9cab36f214c46c7",
+  "Command": "/usr/bin/entrypoint /usr/bin/s6-svscan /etc/s6",
+  "Created": 1789949901,
+  "Ports": [
+   {
+    "IP": "0.0.0.0",
+    "PrivatePort": 22,
+    "PublicPort": 13022,
+    "Type": "tcp"
+   },
+   {
+    "IP": "::",
+    "PrivatePort": 22,
+    "PublicPort": 13022,
+    "Type": "tcp"
+   },
+   {
+    "IP": "0.0.0.0",
+    "PrivatePort": 3000,
+    "PublicPort": 13002,
+    "Type": "tcp"
+   },
+   {
+    "IP": "::",
+    "PrivatePort": 3000,
+    "PublicPort": 13002,
+    "Type": "tcp"
+   }
+  ],
+  "Labels": {
+   "com.docker.compose.config-hash": "73c51346b05cb5694e635bea9bce66b680869d5ebefb34748d9473a7c8987c48",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "db:service_healthy:false",
+   "com.docker.compose.image": "sha256:028a5a345719fa4dfc58e69d1d07bada20e1010b436b23ebc9cab36f214c46c7",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "gitea",
+   "com.docker.compose.project.config_files": "/srv/docker/gitea/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/gitea",
+   "com.docker.compose.replace": "26efb07965f8af06aa03a42f310ff4e27e838c2c5a7283e60d8f92f0a7264ffd",
+   "com.docker.compose.service": "gitea",
+   "com.docker.compose.version": "2.26.1"
+  },
+  "State": "running",
+  "Status": "Up 7 days (healthy)",
+  "HostConfig": {
+   "NetworkMode": "gitea_default"
+  }
+ },
+ {
+  "Id": "abbd59dcacc844bbe396fbc43ebe9692520951e5e93f8abd6d5462c574244299",
+  "Names": [
+   "/gitea-db-1"
+  ],
+  "Image": "postgres:17",
+  "ImageID": "sha256:212aeeeb8faaef6c46498d86cbec6b9344d8d9492996b174664ff82c562ab685",
+  "Command": "docker-entrypoint.sh postgres",
+  "Created": 1789946360,
+  "Ports": [
+   {
+    "PrivatePort": 5432,
+    "Type": "tcp"
+   }
+  ],
+  "Labels": {
+   "com.docker.compose.config-hash": "82add3380223383db099771d43cb8c270031c76452a9b92e525d0d44b48d1306",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "",
+   "com.docker.compose.image": "sha256:212aeeeb8faaef6c46498d86cbec6b9344d8d9492996b174664ff82c562ab685",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "gitea",
+   "com.docker.compose.project.config_files": "/srv/docker/gitea/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/gitea",
+   "com.docker.compose.service": "db",
+   "com.docker.compose.version": "2.26.1"
+  },
+  "State": "running",
+  "Status": "Up 7 days (healthy)",
+  "HostConfig": {
+   "NetworkMode": "gitea_default"
+  }
+ },
+ {
+  "Id": "7717692f78a805a72da0f7611b049f4a857c8e71e193619f5c2f5fc24a8a4498",
+  "Names": [
+   "/portainer-portainer-1"
+  ],
+  "Image": "portainer/portainer-ce:lts",
+  "ImageID": "sha256:dda734886443b826a8f0dfa0d7bd672fbf3ffc80e8f2807bfec53d4226e8cfb0",
+  "Command": "/portainer",
+  "Created": 1789941886,
+  "Ports": [
+   {
+    "PrivatePort": 8000,
+    "Type": "tcp"
+   },
+   {
+    "PrivatePort": 9000,
+    "Type": "tcp"
+   },
+   {
+    "IP": "0.0.0.0",
+    "PrivatePort": 9443,
+    "PublicPort": 9443,
+    "Type": "tcp"
+   },
+   {
+    "IP": "::",
+    "PrivatePort": 9443,
+    "PublicPort": 9443,
+    "Type": "tcp"
+   }
+  ],
+  "Labels": {
+   "com.docker.compose.config-hash": "1df97ceb063ae20c1a8b60be321de58d679ca167139f22439adef317169570cf",
+   "com.docker.compose.container-number": "1",
+   "com.docker.compose.depends_on": "",
+   "com.docker.compose.image": "sha256:dda734886443b826a8f0dfa0d7bd672fbf3ffc80e8f2807bfec53d4226e8cfb0",
+   "com.docker.compose.oneoff": "False",
+   "com.docker.compose.project": "portainer",
+   "com.docker.compose.project.config_files": "/srv/docker/portainer/compose.yml",
+   "com.docker.compose.project.working_dir": "/srv/docker/portainer",
+   "com.docker.compose.service": "portainer",
+   "com.docker.compose.version": "2.26.1",
+   "com.docker.desktop.extension.api.version": ">= 0.2.2",
+   "com.docker.desktop.extension.icon": "https://portainer-io-assets.sfo2.cdn.digitaloceanspaces.com/logos/portainer.png",
+   "com.docker.extension.additional-urls": "[{\"title\":\"Website\",\"url\":\"https://www.portainer.io?utm_campaign=DockerCon&utm_source=DockerDesktop\"},{\"title\":\"Documentation\",\"url\":\"https://docs.portainer.io\"},{\"title\":\"Support\",\"url\":\"https://join.slack.com/t/portainer/shared_invite/zt-txh3ljab-52QHTyjCqbe5RibC2lcjKA\"}]",
+   "com.docker.extension.detailed-description": "<p data-renderer-start-pos=\"226\">Portainer&rsquo;s Docker Desktop extension gives you access to all of Portainer&rsquo;s rich management functionality within your docker desktop experience.</p><h2 data-renderer-start-pos=\"374\">With Portainer you can:</h2><ul><li>See all your running containers</li><li>Easily view all of your container logs</li><li>Console into containers</li><li>Easily deploy your code into containers using a simple form</li><li>Turn your YAML into custom templates for easy reuse</li></ul><h2 data-renderer-start-pos=\"660\">About Portainer&nbsp;</h2><p data-renderer-start-pos=\"680\">Portainer is the worlds&rsquo; most popular universal container management platform with more than 650,000 active monthly users. Portainer can be used to manage Docker Standalone, Kubernetes and Docker Swarm environments through a single common interface. It includes a simple GitOps automation engine and a Kube API.&nbsp;</p><p data-renderer-start-pos=\"1006\">Portainer Business Edition is our fully supported commercial grade product for business-wide use. It includes all the functionality that businesses need to manage containers at scale. Visit <a class=\"sc-jKJlTe dPfAtb\" href=\"http://portainer.io/\" title=\"http://Portainer.io\" data-renderer-mark=\"true\">Portainer.io</a> to learn more about Portainer Business and <a class=\"sc-jKJlTe dPfAtb\" href=\"http://portainer.io/take-3?utm_campaign=DockerCon&amp;utm_source=Docker%20Desktop\" title=\"http://portainer.io/take-3?utm_campaign=DockerCon&amp;utm_source=Docker%20Desktop\" data-renderer-mark=\"true\">get 3 free nodes.</a></p>",
+   "com.docker.extension.publisher-url": "https://www.portainer.io",
+   "com.docker.extension.screenshots": "[{\"alt\": \"screenshot one\", \"url\": \"https://portainer-io-assets.sfo2.digitaloceanspaces.com/screenshots/docker-extension-1.png\"},{\"alt\": \"screenshot two\", \"url\": \"https://portainer-io-assets.sfo2.digitaloceanspaces.com/screenshots/docker-extension-2.png\"},{\"alt\": \"screenshot three\", \"url\": \"https://portainer-io-assets.sfo2.digitaloceanspaces.com/screenshots/docker-extension-3.png\"},{\"alt\": \"screenshot four\", \"url\": \"https://portainer-io-assets.sfo2.digitaloceanspaces.com/screenshots/docker-extension-4.png\"},{\"alt\": \"screenshot five\", \"url\": \"https://portainer-io-assets.sfo2.digitaloceanspaces.com/screenshots/docker-extension-5.png\"},{\"alt\": \"screenshot six\", \"url\": \"https://portainer-io-assets.sfo2.digitaloceanspaces.com/screenshots/docker-extension-6.png\"},{\"alt\": \"screenshot seven\", \"url\": \"https://portainer-io-assets.sfo2.digitaloceanspaces.com/screenshots/docker-extension-7.png\"},{\"alt\": \"screenshot eight\", \"url\": \"https://portainer-io-assets.sfo2.digitaloceanspaces.com/screenshots/docker-extension-8.png\"},{\"alt\": \"screenshot nine\", \"url\": \"https://portainer-io-assets.sfo2.digitaloceanspaces.com/screenshots/docker-extension-9.png\"}]",
+   "git_commit": "d390ab5",
+   "io.portainer.server": "true",
+   "org.opencontainers.image.created": "2026-09-17T00:27:40Z",
+   "org.opencontainers.image.description": "Portainer Community Edition server.",
+   "org.opencontainers.image.documentation": "https://docs.portainer.io",
+   "org.opencontainers.image.revision": "d390ab5",
+   "org.opencontainers.image.title": "Portainer CE",
+   "org.opencontainers.image.url": "https://www.portainer.io",
+   "org.opencontainers.image.vendor": "Portainer.io"
+  },
+  "State": "running",
+  "Status": "Up 7 days",
+  "HostConfig": {
+   "NetworkMode": "portainer_default"
+  }
+ }
+]

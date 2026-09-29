@@ -546,6 +546,8 @@ mod tests {
                 })
             },
             online_cpus: || Ok(1),
+            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
+            docker_state: None,
         }
     }
 

@@ -10,6 +10,9 @@
 *.toml text eol=lf
 *.service text eol=lf
 Cargo.lock text eol=lf
+# Raw HTTP captures from the Docker Engine API (probe fixtures): the CRLF framing and chunk sizes
+# ARE the test data, so git must store and check them out byte for byte.
+src/probe-linux/**/fixtures/**/*.http -text
 # Everything the .deb build copies into the package (maintainer scripts, copyright, the config
 # skeleton) runs or is parsed on Linux: a CR would break the #!/bin/sh line of a maintainer script.
 src/probe-linux/packaging/** text eol=lf

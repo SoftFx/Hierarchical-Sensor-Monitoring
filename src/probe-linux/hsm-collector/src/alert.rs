@@ -413,7 +413,7 @@ impl<'c> AlertBuilder<'c> {
 }
 
 /// A finished alert, owned by the collector. Attach it with `attach_alert` on any sensor handle of
-/// the same collector, before [`Collector::start`].
+/// the same collector.
 pub struct Alert<'c> {
     handle: *mut sys::hsm_alert_t,
     collector: &'c Collector,

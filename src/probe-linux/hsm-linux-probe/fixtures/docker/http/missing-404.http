@@ -1,0 +1,11 @@
+HTTP/1.1 404 Not Found
+Api-Version: 1.45
+Content-Type: application/json
+Docker-Experimental: false
+Ostype: linux
+Server: Docker/26.1.5+dfsg1 (linux)
+Date: Mon, 28 Sep 2026 11:14:08 GMT
+Content-Length: 45
+Connection: close
+
+{"message":"No such container: nonexistent"}

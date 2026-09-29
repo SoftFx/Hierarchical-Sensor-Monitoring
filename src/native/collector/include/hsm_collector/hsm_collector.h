@@ -18,7 +18,7 @@ extern "C"
    reported as the ".module/Collector version" sensor. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
 #define HSM_COLLECTOR_VERSION_MINOR 9
-#define HSM_COLLECTOR_VERSION_PATCH 0
+#define HSM_COLLECTOR_VERSION_PATCH 1
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
@@ -740,6 +740,9 @@ hsm_result_t hsm_collector_create_enum_sensor_with_sensor_options(
     size_t enum_option_count,
     hsm_sensor_t** out_sensor);
 
+/* The recorded registrations (one per sensor per Start, plus runtime creates). The text behind a
+   returned pointer stays valid until the collector is destroyed; a later attach while running
+   replaces the entry at that index with new text (0.9.1) but never frees the old one. */
 size_t hsm_collector_registration_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_registration_json(
     const hsm_collector_t* collector,
@@ -749,10 +752,14 @@ hsm_result_t hsm_collector_get_registration_json(
 /* ---- Alert builders ------------------------------------------------------------------------
    Lifetime: an alert handle is owned by the collector and freed when the collector is destroyed
    (no separate release). Build conditions/actions, then attach to a sensor with
-   hsm_sensor_attach_alert BEFORE the collector starts (or before the sensor is created while the
-   collector is already running) — attaching rebuilds the sensor's registration payload, so an
-   alert added after the registration was already emitted is not retroactively applied. A NULL
-   handle argument returns INVALID_ARGUMENT; the builder setters never throw across the boundary. */
+   hsm_sensor_attach_alert — attaching rebuilds the sensor's registration payload. Before Start, the
+   rebuilt payload is what Start registers. While the collector runs (0.9.1), attaching also works:
+   a sensor created at runtime is registered on the server by the worker's next dispatch cycle (the
+   managed command-queue cadence), so alerts attached right after its create call ride that one
+   registration; an alert attached after it went out re-registers the sensor. Either way the
+   recorded registration for the run (hsm_collector_get_registration_json) is replaced in place, so
+   it carries the alerts. A NULL handle argument returns INVALID_ARGUMENT; the builder setters never
+   throw across the boundary. */
 hsm_result_t hsm_collector_create_alert(
     hsm_collector_t* collector,
     hsm_alert_kind_t kind,

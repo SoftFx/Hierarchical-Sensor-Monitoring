@@ -54,8 +54,11 @@ namespace hsm::test
     class HttpCaptureServer
     {
     public:
-        explicit HttpCaptureServer(int response_status = 200)
-            : response_status_(response_status)
+        // `only_path`: capture the first request to this path; answer every other request with
+        // `response_status` and keep listening (e.g. skip a runtime /commands registration to
+        // capture the /list value batch that follows it).
+        explicit HttpCaptureServer(int response_status = 200, std::string only_path = {})
+            : response_status_(response_status), only_path_(std::move(only_path))
         {
 #if defined(_WIN32)
             WSADATA wsa;
@@ -78,7 +81,11 @@ namespace hsm::test
             getsockname(listen_, reinterpret_cast<sockaddr*>(&bound), &len);
             port_ = ntohs(bound.sin_port);
 
-            worker_ = std::thread([this] { AcceptOne(); });
+            worker_ = std::thread([this] {
+                while (!ServeOne())
+                {
+                }
+            });
         }
 
         ~HttpCaptureServer()
@@ -130,11 +137,13 @@ namespace hsm::test
             return INVALID_SOCKET;
         }
 
-        void AcceptOne()
+        // Serve one connection. True when done: the request was captured, or the server is stopping.
+        bool ServeOne()
         {
             socket_t conn = WaitForConnection();
             if (conn == INVALID_SOCKET)
-                return;
+                return true;
+            bool captured = false;
 
             std::string raw;
             char buffer[4096];
@@ -190,13 +199,15 @@ namespace hsm::test
                 const size_t sp1 = request_line.find(' ');
                 const size_t sp2 = sp1 == std::string::npos ? std::string::npos : request_line.find(' ', sp1 + 1);
 
-                if (sp1 != std::string::npos && sp2 != std::string::npos)
+                if (sp1 != std::string::npos && sp2 != std::string::npos &&
+                    (only_path_.empty() || request_line.substr(sp1 + 1, sp2 - sp1 - 1) == only_path_))
                 {
                     request_.method = request_line.substr(0, sp1);
                     request_.path = request_line.substr(sp1 + 1, sp2 - sp1 - 1);
                     request_.headers = line_end == std::string::npos ? std::string{} : head.substr(line_end + 2);
                     request_.body = raw.substr(header_end + 4, have_length ? content_length : std::string::npos);
                     request_.received.store(true, std::memory_order_release);
+                    captured = true;
                 }
             }
 
@@ -204,6 +215,7 @@ namespace hsm::test
                 "HTTP/1.1 " + std::to_string(response_status_) + " X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
             send(conn, response.c_str(), static_cast<int>(response.size()), 0);
             closesocket(conn);
+            return captured || only_path_.empty();
         }
 
         static std::string FindHeader(const std::string& headers, const std::string& name_lower)
@@ -226,6 +238,7 @@ namespace hsm::test
         socket_t listen_ = INVALID_SOCKET;
         int port_ = 0;
         int response_status_;
+        std::string only_path_;
         std::atomic<bool> stop_{ false };
         std::thread worker_;
         CapturedRequest request_;
@@ -244,8 +257,9 @@ namespace hsm::test
             std::string body;
         };
 
-        explicit HttpRecordingServer(std::string hang_path_prefix = {})
-            : hang_path_prefix_(std::move(hang_path_prefix))
+        // `reject_path_prefix`: requests to it are recorded and answered 400 Bad Request.
+        explicit HttpRecordingServer(std::string hang_path_prefix = {}, std::string reject_path_prefix = {})
+            : hang_path_prefix_(std::move(hang_path_prefix)), reject_path_prefix_(std::move(reject_path_prefix))
         {
 #if defined(_WIN32)
             WSADATA wsa;
@@ -357,6 +371,7 @@ namespace hsm::test
                 }
 
                 const bool hang = !hang_path_prefix_.empty() && recorded.path.rfind(hang_path_prefix_, 0) == 0;
+                const bool reject = !reject_path_prefix_.empty() && recorded.path.rfind(reject_path_prefix_, 0) == 0;
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
                     requests_.push_back(std::move(recorded));
@@ -368,7 +383,9 @@ namespace hsm::test
                     continue;
                 }
 
-                static const std::string response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                static const std::string ok = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                static const std::string bad = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                const std::string& response = reject ? bad : ok;
                 send(conn, response.c_str(), static_cast<int>(response.size()), 0);
                 closesocket(conn);
             }
@@ -430,6 +447,7 @@ namespace hsm::test
         }
 
         std::string hang_path_prefix_;
+        std::string reject_path_prefix_;
         socket_t listen_ = INVALID_SOCKET;
         int port_ = 0;
         std::atomic<bool> stop_{ false };

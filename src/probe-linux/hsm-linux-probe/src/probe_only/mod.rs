@@ -15,11 +15,9 @@
 //! collector starts) and returns a [`Source`] that the probe drives on a thread of its own:
 //!
 //! * [`host`] — `.computer/Logical cores`, `.computer/CPU temperature`;
-//! * [`disk`] — `.computer/Disks monitoring/Free space on disk %`, `… /Free inodes %`.
-//!
-//! **Seam for the Docker source (#1416):** it lives in its own module (`probe_only::docker`),
-//! registers its sensors under `Docker/<project>/<service>/…` from its own `register` function,
-//! and returns its `Source`s to [`register`] like the two above. Nothing else here changes.
+//! * [`disk`] — `.computer/Disks monitoring/Free space on disk %`, `… /Free inodes %`;
+//! * [`docker`] — `<module>/Docker/<project>/<service>/…`, per Compose service (#1416). It
+//!   registers the services it finds before Start and any that appear later at runtime.
 //!
 //! # Failure isolation (root rules #6 and #8)
 //!
@@ -30,6 +28,7 @@
 //!   failure is logged once, deduplicated by [`FailureLog`] until the source recovers.
 
 pub mod disk;
+pub mod docker;
 pub mod host;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -56,6 +55,12 @@ pub struct HostEnvironment {
     pub statvfs: fn(&std::path::Path) -> std::io::Result<disk::FsStats>,
     /// Online logical CPUs (`sysconf(_SC_NPROCESSORS_ONLN)`); injectable for tests.
     pub online_cpus: fn() -> std::io::Result<i32>,
+    /// The Docker Engine API client for a config (the socket); injectable for tests.
+    pub docker_engine:
+        fn(&crate::config::DockerConfig) -> Box<dyn docker::engine::EngineApi + Send>,
+    /// The Docker source's state file (`$STATE_DIRECTORY/docker-state.json`); `None` keeps the
+    /// state in memory only.
+    pub docker_state: Option<PathBuf>,
 }
 
 impl HostEnvironment {
@@ -66,6 +71,10 @@ impl HostEnvironment {
             disk_target: PathBuf::from(disk::DEFAULT_TARGET),
             statvfs: disk::statvfs,
             online_cpus: host::online_cpus,
+            docker_engine: |config| Box::new(docker::Engine::new(config.socket.clone())),
+            docker_state: Some(docker::state::default_state_path(
+                std::env::var_os("STATE_DIRECTORY").as_deref(),
+            )),
         }
     }
 }
@@ -85,6 +94,29 @@ pub trait Source: Send {
 ///
 /// A source that cannot register logs why and is left out; the others are unaffected.
 pub fn register<'c>(
+    collector: &'c Collector,
+    config: &ProbeConfig,
+    environment: &HostEnvironment,
+    logger: &Logger,
+) -> Vec<Box<dyn Source + 'c>> {
+    let mut sources: Vec<Box<dyn Source + 'c>> = Vec::new();
+    sources.extend(register_host_sources(
+        collector,
+        config,
+        environment,
+        logger,
+    ));
+    sources.extend(docker::register(
+        collector,
+        &config.docker,
+        (environment.docker_engine)(&config.docker),
+        environment.docker_state.clone(),
+        logger,
+    ));
+    sources
+}
+
+fn register_host_sources<'c>(
     collector: &'c Collector,
     config: &ProbeConfig,
     environment: &HostEnvironment,
@@ -112,7 +144,6 @@ pub fn register<'c>(
     } else {
         logger.info("disk sensors disabled (probe.hostSensors.disk = false)");
     }
-    // Seam: the Docker source (#1416) registers here, from probe_only::docker.
     sources
 }
 

@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.9.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.9.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -286,6 +286,15 @@ if(HSM_COLLECTOR_HTTP)
     )
     add_test(NAME native_http_stop_start_stop_delivers
         COMMAND hsm_collector_tests native_http_stop_start_stop_delivers
+    )
+    add_test(NAME native_http_registers_sensors_created_while_running
+        COMMAND hsm_collector_tests native_http_registers_sensors_created_while_running
+    )
+    add_test(NAME native_http_alert_after_runtime_registration_reregisters
+        COMMAND hsm_collector_tests native_http_alert_after_runtime_registration_reregisters
+    )
+    add_test(NAME native_http_rejected_runtime_registration_is_not_retried
+        COMMAND hsm_collector_tests native_http_rejected_runtime_registration_is_not_retried
     )
 endif()
 

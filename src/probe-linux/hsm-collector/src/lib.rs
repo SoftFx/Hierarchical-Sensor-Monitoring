@@ -416,26 +416,26 @@ mod tests {
     }
 
     #[test]
-    fn attaching_after_start_is_refused_instead_of_silently_dropped() {
+    fn an_alert_attached_while_running_reaches_the_registration() {
+        // Collector 0.9.1: a sensor created while the collector runs (a service the probe sees
+        // after start) takes its alerts right after creation, and its registration for the run
+        // is re-recorded with them (the live transport re-posts it).
         let collector = named_collector();
+        collector.start().expect("start");
         let sensor = collector
             .int_sensor("probe/late", &SensorOptions::default())
             .expect("int");
         let alert = collector
             .alert(AlertKind::Instant)
-            .and_then(|alert| alert.notification("n", AlertDestination::FromParent))
+            .and_then(|alert| alert.notification("late-alert", AlertDestination::FromParent))
             .expect("alert")
             .build();
-        collector.start().expect("start");
-        let error = sensor
-            .attach_alert(&alert)
-            .expect_err("the registration was already emitted");
-        assert_eq!(
-            error.code(),
-            Some(hsm_collector_sys::HSM_RESULT_INVALID_STATE)
-        );
+        sensor.attach_alert(&alert).expect("attach while running");
+        let registrations = collector.registrations();
+        assert_eq!(registrations.len(), 1, "one registration for the run");
+        assert!(registrations[0].contains("late-alert"), "{registrations:?}");
         collector.stop().expect("stop");
-        // Stopped again: the next Start re-registers, so attaching is effective and allowed.
+        // Stopped: the next Start re-registers, so attaching is effective and allowed too.
         sensor.attach_alert(&alert).expect("attach while stopped");
     }
 

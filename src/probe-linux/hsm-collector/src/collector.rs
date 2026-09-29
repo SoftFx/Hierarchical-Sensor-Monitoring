@@ -550,8 +550,9 @@ impl Collector {
         }
     }
 
-    /// Start building an alert. Attach the result with `attach_alert` on a sensor handle before
-    /// [`Collector::start`]; the alert is owned by this collector and freed with it.
+    /// Start building an alert. Attach the result with `attach_alert` on a sensor handle (before
+    /// [`Collector::start`], or right after creating a sensor while it runs); the alert is owned by
+    /// this collector and freed with it.
     pub fn alert(&self, kind: AlertKind) -> Result<AlertBuilder<'_>> {
         let mut handle = ptr::null_mut();
         // SAFETY: valid handle; the collector keeps the alert until it is destroyed.

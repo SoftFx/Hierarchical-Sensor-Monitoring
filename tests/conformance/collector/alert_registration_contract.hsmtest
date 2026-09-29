@@ -59,3 +59,21 @@ sensor_without_alerts_has_null_alerts|start
 sensor_without_alerts_has_null_alerts|stop
 sensor_without_alerts_has_null_alerts|expect_registration_count|1
 sensor_without_alerts_has_null_alerts|expect_registration_contains|0|"Alerts":null,"TtlAlerts":null
+
+# A sensor created while the collector runs registers once, with the alerts it was created with
+# (#1416). The native collector takes alerts after its create call; before 0.9.1 its runtime
+# registration was recorded at create time without them (and was never POSTed on the HTTP
+# transport - pinned separately by native_http_registers_sensors_created_while_running).
+alert_on_sensor_created_while_running_registers_with_it|create_collector
+alert_on_sensor_created_while_running_registers_with_it|start
+alert_on_sensor_created_while_running_registers_with_it|alert_new|instant
+alert_on_sensor_created_while_running_registers_with_it|alert_condition|0|20|2|0|42
+alert_on_sensor_created_while_running_registers_with_it|alert_sensor_error
+alert_on_sensor_created_while_running_registers_with_it|alert_notification|spike|200
+alert_on_sensor_created_while_running_registers_with_it|alert_icon|1
+alert_on_sensor_created_while_running_registers_with_it|alert_stage
+alert_on_sensor_created_while_running_registers_with_it|create_int_sensor_with_alerts|contract/alert/running|0|3|d
+alert_on_sensor_created_while_running_registers_with_it|expect_registration_count|1|5
+alert_on_sensor_created_while_running_registers_with_it|stop
+alert_on_sensor_created_while_running_registers_with_it|expect_registration_count|1
+alert_on_sensor_created_while_running_registers_with_it|expect_registration_contains|0|"Alerts":[{"Conditions":[{"Combination":0,"Operation":2,"Property":20,"Target":{"Type":0,"Value":"42"}}],"Status":3,"DestinationMode":200,"Template":"spike","Icon":"\u26A0","IsDisabled":false,"ConfirmationPeriod":null,"ScheduledNotificationTime":null,"ScheduledRepeatMode":null,"ScheduledInstantSend":null}]

@@ -32,11 +32,67 @@ pub struct Config {
     pub probe: ProbeConfig,
 }
 
+/// `probe.docker { enabled, socket, composeOnly, samplePeriodSec, oomLatchHours }`: the Docker
+/// Compose source (#1416). Absent = defaults (enabled).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerConfig {
+    #[serde(default = "enabled_by_default")]
+    pub enabled: bool,
+    /// The Engine API socket.
+    #[serde(default = "default_docker_socket")]
+    pub socket: PathBuf,
+    /// Skip containers without Compose labels (one diagnostic line per container) instead of
+    /// reporting them under `Docker/_standalone/<name>`.
+    #[serde(default = "enabled_by_default")]
+    pub compose_only: bool,
+    /// CPU/memory sampling period, 1..=300 s. The bars stay 5 minutes whatever this is.
+    #[serde(default = "default_docker_sample_period_sec")]
+    pub sample_period_sec: u64,
+    /// How long `OOM killed` stays true after an OOM kill was last seen.
+    #[serde(default = "default_docker_oom_latch_hours")]
+    pub oom_latch_hours: u64,
+}
+
+impl Default for DockerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            socket: default_docker_socket(),
+            compose_only: true,
+            sample_period_sec: default_docker_sample_period_sec(),
+            oom_latch_hours: default_docker_oom_latch_hours(),
+        }
+    }
+}
+
+impl DockerConfig {
+    pub fn sample_period(&self) -> Duration {
+        Duration::from_secs(self.sample_period_sec)
+    }
+
+    pub fn oom_latch(&self) -> Duration {
+        Duration::from_secs(self.oom_latch_hours.saturating_mul(3600))
+    }
+}
+
+fn default_docker_socket() -> PathBuf {
+    PathBuf::from("/var/run/docker.sock")
+}
+fn default_docker_sample_period_sec() -> u64 {
+    crate::probe_only::docker::contract::DEFAULT_SAMPLE_PERIOD.as_secs()
+}
+fn default_docker_oom_latch_hours() -> u64 {
+    crate::probe_only::docker::contract::DEFAULT_OOM_LATCH_HOURS
+}
+
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProbeConfig {
     #[serde(default)]
     pub host_sensors: HostSensorsConfig,
+    #[serde(default)]
+    pub docker: DockerConfig,
 }
 
 /// `probe.hostSensors`: the host/disk probe-only sensors. `enabled: false` turns off all of them;
@@ -193,11 +249,39 @@ impl Config {
                 )))
             }
         }
+        self.probe.docker.validate()?;
         Ok(())
     }
 
     pub fn shutdown_timeout(&self) -> Duration {
         Duration::from_secs(self.shutdown_timeout_sec)
+    }
+}
+
+impl DockerConfig {
+    fn validate(&self) -> Result<(), ConfigError> {
+        if !self.enabled {
+            return Ok(());
+        }
+        if !self.socket.is_absolute() {
+            return Err(ConfigError::invalid(format!(
+                "probe.docker.socket must be an absolute path (got '{}')",
+                self.socket.display()
+            )));
+        }
+        let max = crate::probe_only::docker::contract::MAX_SAMPLE_PERIOD.as_secs();
+        if self.sample_period_sec == 0 || self.sample_period_sec > max {
+            return Err(ConfigError::invalid(format!(
+                "probe.docker.samplePeriodSec must be between 1 and {max} (got {})",
+                self.sample_period_sec
+            )));
+        }
+        if self.oom_latch_hours == 0 {
+            return Err(ConfigError::invalid(
+                "probe.docker.oomLatchHours must be greater than zero",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -294,6 +378,19 @@ mod tests {
         let example = include_str!("../../packaging/config.example.json");
         let config = Config::parse(example).expect("the packaged example must parse");
         assert!(config.hsm.address.starts_with("https://"));
+        // The example spells out the Docker defaults, so it must agree with them.
+        let defaults = DockerConfig::default();
+        assert_eq!(config.probe.docker.enabled, defaults.enabled);
+        assert_eq!(config.probe.docker.socket, defaults.socket);
+        assert_eq!(config.probe.docker.compose_only, defaults.compose_only);
+        assert_eq!(
+            config.probe.docker.sample_period_sec,
+            defaults.sample_period_sec
+        );
+        assert_eq!(
+            config.probe.docker.oom_latch_hours,
+            defaults.oom_latch_hours
+        );
         // The skeleton documents the probe-only switches, all on.
         assert!(example.contains("\"hostSensors\""));
         let host = &config.probe.host_sensors;
@@ -457,6 +554,58 @@ mod tests {
             Err(ConfigError::Parse(_))
         ));
         assert!(matches!(Config::parse(""), Err(ConfigError::Parse(_))));
+    }
+
+    #[test]
+    fn the_docker_source_defaults_to_on_compose_only_every_five_seconds() {
+        let config = Config::parse(MINIMAL).expect("parse");
+        assert!(config.probe.docker.enabled);
+        assert_eq!(
+            config.probe.docker.socket,
+            PathBuf::from("/var/run/docker.sock")
+        );
+        assert!(config.probe.docker.compose_only);
+        assert_eq!(config.probe.docker.sample_period(), Duration::from_secs(5));
+        assert_eq!(
+            config.probe.docker.oom_latch(),
+            Duration::from_secs(24 * 3600)
+        );
+    }
+
+    #[test]
+    fn the_docker_section_maps_every_field() {
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "docker": { "enabled": false, "socket": "/run/docker.sock",
+                         "composeOnly": false, "samplePeriodSec": 10, "oomLatchHours": 48 } } }"#;
+        let docker = Config::parse(text).expect("parse").probe.docker;
+        assert!(!docker.enabled);
+        assert_eq!(docker.socket, PathBuf::from("/run/docker.sock"));
+        assert!(!docker.compose_only);
+        assert_eq!(docker.sample_period_sec, 10);
+        assert_eq!(docker.oom_latch_hours, 48);
+    }
+
+    #[test]
+    fn invalid_docker_settings_are_rejected() {
+        for docker in [
+            r#"{ "socket": "docker.sock" }"#,
+            r#"{ "samplePeriodSec": 0 }"#,
+            r#"{ "samplePeriodSec": 301 }"#,
+            r#"{ "oomLatchHours": 0 }"#,
+        ] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
+                     "probe": {{ "docker": {docker} }} }}"#
+            );
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::Invalid(_))),
+                "{docker}"
+            );
+        }
+        // A disabled source is not validated: nothing reads its settings.
+        let off = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "docker": { "enabled": false, "samplePeriodSec": 0 } } }"#;
+        assert!(Config::parse(off).is_ok());
     }
 
     #[test]

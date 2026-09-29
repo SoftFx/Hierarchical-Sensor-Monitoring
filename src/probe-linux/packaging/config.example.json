@@ -17,6 +17,13 @@
       "enabled": true,
       "cpuTemperature": true,
       "disk": true
+    },
+    "docker": {
+      "enabled": true,
+      "socket": "/var/run/docker.sock",
+      "composeOnly": true,
+      "samplePeriodSec": 5,
+      "oomLatchHours": 24
     }
   },
   "shutdownTimeoutSec": 10

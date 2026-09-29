@@ -1,5 +1,12 @@
 #!/bin/sh
 set -e
+# The Docker socket drop-in postinst wrote (docker-access.sh install). Removed here rather than by
+# the script, which is already gone by the time postrm runs. Kept across upgrades: the new
+# postinst rewrites it.
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    rm -f /etc/systemd/system/hsm-linux-probe.service.d/docker.conf
+    rmdir /etc/systemd/system/hsm-linux-probe.service.d 2>/dev/null || true
+fi
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
 fi

@@ -156,6 +156,19 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.9.1** (#1416) — behavior fix, ABI unchanged. A sensor created through the public create
+  paths while the collector runs was recorded locally (`hsm_collector_get_registration_json`) but
+  never POSTed to `/commands` on the HTTP transport — only the built-in lazy sources registered at
+  runtime — and an alert attached after its create call never reached the recorded registration.
+  Now a runtime-created sensor is registered on the server by the worker's next dispatch cycle
+  (before that cycle's values; the managed command-queue cadence), and `hsm_sensor_attach_alert`
+  works while the collector runs: the sensor's registration for the run is re-recorded in place and
+  re-posted when it already went out. A posted, unchanged registration is never re-sent; a failed
+  runtime post that got no HTTP response is retried at the next cycle; an HTTP error answer is final
+  (like managed commands, which retry transport failures only). Pinned by
+  `alert_registration_contract:alert_on_sensor_created_while_running_registers_with_it` (both
+  drivers), `native_http_registers_sensors_created_while_running` and
+  `native_http_alert_after_runtime_registration_reregisters`.
 - **0.9.0** (#1476) — one additive entry point and one path fix.
   `hsm_collector_create_enum_sensor_with_sensor_options(collector, path, options, enum_options,
   count, out)` registers an enum sensor with its option set AND the full `hsm_sensor_options_t`
@@ -237,8 +250,8 @@ Version history:
   IsComputerSensor/SensorLocation path model); and the service-commands sensor
   (`hsm_collector_create_service_commands_sensor` + `hsm_service_commands_send_*`).
   `hsm_alert_t` is an opaque handle owned by the collector (freed at destroy, no
-  separate release); alerts must be attached before the registration is emitted
-  (pre-Start or pre-create-while-running) since attaching rebuilds the payload.
+  separate release); attaching rebuilds the payload (before 0.9.1 it had to happen before the
+  registration was emitted; since 0.9.1 an attach while running re-registers the sensor).
 - **0.2.0** (#1096) — HTTP transport options consumed; wire serialization.
 - **0.1.0** (#1095) — initial lifecycle, scheduler, logging, registration core.
 

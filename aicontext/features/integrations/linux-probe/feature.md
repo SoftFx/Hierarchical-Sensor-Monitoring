@@ -36,31 +36,46 @@ The probe registers **two separately pinned sets**:
    `probe::tests::the_registered_set_is_the_parity_set_plus_the_probe_only_set` ("nothing more,
    nothing less"), their registration and alerts by
    `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. Sources, periods,
-   alerts and costs: README "Probe-only sensors". Next: the Docker source (#1416), registered from
-   its own `probe_only::docker` module under `Docker/<project>/<service>/…`.
+   alerts and costs: README "Probe-only sensors".
+3. **The Docker Compose tree** (#1416, part of the probe-only set) — seven sensors per Compose
+   service under `<module>/Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
+   of 5-second samples; CPU as % of the whole host), `Memory limit`, `Service status` (the Windows
+   `ServiceControllerStatus` enum and its alert), `Health` (only where a healthcheck exists),
+   `Restart count` (posted on change) and `OOM killed` (latched 24 h). Source: the Docker Engine
+   API over its Unix socket (`probe_only/docker/`). Services present at start register before
+   Start; later ones at runtime. A service first seen as a completed one-shot job (every
+   container Exited (0), restart policy `no`) is not monitored until it runs. Pinned for
+   garage-server (12 Compose containers, 11 monitored services, 70 paths) by `DOCKER_GARAGE_SET`.
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,
-batching, retry and TLS stay the library's; only the acquisition (a sysfs read, a `statvfs`) and
-the schedule live in the probe.
+batching, retry and TLS stay the library's; only the acquisition (a sysfs read, a `statvfs`, an
+Engine API call) and the schedule live in the probe.
 
 **Alerts.** The wrapper binds the collector's alert DSL: `Collector::alert(kind)` →
 `AlertBuilder` (conditions, notification / scheduled notification, icon, `sensor_error`,
 confirmation / inactivity period, `disabled`) → `attach_alert` on any sensor handle. An alert is
-part of the registration the collector emits at Start, so `attach_alert` is **refused unless the
-collector is stopped** (a late attach would register the sensor without it, silently). HSM alerts
+part of the sensor's registration: before Start it rides the Start batch; while the collector runs
+(collector 0.9.1) attaching re-records the registration and the live transport re-posts it, which
+is how a sensor created at runtime (a Compose service seen after start) gets its alerts. Attaching
+is refused only while the collector stops. HSM alerts
 can only raise a sensor to Error; a "warning" is a notification with the ⚠ icon and no status
 change, as in the managed Total CPU / Free RAM defaults. Enum state sensors use
 `Collector::enum_sensor_with_options` (collector 0.9.0) — EnumOptions + SensorOptions, the managed
 `Service status` shape; `aggregate_data` must be set explicitly (it is not defaulted to true).
 
-**Configuration.** `probe.hostSensors.{enabled, cpuTemperature, disk}`, all default `true`, so a
-config written before the probe-only sensors turns them on.
+**Configuration.** `probe.hostSensors.{enabled, cpuTemperature, disk}` and
+`probe.docker.{enabled, socket, composeOnly, samplePeriodSec, oomLatchHours}`, switches all
+default `true`, so a config written before the probe-only sensors turns them on.
 
 **Packaging.** `src/probe-linux/packaging/build-deb.sh <version>` builds the `.deb` in a plain
 `debian:13` container (layout `/usr/bin`, `/lib/systemd/system`, the `/etc` conffile; `Depends:
 libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`, checked against the binary's shared
 libraries). A fresh install creates the `hsm-probe` user and does not start the unit; an upgrade
-restarts it if it was running (prerm leaves a `/run` marker, postinst starts it).
+restarts it if it was running (prerm leaves a `/run` marker, postinst starts it). Docker socket
+access is a drop-in (`hsm-linux-probe.service.d/docker.conf`, `SupplementaryGroups=docker`) that
+postinst writes (fresh install / the upgrade from before 0.3.0 only, so an operator's removal sticks) through
+`/usr/lib/hsm-linux-probe/docker-access.sh` only where a `docker` group
+exists — never in the unit, which would then not start on a host without one.
 
 Linux is the only supported target. The initiative is
 [`docs/initiatives/linux-docker-probe.md`](../../../../docs/initiatives/linux-docker-probe.md).
@@ -106,6 +121,18 @@ Linux is the only supported target. The initiative is
   deliberately does not expose the ABI's `allow_untrusted_server_certificate`.
 - **Values dropped by the collector's bounded stop drain are logged at WARN** (the collector reports
   them at debug), per rule #8.
+- **The Docker source only reads.** Its HTTP client has no method but `GET` and builds requests from
+  a closed set of four Engine API endpoints (container ids validated as hex); the socket is
+  root-equivalent, so this is enforced by construction and review. Each call is bounded (1.5 s,
+  under the 2 s source stop wait).
+- **The Docker source never invents a value.** A skipped CPU delta (first sample, counter reset, new
+  container id, interval outside ½…3× the period), a failed or timed-out inspect/stats call, or an
+  unreachable daemon posts nothing — never 0, `false` or a stale state — and is logged once per
+  condition; one wedged container never blanks the other services.
+- **Docker identity is the Compose `(project, service)`,** not the container: nodes survive
+  recreate (and restarts: each node is remembered and re-adopted), a restart count never goes
+  down, an OOM latch survives recreate, and `docker compose run` one-offs are not replicas. State
+  is `$STATE_DIRECTORY/docker-state.json`, written atomically and only on change.
 
 ---
 
