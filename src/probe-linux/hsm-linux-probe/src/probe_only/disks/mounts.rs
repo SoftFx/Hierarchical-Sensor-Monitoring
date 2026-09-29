@@ -175,9 +175,41 @@ pub fn real_filesystems(mounts: &[Mount], exclude: &[String]) -> Vec<Filesystem>
     filesystems
 }
 
-/// Mount points of block-backed filesystems that are hidden under a later mount and whose device
-/// is not visible anywhere else — i.e. real filesystems this process cannot see, typically a
-/// separate `/home` under the service's `ProtectHome=` tmpfs. Reported so the gap is not silent.
+/// Mount points of real filesystems that `/etc/fstab` mounts at a path this service's namespace
+/// made inaccessible. systemd's `ProtectHome=yes` / `InaccessiblePaths=` first **unmount**
+/// everything at the path and then over-mount an inaccessible node (mountinfo root
+/// `/systemd/inaccessible/…`), so a separate `/home` is simply absent from our mountinfo — fstab is
+/// the only place left that says it exists. Reported so the gap is not silent.
+pub fn fstab_hidden(fstab: &str, mounts: &[Mount]) -> Vec<PathBuf> {
+    let inaccessible: Vec<&Path> = mounts
+        .iter()
+        .filter(|mount| mount.root.starts_with("/systemd/inaccessible/"))
+        .map(|mount| mount.mount_point.as_path())
+        .collect();
+    let mut hidden: BTreeSet<PathBuf> = BTreeSet::new();
+    for line in fstab.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut fields = line.split_whitespace();
+        let (Some(_spec), Some(file), Some(fs_type)) =
+            (fields.next(), fields.next(), fields.next())
+        else {
+            continue;
+        };
+        let file = PathBuf::from(unescape_octal(file));
+        let real = fs_type == "auto" || BLOCK_FS_TYPES.contains(&fs_type);
+        if real && inaccessible.iter().any(|point| file.starts_with(point)) {
+            hidden.insert(file);
+        }
+    }
+    hidden.into_iter().collect()
+}
+
+/// Mount points of block-backed filesystems that are still listed but hidden under a later mount
+/// on the same path, and whose device is not visible anywhere else (a disk an administrator
+/// mounted something over). Reported so the gap is not silent.
 pub fn hidden_filesystems(mounts: &[Mount]) -> Vec<PathBuf> {
     let visible_sources: BTreeSet<String> = real_filesystems(mounts, &[])
         .into_iter()
@@ -375,6 +407,29 @@ pub mod tests {
     }
 
     #[test]
+    fn a_separate_home_hidden_by_protect_home_is_found_through_fstab() {
+        // Observed on garage-server with `systemd-run -p InaccessiblePaths=/run/lock`: the tmpfs
+        // entry at /run/lock is gone from the unit's mountinfo, only the inaccessible node remains —
+        // ProtectHome=yes does the same to /home, /root and /run/user.
+        let fstab = "\
+# <file system> <mount point> <type> <options> <dump> <pass>
+UUID=054d942e /               ext4    errors=remount-ro 0 1
+UUID=aaaa     /home           ext4    defaults          0 2
+UUID=bbbb     none            swap    sw                0 0
+UUID=cccc     /srv/data       xfs     defaults          0 2
+tmpfs         /home/cache     tmpfs   defaults          0 0
+";
+        // In the service's namespace: `/` and /srv/data are real, /home is only the inaccessible
+        // node (the capture's own /home line), the ext4 /home entry is absent.
+        let mut text = GARAGE_MOUNTINFO.to_string();
+        text.push_str("900 676 8:49 / /srv/data rw - xfs /dev/sdd1 rw\n");
+        let hidden = fstab_hidden(fstab, &parse_mountinfo(&text));
+        assert_eq!(hidden, vec![PathBuf::from("/home")]);
+        // Without a separate /home in fstab — garage-server — nothing is reported.
+        assert!(fstab_hidden("UUID=x / ext4 defaults 0 1\n", &parse_mountinfo(&text)).is_empty());
+    }
+
+    #[test]
     fn a_device_mounted_over_another_hides_it() {
         // A second stick mounted over /media/usb without unmounting the first: only the one on top
         // is reachable (and statvfs'd), so only it is a filesystem; a tmpfs over a disk hides the
@@ -389,8 +444,8 @@ pub mod tests {
         let filesystems = real_filesystems(&parse_mountinfo(text), &[]);
         let sources: Vec<&str> = filesystems.iter().map(|fs| fs.source.as_str()).collect();
         assert_eq!(sources, vec!["/dev/sda1", "/dev/sde1"]);
-        // The hidden ones are reported, so the gap is not silent (e.g. a /home partition under
-        // ProtectHome's tmpfs).
+        // The hidden ones are reported, so the gap is not silent (an administrator's over-mount;
+        // systemd's ProtectHome= removes the covered entry instead — see `fstab_hidden`).
         assert_eq!(
             hidden_filesystems(&parse_mountinfo(text)),
             vec![PathBuf::from("/data"), PathBuf::from("/media/usb")]

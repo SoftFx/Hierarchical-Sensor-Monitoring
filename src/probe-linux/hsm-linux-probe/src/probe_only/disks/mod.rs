@@ -249,6 +249,7 @@ struct Disks<'c> {
     config: DisksConfig,
     sys_root: PathBuf,
     mountinfo: PathBuf,
+    fstab: PathBuf,
     statvfs: StatvfsFn,
     /// Mount point → name for every filesystem ever named. Names are never reused or changed, and
     /// the map is persisted in `names_path`, so they survive restarts too.
@@ -272,12 +273,17 @@ impl<'c> Disks<'c> {
                 .hidden_reported
                 .lock()
                 .unwrap_or_else(|p| p.into_inner());
-            for point in mounts::hidden_filesystems(&parsed) {
+            // /etc/fstab missing or unreadable: nothing to compare against, nothing to report.
+            let fstab = std::fs::read_to_string(&self.fstab).unwrap_or_default();
+            let hidden = mounts::hidden_filesystems(&parsed)
+                .into_iter()
+                .chain(mounts::fstab_hidden(&fstab, &parsed));
+            for point in hidden {
                 if reported.insert(point.clone()) {
                     logger.warn(format!(
-                        "disks: the filesystem mounted at {} is hidden under another mount in this \
-                         service's namespace (e.g. ProtectHome= over a separate /home) and is not \
-                         reported",
+                        "disks: the filesystem at {} is not visible in this service's namespace \
+                         (hidden by ProtectHome=/InaccessiblePaths= or by another mount) and is \
+                         not reported",
                         point.display()
                     ));
                 }
@@ -717,6 +723,7 @@ fn build<'c>(
         config: config.clone(),
         sys_root: environment.sys_root.clone(),
         mountinfo: environment.mountinfo.clone(),
+        fstab: environment.fstab.clone(),
         statvfs: environment.statvfs,
         names: Mutex::new(
             environment
@@ -1096,6 +1103,78 @@ pub mod tests {
         assert!(statvfs_bounded(Path::new("/mnt/hung"), ok, &flag).is_ok());
     }
 
+    /// Paths `recording_statvfs` was asked for (the helper threads call a plain `fn`).
+    static STATVFS_CALLS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+    fn recording_statvfs(path: &Path) -> std::io::Result<FsStats> {
+        STATVFS_CALLS.lock().unwrap().push(path.to_path_buf());
+        Ok(FsStats {
+            fragment_size: 4096,
+            blocks: 100,
+            blocks_available: 50,
+            files: 10,
+            files_available: 5,
+        })
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn every_sample_statvfses_only_what_is_mounted_and_resumes_a_replug_at_once() {
+        use crate::logging::Level;
+        use crate::probe_only::host::tests::FakeTree;
+        use hsm_collector::CollectorOptions;
+
+        let tree = FakeTree::new("per-sample");
+        tree.file("mountinfo", mounts::tests::GARAGE_MOUNTINFO);
+        let environment = HostEnvironment {
+            sys_root: tree.0.join("sys"),
+            mountinfo: tree.0.join("mountinfo"),
+            fstab: tree.0.join("fstab"),
+            diskstats: tree.0.join("diskstats"),
+            statvfs: recording_statvfs,
+            online_cpus: || Ok(1),
+            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
+            docker_state: None,
+            disk_names: None,
+        };
+        let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
+        options.allow_plaintext_transport = true;
+        let collector = Collector::new(&options).expect("create");
+        let logger = Logger::new(Level::Error, None);
+        let (mut space, _) = build(&collector, &DisksConfig::default(), &environment, &logger);
+        collector.start().expect("start");
+        let asked = |sample: &mut SpaceSource<'_>| {
+            STATVFS_CALLS.lock().unwrap().clear();
+            // A recent re-scan: only the per-sample check runs.
+            sample.last_scan = Instant::now();
+            sample.sample(&logger);
+            let mut calls = STATVFS_CALLS.lock().unwrap().clone();
+            calls.sort();
+            calls
+        };
+
+        // oldlinux unmounted between two re-scans: never statvfs'd (it would answer for `/`).
+        let without_oldlinux = mounts::tests::GARAGE_MOUNTINFO
+            .lines()
+            .filter(|line| !line.contains("/mnt/oldlinux"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        tree.file("mountinfo", &without_oldlinux);
+        let calls = asked(&mut space);
+        assert!(
+            !calls.contains(&PathBuf::from("/mnt/oldlinux")),
+            "{calls:?}"
+        );
+        assert_eq!(calls.len(), 3);
+
+        // Plugged back in (same device): resumed on this very sample, not at the next re-scan.
+        tree.file("mountinfo", mounts::tests::GARAGE_MOUNTINFO);
+        let calls = asked(&mut space);
+        assert!(calls.contains(&PathBuf::from("/mnt/oldlinux")), "{calls:?}");
+        assert_eq!(calls.len(), 4);
+        collector.stop().expect("stop");
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_mount_that_appears_later_registers_at_runtime_and_one_that_goes_away_stops() {
@@ -1110,6 +1189,7 @@ pub mod tests {
         let environment = HostEnvironment {
             sys_root: tree.0.join("sys"),
             mountinfo: tree.0.join("mountinfo"),
+            fstab: tree.0.join("fstab"),
             diskstats: tree.0.join("diskstats"),
             statvfs: |_| {
                 Ok(FsStats {
@@ -1211,6 +1291,7 @@ pub mod tests {
                 config: DisksConfig::default(),
                 sys_root: tree.0.join("sys"),
                 mountinfo: tree.0.join("mountinfo"),
+                fstab: tree.0.join("fstab"),
                 statvfs,
                 names: Mutex::new(names::load(&names_path, &logger)),
                 names_path: Some(names_path.clone()),

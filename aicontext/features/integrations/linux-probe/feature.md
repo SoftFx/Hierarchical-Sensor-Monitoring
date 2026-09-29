@@ -47,8 +47,8 @@ The probe registers **two separately pinned sets**:
    `/proc/diskstats` of the whole disk). Block-backed types only, deduplicated by source device,
    re-scanned every 10 min (new mounts register at runtime; removed ones time out; every 5-min
    sample re-checks the mount table first; automounted and over-mounted filesystems are skipped —
-   a separate `/home` under the unit's `ProtectHome=yes` tmpfs is therefore not reported, logged
-   once at WARN). The archives
+   `ProtectHome=yes` unmounts a separate `/home` from the service's namespace, so it is not
+   reported; logged once at WARN when `/etc/fstab` lists it). The archives
    are `statvfs`'d directly — measured not to wake sleeping disks; nothing under a mount is ever
    opened, listed or read. Pinned for garage-server (4 filesystems, 16 paths) by
    `DISKS_GARAGE_SET`, built from captured `mountinfo`/`diskstats`/sysfs

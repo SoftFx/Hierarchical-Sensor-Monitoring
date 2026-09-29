@@ -171,10 +171,13 @@ on a host that auto-mounts removable media under per-volume paths (`/media/<user
 `/run/media/…`) every new stick leaves sensors behind in Timeout — add those paths to
 `probe.disks.exclude` there.
 
-**Known gap — a separate `/home` (or `/root`).** The unit's `ProtectHome=yes` lays an
-inaccessible tmpfs over `/home`, `/root` and `/run/user` in the service's namespace, so a real
-filesystem mounted there is hidden from the probe (a `statvfs` would answer for the tmpfs). It is
-not reported, and the probe logs one WARN line naming it. On such a host, `ProtectHome=read-only`
+**Known gap — a separate `/home` (or `/root`).** The unit's `ProtectHome=yes` makes `/home`,
+`/root` and `/run/user` inaccessible in the service's namespace: systemd first **unmounts**
+everything there and then over-mounts an inaccessible node (verified on garage-server with
+`systemd-run -p InaccessiblePaths=/run/lock`: the original mount is gone from the unit's
+mountinfo). So a real filesystem mounted there does not exist for the probe and is not reported.
+The probe names it with one WARN line when `/etc/fstab` lists a real filesystem at or below such
+a path (a filesystem mounted by other means — a mount unit, a script — cannot be seen at all). On such a host, `ProtectHome=read-only`
 in a drop-in makes it visible (read-only; the probe never reads anything under a mount) — a
 hardening trade-off left to the operator. garage-server has no separate `/home`.
 

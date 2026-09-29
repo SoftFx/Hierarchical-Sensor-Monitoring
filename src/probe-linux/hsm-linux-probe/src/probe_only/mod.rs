@@ -51,6 +51,8 @@ pub struct HostEnvironment {
     pub sys_root: PathBuf,
     /// This process's mount table (`/proc/self/mountinfo`).
     pub mountinfo: PathBuf,
+    /// The static filesystem table (`/etc/fstab`), to name real filesystems the unit hides.
+    pub fstab: PathBuf,
     /// The kernel's per-device I/O counters (`/proc/diskstats`).
     pub diskstats: PathBuf,
     /// Filesystem statistics for a path (`statvfs(3)`); injectable for tests.
@@ -72,6 +74,7 @@ impl HostEnvironment {
         Self {
             sys_root: PathBuf::from("/sys"),
             mountinfo: PathBuf::from("/proc/self/mountinfo"),
+            fstab: PathBuf::from("/etc/fstab"),
             diskstats: PathBuf::from("/proc/diskstats"),
             statvfs: disks::statvfs,
             online_cpus: host::online_cpus,

@@ -440,6 +440,7 @@ mod tests {
             HostEnvironment {
                 sys_root: self.tree.0.join("sys"),
                 mountinfo: self.tree.0.join("mountinfo"),
+                fstab: self.tree.0.join("fstab"),
                 diskstats: self.tree.0.join("diskstats"),
                 statvfs: |_| {
                     Ok(crate::probe_only::disks::FsStats {
