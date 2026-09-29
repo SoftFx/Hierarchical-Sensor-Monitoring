@@ -112,9 +112,19 @@ pub fn real_filesystems(mounts: &[Mount], exclude: &[String]) -> Vec<Filesystem>
             .iter()
             .any(|later| later.mount_point == mount.mount_point)
     });
+    // An automounted filesystem (`autofs` trigger under it, e.g. `x-systemd.automount`) is never
+    // reported: `statfs(2)` follows automount points, so a `statvfs` after the idle unmount would
+    // mount it again — and spin up the disk the idle timeout let sleep.
+    let automount_points: BTreeSet<&Path> = mounts
+        .iter()
+        .filter(|mount| mount.fs_type == "autofs")
+        .map(|mount| mount.mount_point.as_path())
+        .collect();
     let mut groups: BTreeMap<String, Vec<&Mount>> = BTreeMap::new();
-    for (_, mount) in visible.filter(|(_, mount)| BLOCK_FS_TYPES.contains(&mount.fs_type.as_str()))
-    {
+    for (_, mount) in visible.filter(|(_, mount)| {
+        BLOCK_FS_TYPES.contains(&mount.fs_type.as_str())
+            && !automount_points.contains(mount.mount_point.as_path())
+    }) {
         let key = if mount.source.starts_with("/dev/") {
             mount.source.clone()
         } else {
@@ -314,6 +324,23 @@ pub mod tests {
         let filesystems = real_filesystems(&parse_mountinfo(text), &[]);
         assert_eq!(filesystems.len(), 1);
         assert_eq!(filesystems[0].mount_point, PathBuf::from("/data"));
+    }
+
+    #[test]
+    fn an_automounted_filesystem_is_never_reported() {
+        // x-systemd.automount: the autofs trigger, and the ext4 mounted on it while in use. A
+        // statvfs after the idle unmount would remount it and wake the disk.
+        let text = "\
+1 0 8:1 / / rw - ext4 /dev/sda1 rw
+2 1 0:50 / /mnt/archive rw,relatime - autofs systemd-1 rw,fd=51,pgrp=1,timeout=600
+3 2 8:17 / /mnt/archive rw,relatime - ext4 /dev/sdb1 rw
+";
+        let filesystems = real_filesystems(&parse_mountinfo(text), &[]);
+        let points: Vec<String> = filesystems
+            .iter()
+            .map(|fs| fs.mount_point.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(points, vec!["/"]);
     }
 
     #[test]
