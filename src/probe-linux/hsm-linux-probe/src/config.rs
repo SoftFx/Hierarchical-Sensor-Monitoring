@@ -98,12 +98,54 @@ pub struct ProbeConfig {
     #[serde(default)]
     pub host_sensors: HostSensorsConfig,
     #[serde(default)]
+    pub disks: DisksConfig,
+    #[serde(default)]
     pub docker: DockerConfig,
 }
 
-/// `probe.hostSensors`: the host/disk probe-only sensors. `enabled: false` turns off all of them;
-/// `cpuTemperature` / `disk` turn off one source each (`Logical cores` has no switch of its own —
-/// it costs two records a day).
+/// `probe.disks { enabled, exclude, writeSpeed }`: the per-filesystem disk sensors (#1481).
+/// Absent = defaults (nothing excluded, write speed on; enabled unless the 0.2.x/0.3.x host
+/// switches turned the disks off — see [`ProbeConfig::disks_enabled`]).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DisksConfig {
+    /// `None` = not set: the older host switches decide (an upgrade never turns disks back on).
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    /// Mount-point patterns (`*` = any run of characters) of filesystems not to report, matched
+    /// against the mount point the sensors are named after (e.g. `"/mnt/usb*"`).
+    #[serde(default)]
+    pub exclude: Vec<String>,
+    /// The `Average disk write speed on <name> disk` sensors.
+    #[serde(default = "enabled_by_default")]
+    pub write_speed: bool,
+}
+
+impl Default for DisksConfig {
+    fn default() -> Self {
+        Self {
+            enabled: None,
+            exclude: Vec::new(),
+            write_speed: true,
+        }
+    }
+}
+
+impl ProbeConfig {
+    /// Whether the disk sensors run. An explicit `probe.disks.enabled` decides; without it the
+    /// 0.2.x/0.3.x switches that used to cover the disk sensor still do — `hostSensors.enabled:
+    /// false` or `hostSensors.disk: false` — so an upgrade never switches them back on.
+    pub fn disks_enabled(&self) -> bool {
+        self.disks
+            .enabled
+            .unwrap_or(self.host_sensors.enabled && self.host_sensors.disk != Some(false))
+    }
+}
+
+/// `probe.hostSensors`: the host probe-only sensors. `enabled: false` turns off both;
+/// `cpuTemperature` turns off the temperature (`Logical cores` has no switch of its own — it costs
+/// two records a day). The disk sensors moved to [`DisksConfig`]; the old `disk` switch is still
+/// read so that an explicit `false` in a 0.2.x config keeps them off.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HostSensorsConfig {
@@ -111,8 +153,10 @@ pub struct HostSensorsConfig {
     pub enabled: bool,
     #[serde(default = "enabled_by_default")]
     pub cpu_temperature: bool,
-    #[serde(default = "enabled_by_default")]
-    pub disk: bool,
+    /// Deprecated (0.2.x/0.3.x): use `probe.disks.enabled`. `Some(false)` still disables the
+    /// disks when `probe.disks.enabled` is not set.
+    #[serde(default)]
+    pub disk: Option<bool>,
 }
 
 impl Default for HostSensorsConfig {
@@ -120,7 +164,7 @@ impl Default for HostSensorsConfig {
         Self {
             enabled: true,
             cpu_temperature: true,
-            disk: true,
+            disk: None,
         }
     }
 }
@@ -256,11 +300,27 @@ impl Config {
             }
         }
         self.probe.docker.validate()?;
+        self.probe.disks.validate()?;
         Ok(())
     }
 
     pub fn shutdown_timeout(&self) -> Duration {
         Duration::from_secs(self.shutdown_timeout_sec)
+    }
+}
+
+impl DisksConfig {
+    fn validate(&self) -> Result<(), ConfigError> {
+        if let Some(bad) = self
+            .exclude
+            .iter()
+            .find(|pattern| pattern.trim().is_empty())
+        {
+            return Err(ConfigError::invalid(format!(
+                "probe.disks.exclude must not contain an empty pattern (got '{bad}')"
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -409,7 +469,12 @@ mod tests {
         // The skeleton documents the probe-only switches, all on.
         assert!(example.contains("\"hostSensors\""));
         let host = &config.probe.host_sensors;
-        assert!(host.enabled && host.cpu_temperature && host.disk);
+        assert!(host.enabled && host.cpu_temperature && host.disk.is_none());
+        let disks = &config.probe.disks;
+        assert!(example.contains("\"disks\""));
+        assert_eq!(disks.enabled, Some(true));
+        assert!(disks.write_speed && disks.exclude.is_empty());
+        assert!(config.probe.disks_enabled());
     }
 
     #[test]
@@ -431,7 +496,40 @@ mod tests {
         // them on, not fail and not silently leave them off.
         let config = Config::parse(MINIMAL).expect("parse");
         let host = &config.probe.host_sensors;
-        assert!(host.enabled && host.cpu_temperature && host.disk);
+        assert!(host.enabled && host.cpu_temperature && host.disk.is_none());
+        let disks = &config.probe.disks;
+        assert!(disks.enabled.is_none() && disks.write_speed && disks.exclude.is_empty());
+        assert!(config.probe.disks_enabled());
+    }
+
+    #[test]
+    fn the_disks_section_maps_and_the_old_disk_switch_is_still_read() {
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "disks": { "exclude": ["/mnt/usb*", "/media/*"], "writeSpeed": false } } }"#;
+        let probe = Config::parse(text).expect("parse").probe;
+        assert!(probe.disks_enabled());
+        assert!(!probe.disks.write_speed);
+        assert_eq!(probe.disks.exclude, vec!["/mnt/usb*", "/media/*"]);
+
+        // A 0.3.x config with all host sensors off had the disk sensor off too: it stays off
+        // unless probe.disks.enabled says otherwise.
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "hostSensors": { "enabled": false } } }"#;
+        assert!(!Config::parse(text).expect("parse").probe.disks_enabled());
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "hostSensors": { "enabled": false }, "disks": { "enabled": true } } }"#;
+        assert!(Config::parse(text).expect("parse").probe.disks_enabled());
+
+        // A 0.2.x config that switched the disk sensors off keeps them off (probe_only reads it).
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "hostSensors": { "disk": false } } }"#;
+        let config = Config::parse(text).expect("parse");
+        assert_eq!(config.probe.host_sensors.disk, Some(false));
+        assert!(!config.probe.disks_enabled());
+
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "disks": { "exclude": ["  "] } } }"#;
+        assert!(matches!(Config::parse(text), Err(ConfigError::Invalid(_))));
     }
 
     #[test]
@@ -441,7 +539,7 @@ mod tests {
         let host = Config::parse(text).expect("parse").probe.host_sensors;
         assert!(host.enabled);
         assert!(!host.cpu_temperature);
-        assert!(host.disk);
+        assert!(host.disk.is_none());
 
         let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
              "probe": { "hostSensors": { "enabled": false } } }"#;

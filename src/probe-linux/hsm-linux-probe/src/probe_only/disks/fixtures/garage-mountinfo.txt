@@ -1,0 +1,41 @@
+676 271 8:33 / / ro,nosuid,relatime shared:187 master:1 - ext4 /dev/sdc1 rw,errors=remount-ro
+759 676 0:24 / /run rw,nosuid,nodev,noexec,relatime shared:188 master:5 - tmpfs tmpfs rw,size=1629888k,mode=755,inode64
+760 759 0:31 / /run/lock rw,nosuid,nodev,noexec,relatime shared:192 master:15 - tmpfs tmpfs rw,size=5120k,inode64
+764 759 0:4 net:[4026532413] /run/docker/netns/8686395c44d7 rw,nosuid shared:195 master:166 - nsfs nsfs rw
+770 759 0:4 net:[4026531840] /run/docker/netns/default rw,nosuid shared:203 master:373 - nsfs nsfs rw
+788 676 0:21 / /sys rw,nosuid,nodev,noexec,relatime shared:218 master:6 - sysfs sysfs rw
+789 788 0:7 / /sys/kernel/security rw,nosuid,nodev,noexec,relatime shared:219 master:7 - securityfs securityfs rw
+790 788 0:26 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime shared:220 master:8 - cgroup2 cgroup2 rw,nsdelegate,memory_recursiveprot
+791 788 0:27 / /sys/fs/pstore rw,nosuid,nodev,noexec,relatime shared:222 master:9 - pstore pstore rw
+792 788 0:28 / /sys/fs/bpf ro,nosuid,nodev,noexec,relatime shared:223 master:10 - bpf bpf rw,mode=700
+793 788 0:13 / /sys/kernel/tracing ro,nosuid,nodev,noexec,relatime shared:224 master:16 - tracefs tracefs rw
+794 788 0:8 / /sys/kernel/debug ro,nosuid,nodev,noexec,relatime shared:225 master:17 - debugfs debugfs rw
+795 788 0:34 / /sys/fs/fuse/connections rw,nosuid,nodev,noexec,relatime shared:226 master:20 - fusectl fusectl rw
+796 788 0:35 / /sys/kernel/config rw,nosuid,nodev,noexec,relatime shared:227 master:19 - configfs configfs rw
+800 676 0:38 / /tmp rw,nosuid,nodev shared:228 master:47 - tmpfs tmpfs rw,nr_inodes=1048576,inode64
+801 676 8:17 / /mnt/.rw/mediacentr ro,nosuid,noatime shared:230 master:102 - fuseblk /dev/sdb1 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+802 676 8:17 / /mnt/mediacentr ro,nosuid,noatime shared:231 - fuseblk /dev/sdb1 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+803 802 8:17 /FotoBackupOld /mnt/mediacentr/FotoBackupOld ro,nosuid,noatime shared:232 master:102 - fuseblk /dev/sdb1 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+804 676 8:2 / /mnt/.rw/wd4tb ro,nosuid,noatime shared:234 master:97 - fuseblk /dev/sda2 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+805 676 8:2 / /mnt/wd4tb ro,nosuid,noatime shared:235 - fuseblk /dev/sda2 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+809 805 8:2 /backup /mnt/wd4tb/backup ro,nosuid,noatime shared:236 master:97 - fuseblk /dev/sda2 rw,user_id=0,group_id=0,default_permissions,allow_other,blksize=4096
+810 676 8:21 / /mnt/oldlinux ro,nosuid,noatime shared:237 master:106 - ext4 /dev/sdb5 rw
+811 676 0:44 / /var/lib/docker/overlay2/132cc92877a4cfde92c5ca133a211663cc95b4666bfb19982a404021c01c6cd6/merged ro,nosuid,relatime shared:238 master:116 - overlay overlay rw,lowerdir=/var/lib/docker/overlay2/l/7LUOLK2DIRPWAYZ6HFXBRRIUR3:/var/lib/docker/overlay2/l/F7WGUDJM326XIQJD3A2C3I74EX,upperdir=/var/lib/docker/overlay2/132cc92877a4cfde92c5ca133a211663cc95b4666bfb19982a404021c01c6cd6/diff,workdir=/var/lib/docker/overlay2/132cc92877a4cfde92c5ca133a211663cc95b4666bfb19982a404021c01c6cd6/work
+812 676 0:56 / /var/lib/docker/overlay2/dcb7f1e5d51f08208c24124caabfdf431617233b8de14030dad5ed88b3d5136b/merged ro,nosuid,relatime shared:239 master:162 - overlay overlay rw,lowerdir=/var/lib/docker/overlay2/l/ZFJ5NYHIGA5DM6H5QCNOBA5UVQ:/var/lib/docker/overlay2/l/5LJD5EDM6CWFQO7QS7533X4MDA,upperdir=/var/lib/docker/overlay2/dcb7f1e5d51f08208c24124caabfdf431617233b8de14030dad5ed88b3d5136b/diff,workdir=/var/lib/docker/overlay2/dcb7f1e5d51f08208c24124caabfdf431617233b8de14030dad5ed88b3d5136b/work
+823 676 0:106 / /dev ro,nosuid,noexec shared:250 - tmpfs tmpfs rw,size=4096k,nr_inodes=65536,mode=755,inode64
+824 823 0:23 / /dev/pts rw,nosuid,noexec,relatime shared:251 master:3 - devpts devpts rw,gid=5,mode=600,ptmxmode=000
+825 823 0:25 / /dev/shm rw,nosuid,nodev shared:252 master:4 - tmpfs tmpfs rw,inode64
+826 823 0:20 / /dev/mqueue rw,nosuid,nodev,noexec,relatime shared:253 master:14 - mqueue mqueue rw
+827 823 0:30 / /dev/hugepages rw,nosuid,nodev,relatime shared:254 master:13 - hugetlbfs hugetlbfs rw,pagesize=2M
+677 676 0:24 /systemd/inaccessible/dir /home ro,nosuid,nodev,noexec,relatime shared:255 master:5 - tmpfs tmpfs rw,size=1629888k,mode=755,inode64
+707 676 0:107 / /proc rw,nosuid,nodev,noexec,relatime shared:256 - proc proc rw,hidepid=invisible
+727 707 0:39 / /proc/sys/fs/binfmt_misc rw,nosuid,nodev,noexec,relatime shared:257 master:85 - binfmt_misc binfmt_misc rw
+829 707 0:24 /systemd/inaccessible/reg /proc/kallsyms ro,nosuid,nodev,noexec,relatime shared:294 master:5 - tmpfs tmpfs rw,size=1629888k,mode=755,inode64
+841 676 0:24 /systemd/inaccessible/dir /root ro,nosuid,nodev,noexec,relatime shared:325 master:5 - tmpfs tmpfs rw,size=1629888k,mode=755,inode64
+761 759 0:165 / /run/credentials ro,nosuid,nodev,noexec shared:212 - tmpfs tmpfs rw,size=4096k,nr_inodes=1024,mode=755,inode64
+762 761 0:104 / /run/credentials/hsm-linux-probe.service ro,nosuid,nodev,noexec,relatime,nosymfollow shared:215 master:171 - tmpfs tmpfs rw,size=1024k,nr_inodes=1024,mode=700,inode64,noswap
+843 800 0:38 /systemd-private-198ee0b824424305bf9bf1580ff7a901-hsm-linux-probe.service-hGHrFD/tmp /tmp rw,nosuid,nodev shared:229 master:47 - tmpfs tmpfs rw,nr_inodes=1048576,inode64
+844 676 0:24 /systemd/inaccessible/dir /usr/lib/modules ro,nosuid,nodev,noexec,relatime shared:327 master:5 - tmpfs tmpfs rw,size=1629888k,mode=755,inode64
+845 676 8:33 /var/lib/hsm-linux-probe /var/lib/hsm-linux-probe rw,nosuid,relatime shared:331 master:1 - ext4 /dev/sdc1 rw,errors=remount-ro
+846 676 8:33 /var/log/hsm-linux-probe /var/log/hsm-linux-probe rw,nosuid,relatime shared:332 master:1 - ext4 /dev/sdc1 rw,errors=remount-ro
+847 676 8:33 /var/tmp/systemd-private-198ee0b824424305bf9bf1580ff7a901-hsm-linux-probe.service-4Sn1KE/tmp /var/tmp rw,nosuid,relatime shared:334 master:1 - ext4 /dev/sdc1 rw,errors=remount-ro

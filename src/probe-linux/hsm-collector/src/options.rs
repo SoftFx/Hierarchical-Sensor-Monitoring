@@ -102,9 +102,20 @@ pub struct SensorOptions {
     /// `<computer>/<module>/<path>`; host sensors pass a `.computer/…` path. Also forces
     /// `IsSingletonSensor` on the wire, as the managed `IsComputerSensor` does.
     pub is_computer_sensor: bool,
+    /// `Statistics` flags (managed `StatisticsOptions`; [`STATISTICS_EMA`] = 1). `None` emits the
+    /// kind's default. EMA must be on for an `Ema*` alert property to have values.
+    pub statistics: Option<i32>,
 }
 
+/// `StatisticsOptions.EMA`: the server keeps an exponential moving average of the sensor.
+pub const STATISTICS_EMA: i32 = 1;
+
 impl SensorOptions {
+    pub fn with_statistics(mut self, statistics: i32) -> Self {
+        self.statistics = Some(statistics);
+        self
+    }
+
     pub fn with_keep_history(mut self, keep_history: Duration) -> Self {
         self.keep_history = Some(keep_history);
         self
@@ -160,6 +171,9 @@ impl SensorOptions {
             raw.enable_grafana = tri_state(enable_grafana);
         }
         raw.is_computer_sensor = self.is_computer_sensor;
+        if let Some(statistics) = self.statistics {
+            raw.statistics = statistics;
+        }
     }
 }
 

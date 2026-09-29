@@ -410,6 +410,15 @@ pub mod tests {
             fs::create_dir_all(path.parent().unwrap()).expect("mkdir");
             fs::write(path, text).expect("write");
         }
+
+        /// A symlink at `relative` pointing at `target` (relative to the link's directory), the way
+        /// sysfs links `/sys/dev/block/<maj:min>` into the device tree.
+        #[cfg(unix)]
+        pub fn link(&self, relative: &str, target: &str) {
+            let path = self.0.join(relative);
+            fs::create_dir_all(path.parent().unwrap()).expect("mkdir");
+            std::os::unix::fs::symlink(target, path).expect("symlink");
+        }
     }
 
     impl Drop for FakeTree {

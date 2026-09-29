@@ -15,8 +15,12 @@
   "probe": {
     "hostSensors": {
       "enabled": true,
-      "cpuTemperature": true,
-      "disk": true
+      "cpuTemperature": true
+    },
+    "disks": {
+      "enabled": true,
+      "exclude": [],
+      "writeSpeed": true
     },
     "docker": {
       "enabled": true,
