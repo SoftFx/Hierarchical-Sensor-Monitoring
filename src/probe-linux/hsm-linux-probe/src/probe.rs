@@ -220,20 +220,22 @@ fn build_collector(
     Ok(collector)
 }
 
-/// Where the tree sits, for the start log: "the product root", or the nodes a non-empty
-/// `computerName`/`module` re-introduce.
+/// Where the tree sits, for the start log: the module node under the product root by default, and
+/// a note when `computerName`/`module` move it (not recommended).
 fn tree_root(computer_name: &str, module: &str) -> String {
     let nodes: Vec<&str> = [computer_name, module]
         .into_iter()
         .filter(|segment| !segment.is_empty())
         .collect();
-    if nodes.is_empty() {
+    let place = if nodes.is_empty() {
         "the product root".to_string()
     } else {
-        format!(
-            "'{}/' (computerName/module set; not recommended)",
-            nodes.join("/")
-        )
+        format!("'{}/'", nodes.join("/"))
+    };
+    if computer_name.is_empty() && module == crate::config::DEFAULT_MODULE {
+        place
+    } else {
+        format!("{place} (computerName/module changed from the defaults; not recommended)")
     }
 }
 
@@ -375,6 +377,7 @@ mod tests {
     fn test_collector(port: u16) -> Collector {
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", port);
         options.allow_plaintext_transport = true;
+        options.module = Some(crate::config::DEFAULT_MODULE.into());
         Collector::new(&options).expect("create")
     }
 
@@ -512,14 +515,14 @@ mod tests {
     /// (a CLR concept) and minus the metric-fed process sensors, which register only when
     /// the build can feed them (`METRIC_FED_SET`).
     const MODULE_SET: &[&str] = &[
-        ".module/Collector errors",
-        ".module/Collector queue stats/Items count in package",
-        ".module/Collector queue stats/Package content size",
-        ".module/Collector queue stats/Package process time",
-        ".module/Collector queue stats/Queue overflow",
-        ".module/Collector version",
-        ".module/Service alive",
-        ".module/Version",
+        ".probe/.module/Collector errors",
+        ".probe/.module/Collector queue stats/Items count in package",
+        ".probe/.module/Collector queue stats/Package content size",
+        ".probe/.module/Collector queue stats/Package process time",
+        ".probe/.module/Collector queue stats/Queue overflow",
+        ".probe/.module/Collector version",
+        ".probe/.module/Service alive",
+        ".probe/.module/Version",
     ];
 
     /// Everything the metric-source factory feeds: the computer set (managed
@@ -531,9 +534,9 @@ mod tests {
         ".computer/Disks monitoring/Free space on disk prediction",
         ".computer/Free RAM memory",
         ".computer/Total CPU",
-        ".module/Process process/Process CPU",
-        ".module/Process process/Process memory",
-        ".module/Process process/Process thread count",
+        ".probe/.module/Process process/Process CPU",
+        ".probe/.module/Process process/Process memory",
+        ".probe/.module/Process process/Process thread count",
     ];
 
     /// The Docker source (#1416) on garage-server: 12 Compose containers, 11 monitored services, all
@@ -544,76 +547,76 @@ mod tests {
     /// `lingua-ci/ci-image` — Exited (0) under restart policy `no` — is a completed one-shot job
     /// and not monitored (owner decision). 70 paths, no empty nodes.
     const DOCKER_GARAGE_SET: &[&str] = &[
-        "Docker/caddy/caddy/CPU",
-        "Docker/caddy/caddy/Disk written per hour",
-        "Docker/caddy/caddy/Memory used %",
-        "Docker/caddy/caddy/OOM killed",
-        "Docker/caddy/caddy/Restart count",
-        "Docker/caddy/caddy/Service status",
-        "Docker/gitea/db/CPU",
-        "Docker/gitea/db/Disk written per hour",
-        "Docker/gitea/db/Health",
-        "Docker/gitea/db/Memory used %",
-        "Docker/gitea/db/OOM killed",
-        "Docker/gitea/db/Restart count",
-        "Docker/gitea/db/Service status",
-        "Docker/gitea/gitea/CPU",
-        "Docker/gitea/gitea/Disk written per hour",
-        "Docker/gitea/gitea/Health",
-        "Docker/gitea/gitea/Memory used %",
-        "Docker/gitea/gitea/OOM killed",
-        "Docker/gitea/gitea/Restart count",
-        "Docker/gitea/gitea/Service status",
-        "Docker/hsm/app/CPU",
-        "Docker/hsm/app/Disk written per hour",
-        "Docker/hsm/app/Memory used %",
-        "Docker/hsm/app/OOM killed",
-        "Docker/hsm/app/Restart count",
-        "Docker/hsm/app/Service status",
-        "Docker/lingua-ci/dind/CPU",
-        "Docker/lingua-ci/dind/Disk written per hour",
-        "Docker/lingua-ci/dind/Memory used %",
-        "Docker/lingua-ci/dind/OOM killed",
-        "Docker/lingua-ci/dind/Restart count",
-        "Docker/lingua-ci/dind/Service status",
-        "Docker/lingua-ci/janitor/CPU",
-        "Docker/lingua-ci/janitor/Disk written per hour",
-        "Docker/lingua-ci/janitor/Memory used %",
-        "Docker/lingua-ci/janitor/OOM killed",
-        "Docker/lingua-ci/janitor/Restart count",
-        "Docker/lingua-ci/janitor/Service status",
-        "Docker/lingua-ci/runner-heavy/CPU",
-        "Docker/lingua-ci/runner-heavy/Disk written per hour",
-        "Docker/lingua-ci/runner-heavy/Memory used %",
-        "Docker/lingua-ci/runner-heavy/OOM killed",
-        "Docker/lingua-ci/runner-heavy/Restart count",
-        "Docker/lingua-ci/runner-heavy/Service status",
-        "Docker/lingua-ci/runner-light/CPU",
-        "Docker/lingua-ci/runner-light/Disk written per hour",
-        "Docker/lingua-ci/runner-light/Memory used %",
-        "Docker/lingua-ci/runner-light/OOM killed",
-        "Docker/lingua-ci/runner-light/Restart count",
-        "Docker/lingua-ci/runner-light/Service status",
-        "Docker/lingua/mongo/CPU",
-        "Docker/lingua/mongo/Disk written per hour",
-        "Docker/lingua/mongo/Health",
-        "Docker/lingua/mongo/Memory used %",
-        "Docker/lingua/mongo/OOM killed",
-        "Docker/lingua/mongo/Restart count",
-        "Docker/lingua/mongo/Service status",
-        "Docker/lingua/seaweedfs/CPU",
-        "Docker/lingua/seaweedfs/Disk written per hour",
-        "Docker/lingua/seaweedfs/Health",
-        "Docker/lingua/seaweedfs/Memory used %",
-        "Docker/lingua/seaweedfs/OOM killed",
-        "Docker/lingua/seaweedfs/Restart count",
-        "Docker/lingua/seaweedfs/Service status",
-        "Docker/portainer/portainer/CPU",
-        "Docker/portainer/portainer/Disk written per hour",
-        "Docker/portainer/portainer/Memory used %",
-        "Docker/portainer/portainer/OOM killed",
-        "Docker/portainer/portainer/Restart count",
-        "Docker/portainer/portainer/Service status",
+        ".probe/Docker/caddy/caddy/CPU",
+        ".probe/Docker/caddy/caddy/Disk written per hour",
+        ".probe/Docker/caddy/caddy/Memory used %",
+        ".probe/Docker/caddy/caddy/OOM killed",
+        ".probe/Docker/caddy/caddy/Restart count",
+        ".probe/Docker/caddy/caddy/Service status",
+        ".probe/Docker/gitea/db/CPU",
+        ".probe/Docker/gitea/db/Disk written per hour",
+        ".probe/Docker/gitea/db/Health",
+        ".probe/Docker/gitea/db/Memory used %",
+        ".probe/Docker/gitea/db/OOM killed",
+        ".probe/Docker/gitea/db/Restart count",
+        ".probe/Docker/gitea/db/Service status",
+        ".probe/Docker/gitea/gitea/CPU",
+        ".probe/Docker/gitea/gitea/Disk written per hour",
+        ".probe/Docker/gitea/gitea/Health",
+        ".probe/Docker/gitea/gitea/Memory used %",
+        ".probe/Docker/gitea/gitea/OOM killed",
+        ".probe/Docker/gitea/gitea/Restart count",
+        ".probe/Docker/gitea/gitea/Service status",
+        ".probe/Docker/hsm/app/CPU",
+        ".probe/Docker/hsm/app/Disk written per hour",
+        ".probe/Docker/hsm/app/Memory used %",
+        ".probe/Docker/hsm/app/OOM killed",
+        ".probe/Docker/hsm/app/Restart count",
+        ".probe/Docker/hsm/app/Service status",
+        ".probe/Docker/lingua-ci/dind/CPU",
+        ".probe/Docker/lingua-ci/dind/Disk written per hour",
+        ".probe/Docker/lingua-ci/dind/Memory used %",
+        ".probe/Docker/lingua-ci/dind/OOM killed",
+        ".probe/Docker/lingua-ci/dind/Restart count",
+        ".probe/Docker/lingua-ci/dind/Service status",
+        ".probe/Docker/lingua-ci/janitor/CPU",
+        ".probe/Docker/lingua-ci/janitor/Disk written per hour",
+        ".probe/Docker/lingua-ci/janitor/Memory used %",
+        ".probe/Docker/lingua-ci/janitor/OOM killed",
+        ".probe/Docker/lingua-ci/janitor/Restart count",
+        ".probe/Docker/lingua-ci/janitor/Service status",
+        ".probe/Docker/lingua-ci/runner-heavy/CPU",
+        ".probe/Docker/lingua-ci/runner-heavy/Disk written per hour",
+        ".probe/Docker/lingua-ci/runner-heavy/Memory used %",
+        ".probe/Docker/lingua-ci/runner-heavy/OOM killed",
+        ".probe/Docker/lingua-ci/runner-heavy/Restart count",
+        ".probe/Docker/lingua-ci/runner-heavy/Service status",
+        ".probe/Docker/lingua-ci/runner-light/CPU",
+        ".probe/Docker/lingua-ci/runner-light/Disk written per hour",
+        ".probe/Docker/lingua-ci/runner-light/Memory used %",
+        ".probe/Docker/lingua-ci/runner-light/OOM killed",
+        ".probe/Docker/lingua-ci/runner-light/Restart count",
+        ".probe/Docker/lingua-ci/runner-light/Service status",
+        ".probe/Docker/lingua/mongo/CPU",
+        ".probe/Docker/lingua/mongo/Disk written per hour",
+        ".probe/Docker/lingua/mongo/Health",
+        ".probe/Docker/lingua/mongo/Memory used %",
+        ".probe/Docker/lingua/mongo/OOM killed",
+        ".probe/Docker/lingua/mongo/Restart count",
+        ".probe/Docker/lingua/mongo/Service status",
+        ".probe/Docker/lingua/seaweedfs/CPU",
+        ".probe/Docker/lingua/seaweedfs/Disk written per hour",
+        ".probe/Docker/lingua/seaweedfs/Health",
+        ".probe/Docker/lingua/seaweedfs/Memory used %",
+        ".probe/Docker/lingua/seaweedfs/OOM killed",
+        ".probe/Docker/lingua/seaweedfs/Restart count",
+        ".probe/Docker/lingua/seaweedfs/Service status",
+        ".probe/Docker/portainer/portainer/CPU",
+        ".probe/Docker/portainer/portainer/Disk written per hour",
+        ".probe/Docker/portainer/portainer/Memory used %",
+        ".probe/Docker/portainer/portainer/OOM killed",
+        ".probe/Docker/portainer/portainer/Restart count",
+        ".probe/Docker/portainer/portainer/Service status",
     ];
 
     #[test]
@@ -823,11 +826,11 @@ mod tests {
     #[cfg(feature = "linux-default-sensors")]
     fn the_process_node_keeps_the_shared_fixed_name_alert_templates_target() {
         // By design (#1429 closed as such): every native host — HsmAgent and this probe — registers
-        // the same fixed ".module/Process process" node, so one HSM alert template on that path
+        // the same fixed ".probe/.module/Process process" node, so one HSM alert template on that path
         // applies to all of them. A per-process name would silently detach hosts from it.
         let paths = registered_paths();
         for sensor in ["Process CPU", "Process memory", "Process thread count"] {
-            let expected = format!(".module/Process process/{sensor}");
+            let expected = format!(".probe/.module/Process process/{sensor}");
             assert!(
                 paths.iter().any(|path| path == &expected),
                 "missing {expected} in {paths:#?}"
@@ -836,8 +839,8 @@ mod tests {
         assert!(
             paths
                 .iter()
-                .filter(|path| path.starts_with(".module/Process "))
-                .all(|path| path.starts_with(".module/Process process/")),
+                .filter(|path| path.starts_with(".probe/.module/Process "))
+                .all(|path| path.starts_with(".probe/.module/Process process/")),
             "no other process node may be registered: {paths:#?}"
         );
         assert!(
@@ -882,14 +885,15 @@ mod tests {
 
     #[test]
     fn the_start_log_says_where_the_tree_sits() {
-        assert_eq!(tree_root("", ""), "the product root");
+        assert_eq!(tree_root("", ".probe"), "'.probe/'");
         assert_eq!(
             tree_root("garage-server", "LinuxProbe"),
-            "'garage-server/LinuxProbe/' (computerName/module set; not recommended)"
+            "'garage-server/LinuxProbe/' (computerName/module changed from the defaults; not \
+             recommended)"
         );
         assert_eq!(
-            tree_root("", "LinuxProbe"),
-            "'LinuxProbe/' (computerName/module set; not recommended)"
+            tree_root("", ""),
+            "the product root (computerName/module changed from the defaults; not recommended)"
         );
     }
 
@@ -936,6 +940,7 @@ mod tests {
             std::env::var("HSM_PARITY_ADDRESS").unwrap_or_else(|_| "http://127.0.0.1".into());
         let mut options = CollectorOptions::new("native-parity-key", address, port);
         options.allow_plaintext_transport = true;
+        options.module = Some(crate::config::DEFAULT_MODULE.into());
         let collector = Collector::new(&options).expect("create");
         let logger = Arc::new(Logger::new(Level::Debug, None));
         let sink = Arc::clone(&logger);

@@ -33,7 +33,7 @@ same form (`Prod (EU)` / `Prod EU`) get the same folder name; extract each bundl
 | Entry | Mode | Content |
 |---|---|---|
 | `hsm-linux-probe_<ver>_<arch>.deb` | 0644 | **Byte-identical** to the staged `probe-v*` release asset, under its release file name |
-| `config.json` | 0644 | Probe schema: `hsm.address` + `hsm.port` from `AgentConnectionResolver`, `hsm.accessKeyFile` = `/run/credentials/hsm-linux-probe.service/access-key` (the unit's `LoadCredential=` path). **No `computerName`, no `module`** (#1493: the probe's tree sits directly under the product — one product = one host). **No key.** |
+| `config.json` | 0644 | Probe schema: `hsm.address` + `hsm.port` from `AgentConnectionResolver`, `hsm.accessKeyFile` = `/run/credentials/hsm-linux-probe.service/access-key` (the unit's `LoadCredential=` path). **No `computerName`, no `module`**: the probe's defaults apply — no computer node, module node `.probe` (#1493, #1496; one product = one host). **No key.** |
 | `access-key` | 0600 | The product key from `AgentKeySelector` (same selection as Windows), newline-terminated |
 | `server-ca.pem` | 0644 | Optional, the server's leaf certificate (public part only); see *TLS* |
 | `install.sh`, `uninstall.sh` | 0755 | LF line endings; shellcheck-clean |
@@ -143,11 +143,12 @@ install.sh shreds the extracted one), removes the config (incl.
 `--fresh`, so hand-made links in `/etc/ssl/certs` survive). It never contacts the HSM server —
 the sensor history stays.
 
-## Tree root: no computer node, no module node (#1493)
+## Tree root: no computer node, module node `.probe` (#1493, #1496)
 
-Owner decision 2026-09-29: one product = one host, so the probe's tree sits directly under the product
-(`.computer/…`, `.module/…`, `Docker/…`). The probe's `hsm.computerName` and `hsm.module` default to
-empty, which leaves both segments out of every path; the bundle's `config.json` carries neither. The
+Owner decisions 2026-09-29: one product = one host, so the probe has no computer node; its module node
+stays and is `.probe`. The product root holds `.computer/…` and `.probe/` (with `.module/…` and
+`Docker/…`). The probe's `hsm.computerName` defaults to empty and `hsm.module` to `.probe`; the bundle's
+`config.json` carries neither key, so those defaults apply. The
 former `computerName: "auto"` and its install-time host-name substitution are removed. A host installed
 from an older bundle keeps its `computerName`/`module` until its config is replaced or edited;
 re-installing with `install.sh --force-config` writes the new config and so moves that host's tree to the
@@ -155,7 +156,7 @@ product root (the old nodes, alerts and TTL state stay behind). Setting the keys
 recommended.
 
 **One product per host.** With no host node, a second host installed from the same product's bundle writes
-into the same `.computer/…`, `.module/…` and `Docker/…` sensors: values interleave and `Service alive`
+into the same `.computer/…` and `.probe/…` sensors: values interleave and `Service alive`
 stays green while either host is up. Nothing on the server can tell the two apart, so the rule is stated
 where the bundle is taken and used — the Edit Product download help text and an `install.sh` note. The Windows
 agent bundle is unchanged (`<MACHINE>/HSM Agent/.module`).
@@ -209,7 +210,7 @@ be re-verified before the first non-empty `probe-release.txt`:
 | Package name `hsm-linux-probe`, asset `hsm-linux-probe_<ver>_<arch>.deb` + `.deb.sha256` | install/uninstall scripts, staging, guards | `.deb` build (#1418) |
 | Unit `hsm-linux-probe.service` | `install.sh` / `uninstall.sh` | `packaging/hsm-linux-probe.service` |
 | `LoadCredential=access-key:/etc/hsm-linux-probe/access-key` → `/run/credentials/hsm-linux-probe.service/access-key` | `AccessKeyCredentialPath`, `install.sh` | the unit |
-| Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile` (no `computerName`/`module`, #1493) | `BuildConfigJson` | `config.rs` (both default to empty) |
+| Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile` (no `computerName`/`module`, #1493) | `BuildConfigJson` | `config.rs` (`computerName` empty, `module` `.probe` by default, #1496) |
 | https-only address | `ValidateServerAddress` | `config.rs` validation |
 
 **Not yet verified on a real host.** The `debian:13` smoke test ran against a dummy `.deb`. In that Docker

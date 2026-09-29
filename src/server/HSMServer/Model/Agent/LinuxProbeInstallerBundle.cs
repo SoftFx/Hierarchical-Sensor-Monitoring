@@ -118,8 +118,8 @@ namespace HSMServer.Model.Agent
 
         /// <summary>
         /// The generated config.json in the probe schema. It references the key by path only, and
-        /// carries no computerName and no module: one product = one host, so the probe's sensors sit
-        /// directly under the product (#1493).
+        /// carries no computerName and no module, so the probe's defaults apply: no computer node
+        /// (one product = one host) and the module node `.probe` (#1493, #1496).
         /// </summary>
         public static string BuildConfigJson(LinuxProbeBundleOptions options)
         {
