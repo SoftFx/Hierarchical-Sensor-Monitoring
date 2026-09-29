@@ -2,6 +2,7 @@
 using HSMServer.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Primitives;
+using NLog;
 using System;
 using System.IO;
 using System.Reflection;
@@ -18,6 +19,16 @@ namespace HSMServer.ServerConfiguration
         };
 
         private readonly string _settingsPath = Path.Combine(ConfigPath, ConfigName);
+
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
+        private static readonly JsonDocumentOptions _settingsReadOptions = new()
+        {
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+        };
+
+        private readonly object _resaveLock = new();
 
         private readonly IConfigurationRoot _configuration;
 
@@ -136,7 +147,7 @@ namespace HSMServer.ServerConfiguration
                 if (!section.Exists())
                     return;
 
-                ApiTokens.Disabled = section.GetValue<bool?>(nameof(ApiTokensConfig.Disabled)) ?? false;
+                SetApiTokensKillSwitch(section.GetValue<bool?>(nameof(ApiTokensConfig.Disabled)) ?? false, "configuration reload");
             }
             catch (InvalidOperationException)
             {
@@ -145,7 +156,79 @@ namespace HSMServer.ServerConfiguration
             }
         }
 
-        public void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
+        // The file watcher can miss a hand edit (bind mounts, Docker Desktop, network
+        // file systems). Before overwriting the file, adopt the kill switch it holds so a
+        // settings save can never silently revert an emergency edit. Absent or malformed
+        // values keep the current state, as on reload.
+        private void SyncApiTokensKillSwitchFromFile()
+        {
+            try
+            {
+                if (!File.Exists(_settingsPath))
+                    return;
+
+                // Same leniency as the JSON configuration provider: comments and trailing
+                // commas are accepted, keys are case-insensitive.
+                using var document = JsonDocument.Parse(File.ReadAllText(_settingsPath), _settingsReadOptions);
+
+                if (TryGetPropertyIgnoreCase(document.RootElement, nameof(ApiTokens), out var section)
+                    && TryGetPropertyIgnoreCase(section, nameof(ApiTokensConfig.Disabled), out var disabled))
+                {
+                    // The configuration binder also accepts "true"/"false" strings.
+                    bool? value = disabled.ValueKind switch
+                    {
+                        JsonValueKind.True => true,
+                        JsonValueKind.False => false,
+                        JsonValueKind.String when bool.TryParse(disabled.GetString()?.Trim(), out var parsed) => parsed,
+                        _ => null,
+                    };
+
+                    if (value is { } known)
+                        SetApiTokensKillSwitch(known, "settings file before save");
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                _logger.Warn($"Could not read ApiTokens.Disabled from {ConfigName} before saving; the in-memory value " +
+                             $"(API tokens {(ApiTokens.Disabled ? "OFF" : "ON")}) is written: {ex.Message}");
+            }
+        }
+
+        // Last match wins on a case-variant duplicate (the configuration provider rejects
+        // duplicates outright; this read must not throw, so it takes the latest edit).
+        private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value)
+        {
+            var found = false;
+            value = default;
+
+            if (element.ValueKind == JsonValueKind.Object)
+                foreach (var property in element.EnumerateObject())
+                    if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        value = property.Value;
+                        found = true;
+                    }
+
+            return found;
+        }
+
+        private void SetApiTokensKillSwitch(bool disabled, string source)
+        {
+            if (ApiTokens.Disabled == disabled)
+                return;
+
+            ApiTokens.Disabled = disabled;
+            _logger.Warn($"ApiTokens.Disabled changed to {disabled} ({source}): API tokens are now {(disabled ? "OFF" : "ON")}.");
+        }
+
+        public void ResaveSettings()
+        {
+            lock (_resaveLock)
+            {
+                SyncApiTokensKillSwitchFromFile();
+                File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
+            }
+        }
 
 
         private T Register<T>(string sectionName) where T : class, new()

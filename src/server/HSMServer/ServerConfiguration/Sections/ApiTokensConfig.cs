@@ -13,7 +13,10 @@ namespace HSMServer.ServerConfiguration
         // ApiTokens.Disabled = true denies all API-token authentication plus
         // create/rename/rotate immediately; cookie-authenticated list/revoke and IsAdmin
         // emergency revoke-user remain available for cleanup. Default false: tokens are on.
-        public bool Disabled { get; set; }
+        // Volatile: written by ServerConfig on configuration reload, read per request.
+        public bool Disabled { get => _disabled; set => _disabled = value; }
+
+        private volatile bool _disabled;
 
         // Code-facing view of Disabled. Never persisted, and deliberately NOT bindable
         // (non-public setter — the configuration binder skips it): the earlier key
