@@ -1042,7 +1042,8 @@ struct WriteSpeedSource<'c> {
 }
 
 impl WriteSpeedSource<'_> {
-    /// Post every filesystem's `Written today` (its disk's day so far) and save the ledger.
+    /// Post every filesystem's `Written today` (its disk's day so far). The caller saves the
+    /// ledger after releasing the nodes lock.
     fn post_written_today(&mut self, nodes: &[Node<'_>], logger: &Logger) {
         let now_ms = (self.clock)();
         for node in nodes.iter().filter(|node| node.mounted) {
@@ -1062,7 +1063,6 @@ impl WriteSpeedSource<'_> {
                 logger.error(format!("disks: cannot post a written-today value: {error}"));
             }
         }
-        self.save_ledger(logger);
     }
 
     /// The physical disk behind `disk`: its WWID or serial from sysfs (cached while the name stays
@@ -1264,6 +1264,10 @@ impl Source for WriteSpeedSource<'_> {
             }
             self.last_post = Instant::now();
             self.post_written_today(&nodes, logger);
+            // The fsync'd save runs without the nodes lock: the space source shares it, and a slow
+            // state disk must not stall its samples or re-scan.
+            drop(nodes);
+            self.save_ledger(logger);
         }
     }
 

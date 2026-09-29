@@ -153,7 +153,9 @@ reports under that point's name. All under `.computer/Disks monitoring/`:
 garage-server has four (`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 5 760/day.
 
 **Written today — the midnight rules.** Each 5-s sample adds the disk's delta to the current local
-day; the first sample after local midnight starts the new day from 0. Besides the 5-minute
+day; the first sample after local midnight starts the new day from 0. The day only turns forward:
+a clock stepped back across midnight (or a DST fall-back at local midnight) keeps counting into,
+and posting, the day it came from until the clock reaches the next one. Besides the 5-minute
 posts, the day's final reading is posted in its last 30 seconds (six samples, so one slow read or a
 late tick still lands in it), so the day's last minutes are not lost to the reset. A timezone
 change (`timedatectl set-timezone`) applies without a restart. The first sample, a counter

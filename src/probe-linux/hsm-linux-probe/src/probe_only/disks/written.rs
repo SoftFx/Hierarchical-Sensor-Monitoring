@@ -114,15 +114,19 @@ pub struct DayRecord {
     pub unverified: bool,
 }
 
-/// Whether two identities name the same disk. A WWID or serial must be equal; the mount-point
-/// fallback (`mounts:<a>|<b>`) matches when the two sets share a mount point, so mounting another
-/// partition of the same disk does not make it a different disk.
-pub fn same_disk(a: &str, b: &str) -> bool {
+/// Whether two identities name the same disk; `None` when they cannot tell. A WWID or serial must
+/// be equal; the mount-point fallback (`mounts:<a>|<b>`) matches when the two sets share a mount
+/// point, so mounting another partition of the same disk does not make it a different disk. A
+/// hardware identity and a fallback one are of different kinds (a WWID read that failed in one
+/// run): they cannot tell.
+pub fn same_disk(a: &str, b: &str) -> Option<bool> {
     match (a.strip_prefix("mounts:"), b.strip_prefix("mounts:")) {
-        (Some(a), Some(b)) => a
-            .split('|')
-            .any(|point| b.split('|').any(|other| other == point)),
-        _ => a == b,
+        (Some(a), Some(b)) => Some(
+            a.split('|')
+                .any(|point| b.split('|').any(|other| other == point)),
+        ),
+        (None, None) => Some(a == b),
+        _ => None,
     }
 }
 
@@ -175,13 +179,21 @@ impl Ledger {
                 day,
                 ..DayRecord::default()
             });
-        let other_disk = match (record.identity.as_deref(), identity) {
-            (Some(known), Some(now)) => !same_disk(known, now),
-            // After a reboot an unknown identity cannot vouch for the day.
-            _ => record.unverified,
+        let known = record.identity.clone();
+        let verdict = match (known.as_deref(), identity) {
+            (Some(known), Some(now)) => same_disk(known, now),
+            _ => None,
         };
+        // An identity that cannot tell keeps the day within a boot; after a reboot it cannot
+        // vouch for it.
+        let other_disk = verdict.map_or(record.unverified, |same| !same);
         record.unverified = false;
-        if identity.is_some() {
+        // Keep a hardware identity rather than trade it for the mount-point fallback.
+        let keeps_hardware = verdict.is_none()
+            && known
+                .as_deref()
+                .is_some_and(|id| !id.starts_with("mounts:"));
+        if identity.is_some() && !keeps_hardware {
             record.identity = identity.map(str::to_string);
         }
         if other_disk {
@@ -278,7 +290,10 @@ impl Ledger {
         local: LocalTime,
     ) -> Option<(f64, Option<String>)> {
         let record = self.disks.get(disk)?;
-        if !record.measured || record.day != local(now_ms).0 {
+        // A day behind the clock is over: never report it as today. A clock behind the day (a DST
+        // fall-back at local midnight, a step back) keeps counting into that day and keeps posting
+        // it, so the sensor does not go silent into its TTL.
+        if !record.measured || record.day < local(now_ms).0 {
             return None;
         }
         let gigabytes = (record.bytes as f64 / BYTES_PER_GB * 1000.0).round() / 1000.0;
@@ -501,16 +516,14 @@ pub mod tests {
         );
         assert_eq!(ledger.disks["sdc"].day, today, "the day is not turned back");
         assert_eq!(ledger.disks["sdc"].bytes, 1_024_000_000, "nor wiped");
-        // Counting goes on into that day; nothing is posted while the clock is behind it.
+        // Counting goes on into that day, and it keeps being posted (a DST fall-back at local
+        // midnight must not leave the sensor silent into its TTL).
         ledger
             .sample("sdc", d, 2_000_200, back + 5_000, utc, PERIOD)
             .unwrap();
-        assert_eq!(ledger.today("sdc", back + 5_000, utc), None);
-        assert_eq!(
-            ledger.today("sdc", after + 5_000, utc).unwrap().0,
-            1.024,
-            "posted again once the clock is back in its day"
-        );
+        assert_eq!(ledger.today("sdc", back + 5_000, utc).unwrap().0, 1.024);
+        // A day behind the clock is never reported as today.
+        assert_eq!(ledger.today("sdc", after + 24 * HOUR, utc), None);
     }
 
     #[test]
@@ -652,13 +665,38 @@ pub mod tests {
 
     #[test]
     fn the_mount_point_fallback_matches_on_any_shared_mount_point() {
-        assert!(same_disk(
-            "mounts:/mnt/mediacentr|/mnt/oldlinux",
-            "mounts:/mnt/oldlinux"
-        ));
-        assert!(!same_disk("mounts:/mnt/wd4tb", "mounts:/mnt/mediacentr"));
-        assert!(same_disk("wwid:x", "wwid:x"));
-        assert!(!same_disk("wwid:x", "mounts:/"));
+        assert_eq!(
+            same_disk(
+                "mounts:/mnt/mediacentr|/mnt/oldlinux",
+                "mounts:/mnt/oldlinux"
+            ),
+            Some(true)
+        );
+        assert_eq!(
+            same_disk("mounts:/mnt/wd4tb", "mounts:/mnt/mediacentr"),
+            Some(false)
+        );
+        assert_eq!(same_disk("wwid:x", "wwid:x"), Some(true));
+        assert_eq!(same_disk("wwid:x", "serial:x"), Some(false));
+        // A WWID that could not be read in one run: the kinds differ, it cannot tell.
+        assert_eq!(same_disk("wwid:x", "mounts:/"), None);
+    }
+
+    #[test]
+    fn a_failed_wwid_read_does_not_make_the_same_disk_another() {
+        let mut ledger = Ledger::default();
+        let t = MIDNIGHT + 9 * HOUR;
+        ledger.sample("sdc", Some("wwid:x"), 0, t, utc, PERIOD).ok();
+        ledger
+            .sample("sdc", Some("wwid:x"), 2_000_000, t + 5_000, utc, PERIOD)
+            .unwrap();
+        // Same boot, this run could only read the mount points: the day stays, and the hardware
+        // identity is kept.
+        assert!(ledger
+            .sample("sdc", Some("mounts:/"), 2_000_100, t + 10_000, utc, PERIOD)
+            .is_ok());
+        assert_eq!(ledger.disks["sdc"].identity.as_deref(), Some("wwid:x"));
+        assert_eq!(ledger.today("sdc", t + 10_000, utc).unwrap().0, 1.024);
     }
 
     #[cfg(unix)]
