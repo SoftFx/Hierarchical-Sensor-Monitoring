@@ -98,7 +98,13 @@ services:
       - '-httpListenAddr=:9428'
       - '-storageDataPath=/victoria-logs-data'
       - '-retentionPeriod=${VL_RETENTION_PERIOD:-30d}'
-    # VictoriaLogs does not support a hard disk quota; watch the volume size (docker.md).
+      - '-retention.maxDiskSpaceUsageBytes=${VL_RETENTION_MAX_DISK:-10GiB}'
+    # Absolute disk cap for the log volume (default 10GiB; override VL_RETENTION_MAX_DISK in .env).
+    # When it is exceeded, VictoriaLogs drops the oldest whole per-day partitions automatically and
+    # always keeps the last two days (the cap can be exceeded if those two days alone are bigger);
+    # it operates independently of -retentionPeriod. The percent-based flag
+    # (-retention.maxDiskUsagePercent) is deliberately not used: a Docker named volume shares the
+    # host filesystem, so a percentage would count the whole host disk, not the volume (docker.md).
     mem_limit: 512m
     volumes:
       - victorialogs-data:/victoria-logs-data
