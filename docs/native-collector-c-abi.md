@@ -156,6 +156,21 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.10.0** (#1416 follow-up) — one additive entry point.
+  `hsm_sensor_set_description(sensor, description)` replaces a sensor's registration description
+  with the same re-emission rules as `hsm_sensor_attach_alert` (below, 0.9.1): before Start it is
+  what Start registers; while running the run's recorded registration is replaced in place and the
+  sensor re-posted on the HTTP transport. NULL emits `"Description":null`, which the server reads as
+  "unchanged" — pass `""` to clear a description it already has. For a host whose description
+  carries live facts (the Linux probe's Docker memory limit). Native-only: the managed collector
+  cannot change a description after creation, so there is no conformance verb (see the
+  `CONFORMANCE-UNSUPPORTED` note in `tests/conformance/collector/alert_registration_contract.hsmtest`).
+  Pinned by `native_set_description_rebuilds_the_registration` and
+  `native_http_alert_after_runtime_registration_reregisters`. Pointer lifetime: the 0.9.1
+  contract is unchanged — a `hsm_collector_get_registration_json` pointer stays valid until the
+  collector is destroyed, also across an alert attach while running. The new function carries its
+  own rule: a text it replaces is kept only until 256 later description changes (a host that
+  re-describes a sensor on every replica change must not grow memory without limit).
 - **0.9.1** (#1416) — behavior fix, ABI unchanged. A sensor created through the public create
   paths while the collector runs was recorded locally (`hsm_collector_get_registration_json`) but
   never POSTed to `/commands` on the HTTP transport — only the built-in lazy sources registered at

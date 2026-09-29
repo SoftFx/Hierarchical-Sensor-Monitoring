@@ -119,7 +119,8 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
    An `EXIT` trap, armed just before the key is copied, shreds the extracted copy on every exit path, a
    failing copy included.
 2. `apt-get update` (a failure only warns: an unreachable mirror is not fatal by itself), then `apt-get install -y ./hsm-linux-probe_*.deb ca-certificates` with
-   `--force-confold`, so the config written in step 1 wins over the package's placeholder conffile.
+   `--force-confold`, so the config written in step 1 is kept (from probe 0.3.1 the package ships no
+   conffile at all — postinst only seeds a missing config — and the flag stays as belt and braces).
    Config and key go in **before** the package so the unit's first start already finds them.
    `ca-certificates` is installed always: the probe verifies the server against the system trust store in
    every case, including behind a public-CA proxy where no `server-ca.pem` ships, and minimal hosts lack it.

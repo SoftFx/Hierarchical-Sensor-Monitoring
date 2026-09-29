@@ -118,6 +118,7 @@ into the per-case creation order of that sensor kind (0-based).
 | `add_default_sensor\|id` | register a built-in catalog sensor by stable id name (`total_cpu`, `process_memory`, `free_disk_space`, `service_status`, `collector_alive`, `queue_overflow`, …). Native calls `hsm_collector_add_default_sensor`; C# records the real managed prototype's `AddOrUpdateSensorRequest`. Registration `Path` is asserted by SUFFIX (`.computer/…`/`.module/…`) — the native driver applies the collector prefix while C# records the prototype path. `Description` is not pinned (machine-specific in .NET); byte-exact alert parity is locked by `WireFormatGoldenLockTests` / `NativeDefaultSensorWireMatchesNet` |
 | `add_collector_monitoring_sensors` | register the `.module` collector-monitoring group — Service alive + Collector version + Collector errors. C# calls `AddCollectorMonitoringSensors` on the host's collection (Unix/Windows route to one implementation, but each refuses the other platform); native calls `hsm_collector_add_collector_monitoring_sensors`. The heartbeat then beats on the SENSOR's own `PostDataPeriod` (15 s) in both collectors (#1437 — the native beat used to follow the collector's package-collect period), so keep the case well inside that 15 s and rely only on the beat that fires immediately on Start |
 | `create_int_sensor_with_alerts\|path\|ttl_ms\|unit\|description` | int sensor consuming the staged alert builders (see Alert builder below) |
+| `set_sensor_description\|sensor_index\|description` | replace a created sensor's registration description — **native only**; the managed driver marks it `CONFORMANCE-UNSUPPORTED` (#1482), so no corpus scenario uses it yet |
 | `dispose_sensor\|sensor_index` | release without flushing |
 | `expect_create_int_sensor_rejected\|path`, `expect_create_last_*_sensor_rejected\|path\|default_value` | creation validation throws |
 | `expect_conflicting_mixed_creates_rejected_parallel\|worker_count\|path_count\|path_prefix` | type conflicts on one path rejected under parallel registration |
@@ -246,8 +247,10 @@ meta-suite) — never skip silently.
 
 **Unsupported marker.** A driver that cannot yet implement a verb registers
 it explicitly as unsupported so the run fails with a `TODO` count instead of
-a generic unknown-verb error; the failure list is the port backlog. (No verb
-is currently in that state — both drivers implement the full vocabulary.)
+a generic unknown-verb error; the failure list is the port backlog. One verb is
+in that state: `set_sensor_description`, which the managed collector cannot
+implement until it can change a description after creation (#1482); no corpus
+scenario uses it until then.
 
 Mark such a verb in the driver source with the token `CONFORMANCE-UNSUPPORTED:
 <verb> (#<issue>)`. The reference to a cpp-port issue is mandatory and enforced

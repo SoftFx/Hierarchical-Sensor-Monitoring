@@ -11,7 +11,6 @@
 //! | `Health` | value = unhealthy for 5 min → notification, repeated hourly |
 //! | `Restart count` | value changed → notification |
 //! | `OOM killed` | value = true → sensor Error + notification, repeated hourly |
-//! | `Memory limit` | none (informational) |
 //!
 //! HSM alerts cannot raise a sensor to Warning (the server offers "set Error" only), so "Warning"
 //! is the warning icon on the notification, exactly like the managed Total CPU / Free RAM alerts.

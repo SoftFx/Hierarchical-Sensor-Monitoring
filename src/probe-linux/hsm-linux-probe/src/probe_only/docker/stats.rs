@@ -183,7 +183,7 @@ pub fn service_memory(
     })
 }
 
-/// Megabytes (MiB) for the `Memory limit` Int sensor, saturating.
+/// Megabytes (MiB) of a memory limit, for the `Memory used %` description; saturating.
 pub fn limit_megabytes(bytes: u64) -> i32 {
     i32::try_from(bytes / contract::BYTES_PER_MB).unwrap_or(i32::MAX)
 }

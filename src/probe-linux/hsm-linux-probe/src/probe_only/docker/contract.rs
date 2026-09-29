@@ -18,7 +18,6 @@ pub const STANDALONE_PROJECT: &str = "_standalone";
 
 pub const CPU: &str = "CPU";
 pub const MEMORY_USED: &str = "Memory used %";
-pub const MEMORY_LIMIT: &str = "Memory limit";
 pub const SERVICE_STATUS: &str = "Service status";
 pub const HEALTH: &str = "Health";
 pub const RESTART_COUNT: &str = "Restart count";
@@ -70,7 +69,6 @@ pub const HEALTH_ALERT_CONFIRMATION: Duration = Duration::from_secs(5 * 60);
 // ---- Units (managed `Unit` enum codes) ---------------------------------------------------------
 
 pub const UNIT_PERCENTS: i32 = 100;
-pub const UNIT_MB: i32 = 3;
 pub const UNIT_COUNT: i32 = 1100;
 
 /// Bytes per reported megabyte. The collector's own memory sensors report MiB as "MB".
