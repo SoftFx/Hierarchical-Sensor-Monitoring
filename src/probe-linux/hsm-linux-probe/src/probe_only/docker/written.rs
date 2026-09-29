@@ -157,6 +157,11 @@ pub struct Baseline {
     /// The container's `State.StartedAt` then; a different one means the counter restarted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,
+    /// A start time known to be stale: the counter already dropped (a restart the state poll has
+    /// not reported yet) while this was still the reported start time. Reported again, it is
+    /// treated as unknown; the next different one is adopted without a second skip.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ignored_started_at: Option<String>,
 }
 
 /// Why a sample added nothing.
@@ -258,10 +263,19 @@ impl WriteRecord {
         sample_period: Duration,
         started_at: Option<&str>,
     ) -> Result<(u64, u64), Skip> {
+        let ignored = self
+            .baselines
+            .get(container_id)
+            .and_then(|baseline| baseline.ignored_started_at.clone());
+        // The stale start time stays ignored until the poll reports a different one.
+        let still_ignored =
+            ignored.is_some() && started_at.is_none_or(|now| Some(now) == ignored.as_deref());
+        let started_at = if still_ignored { None } else { started_at };
         let current = Baseline {
             bytes: written,
             at_ms: now_ms,
             started_at: started_at.map(str::to_string),
+            ignored_started_at: if still_ignored { ignored } else { None },
         };
         let previous = self
             .baselines
@@ -273,11 +287,13 @@ impl WriteRecord {
             }
         }
         if written < previous.bytes {
-            // Most likely a restart the state poll has not reported yet: the start time on record
-            // is stale, so the new baseline does not claim one — the next sample must not take the
-            // start time the poll then reports for a second restart.
+            // Most likely a restart the state poll has not reported yet: the start time reported
+            // now is stale. The new baseline claims none and ignores that value until the poll
+            // reports the new one, which is then adopted without a second skip.
             if let Some(baseline) = self.baselines.get_mut(container_id) {
-                baseline.started_at = None;
+                if let Some(stale) = baseline.started_at.take() {
+                    baseline.ignored_started_at = Some(stale);
+                }
             }
             return Err(Skip::CounterReset);
         }
@@ -445,17 +461,31 @@ mod tests {
             Ok((100, 5_000))
         );
         assert_eq!(record.bytes, 600);
-        // Restarted while the probe runs: the counter drop is seen first (a reset) and the new
-        // start time only with the next state poll — one restart, one skipped sample.
+        // Restarted while the probe runs: the counter drop is seen first (a reset); the samples
+        // until the next state poll still carry the old start time, and the poll then reports the
+        // new one. One restart, one skipped sample — no `Restarted` (and so no log line) later.
         let third = Some("2026-09-29T13:40:00Z");
+        let before = record.bytes;
+        let t = H13 + 40 * MIN;
         assert_eq!(
-            record.sample("a", 50, H13 + 40 * MIN, PERIOD, second),
+            record.sample("a", 50, t, PERIOD, second),
             Err(Skip::CounterReset)
         );
-        assert_eq!(
-            record.sample("a", 80, H13 + 40 * MIN + 5_000, PERIOD, third),
-            Ok((30, 5_000))
-        );
+        for (step, counter, started) in [
+            (1, 60, second),
+            (2, 70, second),
+            (3, 80, third),
+            (4, 90, third),
+        ] {
+            assert_eq!(
+                record.sample("a", counter, t + step * 5_000, PERIOD, started),
+                Ok((10, 5_000)),
+                "sample {step}"
+            );
+        }
+        assert_eq!(record.bytes, before + 40, "only the reset sample is lost");
+        assert_eq!(record.baselines["a"].started_at.as_deref(), third);
+        assert_eq!(record.baselines["a"].ignored_started_at, None);
         // A baseline from before the start time was known still pairs.
         record.sample("b", 10, H13, PERIOD, None).ok();
         assert!(record.sample("b", 20, H13 + 5_000, PERIOD, first).is_ok());

@@ -169,7 +169,10 @@ the first after it are not counted. Kernel names are not stable (a reboot can sw
 `sdb`), so each disk's day also records which physical disk it belongs to — its WWID or serial
 from sysfs, else the mount points on it: a different disk under a known name starts its day
 afresh (with the "measured since" comment), and after a reboot a day is kept only when that
-identity matches. Disks not seen for more than a day are dropped from the file. Two filesystems
+identity matches. Disks not seen for more than a day are dropped from the file. One case cannot
+be told apart: a removable disk without a WWID or serial swapped, within one boot, for another
+such disk at the same mount point — both identities are that mount point, so the second continues
+the first one's day. Two filesystems
 on one disk (`mediacentr`, `oldlinux` on `sdb`) both report that disk's total, and their
 descriptions say so.
 
