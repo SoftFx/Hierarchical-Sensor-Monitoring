@@ -77,7 +77,7 @@ pub const UNIT_COUNT: i32 = 1100;
 /// Bytes per reported megabyte. The collector's own memory sensors report MiB as "MB".
 pub const BYTES_PER_MB: u64 = 1024 * 1024;
 /// Bytes per megabyte of `Disk written per hour`: decimal, the unit SSD endurance (TBW) is rated
-/// in, so 1000 of them are the decimal GB the disks' `Written today` reports.
+/// in, so 1000 of them are the decimal GB the disks' `Written per day` reports.
 pub const BYTES_PER_DECIMAL_MB: f64 = 1_000_000.0;
 
 /// How often a changed `Disk written per hour` accumulator is written to the state file at most

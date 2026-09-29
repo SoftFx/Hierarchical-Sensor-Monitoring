@@ -167,24 +167,28 @@ reports under that point's name. All under `.computer/Disks monitoring/`:
 | `Free space on <name> disk %` | Double · Percents | every 5 min | 15 min | [5, 10) → warning; < 5 → **Error** | `statvfs` `f_bavail / f_blocks` (what `df` shows a non-root user) |
 | `Free inodes on <name> disk %` | Double · Percents | every 5 min | 15 min | < 10 → warning | `statvfs` `f_favail / f_files`; not registered when the filesystem has no inode count |
 | `Average disk write speed on <name> disk` | DoubleBar · MBytes_sec, EMA | a sample every 5 s into a 5-min bar | 15 min | — (the Windows sensor has none) | `/proc/diskstats` sectors written × 512 of the **whole disk** under the filesystem, MB = 1024² |
-| `Written today on <name> disk` | Double · GB (**decimal**, 10⁹ bytes, three decimals), no statistics | the same 5-s samples, posted every 5 min | 15 min | — (owner decision) | Σ Δ `/proc/diskstats` sectors written × 512 of the whole disk since **local midnight** (the host's timezone); registered wherever the write speed is |
+| `Written per day on <name> disk` | Double · GB (**decimal**, 10⁹ bytes, three decimals), no statistics | the same 5-s samples; **posted once a day**, in its last 30 s | **26 h** | — (owner decision) | Σ Δ `/proc/diskstats` sectors written × 512 of the whole disk during one **local day** (the host's timezone); registered wherever the write speed is |
 
-**Cost:** ≈ 288 × 4 + 288 ≈ **1 440 records/day per filesystem** (`Written today`: 288/day);
-garage-server has four (`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 5 760/day.
+**Cost:** ≈ 288 × 4 + 1 ≈ **1 150 records/day per filesystem** (`Written per day`: 1/day);
+garage-server has four (`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 4 600/day.
 
-**Written today — the midnight rules.** Each 5-s sample adds the disk's delta to the current local
-day; the first sample after local midnight starts the new day from 0. The day only turns forward:
-a clock stepped back across midnight (or a DST fall-back at local midnight) keeps counting into,
-and posting, the day it came from until the clock reaches the next one. Besides the 5-minute
-posts, the day's final reading is posted in its last 30 seconds (six samples, so one slow read or a
-late tick still lands in it), so the day's last minutes are not lost to the reset. A timezone
-change (`timedatectl set-timezone`) applies without a restart. The first sample, a counter
+**Written per day — the midnight rules** (#1498; until 0.6.1 this was `Written today`, posted
+every 5 minutes — those nodes are stale history since). Each 5-s sample adds the disk's delta to
+the current local day; the first sample after local midnight starts the new day from 0. **The day
+is posted once**, in its last 30 seconds (six samples, so one slow read or a late tick still lands
+in it): the whole day's total. The ledger remembers the posted day, so a restart inside that window
+does not post it twice; a day that ended while the probe was not running is not posted (one INFO
+line at start names it), and the 26-hour TTL then shows the missing day as Timeout. The day only
+turns forward: a clock stepped back across midnight (or a DST fall-back at local midnight) keeps
+counting into the day it came from until the clock reaches the next one. A timezone change
+(`timedatectl set-timezone`) applies without a restart. The first sample, a counter
 that went backwards and a clock that went backwards only set a baseline; a gap longer than three
 samples that crosses midnight cannot be split between the days and is dropped (a gap inside the
 day counts in full). Never an invented 0: a day with no measured delta yet is not posted, and a
 day whose measurement began after midnight (installed, or the probe not running at midnight) says
 from when in the comment (`measured since 09:00 local time …`). The day's total and each disk's
-last counter are kept in `$STATE_DIRECTORY/disk-written.json` (saved at every post and on stop),
+last counter are kept in `$STATE_DIRECTORY/disk-written.json` (saved every 5 minutes, at the
+day's post and on stop),
 so a restart continues the day and counts what was written meanwhile. The counters restart at
 boot, so the file records the boot id (`/proc/sys/kernel/random/boot_id`): after a reboot the
 day continues from its saved total, but the writes between the last sample before the reboot and

@@ -51,9 +51,10 @@ The probe registers **two separately pinned sets**:
    the name follows the mount point, not the device):
    `Free space on <name> disk` (MB, EMA, no absolute-size alert), `… disk %`,
    `Free inodes on <name> disk %`, `Average disk write speed on <name> disk` (MBytes_sec bar from
-   `/proc/diskstats` of the whole disk) and `Written today on <name> disk` (#1485: decimal GB
-   written to that whole disk since local midnight, from the same counter, posted every 5 min;
-   from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
+   `/proc/diskstats` of the whole disk) and `Written per day on <name> disk` (#1485, once a day
+   since #1498: decimal GB written to that whole disk during one local day, from the same counter,
+   **posted once** in the day's last 30 s — TTL 26 h, a day that ended while the probe was down is
+   not posted; from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
    with the boot id and each disk's identity — WWID/serial, else its mount points — so a restart
    continues the day, a reboot keeps the day (only for the same physical disk) but not the
    counters, and a disk renamed by the kernel never inherits another disk's day). Block-backed types only, deduplicated by source device,
