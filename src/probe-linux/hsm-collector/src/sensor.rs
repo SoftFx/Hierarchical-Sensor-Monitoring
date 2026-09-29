@@ -58,7 +58,7 @@ impl<'c> RawSensor<'c> {
         }
         self.collector.with_registration_lock(|| {
             // Before Start the rebuilt registration is what Start emits. While the collector runs
-            // (collector >= 0.10.0) the ABI re-records it and re-posts it on the live transport, so
+            // (collector >= 0.9.1) the ABI re-records it and re-posts it on the live transport, so
             // a sensor created at runtime gets its alerts too. Only a collector on its way down
             // (Stopping/Disposed) is refused: there the alert could never reach the server.
             if !matches!(
@@ -123,7 +123,7 @@ macro_rules! attachable {
         $(
             impl $name<'_> {
                 /// Attach a built alert to this sensor's registration: before [`Collector::start`], or
-                /// while it runs (collector >= 0.10.0 re-registers the sensor with the alert — the
+                /// while it runs (collector >= 0.9.1 re-registers the sensor with the alert — the
                 /// way to give a sensor created at runtime its alerts). Refused while the collector
                 /// stops. The same alert may be attached to several sensors.
                 pub fn attach_alert(&self, alert: &Alert<'_>) -> Result<()> {

@@ -742,7 +742,7 @@ hsm_result_t hsm_collector_create_enum_sensor_with_sensor_options(
 
 /* The recorded registrations (one per sensor per Start, plus runtime creates). The text behind a
    returned pointer stays valid until the collector is destroyed; a later attach while running
-   replaces the entry at that index with new text (0.10.0) but never frees the old one. */
+   replaces the entry at that index with new text (0.9.1) but never frees the old one. */
 size_t hsm_collector_registration_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_registration_json(
     const hsm_collector_t* collector,
@@ -753,7 +753,7 @@ hsm_result_t hsm_collector_get_registration_json(
    Lifetime: an alert handle is owned by the collector and freed when the collector is destroyed
    (no separate release). Build conditions/actions, then attach to a sensor with
    hsm_sensor_attach_alert — attaching rebuilds the sensor's registration payload. Before Start, the
-   rebuilt payload is what Start registers. While the collector runs (0.10.0), attaching also works:
+   rebuilt payload is what Start registers. While the collector runs (0.9.1), attaching also works:
    a sensor created at runtime is registered on the server by the worker's next dispatch cycle (the
    managed command-queue cadence), so alerts attached right after its create call ride that one
    registration; an alert attached after it went out re-registers the sensor. Either way the

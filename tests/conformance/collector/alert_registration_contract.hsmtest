@@ -61,7 +61,7 @@ sensor_without_alerts_has_null_alerts|expect_registration_count|1
 sensor_without_alerts_has_null_alerts|expect_registration_contains|0|"Alerts":null,"TtlAlerts":null
 
 # A sensor created while the collector runs registers once, with the alerts it was created with
-# (#1416). The native collector takes alerts after its create call; before 0.10.0 its runtime
+# (#1416). The native collector takes alerts after its create call; before 0.9.1 its runtime
 # registration was recorded at create time without them (and was never POSTed on the HTTP
 # transport - pinned separately by native_http_registers_sensors_created_while_running).
 alert_on_sensor_created_while_running_registers_with_it|create_collector

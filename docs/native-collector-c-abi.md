@@ -156,10 +156,18 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
-- **0.10.0** (#1416) — one additive entry point and a behavior fix.
+- **0.10.0** (#1416 follow-up) — one additive entry point.
   `hsm_sensor_set_description(sensor, description)` replaces a sensor's registration description
-  (NULL clears it) with the same re-emission rules as `hsm_sensor_attach_alert` below — for a host
-  whose description carries live facts (the Linux probe's Docker memory limit). Fix: a sensor created through the public create
+  with the same re-emission rules as `hsm_sensor_attach_alert` (below, 0.9.1): before Start it is
+  what Start registers; while running the run's recorded registration is replaced in place and the
+  sensor re-posted on the HTTP transport. NULL emits `"Description":null`, which the server reads as
+  "unchanged" — pass `""` to clear a description it already has. For a host whose description
+  carries live facts (the Linux probe's Docker memory limit). Native-only: the managed collector
+  cannot change a description after creation, so there is no conformance verb (see the
+  `CONFORMANCE-UNSUPPORTED` note in `tests/conformance/collector/alert_registration_contract.hsmtest`).
+  Pinned by `native_set_description_rebuilds_the_registration` and
+  `native_http_alert_after_runtime_registration_reregisters`.
+- **0.9.1** (#1416) — behavior fix, ABI unchanged. A sensor created through the public create
   paths while the collector runs was recorded locally (`hsm_collector_get_registration_json`) but
   never POSTed to `/commands` on the HTTP transport — only the built-in lazy sources registered at
   runtime — and an alert attached after its create call never reached the recorded registration.
@@ -253,8 +261,8 @@ Version history:
   IsComputerSensor/SensorLocation path model); and the service-commands sensor
   (`hsm_collector_create_service_commands_sensor` + `hsm_service_commands_send_*`).
   `hsm_alert_t` is an opaque handle owned by the collector (freed at destroy, no
-  separate release); attaching rebuilds the payload (before 0.10.0 it had to happen before the
-  registration was emitted; since 0.10.0 an attach while running re-registers the sensor).
+  separate release); attaching rebuilds the payload (before 0.9.1 it had to happen before the
+  registration was emitted; since 0.9.1 an attach while running re-registers the sensor).
 - **0.2.0** (#1096) — HTTP transport options consumed; wire serialization.
 - **0.1.0** (#1095) — initial lifecycle, scheduler, logging, registration core.
 

@@ -57,7 +57,7 @@ Engine API call) and the schedule live in the probe.
 `AlertBuilder` (conditions, notification / scheduled notification, icon, `sensor_error`,
 confirmation / inactivity period, `disabled`) → `attach_alert` on any sensor handle. An alert is
 part of the sensor's registration: before Start it rides the Start batch; while the collector runs
-(collector 0.10.0) attaching re-records the registration and the live transport re-posts it, which
+(collector 0.9.1) attaching re-records the registration and the live transport re-posts it, which
 is how a sensor created at runtime (a Compose service seen after start) gets its alerts. Attaching
 is refused only while the collector stops. HSM alerts
 can only raise a sensor to Error; a "warning" is a notification with the ⚠ icon and no status

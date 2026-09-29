@@ -1379,6 +1379,19 @@ namespace
             return;
         }
 
+        // Native-only (hsm_sensor_set_description, 0.10.0): the managed driver marks it unsupported
+        // until #1482 gives the managed collector a counterpart, so no corpus scenario uses it yet.
+        if (action == "set_sensor_description")
+        {
+            Require(step.size() >= 3, "set_sensor_description requires sensor index and description");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto description = ExpandTextToken(step[2]);
+            Require(hsm_sensor_set_description(state.sensors[sensor_index].value, description.c_str()) == HSM_RESULT_OK,
+                    "set_sensor_description failed");
+            return;
+        }
+
         if (action == "create_last_int_sensor")
         {
             Require(step.size() >= 3, "create_last_int_sensor requires path and default value");
@@ -5703,7 +5716,7 @@ namespace
     // path, not just that HttpTransport can POST in isolation (the test above).
     void NativeHttpLiveSendPostsToCaptureServer()
     {
-        // The sensor is created while running, so its runtime registration (/commands, 0.10.0)
+        // The sensor is created while running, so its runtime registration (/commands, 0.9.1)
         // precedes the value batch; capture the /list request.
         hsm::test::HttpCaptureServer server(200, "/api/sensors/list");
 
@@ -6033,7 +6046,7 @@ namespace
 
     // #1416: a sensor created while the collector runs is registered on the server — the Start
     // batch has already gone — with the alerts attached right after its create call, and before
-    // its first value. (Before 0.10.0 the public create paths only recorded it locally.)
+    // its first value. (Before 0.9.1 the public create paths only recorded it locally.)
     void NativeHttpRegistersSensorsCreatedWhileRunning()
     {
         hsm::test::HttpRecordingServer server;

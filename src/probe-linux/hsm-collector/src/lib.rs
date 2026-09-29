@@ -440,7 +440,7 @@ mod tests {
 
     #[test]
     fn an_alert_attached_while_running_reaches_the_registration() {
-        // Collector 0.10.0: a sensor created while the collector runs (a service the probe sees
+        // Collector 0.9.1: a sensor created while the collector runs (a service the probe sees
         // after start) takes its alerts right after creation, and its registration for the run
         // is re-recorded with them (the live transport re-posts it).
         let collector = named_collector();

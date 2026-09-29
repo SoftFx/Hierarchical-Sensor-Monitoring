@@ -7,7 +7,7 @@
 //! and every 60 s after, a state poll (listing + inspect: status, health, restart count, OOM).
 //! [`register`] primes the source before the collector starts: every service already running is
 //! registered in the Start batch, alerts included; a service that appears later is registered at
-//! runtime (the collector posts it, alerts included, from 0.10.0). The contract — paths, types, cadences, thresholds — is [`contract`]; the per-service
+//! runtime (the collector posts it, alerts included, from 0.9.1). The contract — paths, types, cadences, thresholds — is [`contract`]; the per-service
 //! state machines are [`tracker`]; naming is [`identity`]; math is [`stats`]; the durable memory is
 //! [`state`].
 //!
