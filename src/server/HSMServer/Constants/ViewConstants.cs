@@ -33,7 +33,6 @@
 
         public const string UserTokenSummaryAction = "UserTokenSummary";
         public const string RevokeUserTokensAction = "RevokeUserTokens";
-        public const string RevokeAllTokensAction = "RevokeAllTokens";
 
         public const string RemoveProductAction = "RemoveProduct";
         public const string EditProductAction = "EditProduct";

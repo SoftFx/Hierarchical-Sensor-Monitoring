@@ -68,7 +68,7 @@ namespace HSMServer.Authentication
                 !credential.StartsWith(ApiTokenMaterial.TokenPrefix, StringComparison.Ordinal))
                 return Task.FromResult(AuthenticateResult.NoResult());
 
-            // Emergency kill switch (ApiTokens.Enabled = false): every API-token
+            // Emergency kill switch (ApiTokens.Disabled = true): every API-token
             // authentication is denied immediately, before any parsing or index lookup —
             // the operator's lever for disabling the channel without touching stored
             // credentials. Same indistinguishable generic failure as any other denial.

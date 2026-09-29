@@ -12,7 +12,7 @@ namespace HSMServer.Controllers
 {
     // IsAdmin emergency levers of the API-token channel (#1356 step 4, PR B): revoke
     // every token of one user (Users-page row action) and of the whole deployment
-    // (Configuration, next to the ApiTokens.Enabled kill switch). Both advance a
+    // (endpoint only, no UI button since the Configuration section was removed). Both advance a
     // durable revocation generation — the manager's persist-first operation that
     // invalidates the target set before this returns — and never depend on the token
     // index being healthy or the channel being enabled: cleanup during kill-switch and

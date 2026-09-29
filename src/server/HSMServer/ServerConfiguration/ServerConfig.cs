@@ -1,6 +1,7 @@
 ﻿using HSMCommon;
 using HSMServer.Extensions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Primitives;
 using System;
 using System.IO;
 using System.Reflection;
@@ -55,6 +56,12 @@ namespace HSMServer.ServerConfiguration
         [JsonIgnore]
         public string TrustedProxiesIgnoredInSettingsFile { get; }
 
+        // The settings file held the pre-rename kill switch "ApiTokens.Enabled": false and
+        // no "Disabled" key. It is ignored (it was also the old persisted default, the two
+        // cannot be told apart), so tokens are ON after the upgrade — Program logs a warning.
+        [JsonIgnore]
+        public bool LegacyApiTokensKillSwitchIgnored { get; }
+
         public MonitoringOptions MonitoringOptions { get; }
 
         public AgentConfig Agent { get; }
@@ -100,12 +107,42 @@ namespace HSMServer.ServerConfiguration
             Kestrel.TrustedProxies = KestrelConfig.ReadTrustedProxies(new ConfigurationBuilder().AddEnvironmentVariables().Build());
             TrustedProxiesIgnoredInSettingsFile = KestrelConfig.FindTrustedProxiesInSettingsFile(configuration);
 
+            var apiTokensSection = configuration.GetSection(nameof(ApiTokens));
+            LegacyApiTokensKillSwitchIgnored = apiTokensSection["Enabled"] is { } legacy
+                && string.Equals(legacy.Trim(), "false", StringComparison.OrdinalIgnoreCase)
+                && apiTokensSection[nameof(ApiTokensConfig.Disabled)] is null;
+
             // Startup validation with actionable errors (initiative, section
             // "Configuration"). Throws before the server starts serving.
             ApiTokens.Validate();
             Kestrel.Validate();
 
             ResaveSettings();
+
+            // The API-token kill switch is config-file only (no UI toggle). Follow hand
+            // edits of the running file so it applies without a restart — and so a later
+            // ResaveSettings (any settings save) cannot write the stale value back.
+            ChangeToken.OnChange(_configuration.GetReloadToken, SyncApiTokensKillSwitch);
+        }
+
+        private void SyncApiTokensKillSwitch()
+        {
+            try
+            {
+                // No section at all means the file is missing or empty mid-save (editors
+                // and config tools delete+rename): keep the current state rather than
+                // failing open, which a settings save in that window would persist.
+                var section = _configuration.GetSection(nameof(ApiTokens));
+                if (!section.Exists())
+                    return;
+
+                ApiTokens.Disabled = section.GetValue<bool?>(nameof(ApiTokensConfig.Disabled)) ?? false;
+            }
+            catch (InvalidOperationException)
+            {
+                // A malformed value in a half-written file: keep the current state; the
+                // next change notification re-reads it.
+            }
         }
 
         public void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));

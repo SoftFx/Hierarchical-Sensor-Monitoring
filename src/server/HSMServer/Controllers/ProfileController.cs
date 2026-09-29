@@ -36,6 +36,9 @@ namespace HSMServer.Controllers
         // bound is the durable backstop.
         public const int MaxNameLength = 200;
 
+        internal static string DefaultTokenNote(bool readOnly, DateTime utcNow) =>
+            $"{(readOnly ? "Read-only" : "Read/write")} token {utcNow:yyyy-MM-dd HH:mm} UTC";
+
         private readonly IApiTokenManager _tokens;
         private readonly ApiTokensConfig _config;
         private readonly ITreeValuesCache _cache;
@@ -91,8 +94,13 @@ namespace HSMServer.Controllers
                 .Select(c => char.IsControl(c) ? ' ' : c)
                 .ToArray())
                 .Trim();
-            if (name.Length is < 1 or > MaxNameLength)
-                return Fail("invalid_name", $"The token name must be 1-{MaxNameLength} characters long.");
+            if (name.Length > MaxNameLength)
+                return Fail("invalid_name", $"The token note must be at most {MaxNameLength} characters long.");
+
+            // The note is optional: a blank one gets a generated default, so a token
+            // created without typing anything is still distinguishable in the list.
+            if (name.Length == 0)
+                name = DefaultTokenNote(request.ReadOnly, DateTime.UtcNow);
 
             var ownerId = CurrentUser.Id;
 
@@ -137,7 +145,7 @@ namespace HSMServer.Controllers
                 .ToArray())
                 .Trim();
             if (name.Length is < 1 or > MaxNameLength)
-                return Fail("invalid_name", $"The token name must be 1-{MaxNameLength} characters long.");
+                return Fail("invalid_name", $"The token note must be 1-{MaxNameLength} characters long.");
 
             if (!_tokens.TryRenameToken(request.EntityId, name, CurrentUser.Name, out _))
                 return Fail("rename_failed", "Renaming failed. Check the server log.");

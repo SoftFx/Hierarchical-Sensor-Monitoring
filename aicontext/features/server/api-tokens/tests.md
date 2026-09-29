@@ -53,7 +53,7 @@ the #1384 owner-mirrored model (eternal tokens, read-only flag, no grants/expiry
 - No/foreign credentials (missing header, Basic, bare Bearer, non-hsm bearer) are `NoResult` with no manager lookup — another scheme's business.
 - Duplicated `Authorization` values are `NoResult` with no manager lookup (the `", "`-joined string would parse as the first value's scheme and hide the bearer).
 - A credential claiming the `hsm_pat_` prefix but failing the shape check (short, no separator, foreign alphabet, wrong secret length) fails closed with no manager lookup.
-- `ApiTokens.Enabled = false` (kill switch) rejects even a valid credential before any parse or lookup — the manager decision is never reached while the channel is off.
+- `ApiTokens.Disabled = true` (kill switch) rejects even a valid credential before any parse or lookup — the manager decision is never reached while the channel is off.
 - Failure events carry a TokenId only when it is canonical: a shape-valid credential with an attacker-chosen id alphabet records the failure with a null TokenId; a canonical-shaped failure records the public id.
 - Manager rejection and deleted-owner both fail closed; challenge is a generic 401 with `WWW-Authenticate: Bearer` and no redirect.
 - Success marks the token used exactly once; every failure path never marks it.
@@ -96,7 +96,7 @@ The #1384 privilege matrix, recomputed per call:
 ## Profile endpoints (`ProfileControllerTests`)
 
 - Create: valid request returns the one-time secret exactly once with the entity id; the read-only flag reaches the manager untouched (dropping or flipping it would silently change the credential's power).
-- Create gates: `disabled` (no manager call at all), `unhealthy`, `quota` (at `MaxTokensPerUser`), `invalid_name` (blank and control-only), `create_failed` (manager false surfaces).
+- Create gates: `disabled` (no manager call at all), `unhealthy`, `quota` (at `MaxTokensPerUser`), `invalid_name` (over-long note only — `CreateToken_TooLongNote_Denied`); a blank, null or control-only note is not an error but gets the generated default (`CreateToken_BlankNote_GetsGeneratedDefault`, `CreateToken_ControlOnlyNote_GetsGeneratedDefault`, format pinned by `DefaultTokenNote_IsStableFormat`), `create_failed` (manager false surfaces).
 - Rename: the new name reaches the manager; blank names are `invalid_name`; foreign entity ids answer `not_found` with no manager call (indistinguishable from unknown); revoked and generation-invalidated tokens are `not_found`; `disabled` while the kill switch is on.
 - Rotate: returns the new secret once; foreign and revoked ids `not_found` with no manager call; `disabled` and `unhealthy` deny without reaching the manager (rotation mints a fresh live credential — its guards are pinned symmetric with create).
 - Revoke: own token revoked with the signed-in actor; works with tokens disabled (the kill switch's documented cleanup path); `unhealthy` denies; foreign ids `not_found`.
@@ -108,8 +108,9 @@ The #1384 privilege matrix, recomputed per call:
 
 ## Configuration (`ApiTokensConfigTests`)
 
-- Defaults are upgrade-safe in the channel sense: channel disabled, quota 10, 30-day retention windows, invalid-attempt budget 60. The expiry knobs of the fine-granted model are gone with expiry itself (#1384).
+- Defaults: channel enabled (`Disabled = false`), quota 10, 30-day retention windows, invalid-attempt budget 60. The expiry knobs of the fine-granted model are gone with expiry itself (#1384).
 - Startup validation: `MaxTokensPerUser` < 1, negative/oversized retention windows and `InvalidAttemptRateLimit` < 1 throw with the key named.
+- Kill-switch key: a legacy persisted `ApiTokens.Enabled = false` is not bound (`Binding_LegacyEnabledFalse_IsIgnored`), `Disabled = true` turns the channel off (`Binding_DisabledTrue_TurnsChannelOff`), serialization writes `Disabled` and never `Enabled` (`Serialization_PersistsDisabled_NotEnabled`), and a hand edit of the running config applies on reload and survives a later resave (`KillSwitch_HandEditOfRunningConfig_AppliesWithoutRestart`).
 
 ## Pipeline order (`ManagementPipelineOrderTests`)
 

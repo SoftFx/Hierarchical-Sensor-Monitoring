@@ -1,21 +1,27 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.ServerConfiguration
 {
     // Retention and abuse bounds of the API-token channel (#1356; initiative section
-    // "Configuration"), plus the issuance-side knob that lands with the token-management
-    // UI (step 4). Defaults are upgrade-safe in the channel sense: a deployment with no
-    // ApiTokens section in config gets tokens fully DISABLED and must opt in explicitly.
-    // Since #1384 tokens are eternal owner mirrors with an optional read-only flag, so
-    // the expiry knobs of the fine-granted model are gone.
+    // "Configuration"), plus the issuance-side kill switch. Since #1384 tokens are
+    // eternal owner mirrors with an optional read-only flag, so the expiry knobs of the
+    // fine-granted model are gone.
     public sealed class ApiTokensConfig
     {
-        // Emergency authentication/issuance kill switch (initiative: "ApiTokens.Enabled =
-        // false ... all API-token authentication plus create/rename/rotate is denied
-        // immediately. Cookie-authenticated list/revoke and IsAdmin emergency
-        // revoke-user/revoke-all remain available for cleanup"). Default false: tokens
-        // are a new channel and an upgraded deployment must enable them deliberately.
-        public bool Enabled { get; set; }
+        // Emergency authentication/issuance kill switch, config-file only (no UI toggle):
+        // ApiTokens.Disabled = true denies all API-token authentication plus
+        // create/rename/rotate immediately; cookie-authenticated list/revoke and IsAdmin
+        // emergency revoke-user remain available for cleanup. Default false: tokens are on.
+        public bool Disabled { get; set; }
+
+        // Code-facing view of Disabled. Never persisted, and deliberately NOT bindable
+        // (non-public setter — the configuration binder skips it): the earlier key
+        // "ApiTokens.Enabled" defaulted to false and ServerConfig resaves the whole file
+        // on every start, so every server that ran it holds "Enabled": false. Binding it
+        // would keep those upgraded servers dark with no UI left to turn tokens on.
+        [JsonIgnore]
+        public bool Enabled { get => !Disabled; internal set => Disabled = !value; }
 
         // Quota of LIVE tokens per user (not revoked, issued at the current global and
         // owner revocation generations — exactly what

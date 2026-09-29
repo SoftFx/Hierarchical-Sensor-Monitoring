@@ -4,7 +4,7 @@
 @model ProfilePageViewModel
 
 @{
-    ViewData["Title"] = "Profile";
+    ViewData["Title"] = "Personal tokens";
 
     var userName = Model.UserName?.Trim() ?? string.Empty;
     var userInitials = AvatarHelper.InitialsOf(userName);
@@ -108,7 +108,7 @@
 
     <div class="token-list">
         <div class="list-header">
-            <div style="flex: 2;">Name</div>
+            <div style="flex: 2;">Note</div>
             <div style="flex: 1;">Access</div>
             <div style="flex: 1;">Created</div>
             <div style="flex: 1;">Last used</div>
@@ -137,7 +137,7 @@
                 <div style="width: 124px; text-align: right;" class="d-flex justify-content-end gap-1">
                     @if (!dead && Model.TokensEnabled)
                     {
-                        <button type="button" class="action-btn rename-button" title="Rename"><i class="fas fa-pen"></i></button>
+                        <button type="button" class="action-btn rename-button" title="Edit note"><i class="fas fa-pen"></i></button>
                         <button type="button" class="action-btn rotate-button" title="Rotate (new secret, same rights)"><i class="fas fa-sync-alt"></i></button>
                     }
                     @if (!dead && Model.GenerationStateHealthy)
@@ -190,8 +190,9 @@
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label" for="tokenNameInput">Name</label>
+                    <label class="form-label" for="tokenNameInput">Note <span class="text-secondary fw-normal">(optional)</span></label>
                     <input type="text" class="form-control" id="tokenNameInput" maxlength="200" placeholder="e.g. Grafana dashboard reader">
+                    <div class="form-text">Left blank, a note with the access type and creation time is generated.</div>
                 </div>
                 <div class="form-check mb-2">
                     <input type="checkbox" class="form-check-input" id="tokenReadOnlyInput">
@@ -212,12 +213,12 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Rename token</h5>
+                <h5 class="modal-title">Edit note</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label" for="renameInput">Name</label>
+                    <label class="form-label" for="renameInput">Note</label>
                     <input type="text" class="form-control" id="renameInput" maxlength="200">
                 </div>
                 <div class="alert alert-danger py-2 modal-error" id="renameModalError"></div>
@@ -381,7 +382,7 @@
                 hideModal('renameModal');
                 window.location.reload();
             } else {
-                showError('renameModalError', answer.message || 'Renaming failed.');
+                showError('renameModalError', answer.message || 'Saving the note failed.');
             }
         });
     });
