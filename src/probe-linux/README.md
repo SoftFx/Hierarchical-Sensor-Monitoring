@@ -524,7 +524,12 @@ Placeholders only — **no secrets**:
 * `hsm.computerName` and `hsm.module` (optional, empty by default): the tree sits directly under
   the product (#1493). A non-empty value re-introduces a `<computer>/` or `<module>/` node above
   `.computer/…`, `.module/…` and `Docker/…` — accepted for compatibility, **not recommended**. The
-  start log says where the tree sits (`sensors under the product root`).
+  start log says where the tree sits (`sensors under the product root`). **Upgrade note (0.6.0):**
+  `module` used to default to `LinuxProbe`. A hand-written config that sets `computerName` but
+  leaves `module` out therefore moves from `<computer>/LinuxProbe/…` to `<computer>/…` on upgrade
+  (the old nodes go stale). Configs from the server bundle or the old skeleton set both keys
+  explicitly and keep their layout until edited. For the product-root layout remove both keys; to
+  keep the old one, set `"module": "LinuxProbe"`.
 * It warns if the key is readable beyond its owner. The check evaluates the POSIX ACL, not just the
   mode bits: systemd hands a credential to a non-root `User=` as a root-owned `0400` file plus a
   named-user ACL entry for the service, which makes `stat` report `0440` (the ACL mask shows in the
