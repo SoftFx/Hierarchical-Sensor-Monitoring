@@ -3,7 +3,8 @@
 //! Under systemd this is `$STATE_DIRECTORY/docker-state.json` (`StateDirectory=hsm-linux-probe` →
 //! `/var/lib/hsm-linux-probe`, the unit's only writable path besides its logs). Per service it
 //! holds what must survive a probe restart or a container recreate: the restart-count baseline, the
-//! last posted restart count, the OOM latch and when the service was last seen.
+//! last posted restart count, the OOM latch, when the service was last seen, and the running hour
+//! of `Disk written per hour`.
 //!
 //! Writes are atomic (temp file + fsync + rename), so a crash mid-write leaves the previous file. A
 //! missing file is a fresh start; a corrupt or unreadable one is too, logged once — losing the
@@ -17,6 +18,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::identity::ServiceKey;
+use super::written::WriteRecord;
 
 /// Bumped on an incompatible layout change; a file of another version is treated as absent.
 pub const STATE_VERSION: u32 = 1;
@@ -47,6 +49,10 @@ pub struct ServiceRecord {
     /// so a collision's outcome never changes and no sensor moves.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node: Option<String>,
+    /// The running `Disk written per hour` accumulator and its containers' baselines. Absent in a
+    /// file written by a probe before 0.5.0 (read as "no hour running yet").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub written: Option<WriteRecord>,
 }
 
 impl ServiceRecord {
@@ -185,6 +191,18 @@ mod tests {
         record.oom_latch_until = Some(1_790_500_000);
         record.last_seen = 1_790_413_000;
         record.node = Some("Docker/gitea/db".into());
+        let mut written = WriteRecord::new(1_790_686_800_000);
+        written
+            .sample(
+                "abbd59dcacc8",
+                11_377_098_752,
+                1_790_686_805_000,
+                std::time::Duration::from_secs(5),
+                Some("2026-09-26T10:28:33.986943106Z"),
+            )
+            .ok();
+        written.cover(5_000, 1_790_686_805_000);
+        record.written = Some(written);
         let mut state = State::default();
         state.services.insert(key, record);
         state
@@ -201,6 +219,18 @@ mod tests {
         assert_eq!(loaded, state);
         assert!(!temp_path(&path).exists(), "the temp file is renamed away");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_file_from_before_disk_written_still_loads() {
+        let text = r#"{"version": 1, "services": [{"project": "gitea", "service": "db",
+            "containers": {"abbd59dcacc8": 2}, "restartTotal": 5, "restartPosted": 5,
+            "lastSeen": 1790413000, "node": "Docker/gitea/db"}]}"#;
+        let state = State::parse(text).expect("parses");
+        let record = &state.services[&ServiceKey::new("gitea", "db")];
+        assert_eq!(record.restart_total, 5);
+        assert_eq!(record.written, None);
+        assert!(!state.to_json().contains("written"), "absent stays absent");
     }
 
     #[test]

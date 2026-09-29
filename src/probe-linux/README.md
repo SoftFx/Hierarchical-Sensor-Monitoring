@@ -147,9 +147,37 @@ reports under that point's name. All under `.computer/Disks monitoring/`:
 | `Free space on <name> disk %` | Double · Percents | every 5 min | 15 min | [5, 10) → warning; < 5 → **Error** | `statvfs` `f_bavail / f_blocks` (what `df` shows a non-root user) |
 | `Free inodes on <name> disk %` | Double · Percents | every 5 min | 15 min | < 10 → warning | `statvfs` `f_favail / f_files`; not registered when the filesystem has no inode count |
 | `Average disk write speed on <name> disk` | DoubleBar · MBytes_sec, EMA | a sample every 5 s into a 5-min bar | 15 min | — (the Windows sensor has none) | `/proc/diskstats` sectors written × 512 of the **whole disk** under the filesystem, MB = 1024² |
+| `Written today on <name> disk` | Double · GB (**decimal**, 10⁹ bytes, three decimals), no statistics | the same 5-s samples, posted every 5 min | 15 min | — (owner decision) | Σ Δ `/proc/diskstats` sectors written × 512 of the whole disk since **local midnight** (the host's timezone); registered wherever the write speed is |
 
-**Cost:** ≈ 288 × 3 + 288 ≈ **1 150 records/day per filesystem**; garage-server has four
-(`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 4 600/day (accepted by the owner).
+**Cost:** ≈ 288 × 4 + 288 ≈ **1 440 records/day per filesystem** (`Written today`: 288/day);
+garage-server has four (`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 5 760/day.
+
+**Written today — the midnight rules.** Each 5-s sample adds the disk's delta to the current local
+day; the first sample after local midnight starts the new day from 0. The day only turns forward:
+a clock stepped back across midnight (or a DST fall-back at local midnight) keeps counting into,
+and posting, the day it came from until the clock reaches the next one. Besides the 5-minute
+posts, the day's final reading is posted in its last 30 seconds (six samples, so one slow read or a
+late tick still lands in it), so the day's last minutes are not lost to the reset. A timezone
+change (`timedatectl set-timezone`) applies without a restart. The first sample, a counter
+that went backwards and a clock that went backwards only set a baseline; a gap longer than three
+samples that crosses midnight cannot be split between the days and is dropped (a gap inside the
+day counts in full). Never an invented 0: a day with no measured delta yet is not posted, and a
+day whose measurement began after midnight (installed, or the probe not running at midnight) says
+from when in the comment (`measured since 09:00 local time …`). The day's total and each disk's
+last counter are kept in `$STATE_DIRECTORY/disk-written.json` (saved at every post and on stop),
+so a restart continues the day and counts what was written meanwhile. The counters restart at
+boot, so the file records the boot id (`/proc/sys/kernel/random/boot_id`): after a reboot the
+day continues from its saved total, but the writes between the last sample before the reboot and
+the first after it are not counted. Kernel names are not stable (a reboot can swap `sda` and
+`sdb`), so each disk's day also records which physical disk it belongs to — its WWID or serial
+from sysfs, else the mount points on it: a different disk under a known name starts its day
+afresh (with the "measured since" comment), and after a reboot a day is kept only when that
+identity matches. Disks not seen for more than a day are dropped from the file. One case cannot
+be told apart: a removable disk without a WWID or serial swapped, within one boot, for another
+such disk at the same mount point — both identities are that mount point, so the second continues
+the first one's day. Two filesystems
+on one disk (`mediacentr`, `oldlinux` on `sdb`) both report that disk's total, and their
+descriptions say so.
 
 **Which filesystems** (`probe_only/disks/mounts.rs`): the block-backed types in
 `/proc/self/mountinfo` — ext2/3/4, xfs, btrfs, vfat, exfat, ntfs3, fuseblk, f2fs; everything else
@@ -238,10 +266,36 @@ Everything lives under one node in the probe's module:
 | `Health` | Enum {starting, healthy, unhealthy} | poll every 60 s, AggregateData | `State.Health.Status`; registered **only** where a healthcheck exists | `unhealthy` for 5 min → notification, repeated hourly | ~0 |
 | `Restart count` | Int · count | poll every 60 s, **posted only on change** | cumulative `RestartCount`, carried across recreates (never goes down) | value changed (`IsChanged`, so a new service's first baseline post does not notify) → notification | ~0 |
 | `OOM killed` | Bool | poll every 60 s, AggregateData | `State.OOMKilled`, latched true for 24 h (`probe.docker.oomLatchHours`), across recreates | true → Error + notification | ~0 |
+| `Disk written per hour` | Double · MB (decimal, 10⁶ bytes), EMA statistics | one value per clock hour (UTC), **sent just after the hour** | bytes the service's containers wrote to **block devices** in that hour: Δ `blkio_stats.io_service_bytes_recursive` op `write`, summed over devices and replicas, accumulated from the 5-s samples. The value's time is the send time (≈ the hour's end); the comment names the window (`13:00–14:00 UTC`) and, for a partly watched hour, how much was measured. First sample / recreate (new id) / counter reset only set a baseline; an hour with no measurement is skipped, never 0. Page cache counts when flushed; tmpfs never | none (owner decision) | 24 |
 
-Cost: ≈ **580 records/day per service** (two bars + a handful of state changes), ≈ 4600/day for
-eight services — within the owner's budget. The stats sensors register only for a service that has
-run, `Health` only where a healthcheck is defined: no empty nodes.
+Cost: ≈ **604 records/day per service** (two bars, 24 hourly write totals and a handful of state
+changes), ≈ 4 830/day for eight services — within the owner's budget. The stats sensors register
+only for a service that has run, `Disk written per hour` only once its containers report a write
+counter, `Health` only where a healthcheck is defined: no empty nodes.
+
+**Disk written per hour — who wears the disk.** The disks' `Average disk write speed` says how
+much a disk is written, not by whom; this sensor splits it by Compose service. Each 5-s sample adds
+a container's write-counter delta to the service's current clock hour; the hour is posted on the
+first tick after it ends. The running hour and each container's last counter live in the state
+file (written at most every 5 minutes, at every posted hour and on stop), so a probe restart
+continues the hour — and the writes made while the probe was down count too, when the container
+and its counter survived and the hour did not change. A gap that crosses an hour boundary cannot
+be split between the two hours and is dropped. The hour that has just ended is posted on the first
+tick after it — also when that tick is the first after a restart, since its bytes were measured;
+an hour older than that (the probe was not running at the next boundary) is dropped, with an INFO
+line. A skip that discards measured bytes (a clock that went backwards, a gap across an hour) is
+logged once. A write through a stacked device (LVM, dm-crypt, md) is
+accounted by the kernel on that device and again on the disk under it; the probe resolves the
+stack in `/sys/dev/block/*/slaves` and leaves the stacked device out whenever a disk under it is
+listed too. The sensor therefore reports **physical** writes: through LVM or dm-crypt a write
+counts once, on the disk; through a mirror (md RAID1/10) **once per member disk**, because each
+member really is written (the wear this sensor is for). A container restarted with the same id —
+also while the probe was down — is recognised by its new `State.StartedAt` and only sets a
+baseline (logged once), since its counter began again from 0. A host that does not account block
+I/O per container reports no counter and gets no sensor: Docker Desktop (WSL2) answers an empty
+list for every container. On a host that does (some container reports a counter), a running
+container that has not written yet — `io.stat` lists a device only after its first I/O — starts
+from a zero baseline tied to its start time, so its first write counts in full.
 
 **Registration.** Before the collector starts, the source lists the daemon once and registers
 every service it finds (and every service remembered as recently removed), so they ride the Start
@@ -284,10 +338,11 @@ Behavior at the edges:
   nothing is posted meanwhile. A failed or timed-out inspect or stats call skips that service's
   values (logged once per container) without touching the other services, and never posts a
   guess. A panic in a tick is caught and logged.
-- **State** (restart baselines, last posted restart count, OOM latches, last-seen times, nodes) is one JSON
-  file, `$STATE_DIRECTORY/docker-state.json` (`/var/lib/hsm-linux-probe`), written atomically only
-  when something changed (at most hourly for last-seen). A missing or corrupt file means a fresh
-  start, logged once.
+- **State** (restart baselines, last posted restart count, OOM latches, last-seen times, nodes,
+  the running `Disk written per hour` accumulator) is one JSON file,
+  `$STATE_DIRECTORY/docker-state.json` (`/var/lib/hsm-linux-probe`), written atomically only when
+  something changed (at most hourly for last-seen; at most every 5 minutes, at each posted hour and
+  on stop for the write accumulator). A missing or corrupt file means a fresh start, logged once.
 
 **Engine API client.** A ~250-line HTTP/1.1 `GET` client over `std::os::unix::net::UnixStream`
 (`docker/http.rs`) with `Content-Length`, chunked and close-delimited bodies, a 1.5 s deadline per

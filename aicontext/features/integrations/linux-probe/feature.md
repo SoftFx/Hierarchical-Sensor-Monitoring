@@ -36,7 +36,7 @@ The probe registers **two separately pinned sets**:
    nothing less"), their registration and alerts by
    `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. Sources, periods,
    alerts and costs: README "Probe-only sensors".
-   **Disks** (#1481, part of the probe-only set) — four sensors per mounted real filesystem under
+   **Disks** (#1481, part of the probe-only set) — five sensors per mounted real filesystem under
    `.computer/Disks monitoring/`, named like the Windows per-drive sensors with a name for the
    letter (`root` for `/`, else the last mount-path segment; collisions → the whole path with
    `/` → `_`, then a counter; the mount point → name map is persisted in
@@ -44,26 +44,34 @@ The probe registers **two separately pinned sets**:
    the name follows the mount point, not the device):
    `Free space on <name> disk` (MB, EMA, no absolute-size alert), `… disk %`,
    `Free inodes on <name> disk %`, `Average disk write speed on <name> disk` (MBytes_sec bar from
-   `/proc/diskstats` of the whole disk). Block-backed types only, deduplicated by source device,
+   `/proc/diskstats` of the whole disk) and `Written today on <name> disk` (#1485: decimal GB
+   written to that whole disk since local midnight, from the same counter, posted every 5 min;
+   from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
+   with the boot id and each disk's identity — WWID/serial, else its mount points — so a restart
+   continues the day, a reboot keeps the day (only for the same physical disk) but not the
+   counters, and a disk renamed by the kernel never inherits another disk's day). Block-backed types only, deduplicated by source device,
    re-scanned every 10 min (new mounts register at runtime; removed ones time out; every 5-min
    sample re-checks the mount table first; automounted and over-mounted filesystems are skipped —
    `ProtectHome=yes` unmounts a separate `/home` from the service's namespace, so it is not
    reported; logged once at WARN when `/etc/fstab` lists it). The archives
    are `statvfs`'d directly — measured not to wake sleeping disks; nothing under a mount is ever
-   opened, listed or read. Pinned for garage-server (4 filesystems, 16 paths) by
+   opened, listed or read. Pinned for garage-server (4 filesystems, 20 paths) by
    `DISKS_GARAGE_SET`, built from captured `mountinfo`/`diskstats`/sysfs
    (`probe_only/disks/fixtures/`). The managed-parity `Free space on disk` (+ prediction) is a
    different sensor and untouched.
-3. **The Docker Compose tree** (#1416, part of the probe-only set) — six sensors per Compose
+3. **The Docker Compose tree** (#1416, part of the probe-only set) — seven sensors per Compose
    service under `<module>/Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
    of 5-second samples; CPU as % of the whole host; the memory limit is stated in the `Memory used %`
-   description and follows a changed limit), `Service status` (the Windows
+   description and follows a changed limit), `Disk written per hour` (decimal MB the service's
+   containers wrote to block devices in one UTC clock hour, from the cgroup write counters in the
+   same stats; sent just after the hour — the comment names the window; the running hour survives
+   a probe restart through the state file; no alert, EMA statistics), `Service status` (the Windows
    `ServiceControllerStatus` enum and its alert), `Health` (only where a healthcheck exists),
    `Restart count` (posted on change) and `OOM killed` (latched 24 h). Source: the Docker Engine
    API over its Unix socket (`probe_only/docker/`). Services present at start register before
    Start; later ones at runtime. A service first seen as a completed one-shot job (every
    container Exited (0), restart policy `no`) is not monitored until it runs. Pinned for
-   garage-server's captures (12 Compose containers, 11 monitored services, 59 paths) by
+   garage-server's captures (12 Compose containers, 11 monitored services, 70 paths) by
    `DOCKER_GARAGE_SET`.
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,
@@ -159,7 +167,14 @@ Linux is the only supported target. The initiative is
 - **Docker identity is the Compose `(project, service)`,** not the container: nodes survive
   recreate (and restarts: each node is remembered and re-adopted), a restart count never goes
   down, an OOM latch survives recreate, and `docker compose run` one-offs are not replicas. State
-  is `$STATE_DIRECTORY/docker-state.json`, written atomically and only on change.
+  is `$STATE_DIRECTORY/docker-state.json`, written atomically and only on change (the running
+  `Disk written per hour` accumulator at most every 5 minutes, at each posted hour and on stop).
+- **An hourly total is posted once, for the hour that just ended.** It is written to the state
+  file right after posting (no double post after a restart). The hour that has just ended is
+  posted on the first tick after it, also when that tick is the first after a restart (its bytes
+  were measured); an older hour is dropped with an INFO line; an hour without a single measured
+  delta is skipped, never 0. A sample read after the boundary in a tick that rolled before it
+  waits for the next tick, so no write of a new hour is credited to the old one.
 
 ---
 

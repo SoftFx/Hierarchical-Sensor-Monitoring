@@ -457,6 +457,8 @@ mod tests {
                 },
                 docker_state: None,
                 disk_names: None,
+                disk_written: None,
+                boot_id: std::path::PathBuf::from("/nonexistent/boot_id"),
             }
         }
     }
@@ -470,7 +472,7 @@ mod tests {
 
     /// The disk sensors garage-server registers (#1481), pinned literally: four real filesystems
     /// (`/` on sdc1, the FUSE-NTFS archives on sda2 and sdb1, ext4 on sdb5), deduplicated from
-    /// eleven mounts, named after the Windows per-drive pattern.
+    /// eleven mounts, named after the Windows per-drive pattern; five sensors each (20 paths).
     const DISKS_GARAGE_SET: &[&str] = &[
         "garage-server/.computer/Disks monitoring/Average disk write speed on mediacentr disk",
         "garage-server/.computer/Disks monitoring/Average disk write speed on oldlinux disk",
@@ -488,6 +490,10 @@ mod tests {
         "garage-server/.computer/Disks monitoring/Free space on root disk %",
         "garage-server/.computer/Disks monitoring/Free space on wd4tb disk",
         "garage-server/.computer/Disks monitoring/Free space on wd4tb disk %",
+        "garage-server/.computer/Disks monitoring/Written today on mediacentr disk",
+        "garage-server/.computer/Disks monitoring/Written today on oldlinux disk",
+        "garage-server/.computer/Disks monitoring/Written today on root disk",
+        "garage-server/.computer/Disks monitoring/Written today on wd4tb disk",
     ];
 
     /// The module set: managed `AddAllModuleSensors` minus `Process ThreadPool thread count`
@@ -520,66 +526,78 @@ mod tests {
 
     /// The Docker source (#1416) on garage-server: 12 Compose containers, 11 monitored services, all
     /// registered before Start. Every service gets the three state sensors, the four with a
-    /// healthcheck (seaweedfs, mongo, gitea, db) `Health`, and all eleven (all running) `CPU` and
-    /// `Memory used %` (the memory limit is in that description, not a sensor of its own).
+    /// healthcheck (seaweedfs, mongo, gitea, db) `Health`, and all eleven (all running) `CPU`,
+    /// `Memory used %` (the memory limit is in that description, not a sensor of its own) and —
+    /// their stats carry a block-device write counter — `Disk written per hour`.
     /// `lingua-ci/ci-image` — Exited (0) under restart policy `no` — is a completed one-shot job
-    /// and not monitored (owner decision). 59 paths, no empty nodes.
+    /// and not monitored (owner decision). 70 paths, no empty nodes.
     const DOCKER_GARAGE_SET: &[&str] = &[
         "garage-server/LinuxProbe/Docker/caddy/caddy/CPU",
+        "garage-server/LinuxProbe/Docker/caddy/caddy/Disk written per hour",
         "garage-server/LinuxProbe/Docker/caddy/caddy/Memory used %",
         "garage-server/LinuxProbe/Docker/caddy/caddy/OOM killed",
         "garage-server/LinuxProbe/Docker/caddy/caddy/Restart count",
         "garage-server/LinuxProbe/Docker/caddy/caddy/Service status",
         "garage-server/LinuxProbe/Docker/gitea/db/CPU",
+        "garage-server/LinuxProbe/Docker/gitea/db/Disk written per hour",
         "garage-server/LinuxProbe/Docker/gitea/db/Health",
         "garage-server/LinuxProbe/Docker/gitea/db/Memory used %",
         "garage-server/LinuxProbe/Docker/gitea/db/OOM killed",
         "garage-server/LinuxProbe/Docker/gitea/db/Restart count",
         "garage-server/LinuxProbe/Docker/gitea/db/Service status",
         "garage-server/LinuxProbe/Docker/gitea/gitea/CPU",
+        "garage-server/LinuxProbe/Docker/gitea/gitea/Disk written per hour",
         "garage-server/LinuxProbe/Docker/gitea/gitea/Health",
         "garage-server/LinuxProbe/Docker/gitea/gitea/Memory used %",
         "garage-server/LinuxProbe/Docker/gitea/gitea/OOM killed",
         "garage-server/LinuxProbe/Docker/gitea/gitea/Restart count",
         "garage-server/LinuxProbe/Docker/gitea/gitea/Service status",
         "garage-server/LinuxProbe/Docker/hsm/app/CPU",
+        "garage-server/LinuxProbe/Docker/hsm/app/Disk written per hour",
         "garage-server/LinuxProbe/Docker/hsm/app/Memory used %",
         "garage-server/LinuxProbe/Docker/hsm/app/OOM killed",
         "garage-server/LinuxProbe/Docker/hsm/app/Restart count",
         "garage-server/LinuxProbe/Docker/hsm/app/Service status",
         "garage-server/LinuxProbe/Docker/lingua-ci/dind/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/dind/Disk written per hour",
         "garage-server/LinuxProbe/Docker/lingua-ci/dind/Memory used %",
         "garage-server/LinuxProbe/Docker/lingua-ci/dind/OOM killed",
         "garage-server/LinuxProbe/Docker/lingua-ci/dind/Restart count",
         "garage-server/LinuxProbe/Docker/lingua-ci/dind/Service status",
         "garage-server/LinuxProbe/Docker/lingua-ci/janitor/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Disk written per hour",
         "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Memory used %",
         "garage-server/LinuxProbe/Docker/lingua-ci/janitor/OOM killed",
         "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Restart count",
         "garage-server/LinuxProbe/Docker/lingua-ci/janitor/Service status",
         "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Disk written per hour",
         "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Memory used %",
         "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/OOM killed",
         "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Restart count",
         "garage-server/LinuxProbe/Docker/lingua-ci/runner-heavy/Service status",
         "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/CPU",
+        "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Disk written per hour",
         "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Memory used %",
         "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/OOM killed",
         "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Restart count",
         "garage-server/LinuxProbe/Docker/lingua-ci/runner-light/Service status",
         "garage-server/LinuxProbe/Docker/lingua/mongo/CPU",
+        "garage-server/LinuxProbe/Docker/lingua/mongo/Disk written per hour",
         "garage-server/LinuxProbe/Docker/lingua/mongo/Health",
         "garage-server/LinuxProbe/Docker/lingua/mongo/Memory used %",
         "garage-server/LinuxProbe/Docker/lingua/mongo/OOM killed",
         "garage-server/LinuxProbe/Docker/lingua/mongo/Restart count",
         "garage-server/LinuxProbe/Docker/lingua/mongo/Service status",
         "garage-server/LinuxProbe/Docker/lingua/seaweedfs/CPU",
+        "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Disk written per hour",
         "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Health",
         "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Memory used %",
         "garage-server/LinuxProbe/Docker/lingua/seaweedfs/OOM killed",
         "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Restart count",
         "garage-server/LinuxProbe/Docker/lingua/seaweedfs/Service status",
         "garage-server/LinuxProbe/Docker/portainer/portainer/CPU",
+        "garage-server/LinuxProbe/Docker/portainer/portainer/Disk written per hour",
         "garage-server/LinuxProbe/Docker/portainer/portainer/Memory used %",
         "garage-server/LinuxProbe/Docker/portainer/portainer/OOM killed",
         "garage-server/LinuxProbe/Docker/portainer/portainer/Restart count",

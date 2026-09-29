@@ -245,11 +245,12 @@ Per filesystem, under `.computer/Disks monitoring/`, named like the Windows per-
 | `Free space on <name> disk %` | Double % · 5 min, TTL 15 min | < 10 warning, < 5 Error | `f_bavail / f_blocks` |
 | `Free inodes on <name> disk %` | Double % · 5 min, TTL 15 min | < 10 warning | `f_favail / f_files` |
 | `Average disk write speed on <name> disk` | DoubleBar MBytes_sec, EMA · 5 s samples, 5-min bar, TTL 15 min | — (as on Windows) | `/proc/diskstats` of the whole disk under the partition |
+| `Written today on <name> disk` | Double GB (decimal), no statistics · the same 5 s samples, posted every 5 min, TTL 15 min | — (owner decision) | Σ Δ `/proc/diskstats` sectors written × 512 since local midnight (host timezone), from 0 at midnight; first sample / counter reset only a baseline; a day without measurement not posted; a day measured from after midnight says since when; the day survives a restart (`disk-written.json`, with the boot id — a reboot keeps the day, not the counters). #1485, 288/day |
 
 Real filesystems are the block-backed types in `/proc/self/mountinfo`, deduplicated by source
 device (garage-server's 11 real-type mounts are 4 filesystems: `root`, `wd4tb`, `mediacentr`,
-`oldlinux`), re-scanned every 10 min so new mounts register at runtime. ≈ 1 150 records/day per
-filesystem, ≈ 4 600 on garage-server. The two #1476 root-only percent sensors moved to
+`oldlinux`), re-scanned every 10 min so new mounts register at runtime. ≈ 1 440 records/day per
+filesystem (1 150 before `Written today`), ≈ 5 760 on garage-server. The two #1476 root-only percent sensors moved to
 `Free space on root disk %` / `Free inodes on root disk %`; the managed-parity
 `Free space on disk` (+ prediction) is unchanged.
 
@@ -267,10 +268,12 @@ operator-facing table and the edge behavior are in the probe README ("Probe-only
 | `Health` | Enum {starting, healthy, unhealthy}, 60 s, AggregateData, only where a healthcheck exists | `State.Health.Status` | `unhealthy` for 5 min → notification |
 | `Restart count` | Int, 60 s, posted only on change | cumulative `RestartCount`; a new container id starts a new baseline (state on disk), never goes down | value changed → notification |
 | `OOM killed` | Bool, 60 s, AggregateData | `State.OOMKilled` latched 24 h (`probe.docker.oomLatchHours`), survives recreate | true → Error + notification |
+| `Disk written per hour` | Double · MB (decimal), EMA statistics, one value per clock hour (UTC) sent just after it (value time = send time; the comment names the window and the measured share of a partial hour) | Σ Δ `blkio_stats.io_service_bytes_recursive` op `write` over devices and replicas, accumulated from the stats samples (block-device writes; page cache when flushed). First sample, counter reset, container-id change ⇒ that sample only sets a baseline; an hour with no measurement is skipped, never 0; the running hour is kept in the state file across a restart. Owner decision 2026-09-29 — "which container is wearing the SSD"; 24 records/day | none |
 
 Replicas: CPU/memory summed (the limit sum capped at host memory), status and health worst-of,
-restarts summed. Budget ≈ 580 records/day per service, ≈ 4600 for eight. No empty nodes: stats
-sensors register once a service has run, `Health` only where a healthcheck is defined. Services
+restarts summed, writes summed. Budget ≈ 604 records/day per service, ≈ 4 830 for eight. No
+empty nodes: stats sensors register once a service has run (`Disk written per hour` once its
+containers report a write counter), `Health` only where a healthcheck is defined. Services
 present at start register before Start (alerts in the Start batch); a service that appears later
 registers at runtime — which needed a collector fix (0.9.1): public-API sensors created while the
 collector runs were recorded locally but never POSTed to `/commands`, and an alert attached after
@@ -566,6 +569,7 @@ coverage in both drivers and an agent version bump:
 | #1416 PR | Docker Compose source (7 sensors per service, Engine API over the socket via a dependency-free HTTP/1.1 client, restart/OOM/vanished state on SSD, conditional socket drop-in); collector: sensors created while running are registered on the server, alerts attachable while running | 0.9.1 / 0.5.38, probe 0.3.0 |
 | #1416 follow-up | Docker set per owner decisions: `Memory limit` dropped (limit stated in the `Memory used %` description, `hsm_sensor_set_description`), `probe.docker.exclude`; config no longer a dpkg conffile (silent upgrades) | 0.10.0 / 0.5.39, probe 0.3.1 |
 | #1481 PR | every mounted real filesystem: free space (MB, %), free inodes and write speed per filesystem, Windows per-drive naming, archives polled directly (standby measured safe), 10-min re-scan with runtime registration; `probe.disks` config | probe 0.4.0 |
+| #1485 PR | disk write volume: `Disk written per hour` per Compose service (decimal MB per UTC clock hour from the cgroup write counters) and `Written today on <name> disk` per filesystem (decimal GB since local midnight from `/proc/diskstats`); both persist their running total across a restart; new `Source::stop` hook | probe 0.5.0 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against

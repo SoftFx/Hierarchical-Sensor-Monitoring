@@ -230,6 +230,10 @@ pub struct InspectState {
     /// Present only when the image or compose file defines a healthcheck.
     #[serde(default)]
     pub health: Option<InspectHealth>,
+    /// When the container last started: a restart keeps the id but gives it a new cgroup, so its
+    /// cumulative counters start again from 0.
+    #[serde(default)]
+    pub started_at: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -247,6 +251,28 @@ pub struct ContainerStats {
     pub cpu_stats: CpuStats,
     #[serde(default)]
     pub memory_stats: MemoryStats,
+    #[serde(default)]
+    pub blkio_stats: BlkioStats,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct BlkioStats {
+    /// Cumulative bytes per device and op. `null` for a container that is not running.
+    #[serde(default)]
+    pub io_service_bytes_recursive: Option<Vec<BlkioEntry>>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct BlkioEntry {
+    #[serde(default)]
+    pub major: u64,
+    #[serde(default)]
+    pub minor: u64,
+    /// `read`/`write` on cgroup v2; `Read`/`Write`/`Sync`/`Async`/`Discard`/`Total` on cgroup v1.
+    #[serde(default)]
+    pub op: String,
+    #[serde(default)]
+    pub value: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
