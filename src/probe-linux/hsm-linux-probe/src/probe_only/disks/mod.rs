@@ -360,31 +360,42 @@ impl<'c> Disks<'c> {
                 return;
             }
         };
+        // Nodes are keyed like names: by mount point. A different device at a known mount point
+        // (a USB stick swapped) continues that mount point's sensors; a filesystem moved to
+        // another mount point reports under that mount point's name.
         let known: BTreeSet<String> = {
             let nodes = self.nodes.lock().unwrap_or_else(|p| p.into_inner());
-            nodes.iter().map(|node| node.fs.key.clone()).collect()
+            nodes
+                .iter()
+                .map(|node| mounts::name_key(&node.fs))
+                .collect()
         };
         // Discovery touches the filesystem: done before taking the nodes lock.
         let found: Vec<Discovered> = current
             .iter()
-            .filter(|(fs, _)| !known.contains(&fs.key))
+            .filter(|(fs, _)| !known.contains(&mounts::name_key(fs)))
             .map(|(fs, name)| self.discover(fs.clone(), name.clone()))
             .collect();
 
         let mut nodes = self.nodes.lock().unwrap_or_else(|p| p.into_inner());
-        let present: BTreeMap<&str, &Filesystem> = current
+        let present: BTreeMap<String, &Filesystem> = current
             .iter()
-            .map(|(fs, _)| (fs.key.as_str(), fs))
+            .map(|(fs, _)| (mounts::name_key(fs), fs))
             .collect();
         for node in nodes.iter_mut() {
-            match present.get(node.fs.key.as_str()) {
+            match present.get(&mounts::name_key(&node.fs)) {
                 Some(fs) => {
                     if !node.mounted {
                         logger.info(format!(
-                            "disks: '{}' is mounted again at {}",
+                            "disks: '{}' is mounted again at {} ({})",
                             node.name,
-                            fs.mount_point.display()
+                            fs.mount_point.display(),
+                            fs.source
                         ));
+                    }
+                    if fs.device != node.fs.device && self.config.write_speed {
+                        // Another device behind the same mount point: follow its disk.
+                        node.disk = diskstats::whole_disk(&self.sys_root, &fs.device, &fs.source);
                     }
                     node.mounted = true;
                     node.fs = (*fs).clone();
@@ -1043,6 +1054,24 @@ pub mod tests {
         let nodes = space.disks.nodes.lock().unwrap();
         let oldlinux = nodes.iter().find(|node| node.name == "oldlinux").unwrap();
         assert!(!oldlinux.mounted);
+        drop(nodes);
+
+        // Another stick in the same slot: same mount point, same name, same sensors — no second
+        // registration of the `usb` paths.
+        tree.file(
+            "mountinfo",
+            &mounted
+                .replace("/dev/sdd1", "/dev/sde1")
+                .replace("8:49", "8:65"),
+        );
+        let registered = collector.registrations().len();
+        space.last_scan = Instant::now() - RESCAN_PERIOD;
+        space.sample(&logger);
+        assert_eq!(collector.registrations().len(), registered);
+        let nodes = space.disks.nodes.lock().unwrap();
+        let usb: Vec<_> = nodes.iter().filter(|node| node.name == "usb").collect();
+        assert_eq!(usb.len(), 1);
+        assert!(usb[0].mounted && usb[0].fs.source == "/dev/sde1");
         drop(nodes);
         collector.stop().expect("stop");
     }

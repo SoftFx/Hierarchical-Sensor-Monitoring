@@ -40,7 +40,8 @@ The probe registers **two separately pinned sets**:
    `.computer/Disks monitoring/`, named like the Windows per-drive sensors with a name for the
    letter (`root` for `/`, else the last mount-path segment; collisions → the whole path with
    `/` → `_`, then a counter; the mount point → name map is persisted in
-   `$STATE_DIRECTORY/disk-names.json`, so names never change, restarts included):
+   `$STATE_DIRECTORY/disk-names.json`, so a mount point's name never changes, restarts included;
+   the name follows the mount point, not the device):
    `Free space on <name> disk` (MB, EMA, no absolute-size alert), `… disk %`,
    `Free inodes on <name> disk %`, `Average disk write speed on <name> disk` (MBytes_sec bar from
    `/proc/diskstats` of the whole disk). Block-backed types only, deduplicated by source device,

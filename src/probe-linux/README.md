@@ -137,7 +137,9 @@ that collide use the whole mount path with `/` → `_` (`/srv/data` → `_srv_da
 if even that is taken. A name belongs to a mount point and, once given, is kept — across restarts
 too: the mount point → name map is persisted in `$STATE_DIRECTORY/disk-names.json`
 (`/var/lib/hsm-linux-probe`), so a mount that appears later never renames one that already has
-history. All under `.computer/Disks monitoring/`:
+history. Because the name follows the mount point, a different device mounted at a known point (a
+swapped USB stick) continues that point's sensors, and a filesystem moved to another mount point
+reports under that point's name. All under `.computer/Disks monitoring/`:
 
 | Sensor | Type · unit | Period | TTL | Alerts | Source |
 |---|---|---|---|---|---|
