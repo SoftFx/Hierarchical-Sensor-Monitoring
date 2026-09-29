@@ -303,6 +303,14 @@ impl Ledger {
         let mut disks = file.disks;
         if boot_id.is_empty() || file.boot_id != boot_id {
             // Another boot: the counters restarted and kernel names may have moved.
+            if !disks.is_empty() {
+                logger.info(format!(
+                    "disks: the host rebooted (or its boot id is unreadable) since {} was saved; \
+                     today's Written today totals continue, but the writes between the last \
+                     sample before the reboot and the first after it are not counted",
+                    path.display()
+                ));
+            }
             for record in disks.values_mut() {
                 record.baseline = None;
                 record.unverified = true;

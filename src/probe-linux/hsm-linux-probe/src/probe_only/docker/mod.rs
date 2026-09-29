@@ -785,12 +785,13 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 let started_at = self.started_at.get(id).map(String::as_str);
                 let mut restarted = false;
                 if let Some(record) = self.tracker.state.services.get_mut(key) {
-                    let accumulator = record
-                        .written
-                        .get_or_insert_with(|| WriteRecord::new(now_ms));
-                    self.written_dirty = true;
                     match counter {
+                        // Only a host that reports write counters keeps (and rewrites) a record.
                         Some(counter) => {
+                            let accumulator = record
+                                .written
+                                .get_or_insert_with(|| WriteRecord::new(now_ms));
+                            self.written_dirty = true;
                             any_writes = true;
                             match accumulator.sample(
                                 id,
@@ -806,7 +807,11 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                                 Err(_) => {}
                             }
                         }
-                        None => accumulator.forget(id),
+                        None => {
+                            if let Some(accumulator) = record.written.as_mut() {
+                                self.written_dirty |= accumulator.forget(id);
+                            }
+                        }
                     }
                 }
                 if restarted
@@ -1902,6 +1907,30 @@ pub(crate) mod tests {
             .iter()
             .any(|p| p == "garage-server/LinuxProbe/Docker/gitea/db/Disk written per hour"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_host_without_write_counters_keeps_no_record_and_writes_no_state() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut engine = FixtureEngine::garage();
+        for round in &mut engine.rounds {
+            for stats in round.values_mut() {
+                // Docker Desktop's shape.
+                stats.blkio_stats.io_service_bytes_recursive = Some(Vec::new());
+            }
+        }
+        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        source.clock = test_clock;
+        two_rounds(&mut source, H13 + 10 * 60_000, 5_000);
+        collector.stop().expect("stop");
+        assert!(!source.written_dirty, "nothing to save");
+        assert!(source
+            .tracker
+            .state
+            .services
+            .values()
+            .all(|record| record.written.is_none()));
     }
 
     #[test]

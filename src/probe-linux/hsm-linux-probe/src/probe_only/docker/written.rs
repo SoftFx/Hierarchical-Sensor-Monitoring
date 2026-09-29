@@ -39,6 +39,11 @@ use super::engine::ContainerStats;
 
 const HOUR_MS: i64 = 3_600_000;
 
+/// How long a start time made stale by a counter drop stays ignored while the poll keeps reporting
+/// it: three state polls. Past that the poll has plainly caught up and the drop was not a restart
+/// (a device leaving the counters), so the start time is trusted again.
+const STALE_START_GRACE_MS: i64 = 3 * 60_000;
+
 /// Unix seconds of the start of the clock hour (UTC) containing `unix_ms`.
 pub fn hour_start(unix_ms: i64) -> i64 {
     unix_ms.div_euclid(HOUR_MS) * 3600
@@ -162,6 +167,9 @@ pub struct Baseline {
     /// treated as unknown; the next different one is adopted without a second skip.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ignored_started_at: Option<String>,
+    /// When the start time began to be ignored (Unix ms).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ignored_since_ms: Option<i64>,
 }
 
 /// Why a sample added nothing.
@@ -263,19 +271,38 @@ impl WriteRecord {
         sample_period: Duration,
         started_at: Option<&str>,
     ) -> Result<(u64, u64), Skip> {
-        let ignored = self
+        // The wall clock went back past the running hour (a VM restored, a clock corrected):
+        // what was counted belongs to an hour that has not come yet — start the current one
+        // afresh rather than let hours of writes pile into it.
+        if hour_start(now_ms) < self.hour_start {
+            self.hour_start = hour_start(now_ms);
+            self.bytes = 0;
+            self.covered_ms = 0;
+            self.deltas = 0;
+        }
+        let (ignored, ignored_since) = self
             .baselines
             .get(container_id)
-            .and_then(|baseline| baseline.ignored_started_at.clone());
-        // The stale start time stays ignored until the poll reports a different one.
-        let still_ignored =
-            ignored.is_some() && started_at.is_none_or(|now| Some(now) == ignored.as_deref());
+            .map(|baseline| {
+                (
+                    baseline.ignored_started_at.clone(),
+                    baseline.ignored_since_ms,
+                )
+            })
+            .unwrap_or_default();
+        // The stale start time stays ignored until the poll reports a different one — or, if the
+        // poll keeps reporting it for three polls, the drop was no restart and it is trusted again.
+        let expired = ignored_since.is_some_and(|since| now_ms - since > STALE_START_GRACE_MS);
+        let still_ignored = ignored.is_some()
+            && !expired
+            && started_at.is_none_or(|now| Some(now) == ignored.as_deref());
         let started_at = if still_ignored { None } else { started_at };
         let current = Baseline {
             bytes: written,
             at_ms: now_ms,
             started_at: started_at.map(str::to_string),
             ignored_started_at: if still_ignored { ignored } else { None },
+            ignored_since_ms: if still_ignored { ignored_since } else { None },
         };
         let previous = self
             .baselines
@@ -293,6 +320,7 @@ impl WriteRecord {
             if let Some(baseline) = self.baselines.get_mut(container_id) {
                 if let Some(stale) = baseline.started_at.take() {
                     baseline.ignored_started_at = Some(stale);
+                    baseline.ignored_since_ms = Some(now_ms);
                 }
             }
             return Err(Skip::CounterReset);
@@ -322,9 +350,9 @@ impl WriteRecord {
             .min(HOUR_MS as u64);
     }
 
-    /// Forget one container's baseline (its counter is gone).
-    pub fn forget(&mut self, container_id: &str) {
-        self.baselines.remove(container_id);
+    /// Forget one container's baseline (its counter is gone); whether there was one.
+    pub fn forget(&mut self, container_id: &str) -> bool {
+        self.baselines.remove(container_id).is_some()
     }
 
     /// Keep only the baselines of the service's current containers.
@@ -486,6 +514,27 @@ mod tests {
         assert_eq!(record.bytes, before + 40, "only the reset sample is lost");
         assert_eq!(record.baselines["a"].started_at.as_deref(), third);
         assert_eq!(record.baselines["a"].ignored_started_at, None);
+
+        // A drop that was no restart (a device left the counters): the poll keeps reporting the
+        // same start time. After three polls it is trusted again, so a later restart is caught.
+        let t = H13 + 45 * MIN;
+        assert_eq!(
+            record.sample("a", 5, t, PERIOD, third),
+            Err(Skip::CounterReset)
+        );
+        record.sample("a", 6, t + 60_000, PERIOD, third).unwrap();
+        assert_eq!(record.baselines["a"].started_at, None, "still ignored");
+        record.sample("a", 7, t + 181_000, PERIOD, third).unwrap();
+        assert_eq!(
+            record.baselines["a"].started_at.as_deref(),
+            third,
+            "trusted again"
+        );
+        let fourth = Some("2026-09-29T13:50:00Z");
+        assert_eq!(
+            record.sample("a", 9_000, t + 186_000, PERIOD, fourth),
+            Err(Skip::Restarted)
+        );
         // A baseline from before the start time was known still pairs.
         record.sample("b", 10, H13, PERIOD, None).ok();
         assert!(record.sample("b", 20, H13 + 5_000, PERIOD, first).is_ok());
@@ -695,6 +744,28 @@ mod tests {
             record.sample("a", 20, H13 + 50 * MIN, PERIOD, None),
             Err(Skip::ClockBackwards)
         );
+    }
+
+    #[test]
+    fn a_clock_set_back_past_the_hour_starts_the_current_hour_afresh() {
+        // The running hour is 16:00 (the clock ran three hours fast); it is corrected to 13:10.
+        let mut record = WriteRecord::new(H13 + 3 * 60 * MIN);
+        record.sample("a", 0, H13 + 3 * 60 * MIN, PERIOD, None).ok();
+        record
+            .sample("a", 500, H13 + 3 * 60 * MIN + 5_000, PERIOD, None)
+            .unwrap();
+        assert_eq!(
+            record.sample("a", 600, H13 + 10 * MIN, PERIOD, None),
+            Err(Skip::ClockBackwards)
+        );
+        assert_eq!(record.hour_start * 1000, H13, "the hour follows the clock");
+        assert_eq!((record.bytes, record.deltas), (0, 0));
+        record
+            .sample("a", 700, H13 + 10 * MIN + 5_000, PERIOD, None)
+            .unwrap();
+        // 14:00: exactly the one hour measured is posted, not four hours in one.
+        let done = record.roll(H13 + 60 * MIN + 1_000).unwrap();
+        assert_eq!(done.bytes, 100);
     }
 
     #[test]
