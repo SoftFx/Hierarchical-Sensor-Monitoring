@@ -2,7 +2,8 @@
 //!
 //! No empty nodes: the state sensors (`Service status`, `Restart count`, `OOM killed`) register on
 //! a service's first sighting; `Health` only for a service whose container defines a healthcheck;
-//! `CPU` and `Memory used %` once the service first yields stats (it has run). A
+//! `CPU` and `Memory used %` once the service first yields stats (it has run), and `Disk written
+//! per hour` once those stats carry a block-device write counter. A
 //! service remembered from the state file but no longer listed registers `Service status` alone —
 //! the only value it still reports.
 //!
@@ -10,8 +11,8 @@
 //! immediately.
 
 use hsm_collector::{
-    BoolSensor, Collector, DoubleBarSensor, EnumOption, EnumSensor, IntSensor, Result,
-    SensorOptions,
+    BoolSensor, Collector, DoubleBarSensor, DoubleSensor, EnumOption, EnumSensor, IntSensor,
+    Result, SensorOptions, STATISTICS_EMA,
 };
 
 use super::alerts::{self, Target};
@@ -26,6 +27,7 @@ pub struct ServiceSensors<'c> {
     pub health: Option<EnumSensor<'c>>,
     pub cpu: Option<DoubleBarSensor<'c>>,
     pub memory_used: Option<DoubleBarSensor<'c>>,
+    pub disk_written: Option<DoubleSensor<'c>>,
     /// The memory limit (MB, unlimited) the `Memory used %` description currently states.
     pub described_limit: Option<(i32, bool)>,
 }
@@ -40,6 +42,7 @@ impl<'c> ServiceSensors<'c> {
             health: None,
             cpu: None,
             memory_used: None,
+            disk_written: None,
             described_limit: None,
         }
     }
@@ -97,12 +100,14 @@ impl<'c> ServiceSensors<'c> {
         problems
     }
 
-    /// Register `CPU` and `Memory used %` on the service's first stats. `limit` is the memory
-    /// limit the percentage is taken against (MB, unlimited), stated in the description.
+    /// Register `CPU` and `Memory used %` on the service's first stats, and `Disk written per hour`
+    /// once they carry a write counter (`writes`). `limit` is the memory limit the percentage is
+    /// taken against (MB, unlimited), stated in the description.
     pub fn ensure_stats_sensors(
         &mut self,
         collector: &'c Collector,
         limit: Option<(i32, bool)>,
+        writes: bool,
     ) -> Vec<String> {
         let mut problems = Vec::new();
         if self.cpu.is_none() {
@@ -124,6 +129,13 @@ impl<'c> ServiceSensors<'c> {
             );
             if self.memory_used.is_some() {
                 self.described_limit = limit;
+            }
+        }
+        if writes && self.disk_written.is_none() {
+            let path = self.path(contract::DISK_WRITTEN);
+            match register_disk_written(collector, &path) {
+                Ok(sensor) => self.disk_written = Some(sensor),
+                Err(error) => problems.push(format!("{path}: not registered: {error}")),
             }
         }
         problems
@@ -254,6 +266,18 @@ fn register_memory_used<'c>(
     Ok((sensor, alert))
 }
 
+// No alert (owner decision): what is "too much" differs per service; EMA statistics give the
+// server a smoothed trend to read instead.
+fn register_disk_written<'c>(collector: &'c Collector, path: &str) -> Result<DoubleSensor<'c>> {
+    let options = SensorOptions::default()
+        .with_description(DISK_WRITTEN_DESCRIPTION)
+        .with_unit(contract::UNIT_MB)
+        .with_statistics(STATISTICS_EMA);
+    collector.double_sensor(path, &options)
+}
+
+const DISK_WRITTEN_DESCRIPTION: &str = "Megabytes (decimal: 1 MB = 10⁶ bytes, the unit SSD endurance is rated in) the Compose service's containers wrote to **block devices** during one clock hour (UTC), replicas and devices summed — who is wearing the disk. Source: the containers' cgroup I/O counters (`blkio_stats.io_service_bytes_recursive`, op write) from the Docker Engine API, sampled every few seconds. Writes still in the page cache count when they are flushed; reads and tmpfs never count. One value per hour, **sent just after the hour it covers**: its time is about one hour later than the writes, and the comment names the window (e.g. `13:00–14:00 UTC`) and, when the probe did not watch the whole hour, how much of it was measured. The first sample of a container (a recreate) or a counter reset only sets a baseline; an hour with no measurement is skipped, never sent as 0. With EMA statistics.";
+
 const CPU_DESCRIPTION: &str = "CPU used by the Compose service's containers, as a percentage of \
 the **whole host** (all cores together = 100 %), replicas summed. Sampled every few seconds \
 (docker.samplePeriodSec, 5 s by default) from the Docker Engine API and aggregated into \
@@ -317,5 +341,12 @@ mod tests {
         assert!(unlimited.contains("**no memory limit is set**"));
         assert!(unlimited.contains("MemTotal (15917 MB)"));
         assert!(memory_used_description(None).contains("or of the host's total memory"));
+    }
+
+    #[test]
+    fn the_disk_written_description_states_the_offset_and_the_unit() {
+        assert!(DISK_WRITTEN_DESCRIPTION.contains("sent just after the hour it covers"));
+        assert!(DISK_WRITTEN_DESCRIPTION.contains("1 MB = 10⁶ bytes"));
+        assert!(DISK_WRITTEN_DESCRIPTION.contains("never sent as 0"));
     }
 }

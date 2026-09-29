@@ -247,6 +247,24 @@ pub struct ContainerStats {
     pub cpu_stats: CpuStats,
     #[serde(default)]
     pub memory_stats: MemoryStats,
+    #[serde(default)]
+    pub blkio_stats: BlkioStats,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct BlkioStats {
+    /// Cumulative bytes per device and op. `null` for a container that is not running.
+    #[serde(default)]
+    pub io_service_bytes_recursive: Option<Vec<BlkioEntry>>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct BlkioEntry {
+    /// `read`/`write` on cgroup v2; `Read`/`Write`/`Sync`/`Async`/`Discard`/`Total` on cgroup v1.
+    #[serde(default)]
+    pub op: String,
+    #[serde(default)]
+    pub value: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

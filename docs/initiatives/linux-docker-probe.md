@@ -267,10 +267,12 @@ operator-facing table and the edge behavior are in the probe README ("Probe-only
 | `Health` | Enum {starting, healthy, unhealthy}, 60 s, AggregateData, only where a healthcheck exists | `State.Health.Status` | `unhealthy` for 5 min → notification |
 | `Restart count` | Int, 60 s, posted only on change | cumulative `RestartCount`; a new container id starts a new baseline (state on disk), never goes down | value changed → notification |
 | `OOM killed` | Bool, 60 s, AggregateData | `State.OOMKilled` latched 24 h (`probe.docker.oomLatchHours`), survives recreate | true → Error + notification |
+| `Disk written per hour` | Double · MB (decimal), EMA statistics, one value per clock hour (UTC) sent just after it (value time = send time; the comment names the window and the measured share of a partial hour) | Σ Δ `blkio_stats.io_service_bytes_recursive` op `write` over devices and replicas, accumulated from the stats samples (block-device writes; page cache when flushed). First sample, counter reset, container-id change ⇒ that sample only sets a baseline; an hour with no measurement is skipped, never 0; the running hour is kept in the state file across a restart. Owner decision 2026-09-29 — "which container is wearing the SSD"; 24 records/day | none |
 
 Replicas: CPU/memory summed (the limit sum capped at host memory), status and health worst-of,
-restarts summed. Budget ≈ 580 records/day per service, ≈ 4600 for eight. No empty nodes: stats
-sensors register once a service has run, `Health` only where a healthcheck is defined. Services
+restarts summed, writes summed. Budget ≈ 604 records/day per service, ≈ 4 830 for eight. No
+empty nodes: stats sensors register once a service has run (`Disk written per hour` once its
+containers report a write counter), `Health` only where a healthcheck is defined. Services
 present at start register before Start (alerts in the Start batch); a service that appears later
 registers at runtime — which needed a collector fix (0.9.1): public-API sensors created while the
 collector runs were recorded locally but never POSTed to `/commands`, and an alert attached after

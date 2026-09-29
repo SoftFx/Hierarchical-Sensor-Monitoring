@@ -238,10 +238,23 @@ Everything lives under one node in the probe's module:
 | `Health` | Enum {starting, healthy, unhealthy} | poll every 60 s, AggregateData | `State.Health.Status`; registered **only** where a healthcheck exists | `unhealthy` for 5 min → notification, repeated hourly | ~0 |
 | `Restart count` | Int · count | poll every 60 s, **posted only on change** | cumulative `RestartCount`, carried across recreates (never goes down) | value changed (`IsChanged`, so a new service's first baseline post does not notify) → notification | ~0 |
 | `OOM killed` | Bool | poll every 60 s, AggregateData | `State.OOMKilled`, latched true for 24 h (`probe.docker.oomLatchHours`), across recreates | true → Error + notification | ~0 |
+| `Disk written per hour` | Double · MB (decimal, 10⁶ bytes), EMA statistics | one value per clock hour (UTC), **sent just after the hour** | bytes the service's containers wrote to **block devices** in that hour: Δ `blkio_stats.io_service_bytes_recursive` op `write`, summed over devices and replicas, accumulated from the 5-s samples. The value's time is the send time (≈ the hour's end); the comment names the window (`13:00–14:00 UTC`) and, for a partly watched hour, how much was measured. First sample / recreate (new id) / counter reset only set a baseline; an hour with no measurement is skipped, never 0. Page cache counts when flushed; tmpfs never | none (owner decision) | 24 |
 
-Cost: ≈ **580 records/day per service** (two bars + a handful of state changes), ≈ 4600/day for
-eight services — within the owner's budget. The stats sensors register only for a service that has
-run, `Health` only where a healthcheck is defined: no empty nodes.
+Cost: ≈ **604 records/day per service** (two bars, 24 hourly write totals and a handful of state
+changes), ≈ 4 830/day for eight services — within the owner's budget. The stats sensors register
+only for a service that has run, `Disk written per hour` only once its containers report a write
+counter, `Health` only where a healthcheck is defined: no empty nodes.
+
+**Disk written per hour — who wears the disk.** The disks' `Average disk write speed` says how
+much a disk is written, not by whom; this sensor splits it by Compose service. Each 5-s sample adds
+a container's write-counter delta to the service's current clock hour; the hour is posted on the
+first tick after it ends. The running hour and each container's last counter live in the state
+file (written at most every 5 minutes, at every posted hour and on stop), so a probe restart
+continues the hour — and the writes made while the probe was down count too, when the container
+and its counter survived and the hour did not change. A gap that crosses an hour boundary cannot
+be split between the two hours and is dropped; an hour that ended while the probe was not running
+is dropped, not posted hours late. A host that does not account block I/O per container reports
+no counter and gets no sensor: Docker Desktop (WSL2) answers an empty list for every container.
 
 **Registration.** Before the collector starts, the source lists the daemon once and registers
 every service it finds (and every service remembered as recently removed), so they ride the Start
@@ -284,10 +297,11 @@ Behavior at the edges:
   nothing is posted meanwhile. A failed or timed-out inspect or stats call skips that service's
   values (logged once per container) without touching the other services, and never posts a
   guess. A panic in a tick is caught and logged.
-- **State** (restart baselines, last posted restart count, OOM latches, last-seen times, nodes) is one JSON
-  file, `$STATE_DIRECTORY/docker-state.json` (`/var/lib/hsm-linux-probe`), written atomically only
-  when something changed (at most hourly for last-seen). A missing or corrupt file means a fresh
-  start, logged once.
+- **State** (restart baselines, last posted restart count, OOM latches, last-seen times, nodes,
+  the running `Disk written per hour` accumulator) is one JSON file,
+  `$STATE_DIRECTORY/docker-state.json` (`/var/lib/hsm-linux-probe`), written atomically only when
+  something changed (at most hourly for last-seen; at most every 5 minutes, at each posted hour and
+  on stop for the write accumulator). A missing or corrupt file means a fresh start, logged once.
 
 **Engine API client.** A ~250-line HTTP/1.1 `GET` client over `std::os::unix::net::UnixStream`
 (`docker/http.rs`) with `Content-Length`, chunked and close-delimited bodies, a 1.5 s deadline per

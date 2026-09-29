@@ -1,10 +1,12 @@
-//! The Docker Compose source (#1416): per-service CPU, memory, status, health, restarts and OOM
-//! kills under `<module>/Docker/<project>/<service>/…`, read from the Docker Engine API over its
-//! Unix socket.
+//! The Docker Compose source (#1416): per-service CPU, memory, status, health, restarts, OOM
+//! kills and block-device writes per hour under `<module>/Docker/<project>/<service>/…`, read from
+//! the Docker Engine API over its Unix socket.
 //!
 //! A probe-only [`Source`] on a thread of its own with two cadences: stats every
-//! `probe.docker.samplePeriodSec` (CPU and memory samples into 5-minute bars) and, on the first tick
-//! and every 60 s after, a state poll (listing + inspect: status, health, restart count, OOM).
+//! `probe.docker.samplePeriodSec` (CPU and memory samples into 5-minute bars, write counters into
+//! the running hour — [`written`]) and, on the first tick and every 60 s after, a state poll
+//! (listing + inspect: status, health, restart count, OOM). Every tick first closes a clock hour
+//! that has ended and posts its `Disk written per hour`, whether or not the daemon answers.
 //! [`register`] primes the source before the collector starts: every service already running is
 //! registered in the Start batch, alerts included; a service that appears later is registered at
 //! runtime (the collector posts it, alerts included, from 0.9.1). The contract — paths, types, cadences, thresholds — is [`contract`]; the per-service
@@ -25,12 +27,13 @@ pub mod sensors;
 pub mod state;
 pub mod stats;
 pub mod tracker;
+pub mod written;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use hsm_collector::Collector;
+use hsm_collector::{Collector, SensorStatus};
 
 use crate::config::DockerConfig;
 use crate::logging::{Level, Logger};
@@ -42,6 +45,7 @@ use sensors::ServiceSensors;
 use state::{LoadOutcome, State};
 use stats::{CpuCounters, CpuTracker};
 use tracker::{ContainerObservation, InspectFacts, Tracker};
+use written::WriteRecord;
 
 pub use engine::Engine;
 
@@ -117,7 +121,13 @@ pub struct DockerSource<'c, E: EngineApi> {
     /// While the daemon is unreachable: no call before this.
     unavailable_until: Option<Instant>,
     backoff: Duration,
+    /// A `Disk written per hour` accumulator changed since the state file was last written.
+    written_dirty: bool,
+    /// When the state file was last written.
+    saved_at: Instant,
     should_stop: fn() -> bool,
+    /// The wall clock, Unix milliseconds (a seam for the hour-boundary tests).
+    clock: fn() -> i64,
 }
 
 impl<'c, E: EngineApi> DockerSource<'c, E> {
@@ -205,7 +215,10 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             next_poll: Instant::now(),
             unavailable_until: None,
             backoff: config.sample_period(),
+            written_dirty: false,
+            saved_at: Instant::now(),
             should_stop: crate::shutdown::is_requested,
+            clock: unix_now_ms,
         }
     }
 
@@ -213,6 +226,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
     /// is logged once and backed off (doubling up to [`contract::MAX_BACKOFF`]); ticks inside the
     /// backoff make no call at all. Nothing is posted for a failed read.
     fn tick(&mut self, logger: &Logger) {
+        // Hours close on the wall clock, whether or not the daemon answers.
+        self.roll_written_hours(logger);
         let now = Instant::now();
         if self.unavailable_until.is_some_and(|until| now < until) {
             return;
@@ -225,6 +240,9 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         }
         if failure.is_none() {
             failure = self.sample_stats(logger, &should_stop).err();
+        }
+        if self.written_dirty && self.saved_at.elapsed() >= contract::WRITTEN_PERSIST_PERIOD {
+            self.persist(logger);
         }
 
         match failure {
@@ -303,16 +321,19 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         let collector = self.collector;
         let mut registered = 0;
         for (key, (has_health, has_run)) in &present {
-            // One stats read per running container, so `Memory used %` registers stating its limit.
-            let limit = if *has_run {
-                roster.get(key).and_then(|ids| self.memory_limit_of(ids))
+            // One stats read per running container, so `Memory used %` registers stating its limit
+            // and `Disk written per hour` registers when the containers report writes.
+            let (limit, writes) = if *has_run {
+                roster
+                    .get(key)
+                    .map_or((None, false), |ids| self.first_stats_of(ids))
             } else {
-                None
+                (None, false)
             };
             let sensors = self.sensors_of(key);
             let mut problems = sensors.ensure_state_sensors(collector, true, *has_health);
             if *has_run {
-                problems.extend(sensors.ensure_stats_sensors(collector, limit));
+                problems.extend(sensors.ensure_stats_sensors(collector, limit, writes));
             }
             report_problems(logger, &mut self.log_once, &problems);
             registered += 1;
@@ -327,16 +348,93 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         Ok(registered)
     }
 
-    /// The service's memory limit (MB, unlimited) from one stats read of each container; `None`
-    /// when a read fails (the first stats round then sets it).
-    fn memory_limit_of(&mut self, ids: &[String]) -> Option<(i32, bool)> {
+    /// From one stats read of each container: the service's memory limit (MB, unlimited) — `None`
+    /// when a read fails (the first stats round then sets it) — and whether any container reports
+    /// a block-device write counter.
+    fn first_stats_of(&mut self, ids: &[String]) -> (Option<(i32, bool)>, bool) {
         let mut readings = Vec::with_capacity(ids.len());
+        let mut complete = true;
+        let mut writes = false;
         for id in ids {
-            let stats = self.engine.stats(id).ok()?;
-            readings.push(stats::memory_reading(&stats, self.host_mem_total)?);
+            let Ok(stats) = self.engine.stats(id) else {
+                complete = false;
+                continue;
+            };
+            writes |= written::written_bytes(&stats).is_some();
+            match stats::memory_reading(&stats, self.host_mem_total) {
+                Some(reading) => readings.push(reading),
+                None => complete = false,
+            }
         }
-        stats::service_memory(&readings, self.host_mem_total)
-            .map(|memory| (stats::limit_megabytes(memory.limit_bytes), memory.unlimited))
+        let limit = complete
+            .then(|| stats::service_memory(&readings, self.host_mem_total))
+            .flatten()
+            .map(|memory| (stats::limit_megabytes(memory.limit_bytes), memory.unlimited));
+        (limit, writes)
+    }
+
+    /// Close every service's `Disk written per hour` hour that has ended and post it. Only the hour
+    /// that just ended is posted; an older one (the probe was down when it ended) is dropped with a
+    /// log line — it would arrive hours late under the current time. The state file is written at
+    /// once, so a restart cannot post the same hour twice. Returns the hours handed to the collector.
+    fn roll_written_hours(&mut self, logger: &Logger) -> Vec<(ServiceKey, written::CompletedHour)> {
+        let now_ms = (self.clock)();
+        let current = written::hour_start(now_ms);
+        let mut rolled = false;
+        let mut posted = Vec::new();
+        for (key, record) in self.tracker.state.services.iter_mut() {
+            let Some(accumulator) = record.written.as_mut() else {
+                continue;
+            };
+            if accumulator.hour_start >= current {
+                continue;
+            }
+            rolled = true;
+            let Some(done) = accumulator.roll(now_ms) else {
+                continue;
+            };
+            let node = record.node.clone().unwrap_or_else(|| key.to_string());
+            if done.hour_start + 3600 != current {
+                logger.info(format!(
+                    "docker: {node}: Disk written per hour for {} not posted: the probe was not \
+                     running when that hour ended",
+                    done.comment()
+                ));
+                continue;
+            }
+            let Some(sensor) = self
+                .sensors
+                .get(key)
+                .and_then(|sensors| sensors.disk_written.as_ref())
+            else {
+                continue;
+            };
+            let comment = done.comment();
+            match sensor.add_with(done.megabytes(), SensorStatus::Ok, Some(&comment)) {
+                Ok(()) => {
+                    logger.log(
+                        Level::Debug,
+                        &format!(
+                            "docker: {node}: Disk written per hour {} MB ({comment})",
+                            done.megabytes()
+                        ),
+                    );
+                    posted.push((key.clone(), done));
+                }
+                Err(error) => {
+                    if self.log_once.raise(&format!("post:{node}:written")) {
+                        logger.error(format!(
+                            "docker: {node}: value not posted: Disk written per hour: {error}"
+                        ));
+                    }
+                }
+            }
+        }
+        if rolled {
+            self.written_dirty = true;
+            self.persist(logger);
+        }
+        posted
     }
 
     fn sensors_of(&mut self, key: &ServiceKey) -> &mut ServiceSensors<'c> {
@@ -581,6 +679,13 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             }
         }
 
+        for (key, record) in self.tracker.state.services.iter_mut() {
+            if let Some(accumulator) = record.written.as_mut() {
+                let before = accumulator.baselines.len();
+                accumulator.retain(roster.get(key).map_or(&[][..], Vec::as_slice));
+                self.written_dirty |= accumulator.baselines.len() != before;
+            }
+        }
         self.roster = roster;
         self.cpu.retain(|id| {
             self.roster
@@ -608,6 +713,12 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let mut readings = Vec::with_capacity(ids.len());
             let mut memory_valid = true;
             let mut any_counters = false;
+            // Disk written: this round's deltas summed over replicas, the longest interval among
+            // them, and whether any container reported a write counter at all.
+            let mut written_bytes = 0u64;
+            let mut written_gap = 0u64;
+            let mut written_accepted = false;
+            let mut any_writes = false;
 
             for id in ids {
                 if should_stop() {
@@ -622,6 +733,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                         return Err(error)
                     }
                     Err(error) => {
+                        // The write baseline is kept: the counter is cumulative, so the next good
+                        // read still yields the bytes written meanwhile.
                         self.read_failure(logger, "stats", id, key, &error);
                         self.cpu.forget(id);
                         cpu_valid = false;
@@ -629,6 +742,26 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                         continue;
                     }
                 };
+                let now_ms = (self.clock)();
+                if let Some(record) = self.tracker.state.services.get_mut(key) {
+                    let accumulator = record
+                        .written
+                        .get_or_insert_with(|| WriteRecord::new(now_ms));
+                    self.written_dirty = true;
+                    match written::written_bytes(&stats) {
+                        Some(counter) => {
+                            any_writes = true;
+                            if let Ok((delta, gap)) =
+                                accumulator.sample(id, counter, now_ms, self.sample_period)
+                            {
+                                written_bytes = written_bytes.saturating_add(delta);
+                                written_gap = written_gap.max(gap);
+                                written_accepted = true;
+                            }
+                        }
+                        None => accumulator.forget(id),
+                    }
+                }
                 // Stamped per container, when its counters arrived: a slow call for one container
                 // must not skew the interval of the next.
                 match CpuCounters::from_stats(&stats, self.origin.elapsed()) {
@@ -651,6 +784,18 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 }
             }
 
+            if written_accepted {
+                let now_ms = (self.clock)();
+                if let Some(accumulator) = self
+                    .tracker
+                    .state
+                    .services
+                    .get_mut(key)
+                    .and_then(|record| record.written.as_mut())
+                {
+                    accumulator.credit(written_bytes, written_gap, now_ms);
+                }
+            }
             if !any_counters {
                 continue;
             }
@@ -663,7 +808,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 .then(|| stats::service_memory(&readings, self.host_mem_total))
                 .flatten();
             let limit = memory.map(|m| (stats::limit_megabytes(m.limit_bytes), m.unlimited));
-            let problems = sensors.ensure_stats_sensors(self.collector, limit);
+            let problems = sensors.ensure_stats_sensors(self.collector, limit, any_writes);
             report_problems(logger, &mut self.log_once, &problems);
 
             let mut failures = Vec::new();
@@ -752,8 +897,10 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         let Some(path) = &self.state_path else {
             return;
         };
+        self.saved_at = Instant::now();
         match self.tracker.state.save(path) {
             Ok(()) => {
+                self.written_dirty = false;
                 self.log_once.clear("state-save");
             }
             Err(error) => {
@@ -786,6 +933,13 @@ fn short_id(id: &str) -> &str {
     id.get(..12).unwrap_or(id)
 }
 
+fn unix_now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or(0)
+}
+
 fn unix_now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -804,6 +958,13 @@ impl<E: EngineApi + Send> Source for DockerSource<'_, E> {
 
     fn sample(&mut self, logger: &Logger) {
         self.tick(logger);
+    }
+
+    fn stop(&mut self, logger: &Logger) {
+        // The running hour's accumulator, so a restart continues it.
+        if self.written_dirty {
+            self.persist(logger);
+        }
     }
 }
 
@@ -1037,9 +1198,10 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
 
         let docker: Vec<&String> = paths.iter().filter(|p| p.contains("/Docker/")).collect();
-        // 11 services × 3 state sensors + 4 healthchecks + 11 × 2 stats sensors; the twelfth,
-        // lingua-ci/ci-image, is a completed one-shot job and not monitored at all.
-        assert_eq!(docker.len(), 11 * 3 + 4 + 11 * 2, "{docker:#?}");
+        // 11 services × 3 state sensors + 4 healthchecks + 11 × 3 stats sensors (CPU, Memory used %,
+        // Disk written per hour); the twelfth, lingua-ci/ci-image, is a completed one-shot job and
+        // not monitored at all.
+        assert_eq!(docker.len(), 11 * 3 + 4 + 11 * 3, "{docker:#?}");
         assert!(paths.iter().all(|p| !p.ends_with("/Memory limit")));
         let has = |p: &str| paths.iter().any(|x| x == p);
         assert!(has(
@@ -1116,7 +1278,7 @@ pub(crate) mod tests {
             .iter()
             .filter(|j| j.contains("/Docker/"))
             .collect();
-        assert_eq!(docker.len(), 59);
+        assert_eq!(docker.len(), 70);
 
         let find = |path: &str| {
             registrations
@@ -1159,6 +1321,15 @@ pub(crate) mod tests {
             find("gitea/db/Memory used %").contains("**1024 MB** on this host"),
             "{}",
             find("gitea/db/Memory used %")
+        );
+        // Disk written per hour: decimal MB, EMA statistics, no alert, and the one-hour offset stated.
+        let written = find("gitea/db/Disk written per hour");
+        assert!(written.contains("\"OriginalUnit\":3"), "{written}");
+        assert!(written.contains("\"Statistics\":1"), "{written}");
+        assert!(!written.contains("\"Alerts\":[{"), "{written}");
+        assert!(
+            written.contains("sent just after the hour it covers"),
+            "{written}"
         );
         // The state sensors store only changes on the server.
         for path in [
@@ -1466,5 +1637,248 @@ pub(crate) mod tests {
             once.raise(&n.to_string());
         }
         assert!(once.active.len() <= LOG_ONCE_CAPACITY);
+    }
+
+    thread_local! {
+        /// The wall clock of the hour-boundary tests (each test runs on its own thread).
+        static NOW_MS: std::cell::Cell<i64> = const { std::cell::Cell::new(0) };
+    }
+
+    fn test_clock() -> i64 {
+        NOW_MS.with(std::cell::Cell::get)
+    }
+
+    fn set_clock(unix_ms: i64) {
+        NOW_MS.with(|now| now.set(unix_ms));
+    }
+
+    /// 2026-09-29 13:00:00 UTC, ms.
+    const H13: i64 = 1_790_686_800_000;
+    const GITEA_DB: &str = "abbd59dcacc8";
+
+    fn key_of(project: &str, service: &str) -> ServiceKey {
+        ServiceKey::new(project, service)
+    }
+
+    /// Poll, then the two garage stats rounds `apart_ms` apart starting at `at_ms`.
+    fn two_rounds(source: &mut DockerSource<'_, FixtureEngine>, at_ms: i64, apart_ms: i64) {
+        let never = || false;
+        set_clock(at_ms);
+        source.engine.round = 0;
+        source.poll(&quiet(), &never).expect("poll");
+        source.sample_stats(&quiet(), &never).expect("round 0");
+        set_clock(at_ms + apart_ms);
+        source.engine.round = 1;
+        source.sample_stats(&quiet(), &never).expect("round 1");
+    }
+
+    fn add_written(engine: &mut FixtureEngine, round: usize, prefix: &str, bytes: u64) {
+        let stats = engine.rounds[round]
+            .iter_mut()
+            .find(|(id, _)| id.starts_with(prefix))
+            .unwrap()
+            .1;
+        let entries = stats
+            .blkio_stats
+            .io_service_bytes_recursive
+            .as_mut()
+            .unwrap();
+        let write = entries.iter_mut().find(|e| e.op == "write").unwrap();
+        write.value += bytes;
+    }
+
+    #[test]
+    fn disk_written_is_posted_once_just_after_its_hour_with_the_window() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = garage_source(
+            &collector,
+            FixtureEngine::garage(),
+            &DockerConfig::default(),
+            None,
+        );
+        source.clock = test_clock;
+        two_rounds(&mut source, H13 + 59 * 60_000 + 50_000, 5_272);
+        set_clock(H13 + 59 * 60_000 + 59_000);
+        assert!(
+            source.roll_written_hours(&quiet()).is_empty(),
+            "not over yet"
+        );
+
+        set_clock(H13 + 60 * 60_000 + 1_000);
+        let posted = source.roll_written_hours(&quiet());
+        collector.stop().expect("stop");
+        // Every monitored service measured the hour: gitea/db wrote 163_840 bytes between the two
+        // captures; a service that wrote nothing measured a real 0.
+        assert_eq!(posted.len(), 11, "{posted:?}");
+        let db = posted
+            .iter()
+            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .unwrap()
+            .1;
+        assert_eq!(db.bytes, 163_840);
+        assert_eq!(db.megabytes(), 0.16);
+        assert_eq!(db.comment(), "13:00–14:00 UTC; measured 0 of 60 min");
+        let caddy = posted
+            .iter()
+            .find(|(key, _)| *key == key_of("caddy", "caddy"))
+            .unwrap()
+            .1;
+        assert_eq!(caddy.bytes, 0);
+        // Posted once: the next tick of the same hour has nothing to post.
+        set_clock(H13 + 60 * 60_000 + 6_000);
+        assert!(source.roll_written_hours(&quiet()).is_empty());
+    }
+
+    #[test]
+    fn a_restart_mid_hour_continues_the_hour_from_the_state_file() {
+        let dir =
+            std::env::temp_dir().join(format!("hsm-probe-docker-written-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(state::STATE_FILE_NAME);
+
+        {
+            let collector = test_collector();
+            collector.start().expect("start");
+            let mut before = garage_source(
+                &collector,
+                FixtureEngine::garage(),
+                &DockerConfig::default(),
+                Some(path.clone()),
+            );
+            before.clock = test_clock;
+            two_rounds(&mut before, H13 + 30 * 60_000, 5_000);
+            // The probe stops at 13:30:05: the running hour goes to the state file.
+            Source::stop(&mut before, &quiet());
+            collector.stop().expect("stop");
+        }
+        let collector = test_collector();
+        collector.start().expect("start");
+        assert!(std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("\"written\""));
+
+        // Back at 13:40 with the same containers; gitea/db wrote 1 MB while the probe was down.
+        let mut engine = FixtureEngine::garage();
+        add_written(&mut engine, 1, GITEA_DB, 1_000_000);
+        let mut after = garage_source(
+            &collector,
+            engine,
+            &DockerConfig::default(),
+            Some(path.clone()),
+        );
+        after.clock = test_clock;
+        let never = || false;
+        set_clock(H13 + 40 * 60_000);
+        after.engine.round = 1;
+        after.poll(&quiet(), &never).expect("poll");
+        after
+            .sample_stats(&quiet(), &never)
+            .expect("first round after the restart");
+
+        set_clock(H13 + 60 * 60_000 + 1_000);
+        let posted = after.roll_written_hours(&quiet());
+        collector.stop().expect("stop");
+        let db = posted
+            .iter()
+            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .unwrap()
+            .1;
+        // Before the stop (163_840) plus the downtime (1 MB): the hour is continued, not lost.
+        assert_eq!(db.bytes, 163_840 + 1_000_000);
+        assert_eq!(db.comment(), "13:00–14:00 UTC; measured 10 of 60 min");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_hour_that_ended_while_the_probe_was_down_is_dropped_not_posted_late() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = garage_source(
+            &collector,
+            FixtureEngine::garage(),
+            &DockerConfig::default(),
+            None,
+        );
+        source.clock = test_clock;
+        two_rounds(&mut source, H13 + 30 * 60_000, 5_000);
+        // Next seen at 15:10: the 13:00 hour ended while the probe was not running.
+        set_clock(H13 + 130 * 60_000);
+        assert!(source.roll_written_hours(&quiet()).is_empty());
+        collector.stop().expect("stop");
+        let record = source.tracker.state.services[&key_of("gitea", "db")]
+            .written
+            .clone()
+            .unwrap();
+        assert_eq!(record.hour_start * 1000, H13 + 120 * 60_000);
+        assert_eq!(record.bytes, 0);
+    }
+
+    #[test]
+    fn a_recreated_container_keeps_the_service_hour() {
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut source = garage_source(
+            &collector,
+            FixtureEngine::garage(),
+            &DockerConfig::default(),
+            None,
+        );
+        source.clock = test_clock;
+        two_rounds(&mut source, H13 + 10 * 60_000, 5_000);
+        // gitea/db is recreated: the same service under a new id whose counter starts afresh.
+        let old = source
+            .engine
+            .list
+            .iter()
+            .position(|c| c.id.starts_with(GITEA_DB))
+            .unwrap();
+        let new_id = format!("ffff{}", &source.engine.list[old].id[4..]);
+        source.engine.list[old].id = new_id.clone();
+        let inspect = source
+            .engine
+            .inspects
+            .iter()
+            .find(|(id, _)| id.starts_with(GITEA_DB))
+            .unwrap()
+            .1
+            .clone();
+        source.engine.inspects.insert(new_id.clone(), inspect);
+        for round in 0..2 {
+            let mut stats = source.engine.rounds[round]
+                .iter()
+                .find(|(id, _)| id.starts_with(GITEA_DB))
+                .unwrap()
+                .1
+                .clone();
+            let write = stats
+                .blkio_stats
+                .io_service_bytes_recursive
+                .as_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|e| e.op == "write")
+                .unwrap();
+            write.value = 4_096 + 500 * round as u64;
+            source.engine.rounds[round].insert(new_id.clone(), stats);
+        }
+        two_rounds(&mut source, H13 + 20 * 60_000, 5_000);
+        set_clock(H13 + 60 * 60_000 + 1_000);
+        let posted = source.roll_written_hours(&quiet());
+        collector.stop().expect("stop");
+        let db = posted
+            .iter()
+            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .unwrap()
+            .1;
+        // Old container: 163_840. New one: its first sample is a baseline, then 500 bytes.
+        assert_eq!(db.bytes, 163_840 + 500);
+        let record = &source.tracker.state.services[&key_of("gitea", "db")];
+        let baselines = &record.written.as_ref().unwrap().baselines;
+        assert!(
+            baselines.keys().all(|id| !id.starts_with(GITEA_DB)),
+            "old id pruned"
+        );
     }
 }

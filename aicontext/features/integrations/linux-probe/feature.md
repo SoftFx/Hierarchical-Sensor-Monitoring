@@ -54,16 +54,19 @@ The probe registers **two separately pinned sets**:
    `DISKS_GARAGE_SET`, built from captured `mountinfo`/`diskstats`/sysfs
    (`probe_only/disks/fixtures/`). The managed-parity `Free space on disk` (+ prediction) is a
    different sensor and untouched.
-3. **The Docker Compose tree** (#1416, part of the probe-only set) — six sensors per Compose
+3. **The Docker Compose tree** (#1416, part of the probe-only set) — seven sensors per Compose
    service under `<module>/Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
    of 5-second samples; CPU as % of the whole host; the memory limit is stated in the `Memory used %`
-   description and follows a changed limit), `Service status` (the Windows
+   description and follows a changed limit), `Disk written per hour` (decimal MB the service's
+   containers wrote to block devices in one UTC clock hour, from the cgroup write counters in the
+   same stats; sent just after the hour — the comment names the window; the running hour survives
+   a probe restart through the state file; no alert, EMA statistics), `Service status` (the Windows
    `ServiceControllerStatus` enum and its alert), `Health` (only where a healthcheck exists),
    `Restart count` (posted on change) and `OOM killed` (latched 24 h). Source: the Docker Engine
    API over its Unix socket (`probe_only/docker/`). Services present at start register before
    Start; later ones at runtime. A service first seen as a completed one-shot job (every
    container Exited (0), restart policy `no`) is not monitored until it runs. Pinned for
-   garage-server's captures (12 Compose containers, 11 monitored services, 59 paths) by
+   garage-server's captures (12 Compose containers, 11 monitored services, 70 paths) by
    `DOCKER_GARAGE_SET`.
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,
@@ -159,7 +162,12 @@ Linux is the only supported target. The initiative is
 - **Docker identity is the Compose `(project, service)`,** not the container: nodes survive
   recreate (and restarts: each node is remembered and re-adopted), a restart count never goes
   down, an OOM latch survives recreate, and `docker compose run` one-offs are not replicas. State
-  is `$STATE_DIRECTORY/docker-state.json`, written atomically and only on change.
+  is `$STATE_DIRECTORY/docker-state.json`, written atomically and only on change (the running
+  `Disk written per hour` accumulator at most every 5 minutes, at each posted hour and on stop).
+- **An hourly total is posted once, for the hour that just ended.** It is written to the state
+  file right after posting (no double post after a restart); an hour that ended while the probe
+  was down is dropped, never posted late; an hour without a single measured delta is skipped,
+  never 0.
 
 ---
 

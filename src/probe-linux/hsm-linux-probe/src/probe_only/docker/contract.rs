@@ -22,6 +22,7 @@ pub const SERVICE_STATUS: &str = "Service status";
 pub const HEALTH: &str = "Health";
 pub const RESTART_COUNT: &str = "Restart count";
 pub const OOM_KILLED: &str = "OOM killed";
+pub const DISK_WRITTEN: &str = "Disk written per hour";
 
 // ---- Cadences ----------------------------------------------------------------------------------
 
@@ -68,11 +69,20 @@ pub const HEALTH_ALERT_CONFIRMATION: Duration = Duration::from_secs(5 * 60);
 
 // ---- Units (managed `Unit` enum codes) ---------------------------------------------------------
 
+pub const UNIT_MB: i32 = 3;
 pub const UNIT_PERCENTS: i32 = 100;
 pub const UNIT_COUNT: i32 = 1100;
 
 /// Bytes per reported megabyte. The collector's own memory sensors report MiB as "MB".
 pub const BYTES_PER_MB: u64 = 1024 * 1024;
+/// Bytes per megabyte of `Disk written per hour`: decimal, the unit SSD endurance (TBW) is rated
+/// in, so 1000 of them are the decimal GB the disks' `Written today` reports.
+pub const BYTES_PER_DECIMAL_MB: f64 = 1_000_000.0;
+
+/// How often a changed `Disk written per hour` accumulator is written to the state file at most
+/// (it is also written when an hour is posted and when the probe stops). A crash inside the hour
+/// loses nothing: the persisted baselines pair with the next counters, which cover the lost minutes.
+pub const WRITTEN_PERSIST_PERIOD: Duration = Duration::from_secs(5 * 60);
 
 // ---- Engine API --------------------------------------------------------------------------------
 
@@ -186,6 +196,10 @@ mod tests {
         assert_eq!(HEALTH_ALERT_CONFIRMATION, Duration::from_secs(300));
         assert_eq!(VANISHED_SERVICE_RETENTION, Duration::from_secs(7 * 86_400));
         assert_eq!(DEFAULT_OOM_LATCH_HOURS, 24);
+        // Disk written per hour (owner decision): decimal MB, one value per clock hour.
+        assert_eq!(DISK_WRITTEN, "Disk written per hour");
+        assert_eq!(UNIT_MB, 3);
+        assert_eq!(BYTES_PER_DECIMAL_MB, 1e6);
     }
 
     #[test]

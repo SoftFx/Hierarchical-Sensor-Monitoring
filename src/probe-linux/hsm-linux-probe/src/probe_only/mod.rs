@@ -98,6 +98,9 @@ pub trait Source: Send {
     fn period(&self) -> Duration;
     /// Take one sample and post it. Must not block for long; failures are the source's to log.
     fn sample(&mut self, logger: &Logger);
+    /// The probe is stopping: save what must survive a restart. Must not block for long (it runs
+    /// inside the probe's stop wait for its source threads).
+    fn stop(&mut self, _logger: &Logger) {}
 }
 
 /// Register every enabled probe-only source. Call before `Collector::start`: the alerts are part of
@@ -240,6 +243,12 @@ pub fn run_source(source: &mut dyn Source, stop: &StopSignal, logger: &Logger) {
             next = now + period;
         }
         if stop.wait_until(next) {
+            if catch_unwind(AssertUnwindSafe(|| source.stop(logger))).is_err() {
+                logger.error(format!(
+                    "probe-only source '{}' panicked while stopping",
+                    source.name()
+                ));
+            }
             return;
         }
     }
