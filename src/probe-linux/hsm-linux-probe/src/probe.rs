@@ -192,8 +192,9 @@ fn build_collector(
 
     let mut options =
         CollectorOptions::new(key.expose(), config.hsm.address.trim(), config.hsm.port);
-    // Both empty by default (#1493): the collector then leaves the segments out and the tree sits
-    // directly under the product.
+    // Only non-empty segments are handed over; the collector leaves an absent one out. By default
+    // there is no computer name (#1493) and the module is `.probe` (#1496), so the tree is
+    // `.computer/…` and `.probe/…` at the product root.
     if !config.hsm.module.is_empty() {
         options.module = Some(config.hsm.module.clone());
     }
