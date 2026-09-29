@@ -1227,6 +1227,7 @@ pub(crate) mod tests {
     pub(crate) fn test_collector() -> Collector {
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
         options.allow_plaintext_transport = true;
+        options.module = Some(crate::config::DEFAULT_MODULE.into());
         Collector::new(&options).expect("create")
     }
 
@@ -1312,22 +1313,25 @@ pub(crate) mod tests {
         let paths = registered(&collector);
         collector.stop().expect("stop");
 
-        let docker: Vec<&String> = paths.iter().filter(|p| p.starts_with("Docker/")).collect();
+        let docker: Vec<&String> = paths
+            .iter()
+            .filter(|p| p.starts_with(".probe/Docker/"))
+            .collect();
         // 11 services × 3 state sensors + 4 healthchecks + 11 × 3 stats sensors (CPU, Memory used %,
         // Disk written per hour); the twelfth, lingua-ci/ci-image, is a completed one-shot job and
         // not monitored at all.
         assert_eq!(docker.len(), 11 * 3 + 4 + 11 * 3, "{docker:#?}");
         assert!(paths.iter().all(|p| !p.ends_with("/Memory limit")));
         let has = |p: &str| paths.iter().any(|x| x == p);
-        assert!(has("Docker/gitea/db/Service status"));
-        assert!(has("Docker/gitea/db/Health"));
-        assert!(has("Docker/gitea/db/CPU"));
+        assert!(has(".probe/Docker/gitea/db/Service status"));
+        assert!(has(".probe/Docker/gitea/db/Health"));
+        assert!(has(".probe/Docker/gitea/db/CPU"));
         // The exited one-shot image build (Exited (0), restart "no"): a completed job, no node.
         assert!(paths
             .iter()
-            .all(|p| !p.starts_with("Docker/lingua-ci/ci-image/")));
+            .all(|p| !p.starts_with(".probe/Docker/lingua-ci/ci-image/")));
         // No healthcheck, no Health node.
-        assert!(!has("Docker/hsm/app/Health"));
+        assert!(!has(".probe/Docker/hsm/app/Health"));
     }
 
     #[test]
@@ -1368,7 +1372,7 @@ pub(crate) mod tests {
         let status = collector
             .registrations()
             .into_iter()
-            .find(|json| json.contains("Docker/gitea/db/Service status"))
+            .find(|json| json.contains(".probe/Docker/gitea/db/Service status"))
             .expect("gitea/db registered at runtime");
         assert!(status.contains("$operation Running"), "{status}");
     }
@@ -1389,14 +1393,14 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
         let docker: Vec<&String> = registrations
             .iter()
-            .filter(|j| j.contains("\"Path\":\"Docker/"))
+            .filter(|j| j.contains("\"Path\":\".probe/Docker/"))
             .collect();
         assert_eq!(docker.len(), 70);
 
         let find = |path: &str| {
             registrations
                 .iter()
-                .find(|json| json.contains(&format!("\"Path\":\"Docker/{path}\"")))
+                .find(|json| json.contains(&format!("\"Path\":\".probe/Docker/{path}\"")))
                 .unwrap_or_else(|| panic!("{path} not registered"))
                 .clone()
         };
@@ -1483,9 +1487,12 @@ pub(crate) mod tests {
         source.poll(&quiet(), &|| false).expect("poll");
         let portainer: Vec<String> = registered(&collector)
             .into_iter()
-            .filter(|p| p.starts_with("Docker/portainer/"))
+            .filter(|p| p.starts_with(".probe/Docker/portainer/"))
             .collect();
-        assert_eq!(portainer, vec!["Docker/portainer/portainer/Service status"]);
+        assert_eq!(
+            portainer,
+            vec![".probe/Docker/portainer/portainer/Service status"]
+        );
         // The poll persisted the other services it met: 10 listed services (ci-image is a
         // completed job) plus the remembered portainer.
         let (saved, _) = State::load(&path);
@@ -1521,7 +1528,7 @@ pub(crate) mod tests {
             source.poll(&quiet(), &|| false).expect("poll");
             let standalone = registered(&collector)
                 .into_iter()
-                .filter(|p| p.starts_with("Docker/_standalone/adhoc/"))
+                .filter(|p| p.starts_with(".probe/Docker/_standalone/adhoc/"))
                 .count();
             assert_eq!(standalone, expected, "composeOnly={compose_only}");
         }
@@ -1544,11 +1551,11 @@ pub(crate) mod tests {
             .expect("nor in the stats tick");
         let paths = registered(&collector);
         let has = |p: &str| paths.iter().any(|x| x == p);
-        assert!(has("Docker/gitea/db/Service status"));
-        assert!(!has("Docker/gitea/db/Health"));
-        assert!(!has("Docker/gitea/db/CPU"));
-        assert!(has("Docker/gitea/gitea/Health"));
-        assert!(has("Docker/gitea/gitea/CPU"));
+        assert!(has(".probe/Docker/gitea/db/Service status"));
+        assert!(!has(".probe/Docker/gitea/db/Health"));
+        assert!(!has(".probe/Docker/gitea/db/CPU"));
+        assert!(has(".probe/Docker/gitea/gitea/Health"));
+        assert!(has(".probe/Docker/gitea/gitea/CPU"));
     }
 
     #[test]
@@ -1622,13 +1629,15 @@ pub(crate) mod tests {
         source.poll(&quiet(), &|| false).expect("poll");
         source.sample_stats(&quiet(), &|| false).expect("stats");
         let paths = registered(&collector);
-        assert!(paths.iter().all(|p| !p.starts_with("Docker/portainer/")));
         assert!(paths
             .iter()
-            .all(|p| !p.starts_with("Docker/lingua-ci/janitor/")));
+            .all(|p| !p.starts_with(".probe/Docker/portainer/")));
         assert!(paths
             .iter()
-            .any(|p| p.starts_with("Docker/lingua-ci/runner-heavy/")));
+            .all(|p| !p.starts_with(".probe/Docker/lingua-ci/janitor/")));
+        assert!(paths
+            .iter()
+            .any(|p| p.starts_with(".probe/Docker/lingua-ci/runner-heavy/")));
         let (saved, _) = State::load(&path);
         assert!(!saved.services.contains_key(&portainer));
         assert!(!saved
@@ -1662,13 +1671,13 @@ pub(crate) mod tests {
         collector.stop().expect("stop");
         let app: Vec<&String> = registrations
             .iter()
-            .filter(|json| json.contains("Docker/hsm/app/Memory used %"))
+            .filter(|json| json.contains(".probe/Docker/hsm/app/Memory used %"))
             .collect();
         assert_eq!(app.len(), 1, "re-registered in place, not added");
         assert!(app[0].contains("**512 MB** on this host"), "{}", app[0]);
     }
 
-    const CI_IMAGE: &str = "Docker/lingua-ci/ci-image/Service status";
+    const CI_IMAGE: &str = ".probe/Docker/lingua-ci/ci-image/Service status";
 
     fn set_ci_image_state(engine: &mut FixtureEngine, state: &str) {
         let ci = engine
@@ -1938,7 +1947,7 @@ pub(crate) mod tests {
         assert_eq!(db.bytes, 163_840);
         assert!(paths
             .iter()
-            .any(|p| p == "Docker/gitea/db/Disk written per hour"));
+            .any(|p| p == ".probe/Docker/gitea/db/Disk written per hour"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

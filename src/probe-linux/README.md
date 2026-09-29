@@ -21,13 +21,24 @@ collector's public sensor API, so wire format, queuing, batching, retry and TLS 
 only the acquisition (a sysfs read, a `statvfs`, a Docker Engine API call) and the schedule live in
 the probe. The archive/backup part of #1417 is the next probe-only source.
 
-**The tree sits directly under the product** (owner decision, #1493 — one product = one host):
-`.computer/…`, `.module/…` and `Docker/…` at the product root, with no `<computer>` node and no
-`<module>` node. `hsm.computerName` and `hsm.module` are therefore empty by default and absent from
-the skeleton and from the server's install bundle. Both are still accepted for compatibility, but
-setting them re-introduces the `<computer>/` and `<module>/` levels — **not recommended**. This
-holds for the Linux probe only: the Windows agent (HsmAgent) keeps its `<MACHINE>/HSM Agent/.module`
-layout.
+**The tree sits directly under the product, with no computer node** (owner decisions #1493 and
+#1496 — one product = one host). The product root holds the host's `.computer/…` and the probe's
+module node `.probe/`, which carries `.module/…` and `Docker/…` — the .NET layout with an empty
+`ComputerName`:
+
+```
+<product>/
+├── .computer/…                      host sensors (CPU, RAM, temperature, disks)
+└── .probe/                          the probe (module node)
+    ├── .module/…                    Service alive, Collector version/errors, Version, process, queue stats
+    └── Docker/<project>/<service>/…
+```
+
+`hsm.computerName` is empty by default and `hsm.module` defaults to `.probe`; the skeleton and the
+server's install bundle write neither, so the defaults apply. Both keys are still accepted, but a
+`computerName` re-introduces a `<computer>/` level and another `module` renames `.probe` — **not
+recommended**. This holds for the Linux probe only: the Windows agent (HsmAgent) keeps its
+`<MACHINE>/HSM Agent/.module` layout.
 
 The process node name is fixed as `.module/Process process`, the same as HsmAgent, so alert
 templates apply across hosts — do not rename it. As in `src/agent`, the process sensors are
@@ -53,7 +64,8 @@ collector 0.7.0) with `linux-default-sensors` on — the build the garage-server
 The registration carries no bar period, post period or tick; those columns are what the captured
 values show. Every divergence is in value delivery.
 
-Paths are relative to the product root (`.computer/…`, `.module/…`; #1493).
+Paths are relative to the product root: `.computer/…` there, `.module/…` under the probe's
+module node `.probe/` (#1493, #1496).
 TTL is "none" for every sensor except `Service alive`, which carries the inactivity alert.
 
 | Sensor | Type · unit | Alerts / KeepHistory (both sides) | Bars / posting: managed → native | Live value: managed / native | Status |
@@ -260,8 +272,8 @@ switches covered the disk sensor, so **while `probe.disks.enabled` is not set** 
 
 ### Docker Compose services (#1416)
 
-Everything lives under one node at the product root:
-`Docker/<project>/<service>/<sensor>`, e.g. `Docker/gitea/db/Service status`. Source: the Docker Engine API on
+Everything lives under one node in the probe's module node:
+`.probe/Docker/<project>/<service>/<sensor>`, e.g. `.probe/Docker/gitea/db/Service status`. Source: the Docker Engine API on
 `probe.docker.socket` (default `/var/run/docker.sock`); every number below is in
 `hsm-linux-probe/src/probe_only/docker/contract.rs`, every alert in `…/docker/alerts.rs`.
 
@@ -521,19 +533,21 @@ Placeholders only — **no secrets**:
   never hardcodes `/run/credentials/<unit>/`; without that variable a relative name is an error. An
   absolute path is used as is. The probe reads the key at startup and wipes every copy it
   makes once the collector has taken it (the collector's own C++ copy is not ours to clear).
-* `hsm.computerName` and `hsm.module` (optional, empty by default): the tree sits directly under
-  the product (#1493). A non-empty value re-introduces a `<computer>/` or `<module>/` node above
-  `.computer/…`, `.module/…` and `Docker/…` — accepted for compatibility, **not recommended**. The
-  start log says where the tree sits (`sensors under the product root`). **Upgrade note (0.6.0):**
-  `module` used to default to `LinuxProbe`. A hand-written config that sets `computerName` but
-  leaves `module` out therefore moves from `<computer>/LinuxProbe/…` to `<computer>/…` on upgrade
-  (the old nodes go stale). Configs from the server bundle or the old skeleton set both keys
+* `hsm.computerName` (optional, empty by default) and `hsm.module` (optional, `.probe` by
+  default): the product root holds `.computer/…` and `.probe/` (#1493, #1496). A `computerName`
+  re-introduces a `<computer>/` node, another `module` renames `.probe` — accepted for
+  compatibility, **not recommended**. The start log says where the tree sits (`sensors under
+  '.probe/'`, with a note when the keys differ from the defaults). **Upgrade note (0.6.1):**
+  `module` defaulted to `LinuxProbe` before 0.6.0 and to empty in 0.6.0. A config that leaves
+  `module` out therefore moves on upgrade — from `<computer>/LinuxProbe/…` (≤ 0.5.x) or from the
+  product root (0.6.0) — to `.probe/…` (the old nodes go stale; `.computer/…` does not move when
+  `computerName` is unset). Configs from an older server bundle or the old skeleton set both keys
   explicitly and keep their layout until edited — or until the bundle is re-installed with
   `install.sh --force-config`, which writes the new config without either key and so moves the
-  tree to the product root (the old nodes, their alerts and TTL state stay behind).
+  tree to the default layout (the old nodes, their alerts and TTL state stay behind).
   **One product per host:** with no host node, two hosts reporting into one product write into the
-  same sensors — give every host its own product. For the product-root layout remove both keys; to
-  keep the old one, set `"module": "LinuxProbe"`.
+  same sensors — give every host its own product. For the default layout remove both keys; to keep
+  an older one, set `"module"` (and `"computerName"`) explicitly.
 * It warns if the key is readable beyond its owner. The check evaluates the POSIX ACL, not just the
   mode bits: systemd hands a credential to a non-root `User=` as a root-owned `0400` file plus a
   named-user ACL entry for the service, which makes `stat` report `0440` (the ACL mask shows in the

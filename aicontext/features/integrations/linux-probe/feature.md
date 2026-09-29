@@ -20,11 +20,12 @@ Three crates under `src/probe-linux/`:
 | `hsm-collector` | Safe RAII wrapper: `Collector`, typed sensor handles, alert builders, log sink |
 | `hsm-linux-probe` | The binary: config, secrets, logging, signals, lifecycle, sensor registration, probe-only sources (`src/probe_only/`) |
 
-**The tree sits directly under the product** (owner decision 2026-09-29, #1493: one product = one
-host): `.computer/…`, `.module/…` and `Docker/…` at the product root, with no `<computer>` and
-no `<module>` node. `hsm.computerName` / `hsm.module` are empty by default and the server bundle
-writes neither; a non-empty value re-introduces the node (accepted, not recommended). Linux probe
-only — the Windows agent keeps `<MACHINE>/HSM Agent/.module`.
+**No computer node; the module node is `.probe`** (owner decisions 2026-09-29, #1493 and #1496:
+one product = one host). The product root holds `.computer/…` (the host) and `.probe/` with
+`.module/…` and `Docker/…` — the .NET layout with an empty `ComputerName`. `hsm.computerName` is
+empty and `hsm.module` is `.probe` by default; the server bundle writes neither. Other values are
+accepted, not recommended. Linux probe only — the Windows agent keeps
+`<MACHINE>/HSM Agent/.module`.
 
 The probe registers **two separately pinned sets**:
 
@@ -66,7 +67,7 @@ The probe registers **two separately pinned sets**:
    (`probe_only/disks/fixtures/`). The managed-parity `Free space on disk` (+ prediction) is a
    different sensor and untouched.
 3. **The Docker Compose tree** (#1416, part of the probe-only set) — seven sensors per Compose
-   service under `Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
+   service under `.probe/Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
    of 5-second samples; CPU as % of the whole host; the memory limit is stated in the `Memory used %`
    description and follows a changed limit), `Disk written per hour` (decimal MB the service's
    containers wrote to block devices in one UTC clock hour, from the cgroup write counters in the

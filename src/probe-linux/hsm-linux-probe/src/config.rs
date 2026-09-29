@@ -190,9 +190,10 @@ pub struct HsmConfig {
     /// compatibility, but a non-empty value re-introduces a `<computer>` node — not recommended.
     #[serde(default)]
     pub computer_name: String,
-    /// Empty by default, like `computer_name`: a non-empty value re-introduces a `<module>` node
-    /// between the product (or the computer node) and `.module/…` / `Docker/…` — not recommended.
-    #[serde(default)]
+    /// The probe's module node, `.probe` by default (owner decision, #1496): the product root holds
+    /// `.computer/…` (the host) and `.probe/` with `.module/…` and `Docker/…` — the .NET layout with
+    /// an empty ComputerName. Another value renames that node — accepted, not recommended.
+    #[serde(default = "default_module")]
     pub module: String,
     /// Send-queue dispatch period.
     #[serde(default = "default_package_collect_period_sec")]
@@ -221,6 +222,12 @@ impl Default for LoggingConfig {
     }
 }
 
+/// The probe's module node (#1496).
+pub const DEFAULT_MODULE: &str = ".probe";
+
+fn default_module() -> String {
+    DEFAULT_MODULE.to_string()
+}
 fn default_package_collect_period_sec() -> u64 {
     15
 }
@@ -438,8 +445,8 @@ mod tests {
     #[test]
     fn minimal_config_applies_documented_defaults() {
         let config = Config::parse(MINIMAL).expect("parse");
-        // No computer node and no module node by default: the tree sits at the product root.
-        assert_eq!(config.hsm.module, "");
+        // No computer node by default; the module node is `.probe` (#1496).
+        assert_eq!(config.hsm.module, ".probe");
         assert_eq!(config.hsm.computer_name, "");
         assert_eq!(config.hsm.package_collect_period_sec, 15);
         assert_eq!(config.hsm.request_timeout_sec, 30);

@@ -189,12 +189,13 @@ The registered set is 15 paths, byte-identical in registration to managed (a 330
 both collectors against one fake server; the table lives in `src/probe-linux/README.md` and a
 test pins the exact path list):
 
-**Where the tree sits — owner decision 2026-09-29, #1493: one product = one host.** Every path
-below is at the **product root** — `.computer/…`, `.module/…`, `Docker/…` — with no `<computer>`
-node and no `<module>` node. `hsm.computerName` and `hsm.module` are empty by default and the
-server's install bundle writes neither; setting them re-introduces the two levels (accepted for
-compatibility, not recommended). The Windows agent keeps its `<MACHINE>/HSM Agent/.module` layout;
-this decision is for the Linux probe only.
+**Where the tree sits — owner decisions 2026-09-29, #1493 and #1496: one product = one host, no
+computer node, the module node stays.** The product root holds the host's `.computer/…` and the
+probe's module node `.probe/` (with `.module/…` and `Docker/…`) — the .NET layout with an empty
+`ComputerName`. `hsm.computerName` is empty and `hsm.module` is `.probe` by default; the server's
+install bundle writes neither key. Setting them differently is accepted for compatibility, not
+recommended. The Windows agent keeps its `<MACHINE>/HSM Agent/.module` layout; this decision is for
+the Linux probe only.
 
 ```
 <product>/
@@ -202,12 +203,15 @@ this decision is for the Linux probe only.
 │   └── Disks monitoring/   Free space on disk (+ prediction), Free space on <name> disk (+ %),
 │                           Free inodes on <name> disk %, Average disk write speed on <name> disk,
 │                           Written today on <name> disk
-├── .module/            Service alive, Collector version, Collector errors, Version,
-│   ├── Process process/    Process CPU, Process memory, Process thread count
-│   └── Collector queue stats/  Items count in package, Package content size, …
-└── Docker/<project>/<service>/  CPU, Memory used %, Disk written per hour, Service status,
-                                 Health, Restart count, OOM killed
+└── .probe/             the probe's module node
+    ├── .module/        Service alive, Collector version, Collector errors, Version,
+    │   ├── Process process/    Process CPU, Process memory, Process thread count
+    │   └── Collector queue stats/  Items count in package, Package content size, …
+    └── Docker/<project>/<service>/  CPU, Memory used %, Disk written per hour, Service status,
+                                     Health, Restart count, OOM killed
 ```
+
+The `.module/…` paths below are under `.probe/`.
 
 - `.computer/Total CPU`, `.computer/Free RAM memory`
 - `.computer/Disks monitoring/Free space on disk` + `… prediction`
@@ -275,8 +279,8 @@ filesystem (1 150 before `Written today`), ≈ 5 760 on garage-server. The two #
 `Free space on disk` (+ prediction) is unchanged.
 
 **Docker Compose — agreed 2026-09-24, built in #1416** (garage_administration
-`hsm/SENSORS-DECISIONS.md` §2). All under one node at the product root (#1493):
-`Docker/<project>/<service>/<sensor>`. Every number lives in
+`hsm/SENSORS-DECISIONS.md` §2). All under one node in the probe's module node (#1496):
+`.probe/Docker/<project>/<service>/<sensor>`. Every number lives in
 `hsm-linux-probe/src/probe_only/docker/contract.rs`, every alert in `…/docker/alerts.rs`; the
 operator-facing table and the edge behavior are in the probe README ("Probe-only sensors").
 
@@ -448,8 +452,8 @@ product and the client runs one command and is connected
   - a generated `config.json` in the probe schema (§4.1). The address and port come from the
     existing `AgentConnectionResolver` (so the admin's "Agent connection URL" setting applies
     unchanged) and `accessKeyFile` points at the LoadCredential path — no `computerName` and no
-    `module` since #1493 (the tree sits at the product root; the bundle's former `"auto"` host-name
-    substitution is gone);
+    `module` since #1493, so the probe's defaults apply (no computer node, module node `.probe`,
+    #1496; the bundle's former `"auto"` host-name substitution is gone);
   - `access-key`: the product key from the existing `AgentKeySelector`, in its own file. It is
     never written into `config.json`, so the config can be shown and diffed safely;
   - `server-ca.pem`: the server's **public** certificate chain, with no private key. `install.sh`
@@ -593,6 +597,7 @@ coverage in both drivers and an agent version bump:
 | #1481 PR | every mounted real filesystem: free space (MB, %), free inodes and write speed per filesystem, Windows per-drive naming, archives polled directly (standby measured safe), 10-min re-scan with runtime registration; `probe.disks` config | probe 0.4.0 |
 | #1485 PR | disk write volume: `Disk written per hour` per Compose service (decimal MB per UTC clock hour from the cgroup write counters) and `Written today on <name> disk` per filesystem (decimal GB since local midnight from `/proc/diskstats`); both persist their running total across a restart; new `Source::stop` hook | probe 0.5.0 |
 | #1493 PR | the tree sits directly under the product: `hsm.computerName` / `hsm.module` empty by default (accepted, not recommended), the install bundle writes neither (the `"auto"` host-name substitution removed), pinned sets at the root | probe 0.6.0 |
+| #1496 PR | the module node stays: `hsm.module` defaults to `.probe` (the product root holds `.computer/…` and `.probe/{.module,Docker}/…`); `computerName` stays empty by default | probe 0.6.1 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
