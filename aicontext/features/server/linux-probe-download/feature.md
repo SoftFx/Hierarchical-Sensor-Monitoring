@@ -33,7 +33,7 @@ same form (`Prod (EU)` / `Prod EU`) get the same folder name; extract each bundl
 | Entry | Mode | Content |
 |---|---|---|
 | `hsm-linux-probe_<ver>_<arch>.deb` | 0644 | **Byte-identical** to the staged `probe-v*` release asset, under its release file name |
-| `config.json` | 0644 | Probe schema: `hsm.address` + `hsm.port` from `AgentConnectionResolver`, `hsm.accessKeyFile` = `/run/credentials/hsm-linux-probe.service/access-key` (the unit's `LoadCredential=` path), `hsm.module` = `LinuxProbe`, `hsm.computerName` = `"auto"`. **No key.** |
+| `config.json` | 0644 | Probe schema: `hsm.address` + `hsm.port` from `AgentConnectionResolver`, `hsm.accessKeyFile` = `/run/credentials/hsm-linux-probe.service/access-key` (the unit's `LoadCredential=` path). **No `computerName`, no `module`** (#1493: the probe's tree sits directly under the product — one product = one host). **No key.** |
 | `access-key` | 0600 | The product key from `AgentKeySelector` (same selection as Windows), newline-terminated |
 | `server-ca.pem` | 0644 | Optional, the server's leaf certificate (public part only); see *TLS* |
 | `install.sh`, `uninstall.sh` | 0755 | LF line endings; shellcheck-clean |
@@ -112,10 +112,10 @@ explicit admin setting, or probing the resolved address, is the fix if such a to
 
 install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` expected next to it):
 
-1. Places `config.json` in `/etc/hsm-linux-probe/` **only if none exists** (or with `--force-config`),
-   replacing `"computerName": "auto"` with the host's short name (see *Gap*); if the substitution matched
-   nothing it stops instead of installing `"auto"` (every host would collapse onto one node). Places the key if the bundle
-   still has it; a re-run after the key was consumed keeps the installed one.
+1. Places `config.json` in `/etc/hsm-linux-probe/` as is, **only if none exists** (or with
+   `--force-config`). No host name is written into it (#1493 removed the former `"auto"` → host-name
+   substitution: the tree has no computer node any more). Places the key if the bundle still has it; a
+   re-run after the key was consumed keeps the installed one.
    An `EXIT` trap, armed just before the key is copied, shreds the extracted copy on every exit path, a
    failing copy included.
 2. `apt-get update` (a failure only warns: an unreachable mirror is not fatal by itself), then `apt-get install -y ./hsm-linux-probe_*.deb ca-certificates` with
@@ -143,12 +143,15 @@ install.sh shreds the extracted one), removes the config (incl.
 `--fresh`, so hand-made links in `/etc/ssl/certs` survive). It never contacts the HSM server —
 the sensor history stays.
 
-## Gap: `computerName: "auto"`
+## Tree root: no computer node, no module node (#1493)
 
-The probe's config parser (`src/probe-linux/hsm-linux-probe/src/config.rs`, PR #1420) does **not** resolve
-`"auto"`: it passes any non-empty value verbatim to the collector, and an empty one leaves the computer node
-out of the path. Until the probe resolves `"auto"` itself (like HsmAgent's `config.cpp`), install.sh does it
-at install time. The server-generated config keeps `"auto"`, so nothing changes when the probe learns it.
+Owner decision 2026-09-29: one product = one host, so the probe's tree sits directly under the product
+(`.computer/…`, `.module/…`, `Docker/…`). The probe's `hsm.computerName` and `hsm.module` default to
+empty, which leaves both segments out of every path; the bundle's `config.json` carries neither. The
+former `computerName: "auto"` and its install-time host-name substitution are removed. A host installed
+from an older bundle keeps its `computerName`/`module` until its config is replaced
+(`install.sh --force-config`) or edited — setting them is accepted but not recommended. The Windows
+agent bundle is unchanged (`<MACHINE>/HSM Agent/.module`).
 
 ## Staging: `probe-release.txt`
 
@@ -199,8 +202,7 @@ be re-verified before the first non-empty `probe-release.txt`:
 | Package name `hsm-linux-probe`, asset `hsm-linux-probe_<ver>_<arch>.deb` + `.deb.sha256` | install/uninstall scripts, staging, guards | `.deb` build (#1418) |
 | Unit `hsm-linux-probe.service` | `install.sh` / `uninstall.sh` | `packaging/hsm-linux-probe.service` |
 | `LoadCredential=access-key:/etc/hsm-linux-probe/access-key` → `/run/credentials/hsm-linux-probe.service/access-key` | `AccessKeyCredentialPath`, `install.sh` | the unit |
-| Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile/computerName/module` | `BuildConfigJson` | `config.rs` |
-| Module `LinuxProbe` | `ModuleName` | `config.rs` default |
+| Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile` (no `computerName`/`module`, #1493) | `BuildConfigJson` | `config.rs` (both default to empty) |
 | https-only address | `ValidateServerAddress` | `config.rs` validation |
 
 **Not yet verified on a real host.** The `debian:13` smoke test ran against a dummy `.deb`. In that Docker

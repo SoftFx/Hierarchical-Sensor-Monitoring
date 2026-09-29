@@ -185,9 +185,14 @@ pub struct HsmConfig {
     /// `LoadCredential=` drop), so the config does not hardcode the unit name; an absolute path is
     /// used as is. See `secret::resolve_key_path`.
     pub access_key_file: PathBuf,
+    /// Empty by default: one product = one host, so the probe's sensors sit directly under the
+    /// product (`.computer/…`, `.module/…`, `Docker/…`; owner decision, #1493). Accepted for
+    /// compatibility, but a non-empty value re-introduces a `<computer>` node — not recommended.
     #[serde(default)]
     pub computer_name: String,
-    #[serde(default = "default_module")]
+    /// Empty by default, like `computer_name`: a non-empty value re-introduces a `<module>` node
+    /// between the product (or the computer node) and `.module/…` / `Docker/…` — not recommended.
+    #[serde(default)]
     pub module: String,
     /// Send-queue dispatch period.
     #[serde(default = "default_package_collect_period_sec")]
@@ -216,9 +221,6 @@ impl Default for LoggingConfig {
     }
 }
 
-fn default_module() -> String {
-    "LinuxProbe".to_string()
-}
 fn default_package_collect_period_sec() -> u64 {
     15
 }
@@ -436,7 +438,8 @@ mod tests {
     #[test]
     fn minimal_config_applies_documented_defaults() {
         let config = Config::parse(MINIMAL).expect("parse");
-        assert_eq!(config.hsm.module, "LinuxProbe");
+        // No computer node and no module node by default: the tree sits at the product root.
+        assert_eq!(config.hsm.module, "");
         assert_eq!(config.hsm.computer_name, "");
         assert_eq!(config.hsm.package_collect_period_sec, 15);
         assert_eq!(config.hsm.request_timeout_sec, 30);
