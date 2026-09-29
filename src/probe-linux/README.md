@@ -171,6 +171,13 @@ on a host that auto-mounts removable media under per-volume paths (`/media/<user
 `/run/media/…`) every new stick leaves sensors behind in Timeout — add those paths to
 `probe.disks.exclude` there.
 
+**Known gap — a separate `/home` (or `/root`).** The unit's `ProtectHome=yes` lays an
+inaccessible tmpfs over `/home`, `/root` and `/run/user` in the service's namespace, so a real
+filesystem mounted there is hidden from the probe (a `statvfs` would answer for the tmpfs). It is
+not reported, and the probe logs one WARN line naming it. On such a host, `ProtectHome=read-only`
+in a drop-in makes it visible (read-only; the probe never reads anything under a mount) — a
+hardening trade-off left to the operator. garage-server has no separate `/home`.
+
 **Which disk the write speed is read from** (`probe_only/disks/diskstats.rs`): the mount's
 `major:minor` in `/sys/dev/block/` (falling back to the source's name in `/sys/class/block/`); a
 partition is replaced by its parent disk (`sda2` → `sda`). Two filesystems on one disk

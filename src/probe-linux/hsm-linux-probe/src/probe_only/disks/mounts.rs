@@ -175,6 +175,29 @@ pub fn real_filesystems(mounts: &[Mount], exclude: &[String]) -> Vec<Filesystem>
     filesystems
 }
 
+/// Mount points of block-backed filesystems that are hidden under a later mount and whose device
+/// is not visible anywhere else — i.e. real filesystems this process cannot see, typically a
+/// separate `/home` under the service's `ProtectHome=` tmpfs. Reported so the gap is not silent.
+pub fn hidden_filesystems(mounts: &[Mount]) -> Vec<PathBuf> {
+    let visible_sources: BTreeSet<String> = real_filesystems(mounts, &[])
+        .into_iter()
+        .map(|fs| fs.source)
+        .collect();
+    let mut hidden: BTreeSet<PathBuf> = BTreeSet::new();
+    for (index, mount) in mounts.iter().enumerate() {
+        let covered = mounts[index + 1..]
+            .iter()
+            .any(|later| later.mount_point == mount.mount_point);
+        if covered
+            && BLOCK_FS_TYPES.contains(&mount.fs_type.as_str())
+            && !visible_sources.contains(&mount.source)
+        {
+            hidden.insert(mount.mount_point.clone());
+        }
+    }
+    hidden.into_iter().collect()
+}
+
 /// `*` matches any run of characters (including `/`); everything else matches itself.
 pub fn glob_matches(pattern: &str, text: &str) -> bool {
     let pattern: Vec<char> = pattern.chars().collect();
@@ -366,6 +389,14 @@ pub mod tests {
         let filesystems = real_filesystems(&parse_mountinfo(text), &[]);
         let sources: Vec<&str> = filesystems.iter().map(|fs| fs.source.as_str()).collect();
         assert_eq!(sources, vec!["/dev/sda1", "/dev/sde1"]);
+        // The hidden ones are reported, so the gap is not silent (e.g. a /home partition under
+        // ProtectHome's tmpfs).
+        assert_eq!(
+            hidden_filesystems(&parse_mountinfo(text)),
+            vec![PathBuf::from("/data"), PathBuf::from("/media/usb")]
+        );
+        // On garage-server nothing real is hidden (its /home is a directory on `/`).
+        assert!(hidden_filesystems(&parse_mountinfo(GARAGE_MOUNTINFO)).is_empty());
         let mut names = BTreeMap::new();
         assign_names(&filesystems, &mut names);
         assert_eq!(names["/media/usb"], "usb");

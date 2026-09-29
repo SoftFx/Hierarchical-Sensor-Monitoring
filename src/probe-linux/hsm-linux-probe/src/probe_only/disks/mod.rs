@@ -254,6 +254,8 @@ struct Disks<'c> {
     /// the map is persisted in `names_path`, so they survive restarts too.
     names: Mutex<BTreeMap<String, String>>,
     names_path: Option<PathBuf>,
+    /// Hidden (over-mounted) filesystems already warned about, so each is logged once.
+    hidden_reported: Mutex<BTreeSet<PathBuf>>,
     nodes: Mutex<Vec<Node<'c>>>,
 }
 
@@ -263,8 +265,24 @@ impl<'c> Disks<'c> {
     fn scan(&self, logger: &Logger) -> Result<Vec<(Filesystem, String)>, String> {
         let text = std::fs::read_to_string(&self.mountinfo)
             .map_err(|error| format!("cannot read {}: {error}", self.mountinfo.display()))?;
-        let filesystems =
-            mounts::real_filesystems(&mounts::parse_mountinfo(&text), &self.config.exclude);
+        let parsed = mounts::parse_mountinfo(&text);
+        let filesystems = mounts::real_filesystems(&parsed, &self.config.exclude);
+        {
+            let mut reported = self
+                .hidden_reported
+                .lock()
+                .unwrap_or_else(|p| p.into_inner());
+            for point in mounts::hidden_filesystems(&parsed) {
+                if reported.insert(point.clone()) {
+                    logger.warn(format!(
+                        "disks: the filesystem mounted at {} is hidden under another mount in this \
+                         service's namespace (e.g. ProtectHome= over a separate /home) and is not \
+                         reported",
+                        point.display()
+                    ));
+                }
+            }
+        }
         let mut names = self.names.lock().unwrap_or_else(|p| p.into_inner());
         let before = names.len();
         mounts::assign_names(&filesystems, &mut names);
@@ -708,6 +726,7 @@ fn build<'c>(
                 .unwrap_or_default(),
         ),
         names_path: environment.disk_names.clone(),
+        hidden_reported: Mutex::new(BTreeSet::new()),
         nodes: Mutex::new(Vec::new()),
     });
     let mut failures = FailureLog::default();
@@ -1195,6 +1214,7 @@ pub mod tests {
                 statvfs,
                 names: Mutex::new(names::load(&names_path, &logger)),
                 names_path: Some(names_path.clone()),
+                hidden_reported: Mutex::new(BTreeSet::new()),
                 nodes: Mutex::new(Vec::new()),
             }
         };
