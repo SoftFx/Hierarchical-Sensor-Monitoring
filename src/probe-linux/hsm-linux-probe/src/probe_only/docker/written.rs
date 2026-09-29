@@ -7,12 +7,16 @@
 //! writes that reached a block device: data still in the page cache counts when it is flushed, and
 //! tmpfs never counts. A write through a stacked device (LVM, dm-crypt, md) is accounted both on
 //! that device and on the disk under it; a stacked device is therefore left out whenever a disk
-//! under it is listed too ([`Stacking`]), so a write counts once, on the physical disk.
+//! under it is listed too ([`Stacking`]), so a write counts on the physical disks it reached: once
+//! through LVM or dm-crypt, **once per member disk** through a mirror (md RAID1/10) — the physical
+//! wear, which is what this sensor is for.
 //!
 //! **Accounting.** Every sample adds the container's delta since its previous sample to the
 //! service's current clock hour (UTC). A delta that cannot be honest is dropped and the counter
 //! becomes the new baseline: the first sample of a container (first sight, or a recreate — a new
-//! id), a counter that went backwards, a clock that went backwards, and a gap longer than
+//! id), a restart of the same container (a changed `State.StartedAt`: a new cgroup whose counter
+//! began again from 0, even when it has already passed the old value), a counter that went
+//! backwards, a clock that went backwards, and a gap longer than
 //! [`contract::MAX_INTERVAL_FACTOR`] sample periods that crosses an hour boundary (its bytes cannot
 //! be placed in either hour). A long gap inside one hour is kept: all of it belongs to that hour.
 //! So a mid-hour recreate loses only the writes between the old container's last sample and the
@@ -144,12 +148,15 @@ pub fn written_bytes(stats: &ContainerStats, stacking: &mut Stacking) -> Option<
 }
 
 /// A container's counter at its last sample.
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Baseline {
     pub bytes: u64,
     /// Unix milliseconds of the sample.
     pub at_ms: i64,
+    /// The container's `State.StartedAt` then; a different one means the counter restarted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<String>,
 }
 
 /// Why a sample added nothing.
@@ -159,6 +166,8 @@ pub enum Skip {
     FirstSample,
     /// The counter went backwards.
     CounterReset,
+    /// The container was restarted (a new `State.StartedAt`): its counter began again from 0.
+    Restarted,
     /// The wall clock went backwards.
     ClockBackwards,
     /// The probe missed samples across an hour boundary: the bytes cannot be placed in an hour.
@@ -247,15 +256,22 @@ impl WriteRecord {
         written: u64,
         now_ms: i64,
         sample_period: Duration,
+        started_at: Option<&str>,
     ) -> Result<(u64, u64), Skip> {
         let current = Baseline {
             bytes: written,
             at_ms: now_ms,
+            started_at: started_at.map(str::to_string),
         };
         let previous = self
             .baselines
             .insert(container_id.to_string(), current)
             .ok_or(Skip::FirstSample)?;
+        if let (Some(before), Some(now)) = (previous.started_at.as_deref(), started_at) {
+            if before != now {
+                return Err(Skip::Restarted);
+            }
+        }
         if written < previous.bytes {
             return Err(Skip::CounterReset);
         }
@@ -402,6 +418,32 @@ mod tests {
         tree
     }
 
+    #[test]
+    fn a_restart_of_the_same_container_is_a_new_baseline_even_above_the_old_counter() {
+        let mut record = WriteRecord::new(H13);
+        let first = Some("2026-09-29T08:00:00Z");
+        record.sample("a", 1_000, H13, PERIOD, first).ok();
+        assert_eq!(
+            record.sample("a", 1_500, H13 + 5_000, PERIOD, first),
+            Ok((500, 5_000))
+        );
+        // Restarted while the probe was down: same id, a new cgroup that has already written more
+        // than the old counter. Not a delta of 300 — a baseline.
+        let second = Some("2026-09-29T13:20:00Z");
+        assert_eq!(
+            record.sample("a", 1_800, H13 + 30 * MIN, PERIOD, second),
+            Err(Skip::Restarted)
+        );
+        assert_eq!(
+            record.sample("a", 1_900, H13 + 30 * MIN + 5_000, PERIOD, second),
+            Ok((100, 5_000))
+        );
+        assert_eq!(record.bytes, 600);
+        // A baseline from before the start time was known still pairs.
+        record.sample("b", 10, H13, PERIOD, None).ok();
+        assert!(record.sample("b", 20, H13 + 5_000, PERIOD, first).is_ok());
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_write_through_lvm_counts_once_on_the_disk() {
@@ -429,15 +471,67 @@ mod tests {
         assert_eq!(written_bytes(&top_only, &mut stacking), Some(4096));
     }
 
+    /// md RAID1 over `sda1` and `sdb1`: `md0` (9:0) has both partitions as slaves.
+    #[cfg(unix)]
+    #[test]
+    fn a_mirrored_write_counts_once_per_member_disk() {
+        let tree = crate::probe_only::host::tests::FakeTree::new("raid1");
+        tree.file("sys/devices/virtual/block/md0/dev", "9:0\n");
+        for (disk, number, partition, partition_number) in [
+            ("sda", "8:0", "sda1", "8:1"),
+            ("sdb", "8:16", "sdb1", "8:17"),
+        ] {
+            tree.file(
+                &format!("sys/devices/block/{disk}/dev"),
+                &format!("{number}\n"),
+            );
+            tree.file(
+                &format!("sys/devices/block/{disk}/{partition}/dev"),
+                &format!("{partition_number}\n"),
+            );
+            tree.file(
+                &format!("sys/devices/block/{disk}/{partition}/partition"),
+                "1\n",
+            );
+            tree.link(
+                &format!("sys/class/block/{partition}"),
+                &format!("../../devices/block/{disk}/{partition}"),
+            );
+            tree.link(
+                &format!("sys/devices/virtual/block/md0/slaves/{partition}"),
+                &format!("../../../../block/{disk}/{partition}"),
+            );
+        }
+        tree.link("sys/dev/block/9:0", "../../devices/virtual/block/md0");
+        let mut stacking = Stacking::new(Some(tree.0.join("sys")));
+        assert_eq!(
+            stacking.under("9:0"),
+            ["8:0".to_string(), "8:16".to_string()]
+        );
+        // One 4 KiB logical write lands on both mirrors: the physical wear is 8 KiB (intended —
+        // the sensor answers "what wears the disks"; the description says so).
+        let mirrored: ContainerStats = serde_json::from_value(serde_json::json!({
+            "blkio_stats": { "io_service_bytes_recursive": [
+                { "major": 9, "minor": 0, "op": "write", "value": 4096 },
+                { "major": 8, "minor": 0, "op": "write", "value": 4096 },
+                { "major": 8, "minor": 16, "op": "write", "value": 4096 }
+            ] }
+        }))
+        .unwrap();
+        assert_eq!(written_bytes(&mirrored, &mut stacking), Some(8192));
+    }
+
     #[test]
     fn deltas_accumulate_into_the_hour_and_post_after_it() {
         let mut record = WriteRecord::new(H13);
         assert_eq!(
-            record.sample("a", 1_000, H13 + 10_000, PERIOD),
+            record.sample("a", 1_000, H13 + 10_000, PERIOD, None),
             Err(Skip::FirstSample)
         );
         // A delta goes into the hour as it is read (a round cut short loses nothing).
-        record.sample("a", 1_000, H13 + 10_000, PERIOD).unwrap();
+        record
+            .sample("a", 1_000, H13 + 10_000, PERIOD, None)
+            .unwrap();
         assert_eq!((record.bytes, record.deltas), (0, 1));
         let mut at = H13 + 10_000;
         let mut counter = 1_000;
@@ -445,7 +539,7 @@ mod tests {
         while at + 5_000 < H13 + 60 * MIN {
             at += 5_000;
             counter += 2_000_000;
-            let (_, gap) = record.sample("a", counter, at, PERIOD).unwrap();
+            let (_, gap) = record.sample("a", counter, at, PERIOD, None).unwrap();
             record.cover(gap, at);
         }
         assert_eq!(record.roll(H13 + 59 * MIN), None, "not over yet");
@@ -461,7 +555,7 @@ mod tests {
         // The new hour starts empty but keeps the baseline: its first sample counts.
         assert_eq!(record.bytes, 0);
         let (delta, _) = record
-            .sample("a", counter + 5, H13 + 60 * MIN + 2_000, PERIOD)
+            .sample("a", counter + 5, H13 + 60 * MIN + 2_000, PERIOD, None)
             .unwrap();
         assert_eq!(delta, 5);
     }
@@ -469,15 +563,15 @@ mod tests {
     #[test]
     fn an_hour_without_an_accepted_delta_is_not_posted_as_zero() {
         let mut record = WriteRecord::new(H13);
-        record.sample("a", 1_000, H13 + 59 * MIN, PERIOD).ok();
+        record.sample("a", 1_000, H13 + 59 * MIN, PERIOD, None).ok();
         assert_eq!(record.roll(H13 + 61 * MIN), None);
         assert_eq!(
-            record.sample("a", 1_000, H13 + 61 * MIN, PERIOD),
+            record.sample("a", 1_000, H13 + 61 * MIN, PERIOD, None),
             Err(Skip::GapAcrossHours)
         );
         // …but an hour of measured silence is a real 0.
         let at = H13 + 61 * MIN + 5_000;
-        let (_, gap) = record.sample("a", 1_000, at, PERIOD).unwrap();
+        let (_, gap) = record.sample("a", 1_000, at, PERIOD, None).unwrap();
         record.cover(gap, at);
         let done = record.roll(H13 + 121 * MIN).unwrap();
         assert_eq!(done.megabytes(), 0.0);
@@ -486,25 +580,31 @@ mod tests {
     #[test]
     fn a_counter_reset_or_a_new_container_id_loses_only_its_sample() {
         let mut record = WriteRecord::new(H13);
-        record.sample("old", 5_000, H13, PERIOD).ok();
-        let (_, gap) = record.sample("old", 6_000, H13 + 5_000, PERIOD).unwrap();
+        record.sample("old", 5_000, H13, PERIOD, None).ok();
+        let (_, gap) = record
+            .sample("old", 6_000, H13 + 5_000, PERIOD, None)
+            .unwrap();
         record.cover(gap, H13 + 5_000);
         // Recreated: a new id with a fresh counter far below the old one — a baseline, not a
         // negative or a huge delta.
         assert_eq!(
-            record.sample("new", 10, H13 + 10_000, PERIOD),
+            record.sample("new", 10, H13 + 10_000, PERIOD, None),
             Err(Skip::FirstSample)
         );
         record.retain(&["new".to_string()]);
         assert_eq!(record.baselines.len(), 1);
-        let (_, gap) = record.sample("new", 110, H13 + 15_000, PERIOD).unwrap();
+        let (_, gap) = record
+            .sample("new", 110, H13 + 15_000, PERIOD, None)
+            .unwrap();
         record.cover(gap, H13 + 15_000);
         // Same id, counter backwards: a baseline again.
         assert_eq!(
-            record.sample("new", 50, H13 + 20_000, PERIOD),
+            record.sample("new", 50, H13 + 20_000, PERIOD, None),
             Err(Skip::CounterReset)
         );
-        let (_, gap) = record.sample("new", 80, H13 + 25_000, PERIOD).unwrap();
+        let (_, gap) = record
+            .sample("new", 80, H13 + 25_000, PERIOD, None)
+            .unwrap();
         record.cover(gap, H13 + 25_000);
         let done = record.roll(H13 + 60 * MIN).unwrap();
         assert_eq!(
@@ -517,29 +617,35 @@ mod tests {
     #[test]
     fn a_gap_inside_the_hour_counts_and_one_across_hours_is_dropped() {
         let mut record = WriteRecord::new(H13);
-        record.sample("a", 0, H13 + MIN, PERIOD).ok();
+        record.sample("a", 0, H13 + MIN, PERIOD, None).ok();
         // Ten minutes without a sample (the daemon did not answer), same hour: all of it counts.
-        let (delta, gap) = record.sample("a", 700, H13 + 11 * MIN, PERIOD).unwrap();
+        let (delta, gap) = record
+            .sample("a", 700, H13 + 11 * MIN, PERIOD, None)
+            .unwrap();
         assert_eq!((delta, gap), (700, 10 * MIN as u64));
         record.cover(gap, H13 + 11 * MIN);
-        record.sample("a", 800, H13 + 55 * MIN, PERIOD).unwrap();
+        record
+            .sample("a", 800, H13 + 55 * MIN, PERIOD, None)
+            .unwrap();
         // Probe down from 13:55 to 14:05: the bytes belong to either hour — dropped.
         record.roll(H13 + 65 * MIN);
         assert_eq!(
-            record.sample("a", 900, H13 + 65 * MIN, PERIOD),
+            record.sample("a", 900, H13 + 65 * MIN, PERIOD, None),
             Err(Skip::GapAcrossHours)
         );
         // An ordinary sample across the boundary is not a gap.
         let mut record = WriteRecord::new(H13);
-        record.sample("a", 0, H13 + 60 * MIN - 2_000, PERIOD).ok();
+        record
+            .sample("a", 0, H13 + 60 * MIN - 2_000, PERIOD, None)
+            .ok();
         record.roll(H13 + 60 * MIN + 3_000);
         assert_eq!(
-            record.sample("a", 10, H13 + 60 * MIN + 3_000, PERIOD),
+            record.sample("a", 10, H13 + 60 * MIN + 3_000, PERIOD, None),
             Ok((10, 5_000))
         );
         // The clock going backwards is a new baseline.
         assert_eq!(
-            record.sample("a", 20, H13 + 50 * MIN, PERIOD),
+            record.sample("a", 20, H13 + 50 * MIN, PERIOD, None),
             Err(Skip::ClockBackwards)
         );
     }
@@ -548,11 +654,11 @@ mod tests {
     fn a_partial_hour_says_how_much_of_it_was_measured() {
         // The probe started at 13:40.
         let mut record = WriteRecord::new(H13 + 40 * MIN);
-        record.sample("a", 0, H13 + 40 * MIN, PERIOD).ok();
+        record.sample("a", 0, H13 + 40 * MIN, PERIOD, None).ok();
         let mut at = H13 + 40 * MIN;
         while at + 5_000 < H13 + 60 * MIN {
             at += 5_000;
-            let (_, gap) = record.sample("a", 1, at, PERIOD).unwrap();
+            let (_, gap) = record.sample("a", 1, at, PERIOD, None).unwrap();
             record.cover(gap, at);
         }
         let done = record.roll(H13 + 60 * MIN + 1_000).unwrap();
@@ -573,7 +679,7 @@ mod tests {
     #[test]
     fn the_record_round_trips_through_json() {
         let mut record = WriteRecord::new(H13);
-        record.sample("abc", 42, H13 + 1_000, PERIOD).ok();
+        record.sample("abc", 42, H13 + 1_000, PERIOD, None).ok();
         record.cover(5_000, H13 + 1_000);
         let text = serde_json::to_string(&record).unwrap();
         assert!(text.contains("\"hourStart\""), "{text}");

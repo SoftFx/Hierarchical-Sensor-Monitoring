@@ -857,6 +857,7 @@ fn build<'c>(
             clock: unix_now_ms,
             local: written::local_time,
             save_failures: FailureLog::default(),
+            identities: BTreeMap::new(),
         })
     } else {
         logger.info("disks: write speed disabled (probe.disks.writeSpeed = false)");
@@ -1034,6 +1035,8 @@ struct WriteSpeedSource<'c> {
     clock: fn() -> i64,
     local: LocalTime,
     save_failures: FailureLog,
+    /// Each disk's WWID/serial, read once while its name stays in `/proc/diskstats`.
+    identities: BTreeMap<String, Option<String>>,
 }
 
 impl WriteSpeedSource<'_> {
@@ -1060,6 +1063,27 @@ impl WriteSpeedSource<'_> {
         self.save_ledger(logger);
     }
 
+    /// The physical disk behind `disk`: its WWID or serial from sysfs (cached while the name stays
+    /// in `/proc/diskstats`; sysfs serves them from memory, the disk is not asked), else the mount
+    /// points reported on it.
+    fn identity_of(&mut self, disk: &str, nodes: &[Node<'_>]) -> Option<String> {
+        let sys_root = self.disks.sys_root.clone();
+        let hardware = self
+            .identities
+            .entry(disk.to_string())
+            .or_insert_with(|| hardware_identity(&sys_root, disk))
+            .clone();
+        hardware.or_else(|| {
+            let mut points: Vec<String> = nodes
+                .iter()
+                .filter(|node| node.disk.as_deref() == Some(disk))
+                .map(|node| node.fs.mount_point.to_string_lossy().into_owned())
+                .collect();
+            points.sort();
+            (!points.is_empty()).then(|| format!("mounts:{}", points.join("|")))
+        })
+    }
+
     fn save_ledger(&mut self, logger: &Logger) {
         let Some(path) = &self.ledger_path else {
             return;
@@ -1067,6 +1091,7 @@ impl WriteSpeedSource<'_> {
         if !self.ledger_dirty {
             return;
         }
+        self.ledger.prune((self.local)((self.clock)()).0);
         let what = "disks: written-today ledger";
         match self.ledger.save(path, &self.boot_id) {
             Ok(()) => {
@@ -1083,6 +1108,22 @@ impl WriteSpeedSource<'_> {
             ),
         }
     }
+}
+
+/// `wwid:<…>` or `serial:<…>` of a whole disk from sysfs; `None` when the device exposes neither.
+fn hardware_identity(sys_root: &Path, disk: &str) -> Option<String> {
+    let block = sys_root.join("block").join(disk);
+    [
+        ("wwid", block.join("wwid")),
+        ("wwid", block.join("device/wwid")),
+        ("serial", block.join("device/serial")),
+    ]
+    .into_iter()
+    .find_map(|(kind, path)| {
+        let text = std::fs::read_to_string(path).ok()?;
+        let value = text.trim();
+        (!value.is_empty()).then(|| format!("{kind}:{value}"))
+    })
 }
 
 fn unix_now_ms() -> i64 {
@@ -1134,13 +1175,25 @@ impl Source for WriteSpeedSource<'_> {
                 // Gone from the table: the next appearance starts a new baseline.
                 self.rates.remove(disk);
                 self.ledger.forget_baseline(disk);
+                self.identities.remove(disk);
                 continue;
             };
             // Today's volume: every sample, whatever the rate makes of it (a long gap inside the
             // day still counts; the ledger has its own rules).
-            let _ = self
-                .ledger
-                .sample(disk, written, now_ms, self.local, WRITE_SAMPLE_PERIOD);
+            let identity = self.identity_of(disk, &nodes);
+            if let Err(written::Skip::OtherDisk) = self.ledger.sample(
+                disk,
+                identity.as_deref(),
+                written,
+                now_ms,
+                self.local,
+                WRITE_SAMPLE_PERIOD,
+            ) {
+                logger.info(format!(
+                    "disks: {disk} is not the disk that had this name before (or it cannot be \
+                     told after a reboot); its Written today starts afresh"
+                ));
+            }
             self.ledger_dirty = true;
             let rate = self
                 .rates

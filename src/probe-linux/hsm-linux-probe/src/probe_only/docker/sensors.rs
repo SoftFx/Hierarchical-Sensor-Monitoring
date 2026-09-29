@@ -287,8 +287,19 @@ fn register_disk_written<'c>(collector: &'c Collector, path: &str) -> Result<Dou
     collector.double_sensor(path, &options)
 }
 
-const DISK_WRITTEN_DESCRIPTION: &str = "Megabytes (decimal: 1 MB = 10⁶ bytes, the unit SSD endurance is rated in) the Compose service's containers wrote to **block devices** during one clock hour (UTC), replicas and disks summed (a write through LVM/dm-crypt/md counts once, on \
-the disk) — who is wearing the disk. Source: the containers' cgroup I/O counters (`blkio_stats.io_service_bytes_recursive`, op write) from the Docker Engine API, sampled every few seconds. Writes still in the page cache count when they are flushed; reads and tmpfs never count. One value per hour, **sent just after the hour it covers**: its time is about one hour later than the writes, and the comment names the window (e.g. `13:00–14:00 UTC`) and, when the probe did not watch the whole hour, how much of it was measured. The first sample of a container (a recreate) or a counter reset only sets a baseline; an hour with no measurement is skipped, never sent as 0. With EMA statistics.";
+const DISK_WRITTEN_DESCRIPTION: &str =
+    "Megabytes (decimal: 1 MB = 10⁶ bytes, the unit SSD endurance is rated in) the Compose \
+service's containers wrote to **block devices** during one clock hour (UTC), replicas and disks \
+summed — who is wearing the disk. Physical writes: a write through LVM or dm-crypt counts once, \
+on the disk; a mirrored write (md RAID1/10) counts once per member disk. Source: the \
+containers' cgroup I/O counters (`blkio_stats.io_service_bytes_recursive`, op write) from the \
+Docker Engine API, sampled every few seconds. Writes still in the page cache count when they \
+are flushed; reads and tmpfs never count. One value per hour, **sent just after the hour it \
+covers**: its time is about one hour later than the writes, and the comment names the window \
+(e.g. `13:00–14:00 UTC`) and, when the probe did not watch the whole hour, how much of it was \
+measured. The first sample of a container (a recreate), a restart of it or a counter reset \
+only sets a baseline; an hour with no measurement is skipped, never sent as 0. With EMA \
+statistics.";
 
 const CPU_DESCRIPTION: &str = "CPU used by the Compose service's containers, as a percentage of \
 the **whole host** (all cores together = 100 %), replicas summed. Sampled every few seconds \

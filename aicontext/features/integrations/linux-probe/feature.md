@@ -47,8 +47,9 @@ The probe registers **two separately pinned sets**:
    `/proc/diskstats` of the whole disk) and `Written today on <name> disk` (#1485: decimal GB
    written to that whole disk since local midnight, from the same counter, posted every 5 min;
    from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
-   with the boot id, so a restart continues the day and a reboot keeps the day but not the
-   counters). Block-backed types only, deduplicated by source device,
+   with the boot id and each disk's identity — WWID/serial, else its mount points — so a restart
+   continues the day, a reboot keeps the day (only for the same physical disk) but not the
+   counters, and a disk renamed by the kernel never inherits another disk's day). Block-backed types only, deduplicated by source device,
    re-scanned every 10 min (new mounts register at runtime; removed ones time out; every 5-min
    sample re-checks the mount table first; automounted and over-mounted filesystems are skipped —
    `ProtectHome=yes` unmounts a separate `/home` from the service's namespace, so it is not

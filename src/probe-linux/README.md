@@ -165,8 +165,13 @@ last counter are kept in `$STATE_DIRECTORY/disk-written.json` (saved at every po
 so a restart continues the day and counts what was written meanwhile. The counters restart at
 boot, so the file records the boot id (`/proc/sys/kernel/random/boot_id`): after a reboot the
 day continues from its saved total, but the writes between the last sample before the reboot and
-the first after it are not counted. Two filesystems on one disk (`mediacentr`, `oldlinux` on
-`sdb`) both report that disk's total, and their descriptions say so.
+the first after it are not counted. Kernel names are not stable (a reboot can swap `sda` and
+`sdb`), so each disk's day also records which physical disk it belongs to — its WWID or serial
+from sysfs, else the mount points on it: a different disk under a known name starts its day
+afresh (with the "measured since" comment), and after a reboot a day is kept only when that
+identity matches. Disks not seen for more than a day are dropped from the file. Two filesystems
+on one disk (`mediacentr`, `oldlinux` on `sdb`) both report that disk's total, and their
+descriptions say so.
 
 **Which filesystems** (`probe_only/disks/mounts.rs`): the block-backed types in
 `/proc/self/mountinfo` — ext2/3/4, xfs, btrfs, vfat, exfat, ntfs3, fuseblk, f2fs; everything else
@@ -273,7 +278,11 @@ be split between the two hours and is dropped; an hour that ended while the prob
 is dropped, not posted hours late. A write through a stacked device (LVM, dm-crypt, md) is
 accounted by the kernel on that device and again on the disk under it; the probe resolves the
 stack in `/sys/dev/block/*/slaves` and leaves the stacked device out whenever a disk under it is
-listed too, so each write counts once, on the physical disk. A host that does not account block
+listed too. The sensor therefore reports **physical** writes: through LVM or dm-crypt a write
+counts once, on the disk; through a mirror (md RAID1/10) **once per member disk**, because each
+member really is written (the wear this sensor is for). A container restarted with the same id —
+also while the probe was down — is recognised by its new `State.StartedAt` and only sets a
+baseline (logged once), since its counter began again from 0. A host that does not account block
 I/O per container reports no counter and gets no sensor: Docker Desktop (WSL2) answers an empty
 list for every container.
 

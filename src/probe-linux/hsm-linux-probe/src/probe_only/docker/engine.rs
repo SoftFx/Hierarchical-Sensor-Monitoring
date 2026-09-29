@@ -230,6 +230,10 @@ pub struct InspectState {
     /// Present only when the image or compose file defines a healthcheck.
     #[serde(default)]
     pub health: Option<InspectHealth>,
+    /// When the container last started: a restart keeps the id but gives it a new cgroup, so its
+    /// cumulative counters start again from 0.
+    #[serde(default)]
+    pub started_at: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

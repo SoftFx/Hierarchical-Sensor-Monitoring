@@ -128,8 +128,11 @@ pub struct DockerSource<'c, E: EngineApi> {
     should_stop: fn() -> bool,
     /// The wall clock, Unix milliseconds (a seam for the hour-boundary tests).
     clock: fn() -> i64,
-    /// Stacked block devices (LVM, dm-crypt, md), so a write is counted once.
+    /// Stacked block devices (LVM, dm-crypt, md), so a write is counted on the physical disks.
     stacking: written::Stacking,
+    /// Each listed container's `State.StartedAt` from the last inspect: a change means a restart,
+    /// whose write counter began again from 0.
+    started_at: std::collections::HashMap<String, String>,
 }
 
 impl<'c, E: EngineApi> DockerSource<'c, E> {
@@ -222,6 +225,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             should_stop: crate::shutdown::is_requested,
             clock: unix_now_ms,
             stacking: written::Stacking::default(),
+            started_at: std::collections::HashMap::new(),
         }
     }
 
@@ -359,9 +363,18 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         let mut complete = true;
         let mut writes = false;
         for id in ids {
-            let Ok(stats) = self.engine.stats(id) else {
-                complete = false;
-                continue;
+            let stats = match self.engine.stats(id) {
+                Ok(stats) => stats,
+                // A daemon or container that does not answer costs one timeout per service, not
+                // one per replica, before Start; the first stats round catches up.
+                Err(error) if error.is_unavailable() => {
+                    complete = false;
+                    break;
+                }
+                Err(_) => {
+                    complete = false;
+                    continue;
+                }
             };
             writes |= written::written_bytes(&stats, &mut self.stacking).is_some();
             match stats::memory_reading(&stats, self.host_mem_total) {
@@ -530,6 +543,10 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let inspect = match self.engine.inspect(&container.id) {
                 Ok(inspect) => {
                     self.clear_read_failure(logger, "inspect", &container.id);
+                    if !inspect.state.started_at.is_empty() {
+                        self.started_at
+                            .insert(container.id.clone(), inspect.state.started_at.clone());
+                    }
                     Some(InspectFacts {
                         restart_count: inspect.restart_count,
                         oom_killed: inspect.state.oom_killed,
@@ -703,6 +720,11 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 self.written_dirty |= accumulator.baselines.len() != before;
             }
         }
+        self.started_at.retain(|id, _| {
+            roster
+                .values()
+                .any(|ids| ids.iter().any(|listed| listed == id))
+        });
         self.roster = roster;
         self.cpu.retain(|id| {
             self.roster
@@ -760,6 +782,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 };
                 let now_ms = (self.clock)();
                 let counter = written::written_bytes(&stats, &mut self.stacking);
+                let started_at = self.started_at.get(id).map(String::as_str);
+                let mut restarted = false;
                 if let Some(record) = self.tracker.state.services.get_mut(key) {
                     let accumulator = record
                         .written
@@ -768,14 +792,35 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                     match counter {
                         Some(counter) => {
                             any_writes = true;
-                            if let Ok((_, gap)) =
-                                accumulator.sample(id, counter, now_ms, self.sample_period)
-                            {
-                                written_gap = Some(written_gap.unwrap_or(0).max(gap));
+                            match accumulator.sample(
+                                id,
+                                counter,
+                                now_ms,
+                                self.sample_period,
+                                started_at,
+                            ) {
+                                Ok((_, gap)) => {
+                                    written_gap = Some(written_gap.unwrap_or(0).max(gap));
+                                }
+                                Err(written::Skip::Restarted) => restarted = true,
+                                Err(_) => {}
                             }
                         }
                         None => accumulator.forget(id),
                     }
+                }
+                if restarted
+                    && self.log_once.raise(&format!(
+                        "restarted:{id}:{}",
+                        started_at.unwrap_or_default()
+                    ))
+                {
+                    logger.info(format!(
+                        "docker: {key}: container {} was restarted since its last sample; its \
+                         writes between that sample and the restart are not counted in Disk \
+                         written per hour",
+                        short_id(id)
+                    ));
                 }
                 // Stamped per container, when its counters arrived: a slow call for one container
                 // must not skew the interval of the next.
@@ -1050,6 +1095,8 @@ pub(crate) mod tests {
         pub down: bool,
         /// Container id prefix whose inspect and stats calls time out (a wedged container).
         pub wedged: Option<&'static str>,
+        /// Stats calls made, for the bounded-priming test.
+        pub stats_calls: usize,
     }
 
     impl FixtureEngine {
@@ -1071,6 +1118,7 @@ pub(crate) mod tests {
                 round: 0,
                 down: false,
                 wedged: None,
+                stats_calls: 0,
             }
         }
 
@@ -1115,6 +1163,7 @@ pub(crate) mod tests {
                 })
         }
         fn stats(&mut self, id: &str) -> Result<ContainerStats, EngineError> {
+            self.stats_calls += 1;
             self.check_container(id)?;
             let round = &self.rounds[self.round.min(self.rounds.len() - 1)];
             round.get(id).cloned().ok_or_else(|| EngineError::Status {
@@ -1852,6 +1901,86 @@ pub(crate) mod tests {
         assert!(paths
             .iter()
             .any(|p| p == "garage-server/LinuxProbe/Docker/gitea/db/Disk written per hour"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn priming_stops_at_the_first_container_that_does_not_answer() {
+        let collector = test_collector();
+        let mut engine = FixtureEngine::garage();
+        engine.wedged = Some("abbd59dcacc8");
+        let mut source = garage_source(&collector, engine, &DockerConfig::default(), None);
+        let db = source
+            .engine
+            .list
+            .iter()
+            .find(|c| c.id.starts_with("abbd59dcacc8"))
+            .unwrap()
+            .id
+            .clone();
+        // Three replicas that all time out: one timeout, not three.
+        let (limit, writes) = source.first_stats_of(&[db.clone(), db.clone(), db]);
+        assert_eq!((limit, writes), (None, false));
+        assert_eq!(source.engine.stats_calls, 1);
+    }
+
+    #[test]
+    fn a_container_restarted_while_the_probe_was_down_starts_a_new_baseline() {
+        let dir = std::env::temp_dir().join(format!(
+            "hsm-probe-docker-written-restarted-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(state::STATE_FILE_NAME);
+        {
+            let collector = test_collector();
+            collector.start().expect("start");
+            let mut before = garage_source(
+                &collector,
+                FixtureEngine::garage(),
+                &DockerConfig::default(),
+                Some(path.clone()),
+            );
+            before.clock = test_clock;
+            two_rounds(&mut before, H13 + 10 * 60_000, 5_000);
+            Source::stop(&mut before, &quiet());
+            collector.stop().expect("stop");
+        }
+        // gitea/db was restarted (same id, new StartedAt) and its new cgroup has already written
+        // more than the old counter: a baseline, not a too-small delta.
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut engine = FixtureEngine::garage();
+        add_written(&mut engine, 1, GITEA_DB, 1_000_000);
+        let inspect = engine
+            .inspects
+            .iter_mut()
+            .find(|(id, _)| id.starts_with(GITEA_DB))
+            .unwrap()
+            .1;
+        inspect.state.started_at = "2026-09-29T13:15:00Z".into();
+        let mut after = garage_source(&collector, engine, &DockerConfig::default(), Some(path));
+        after.clock = test_clock;
+        let never = || false;
+        set_clock(H13 + 20 * 60_000);
+        after.engine.round = 1;
+        after.poll(&quiet(), &never).expect("poll");
+        after
+            .sample_stats(&quiet(), &never)
+            .expect("round after the restart");
+        set_clock(H13 + 60 * 60_000 + 1_000);
+        let posted = after.roll_written_hours(&quiet());
+        collector.stop().expect("stop");
+        let db = posted
+            .iter()
+            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .unwrap()
+            .1;
+        assert_eq!(
+            db.bytes, 163_840,
+            "only the delta measured before the restart"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

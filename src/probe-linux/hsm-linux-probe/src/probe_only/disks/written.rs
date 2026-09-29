@@ -19,6 +19,13 @@
 //! the probe was down count too. The counters restart at boot, so the file also records the boot
 //! (`/proc/sys/kernel/random/boot_id`): after a reboot the old counters are not trusted and the
 //! writes between the last sample before it and the first after it are not counted.
+//!
+//! **Which disk.** Records are keyed by the kernel name (`sda`), which is not stable: a reboot can
+//! swap `sda` and `sdb`, a USB disk can take a name another disk held earlier. Each record
+//! therefore carries the disk's identity ([`same_disk`]): its WWID or serial from sysfs, else the
+//! mount points on it. A different disk under a known name starts the day afresh (from its first
+//! sample, with the "measured since" comment); after a reboot the day is kept only when the
+//! identity is known and matches. A disk not seen for more than a day is dropped from the file.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -91,6 +98,24 @@ pub struct DayRecord {
     pub since_second: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub baseline: Option<Baseline>,
+    /// Which disk the day belongs to (see [`same_disk`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<String>,
+    /// Loaded from another boot: the day is kept only if the first sample's identity matches.
+    #[serde(skip)]
+    pub unverified: bool,
+}
+
+/// Whether two identities name the same disk. A WWID or serial must be equal; the mount-point
+/// fallback (`mounts:<a>|<b>`) matches when the two sets share a mount point, so mounting another
+/// partition of the same disk does not make it a different disk.
+pub fn same_disk(a: &str, b: &str) -> bool {
+    match (a.strip_prefix("mounts:"), b.strip_prefix("mounts:")) {
+        (Some(a), Some(b)) => a
+            .split('|')
+            .any(|point| b.split('|').any(|other| other == point)),
+        _ => a == b,
+    }
 }
 
 /// Why a sample added nothing.
@@ -102,6 +127,8 @@ pub enum Skip {
     ClockBackwards,
     /// The probe missed samples across midnight.
     GapAcrossDays,
+    /// Another physical disk now carries this name: its day starts afresh.
+    OtherDisk,
 }
 
 /// The day of every metered disk, keyed by its `/proc/diskstats` name.
@@ -121,10 +148,12 @@ struct LedgerFile {
 
 impl Ledger {
     /// Record `disk`'s counter read at `now_ms`; returns the bytes added to its day, or why none.
-    /// The new counter always becomes the baseline.
+    /// The new counter always becomes the baseline. `identity` names the physical disk now behind
+    /// the name ([`same_disk`]).
     pub fn sample(
         &mut self,
         disk: &str,
+        identity: Option<&str>,
         sectors: u64,
         now_ms: i64,
         local: LocalTime,
@@ -138,6 +167,29 @@ impl Ledger {
                 day,
                 ..DayRecord::default()
             });
+        let other_disk = match (record.identity.as_deref(), identity) {
+            (Some(known), Some(now)) => !same_disk(known, now),
+            // After a reboot an unknown identity cannot vouch for the day.
+            _ => record.unverified,
+        };
+        record.unverified = false;
+        if identity.is_some() {
+            record.identity = identity.map(str::to_string);
+        }
+        if other_disk {
+            // Another disk under this name: nothing of the old day or counter is its own.
+            *record = DayRecord {
+                day,
+                identity: identity.map(str::to_string),
+                baseline: Some(Baseline {
+                    sectors,
+                    at_ms: now_ms,
+                    day,
+                }),
+                ..DayRecord::default()
+            };
+            return Err(Skip::OtherDisk);
+        }
         if record.day != day {
             // Local midnight passed: a new day starts from 0.
             record.day = day;
@@ -172,6 +224,12 @@ impl Ledger {
         let bytes = (sectors - previous.sectors).saturating_mul(SECTOR_BYTES);
         record.bytes = record.bytes.saturating_add(bytes);
         Ok(bytes)
+    }
+
+    /// Drop the disks not seen since before yesterday (renamed away, unplugged for good), so the
+    /// file does not grow with name churn.
+    pub fn prune(&mut self, today: i64) {
+        self.disks.retain(|_, record| record.day >= today - 1);
     }
 
     /// A disk left `/proc/diskstats`: its next appearance starts a new baseline.
@@ -235,8 +293,10 @@ impl Ledger {
         };
         let mut disks = file.disks;
         if boot_id.is_empty() || file.boot_id != boot_id {
+            // Another boot: the counters restarted and kernel names may have moved.
             for record in disks.values_mut() {
                 record.baseline = None;
+                record.unverified = true;
             }
         }
         Ledger { disks }
@@ -303,13 +363,13 @@ pub mod tests {
         let mut ledger = Ledger::default();
         let t = MIDNIGHT - 2_000;
         assert_eq!(
-            ledger.sample("sdc", 1_000, t, utc, PERIOD),
+            ledger.sample("sdc", Some("wwid:sdc"), 1_000, t, utc, PERIOD),
             Err(Skip::Baseline)
         );
         // 2_000_000 sectors = 1.024 GB across midnight: counted in the new day, which was watched
         // from its start (no comment).
         assert_eq!(
-            ledger.sample("sdc", 2_001_000, t + 5_000, utc, PERIOD),
+            ledger.sample("sdc", Some("wwid:sdc"), 2_001_000, t + 5_000, utc, PERIOD),
             Ok(1_024_000_000)
         );
         assert_eq!(
@@ -318,7 +378,7 @@ pub mod tests {
         );
         // Nothing written: a real 0 delta, the day stays.
         ledger
-            .sample("sdc", 2_001_000, t + 10_000, utc, PERIOD)
+            .sample("sdc", Some("wwid:sdc"), 2_001_000, t + 10_000, utc, PERIOD)
             .unwrap();
         assert_eq!(
             ledger.today("sdc", MIDNIGHT + 6 * MIN, utc).unwrap().0,
@@ -330,20 +390,29 @@ pub mod tests {
     fn midnight_starts_the_next_day_from_zero() {
         let mut ledger = Ledger::default();
         let evening = MIDNIGHT + 23 * HOUR + 59 * MIN + 50_000;
-        ledger.sample("sdc", 0, evening - 5_000, utc, PERIOD).ok();
         ledger
-            .sample("sdc", 1_000_000, evening, utc, PERIOD)
+            .sample("sdc", Some("wwid:sdc"), 0, evening - 5_000, utc, PERIOD)
+            .ok();
+        ledger
+            .sample("sdc", Some("wwid:sdc"), 1_000_000, evening, utc, PERIOD)
             .unwrap();
         assert!(ledger.today("sdc", evening, utc).unwrap().0 > 0.5);
         // 00:00:05 the next day: the day before is over, the new one starts from what the first
         // sample across midnight measured (nothing here).
         let next = evening + 15_000;
-        assert_eq!(ledger.sample("sdc", 1_000_000, next, utc, PERIOD), Ok(0));
+        assert_eq!(
+            ledger.sample("sdc", Some("wwid:sdc"), 1_000_000, next, utc, PERIOD),
+            Ok(0)
+        );
         assert_eq!(ledger.today("sdc", next, utc), Some((0.0, None)));
         // Before any sample of the next day, yesterday's total is not reported as today's.
         let mut stale = Ledger::default();
-        stale.sample("sda", 0, evening - 5_000, utc, PERIOD).ok();
-        stale.sample("sda", 10, evening, utc, PERIOD).unwrap();
+        stale
+            .sample("sda", Some("wwid:sda"), 0, evening - 5_000, utc, PERIOD)
+            .ok();
+        stale
+            .sample("sda", Some("wwid:sda"), 10, evening, utc, PERIOD)
+            .unwrap();
         assert_eq!(stale.today("sda", next, utc), None);
     }
 
@@ -351,14 +420,16 @@ pub mod tests {
     fn a_reset_or_the_first_sample_is_skipped_never_zero() {
         let mut ledger = Ledger::default();
         let t = MIDNIGHT + 10 * HOUR;
-        ledger.sample("sdc", 5_000, t, utc, PERIOD).ok();
+        ledger
+            .sample("sdc", Some("wwid:sdc"), 5_000, t, utc, PERIOD)
+            .ok();
         assert_eq!(ledger.today("sdc", t, utc), None, "only a baseline yet");
         assert_eq!(
-            ledger.sample("sdc", 100, t + 5_000, utc, PERIOD),
+            ledger.sample("sdc", Some("wwid:sdc"), 100, t + 5_000, utc, PERIOD),
             Err(Skip::CounterReset)
         );
         assert_eq!(
-            ledger.sample("sdc", 300, t + 10_000, utc, PERIOD),
+            ledger.sample("sdc", Some("wwid:sdc"), 300, t + 10_000, utc, PERIOD),
             Ok(200 * 512)
         );
         // The measurement began at 10:00: the comment says so.
@@ -369,7 +440,7 @@ pub mod tests {
             Some("measured since 10:00 local time (writes before that are not counted)")
         );
         assert_eq!(
-            ledger.sample("sdc", 400, t, utc, PERIOD),
+            ledger.sample("sdc", Some("wwid:sdc"), 400, t, utc, PERIOD),
             Err(Skip::ClockBackwards)
         );
     }
@@ -378,15 +449,17 @@ pub mod tests {
     fn a_gap_inside_the_day_counts_and_one_across_midnight_is_dropped() {
         let mut ledger = Ledger::default();
         let t = MIDNIGHT + 20 * HOUR;
-        ledger.sample("sdc", 0, t, utc, PERIOD).ok();
+        ledger
+            .sample("sdc", Some("wwid:sdc"), 0, t, utc, PERIOD)
+            .ok();
         // Two hours without a sample (the probe was stopped): all of it belongs to today.
         assert_eq!(
-            ledger.sample("sdc", 1_000, t + 2 * HOUR, utc, PERIOD),
+            ledger.sample("sdc", Some("wwid:sdc"), 1_000, t + 2 * HOUR, utc, PERIOD),
             Ok(1_000 * 512)
         );
         // Stopped from 23:00 to 01:00: cannot be split between the days.
         assert_eq!(
-            ledger.sample("sdc", 2_000, t + 5 * HOUR, utc, PERIOD),
+            ledger.sample("sdc", Some("wwid:sdc"), 2_000, t + 5 * HOUR, utc, PERIOD),
             Err(Skip::GapAcrossDays)
         );
         assert_eq!(ledger.today("sdc", t + 5 * HOUR, utc), None);
@@ -399,9 +472,11 @@ pub mod tests {
         let logger = Logger::new(Level::Error, None);
         let t = MIDNIGHT + 9 * HOUR;
         let mut ledger = Ledger::default();
-        ledger.sample("sdc", 0, t, utc, PERIOD).ok();
         ledger
-            .sample("sdc", 2_000_000, t + 5_000, utc, PERIOD)
+            .sample("sdc", Some("wwid:sdc"), 0, t, utc, PERIOD)
+            .ok();
+        ledger
+            .sample("sdc", Some("wwid:sdc"), 2_000_000, t + 5_000, utc, PERIOD)
             .unwrap();
         ledger.save(&path, "boot-a").unwrap();
 
@@ -410,7 +485,7 @@ pub mod tests {
         let mut same = Ledger::load(&path, "boot-a", &logger);
         assert_eq!(same, ledger);
         assert_eq!(
-            same.sample("sdc", 4_000_000, t + HOUR, utc, PERIOD),
+            same.sample("sdc", Some("wwid:sdc"), 4_000_000, t + HOUR, utc, PERIOD),
             Ok(2_000_000 * 512)
         );
         assert_eq!(same.today("sdc", t + HOUR, utc).unwrap().0, 2.048);
@@ -418,7 +493,7 @@ pub mod tests {
         // After a reboot the kernel counter restarted: a baseline, and the day is kept.
         let mut rebooted = Ledger::load(&path, "boot-b", &logger);
         assert_eq!(
-            rebooted.sample("sdc", 3_000_000, t + HOUR, utc, PERIOD),
+            rebooted.sample("sdc", Some("wwid:sdc"), 3_000_000, t + HOUR, utc, PERIOD),
             Err(Skip::Baseline)
         );
         assert_eq!(rebooted.today("sdc", t + HOUR, utc).unwrap().0, 1.024);
@@ -431,6 +506,91 @@ pub mod tests {
         );
         tree.file(FILE_NAME, r#"{"version": 9, "bootId": "x", "disks": {}}"#);
         assert_eq!(Ledger::load(&path, "boot-a", &logger), Ledger::default());
+    }
+
+    #[test]
+    fn a_reboot_that_swaps_disk_names_does_not_carry_one_disks_day_to_another() {
+        let tree = FakeTree::new("disk-written-swap");
+        let path = tree.0.join(FILE_NAME);
+        let logger = Logger::new(Level::Error, None);
+        let t = MIDNIGHT + 9 * HOUR;
+        let (a, b) = (
+            Some("wwid:naa.5000c500a1b2c3d4"),
+            Some("wwid:naa.5000c500e5f6a7b8"),
+        );
+        let mut ledger = Ledger::default();
+        for (name, identity, written) in [("sda", a, 2_000_000), ("sdb", b, 4_000_000)] {
+            ledger.sample(name, identity, 0, t, utc, PERIOD).ok();
+            ledger
+                .sample(name, identity, written, t + 5_000, utc, PERIOD)
+                .unwrap();
+        }
+        ledger.save(&path, "boot-a").unwrap();
+
+        // Rebooted at 14:00; the kernel now calls disk B `sda` and disk A `sdb`.
+        let later = t + 5 * HOUR;
+        let mut swapped = Ledger::load(&path, "boot-b", &logger);
+        assert_eq!(
+            swapped.sample("sda", b, 10, later, utc, PERIOD),
+            Err(Skip::OtherDisk)
+        );
+        assert_eq!(
+            swapped.sample("sdb", a, 10, later, utc, PERIOD),
+            Err(Skip::OtherDisk)
+        );
+        assert_eq!(
+            swapped.today("sda", later, utc),
+            None,
+            "nothing measured yet"
+        );
+        swapped
+            .sample("sda", b, 2_010, later + 5_000, utc, PERIOD)
+            .unwrap();
+        let (value, comment) = swapped.today("sda", later + 5_000, utc).unwrap();
+        assert_eq!(value, 0.001);
+        assert_eq!(
+            comment.as_deref(),
+            Some("measured since 14:00 local time (writes before that are not counted)")
+        );
+
+        // The same reboot without a swap keeps each day.
+        let mut kept = Ledger::load(&path, "boot-b", &logger);
+        assert_eq!(
+            kept.sample("sda", a, 10, later, utc, PERIOD),
+            Err(Skip::Baseline)
+        );
+        assert_eq!(kept.today("sda", later, utc).unwrap().0, 1.024);
+        // …but an identity that cannot be read after a reboot cannot vouch for the day.
+        let mut unknown = Ledger::load(&path, "boot-b", &logger);
+        assert_eq!(
+            unknown.sample("sdb", None, 10, later, utc, PERIOD),
+            Err(Skip::OtherDisk)
+        );
+
+        // Same boot, another disk plugged in under a name held earlier today.
+        let mut same_boot = Ledger::load(&path, "boot-a", &logger);
+        assert_eq!(
+            same_boot.sample("sdb", Some("wwid:usb-stick"), 5, later, utc, PERIOD),
+            Err(Skip::OtherDisk)
+        );
+
+        // A disk not seen since before yesterday is dropped from the file.
+        let mut old = Ledger::load(&path, "boot-a", &logger);
+        old.prune(utc(t).0 + 1);
+        assert_eq!(old.disks.len(), 2, "seen yesterday: kept");
+        old.prune(utc(t).0 + 2);
+        assert!(old.disks.is_empty());
+    }
+
+    #[test]
+    fn the_mount_point_fallback_matches_on_any_shared_mount_point() {
+        assert!(same_disk(
+            "mounts:/mnt/mediacentr|/mnt/oldlinux",
+            "mounts:/mnt/oldlinux"
+        ));
+        assert!(!same_disk("mounts:/mnt/wd4tb", "mounts:/mnt/mediacentr"));
+        assert!(same_disk("wwid:x", "wwid:x"));
+        assert!(!same_disk("wwid:x", "mounts:/"));
     }
 
     #[cfg(unix)]
