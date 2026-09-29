@@ -95,7 +95,10 @@ trap 'rm -rf "$STAGE"' EXIT
 ROOT="$STAGE/$PACKAGE"
 
 echo "==> staging $PACKAGE"
-install -d -m 0755 "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/lib/systemd/system" \
+# /etc/hsm-linux-probe is shipped as an (empty) directory: the package keeps owning it, so an
+# upgrade from a conffile-era package does not try to delete it (dpkg warned "Directory not
+# empty"), and purge removes it once empty. The config inside is postinst's, not dpkg's.
+install -d -m 0755 "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/lib/systemd/system" "$ROOT/etc/hsm-linux-probe" \
     "$ROOT/usr/share/hsm-linux-probe" "$ROOT/usr/share/doc/hsm-linux-probe" "$ROOT/usr/lib/hsm-linux-probe"
 install -m 0755 "$BINARY" "$ROOT/usr/bin/hsm-linux-probe"
 strip --strip-unneeded "$ROOT/usr/bin/hsm-linux-probe"
