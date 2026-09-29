@@ -89,29 +89,28 @@ TTL is "none" for every sensor except `Service alive`, which carries the inactiv
 
 ## Probe-only sensors
 
-Sensors that exist **only in this probe** (owner decisions of 2026-09-24, #1476, #1416). They are
-pinned separately from the parity set by
+Sensors that exist **only in this probe** (owner decisions of 2026-09-24/29, #1476, #1481, #1416).
+They are pinned separately from the parity set by
 `probe::tests::the_registered_set_is_the_parity_set_plus_the_probe_only_set` (`PROBE_ONLY_SET` +
-`DOCKER_GARAGE_SET`, nothing more, nothing less), and their registration shape and alerts by
+`DISKS_GARAGE_SET` + `DOCKER_GARAGE_SET`, nothing more, nothing less, the disks and Docker sets
+built from garage-server captures), and their registration shape and alerts by
 `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts` and
 `docker::tests::prime_registers_the_whole_tree_before_start_with_alerts`.
 
-### Host and disk (#1476)
+*Legend for the tables below:* **warning** = a notification with the ⚠ icon and **no status
+change**; **Error** = a notification that also sets the sensor to Error. **TTL** = three periods
+for the 5-minute sensors (48 h, one missed day, for the daily cores value): a source that stops
+producing — a read that keeps failing, a thread stuck on a hung filesystem, an unmounted disk —
+turns the sensor to Timeout on the server instead of leaving its last value looking fresh.
 
-All four are computer-level (`is_computer_sensor`), so they sit under `<computer>/.computer/…`.
+### Host (#1476)
+
+Computer-level (`is_computer_sensor`), so under `<computer>/.computer/…`.
 
 | Path | Type · unit | Period | TTL | Alerts (registered with the sensor) | Source | Records/day |
 |---|---|---|---|---|---|---|
 | `.computer/Logical cores` | Int | at start + every 24 h | 48 h | — | `sysconf(_SC_NPROCESSORS_ONLN)` (what `nproc` shows) | ≈ 2 |
 | `.computer/CPU temperature` | DoubleBar · °C (no `Unit` code exists; said in the description) | a sample every 5 s into a 5-min bar (60 samples) | 15 min | Mean in (80, 90] → warning; Mean > 90 → **Error** | rule below | 288 |
-| `.computer/Disks monitoring/Free space on disk %` | Double · Percents | every 5 min | 15 min | value in [5, 10) → warning; value < 5 → **Error** | `statvfs`: `f_bavail / f_blocks` of the mount holding `/srv/docker` | 288 |
-| `.computer/Disks monitoring/Free inodes %` | Double · Percents | every 5 min | 15 min | value < 10 → warning | `statvfs`: `f_favail / f_files`, same mount | 288 |
-
-*Legend:* **warning** = a notification with the ⚠ icon and **no status change**; **Error** = a
-notification that also sets the sensor to Error. **TTL** = three periods for the 5-minute sensors (48 h, one
-missed day, for the daily cores value): a source that stops producing — a read that keeps failing, a thread stuck on a hung
-filesystem — turns the sensor to Timeout on the server instead of leaving its last value looking
-fresh.
 
 **Alert semantics.** Every alert notifies (the managed "instant hourly" schedule: the first
 notification at once, repeats hourly while it holds — the same action as the managed default
@@ -129,26 +128,71 @@ never their inputs (a `drivetemp` input would wake a sleeping disk). With no sou
 **not registered** (one INFO line). A failed read skips the sample — never a 0 °C — and is logged
 once until it recovers.
 
-**Disk mount rule** (`probe_only/disk.rs`): the mount whose mount point is the longest
-component-wise prefix of the canonical `/srv/docker` in `/proc/self/mountinfo` (the top one when
-mounts are stacked; a missing target is walked up to its nearest existing ancestor). Resolved once
-at registration and logged. The shared collector's `Free space on disk` always reports
-`statvfs("/")` (it mirrors the managed `UnixDiskInfo`); where `/srv/docker` is on the root
-filesystem — garage-server — both describe the same mount, and the log says so; where it is not,
-the probe logs that the two differ. Only that one mount is ever `statvfs`'d; a filesystem without
-an inode count (`f_files == 0`) gets no inode sensor.
+### Disks — every mounted real filesystem (#1481)
 
-**Isolation.** Each source runs on its own thread (a hung `statvfs` cannot stall the temperature
-samples), every sample runs under `catch_unwind`, and nothing is posted before the collector starts.
-The disk source's registration-time probing (`canonicalize` + one `statvfs`) runs on a helper
-thread with a 5 s deadline, so a hung mount cannot hold up the start of the parity set (the disk
-sensors are then not registered, with an ERROR line). On stop the sources get 2 s; stuck ones are
-named, the collector drains anyway, and the process exits without joining a thread still blocked
-in a read.
+Four sensors per filesystem, named like the Windows per-drive sensors (`Free space on C disk`,
+`Average disk write speed on C disk` in the managed and native Windows collectors) with a name in
+place of the drive letter: **`root`** for `/`, else the **last segment** of the mount path; names
+that collide use the whole mount path with `/` → `_` (`/srv/data` → `_srv_data`). A name, once
+given, is kept for the life of the process. All under `.computer/Disks monitoring/`:
 
-**Configuration** — `probe.hostSensors` (all default `true`, so a config written before these
-sensors existed turns them on): `enabled` switches off all four; `cpuTemperature` and `disk` switch
-off one source each. `Logical cores` has no switch of its own.
+| Sensor | Type · unit | Period | TTL | Alerts | Source |
+|---|---|---|---|---|---|
+| `Free space on <name> disk` | Double · MB (whole MB), EMA | every 5 min | 15 min | the managed `Free space on <X> disk` alert verbatim: EMA value ≤ 20 480 MB → **Error** (⬇) | `statvfs` `f_bavail × f_frsize` |
+| `Free space on <name> disk %` | Double · Percents | every 5 min | 15 min | [5, 10) → warning; < 5 → **Error** | `statvfs` `f_bavail / f_blocks` (what `df` shows a non-root user) |
+| `Free inodes on <name> disk %` | Double · Percents | every 5 min | 15 min | < 10 → warning | `statvfs` `f_favail / f_files`; not registered when the filesystem has no inode count |
+| `Average disk write speed on <name> disk` | DoubleBar · MBytes_sec, EMA | a sample every 5 s into a 5-min bar | 15 min | — (the Windows sensor has none) | `/proc/diskstats` sectors written × 512 of the **whole disk** under the filesystem, MB = 1024² |
+
+**Cost:** ≈ 288 × 3 + 288 ≈ **1 150 records/day per filesystem**; garage-server has four
+(`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 4 600/day (accepted by the owner).
+
+**Which filesystems** (`probe_only/disks/mounts.rs`): the block-backed types in
+`/proc/self/mountinfo` — ext2/3/4, xfs, btrfs, vfat, exfat, ntfs3, fuseblk, f2fs; everything else
+(tmpfs, overlay, squashfs, proc, sysfs, cgroup, devtmpfs, autofs, nfs, cifs, …) is skipped.
+Mounts of one source device — bind mounts, sub-directory mounts, the read-only re-mounts systemd
+adds in the service's namespace — are **one** filesystem, reported at a whole-filesystem mount
+(`root` field `/`) when there is one, then the shortest mount point: on garage-server
+`/mnt/.rw/wd4tb`, `/mnt/wd4tb` and `/mnt/wd4tb/backup` (all `/dev/sda2`) are one `wd4tb`. The set is
+resolved before the collector starts and **re-scanned every 10 minutes**: a new filesystem
+registers its sensors while the collector runs (collector ≥ 0.9.1 re-posts the registration,
+alerts included), one that goes away stops reporting (its sensors time out) and resumes under the
+same name when it comes back.
+
+**Which disk the write speed is read from** (`probe_only/disks/diskstats.rs`): the mount's
+`major:minor` in `/sys/dev/block/` (falling back to the source's name in `/sys/class/block/`); a
+partition is replaced by its parent disk (`sda2` → `sda`). Two filesystems on one disk
+(`mediacentr` on `sdb1` and `oldlinux` on `sdb5`) both carry that disk's number, and the
+description says so. The first sample, a counter that went backwards and an implausible interval
+(under 2.5 s or over 15 s) only set the baseline — never a 0.
+
+**What is read — and what never is.** `/proc/self/mountinfo`, `statvfs(2)` of each reported mount
+point, sysfs `uevent` files and `/proc/diskstats`. Nothing under a mount is ever opened, listed or
+read. `statvfs` is answered from the superblock: **measured on garage-server (2026-09-29)**, it did
+not wake the sleeping archive disks — `smartctl -n standby` reported both in STANDBY before, 5 s
+after and 35 s after `statvfs` on the FUSE-NTFS `/mnt/wd4tb` and `/mnt/mediacentr` and the ext4
+`/mnt/oldlinux`. So the archives are polled directly every 5 minutes; the earlier plan of reading
+their free space from a backup-snapshot file is dropped.
+
+**Moved in 0.4.0:** the two #1476 sensors `.computer/Disks monitoring/Free space on disk %` and
+`… /Free inodes %` are now `Free space on root disk %` and `Free inodes on root disk %`; the old
+paths stop receiving data. The managed-parity `Disks monitoring/Free space on disk` and its
+`prediction` (the .NET Unix set, `statvfs("/")`) are untouched.
+
+**Isolation.** Each source runs on its own thread; free space and write speed are two sources.
+Every `statvfs` runs on a helper thread with a 5 s deadline, and a filesystem whose previous
+`statvfs` is still blocked is not asked again, so a hung FUSE daemon parks one thread and costs
+only that filesystem's samples (logged once; its sensors time out). Every sample runs under
+`catch_unwind`, and nothing is posted before the collector starts. On stop the sources get 2 s;
+stuck ones are named, the collector drains anyway, and the process exits without joining a thread
+still blocked in a read.
+
+**Configuration** — `probe.hostSensors { enabled, cpuTemperature }` for the host sensors
+(`enabled` switches off both; `Logical cores` has no switch of its own) and
+`probe.disks { enabled, exclude, writeSpeed }` for the disks: `exclude` is a list of mount-point
+patterns (`*` = any run of characters) matched against the mount point a filesystem is named
+after, `writeSpeed: false` drops the write-speed sensors. All default on. The 0.2.x switch
+`probe.hostSensors.disk` is deprecated: an explicit `false` still turns the disks off (with a
+warning), `true` is ignored.
 
 ### Docker Compose services (#1416)
 
@@ -247,7 +291,7 @@ src/probe-linux/
   hsm-collector-sys/   raw FFI declarations for the ABI subset the probe uses + the CMake build
   hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, alerts, log sink
   hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, sensor registration
-    src/probe_only/    probe-only sources (host.rs, disk.rs, docker/) and their per-source threads
+    src/probe_only/    probe-only sources (host.rs, disks/, docker/) and their per-source threads
     fixtures/docker/   Engine API captures from garage-server
   packaging/           systemd unit, config skeleton, maintainer scripts, build-deb.sh,
                        docker-access.sh (Docker socket drop-in)

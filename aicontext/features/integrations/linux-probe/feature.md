@@ -30,13 +30,24 @@ The probe registers **two separately pinned sets**:
    `probe::tests::the_registered_set_is_exactly_the_managed_unix_default_set`.
 2. **The probe-only set** (#1476) — sensors the owner agreed one by one that exist **only in the
    Linux probe**, never in the shared collector catalog and never on Windows (moving one into the
-   catalog is a separate, later decision). Today: `.computer/Logical cores`,
-   `.computer/CPU temperature`, `.computer/Disks monitoring/Free space on disk %` and
-   `… /Free inodes %` (computer-level). Pinned by `PROBE_ONLY_SET` in
+   catalog is a separate, later decision). Host: `.computer/Logical cores`,
+   `.computer/CPU temperature` (computer-level). Pinned by `PROBE_ONLY_SET` in
    `probe::tests::the_registered_set_is_the_parity_set_plus_the_probe_only_set` ("nothing more,
    nothing less"), their registration and alerts by
    `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. Sources, periods,
    alerts and costs: README "Probe-only sensors".
+   **Disks** (#1481, part of the probe-only set) — four sensors per mounted real filesystem under
+   `.computer/Disks monitoring/`, named like the Windows per-drive sensors with a name for the
+   letter (`root` for `/`, else the last mount-path segment; collisions → the whole path with
+   `/` → `_`): `Free space on <name> disk` (MB, the managed alert verbatim), `… disk %`,
+   `Free inodes on <name> disk %`, `Average disk write speed on <name> disk` (MBytes_sec bar from
+   `/proc/diskstats` of the whole disk). Block-backed types only, deduplicated by source device,
+   re-scanned every 10 min (new mounts register at runtime; removed ones time out). The archives
+   are `statvfs`'d directly — measured not to wake sleeping disks; nothing under a mount is ever
+   opened, listed or read. Pinned for garage-server (4 filesystems, 16 paths) by
+   `DISKS_GARAGE_SET`, built from captured `mountinfo`/`diskstats`/sysfs
+   (`probe_only/disks/fixtures/`). The managed-parity `Free space on disk` (+ prediction) is a
+   different sensor and untouched.
 3. **The Docker Compose tree** (#1416, part of the probe-only set) — seven sensors per Compose
    service under `<module>/Docker/<project>/<service>/`: `CPU` and `Memory used %` (5-minute bars
    of 5-second samples; CPU as % of the whole host), `Memory limit`, `Service status` (the Windows
@@ -63,9 +74,11 @@ change, as in the managed Total CPU / Free RAM defaults. Enum state sensors use
 `Collector::enum_sensor_with_options` (collector 0.9.0) — EnumOptions + SensorOptions, the managed
 `Service status` shape; `aggregate_data` must be set explicitly (it is not defaulted to true).
 
-**Configuration.** `probe.hostSensors.{enabled, cpuTemperature, disk}` and
+**Configuration.** `probe.hostSensors.{enabled, cpuTemperature}`,
+`probe.disks.{enabled, exclude, writeSpeed}` and
 `probe.docker.{enabled, socket, composeOnly, samplePeriodSec, oomLatchHours}`, switches all
-default `true`, so a config written before the probe-only sensors turns them on.
+default `true` (and `exclude` empty), so a config without those sections turns everything on. The
+0.2.x `probe.hostSensors.disk` is deprecated; an explicit `false` still disables the disks.
 
 **Packaging.** `src/probe-linux/packaging/build-deb.sh <version>` builds the `.deb` in a plain
 `debian:13` container (layout `/usr/bin`, `/lib/systemd/system`, the `/etc` conffile; `Depends:
@@ -93,9 +106,9 @@ Linux is the only supported target. The initiative is
   once until it recovers — never posted as a value (no 0 for "unknown"). So that a source which
   stops producing is visible on the server, every probe-only sensor carries a TTL — three periods
   (15 min) for the 5-minute sensors, 48 h (one missed day) for the daily `Logical cores` — and
-  turns to Timeout. Registration-time
-  filesystem probing that could block (the disk source's `canonicalize` + `statvfs`) runs on a
-  helper thread with a deadline, so a hung mount cannot hold up Start of the parity set.
+  turns to Timeout. Every `statvfs` — at registration and when sampling — runs on a helper
+  thread with a 5 s deadline, and a filesystem whose last `statvfs` is still blocked is not asked
+  again, so a hung mount can neither hold up Start nor stall the other disks.
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at
   most 2 s; stuck ones are named in the log, the collector drains anyway, and the process then
   exits without joining a thread that is still blocked in a read.

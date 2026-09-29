@@ -2,8 +2,9 @@
 
 > Status: **phase 1 delivered and verified on the real host** (2026-09-24). Epic: #1413.
 > The probe runs on garage-server reporting the managed Unix default set plus probe-only sensors
-> agreed with the owner one by one (§4.2a): host/disk (#1476) and Docker Compose (#1416); the
-> archive/backup sensors (#1417) are still to be agreed. Releases are on hold by owner decision
+> agreed with the owner one by one (§4.2a): host (#1476), every mounted disk including the
+> archives (#1481) and Docker Compose (#1416); the backup-contract sensors (#1417) are still to be
+> agreed. Releases are on hold by owner decision
 > (§4.5).
 > See §9 for what shipped, §10 for what the work uncovered, §11 for what remains.
 > Source task: garage_administration `hsm/TASK-linux-docker-monitoring.md`.
@@ -116,15 +117,18 @@ Probe host language — Rust vs C++ (both native, both consume the same collecto
         │     ├── loadavg (60 s): /proc/loadavg — exists in no collector today
         │     ├── docker (stats 5 s, state 60 s): Docker Engine API over the unix socket
         │     │     (HTTP/1.1 GET over UnixStream, one-shot stats; no stream, no external CLI)
-        │     ├── ssd (5 min): statvfs on the filesystem containing /srv/docker
-        │     └── backup/archive: timestamped JSON snapshots on SSD (never touches /mnt/*)
+        │     ├── disks (5 min / 5 s): statvfs of every real filesystem incl. the archives
+        │     │     (#1481 — measured not to wake them) + /proc/diskstats write speed
+        │     └── backup: timestamped JSON results on SSD (the §4.4 contract, still open)
         └── probe state on SSD (restart counters, OOM latches, last-seen backup result)
 ```
 
 Key properties: one process; scheduling/queuing/batching/retry are the collector's; each
 probe source is exception-isolated behind its own catch with a visible per-source status
 sensor (no silent loss); Docker timeout/partial data ⇒ skipped values + diagnostic, never
-zeros/`healthy`/re-stamped stale data; archive HDDs are never touched by any polling path.
+zeros/`healthy`/re-stamped stale data; the archive HDDs are only ever `statvfs`'d (answered
+from the superblock — measured on garage-server not to wake them, §4.2a), never opened, listed
+or read.
 
 ### 4.1 Collector workstream: Linux metric sources (shared, conformance-governed)
 
@@ -209,21 +213,43 @@ Per the owner rule above, each sensor is agreed individually before implementati
 source, what it costs in history, and whether it belongs in the shared collector catalog rather
 than in the probe.
 
-**Host and disk — agreed 2026-09-24, built in #1476** (computer-level: `<computer>/.computer/…`;
+**Host — agreed 2026-09-24, built in #1476** (computer-level: `<computer>/.computer/…`;
 source rules, alert semantics and config in `src/probe-linux/README.md` "Probe-only sensors"):
 
 | Path | Type · period | Alert | Source | Records/day |
 |---|---|---|---|---|
 | `.computer/Logical cores` | Int · at start + daily, TTL 48 h | — | `sysconf(_SC_NPROCESSORS_ONLN)` | ≈ 2 |
 | `.computer/CPU temperature` | DoubleBar °C · 5 s samples, 5-min bar, TTL 15 min | Mean > 80 warning, > 90 Error | hwmon coretemp `Package id 0` → thermal zone `x86_pkg_temp` → first `cpu` zone; not registered without one | 288 |
-| `.computer/Disks monitoring/Free space on disk %` | Double % · 5 min, TTL 15 min | < 10 warning, < 5 Error | `statvfs` `f_bavail/f_blocks` of the mount holding `/srv/docker` (resolved via `/proc/self/mountinfo`) | 288 |
-| `.computer/Disks monitoring/Free inodes %` | Double % · 5 min, TTL 15 min | < 10 warning | `statvfs` `f_favail/f_files`, same mount | 288 |
 
 "Warning" is a notification with the ⚠ icon and no status change: HSM alerts can only raise
 Error (the server's only status action), exactly like the managed Total CPU / Free RAM alerts.
-Rejected: load average (Total CPU is already a 5-minute bar with an EMA). Deferred: the archive
-HDDs — they sleep and must never be polled, so they need the backup scripts to record free space
-into a state file first (the archive/backup part of #1417, still open).
+Rejected: load average (Total CPU is already a 5-minute bar with an EMA).
+
+**Disks — every mounted real filesystem, agreed 2026-09-29, built in #1481.** #1476 first
+reported only the filesystem holding `/srv/docker` and deferred the archive HDDs to a
+backup-snapshot file, on the assumption that polling would wake them. The owner measured it on
+garage-server (2026-09-29): `statvfs` on the sleeping FUSE-NTFS archives `/mnt/wd4tb` (sda2) and
+`/mnt/mediacentr` (sdb1) and on the ext4 `/mnt/oldlinux` (sdb5) left both disks in STANDBY
+(`smartctl -n standby`, before, 5 s and 35 s after). So the archives are polled directly, and the
+snapshot-file design is dropped; the probe only ever calls `statvfs` on a mount — it never opens,
+lists or reads anything under one — and reads `/proc/diskstats` (kernel memory).
+
+Per filesystem, under `.computer/Disks monitoring/`, named like the Windows per-drive sensors
+(`Free space on C disk`) with `root` for `/` and the last mount-path segment otherwise:
+
+| Sensor | Type · period | Alert | Source |
+|---|---|---|---|
+| `Free space on <name> disk` | Double MB, EMA · 5 min, TTL 15 min | the managed/Windows `EmaValue ≤ 20 480 MB` → Error, verbatim | `statvfs` `f_bavail × f_frsize` |
+| `Free space on <name> disk %` | Double % · 5 min, TTL 15 min | < 10 warning, < 5 Error | `f_bavail / f_blocks` |
+| `Free inodes on <name> disk %` | Double % · 5 min, TTL 15 min | < 10 warning | `f_favail / f_files` |
+| `Average disk write speed on <name> disk` | DoubleBar MBytes_sec, EMA · 5 s samples, 5-min bar, TTL 15 min | — (as on Windows) | `/proc/diskstats` of the whole disk under the partition |
+
+Real filesystems are the block-backed types in `/proc/self/mountinfo`, deduplicated by source
+device (garage-server's 11 real-type mounts are 4 filesystems: `root`, `wd4tb`, `mediacentr`,
+`oldlinux`), re-scanned every 10 min so new mounts register at runtime. ≈ 1 150 records/day per
+filesystem, ≈ 4 600 on garage-server. The two #1476 root-only percent sensors moved to
+`Free space on root disk %` / `Free inodes on root disk %`; the managed-parity
+`Free space on disk` (+ prediction) is unchanged.
 
 **Docker Compose — agreed 2026-09-24, built in #1416** (garage_administration
 `hsm/SENSORS-DECISIONS.md` §2). All under one node in the probe's module:
@@ -254,7 +280,6 @@ agreement (the Stage-0 Docker rows are superseded by the table above).
 
 | Path (under garage-server/LinuxProbe/) | Type | Period | TTL | Notes |
 |---|---|---|---|---|
-| `Disk/archive/{wd4tb,mediacentr}/{Free GB, Snapshot age}` | Double | on snapshot change | ≥ backup window + slack (~26 h) | From SSD snapshot JSON only. Stale = TTL expiry, a distinct state. Deferred (see above). |
 | `Backup/<job>/{Last result, Duration min, Missed deadline}` | Enum/Double/Bool | on new result | job-specific | From the backup task's snapshot contract (§4.4). |
 | `Backup/<job>/Last success heartbeat` | Bool/TTL | only on *new* confirmed success | deadline-derived | Re-reading the same result never refreshes it; "never succeeded yet" is a distinct initial state. |
 | `Probe/Sources/<name> status` | Enum {ok, degraded, failed} | 60 s | 3 min | Per-source failure isolation made visible. |
@@ -327,8 +352,10 @@ Interface: timestamped JSON files on SSD (e.g. `/var/lib/hsm-linux-probe/inbox/`
 atomically (`tmp` + `rename`) by the backup implementation, read-only for the probe:
 
 - `backup-<job>.json`: `{ job, started_at, finished_at, result: ok|failed, duration_s, detail }`
-- `archive-capacity/<disk>.json`: `{ disk, sampled_at, free_bytes, total_bytes }` — produced
-  during the backup window while the disk is already awake.
+
+Archive **capacity** is no longer part of this contract: since #1481 the probe `statvfs`es the
+archive mounts directly every 5 minutes, which was measured not to wake the sleeping disks
+(§4.2a). The backup-result contract above stays separate and is still to be agreed (#1417).
 
 Probe semantics (fixture-tested): distinguishes explicit failure / runtime-exceeded (running
 marker or `started_at` without `finished_at`) / missed deadline (schedule known from config)
@@ -531,6 +558,7 @@ coverage in both drivers and an agent version bump:
 | #1446 | the prediction tells the truth: signed EMA, 6 h window, explicit states | 0.8.1 / 0.5.35, managed 3.5.3 |
 | #1476 PR | alerts in the Rust wrapper; enum-with-options ABI; option-anchored bars/rates; probe-only host/disk sensors; `build-deb.sh` | 0.9.0 / 0.5.37, probe 0.2.0 |
 | #1416 PR | Docker Compose source (7 sensors per service, Engine API over the socket via a dependency-free HTTP/1.1 client, restart/OOM/vanished state on SSD, conditional socket drop-in); collector: sensors created while running are registered on the server, alerts attachable while running | 0.9.1 / 0.5.38, probe 0.3.0 |
+| #1481 PR | every mounted real filesystem: free space (MB, %), free inodes and write speed per filesystem, Windows per-drive naming, archives polled directly (standby measured safe), 10-min re-scan with runtime registration; `probe.disks` config | probe 0.4.0 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
@@ -587,8 +615,8 @@ runs on an invariant locale with no `N:` drive and a quiet disk.
 ## 11. What remains
 
 **Needs an owner decision before any code:**
-- the archive-HDD and backup sensors (#1417) — the disks sleep and must never be polled, so they
-  wait for the backup scripts to record free space into a state file the probe can read;
+- the backup-contract sensors (#1417, §4.4) — the archive-disk capacity part is done by direct
+  polling (#1481);
 - whether the probe-only host sensors (logical cores, CPU temperature) ever move into the shared
   catalog and onto Windows — for now they stay Linux-probe-only (load average was rejected);
 - when releases resume: `agent-v0.5.35` plus the `agent-release.txt` pin (without it none of the
