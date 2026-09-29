@@ -88,16 +88,20 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
         }
 
         [Theory]
-        [InlineData("true")]
-        [InlineData("\"true\"")]
-        public void KillSwitch_HandEditMissedByWatcher_SurvivesSettingsSave(string disabledJson)
+        [InlineData("{ \"ApiTokens\": { \"Disabled\": true } }")]
+        [InlineData("{ \"ApiTokens\": { \"Disabled\": \"true\" } }")]
+        [InlineData("{ \"apiTokens\": { \"disabled\": true } }")]
+        [InlineData("{ \"ApiTokens\": { \"Disabled\": true, // incident 42\n }, }")]
+        public void KillSwitch_HandEditMissedByWatcher_SurvivesSettingsSave(string fileContent)
         {
             // The file watcher missed the edit (bind mount): a settings save must adopt
-            // the file's switch rather than write the stale in-memory value back.
+            // the file's switch rather than write the stale in-memory value back — with
+            // the configuration provider's leniency (string bool, key case, comments,
+            // trailing commas).
             var server = CreateServer(new MutableConfigurationSource());
             Assert.True(server.ApiTokens.Enabled);
 
-            File.WriteAllText(SettingsFile, $"{{ \"ApiTokens\": {{ \"Disabled\": {disabledJson} }} }}");
+            File.WriteAllText(SettingsFile, fileContent);
 
             server.ResaveSettings();
 

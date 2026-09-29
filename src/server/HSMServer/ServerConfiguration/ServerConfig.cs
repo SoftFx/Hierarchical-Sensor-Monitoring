@@ -22,6 +22,12 @@ namespace HSMServer.ServerConfiguration
 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
+        private static readonly JsonDocumentOptions _settingsReadOptions = new()
+        {
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+        };
+
         private readonly object _resaveLock = new();
 
         private readonly IConfigurationRoot _configuration;
@@ -161,12 +167,12 @@ namespace HSMServer.ServerConfiguration
                 if (!File.Exists(_settingsPath))
                     return;
 
-                using var document = JsonDocument.Parse(File.ReadAllText(_settingsPath));
+                // Same leniency as the JSON configuration provider: comments and trailing
+                // commas are accepted, keys are case-insensitive.
+                using var document = JsonDocument.Parse(File.ReadAllText(_settingsPath), _settingsReadOptions);
 
-                if (document.RootElement.ValueKind == JsonValueKind.Object
-                    && document.RootElement.TryGetProperty(nameof(ApiTokens), out var section)
-                    && section.ValueKind == JsonValueKind.Object
-                    && section.TryGetProperty(nameof(ApiTokensConfig.Disabled), out var disabled))
+                if (TryGetPropertyIgnoreCase(document.RootElement, nameof(ApiTokens), out var section)
+                    && TryGetPropertyIgnoreCase(section, nameof(ApiTokensConfig.Disabled), out var disabled))
                 {
                     // The configuration binder also accepts "true"/"false" strings.
                     bool? value = disabled.ValueKind switch
@@ -183,7 +189,26 @@ namespace HSMServer.ServerConfiguration
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
+                _logger.Warn($"Could not read ApiTokens.Disabled from {ConfigName} before saving; the in-memory value " +
+                             $"(API tokens {(ApiTokens.Disabled ? "OFF" : "ON")}) is written: {ex.Message}");
             }
+        }
+
+        // Last match wins, as in the configuration provider.
+        private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value)
+        {
+            var found = false;
+            value = default;
+
+            if (element.ValueKind == JsonValueKind.Object)
+                foreach (var property in element.EnumerateObject())
+                    if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        value = property.Value;
+                        found = true;
+                    }
+
+            return found;
         }
 
         private void SetApiTokensKillSwitch(bool disabled, string source)
