@@ -205,7 +205,9 @@ the owner agreed one by one, which by decision (2026-09-24) exist **only in the 
 never in the shared collector catalog, never on Windows; moving any of them into the catalog is a
 separate, later step. They are pinned by their own test (`PROBE_ONLY_SET`) next to the unchanged
 parity test, so the parity contract stays exactly the 15 paths above. On garage-server the probe
-therefore registers 19 sensors. The agreed host/disk rows are in §4.2a.
+registers 97 sensors since 0.4.0 (2026-09-29): 15 + 2 host + 16 disk (four filesystems × 4) + 64
+Docker (12 Compose services × 5 + 4 `Health`) — the disk and Docker parts follow the host's mounts
+and services. The agreed host/disk rows are in §4.2a.
 
 ### 4.2a Probe-only sensors — agreed one by one
 
@@ -596,6 +598,22 @@ collector's `Free space on disk` reports (46 054 MB). Cost after 15 min: cgroup 
 before and after. The server's Sensor API history shows a closed bar only once the next one
 arrives (it keeps the newest bar in memory as the partial "last value") — a server behavior, the
 UI shows the latest bar at once.
+
+**All mounted disks (#1481, probe 0.4.0, collector 0.10.0).** Trial on garage-server, 2026-09-29,
+`0.3.0~trial2` → `0.4.0~trial1`, installed non-interactively with the config and credential
+byte-identical before and after: `Registered 97 sensor(s) on connect` (15 + 2 host + 16 disk +
+64 Docker). Four filesystems from eleven mounts — `root` (`/`, sdc1), `wd4tb` (sda2),
+`mediacentr` (sdb1), `oldlinux` (sdb5). Every value matched `df -P` / `df -Pi` / `stat -f` at the
+same time: free MB 39 821 / 324 970 / 221 836 / 2 407 676 (floor of `f_bavail × f_frsize`, `/`
+exact to the MB against `stat -f` one second before the sample), free % 37.44 / 71.04 / 90.27 /
+63.11, free inodes % 82.89 / 99.95 / 96.27 / 99.99. The `root` write-speed bar holds **60
+samples** per 5 minutes; its 12:45–12:50 mean of 0.05 MB/s matches the sdc sectors-written delta
+over the same window (30 624 × 512 B / 300 s = 0.0498 MB/s); the HDD bars read 0. Both archive
+HDDs stayed in **STANDBY** (`smartctl -n standby`, exit 2) before the install and after 7, 16 and
+21 minutes of polling. Cost after 21 min: cgroup memory 6.5 MiB (peak 7.5 MiB) of 64 MiB, RSS
+20 MB, CPU 3.95 s in 1 252 s ≈ 0.32 % of one core against the 5 % quota, 9 tasks; no warnings or
+errors in the journal, `.module/Collector errors` empty. The two #1476 paths `Free space on disk %`
+and `Free inodes %` stopped at the upgrade and are left for the owner to remove on the server.
 
 ## 10. What the parity work uncovered
 
