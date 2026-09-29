@@ -1168,6 +1168,12 @@ impl Source for WriteSpeedSource<'_> {
             })
             .filter_map(|node| node.disk.as_deref())
             .collect();
+        // A name absent from /proc/diskstats (unplugged, even while unmounted and not sampled) may
+        // come back as another disk: forget what was cached or counted under it.
+        self.identities
+            .retain(|disk, _| counters.contains_key(disk.as_str()));
+        self.ledger
+            .forget_baselines_except(|disk| counters.contains_key(disk));
         let mut missing = Vec::new();
         for disk in disks {
             let Some(&written) = counters.get(disk) else {
@@ -1663,6 +1669,21 @@ pub mod tests {
         NOW_MS.with(|now| now.set(late + 5_000));
         write.sample(&logger);
         assert_eq!(write.last_post, posted_at, "once per day");
+
+        // sdc leaves /proc/diskstats (unplugged): its cached identity and its counter go, so a
+        // different disk that later gets the name cannot inherit either.
+        assert!(write.identities.contains_key("sdc"));
+        tree.file(
+            "diskstats",
+            &diskstats::tests::GARAGE_DISKSTATS
+                .lines()
+                .filter(|line| !line.contains(" sdc "))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+        write.sample(&logger);
+        assert!(!write.identities.contains_key("sdc"));
+        assert_eq!(write.ledger.disks["sdc"].baseline, None);
         collector.stop().expect("stop");
     }
 

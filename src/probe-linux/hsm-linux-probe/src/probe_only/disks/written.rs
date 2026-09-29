@@ -232,6 +232,15 @@ impl Ledger {
         self.disks.retain(|_, record| record.day >= today - 1);
     }
 
+    /// Forget the counters of every disk `keep` rejects (no longer in `/proc/diskstats`).
+    pub fn forget_baselines_except(&mut self, keep: impl Fn(&str) -> bool) {
+        for (disk, record) in self.disks.iter_mut() {
+            if !keep(disk) {
+                record.baseline = None;
+            }
+        }
+    }
+
     /// A disk left `/proc/diskstats`: its next appearance starts a new baseline.
     pub fn forget_baseline(&mut self, disk: &str) {
         if let Some(record) = self.disks.get_mut(disk) {

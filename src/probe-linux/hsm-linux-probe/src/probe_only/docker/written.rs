@@ -273,6 +273,12 @@ impl WriteRecord {
             }
         }
         if written < previous.bytes {
+            // Most likely a restart the state poll has not reported yet: the start time on record
+            // is stale, so the new baseline does not claim one — the next sample must not take the
+            // start time the poll then reports for a second restart.
+            if let Some(baseline) = self.baselines.get_mut(container_id) {
+                baseline.started_at = None;
+            }
             return Err(Skip::CounterReset);
         }
         if now_ms < previous.at_ms {
@@ -439,6 +445,17 @@ mod tests {
             Ok((100, 5_000))
         );
         assert_eq!(record.bytes, 600);
+        // Restarted while the probe runs: the counter drop is seen first (a reset) and the new
+        // start time only with the next state poll — one restart, one skipped sample.
+        let third = Some("2026-09-29T13:40:00Z");
+        assert_eq!(
+            record.sample("a", 50, H13 + 40 * MIN, PERIOD, second),
+            Err(Skip::CounterReset)
+        );
+        assert_eq!(
+            record.sample("a", 80, H13 + 40 * MIN + 5_000, PERIOD, third),
+            Ok((30, 5_000))
+        );
         // A baseline from before the start time was known still pairs.
         record.sample("b", 10, H13, PERIOD, None).ok();
         assert!(record.sample("b", 20, H13 + 5_000, PERIOD, first).is_ok());
