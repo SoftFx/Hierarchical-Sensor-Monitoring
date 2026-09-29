@@ -44,7 +44,7 @@ curl -o .env https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monito
 
 Before the first docker compose up, edit .env: set HSM_DOMAIN to your real host name and, because the template defaults to Cloudflare DNS-01, provide CF_API_TOKEN. The copied template cannot start with its blank token. If inbound HTTP/TLS validation is available and you prefer it, change HSM_CERTIFICATE to letsencrypt-http instead.
 
-The log storage (VictoriaLogs) also starts with the template defaults, but its web UI and query API stay off: VL_UI_USER and VL_UI_PASSWORD are commented out, and Caddy serves no log routes until they are set. To enable log access, uncomment both lines in .env and set your own long random password (at least 12 characters; the placeholder `change-me` and shorter passwords are refused at startup).
+The log storage (VictoriaLogs) also starts with the template defaults, which pair COMPOSE_PROFILES=logs with HSM_STRUCTURED_LOGS=true (the app-side JSON log that vlagent ships); an .env that predates log storage enables none of it until both settings are added. The web UI and query API stay off: VL_UI_USER and VL_UI_PASSWORD are commented out, and Caddy serves no log routes until they are set. To enable log access, uncomment both lines in .env and set your own long random password (at least 12 characters; the placeholder `change-me` and shorter passwords are refused at startup).
 
 For Cloudflare DNS validation (the documented DNS-01 example), use a scoped API token with Zone:DNS:Edit and Zone:Zone:Read for the selected zone:
 
@@ -215,8 +215,11 @@ This is the supported setup, the same file as [`docker-compose.yml`](https://git
 #     -f docker_scripts/HSMserver/Dockerfile.healthcheck docker_scripts/HSMserver
 #
 # LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database). The app writes its structured
-# JSON log to Logs/; the vlagent service tails that file and ships it to VictoriaLogs with durable
-# delivery (checkpoints + on-disk buffer; automatic replay after an outage — no manual backfill).
+# JSON log to Logs/ only when HSM_STRUCTURED_LOGS=true (default false, so an older .env upgraded
+# to this file never starts writing it on its own); the vlagent service then tails that file and
+# ships it to VictoriaLogs with durable delivery (checkpoints + on-disk buffer; automatic replay
+# after an outage — no manual backfill). .env.example pairs COMPOSE_PROFILES=logs with
+# HSM_STRUCTURED_LOGS=true, so fresh installs get the full pipeline.
 # Caddy exposes VictoriaLogs' UI (/select/vmui) and query API (/select/logsql) with basic auth
 # only when VL_UI_USER/VL_UI_PASSWORD are set in .env; .env.example ships them commented out, so
 # a fresh install stores logs but serves no public log routes until real credentials are set.
@@ -253,7 +256,10 @@ services:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy.
       Kestrel__TrustedProxies__0: 'attached-networks'
       # Structured JSON log archive in nlog.config; vlagent ships it to VictoriaLogs.
-      HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-true}'
+      # Defaults to false: an .env from before log storage must not silently start writing a
+      # second JSON copy of every Info+ event (plus its daily zip archives) with no VictoriaLogs
+      # or vlagent to read it. .env.example pairs HSM_STRUCTURED_LOGS=true with the 'logs' profile.
+      HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-false}'
     volumes:
       - ./Logs:/app/Logs
       - ./Config:/app/Config
@@ -348,7 +354,7 @@ What must stay as it is, if you ever adapt it:
 | ./CaddyData:/data | Keeps ACME accounts and certificates across restarts and updates. |
 | ./CaddyCertificates:/certs:ro | Supplies custom PEM files without allowing the container to modify them. |
 | Pinned hsmonitoring/hsm-caddy:2.11.4-2 | Provides Caddy 2.11.4 with Cloudflare v0.2.4 and dynv6 DNS modules plus the VictoriaLogs read-only routes; users do not build locally. |
-| HSM_STRUCTURED_LOGS=true on the app service | The app writes the structured JSON log archive that the vlagent service tails and ships to VictoriaLogs; the rule never fires in non-compose deployments, so the JSON file appears only in this stack. |
+| HSM_STRUCTURED_LOGS from .env on the app service (default false) | The app writes the structured JSON log archive that the vlagent service tails and ships to VictoriaLogs. The template sets true next to COMPOSE_PROFILES=logs; the compose default is false so an upgraded compose file with an older .env never starts writing the archive on its own. The rule never fires in non-compose deployments, so the JSON file appears only in this stack. |
 | Published ports 44330 and 44333 | Collectors and downloaded agent bundles use Sensor API port 44330; the UI is also available on 44333. |
 
 ### Internal DNS name

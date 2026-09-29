@@ -36,8 +36,11 @@
 #     -f docker_scripts/HSMserver/Dockerfile.healthcheck docker_scripts/HSMserver
 #
 # LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database). The app writes its structured
-# JSON log to Logs/; the vlagent service tails that file and ships it to VictoriaLogs with durable
-# delivery (checkpoints + on-disk buffer; automatic replay after an outage — no manual backfill).
+# JSON log to Logs/ only when HSM_STRUCTURED_LOGS=true (default false, so an older .env upgraded
+# to this file never starts writing it on its own); the vlagent service then tails that file and
+# ships it to VictoriaLogs with durable delivery (checkpoints + on-disk buffer; automatic replay
+# after an outage — no manual backfill). .env.example pairs COMPOSE_PROFILES=logs with
+# HSM_STRUCTURED_LOGS=true, so fresh installs get the full pipeline.
 # Caddy exposes VictoriaLogs' UI (/select/vmui) and query API (/select/logsql) with basic auth
 # only when VL_UI_USER/VL_UI_PASSWORD are set in .env; .env.example ships them commented out, so
 # a fresh install stores logs but serves no public log routes until real credentials are set.
@@ -74,7 +77,10 @@ services:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy.
       Kestrel__TrustedProxies__0: 'attached-networks'
       # Structured JSON log archive in nlog.config; vlagent ships it to VictoriaLogs.
-      HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-true}'
+      # Defaults to false: an .env from before log storage must not silently start writing a
+      # second JSON copy of every Info+ event (plus its daily zip archives) with no VictoriaLogs
+      # or vlagent to read it. .env.example pairs HSM_STRUCTURED_LOGS=true with the 'logs' profile.
+      HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-false}'
     volumes:
       - ./Logs:/app/Logs
       - ./Config:/app/Config

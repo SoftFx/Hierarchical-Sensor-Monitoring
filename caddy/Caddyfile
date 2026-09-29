@@ -49,7 +49,7 @@
 # of the two snippets below through HSM_VL_SNIPPET and generates VL_UI_BCRYPT_HASH from
 # VL_UI_PASSWORD, so no plaintext secret ever reaches the Caddyfile. /select/vmui is the
 # built-in web UI and /select/logsql the query API in the pinned VictoriaLogs version; ingest
-# (/insert/...) is reachable only inside the compose network (Vector) and is not routed here.
+# (/insert/...) is not routed here — shipping is done by vlagent inside the compose network.
 (victorialogs-routes) {
 	@victorialogs path /select/vmui /select/vmui/* /select/logsql /select/logsql/*
 	handle @victorialogs {
