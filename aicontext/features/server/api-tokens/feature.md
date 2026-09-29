@@ -67,7 +67,7 @@ Status: the initiative's steps 1–4 are delivered (see `docs/initiatives/fine-g
 
 ### Emergency revoke
 
-- **Surface.** `ApiTokensAdminController : BaseController` with class-level `[AuthorizeIsAdmin]` — cookie session + admin role; an API-token principal can never reach it. Three actions: `GET UserTokenSummary` (live count for the confirmation modal) and `POST RevokeUserTokens` / `POST RevokeAllTokens` (`[ValidateAntiForgeryToken]`, JSON in/out, the `EmergencyRevokeResponse { ok, error, message, correlationId, newGeneration, affectedTokens }` shape). Buttons: revoke-user as a row action on the Users page, revoke-all on Configuration → Server next to the `ApiTokens.Enabled` kill switch; both open a modal with a typed confirmation and a required reason.
+- **Surface.** `ApiTokensAdminController : BaseController` with class-level `[AuthorizeIsAdmin]` — cookie session + admin role; an API-token principal can never reach it. Three actions: `GET UserTokenSummary` (live count for the confirmation modal) and `POST RevokeUserTokens` / `POST RevokeAllTokens` (`[ValidateAntiForgeryToken]`, JSON in/out, the `EmergencyRevokeResponse { ok, error, message, correlationId, newGeneration, affectedTokens }` shape). Buttons: revoke-user as a row action on the Users page, revoke-all has no UI button (endpoint only; the Configuration → Server section was removed); both open a modal with a typed confirmation and a required reason.
 - **Typed confirmation.** Revoke-user requires typing the target's exact username (trimmed, case-insensitive) and is validated server-side; revoke-all requires the literal phrase `revoke-all` (ordinal). A wrong confirmation answers `invalid_confirmation` without advancing anything.
 - **Reason.** Required free text, 1–256 chars after trimming; control characters are normalized to spaces before the value reaches the audit record, and empty/control-only/over-long input answers `invalid_reason`.
 - **Semantics.** Every successful call advances the target durable generation (persist-first, published to authentication before the response) — idempotent by effect, not by no-op. A valid target with zero live tokens still succeeds and still advances. An unknown `userId` answers `not_found`. An admin may emergency-revoke their own user (the cookie session is a separate channel). The affected count (computed before the advance) and the new generation are reported in the response and the audit.
@@ -120,8 +120,7 @@ Status: the initiative's steps 1–4 are delivered (see `docs/initiatives/fine-g
 | `src/server/HSMServer/Middleware/UserProcessorMiddleware.cs` | Token-principal skip (never replaces a token principal) |
 | `src/server/HSMServer/Views/Profile/Index.cshtml` | Profile page: user card, token list (access badges), create modal (name + read-only checkbox), rename/rotate/revoke modals, one-time secret modal, degraded-mode banners |
 | `src/server/HSMServer/Views/Account/Users.cshtml` | Members page: emergency revoke-tokens row action + typed-confirmation modal |
-| `src/server/HSMServer/Views/Configuration/_Server.cshtml` | Server settings: "Revoke all API tokens" next to the kill switch + typed-phrase modal |
-| `src/server/HSMServer/Views/Shared/_Layout.cshtml` | Header user menu (avatar + name dropdown: Profile / Logout) |
+| `src/server/HSMServer/Views/Shared/_Layout.cshtml` | Header user menu (avatar + name dropdown: Personal tokens / Logout) |
 | `src/server/HSMServer/Extensions/ApplicationServiceExtensions.cs` | Registrations, `HsmListenerBindings`, middleware order (guards after `UseRouting`, before auth) |
 
 ## Data Flow
@@ -145,7 +144,7 @@ request: Authorization: Bearer hsm_pat_v1_…
 - Generation state: `ApiTokenGeneration_Global` and `ApiTokenGeneration_Owner_<ownerUserId>` hold plain long values in the invariant culture; unparsable or negative values are corrupt (the counter is monotonic from 0) and fail the index closed.
 - Restoring an old environment backup rolls back token rows and generation rows together, so an emergency revoke performed after the backup point is undone consistently — and therefore invisibly. After any environment restore, re-run the emergency revoke.
 - The `ApiToken_` / `ApiTokenGeneration_` prefixes differ at the separator position (`'_'` vs `'G'`), so the full scan (`ReadAllApiTokens`) never picks up generation rows.
-- Configuration: `ApiTokens.Enabled` (emergency kill switch, default false — upgrades opt in), `ApiTokens.MaxTokensPerUser` (10), retention windows (`TokenRecordRetention` 30d, `SecurityEventRetention` 30d) and `InvalidAttemptRateLimit` (60) — all startup-validated with key-named errors. The expiry knobs of the fine-granted model (`AllowNoExpiration`/`DefaultLifetime`/`MaxLifetime`, #1373) are gone with expiry itself.
+- Configuration: `ApiTokens.Enabled` (emergency kill switch, config-file only — no UI toggle; default true), `ApiTokens.MaxTokensPerUser` (10), retention windows (`TokenRecordRetention` 30d, `SecurityEventRetention` 30d) and `InvalidAttemptRateLimit` (60) — all startup-validated with key-named errors. The expiry knobs of the fine-granted model (`AllowNoExpiration`/`DefaultLifetime`/`MaxLifetime`, #1373) are gone with expiry itself.
 
 ## UI / Operator Visibility
 

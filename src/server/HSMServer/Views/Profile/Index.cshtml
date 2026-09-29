@@ -4,7 +4,7 @@
 @model ProfilePageViewModel
 
 @{
-    ViewData["Title"] = "Profile";
+    ViewData["Title"] = "Personal tokens";
 
     var userName = Model.UserName?.Trim() ?? string.Empty;
     var userInitials = AvatarHelper.InitialsOf(userName);

@@ -3,19 +3,18 @@ using System;
 namespace HSMServer.ServerConfiguration
 {
     // Retention and abuse bounds of the API-token channel (#1356; initiative section
-    // "Configuration"), plus the issuance-side knob that lands with the token-management
-    // UI (step 4). Defaults are upgrade-safe in the channel sense: a deployment with no
-    // ApiTokens section in config gets tokens fully DISABLED and must opt in explicitly.
-    // Since #1384 tokens are eternal owner mirrors with an optional read-only flag, so
-    // the expiry knobs of the fine-granted model are gone.
+    // "Configuration"), plus the issuance-side kill switch. Since #1384 tokens are
+    // eternal owner mirrors with an optional read-only flag, so the expiry knobs of the
+    // fine-granted model are gone.
     public sealed class ApiTokensConfig
     {
         // Emergency authentication/issuance kill switch (initiative: "ApiTokens.Enabled =
         // false ... all API-token authentication plus create/rename/rotate is denied
-        // immediately. Cookie-authenticated list/revoke and IsAdmin emergency
-        // revoke-user/revoke-all remain available for cleanup"). Default false: tokens
-        // are a new channel and an upgraded deployment must enable them deliberately.
-        public bool Enabled { get; set; }
+        // immediately. Cookie-authenticated list/revoke and IsAdmin emergency revoke-user
+        // remain available for cleanup"). Default true: personal tokens are a standard
+        // feature with no UI toggle; the key is flipped in the config file only in an
+        // emergency.
+        public bool Enabled { get; set; } = true;
 
         // Quota of LIVE tokens per user (not revoked, issued at the current global and
         // owner revocation generations — exactly what

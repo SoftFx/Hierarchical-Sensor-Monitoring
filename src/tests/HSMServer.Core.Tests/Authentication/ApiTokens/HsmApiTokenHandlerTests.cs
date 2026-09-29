@@ -95,7 +95,7 @@ namespace HSMServer.Core.Tests.Authentication.ApiTokens
             services.AddSingleton(_securityEvents.Object);
 
             // One config instance feeds both the handler's Enabled kill switch and the
-            // limiter; Enabled defaults to false, so existing contract tests opt in here.
+            // limiter; contract tests pin Enabled explicitly rather than rely on the default.
             var config = _configOverride ?? new ServerConfiguration.ApiTokensConfig
             {
                 Enabled = true,

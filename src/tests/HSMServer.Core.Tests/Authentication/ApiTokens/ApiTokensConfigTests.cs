@@ -4,19 +4,19 @@ using Xunit;
 
 namespace HSMServer.Core.Tests.Authentication.ApiTokens
 {
-    // ApiTokensConfig contract (#1356 step 4, simplified by #1384): upgrade-safe defaults
-    // in the channel sense — a deployment with no ApiTokens section gets the token
-    // channel fully disabled — and startup validation with actionable, key-named errors
-    // for every knob. The expiry knobs of the fine-granted model are gone: tokens are
-    // eternal owner mirrors with an optional read-only flag.
+    // ApiTokensConfig contract (#1356 step 4, simplified by #1384): the token channel is
+    // enabled by default (no UI toggle; Enabled=false in the config file is the emergency
+    // kill switch) and startup validation gives actionable, key-named errors for every
+    // knob. The expiry knobs of the fine-granted model are gone: tokens are eternal owner
+    // mirrors with an optional read-only flag.
     public class ApiTokensConfigTests
     {
         [Fact]
-        public void Defaults_DisabledChannel_EternalTokens()
+        public void Defaults_EnabledChannel_EternalTokens()
         {
             var config = new ApiTokensConfig();
 
-            Assert.False(config.Enabled);
+            Assert.True(config.Enabled);
             Assert.Equal(10, config.MaxTokensPerUser);
             Assert.Equal(TimeSpan.FromDays(30), config.TokenRecordRetention);
             Assert.Equal(TimeSpan.FromDays(30), config.SecurityEventRetention);
