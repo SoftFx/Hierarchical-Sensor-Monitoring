@@ -111,8 +111,8 @@ pub struct WriteRecord {
     pub hour_start: i64,
     pub bytes: u64,
     pub covered_ms: u64,
-    /// Accepted sample rounds in the hour; 0 ⇒ nothing to post.
-    pub rounds: u32,
+    /// Accepted deltas in the hour; 0 ⇒ nothing to post.
+    pub deltas: u32,
     /// Each current container's last counter.
     #[serde(default)]
     pub baselines: BTreeMap<String, Baseline>,
@@ -138,16 +138,18 @@ impl WriteRecord {
             bytes: self.bytes,
             covered_ms: self.covered_ms,
         };
-        let rounds = self.rounds;
+        let deltas = self.deltas;
         self.hour_start = current;
         self.bytes = 0;
         self.covered_ms = 0;
-        self.rounds = 0;
-        (rounds > 0).then_some(done)
+        self.deltas = 0;
+        (deltas > 0).then_some(done)
     }
 
-    /// Record the container's counter read at `now_ms`; returns its delta and the interval it
-    /// covers (ms), or why there is none. The new counter always becomes the baseline.
+    /// Record the container's counter read at `now_ms` and add its delta to the running hour at
+    /// once — the baseline and the hour move together, so a round cut short (a stop, the daemon
+    /// gone) loses nothing. Returns the delta and the interval it covers (ms), or why there is
+    /// none. The new counter always becomes the baseline.
     pub fn sample(
         &mut self,
         container_id: &str,
@@ -174,19 +176,21 @@ impl WriteRecord {
         if gap as f64 > longest && hour_start(previous.at_ms) != hour_start(now_ms) {
             return Err(Skip::GapAcrossHours);
         }
-        Ok((written - previous.bytes, gap))
+        let delta = written - previous.bytes;
+        self.bytes = self.bytes.saturating_add(delta);
+        self.deltas = self.deltas.saturating_add(1);
+        Ok((delta, gap))
     }
 
-    /// Add one round of the service (its replicas' deltas summed) to the running hour. `gap_ms` is
-    /// the longest interval among them; coverage never exceeds the part of the hour that passed.
-    pub fn credit(&mut self, bytes: u64, gap_ms: u64, now_ms: i64) {
+    /// Count one sample round of the service as measured time: `gap_ms` is the longest interval
+    /// among its replicas' accepted deltas. Coverage never exceeds the part of the hour that
+    /// passed; it only feeds the comment.
+    pub fn cover(&mut self, gap_ms: u64, now_ms: i64) {
         let into_hour = u64::try_from(now_ms - self.hour_start * 1000).unwrap_or(0);
-        self.bytes = self.bytes.saturating_add(bytes);
         self.covered_ms = self
             .covered_ms
             .saturating_add(gap_ms.min(into_hour))
             .min(HOUR_MS as u64);
-        self.rounds = self.rounds.saturating_add(1);
     }
 
     /// Forget one container's baseline (its counter is gone).
@@ -290,14 +294,17 @@ mod tests {
             record.sample("a", 1_000, H13 + 10_000, PERIOD),
             Err(Skip::FirstSample)
         );
+        // A delta goes into the hour as it is read (a round cut short loses nothing).
+        record.sample("a", 1_000, H13 + 10_000, PERIOD).unwrap();
+        assert_eq!((record.bytes, record.deltas), (0, 1));
         let mut at = H13 + 10_000;
         let mut counter = 1_000;
         // 2 MB every 5 s for the rest of the hour.
         while at + 5_000 < H13 + 60 * MIN {
             at += 5_000;
             counter += 2_000_000;
-            let (delta, gap) = record.sample("a", counter, at, PERIOD).unwrap();
-            record.credit(delta, gap, at);
+            let (_, gap) = record.sample("a", counter, at, PERIOD).unwrap();
+            record.cover(gap, at);
         }
         assert_eq!(record.roll(H13 + 59 * MIN), None, "not over yet");
         let done = record.roll(H13 + 60 * MIN + 1_000).expect("posted");
@@ -328,8 +335,8 @@ mod tests {
         );
         // …but an hour of measured silence is a real 0.
         let at = H13 + 61 * MIN + 5_000;
-        let (delta, gap) = record.sample("a", 1_000, at, PERIOD).unwrap();
-        record.credit(delta, gap, at);
+        let (_, gap) = record.sample("a", 1_000, at, PERIOD).unwrap();
+        record.cover(gap, at);
         let done = record.roll(H13 + 121 * MIN).unwrap();
         assert_eq!(done.megabytes(), 0.0);
     }
@@ -338,8 +345,8 @@ mod tests {
     fn a_counter_reset_or_a_new_container_id_loses_only_its_sample() {
         let mut record = WriteRecord::new(H13);
         record.sample("old", 5_000, H13, PERIOD).ok();
-        let (delta, gap) = record.sample("old", 6_000, H13 + 5_000, PERIOD).unwrap();
-        record.credit(delta, gap, H13 + 5_000);
+        let (_, gap) = record.sample("old", 6_000, H13 + 5_000, PERIOD).unwrap();
+        record.cover(gap, H13 + 5_000);
         // Recreated: a new id with a fresh counter far below the old one — a baseline, not a
         // negative or a huge delta.
         assert_eq!(
@@ -348,15 +355,15 @@ mod tests {
         );
         record.retain(&["new".to_string()]);
         assert_eq!(record.baselines.len(), 1);
-        let (delta, gap) = record.sample("new", 110, H13 + 15_000, PERIOD).unwrap();
-        record.credit(delta, gap, H13 + 15_000);
+        let (_, gap) = record.sample("new", 110, H13 + 15_000, PERIOD).unwrap();
+        record.cover(gap, H13 + 15_000);
         // Same id, counter backwards: a baseline again.
         assert_eq!(
             record.sample("new", 50, H13 + 20_000, PERIOD),
             Err(Skip::CounterReset)
         );
-        let (delta, gap) = record.sample("new", 80, H13 + 25_000, PERIOD).unwrap();
-        record.credit(delta, gap, H13 + 25_000);
+        let (_, gap) = record.sample("new", 80, H13 + 25_000, PERIOD).unwrap();
+        record.cover(gap, H13 + 25_000);
         let done = record.roll(H13 + 60 * MIN).unwrap();
         assert_eq!(
             done.bytes,
@@ -372,7 +379,7 @@ mod tests {
         // Ten minutes without a sample (the daemon did not answer), same hour: all of it counts.
         let (delta, gap) = record.sample("a", 700, H13 + 11 * MIN, PERIOD).unwrap();
         assert_eq!((delta, gap), (700, 10 * MIN as u64));
-        record.credit(delta, gap, H13 + 11 * MIN);
+        record.cover(gap, H13 + 11 * MIN);
         record.sample("a", 800, H13 + 55 * MIN, PERIOD).unwrap();
         // Probe down from 13:55 to 14:05: the bytes belong to either hour — dropped.
         record.roll(H13 + 65 * MIN);
@@ -403,14 +410,14 @@ mod tests {
         let mut at = H13 + 40 * MIN;
         while at + 5_000 < H13 + 60 * MIN {
             at += 5_000;
-            let (delta, gap) = record.sample("a", 1, at, PERIOD).unwrap();
-            record.credit(delta, gap, at);
+            let (_, gap) = record.sample("a", 1, at, PERIOD).unwrap();
+            record.cover(gap, at);
         }
         let done = record.roll(H13 + 60 * MIN + 1_000).unwrap();
         assert_eq!(done.comment(), "13:00–14:00 UTC; measured 19 of 60 min");
         // The first round of an hour covers only the part since the boundary.
         let mut record = WriteRecord::new(H13 + 60 * MIN);
-        record.credit(0, 5_000, H13 + 60 * MIN + 3_000);
+        record.cover(5_000, H13 + 60 * MIN + 3_000);
         assert_eq!(record.covered_ms, 3_000);
         // Midnight wraps.
         let late = CompletedHour {
@@ -425,7 +432,7 @@ mod tests {
     fn the_record_round_trips_through_json() {
         let mut record = WriteRecord::new(H13);
         record.sample("abc", 42, H13 + 1_000, PERIOD).ok();
-        record.credit(7, 5_000, H13 + 1_000);
+        record.cover(5_000, H13 + 1_000);
         let text = serde_json::to_string(&record).unwrap();
         assert!(text.contains("\"hourStart\""), "{text}");
         let back: WriteRecord = serde_json::from_str(&text).unwrap();

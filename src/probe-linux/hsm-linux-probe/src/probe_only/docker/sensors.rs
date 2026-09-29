@@ -131,14 +131,25 @@ impl<'c> ServiceSensors<'c> {
                 self.described_limit = limit;
             }
         }
-        if writes && self.disk_written.is_none() {
-            let path = self.path(contract::DISK_WRITTEN);
-            match register_disk_written(collector, &path) {
-                Ok(sensor) => self.disk_written = Some(sensor),
-                Err(error) => problems.push(format!("{path}: not registered: {error}")),
-            }
+        if writes {
+            problems.extend(self.ensure_disk_written(collector));
         }
         problems
+    }
+
+    /// Register `Disk written per hour` unless it is; `Some(problem)` when that failed.
+    pub fn ensure_disk_written(&mut self, collector: &'c Collector) -> Option<String> {
+        if self.disk_written.is_some() {
+            return None;
+        }
+        let path = self.path(contract::DISK_WRITTEN);
+        match register_disk_written(collector, &path) {
+            Ok(sensor) => {
+                self.disk_written = Some(sensor);
+                None
+            }
+            Err(error) => Some(format!("{path}: not registered: {error}")),
+        }
     }
 
     /// Keep the `Memory used %` description on the current limit: a changed limit (a recreated

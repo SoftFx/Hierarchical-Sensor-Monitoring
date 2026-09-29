@@ -393,7 +393,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let Some(done) = accumulator.roll(now_ms) else {
                 continue;
             };
-            let node = record.node.clone().unwrap_or_else(|| key.to_string());
+            let node = record.node.clone().unwrap_or_else(|| self.naming.node(key));
             if done.hour_start + 3600 != current {
                 logger.info(format!(
                     "docker: {node}: Disk written per hour for {} not posted: the probe was not \
@@ -402,11 +402,23 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 ));
                 continue;
             }
-            let Some(sensor) = self
+            // A measured hour means the service reported writes, so its sensor exists on the
+            // server; it may just not be registered in this run yet (restarted while the daemon
+            // did not answer): register it now rather than drop the hour.
+            let sensors = self
                 .sensors
-                .get(key)
-                .and_then(|sensors| sensors.disk_written.as_ref())
-            else {
+                .entry(key.clone())
+                .or_insert_with(|| ServiceSensors::new(node.clone()));
+            if let Some(problem) = sensors.ensure_disk_written(self.collector) {
+                if self.log_once.raise(&format!("register:{problem}")) {
+                    logger.error(format!(
+                        "docker: sensor {problem}; Disk written per hour for {} is lost",
+                        done.comment()
+                    ));
+                }
+                continue;
+            }
+            let Some(sensor) = sensors.disk_written.as_ref() else {
                 continue;
             };
             let comment = done.comment();
@@ -713,11 +725,10 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             let mut readings = Vec::with_capacity(ids.len());
             let mut memory_valid = true;
             let mut any_counters = false;
-            // Disk written: this round's deltas summed over replicas, the longest interval among
-            // them, and whether any container reported a write counter at all.
-            let mut written_bytes = 0u64;
-            let mut written_gap = 0u64;
-            let mut written_accepted = false;
+            // Disk written: the longest interval among this round's accepted deltas (the deltas
+            // themselves go into the hour as they are read), and whether any container reported a
+            // write counter at all.
+            let mut written_gap: Option<u64> = None;
             let mut any_writes = false;
 
             for id in ids {
@@ -751,12 +762,10 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                     match written::written_bytes(&stats) {
                         Some(counter) => {
                             any_writes = true;
-                            if let Ok((delta, gap)) =
+                            if let Ok((_, gap)) =
                                 accumulator.sample(id, counter, now_ms, self.sample_period)
                             {
-                                written_bytes = written_bytes.saturating_add(delta);
-                                written_gap = written_gap.max(gap);
-                                written_accepted = true;
+                                written_gap = Some(written_gap.unwrap_or(0).max(gap));
                             }
                         }
                         None => accumulator.forget(id),
@@ -784,7 +793,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 }
             }
 
-            if written_accepted {
+            if let Some(gap) = written_gap {
                 let now_ms = (self.clock)();
                 if let Some(accumulator) = self
                     .tracker
@@ -793,7 +802,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                     .get_mut(key)
                     .and_then(|record| record.written.as_mut())
                 {
-                    accumulator.credit(written_bytes, written_gap, now_ms);
+                    accumulator.cover(gap, now_ms);
                 }
             }
             if !any_counters {
@@ -1788,6 +1797,53 @@ pub(crate) mod tests {
         // Before the stop (163_840) plus the downtime (1 MB): the hour is continued, not lost.
         assert_eq!(db.bytes, 163_840 + 1_000_000);
         assert_eq!(db.comment(), "13:00–14:00 UTC; measured 10 of 60 min");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_measured_hour_is_posted_after_a_restart_even_while_the_daemon_is_down() {
+        let dir = std::env::temp_dir().join(format!(
+            "hsm-probe-docker-written-down-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(state::STATE_FILE_NAME);
+        {
+            let collector = test_collector();
+            collector.start().expect("start");
+            let mut before = garage_source(
+                &collector,
+                FixtureEngine::garage(),
+                &DockerConfig::default(),
+                Some(path.clone()),
+            );
+            before.clock = test_clock;
+            two_rounds(&mut before, H13 + 50 * 60_000, 5_000);
+            Source::stop(&mut before, &quiet());
+            collector.stop().expect("stop");
+        }
+        // Restarted at 14:00:01 with the daemon not answering: nothing registered in prime, but
+        // the measured 13:00 hour is still posted — its sensor is registered on demand.
+        let collector = test_collector();
+        collector.start().expect("start");
+        let mut engine = FixtureEngine::garage();
+        engine.down = true;
+        let mut after = garage_source(&collector, engine, &DockerConfig::default(), Some(path));
+        after.clock = test_clock;
+        set_clock(H13 + 60 * 60_000 + 1_000);
+        let posted = after.roll_written_hours(&quiet());
+        let paths = registered(&collector);
+        collector.stop().expect("stop");
+        let db = posted
+            .iter()
+            .find(|(key, _)| *key == key_of("gitea", "db"))
+            .unwrap()
+            .1;
+        assert_eq!(db.bytes, 163_840);
+        assert!(paths
+            .iter()
+            .any(|p| p == "garage-server/LinuxProbe/Docker/gitea/db/Disk written per hour"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

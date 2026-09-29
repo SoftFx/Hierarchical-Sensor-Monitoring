@@ -200,7 +200,7 @@ mod tests {
                 std::time::Duration::from_secs(5),
             )
             .ok();
-        written.credit(163_840, 5_000, 1_790_686_805_000);
+        written.cover(5_000, 1_790_686_805_000);
         record.written = Some(written);
         let mut state = State::default();
         state.services.insert(key, record);
