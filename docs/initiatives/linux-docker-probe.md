@@ -570,6 +570,7 @@ coverage in both drivers and an agent version bump:
 | #1416 follow-up | Docker set per owner decisions: `Memory limit` dropped (limit stated in the `Memory used %` description, `hsm_sensor_set_description`), `probe.docker.exclude`; config no longer a dpkg conffile (silent upgrades) | 0.10.0 / 0.5.39, probe 0.3.1 |
 | #1481 PR | every mounted real filesystem: free space (MB, %), free inodes and write speed per filesystem, Windows per-drive naming, archives polled directly (standby measured safe), 10-min re-scan with runtime registration; `probe.disks` config | probe 0.4.0 |
 | #1485 PR | disk write volume: `Disk written per hour` per Compose service (decimal MB per UTC clock hour from the cgroup write counters) and `Written today on <name> disk` per filesystem (decimal GB since local midnight from `/proc/diskstats`); both persist their running total across a restart; new `Source::stop` hook | probe 0.5.0 |
+| #1490 PR | Docker projects reporting into their own HSM products: `probe.docker.products` (project → `accessKeyFile`), one extra collector per product (Service alive / Collector version / Collector errors only), `Docker/<service>` inside a dedicated product and `Docker/<project>/<service>` in the main one, state keyed by product, loud start failure on an unreadable key | probe 0.6.0 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against

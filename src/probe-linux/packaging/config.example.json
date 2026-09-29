@@ -28,7 +28,8 @@
       "composeOnly": true,
       "samplePeriodSec": 5,
       "oomLatchHours": 24,
-      "exclude": []
+      "exclude": [],
+      "products": []
     }
   },
   "shutdownTimeoutSec": 10

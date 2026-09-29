@@ -2,7 +2,11 @@
 //!
 //! A sensor's identity is its Compose `(project, service)` pair from the container labels
 //! `com.docker.compose.project` / `com.docker.compose.service` — stable across recreate and
-//! upgrade, unlike the container id or name. The node is `Docker/<project>/<service>`.
+//! upgrade, unlike the container id or name. The node is `Docker/<project>/<service>` in the
+//! probe's main product, and `Docker/<service>` for a project that reports into an HSM product of
+//! its own (`probe.docker.products`, #1490): there the project level would only repeat the
+//! product. One rule, [`Naming::node`]; the services of a dedicated product share one namespace
+//! (several projects may map to the same product).
 //!
 //! Path segments keep `[A-Za-z0-9_-]` and turn everything else into `_`. Two different raw names
 //! can normalize to the same segment (`web.api` and `web_api`); a reverse map detects that and the
@@ -164,26 +168,32 @@ impl Namespace {
     }
 
     fn segment(&mut self, raw: &str) -> String {
-        if let Some(segment) = self.by_raw.get(raw) {
+        self.segment_named(raw, raw)
+    }
+
+    /// The segment for `name`, owned by `owner` (the key the namespace tells owners apart by —
+    /// `project/service` in a product namespace, where two projects may share a service name).
+    fn segment_named(&mut self, owner: &str, name: &str) -> String {
+        if let Some(segment) = self.by_raw.get(owner) {
             return segment.clone();
         }
-        let plain = normalize(raw);
+        let plain = normalize(name);
         let segment = if self.owner_of.contains_key(&plain) {
             // Collision: suffix the newcomer. A second-order collision (the suffixed segment is
             // itself taken) is resolved by hashing again with a counter — deterministic and
             // practically unreachable.
-            let mut candidate = format!("{plain}-{}", short_hash(raw));
+            let mut candidate = format!("{plain}-{}", short_hash(owner));
             let mut round = 1u32;
             while self.owner_of.contains_key(&candidate) {
-                candidate = format!("{plain}-{}", short_hash(&format!("{raw}#{round}")));
+                candidate = format!("{plain}-{}", short_hash(&format!("{owner}#{round}")));
                 round += 1;
             }
             candidate
         } else {
             plain
         };
-        self.owner_of.insert(segment.clone(), raw.to_string());
-        self.by_raw.insert(raw.to_string(), segment.clone());
+        self.owner_of.insert(segment.clone(), owner.to_string());
+        self.by_raw.insert(owner.to_string(), segment.clone());
         segment
     }
 }
@@ -193,10 +203,26 @@ impl Namespace {
 pub struct Naming {
     projects: Namespace,
     services: BTreeMap<String, Namespace>,
+    /// Project → the dedicated product it reports into (`probe.docker.products`).
+    dedicated: HashMap<String, String>,
+    /// The service namespace of each dedicated product.
+    product_services: BTreeMap<String, Namespace>,
     nodes: HashMap<ServiceKey, String>,
 }
 
 impl Naming {
+    /// Naming for a probe whose `dedicated` projects (project → product) report into HSM products
+    /// of their own: their services are `Docker/<service>`.
+    pub fn with_products(dedicated: HashMap<String, String>) -> Self {
+        Self {
+            dedicated,
+            ..Self::default()
+        }
+    }
+
+    fn owner(key: &ServiceKey) -> String {
+        format!("{}/{}", key.project, key.service)
+    }
     /// Re-adopt the node a service was given in an earlier run (from the state file). Returns
     /// false, adopting nothing, when the node is malformed or clashes with one already adopted;
     /// the service is then named afresh.
@@ -204,13 +230,32 @@ impl Naming {
         if let Some(existing) = self.nodes.get(key) {
             return existing == node;
         }
+        let well_formed = |segment: &str| !segment.is_empty() && normalize(segment) == segment;
+        if let Some(product) = self.dedicated.get(&key.project).cloned() {
+            // A dedicated product's node: `Docker/<service>`.
+            let mut parts = node.split('/');
+            let (Some(root), Some(service), None) = (parts.next(), parts.next(), parts.next())
+            else {
+                return false;
+            };
+            let owner = Self::owner(key);
+            let namespace = self.product_services.entry(product).or_default();
+            if root != contract::ROOT
+                || !well_formed(service)
+                || !namespace.can_claim(&owner, service)
+            {
+                return false;
+            }
+            namespace.claim(&owner, service);
+            self.nodes.insert(key.clone(), node.to_string());
+            return true;
+        }
         let mut parts = node.split('/');
         let (Some(root), Some(project), Some(service), None) =
             (parts.next(), parts.next(), parts.next(), parts.next())
         else {
             return false;
         };
-        let well_formed = |segment: &str| !segment.is_empty() && normalize(segment) == segment;
         if root != contract::ROOT || !well_formed(project) || !well_formed(service) {
             return false;
         }
@@ -253,10 +298,21 @@ impl Naming {
         }
     }
 
-    /// The node path of a service, `Docker/<project>/<service>`, assigning it on first use.
+    /// The node path of a service, assigning it on first use: `Docker/<project>/<service>` in the
+    /// main product, `Docker/<service>` in a dedicated one.
     pub fn node(&mut self, key: &ServiceKey) -> String {
         if let Some(node) = self.nodes.get(key) {
             return node.clone();
+        }
+        if let Some(product) = self.dedicated.get(&key.project).cloned() {
+            let service = self
+                .product_services
+                .entry(product)
+                .or_default()
+                .segment_named(&Self::owner(key), &key.service);
+            let node = format!("{}/{service}", contract::ROOT);
+            self.nodes.insert(key.clone(), node.clone());
+            return node;
         }
         let project = self.projects.segment(&key.project);
         let service = self
@@ -276,6 +332,39 @@ mod tests {
 
     fn key(project: &str, service: &str) -> ServiceKey {
         ServiceKey::new(project, service)
+    }
+
+    fn lingua_dedicated() -> Naming {
+        Naming::with_products(HashMap::from([
+            ("lingua".to_string(), "access-key-lingua".to_string()),
+            ("lingua-ci".to_string(), "access-key-lingua".to_string()),
+        ]))
+    }
+
+    #[test]
+    fn a_dedicated_product_drops_the_project_level_and_the_main_one_keeps_it() {
+        let mut naming = lingua_dedicated();
+        assert_eq!(naming.node(&key("lingua", "mongo")), "Docker/mongo");
+        assert_eq!(naming.node(&key("lingua", "seaweedfs")), "Docker/seaweedfs");
+        assert_eq!(naming.node(&key("gitea", "db")), "Docker/gitea/db");
+        // Two projects in one product: their services share the product's namespace, and a
+        // clash is told apart like any other (the newcomer gets the hash suffix).
+        let clash = naming.node(&key("lingua-ci", "mongo"));
+        assert!(clash.starts_with("Docker/mongo-") && clash.len() == "Docker/mongo-".len() + 6);
+        // The same service name in the main product is a different node.
+        assert_eq!(naming.node(&key("other", "mongo")), "Docker/other/mongo");
+    }
+
+    #[test]
+    fn a_dedicated_node_is_re_adopted_and_a_main_one_is_not_taken_for_it() {
+        let mut naming = lingua_dedicated();
+        assert!(naming.adopt(&key("lingua", "mongo"), "Docker/mongo"));
+        assert_eq!(naming.node(&key("lingua", "mongo")), "Docker/mongo");
+        // A node from when the project reported into the main product does not fit any more.
+        let mut moved = lingua_dedicated();
+        assert!(!moved.adopt(&key("lingua", "mongo"), "Docker/lingua/mongo"));
+        // …nor does a dedicated node for a main-product project.
+        assert!(!moved.adopt(&key("gitea", "db"), "Docker/db"));
     }
 
     #[test]

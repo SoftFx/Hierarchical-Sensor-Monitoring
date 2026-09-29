@@ -113,12 +113,33 @@ pub trait Source: Send {
     fn stop(&mut self, _logger: &Logger) {}
 }
 
-/// Register every enabled probe-only source. Call before `Collector::start`: the alerts are part of
-/// the registration, and a value posted before Start would be dropped by the collector anyway.
-///
-/// A source that cannot register logs why and is left out; the others are unaffected.
+/// Register every enabled probe-only source, every Docker project in the main product (the test
+/// harness). See [`register_routed`].
+#[cfg(test)]
 pub fn register<'c>(
     collector: &'c Collector,
+    config: &ProbeConfig,
+    environment: &HostEnvironment,
+    logger: &Logger,
+) -> Vec<Box<dyn Source + 'c>> {
+    register_routed(
+        collector,
+        docker::Routes::main_only(collector),
+        config,
+        environment,
+        logger,
+    )
+}
+
+/// Register every enabled probe-only source. Call before `Collector::start`: the alerts are part of
+/// the registration, and a value posted before Start would be dropped by the collector anyway.
+/// `docker_routes` says which collector (HSM product) each Compose project reports into; the host
+/// and disk sensors always go to `collector`, the main one.
+///
+/// A source that cannot register logs why and is left out; the others are unaffected.
+pub fn register_routed<'c>(
+    collector: &'c Collector,
+    docker_routes: docker::Routes<'c>,
     config: &ProbeConfig,
     environment: &HostEnvironment,
     logger: &Logger,
@@ -137,7 +158,7 @@ pub fn register<'c>(
         logger,
     ));
     sources.extend(docker::register(
-        collector,
+        docker_routes,
         &config.docker,
         (environment.docker_engine)(&config.docker),
         environment.docker_state.clone(),

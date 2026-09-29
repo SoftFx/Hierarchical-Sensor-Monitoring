@@ -53,6 +53,11 @@ pub struct ServiceRecord {
     /// file written by a probe before 0.5.0 (read as "no hour running yet").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub written: Option<WriteRecord>,
+    /// The dedicated HSM product the service reports into (its `accessKeyFile`); `None` = the
+    /// main product. A record of another product than the project maps to now is dropped at load:
+    /// a project moved between products starts clean.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product: Option<String>,
 }
 
 impl ServiceRecord {

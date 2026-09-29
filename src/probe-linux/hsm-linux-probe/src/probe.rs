@@ -35,10 +35,26 @@ const TICK: Duration = Duration::from_millis(200);
 /// Build, start and run the probe until a stop is requested.
 pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::error::Error>> {
     let collector = build_collector(config, Arc::clone(&logger))?;
+    // Before anything registers: a dedicated product whose key cannot be read stops the probe
+    // here, loudly, rather than let its projects report into the main product unnoticed.
+    let products = build_product_collectors(config, &logger)?;
     let product_version = register_sensors(&collector, &logger);
     // After the parity set and before Start: their alerts are part of the registration.
-    let mut probe_only_sources = probe_only::register(
+    let routes = probe_only::docker::Routes::new(
         &collector,
+        products.iter().flat_map(|product| {
+            product.projects.iter().map(move |project| {
+                (
+                    project.clone(),
+                    product.key_file.clone(),
+                    &product.collector,
+                )
+            })
+        }),
+    );
+    let mut probe_only_sources = probe_only::register_routed(
+        &collector,
+        routes,
         &config.probe,
         &HostEnvironment::system(),
         &logger,
@@ -58,6 +74,23 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
     ));
 
     collector.start()?;
+    // Each dedicated product's collector is isolated: one that cannot start costs only its
+    // projects' values (logged), never the main product.
+    for product in &products {
+        match product.collector.start() {
+            Ok(()) => logger.info(format!(
+                "{}: collector started (Docker projects {})",
+                product.label(),
+                product.projects.join(", ")
+            )),
+            Err(error) => logger.error(format!(
+                "{}: the collector cannot start ({error}); the values of Docker projects {} are \
+                 not sent",
+                product.label(),
+                product.projects.join(", ")
+            )),
+        }
+    }
 
     // After Start: the collector drops a value posted before it can accept data.
     if let Some(sensor) = &product_version {
@@ -101,6 +134,9 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
         // scope, and with a stuck thread the process exits after the drain instead of joining it.
         stop_sources.request();
         let all_stopped = await_sources(&exited_rx, running, &logger);
+        for product in &products {
+            stop_product_collector(product, &logger);
+        }
         stop_collector(&collector, product_version.as_ref(), config, &logger);
         if !all_stopped {
             // The drain is done; leaving the scope would join the stuck thread and hold the
@@ -178,12 +214,112 @@ fn stop_collector(
     }
 }
 
+/// A collector reporting into a dedicated HSM product (`probe.docker.products`, #1490): same
+/// server, computer and module as the main one, its own key, queue and transport.
+pub struct ProductCollector {
+    /// The configured `accessKeyFile` — the product's id in the state file and the log.
+    pub key_file: String,
+    /// The Compose projects it carries.
+    pub projects: Vec<String>,
+    pub collector: Collector,
+}
+
+impl ProductCollector {
+    /// How the log names this product: its projects, never its key.
+    fn label(&self) -> String {
+        format!("product of Docker project(s) {}", self.projects.join(", "))
+    }
+}
+
+/// One collector per distinct `accessKeyFile` in `probe.docker.products`, each registering only
+/// `.module/Service alive`, `Collector version` and `Collector errors` of its own (the collector's
+/// monitoring group — the heartbeat is armed only through it) and, later, the Docker sensors of
+/// its projects. An unreadable key file is an error: the probe must not start and silently report
+/// a product's projects into the main product.
+fn build_product_collectors(
+    config: &Config,
+    logger: &Arc<Logger>,
+) -> Result<Vec<ProductCollector>, Box<dyn std::error::Error>> {
+    let docker = &config.probe.docker;
+    if docker.products.is_empty() {
+        return Ok(Vec::new());
+    }
+    if !docker.enabled {
+        logger.info(
+            "probe.docker.products is set but the Docker source is disabled; no product \
+             collectors",
+        );
+        return Ok(Vec::new());
+    }
+    let mut by_key: Vec<(std::path::PathBuf, Vec<String>)> = Vec::new();
+    for product in &docker.products {
+        match by_key
+            .iter_mut()
+            .find(|(key_file, _)| *key_file == product.access_key_file)
+        {
+            Some((_, projects)) => projects.push(product.project.clone()),
+            None => by_key.push((
+                product.access_key_file.clone(),
+                vec![product.project.clone()],
+            )),
+        }
+    }
+    let mut collectors = Vec::with_capacity(by_key.len());
+    for (key_file, projects) in by_key {
+        let label = format!("product of Docker project(s) {}", projects.join(", "));
+        let collector =
+            build_collector_with_key(config, &key_file, Arc::clone(logger), Some(&label)).map_err(
+                |error| {
+                    format!("probe.docker.products: {label}: {error}; the probe does not start")
+                },
+            )?;
+        if let Err(error) = collector.add_collector_monitoring_sensors() {
+            logger.error(format!(
+                "{label}: cannot register its collector self-sensors: {error}"
+            ));
+        }
+        collectors.push(ProductCollector {
+            key_file: key_file.display().to_string(),
+            projects,
+            collector,
+        });
+    }
+    Ok(collectors)
+}
+
+/// Stop a product's collector with its bounded drain; a failure is logged, never fatal.
+fn stop_product_collector(product: &ProductCollector, logger: &Logger) {
+    let started = Instant::now();
+    match product.collector.stop() {
+        Ok(()) => logger.info(format!(
+            "{}: collector stopped in {} ms",
+            product.label(),
+            started.elapsed().as_millis()
+        )),
+        Err(error) => logger.error(format!(
+            "{}: collector stop reported: {error}",
+            product.label()
+        )),
+    }
+}
+
 fn build_collector(
     config: &Config,
     logger: Arc<Logger>,
 ) -> Result<Collector, Box<dyn std::error::Error>> {
+    build_collector_with_key(config, &config.hsm.access_key_file, logger, None)
+}
+
+/// A collector for `config.hsm`'s server, computer and module with the key in `key_file`. `label`
+/// prefixes its log lines (a dedicated product's collector).
+fn build_collector_with_key(
+    config: &Config,
+    key_file: &std::path::Path,
+    logger: Arc<Logger>,
+    label: Option<&str>,
+) -> Result<Collector, Box<dyn std::error::Error>> {
     let key_path = secret::resolve_key_path(
-        &config.hsm.access_key_file,
+        key_file,
         std::env::var_os("CREDENTIALS_DIRECTORY").as_deref(),
     )?;
     let key = Secret::read_from_file(&key_path)?;
@@ -213,8 +349,14 @@ fn build_collector(
     let collector = collector?;
 
     let log_sink = Arc::clone(&logger);
+    let prefix = label.map(|label| format!("[{label}] ")).unwrap_or_default();
     collector.set_logger(move |level: LogLevel, message: &str| {
-        log_sink.log(logging::collector_message_level(level, message), message);
+        let level = logging::collector_message_level(level, message);
+        if prefix.is_empty() {
+            log_sink.log(level, message);
+        } else {
+            log_sink.log(level, &format!("{prefix}{message}"));
+        }
     })?;
 
     collector.use_http_transport()?;
@@ -868,6 +1010,72 @@ mod tests {
             panic!("nothing should be logged: {line}")
         });
         assert!(await_sources(&rx, vec!["disk"], &quiet));
+    }
+
+    fn products_config(products: &str) -> Config {
+        Config::parse(&format!(
+            r#"{{ "hsm": {{ "address": "https://127.0.0.1", "port": 1, "accessKeyFile": "/k" }},
+                 "probe": {{ "docker": {{ "products": {products} }} }} }}"#
+        ))
+        .expect("parse")
+    }
+
+    #[test]
+    fn an_unreadable_product_key_stops_the_probe_and_never_names_the_key() {
+        let logger = Arc::new(Logger::new(Level::Error, None));
+        let config = products_config(
+            r#"[{ "project": "lingua", "accessKeyFile": "/nonexistent/access-key-lingua" }]"#,
+        );
+        let error = build_product_collectors(&config, &logger)
+            .err()
+            .expect("an unreadable key file is fatal")
+            .to_string();
+        assert!(error.contains("lingua"), "{error}");
+        assert!(error.contains("/nonexistent/access-key-lingua"), "{error}");
+        assert!(error.contains("does not start"), "{error}");
+        // A relative name outside systemd (no $CREDENTIALS_DIRECTORY) is an error too, never a
+        // lookup in the working directory.
+        if std::env::var_os("CREDENTIALS_DIRECTORY").is_none() {
+            let relative = products_config(
+                r#"[{ "project": "lingua", "accessKeyFile": "access-key-lingua" }]"#,
+            );
+            assert!(build_product_collectors(&relative, &logger).is_err());
+        }
+    }
+
+    #[test]
+    fn one_collector_per_product_key_with_its_projects() {
+        let tree = crate::probe_only::host::tests::FakeTree::new("product-keys");
+        tree.file("lingua", "lingua-product-key\n");
+        tree.file("tools", "tools-product-key\n");
+        let (lingua, tools) = (tree.0.join("lingua"), tree.0.join("tools"));
+        let logger = Arc::new(Logger::new(Level::Error, None));
+        let config = products_config(&format!(
+            r#"[{{ "project": "lingua", "accessKeyFile": "{0}" }},
+                {{ "project": "lingua-ci", "accessKeyFile": "{0}" }},
+                {{ "project": "portainer", "accessKeyFile": "{1}" }}]"#,
+            lingua.display(),
+            tools.display()
+        ));
+        let products = build_product_collectors(&config, &logger).expect("build");
+        let grouped: Vec<(String, Vec<String>)> = products
+            .iter()
+            .map(|p| (p.key_file.clone(), p.projects.clone()))
+            .collect();
+        assert_eq!(
+            grouped,
+            vec![
+                (
+                    lingua.display().to_string(),
+                    vec!["lingua".to_string(), "lingua-ci".to_string()]
+                ),
+                (tools.display().to_string(), vec!["portainer".to_string()]),
+            ]
+        );
+        // The Docker source disabled: no product collectors at all.
+        let mut off = config.clone();
+        off.probe.docker.enabled = false;
+        assert!(build_product_collectors(&off, &logger).unwrap().is_empty());
     }
 
     #[test]

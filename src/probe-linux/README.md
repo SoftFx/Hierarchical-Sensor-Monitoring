@@ -319,6 +319,23 @@ Behavior at the edges:
   no sensors, one INFO line (`<project>/<service>: excluded by probe.docker.exclude, not
   monitored`). A service the state remembers that is now excluded is dropped from the state at
   start (no `Stopped`, no alert). Only an exclude list: whatever is not excluded is monitored.
+- **A project in its own HSM product** (`probe.docker.products`, #1490, owner decision): a Compose
+  project can report into an HSM product of its own, with that product's access key; every other
+  project stays in the probe's main product. The probe runs one extra collector per such product
+  (same server, computer and module — its own key, queue and transport), started and stopped with
+  the main one; a product whose collector fails costs only its projects' values (logged under
+  `product of Docker project(s) <projects>`, never the key). **The path rule:** in a dedicated
+  product the project level would only repeat the product, so its services are
+  `Docker/<service>/…`; in the main product they stay `Docker/<project>/<service>/…` — one code
+  path, only the prefix differs (several projects mapped to one product share its service
+  namespace; a clash gets the usual hash suffix). Sensors, alerts and aggregation are identical in
+  both. Each extra product also carries the collector's own `.module/Service alive`,
+  `Collector version` and `Collector errors` (the collector's monitoring group — the heartbeat is
+  armed only through it; ~0 records/day besides the heartbeat), nothing else: no host metrics, no
+  queue statistics. The state remembers each service's product: a project moved between products
+  starts clean (new node, new baselines; its old nodes remain on the server as history for the
+  operator to delete). A configured key file that cannot be read **stops the probe at start**
+  (logged, non-zero exit) rather than monitor the project into the wrong product.
 - **Completed one-shot jobs** (owner decision): a Compose service whose containers have all exited
   with code 0 under restart policy `no` (garage's `lingua-ci/ci-image`, an image build) is a job
   that finished, not a service that stopped — no sensors, one INFO line
@@ -528,8 +545,24 @@ Placeholders only — **no secrets**:
 * `probe.docker` (optional; every key has a default): `enabled` (`true`), `socket`
   (`/var/run/docker.sock`), `composeOnly` (`true`), `samplePeriodSec` (`5`, 1–300; the bars stay
   5 minutes whatever it is), `oomLatchHours` (`24`) and `exclude` (`[]`: `project/service`
-  patterns, `*` within a segment, e.g. `"portainer/*"`, `"lingua-ci/janitor"`). A host without Docker needs no change: the
+  patterns, `*` within a segment, e.g. `"portainer/*"`, `"lingua-ci/janitor"`) and `products`
+  (`[]`: `{ "project": "lingua", "accessKeyFile": "access-key-lingua" }` entries — a project at
+  most once; `accessKeyFile` resolves exactly like `hsm.accessKeyFile`, and the key itself never
+  goes into the config). A host without Docker needs no change: the
   source logs one info line and waits for the socket; `enabled: false` turns it off entirely.
+
+  **A product's key** comes in like the main one, as a systemd credential. The unit ships
+  `LoadCredential=access-key:/etc/hsm-linux-probe/access-key`; a host adds its extra keys in a
+  drop-in, so the packaged unit stays untouched:
+
+  ```ini
+  # /etc/systemd/system/hsm-linux-probe.service.d/credentials.conf
+  [Service]
+  LoadCredential=access-key-lingua:/etc/hsm-linux-probe/access-key-lingua
+  ```
+
+  (the key file root-owned, `0400`), then `"products": [{ "project": "lingua", "accessKeyFile":
+  "access-key-lingua" }]` in `probe.docker`, `systemctl daemon-reload` and a restart.
 
 ## Running
 

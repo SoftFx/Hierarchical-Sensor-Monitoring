@@ -172,6 +172,16 @@ impl Tracker {
         }
     }
 
+    /// Remember which product a service reports into.
+    pub fn set_product(&mut self, key: &ServiceKey, product: Option<&str>) {
+        if let Some(record) = self.state.services.get_mut(key) {
+            if record.product.as_deref() != product {
+                record.product = product.map(str::to_string);
+                self.dirty = true;
+            }
+        }
+    }
+
     /// Record that `value` reached the `Restart count` sensor.
     pub fn restart_posted(&mut self, key: &ServiceKey, value: u64) {
         if let Some(record) = self.state.services.get_mut(key) {

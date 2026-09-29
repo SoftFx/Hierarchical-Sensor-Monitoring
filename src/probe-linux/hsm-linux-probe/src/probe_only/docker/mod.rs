@@ -23,6 +23,7 @@ pub mod contract;
 pub mod engine;
 pub mod http;
 pub mod identity;
+pub mod products;
 pub mod sensors;
 pub mod state;
 pub mod stats;
@@ -33,7 +34,9 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use hsm_collector::{Collector, SensorStatus};
+#[cfg(test)]
+use hsm_collector::Collector;
+use hsm_collector::SensorStatus;
 
 use crate::config::DockerConfig;
 use crate::logging::{Level, Logger};
@@ -41,6 +44,7 @@ use crate::probe_only::Source;
 
 use engine::{ApiVersion, EngineApi, EngineError};
 use identity::{Membership, Naming, ServiceKey};
+pub use products::Routes;
 use sensors::ServiceSensors;
 use state::{LoadOutcome, State};
 use stats::{CpuCounters, CpuTracker};
@@ -96,9 +100,10 @@ impl LogOnce {
     }
 }
 
-/// The Docker source. Owns its sensors; borrows the collector for their lifetime.
+/// The Docker source. Owns its sensors; borrows the collectors (the main one and one per dedicated
+/// product) for their lifetime.
 pub struct DockerSource<'c, E: EngineApi> {
-    collector: &'c Collector,
+    routes: Routes<'c>,
     engine: E,
     sample_period: Duration,
     oom_latch: Duration,
@@ -139,9 +144,31 @@ pub struct DockerSource<'c, E: EngineApi> {
 }
 
 impl<'c, E: EngineApi> DockerSource<'c, E> {
-    /// Build the source and load its state. `state_path = None` keeps the state in memory only.
+    /// Build the source with every project in the main product (the test harness). See
+    /// [`DockerSource::routed`].
+    #[cfg(test)]
     pub fn new(
         collector: &'c Collector,
+        engine: E,
+        config: &DockerConfig,
+        logger: &Logger,
+        state_path: Option<PathBuf>,
+        host_mem_total: Option<u64>,
+    ) -> Self {
+        Self::routed(
+            Routes::main_only(collector),
+            engine,
+            config,
+            logger,
+            state_path,
+            host_mem_total,
+        )
+    }
+
+    /// Build the source and load its state. `state_path = None` keeps the state in memory only.
+    /// `routes` says which collector (HSM product) each project reports into.
+    pub fn routed(
+        routes: Routes<'c>,
         engine: E,
         config: &DockerConfig,
         logger: &Logger,
@@ -191,8 +218,27 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 ));
             }
         }
+        // A service remembered under another product than its project maps to now (the project
+        // was moved between products) starts clean: other node, other restart baseline, other
+        // sensors.
+        let remembered: Vec<(ServiceKey, Option<String>)> = tracker
+            .state
+            .services
+            .values()
+            .map(|record| (record.key(), record.product.clone()))
+            .collect();
+        for (key, product) in remembered {
+            let now = routes.product(&key.project);
+            if product.as_deref() != now && tracker.forget(&key) {
+                logger.info(format!(
+                    "docker: {key}: now reports into {} (was {}); its state starts clean",
+                    Routes::describe(now),
+                    Routes::describe(product.as_deref())
+                ));
+            }
+        }
         // Re-adopt the nodes of the previous run before anything new is named.
-        let mut naming = Naming::default();
+        let mut naming = Naming::with_products(routes.dedicated_projects());
         for record in tracker.state.services.values() {
             if let Some(node) = &record.node {
                 if !naming.adopt(&record.key(), node) {
@@ -204,7 +250,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             }
         }
         Self {
-            collector,
+            routes,
             engine,
             sample_period: config.sample_period(),
             oom_latch: config.oom_latch(),
@@ -329,9 +375,9 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         self.naming
             .resolve_all(present.keys().chain(vanished.iter()));
 
-        let collector = self.collector;
         let mut registered = 0;
         for (key, (has_health, has_run)) in &present {
+            let collector = self.routes.collector(&key.project);
             // One stats read per running container, so `Memory used %` registers stating its limit
             // and `Disk written per hour` registers when the containers report writes.
             let (limit, writes) = if *has_run {
@@ -350,6 +396,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
             registered += 1;
         }
         for key in &vanished {
+            let collector = self.routes.collector(&key.project);
             let problems = self
                 .sensors_of(key)
                 .ensure_state_sensors(collector, false, false);
@@ -430,7 +477,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 .sensors
                 .entry(key.clone())
                 .or_insert_with(|| ServiceSensors::new(node.clone()));
-            if let Some(problem) = sensors.ensure_disk_written(self.collector) {
+            if let Some(problem) = sensors.ensure_disk_written(self.routes.collector(&key.project))
+            {
                 if self.log_once.raise(&format!("register:{problem}")) {
                     logger.error(format!(
                         "docker: sensor {problem}; Disk written per hour for {} is lost",
@@ -661,6 +709,8 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
         for key in outcome.reports.keys() {
             let node = self.naming.node(key);
             self.tracker.set_node(key, &node);
+            self.tracker
+                .set_product(key, self.routes.product(&key.project));
         }
 
         for key in &outcome.forgotten {
@@ -678,7 +728,7 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 .entry(key.clone())
                 .or_insert_with(|| ServiceSensors::new(node));
             let problems = sensors.ensure_state_sensors(
-                self.collector,
+                self.routes.collector(&key.project),
                 report.present,
                 report.has_healthcheck,
             );
@@ -919,7 +969,11 @@ impl<'c, E: EngineApi> DockerSource<'c, E> {
                 .then(|| stats::service_memory(&readings, self.host_mem_total))
                 .flatten();
             let limit = memory.map(|m| (stats::limit_megabytes(m.limit_bytes), m.unlimited));
-            let problems = sensors.ensure_stats_sensors(self.collector, limit, any_writes);
+            let problems = sensors.ensure_stats_sensors(
+                self.routes.collector(&key.project),
+                limit,
+                any_writes,
+            );
             report_problems(logger, &mut self.log_once, &problems);
 
             let mut failures = Vec::new();
@@ -1080,9 +1134,9 @@ impl<E: EngineApi + Send> Source for DockerSource<'_, E> {
 }
 
 /// Build the Docker source, prime its registrations (before Start) and hand it to the probe-only
-/// runner. `None` when disabled.
+/// runner. `None` when disabled. `routes` holds the main collector and one per dedicated product.
 pub fn register<'c>(
-    collector: &'c Collector,
+    routes: Routes<'c>,
     config: &DockerConfig,
     engine: Box<dyn EngineApi + Send>,
     state_path: Option<PathBuf>,
@@ -1093,14 +1147,8 @@ pub fn register<'c>(
         logger.info("docker: source disabled (probe.docker.enabled = false)");
         return None;
     }
-    let mut source = DockerSource::new(
-        collector,
-        engine,
-        config,
-        logger,
-        state_path,
-        host_mem_total(),
-    );
+    let mut source =
+        DockerSource::routed(routes, engine, config, logger, state_path, host_mem_total());
     source.stacking = written::Stacking::new(Some(sys_root));
     match source.prime(logger) {
         Ok(count) => logger.info(format!(
@@ -1460,6 +1508,133 @@ pub(crate) mod tests {
                 find(path)
             );
         }
+    }
+
+    /// The garage fixtures with `lingua` reporting into its own product: its two services go to
+    /// the Lingua collector as `Docker/<service>/…`; every other project stays in the main product
+    /// under `Docker/<project>/<service>/…`.
+    #[test]
+    fn a_dedicated_project_reports_into_its_own_product_without_the_project_level() {
+        let main = test_collector();
+        let lingua = test_collector();
+        let routes = Routes::new(
+            &main,
+            [(
+                "lingua".to_string(),
+                "access-key-lingua".to_string(),
+                &lingua,
+            )],
+        );
+        let mut source = DockerSource::routed(
+            routes,
+            FixtureEngine::garage(),
+            &DockerConfig::default(),
+            &quiet(),
+            None,
+            Some(GARAGE_MEM_TOTAL),
+        );
+        source.should_stop = || false;
+        assert_eq!(source.prime(&quiet()).expect("prime"), 11);
+        main.start().expect("start");
+        lingua.start().expect("start");
+        let (in_main, in_lingua) = (registered(&main), registered(&lingua));
+        main.stop().expect("stop");
+        lingua.stop().expect("stop");
+
+        let lingua_paths: Vec<&str> = in_lingua.iter().map(String::as_str).collect();
+        assert_eq!(
+            lingua_paths,
+            [
+                "garage-server/LinuxProbe/Docker/mongo/CPU",
+                "garage-server/LinuxProbe/Docker/mongo/Disk written per hour",
+                "garage-server/LinuxProbe/Docker/mongo/Health",
+                "garage-server/LinuxProbe/Docker/mongo/Memory used %",
+                "garage-server/LinuxProbe/Docker/mongo/OOM killed",
+                "garage-server/LinuxProbe/Docker/mongo/Restart count",
+                "garage-server/LinuxProbe/Docker/mongo/Service status",
+                "garage-server/LinuxProbe/Docker/seaweedfs/CPU",
+                "garage-server/LinuxProbe/Docker/seaweedfs/Disk written per hour",
+                "garage-server/LinuxProbe/Docker/seaweedfs/Health",
+                "garage-server/LinuxProbe/Docker/seaweedfs/Memory used %",
+                "garage-server/LinuxProbe/Docker/seaweedfs/OOM killed",
+                "garage-server/LinuxProbe/Docker/seaweedfs/Restart count",
+                "garage-server/LinuxProbe/Docker/seaweedfs/Service status",
+            ]
+        );
+        let docker_in_main: Vec<&String> =
+            in_main.iter().filter(|p| p.contains("/Docker/")).collect();
+        assert_eq!(docker_in_main.len(), 70 - 14);
+        assert!(docker_in_main
+            .iter()
+            .all(|p| !p.contains("/Docker/lingua/")));
+        assert!(in_main.contains(&"garage-server/LinuxProbe/Docker/gitea/db/Service status".into()));
+        // Alerts are the same in both products.
+        let status = lingua
+            .registrations()
+            .into_iter()
+            .find(|json| json.contains("Docker/mongo/Service status"))
+            .unwrap();
+        assert!(status.contains("$operation Running"), "{status}");
+    }
+
+    #[test]
+    fn a_project_moved_into_its_own_product_starts_clean() {
+        let dir =
+            std::env::temp_dir().join(format!("hsm-probe-docker-products-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(state::STATE_FILE_NAME);
+        {
+            let collector = test_collector();
+            collector.start().expect("start");
+            let mut before = garage_source(
+                &collector,
+                FixtureEngine::garage(),
+                &DockerConfig::default(),
+                Some(path.clone()),
+            );
+            before.poll(&quiet(), &|| false).expect("poll");
+            collector.stop().expect("stop");
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("\"node\": \"Docker/lingua/mongo\""), "{text}");
+
+        let (main, lingua) = (test_collector(), test_collector());
+        let routes = Routes::new(
+            &main,
+            [(
+                "lingua".to_string(),
+                "access-key-lingua".to_string(),
+                &lingua,
+            )],
+        );
+        let mut after = DockerSource::routed(
+            routes,
+            FixtureEngine::garage(),
+            &DockerConfig::default(),
+            &quiet(),
+            Some(path.clone()),
+            Some(GARAGE_MEM_TOTAL),
+        );
+        after.should_stop = || false;
+        // The lingua services were dropped from the state at load; the rest kept theirs.
+        assert!(!after
+            .tracker()
+            .state
+            .services
+            .contains_key(&ServiceKey::new("lingua", "mongo")));
+        assert!(after
+            .tracker()
+            .state
+            .services
+            .contains_key(&ServiceKey::new("gitea", "db")));
+        after.poll(&quiet(), &|| false).expect("poll");
+        let record = &after.tracker().state.services[&ServiceKey::new("lingua", "mongo")];
+        assert_eq!(record.node.as_deref(), Some("Docker/mongo"));
+        assert_eq!(record.product.as_deref(), Some("access-key-lingua"));
+        let db = &after.tracker().state.services[&ServiceKey::new("gitea", "db")];
+        assert_eq!(db.product, None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

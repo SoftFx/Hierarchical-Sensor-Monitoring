@@ -57,6 +57,20 @@ pub struct DockerConfig {
     /// monitored, e.g. `portainer/*`, `lingua-ci/janitor`.
     #[serde(default)]
     pub exclude: Vec<String>,
+    /// Compose projects that report into an HSM product of their own (#1490); every other project
+    /// stays in the probe's main product.
+    #[serde(default)]
+    pub products: Vec<DockerProduct>,
+}
+
+/// One `probe.docker.products` entry: a Compose project and the access key of its HSM product.
+/// Only the key's file is configured, never the key: an absolute path as is, a relative name
+/// inside `$CREDENTIALS_DIRECTORY` (a `LoadCredential=` of the unit), like `hsm.accessKeyFile`.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerProduct {
+    pub project: String,
+    pub access_key_file: PathBuf,
 }
 
 impl Default for DockerConfig {
@@ -68,6 +82,7 @@ impl Default for DockerConfig {
             sample_period_sec: default_docker_sample_period_sec(),
             oom_latch_hours: default_docker_oom_latch_hours(),
             exclude: Vec::new(),
+            products: Vec::new(),
         }
     }
 }
@@ -352,6 +367,26 @@ impl DockerConfig {
                 return Err(ConfigError::invalid(format!(
                     "probe.docker.exclude entries are 'project/service' patterns with '*' \
                      wildcards (got '{pattern}')"
+                )));
+            }
+        }
+        let mut projects = std::collections::BTreeSet::new();
+        for product in &self.products {
+            if product.project.trim().is_empty() {
+                return Err(ConfigError::invalid(
+                    "probe.docker.products: every entry needs a non-empty 'project'",
+                ));
+            }
+            if product.access_key_file.as_os_str().is_empty() {
+                return Err(ConfigError::invalid(format!(
+                    "probe.docker.products: project '{}' needs an 'accessKeyFile'",
+                    product.project
+                )));
+            }
+            if !projects.insert(product.project.as_str()) {
+                return Err(ConfigError::invalid(format!(
+                    "probe.docker.products: project '{}' appears more than once",
+                    product.project
                 )));
             }
         }
@@ -715,6 +750,48 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    #[test]
+    fn docker_products_parse_and_are_validated() {
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "docker": { "products": [
+                 { "project": "lingua", "accessKeyFile": "access-key-lingua" },
+                 { "project": "gitea", "accessKeyFile": "/etc/hsm-linux-probe/access-key-gitea" }
+             ] } } }"#;
+        let docker = Config::parse(text).expect("parse").probe.docker;
+        assert_eq!(
+            docker.products,
+            vec![
+                DockerProduct {
+                    project: "lingua".into(),
+                    access_key_file: PathBuf::from("access-key-lingua"),
+                },
+                DockerProduct {
+                    project: "gitea".into(),
+                    access_key_file: PathBuf::from("/etc/hsm-linux-probe/access-key-gitea"),
+                },
+            ]
+        );
+        assert!(DockerConfig::default().products.is_empty());
+        for products in [
+            r#"[{ "project": "", "accessKeyFile": "k" }]"#,
+            r#"[{ "project": "lingua", "accessKeyFile": "" }]"#,
+            r#"[{ "project": "lingua", "accessKeyFile": "a" }, { "project": "lingua", "accessKeyFile": "b" }]"#,
+        ] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
+                     "probe": {{ "docker": {{ "products": {products} }} }} }}"#
+            );
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::Invalid(_))),
+                "{products}"
+            );
+        }
+        // A key itself is never accepted in place of its file.
+        let key_inline = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "probe": { "docker": { "products": [{ "project": "lingua", "accessKey": "x" }] } } }"#;
+        assert!(Config::parse(key_inline).is_err());
     }
 
     #[test]

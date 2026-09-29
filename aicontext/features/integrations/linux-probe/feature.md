@@ -73,6 +73,18 @@ The probe registers **two separately pinned sets**:
    container Exited (0), restart policy `no`) is not monitored until it runs. Pinned for
    garage-server's captures (12 Compose containers, 11 monitored services, 70 paths) by
    `DOCKER_GARAGE_SET`.
+   **Per-product routing** (#1490, `probe.docker.products`): a Compose project may report into an
+   HSM product of its own. The probe runs one extra collector per such product (same server,
+   computer and module, the product's key read like `hsm.accessKeyFile`) carrying only
+   `.module/Service alive`, `Collector version` and `Collector errors` besides the project's
+   Docker sensors. In a dedicated product the path is `Docker/<service>/…` (the project level
+   would repeat the product); in the main product it stays `Docker/<project>/<service>/…` — one
+   naming rule with a per-product prefix (`identity::Naming`). Sensors, alerts and aggregation are
+   identical. The state records each service's product, so a project moved between products
+   starts clean. An unreadable product key file stops the probe at start (non-zero exit), never a
+   silent fallback into the main product. Pinned by
+   `docker::tests::a_dedicated_project_reports_into_its_own_product_without_the_project_level`
+   (garage fixtures with `lingua` mapped: 14 paths in the Lingua collector, 56 in the main one).
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,
 batching, retry and TLS stay the library's; only the acquisition (a sysfs read, a `statvfs`, an
