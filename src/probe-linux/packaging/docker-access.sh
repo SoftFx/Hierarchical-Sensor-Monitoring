@@ -12,7 +12,8 @@
 # without Docker. This script writes the drop-in only when `getent group docker` succeeds.
 #
 # Installed as /usr/lib/hsm-linux-probe/docker-access.sh and called by the package's postinst
-# (`install`); postrm deletes the same drop-in itself on remove/purge (this script is gone by then),
+# (`install`, on a fresh install and on the upgrade from before 0.3.0 only, so an operator's removal
+# sticks); postrm deletes the same drop-in itself on remove/purge (this script is gone by then),
 # and `remove` is here for an operator taking the socket away by hand. After installing Docker on a
 # host that already has the probe, run it by hand:
 #   sudo /usr/lib/hsm-linux-probe/docker-access.sh install && sudo systemctl restart hsm-linux-probe
@@ -32,7 +33,8 @@ install)
 # Written by hsm-linux-probe's package (docker-access.sh) because this host has a docker group.
 # Grants read access to the Docker Engine API socket for the Docker source (#1416).
 # Remove this file (and daemon-reload) to take the socket away; the probe then logs one error and
-# reports no Docker sensors, everything else keeps working.
+# reports no Docker sensors, everything else keeps working. Package upgrades do not re-create it;
+# /usr/lib/hsm-linux-probe/docker-access.sh install does.
 [Service]
 SupplementaryGroups=docker
 EOF

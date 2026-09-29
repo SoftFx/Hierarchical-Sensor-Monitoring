@@ -73,7 +73,8 @@ libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`, checked against the
 libraries). A fresh install creates the `hsm-probe` user and does not start the unit; an upgrade
 restarts it if it was running (prerm leaves a `/run` marker, postinst starts it). Docker socket
 access is a drop-in (`hsm-linux-probe.service.d/docker.conf`, `SupplementaryGroups=docker`) that
-postinst writes through `/usr/lib/hsm-linux-probe/docker-access.sh` only where a `docker` group
+postinst writes (fresh install / the upgrade from before 0.3.0 only, so an operator's removal sticks) through
+`/usr/lib/hsm-linux-probe/docker-access.sh` only where a `docker` group
 exists — never in the unit, which would then not start on a host without one.
 
 Linux is the only supported target. The initiative is

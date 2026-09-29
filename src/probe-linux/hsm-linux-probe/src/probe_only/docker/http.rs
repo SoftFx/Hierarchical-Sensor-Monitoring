@@ -62,7 +62,7 @@ pub fn get(
     use std::os::unix::net::UnixStream;
 
     let deadline = Instant::now() + timeout;
-    let mut stream = UnixStream::connect(socket).map_err(HttpError::Io)?;
+    let mut stream: UnixStream = connect_before(socket, deadline)?;
     stream
         .set_write_timeout(Some(timeout))
         .map_err(HttpError::Io)?;
@@ -92,6 +92,74 @@ pub fn get(
         io::ErrorKind::Unsupported,
         "Unix-domain sockets are not available on this platform",
     )))
+}
+
+/// Connect to a Unix stream socket, giving up at `deadline`. `UnixStream::connect` blocks without
+/// bound when the listener's backlog is full (a wedged daemon that stopped accepting), so the
+/// connect is non-blocking and retried until the deadline; the connected socket is then switched
+/// back to blocking for the timed write and reads.
+#[cfg(unix)]
+fn connect_before(
+    socket: &Path,
+    deadline: Instant,
+) -> Result<std::os::unix::net::UnixStream, HttpError> {
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::io::FromRawFd;
+
+    let bytes = socket.as_os_str().as_bytes();
+    // SAFETY: a zeroed sockaddr_un is a valid "empty" address; the path is copied in below.
+    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    if bytes.len() >= address.sun_path.len() || bytes.contains(&0) {
+        return Err(HttpError::Io(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "socket path too long or contains NUL",
+        )));
+    }
+    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+    for (slot, byte) in address.sun_path.iter_mut().zip(bytes) {
+        *slot = *byte as libc::c_char;
+    }
+
+    // SAFETY: plain socket(2); the descriptor is owned by `stream` below or closed on error.
+    let fd = unsafe {
+        libc::socket(
+            libc::AF_UNIX,
+            libc::SOCK_STREAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK,
+            0,
+        )
+    };
+    if fd < 0 {
+        return Err(HttpError::Io(io::Error::last_os_error()));
+    }
+    // SAFETY: `fd` is a fresh, owned socket descriptor; UnixStream closes it on drop.
+    let stream = unsafe { std::os::unix::net::UnixStream::from_raw_fd(fd) };
+    let length = std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t;
+    loop {
+        // SAFETY: `address` is a valid sockaddr_un of `length` bytes for the call.
+        let result = unsafe {
+            libc::connect(
+                fd,
+                &address as *const libc::sockaddr_un as *const libc::sockaddr,
+                length,
+            )
+        };
+        if result == 0 {
+            break;
+        }
+        let error = io::Error::last_os_error();
+        match error.raw_os_error() {
+            // A full backlog on a Unix socket answers EAGAIN: wait a little and try again.
+            Some(libc::EAGAIN) | Some(libc::EINTR) => {
+                if Instant::now() >= deadline {
+                    return Err(HttpError::Timeout);
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            _ => return Err(HttpError::Io(error)),
+        }
+    }
+    stream.set_nonblocking(false).map_err(HttpError::Io)?;
+    Ok(stream)
 }
 
 /// The request bytes. `Host` is required by HTTP/1.1; the daemon ignores its value.
@@ -384,6 +452,43 @@ mod tests {
             |_, _| Ok(()),
         );
         assert!(matches!(result, Err(HttpError::TooLarge)));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_listener_that_stopped_accepting_cannot_hang_the_connect() {
+        use std::os::unix::io::AsRawFd;
+        use std::os::unix::net::UnixListener;
+
+        // A wedged daemon: listening, never accepting. Once its backlog is full a blocking
+        // connect would wait forever; ours gives up at the deadline.
+        let path =
+            std::env::temp_dir().join(format!("hsm-probe-backlog-{}.sock", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let listener = UnixListener::bind(&path).expect("bind");
+        // A backlog of 1, so it fills after a couple of connects (std listens with SOMAXCONN).
+        // SAFETY: re-listening on a bound socket we own just shrinks its backlog.
+        assert_eq!(unsafe { libc::listen(listener.as_raw_fd(), 1) }, 0);
+        let mut queued = Vec::new();
+        let started = Instant::now();
+        let mut timed_out = false;
+        for _ in 0..4096 {
+            match connect_before(&path, Instant::now() + Duration::from_millis(50)) {
+                Ok(stream) => queued.push(stream),
+                Err(HttpError::Timeout) => {
+                    timed_out = true;
+                    break;
+                }
+                Err(other) => panic!("unexpected {other}"),
+            }
+        }
+        let _ = std::fs::remove_file(&path);
+        assert!(
+            timed_out,
+            "the backlog never filled after {} connects",
+            queued.len()
+        );
+        assert!(started.elapsed() < Duration::from_secs(10));
     }
 
     #[cfg(unix)]

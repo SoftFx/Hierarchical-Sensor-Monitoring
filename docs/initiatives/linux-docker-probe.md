@@ -287,7 +287,7 @@ endpoints (`/containers/json`, `/containers/{id}/stats?stream=false&one-shot=tru
 
 Client (decided in #1416, replacing the `curl`-crate plan): a minimal hand-rolled HTTP/1.1
 `GET` client over `std::os::unix::net::UnixStream` (`hsm-linux-probe/src/probe_only/docker/http.rs`,
-~250 lines incl. `Content-Length`, chunked and close-delimited bodies, one 1.5 s deadline per call,
+~250 lines incl. `Content-Length`, chunked and close-delimited bodies, one 1.5 s deadline per call including the connect,
 a 4 MiB body cap), JSON via serde_json. The Engine API socket is local plaintext HTTP, so libcurl
 would contribute nothing, while the `curl` crate would bring `curl-sys` — whose build silently
 compiles its bundled libcurl when pkg-config does not find the system one, i.e. exactly the "two
@@ -305,7 +305,8 @@ systemd refuses to start a unit whose supplementary group does not exist, so a h
 would break the probe on every host without Docker. The package ships
 `/usr/lib/hsm-linux-probe/docker-access.sh`; postinst runs `install`, which writes the drop-in
 `/etc/systemd/system/hsm-linux-probe.service.d/docker.conf` (`SupplementaryGroups=docker`) only
-when `getent group docker` succeeds (and removes a stale one otherwise); postrm removes it on
+when `getent group docker` succeeds (and removes a stale one otherwise), on a fresh install and on
+the upgrade from before 0.3.0 only (an operator's removal sticks); postrm removes it on
 remove/purge. Connecting to the socket needs no write access to its filesystem, so
 `ProtectSystem=strict` stays; `RestrictAddressFamilies` already has `AF_UNIX`.
 

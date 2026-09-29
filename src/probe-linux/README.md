@@ -215,7 +215,7 @@ Behavior at the edges:
 
 **Engine API client.** A ~250-line HTTP/1.1 `GET` client over `std::os::unix::net::UnixStream`
 (`docker/http.rs`) with `Content-Length`, chunked and close-delimited bodies, a 1.5 s deadline per
-call (under the 2 s stop wait of the source threads) and a 4 MiB body cap — not the `curl` crate: the socket is local plaintext HTTP, and `curl-sys`
+call covering the connect too (under the 2 s stop wait of the source threads) and a 4 MiB body cap — not the `curl` crate: the socket is local plaintext HTTP, and `curl-sys`
 silently compiles its bundled libcurl when pkg-config misses the system one (two libcurls in one
 process) and drags `libz-sys`/`openssl-sys` into the link line. The probe still links exactly one
 libcurl, the collector's. The client can only build four requests, all `GET`: `/version`,
@@ -229,8 +229,9 @@ itself to the four read-only GETs above by construction and review, not by the k
 does **not** name the group (`SupplementaryGroups=docker` stops a unit from starting on a host
 without that group); the package's postinst runs `/usr/lib/hsm-linux-probe/docker-access.sh
 install`, which writes the drop-in `/etc/systemd/system/hsm-linux-probe.service.d/docker.conf` only
-when `getent group docker` succeeds (and removes a stale one otherwise); postrm removes it on
-remove/purge. After installing Docker on a host that
+when `getent group docker` succeeds (and removes a stale one otherwise) — on a fresh install and on
+the upgrade from before 0.3.0 only, so an operator who removed it keeps it removed across upgrades;
+postrm removes it on remove/purge. After installing Docker on a host that
 already runs the probe: `sudo /usr/lib/hsm-linux-probe/docker-access.sh install && sudo systemctl
 daemon-reload && sudo systemctl restart hsm-linux-probe`.
 

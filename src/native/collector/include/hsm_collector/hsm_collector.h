@@ -740,6 +740,9 @@ hsm_result_t hsm_collector_create_enum_sensor_with_sensor_options(
     size_t enum_option_count,
     hsm_sensor_t** out_sensor);
 
+/* The recorded registrations (one per sensor per Start, plus runtime creates). The text behind a
+   returned pointer stays valid until the collector is destroyed; a later attach while running
+   replaces the entry at that index with new text (0.9.1) but never frees the old one. */
 size_t hsm_collector_registration_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_registration_json(
     const hsm_collector_t* collector,

@@ -164,7 +164,8 @@ Version history:
   (before that cycle's values; the managed command-queue cadence), and `hsm_sensor_attach_alert`
   works while the collector runs: the sensor's registration for the run is re-recorded in place and
   re-posted when it already went out. A posted, unchanged registration is never re-sent; a failed
-  runtime post is retried at the next cycle. Pinned by
+  runtime post that got no HTTP response is retried at the next cycle; an HTTP error answer is final
+  (like managed commands, which retry transport failures only). Pinned by
   `alert_registration_contract:alert_on_sensor_created_while_running_registers_with_it` (both
   drivers), `native_http_registers_sensors_created_while_running` and
   `native_http_alert_after_runtime_registration_reregisters`.

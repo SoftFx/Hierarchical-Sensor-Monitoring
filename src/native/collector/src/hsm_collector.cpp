@@ -2504,7 +2504,13 @@ namespace
             if (!CanStartNewSensorsLocked())
                 return;
             if (sensor->registration_index_ < registrations_.size())
+            {
+                // hsm_collector_get_registration_json hands out pointers into these strings; keep
+                // the replaced text alive until the collector is destroyed instead of freeing it
+                // under a caller (bounded by the number of attaches).
+                retired_registrations_.push_back(std::move(registrations_[sensor->registration_index_]));
                 registrations_[sensor->registration_index_] = sensor->RegistrationJson();
+            }
 #if defined(HSM_COLLECTOR_HTTP)
             if (send_wire_)
                 QueueRuntimeRegistration(sensor);
@@ -2539,12 +2545,21 @@ namespace
         // network interface, service-status, TCP-rate) or any sensor the host creates, or attaches
         // an alert to, while the collector runs (FlushRuntimeRegistrations) — rather than the
         // connect-time batch. It changes the log label (no "on connect") and level (Debug, so
-        // per-sample registrations do not spam the log). Returns whether the server accepted it;
-        // each sensor then records the registration version the server has seen.
-        bool PostRegistrationsWire(const std::vector<std::shared_ptr<NativeSensor>>& sensors, bool runtime = false)
+        // per-sample registrations do not spam the log). On success each sensor records the
+        // registration version the server has seen. The outcome tells a runtime flush whether to try
+        // again: like the managed command queue, only a transport failure (no HTTP response) is
+        // retried — an HTTP error answer (4xx/5xx) is final.
+        enum class RegistrationPost
+        {
+            Accepted,
+            Retry,
+            Rejected,
+        };
+
+        RegistrationPost PostRegistrationsWire(const std::vector<std::shared_ptr<NativeSensor>>& sensors, bool runtime = false)
         {
             if (sensors.empty())
-                return true;
+                return RegistrationPost::Accepted;
 
             std::vector<uint64_t> versions;
             versions.reserve(sensors.size());
@@ -2574,7 +2589,7 @@ namespace
                                            stop_drain_deadline_ - std::chrono::steady_clock::now())
                                            .count();
                 if (remaining <= 0)
-                    return false;
+                    return RegistrationPost::Retry;
                 timeout_ms = (std::min<int64_t>)(timeout_ms, remaining);
             }
 
@@ -2590,7 +2605,7 @@ namespace
                                                ? "HTTP " + std::to_string(response.status_code)
                                                : (response.error.empty() ? "no response" : response.error);
                 LogError("Failed to register " + what + (runtime ? "" : " on connect") + ": " + reason);
-                return false;
+                return response.status_code > 0 ? RegistrationPost::Rejected : RegistrationPost::Retry;
             }
 
             for (size_t i = 0; i < sensors.size(); ++i)
@@ -2599,7 +2614,7 @@ namespace
                 LogMessage(HSM_LOG_LEVEL_DEBUG, "Registered " + what + ".");
             else
                 LogMessage(HSM_LOG_LEVEL_INFO, "Registered " + what + " on connect.");
-            return true;
+            return RegistrationPost::Accepted;
         }
 
         // Queue a sensor whose registration the server has not seen yet: created, or given an
@@ -2619,8 +2634,9 @@ namespace
             pending_registrations_.push_back(sensor);
         }
 
-        // Post every queued registration the server has not seen (worker cycle / stop drain). A
-        // failed post re-queues them for the next cycle; the failure itself is logged (dedup'd).
+        // Post every queued registration the server has not seen (worker cycle / stop drain). A post
+        // that got no HTTP response re-queues them for the next cycle; an HTTP error answer does not
+        // (it would repeat forever). Either failure is logged (dedup'd).
         void FlushRuntimeRegistrations()
         {
             std::vector<std::shared_ptr<NativeSensor>> pending;
@@ -2634,7 +2650,7 @@ namespace
                     due.push_back(std::move(sensor));
             if (due.empty())
                 return;
-            if (!PostRegistrationsWire(due, /*runtime=*/true))
+            if (PostRegistrationsWire(due, /*runtime=*/true) == RegistrationPost::Retry)
                 for (const auto& sensor : due)
                     QueueRuntimeRegistration(sensor);
         }
@@ -5531,6 +5547,9 @@ namespace
         std::vector<std::shared_ptr<AlertData>> alert_data_; // alert handles, owned for the collector's lifetime
         std::vector<std::string> sent_values_;
         std::vector<std::string> registrations_;
+        // Registration texts replaced in place by an attach while running (OnRegistrationChanged),
+        // kept so a pointer returned by RegistrationJson(index) never dangles.
+        std::vector<std::string> retired_registrations_;
         // One-shot values queued (pre-formatted wire/record JSON) while not yet accepting data, drained
         // into the send queue on the next Start. Lets a sensor registered pre-Start emit an initial
         // value on connect (mirrors managed SensorBase.StartAsync) instead of having it dropped by the

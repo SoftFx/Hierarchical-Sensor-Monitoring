@@ -6040,6 +6040,25 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
     }
 
+    // A runtime registration the server answers with an HTTP error is not retried every cycle —
+    // it would repeat forever (managed commands likewise retry transport failures only). The
+    // sensor's values still flow.
+    void NativeHttpRejectedRuntimeRegistrationIsNotRetried()
+    {
+        hsm::test::HttpRecordingServer server({}, "/api/sensors/commands");
+        CollectorHandle collector = CreateCollector(StopDrainOptions(server.Port(), 20));
+        hsm_collector_test_install_http_sender(collector.value);
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        SensorHandle sensor = CreateIntSensor(collector.value, "runtime/rejected");
+        Require(hsm_sensor_add_int(sensor.value, 401, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add 401 failed");
+        Require(WaitForRequestWith(server, "/api/sensors/list", { "\"Value\":401," }) >= 0, "the value is still delivered");
+        // Ten more worker cycles: the rejected registration must not be posted again.
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        Require(server.CountPath("/api/sensors/commands") == 1, "a rejected registration is posted once");
+    }
+
     // An alert attached AFTER the runtime registration went out re-registers the sensor, so the
     // server still ends with the alert.
     void NativeHttpAlertAttachedAfterRuntimeRegistrationReRegisters()
@@ -7634,6 +7653,7 @@ namespace
             { "native_http_stop_start_stop_delivers", [](const std::string&) { NativeHttpStopStartStopDelivers(); } },
             { "native_http_registers_sensors_created_while_running", [](const std::string&) { NativeHttpRegistersSensorsCreatedWhileRunning(); } },
             { "native_http_alert_after_runtime_registration_reregisters", [](const std::string&) { NativeHttpAlertAttachedAfterRuntimeRegistrationReRegisters(); } },
+            { "native_http_rejected_runtime_registration_is_not_retried", [](const std::string&) { NativeHttpRejectedRuntimeRegistrationIsNotRetried(); } },
 #endif
             { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
             { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },

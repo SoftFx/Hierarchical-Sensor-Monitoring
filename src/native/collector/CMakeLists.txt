@@ -293,6 +293,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_alert_after_runtime_registration_reregisters
         COMMAND hsm_collector_tests native_http_alert_after_runtime_registration_reregisters
     )
+    add_test(NAME native_http_rejected_runtime_registration_is_not_retried
+        COMMAND hsm_collector_tests native_http_rejected_runtime_registration_is_not_retried
+    )
 endif()
 
 add_test(NAME native_invalid_argument_clears_out_params

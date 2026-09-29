@@ -257,8 +257,9 @@ namespace hsm::test
             std::string body;
         };
 
-        explicit HttpRecordingServer(std::string hang_path_prefix = {})
-            : hang_path_prefix_(std::move(hang_path_prefix))
+        // `reject_path_prefix`: requests to it are recorded and answered 400 Bad Request.
+        explicit HttpRecordingServer(std::string hang_path_prefix = {}, std::string reject_path_prefix = {})
+            : hang_path_prefix_(std::move(hang_path_prefix)), reject_path_prefix_(std::move(reject_path_prefix))
         {
 #if defined(_WIN32)
             WSADATA wsa;
@@ -370,6 +371,7 @@ namespace hsm::test
                 }
 
                 const bool hang = !hang_path_prefix_.empty() && recorded.path.rfind(hang_path_prefix_, 0) == 0;
+                const bool reject = !reject_path_prefix_.empty() && recorded.path.rfind(reject_path_prefix_, 0) == 0;
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
                     requests_.push_back(std::move(recorded));
@@ -381,7 +383,9 @@ namespace hsm::test
                     continue;
                 }
 
-                static const std::string response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                static const std::string ok = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                static const std::string bad = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                const std::string& response = reject ? bad : ok;
                 send(conn, response.c_str(), static_cast<int>(response.size()), 0);
                 closesocket(conn);
             }
@@ -443,6 +447,7 @@ namespace hsm::test
         }
 
         std::string hang_path_prefix_;
+        std::string reject_path_prefix_;
         socket_t listen_ = INVALID_SOCKET;
         int port_ = 0;
         std::atomic<bool> stop_{ false };
