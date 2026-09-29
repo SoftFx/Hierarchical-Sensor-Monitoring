@@ -36,7 +36,7 @@ The probe registers **two separately pinned sets**:
    nothing less"), their registration and alerts by
    `probe::tests::probe_only_sensors_register_their_agreed_shape_and_alerts`. Sources, periods,
    alerts and costs: README "Probe-only sensors".
-   **Disks** (#1481, part of the probe-only set) — four sensors per mounted real filesystem under
+   **Disks** (#1481, part of the probe-only set) — five sensors per mounted real filesystem under
    `.computer/Disks monitoring/`, named like the Windows per-drive sensors with a name for the
    letter (`root` for `/`, else the last mount-path segment; collisions → the whole path with
    `/` → `_`, then a counter; the mount point → name map is persisted in
@@ -44,13 +44,17 @@ The probe registers **two separately pinned sets**:
    the name follows the mount point, not the device):
    `Free space on <name> disk` (MB, EMA, no absolute-size alert), `… disk %`,
    `Free inodes on <name> disk %`, `Average disk write speed on <name> disk` (MBytes_sec bar from
-   `/proc/diskstats` of the whole disk). Block-backed types only, deduplicated by source device,
+   `/proc/diskstats` of the whole disk) and `Written today on <name> disk` (#1485: decimal GB
+   written to that whole disk since local midnight, from the same counter, posted every 5 min;
+   from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
+   with the boot id, so a restart continues the day and a reboot keeps the day but not the
+   counters). Block-backed types only, deduplicated by source device,
    re-scanned every 10 min (new mounts register at runtime; removed ones time out; every 5-min
    sample re-checks the mount table first; automounted and over-mounted filesystems are skipped —
    `ProtectHome=yes` unmounts a separate `/home` from the service's namespace, so it is not
    reported; logged once at WARN when `/etc/fstab` lists it). The archives
    are `statvfs`'d directly — measured not to wake sleeping disks; nothing under a mount is ever
-   opened, listed or read. Pinned for garage-server (4 filesystems, 16 paths) by
+   opened, listed or read. Pinned for garage-server (4 filesystems, 20 paths) by
    `DISKS_GARAGE_SET`, built from captured `mountinfo`/`diskstats`/sysfs
    (`probe_only/disks/fixtures/`). The managed-parity `Free space on disk` (+ prediction) is a
    different sensor and untouched.

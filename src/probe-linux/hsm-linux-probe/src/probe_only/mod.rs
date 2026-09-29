@@ -67,6 +67,11 @@ pub struct HostEnvironment {
     pub docker_state: Option<PathBuf>,
     /// The persisted disk names (`$STATE_DIRECTORY/disk-names.json`); `None` keeps them in memory.
     pub disk_names: Option<PathBuf>,
+    /// Today's written volume per disk (`$STATE_DIRECTORY/disk-written.json`); `None` keeps it in
+    /// memory.
+    pub disk_written: Option<PathBuf>,
+    /// This boot's id (`/proc/sys/kernel/random/boot_id`): the diskstats counters restart at boot.
+    pub boot_id: PathBuf,
 }
 
 impl HostEnvironment {
@@ -86,6 +91,11 @@ impl HostEnvironment {
                 docker::state::default_state_path(std::env::var_os("STATE_DIRECTORY").as_deref())
                     .with_file_name(disks::names::FILE_NAME),
             ),
+            disk_written: Some(
+                docker::state::default_state_path(std::env::var_os("STATE_DIRECTORY").as_deref())
+                    .with_file_name(disks::written::FILE_NAME),
+            ),
+            boot_id: PathBuf::from("/proc/sys/kernel/random/boot_id"),
         }
     }
 }

@@ -1,5 +1,5 @@
 //! Disk sensors for every mounted real filesystem (#1481): free space (MB and %), free inodes (%)
-//! and the write speed of the disk underneath.
+//! and the write speed and today's written volume of the disk underneath.
 //!
 //! # Layout — the Windows per-drive naming
 //!
@@ -14,6 +14,7 @@
 //! | `Free space on <name> disk %` | Double · Percents | 5 min |
 //! | `Free inodes on <name> disk %` | Double · Percents | 5 min |
 //! | `Average disk write speed on <name> disk` | DoubleBar · MBytes_sec | 5 s samples, 5-min bar |
+//! | `Written today on <name> disk` | Double · GB (decimal) | 5 s samples, posted every 5 min |
 //!
 //! Every sensor carries a 15-minute TTL (three periods of the 5-minute ones): a filesystem that
 //! stops being sampled — unmounted, or its `statvfs` hanging — turns to Timeout on the server.
@@ -46,12 +47,13 @@
 pub mod diskstats;
 pub mod mounts;
 pub mod names;
+pub mod written;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use hsm_collector::{
     instant_hourly_schedule_anchor, Alert, AlertCombination, AlertDestination, AlertIcon,
@@ -61,6 +63,7 @@ use hsm_collector::{
 
 use self::diskstats::{Skip, WriteRate};
 use self::mounts::Filesystem;
+use self::written::{Ledger, LocalTime};
 use super::{FailureLog, HostEnvironment, Source};
 use crate::config::DisksConfig;
 use crate::logging::{Level, Logger};
@@ -86,6 +89,7 @@ const STATVFS_TIMEOUT: Duration = if cfg!(test) {
 
 /// Codes of the managed `Unit` enum.
 const UNIT_MB: i32 = 3;
+const UNIT_GB: i32 = 4;
 const UNIT_PERCENTS: i32 = 100;
 const UNIT_MBYTES_SEC: i32 = 2103;
 
@@ -102,6 +106,9 @@ pub fn free_inodes_percent_path(name: &str) -> String {
 }
 pub fn write_speed_path(name: &str) -> String {
     format!("{CATEGORY}/Average disk write speed on {name} disk")
+}
+pub fn written_today_path(name: &str) -> String {
+    format!("{CATEGORY}/Written today on {name} disk")
 }
 
 /// The `statvfs` fields the sensors use.
@@ -228,6 +235,8 @@ struct Node<'c> {
     /// decided — and the inode sensor registered or not — on the first successful sample.
     inodes_pending: bool,
     write_speed: Option<DoubleBarSensor<'c>>,
+    /// Registered wherever the write speed is: the same disk, the same counter.
+    written_today: Option<DoubleSensor<'c>>,
     in_flight: Arc<AtomicBool>,
     failures: FailureLog,
 }
@@ -439,9 +448,19 @@ impl<'c> Disks<'c> {
                         if self.config.write_speed {
                             node.disk =
                                 diskstats::whole_disk(&self.sys_root, &fs.device, &fs.source);
-                            if node.write_speed.is_none() {
-                                if let Some(disk) = node.disk.clone() {
+                            if let Some(disk) = node.disk.clone() {
+                                if node.write_speed.is_none() {
                                     node.write_speed = register_write_speed(
+                                        self.collector,
+                                        logger,
+                                        &node.name,
+                                        &node.fs,
+                                        &disk,
+                                        &[],
+                                    );
+                                }
+                                if node.written_today.is_none() {
+                                    node.written_today = register_written_today(
                                         self.collector,
                                         logger,
                                         &node.name,
@@ -530,19 +549,23 @@ fn register_node<'c>(
         // The discovery statvfs failed: the first successful sample decides.
         None => None,
     };
-    let write_speed = disk.as_ref().and_then(|disk| {
-        let sharing = by_disk
-            .get(disk)
-            .map(|names| {
-                names
-                    .iter()
-                    .filter(|other| **other != name)
-                    .cloned()
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        register_write_speed(collector, logger, &name, &fs, disk, &sharing)
-    });
+    let sharing = disk
+        .as_ref()
+        .and_then(|disk| by_disk.get(disk))
+        .map(|names| {
+            names
+                .iter()
+                .filter(|other| **other != name)
+                .cloned()
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let write_speed = disk
+        .as_ref()
+        .and_then(|disk| register_write_speed(collector, logger, &name, &fs, disk, &sharing));
+    let written_today = disk
+        .as_ref()
+        .and_then(|disk| register_written_today(collector, logger, &name, &fs, disk, &sharing));
     Node {
         name,
         fs,
@@ -553,6 +576,7 @@ fn register_node<'c>(
         free_inodes,
         inodes_pending: inodes_counted.is_none(),
         write_speed,
+        written_today,
         in_flight,
         failures: FailureLog::default(),
     }
@@ -630,6 +654,47 @@ fn register_write_speed<'c>(
             None
         }
     }
+}
+
+/// No alert and no statistics (owner decision): a running total that resets at midnight is read as
+/// is.
+fn register_written_today<'c>(
+    collector: &'c Collector,
+    logger: &Logger,
+    name: &str,
+    fs: &Filesystem,
+    disk: &str,
+    sharing: &[String],
+) -> Option<DoubleSensor<'c>> {
+    let shared = if sharing.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " The disk is shared, so this is also the volume written today of: {}.",
+            sharing.join(", ")
+        )
+    };
+    register_double(
+        collector,
+        logger,
+        &written_today_path(name),
+        SensorOptions::default()
+            .with_is_computer_sensor(true)
+            .with_ttl(TTL)
+            .with_unit(UNIT_GB)
+            .with_description(format!(
+                "Written to the whole disk {disk} under {} since local midnight (the host's \
+                 timezone), in GB (decimal: 1 GB = 10⁹ bytes, the unit disk endurance is rated \
+                 in): /proc/diskstats sectors written, summed from the 5-s write-speed samples and \
+                 posted every 5 minutes. Starts from 0 at local midnight. The first sample or a \
+                 counter reset only sets a baseline; a day with no measurement yet is not posted \
+                 (never an invented 0), and a day whose measurement began after midnight says \
+                 since when in the comment. A probe restart continues the day; the writes during \
+                 a reboot are not counted.{shared}",
+                where_(fs)
+            )),
+        Vec::new(),
+    )
 }
 
 fn log_no_inodes(logger: &Logger, name: &str, fs: &Filesystem) {
@@ -772,11 +837,25 @@ fn build<'c>(
         live_failures: FailureLog::default(),
     };
     let write = if config.write_speed {
+        let boot_id = written::read_boot_id(&environment.boot_id);
+        let ledger = environment
+            .disk_written
+            .as_deref()
+            .map(|path| Ledger::load(path, &boot_id, logger))
+            .unwrap_or_default();
         Some(WriteSpeedSource {
             disks,
             diskstats: environment.diskstats.clone(),
             rates: BTreeMap::new(),
             failures: FailureLog::default(),
+            ledger,
+            ledger_path: environment.disk_written.clone(),
+            boot_id,
+            ledger_dirty: false,
+            last_post: Instant::now(),
+            clock: unix_now_ms,
+            local: written::local_time,
+            save_failures: FailureLog::default(),
         })
     } else {
         logger.info("disks: write speed disabled (probe.disks.writeSpeed = false)");
@@ -932,12 +1011,81 @@ fn post(sensor: &Option<DoubleSensor<'_>>, value: Option<f64>, logger: &Logger) 
 }
 
 /// Disk write speed: one `/proc/diskstats` read every 5 s, one rate per whole disk, posted into the
-/// bar of every mounted filesystem on that disk.
+/// bar of every mounted filesystem on that disk. The same read feeds each disk's written-today
+/// total ([`written`]), posted every 5 minutes.
 struct WriteSpeedSource<'c> {
     disks: Arc<Disks<'c>>,
     diskstats: PathBuf,
     rates: BTreeMap<String, WriteRate>,
     failures: FailureLog,
+    ledger: Ledger,
+    /// `$STATE_DIRECTORY/disk-written.json`; `None` keeps the day in memory only.
+    ledger_path: Option<PathBuf>,
+    boot_id: String,
+    /// The ledger changed since it was last saved.
+    ledger_dirty: bool,
+    /// When `Written today` was last posted.
+    last_post: Instant,
+    /// The wall clock, Unix milliseconds, and the host's local calendar (seams for tests).
+    clock: fn() -> i64,
+    local: LocalTime,
+    save_failures: FailureLog,
+}
+
+impl WriteSpeedSource<'_> {
+    /// Post every filesystem's `Written today` (its disk's day so far) and save the ledger.
+    fn post_written_today(&mut self, nodes: &[Node<'_>], logger: &Logger) {
+        let now_ms = (self.clock)();
+        for node in nodes.iter().filter(|node| node.mounted) {
+            let (Some(sensor), Some(disk)) = (&node.written_today, node.disk.as_deref()) else {
+                continue;
+            };
+            let Some((gigabytes, comment)) = self.ledger.today(disk, now_ms, self.local) else {
+                continue;
+            };
+            let posted = match &comment {
+                Some(comment) => {
+                    sensor.add_with(gigabytes, hsm_collector::SensorStatus::Ok, Some(comment))
+                }
+                None => sensor.add(gigabytes),
+            };
+            if let Err(error) = posted {
+                logger.error(format!("disks: cannot post a written-today value: {error}"));
+            }
+        }
+        self.save_ledger(logger);
+    }
+
+    fn save_ledger(&mut self, logger: &Logger) {
+        let Some(path) = &self.ledger_path else {
+            return;
+        };
+        if !self.ledger_dirty {
+            return;
+        }
+        let what = "disks: written-today ledger";
+        match self.ledger.save(path, &self.boot_id) {
+            Ok(()) => {
+                self.ledger_dirty = false;
+                self.save_failures.succeeded(logger, what);
+            }
+            Err(error) => self.save_failures.failed(
+                logger,
+                what,
+                &format!(
+                    "cannot write {} ({error}); a restart would start today's totals afresh",
+                    path.display()
+                ),
+            ),
+        }
+    }
+}
+
+fn unix_now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or(0)
 }
 
 impl Source for WriteSpeedSource<'_> {
@@ -963,12 +1111,16 @@ impl Source for WriteSpeedSource<'_> {
             }
         };
         let now = Instant::now();
+        let now_ms = (self.clock)();
         let counters = diskstats::parse_diskstats(&text);
 
-        let nodes = self.disks.nodes.lock().unwrap_or_else(|p| p.into_inner());
+        let disks_handle = Arc::clone(&self.disks);
+        let nodes = disks_handle.nodes.lock().unwrap_or_else(|p| p.into_inner());
         let disks: BTreeSet<&str> = nodes
             .iter()
-            .filter(|node| node.mounted && node.write_speed.is_some())
+            .filter(|node| {
+                node.mounted && (node.write_speed.is_some() || node.written_today.is_some())
+            })
             .filter_map(|node| node.disk.as_deref())
             .collect();
         let mut missing = Vec::new();
@@ -977,8 +1129,15 @@ impl Source for WriteSpeedSource<'_> {
                 missing.push(disk.to_string());
                 // Gone from the table: the next appearance starts a new baseline.
                 self.rates.remove(disk);
+                self.ledger.forget_baseline(disk);
                 continue;
             };
+            // Today's volume: every sample, whatever the rate makes of it (a long gap inside the
+            // day still counts; the ledger has its own rules).
+            let _ = self
+                .ledger
+                .sample(disk, written, now_ms, self.local, WRITE_SAMPLE_PERIOD);
+            self.ledger_dirty = true;
             let rate = self
                 .rates
                 .entry(disk.to_string())
@@ -1015,6 +1174,16 @@ impl Source for WriteSpeedSource<'_> {
                 &format!("{} not in {}", missing.join(", "), self.diskstats.display()),
             );
         }
+        // Every 5 minutes; half a sample period of slack absorbs scheduling jitter.
+        if self.last_post.elapsed() + WRITE_SAMPLE_PERIOD / 2 >= SPACE_PERIOD {
+            self.last_post = Instant::now();
+            self.post_written_today(&nodes, logger);
+        }
+    }
+
+    fn stop(&mut self, logger: &Logger) {
+        // Today's totals and counters, so a restart continues the day.
+        self.save_ledger(logger);
     }
 }
 
@@ -1040,6 +1209,7 @@ pub mod tests {
                     free_space_percent_path(name),
                     free_inodes_percent_path(name),
                     write_speed_path(name),
+                    written_today_path(name),
                 ]
             })
             .map(|path| format!("{computer}/{path}"))
@@ -1147,6 +1317,8 @@ pub mod tests {
             docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
             docker_state: None,
             disk_names: None,
+            disk_written: None,
+            boot_id: PathBuf::from("/nonexistent/boot_id"),
         };
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
         options.allow_plaintext_transport = true;
@@ -1215,6 +1387,8 @@ pub mod tests {
             docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
             docker_state: None,
             disk_names: None,
+            disk_written: None,
+            boot_id: PathBuf::from("/nonexistent/boot_id"),
         };
         let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
         options.allow_plaintext_transport = true;
@@ -1230,7 +1404,7 @@ pub mod tests {
         let metered: Vec<&str> = write.rates.keys().map(String::as_str).collect();
         assert_eq!(metered, vec!["sda", "sdb", "sdc"]);
         let before = collector.registrations().len();
-        assert_eq!(before, 16, "four filesystems x four sensors");
+        assert_eq!(before, 20, "four filesystems x five sensors");
 
         // A USB stick is plugged in and the oldlinux partition is unmounted.
         let mounted = mounts::tests::GARAGE_MOUNTINFO
@@ -1280,6 +1454,132 @@ pub mod tests {
         assert_eq!(usb.len(), 1);
         assert!(usb[0].mounted && usb[0].fs.source == "/dev/sde1");
         drop(nodes);
+        collector.stop().expect("stop");
+    }
+
+    thread_local! {
+        /// The wall clock of the written-today tests (each test runs on its own thread).
+        static NOW_MS: std::cell::Cell<i64> = const { std::cell::Cell::new(0) };
+    }
+
+    fn test_clock() -> i64 {
+        NOW_MS.with(std::cell::Cell::get)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn written_today_follows_each_disks_counter_and_survives_a_restart() {
+        use crate::logging::Level;
+        use crate::probe_only::host::tests::FakeTree;
+        use hsm_collector::CollectorOptions;
+
+        let tree = FakeTree::new("written-today");
+        tree.file("mountinfo", mounts::tests::GARAGE_MOUNTINFO);
+        tree.file("diskstats", diskstats::tests::GARAGE_DISKSTATS);
+        tree.file("boot_id", "4b1c7a52-0000-4000-8000-000000000001\n");
+        diskstats::tests::garage_sysfs(&tree);
+        let environment = HostEnvironment {
+            sys_root: tree.0.join("sys"),
+            mountinfo: tree.0.join("mountinfo"),
+            fstab: tree.0.join("fstab"),
+            diskstats: tree.0.join("diskstats"),
+            statvfs: recording_statvfs,
+            online_cpus: || Ok(1),
+            docker_engine: |_| Box::new(crate::probe_only::docker::tests::FixtureEngine::garage()),
+            docker_state: None,
+            disk_names: None,
+            disk_written: Some(tree.0.join(written::FILE_NAME)),
+            boot_id: tree.0.join("boot_id"),
+        };
+        // sdc wrote 2 000 000 sectors (1.024 GB) since the first read; the HDDs nothing.
+        let later = diskstats::tests::GARAGE_DISKSTATS.replace(" 683671624 ", " 685671624 ");
+        let start = written::tests::MIDNIGHT + 9 * 3_600_000;
+
+        let mut options = CollectorOptions::new("unit-test-key", "http://127.0.0.1", 1);
+        options.allow_plaintext_transport = true;
+        options.computer_name = Some("garage-server".into());
+        let logger = Logger::new(Level::Error, None);
+        {
+            let collector = Collector::new(&options).expect("create");
+            let (_, write) = build(&collector, &DisksConfig::default(), &environment, &logger);
+            let mut write = write.expect("write speed on by default");
+            write.clock = test_clock;
+            write.local = written::tests::utc;
+            collector.start().expect("start");
+            NOW_MS.with(|now| now.set(start));
+            write.sample(&logger);
+            tree.file("diskstats", &later);
+            NOW_MS.with(|now| now.set(start + 5_000));
+            // The 5-minute post is due: it also saves the ledger.
+            write.last_post = Instant::now() - SPACE_PERIOD;
+            write.sample(&logger);
+            let at = start + 5_000;
+            assert_eq!(
+                write.ledger.today("sdc", at, written::tests::utc),
+                Some((
+                    1.024,
+                    Some(
+                        "measured since 09:00 local time (writes before that are not counted)"
+                            .into()
+                    )
+                ))
+            );
+            assert_eq!(
+                write
+                    .ledger
+                    .today("sda", at, written::tests::utc)
+                    .unwrap()
+                    .0,
+                0.0
+            );
+            assert_eq!(
+                write
+                    .ledger
+                    .today("sdb", at, written::tests::utc)
+                    .unwrap()
+                    .0,
+                0.0
+            );
+
+            let registrations = collector.registrations();
+            let root = registrations
+                .iter()
+                .find(|json| json.contains("Written today on root disk"))
+                .expect("registered")
+                .clone();
+            assert!(root.contains("\"OriginalUnit\":4"), "{root}");
+            assert!(!root.contains("\"Statistics\":1"), "{root}");
+            assert!(!root.contains("\"Alerts\":[{"), "{root}");
+            // mediacentr and oldlinux share sdb: each says so.
+            assert!(registrations
+                .iter()
+                .any(|json| json.contains("Written today on oldlinux disk")
+                    && json.contains("also the volume written today of: mediacentr")));
+            collector.stop().expect("stop");
+        }
+
+        // Restarted an hour later in the same boot: sdc wrote 1.024 GB more meanwhile, and the day
+        // continues from the ledger.
+        tree.file(
+            "diskstats",
+            &diskstats::tests::GARAGE_DISKSTATS.replace(" 683671624 ", " 687671624 "),
+        );
+        let collector = Collector::new(&options).expect("create");
+        let (_, write) = build(&collector, &DisksConfig::default(), &environment, &logger);
+        let mut write = write.expect("write speed on by default");
+        write.clock = test_clock;
+        write.local = written::tests::utc;
+        collector.start().expect("start");
+        NOW_MS.with(|now| now.set(start + 3_600_000));
+        write.sample(&logger);
+        assert_eq!(
+            write
+                .ledger
+                .today("sdc", start + 3_600_000, written::tests::utc)
+                .unwrap()
+                .0,
+            2.048
+        );
         collector.stop().expect("stop");
     }
 

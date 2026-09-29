@@ -457,6 +457,8 @@ mod tests {
                 },
                 docker_state: None,
                 disk_names: None,
+                disk_written: None,
+                boot_id: std::path::PathBuf::from("/nonexistent/boot_id"),
             }
         }
     }
@@ -470,7 +472,7 @@ mod tests {
 
     /// The disk sensors garage-server registers (#1481), pinned literally: four real filesystems
     /// (`/` on sdc1, the FUSE-NTFS archives on sda2 and sdb1, ext4 on sdb5), deduplicated from
-    /// eleven mounts, named after the Windows per-drive pattern.
+    /// eleven mounts, named after the Windows per-drive pattern; five sensors each (20 paths).
     const DISKS_GARAGE_SET: &[&str] = &[
         "garage-server/.computer/Disks monitoring/Average disk write speed on mediacentr disk",
         "garage-server/.computer/Disks monitoring/Average disk write speed on oldlinux disk",
@@ -488,6 +490,10 @@ mod tests {
         "garage-server/.computer/Disks monitoring/Free space on root disk %",
         "garage-server/.computer/Disks monitoring/Free space on wd4tb disk",
         "garage-server/.computer/Disks monitoring/Free space on wd4tb disk %",
+        "garage-server/.computer/Disks monitoring/Written today on mediacentr disk",
+        "garage-server/.computer/Disks monitoring/Written today on oldlinux disk",
+        "garage-server/.computer/Disks monitoring/Written today on root disk",
+        "garage-server/.computer/Disks monitoring/Written today on wd4tb disk",
     ];
 
     /// The module set: managed `AddAllModuleSensors` minus `Process ThreadPool thread count`
