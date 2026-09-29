@@ -149,8 +149,15 @@ Owner decision 2026-09-29: one product = one host, so the probe's tree sits dire
 (`.computer/…`, `.module/…`, `Docker/…`). The probe's `hsm.computerName` and `hsm.module` default to
 empty, which leaves both segments out of every path; the bundle's `config.json` carries neither. The
 former `computerName: "auto"` and its install-time host-name substitution are removed. A host installed
-from an older bundle keeps its `computerName`/`module` until its config is replaced
-(`install.sh --force-config`) or edited — setting them is accepted but not recommended. The Windows
+from an older bundle keeps its `computerName`/`module` until its config is replaced or edited;
+re-installing with `install.sh --force-config` writes the new config and so moves that host's tree to the
+product root (the old nodes, alerts and TTL state stay behind). Setting the keys is accepted but not
+recommended.
+
+**One product per host.** With no host node, a second host installed from the same product's bundle writes
+into the same `.computer/…`, `.module/…` and `Docker/…` sensors: values interleave and `Service alive`
+stays green while either host is up. Nothing on the server can tell the two apart, so the rule is stated
+where the bundle is taken and used — the Edit Product download help text and an `install.sh` note. The Windows
 agent bundle is unchanged (`<MACHINE>/HSM Agent/.module`).
 
 ## Staging: `probe-release.txt`

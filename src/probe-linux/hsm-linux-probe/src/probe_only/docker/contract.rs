@@ -7,7 +7,8 @@
 
 use std::time::Duration;
 
-/// Root node of the Docker tree, under the probe's module: `<computer>/<module>/Docker/…`.
+/// Root node of the Docker tree: `Docker/…` at the product root (#1493), or under
+/// `computerName`/`module` when those are set.
 pub const ROOT: &str = "Docker";
 
 /// Pseudo-project for containers without Compose labels when `docker.composeOnly` is `false`.

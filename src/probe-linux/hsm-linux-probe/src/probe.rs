@@ -478,7 +478,8 @@ mod tests {
     }
 
     /// Sensors that exist only in this probe (README "Probe-only sensors"; owner decisions of
-    /// 2026-09-24): computer-level, so they sit under `<computer>/.computer/`, not the module.
+    /// 2026-09-24): computer-level, so they sit under `.computer/` at the product root (or under
+    /// `computerName` when it is set), not the module.
     const PROBE_ONLY_SET: &[&str] = &[".computer/CPU temperature", ".computer/Logical cores"];
 
     /// The disk sensors garage-server registers (#1481), pinned literally: four real filesystems

@@ -155,6 +155,8 @@ namespace HSMServer.Core.Tests
             // The bundle's config is installed as is: no host name is written into it any more.
             Assert.DoesNotContain("computerName", script);
             Assert.DoesNotContain("hostname", script);
+            // The layout has no host node, so the rule that keeps two hosts apart is said out loud.
+            Assert.Contains("one product per host", script);
             Assert.Contains("install -m 0644 -o root -g root config.json \"$CONFIG_DIR/config.json\"", script);
 
             // The key is only moved as a file: never printed or read into a variable.

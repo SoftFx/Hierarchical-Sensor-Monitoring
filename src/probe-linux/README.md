@@ -528,7 +528,11 @@ Placeholders only — **no secrets**:
   `module` used to default to `LinuxProbe`. A hand-written config that sets `computerName` but
   leaves `module` out therefore moves from `<computer>/LinuxProbe/…` to `<computer>/…` on upgrade
   (the old nodes go stale). Configs from the server bundle or the old skeleton set both keys
-  explicitly and keep their layout until edited. For the product-root layout remove both keys; to
+  explicitly and keep their layout until edited — or until the bundle is re-installed with
+  `install.sh --force-config`, which writes the new config without either key and so moves the
+  tree to the product root (the old nodes, their alerts and TTL state stay behind).
+  **One product per host:** with no host node, two hosts reporting into one product write into the
+  same sensors — give every host its own product. For the product-root layout remove both keys; to
   keep the old one, set `"module": "LinuxProbe"`.
 * It warns if the key is readable beyond its owner. The check evaluates the POSIX ACL, not just the
   mode bits: systemd hands a credential to a non-root `User=` as a root-owned `0400` file plus a
