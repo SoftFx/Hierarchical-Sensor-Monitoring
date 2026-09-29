@@ -166,7 +166,10 @@ Version history:
   cannot change a description after creation, so there is no conformance verb (see the
   `CONFORMANCE-UNSUPPORTED` note in `tests/conformance/collector/alert_registration_contract.hsmtest`).
   Pinned by `native_set_description_rebuilds_the_registration` and
-  `native_http_alert_after_runtime_registration_reregisters`.
+  `native_http_alert_after_runtime_registration_reregisters`. Also: the registration texts an
+  in-place replacement retires (kept so a pointer from `hsm_collector_get_registration_json` does
+  not dangle) are now bounded to the latest 256 — a host re-describing a sensor on every replica
+  change must not grow memory without limit; read and copy returned text promptly.
 - **0.9.1** (#1416) — behavior fix, ABI unchanged. A sensor created through the public create
   paths while the collector runs was recorded locally (`hsm_collector_get_registration_json`) but
   never POSTed to `/commands` on the HTTP transport — only the built-in lazy sources registered at

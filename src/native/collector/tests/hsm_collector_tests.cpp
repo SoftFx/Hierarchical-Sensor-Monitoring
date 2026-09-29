@@ -3031,15 +3031,16 @@ namespace
         Require(hsm_collector_registration_count(collector.value) == 1, "one registration at Start");
         const char* json = nullptr;
         Require(hsm_collector_get_registration_json(collector.value, 0, &json) == HSM_RESULT_OK, "read");
-        const std::string at_start = json;
-        Require(at_start.find("\"Description\":\"second\"") != std::string::npos, at_start.c_str());
+        const char* at_start = json; // the raw pointer the ABI handed out, kept across the change
+        Require(std::string(at_start).find("\"Description\":\"second\"") != std::string::npos, at_start);
 
         Require(hsm_sensor_set_description(sensor.value, "third") == HSM_RESULT_OK, "set while running");
         Require(hsm_collector_registration_count(collector.value) == 1, "replaced in place, not appended");
         Require(hsm_collector_get_registration_json(collector.value, 0, &json) == HSM_RESULT_OK, "read");
         Require(std::string(json).find("\"Description\":\"third\"") != std::string::npos, json);
-        // The text handed out before the change is still readable (kept, not freed).
-        Require(at_start.find("second") != std::string::npos, "old text intact");
+        // The text handed out before the change is still readable through the same pointer
+        // (kept, not freed — ASan would flag a use-after-free here).
+        Require(std::string(at_start).find("\"Description\":\"second\"") != std::string::npos, "old text intact");
 
         Require(hsm_sensor_set_description(sensor.value, nullptr) == HSM_RESULT_OK, "clear");
         Require(hsm_collector_get_registration_json(collector.value, 0, &json) == HSM_RESULT_OK, "read");

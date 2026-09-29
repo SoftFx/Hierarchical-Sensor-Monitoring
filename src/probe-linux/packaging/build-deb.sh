@@ -110,7 +110,7 @@ for script in postinst prerm postrm; do
     install -m 0755 "$PACKAGING_DIR/deb/$script" "$ROOT/DEBIAN/$script"
 done
 # No DEBIAN/conffiles: the operator's /etc/hsm-linux-probe/config.json belongs to the operator
-# (seeded once by postinst). Packages before 0.3.0 shipped it as a conffile; dpkg keeps such a file
+# (seeded once by postinst). Packages before 0.3.1 shipped it as a conffile; dpkg keeps such a file
 # as an "obsolete" conffile on upgrade - never deleted, never prompted about - and purge removes it.
 
 INSTALLED_SIZE="$(du -sk --exclude=DEBIAN "$ROOT" | cut -f1)"

@@ -24,7 +24,7 @@ case "$1" in
                 --shell /usr/sbin/nologin --comment "HSM Linux probe" hsm-probe
         fi
         # The config belongs to the operator: seeded from the skeleton only when absent (a fresh
-        # install without install.sh), never touched afterwards. Before 0.3.0 it was a dpkg
+        # install without install.sh), never touched afterwards. Before 0.3.1 it was a dpkg
         # conffile, which made an upgrade stop at a prompt whenever the skeleton changed.
         if [ ! -e /etc/hsm-linux-probe/config.json ]; then
             install -d -m 0755 /etc/hsm-linux-probe

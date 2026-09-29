@@ -370,7 +370,7 @@ start the unit (`install.sh` does, once config and key are in place); prerm disa
 postrm purges `/var/lib` and `/var/log` state. On upgrade prerm stops the unit and, **from 0.2.0 on**,
 leaves a marker in `/run` when it was running, so the new postinst starts it again — an upgrade
 does not end monitoring. (Upgrading *from* a `0.1.0~trial*` package runs that package's old prerm,
-which leaves no marker: start the unit by hand once.) The operator's config is **not** a conffile (from 0.3.0): postinst
+which leaves no marker: start the unit by hand once.) The operator's config is **not** a conffile (from 0.3.1): postinst
 seeds `/etc/hsm-linux-probe/config.json` from the skeleton only when it is absent, and no upgrade
 touches it or stops at a prompt (a conffile-era file becomes an obsolete conffile: kept, never
 prompted about; purge removes it). The upgrade command keeps `--force-confold` as belt and braces:

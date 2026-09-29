@@ -2518,9 +2518,12 @@ namespace
             if (sensor->registration_index_ < registrations_.size())
             {
                 // hsm_collector_get_registration_json hands out pointers into these strings; keep
-                // the replaced text alive until the collector is destroyed instead of freeing it
-                // under a caller (bounded by the number of attaches).
+                // the replaced text alive instead of freeing it under a caller. Bounded: the
+                // oldest of kRetiredRegistrationsKept replaced texts goes first, so a host that
+                // re-describes a sensor on every replica change cannot grow this without limit.
                 retired_registrations_.push_back(std::move(registrations_[sensor->registration_index_]));
+                if (retired_registrations_.size() > kRetiredRegistrationsKept)
+                    retired_registrations_.pop_front();
                 registrations_[sensor->registration_index_] = sensor->RegistrationJson();
             }
 #if defined(HSM_COLLECTOR_HTTP)
@@ -5561,7 +5564,8 @@ namespace
         std::vector<std::string> registrations_;
         // Registration texts replaced in place by an attach while running (OnRegistrationChanged),
         // kept so a pointer returned by RegistrationJson(index) never dangles.
-        std::vector<std::string> retired_registrations_;
+        std::deque<std::string> retired_registrations_;
+        static constexpr size_t kRetiredRegistrationsKept = 256;
         // One-shot values queued (pre-formatted wire/record JSON) while not yet accepting data, drained
         // into the send queue on the next Start. Lets a sensor registered pre-Start emit an initial
         // value on connect (mirrors managed SensorBase.StartAsync) instead of having it dropped by the

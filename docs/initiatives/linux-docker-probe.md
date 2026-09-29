@@ -416,7 +416,7 @@ product and the client runs one command and is connected
   design — the bundle owns the live file, the package owns the skeleton — and the consequence is
   that a later package upgrade treated the config as a locally modified conffile — and on the
   0.3.0~trial1 upgrade on garage dpkg stopped at the conffile prompt with the probe down. **Fixed
-  in #1416 (0.3.0):** the config is no longer a conffile. The package ships the skeleton as
+  in the #1416 follow-up (0.3.1):** the config is no longer a conffile. The package ships the skeleton as
   `/usr/share/hsm-linux-probe/config.example.json`; postinst seeds `/etc/hsm-linux-probe/config.json`
   from it only when absent; upgrades never touch the operator's file. A conffile-era file becomes an
   obsolete conffile (kept, never prompted about); purge removes it. `install.sh` keeps
