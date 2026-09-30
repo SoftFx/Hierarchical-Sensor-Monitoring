@@ -31,9 +31,11 @@ rm -f hsm-linux-probe-<product>.tar.gz   # it still contains the product key
 ```
 
 `install.sh` places the config and the key, installs the package and `ca-certificates`, trusts the
-server's certificate when the bundle carries one, then `systemctl enable --now` and prints the unit
-status (details: `aicontext/features/server/linux-probe-download/feature.md`). **One product per
-host:** two hosts installed from one product's bundle write into the same sensors.
+server's certificate when the bundle carries one, writes the top-CPU drop-in
+`/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf` when the bundle enables *Report top
+processes by CPU* (below), then `systemctl enable --now` and prints the unit status (details:
+`aicontext/features/server/linux-probe-download/feature.md`). **One product per host:** two hosts
+installed from one product's bundle write into the same sensors.
 
 **From the release, by hand** (no server bundle, e.g. a key issued separately):
 
@@ -57,6 +59,18 @@ The key file holds the product access key and nothing else. It is never written 
 to the probe. A server with a private certificate: copy its certificate to
 `/usr/local/share/ca-certificates/hsm-server.crt` (the `.crt` extension is required) and run
 `sudo update-ca-certificates`. The probe has no switch to skip certificate checks.
+
+**Top CPU processes** (`topCpu` in `config.json`, off by default; README "Top CPU processes"): the
+unit's `ProtectProc=invisible` hides every other process from the probe, so enabling `topCpu` by hand
+also needs the drop-in the server bundle writes:
+
+```bash
+sudo mkdir -p /etc/systemd/system/hsm-linux-probe.service.d
+printf '[Service]\nProtectProc=default\n' | sudo tee /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
+sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe
+```
+
+Without it the probe runs and logs one INFO line (`/proc is mounted with hidepid=invisible`).
 
 **Check** (both routes):
 
@@ -83,8 +97,8 @@ starts it again, so an upgrade does not end monitoring (a probe that was stopped
 `/etc/hsm-linux-probe/config.json`, the key and `/var/lib/hsm-linux-probe` are not touched: the
 config is not a dpkg conffile (from 0.3.1), so no upgrade stops at a conffile prompt, and
 `--force-confold` is only belt and braces. Read the [README](README.md) upgrade notes of the
-versions in between first: some releases moved sensors (e.g. 0.4.0, 0.6.0, 0.6.1, 0.6.2), and the
-old nodes then go stale on the server and are removed there by hand.
+versions in between first: some releases moved sensors (e.g. 0.4.0, 0.6.0, 0.6.1, 0.6.2; 0.7.0
+moves none), and the old nodes then go stale on the server and are removed there by hand.
 
 Re-running a newer server bundle's `install.sh` upgrades the same way and keeps the existing config
 and key; `install.sh --force-config` replaces the config with the bundle's.
@@ -109,17 +123,21 @@ The restart marker works the same way (for targets from 0.2.0 on). Config, key a
 The versioned state files (`disk-written.json`, `docker-state.json`) carry a format version; an
 older probe that does not know it treats the file as absent and that source starts fresh, as on a
 first install (logged once). A rollback across a release that moved sensors
-puts the sensors back under the older paths. To make the server's bundles serve the older package
+puts the sensors back under the older paths. Below 0.7.0 the `topCpu` block is ignored (unknown keys
+are), its sensors time out, and a `top-cpu.conf` drop-in only relaxes `ProtectProc` for nothing:
+delete it (`sudo rm /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf && sudo systemctl
+daemon-reload`) before the restart. To make the server's bundles serve the older package
 too, set `src/server/HSMServer/probe-release.txt` back to it and release the server.
 
 ## Remove
 
 ```bash
-sudo ./hsm-linux-probe-<product>/uninstall.sh   # from a bundle: purge + key + config + CA
+sudo ./hsm-linux-probe-<product>/uninstall.sh   # from a bundle: purge + key + config + CA + drop-ins
 # or by hand:
 sudo systemctl disable --now hsm-linux-probe
 sudo shred -u /etc/hsm-linux-probe/access-key
-sudo apt-get purge -y hsm-linux-probe           # removes config, state, logs, the Docker drop-in
+sudo apt-get purge -y hsm-linux-probe           # removes config, state, logs, the Docker and
+                                                # top-CPU drop-ins (the latter from 0.7.0 on)
 ```
 
 The `hsm-probe` user and group stay (Debian convention for system users). The sensor history on
@@ -140,9 +158,11 @@ be delivered by the time the queue overflows or the stop drain ends is dropped a
 | Docker state | `/var/lib/hsm-linux-probe/docker-state.json` | on change (last-seen at most hourly; the hourly write total at most every 5 min, per hour and on stop) | per Compose service; a service that disappeared is reported `Stopped` and kept for **7 days** after last seen, then forgotten; an OOM latch lasts `probe.docker.oomLatchHours` (24 h) |
 | Upgrade marker | `/run/hsm-linux-probe.restart-after-upgrade` | by `prerm` during an upgrade of a running probe | until the new `postinst` (tmpfs: gone at reboot) |
 | Config, key | `/etc/hsm-linux-probe/config.json`, `access-key` | by the operator / `install.sh`; the package only seeds a missing config | until purge (config) / `uninstall.sh` or by hand (key) |
+| Unit drop-ins | `/etc/systemd/system/hsm-linux-probe.service.d/`: `docker.conf` (postinst, where a docker group exists), `top-cpu.conf` (`install.sh`, when the bundle enables top-CPU) | at install | until `uninstall.sh` or remove/purge |
 
 Nothing else is written: `ProtectSystem=strict` leaves the state and log directories as the unit's
-only writable paths.
+only writable paths. Top CPU processes (#1479) keeps nothing on the host: its per-process baseline
+lives in memory, and a restart only costs one period without values.
 
 ## Acceptance: sleeping disks stay asleep
 

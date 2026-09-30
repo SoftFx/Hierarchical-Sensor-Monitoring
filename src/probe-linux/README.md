@@ -38,8 +38,9 @@ module node `.probe/`, which carries `.module/…` and `Docker/…` — the .NET
     └── Docker/<project>/<service>/…
 ```
 
-`hsm.computerName` is empty by default and `hsm.module` defaults to `.probe`; the skeleton and the
-server's install bundle write neither, so the defaults apply. Both keys are still accepted, but a
+`hsm.computerName` is empty by default and `hsm.module` defaults to `.probe`; the skeleton writes
+neither, and the server's install bundle writes exactly those values (`""`, `".probe"`, #1495).
+Other values are still accepted, but a
 `computerName` re-introduces a `<computer>/` level and another `module` renames `.probe` — **not
 recommended**. This holds for the Linux probe only: the Windows agent (HsmAgent) keeps its
 `<MACHINE>/HSM Agent/.module` layout.
@@ -704,7 +705,7 @@ Placeholders only — **no secrets**:
   explicitly and keep their layout until edited — or until the bundle is re-installed with
   `install.sh --force-config`, which writes the new config and so moves the tree to the default
   layout (the old nodes, their alerts and TTL state stay behind). The server bundle writes that
-  layout explicitly (`"computerName": ""`, `"module": ".probe"`; #1495, alongside probe 0.6.3),
+  layout explicitly (`"computerName": ""`, `"module": ".probe"`; #1495, alongside probe 0.7.0),
   so it does not depend on the defaults of the probe version the server ships.
   **One product per host:** with no host node, two hosts reporting into one product write into the
   same sensors — give every host its own product. For the default layout remove both keys; to keep

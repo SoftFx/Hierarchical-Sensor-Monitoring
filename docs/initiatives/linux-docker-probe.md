@@ -172,7 +172,8 @@ algorithm-contract fixtures in the native suite (top-CPU precedent:
 already exist — it is the reference side of the scenario). Collector version bump, tag
 `collector-v<next>`, registry `versions/` update — the probe then pins that published
 version. Windows-only sensors (event logs, service status, network speed, top-CPU, OS info)
-are explicitly **not** ported here.
+are explicitly **not** ported here (top-CPU later came to Linux as a probe-only source, #1479,
+not through the collector).
 
 TLS: libcurl/OpenSSL on Debian uses the system trust store, so installing the garage cert
 via `update-ca-certificates` keeps peer+hostname verification on with **no collector
@@ -462,9 +463,10 @@ product and the client runs one command and is connected
     checks its SHA-256, the same way `agent-release.txt` works;
   - a generated `config.json` in the probe schema (§4.1). The address and port come from the
     existing `AgentConnectionResolver` (so the admin's "Agent connection URL" setting applies
-    unchanged) and `accessKeyFile` points at the LoadCredential path — no `computerName` and no
-    `module` since #1493, so the probe's defaults apply (no computer node, module node `.probe`,
-    #1496; the bundle's former `"auto"` host-name substitution is gone);
+    unchanged) and `accessKeyFile` points at the LoadCredential path; the layout is written out
+    as `computerName: ""`, `module: ".probe"` (no computer node, module node `.probe`; #1493,
+    #1496, written explicitly since #1495; the bundle's former `"auto"` host-name substitution is
+    gone), and with *Report top processes by CPU* on, the agent's `topCpu` block (#1479);
   - `access-key`: the product key from the existing `AgentKeySelector`, in its own file. It is
     never written into `config.json`, so the config can be shown and diffed safely;
   - `server-ca.pem`: the server's **public** certificate chain, with no private key. `install.sh`
@@ -589,7 +591,7 @@ install, approve alert thresholds and Telegram destinations, run the controlled 
 
 Managed DataCollector changes; HsmAgent refactor; probe self-update (systemd + package
 upgrade instead); porting Windows-only sensors (event logs, service status, network speed,
-top-CPU, OS info) to Linux; block I/O sensors (optional follow-up); a backup-result reader in
+OS info) to Linux — top-CPU is the exception, added probe-only in #1479; block I/O sensors (optional follow-up); a backup-result reader in
 the probe (owner decision, §4.4 — the host's backup tooling posts to HSM itself); external independent
 availability checker; changes to HSM server core, its container limits, compose file, backup
 scripts, Windows Scheduled Tasks, or `docs/initiatives/ai-manageable-control-plane.md`.

@@ -121,8 +121,13 @@ if ls /etc/hsm-linux-probe/*.dpkg-* >/dev/null 2>&1; then
 fi
 
 echo "==> purge"
+# The top-CPU drop-in the server bundle's install.sh writes (#1479): postrm must remove it.
+mkdir -p /etc/systemd/system/hsm-linux-probe.service.d
+printf '[Service]\nProtectProc=default\n' >/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
 apt-get purge -y -qq hsm-linux-probe >/dev/null
 [[ ! -e /usr/bin/hsm-linux-probe ]] || fail "purge left /usr/bin/hsm-linux-probe"
+[[ ! -e /etc/systemd/system/hsm-linux-probe.service.d ]] ||
+    fail "purge left the unit's drop-ins: $(ls -A /etc/systemd/system/hsm-linux-probe.service.d)"
 [[ ! -e /etc/hsm-linux-probe ]] || fail "purge left /etc/hsm-linux-probe: $(ls -A /etc/hsm-linux-probe)"
 
 echo "SMOKE OK: hsm-linux-probe $PKG_VERSION installs, runs, stops, reinstalls and purges on $(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2- | tr -d '"')"

@@ -918,7 +918,7 @@ mod tests {
 
     #[test]
     fn the_config_reaches_the_collector_options() {
-        // A minimal config (what the install bundle wrote before 0.6.3): no computer node, the
+        // A minimal config (what the install bundle wrote before 0.7.0): no computer node, the
         // module node `.probe`.
         let options = collector_options(&config_with(""), "unit-test-key");
         assert_eq!(options.module.as_deref(), Some(".probe"));
@@ -934,7 +934,7 @@ mod tests {
             service_alive_path(&options).as_deref(),
             Some(".probe/.module/Service alive")
         );
-        // What the bundle writes since 0.6.3: the same layout, spelled out.
+        // What the bundle writes since 0.7.0: the same layout, spelled out.
         let options = collector_options(
             &config_with(r#", "computerName": "", "module": ".probe""#),
             "unit-test-key",

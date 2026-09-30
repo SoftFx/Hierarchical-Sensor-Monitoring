@@ -909,7 +909,7 @@ mod tests {
             ..WriteRecord::default()
         };
         assert_eq!(reopened.roll(H13 + 60 * MIN), None);
-        // A record saved before 0.6.3 has no posted hour: it posts as before.
+        // A record saved before 0.7.0 has no posted hour: it posts as before.
         let old: WriteRecord = serde_json::from_str(
             r#"{"hourStart": 1790686800, "bytes": 5, "coveredMs": 0, "deltas": 1}"#,
         )
