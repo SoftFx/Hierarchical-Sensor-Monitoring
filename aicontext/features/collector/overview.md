@@ -90,10 +90,11 @@ Registration is idempotent on path: registering a path that already exists retur
 
 ### Public API surface (portability-oriented)
 
-Two additive, portable-friendly APIs sit alongside the legacy surface (nothing removed):
+Additive, portable-friendly APIs sit alongside the legacy surface (nothing removed):
 
 - **`ILifecycleListener`** — observer interface (`OnStarting`/`OnRunning`/`OnStopping`/`OnStopped`) registered via `DataCollector.AddLifecycleListener(...)`, the `IDataCollector` extension method, or the optional `ILifecycleObservableCollector` capability. The extension delegates only when the collector exposes that optional capability; custom `IDataCollector` implementations without it are left unchanged. This is the portable equivalent of the `ToStarting`/`ToRunning`/`ToStopping`/`ToStopped` C# events (which still fire). Listeners are invoked from `LogAndRaise` under `_opLock` with per-listener exception isolation; only transitions after registration are delivered (no replay).
 - **Fluent sensor builders** — `collector.InstantSensor<T>(path)`, `BarSensor<T>(path)`, `RateSensor(path)` extension methods returning fluent builders whose `Build()` dispatches to the existing options-based `CreateXxx(path, options)` factory methods. Implemented as extension methods, so the `IDataCollector` interface is unchanged; the legacy per-type overloads remain. The builders give ports a single `path → type → kind → options → Build` mental model instead of 100+ overloads.
+- **`IDescribableSensor` / `sensor.SetDescription(text)`** (#1482) — change a created sensor's description; re-registers it while Starting/Running, otherwise the next Start registers the new text (parity with native `hsm_sensor_set_description`). Optional capability + extension methods, so the sensor interfaces are unchanged. Details: [`public-api/feature.md`](./public-api/feature.md#changing-a-sensors-description-after-creation-1482).
 
 ### Data gating
 

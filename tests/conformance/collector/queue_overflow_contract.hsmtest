@@ -31,3 +31,28 @@ overflow_massive_burst_keeps_last_capacity|add_int_sequence|1|500|0|Ok|burst
 overflow_massive_burst_keeps_last_capacity|stop
 overflow_massive_burst_keeps_last_capacity|expect_sent_count|50
 overflow_massive_burst_keeps_last_capacity|expect_payload_value_sequence|0|50|450
+
+# A failed package put back into a FULL queue is dropped (the #1088 backstop), and every value lost to
+# overflow — evicted on enqueue OR dropped as a retry — is counted in the ".module/Collector queue
+# stats/Queue overflow" bar (#1480; native used to drop the retry without a trace). Timeline: a send
+# is parked in the hang (so its values have left the queue), the queue is filled to capacity, the hang
+# is lifted into an injected failure, the retried values find the queue full. Whether the dispatcher
+# took one or both of the first two values, the values lost total 2 (one evicted + one retry dropped,
+# or two retries dropped), and the 10 queued values are delivered in order. Only the SUM is pinned:
+# managed adds one bar value per lost value, native one value per collect cycle (or per Stop's final
+# fold) with the cycle's total, so Count/Mean differ by design. A sum of 2 is exact either way
+# (bars of [1,1] or [2]).
+requeue_drop_at_capacity_counts_as_overflow|create_collector_with_limits|10|50|50
+requeue_drop_at_capacity_counts_as_overflow|add_queue_diagnostic_sensors
+requeue_drop_at_capacity_counts_as_overflow|create_int_sensor|contract/overflow/requeue
+requeue_drop_at_capacity_counts_as_overflow|start
+requeue_drop_at_capacity_counts_as_overflow|set_sender_hang
+requeue_drop_at_capacity_counts_as_overflow|set_sender_fail_next|1
+requeue_drop_at_capacity_counts_as_overflow|add_int_sequence|1|2|0|Ok|parked
+requeue_drop_at_capacity_counts_as_overflow|wait_sender_parked|5
+requeue_drop_at_capacity_counts_as_overflow|add_int_sequence|1|10|10|Ok|queued
+requeue_drop_at_capacity_counts_as_overflow|release_sender_hang
+requeue_drop_at_capacity_counts_as_overflow|expect_sent_count|10|5
+requeue_drop_at_capacity_counts_as_overflow|expect_payload_value_sequence|0|10|10
+requeue_drop_at_capacity_counts_as_overflow|stop
+requeue_drop_at_capacity_counts_as_overflow|expect_bar_sum|/Queue overflow|2

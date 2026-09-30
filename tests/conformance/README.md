@@ -115,10 +115,11 @@ into the per-case creation order of that sensor kind (0-based).
 | `create_int_sensor_full_options\|path\|ttl_ms\|unit\|keep_history_ms\|self_destroy_ms\|statistics\|is_singleton\|aggregate\|grafana\|is_computer\|sensor_location\|description` | full SensorOptions surface + path model; tri-state (is_singleton/aggregate/grafana) -1=null/0/1; statistics -1=null else flags (EMA=1); is_computer anchors at the computer node + forces singleton; sensor_location 0=Module/1=Product |
 | `create_enum_sensor_full_options\|path\|ttl_ms\|keep_history_ms\|aggregate\|grafana\|is_computer\|description\|key:value:color:desc[;...]` | enum sensor carrying its `EnumOptions` AND the SensorOptions surface (the `ServiceStatusPrototype` shape); tri-states -1=null/0/1; consumes the staged alert builders. C#: `CreateEnumSensor(path, new EnumSensorOptions { … })`; native: `hsm_collector_create_enum_sensor_with_sensor_options` (0.9.0) + `hsm_sensor_attach_alert` |
 | `create_service_commands_sensor` | service-commands sensor (string, fixed `.module/Service commands`, implicit received-new-value alert) |
-| `add_default_sensor\|id` | register a built-in catalog sensor by stable id name (`total_cpu`, `process_memory`, `free_disk_space`, `service_status`, `collector_alive`, `queue_overflow`, …). Native calls `hsm_collector_add_default_sensor`; C# records the real managed prototype's `AddOrUpdateSensorRequest`. Registration `Path` is asserted by SUFFIX (`.computer/…`/`.module/…`) — the native driver applies the collector prefix while C# records the prototype path. `Description` is not pinned (machine-specific in .NET); byte-exact alert parity is locked by `WireFormatGoldenLockTests` / `NativeDefaultSensorWireMatchesNet` |
+| `add_default_sensor\|id` | register a built-in catalog sensor by stable id name (`total_cpu`, `process_memory`, `free_disk_space`, `service_status`, `collector_alive`, `queue_overflow`, …). Native calls `hsm_collector_add_default_sensor`; C# records the real managed prototype's `AddOrUpdateSensorRequest`. Registration `Path` is asserted by SUFFIX (`.computer/…`/`.module/…`) — the native driver applies the collector prefix while C# records the prototype path. `Description` is not pinned (machine-specific in .NET), except for the four `.module/Collector queue stats` rows (#1480), whose text is composed only from the collector options and is pinned byte-exact (both harnesses create the collector with the same options); byte-exact alert parity is locked by `WireFormatGoldenLockTests` / `NativeDefaultSensorWireMatchesNet` |
 | `add_collector_monitoring_sensors` | register the `.module` collector-monitoring group — Service alive + Collector version + Collector errors. C# calls `AddCollectorMonitoringSensors` on the host's collection (Unix/Windows route to one implementation, but each refuses the other platform); native calls `hsm_collector_add_collector_monitoring_sensors`. The heartbeat then beats on the SENSOR's own `PostDataPeriod` (15 s) in both collectors (#1437 — the native beat used to follow the collector's package-collect period), so keep the case well inside that 15 s and rely only on the beat that fires immediately on Start |
+| `add_queue_diagnostic_sensors` | (#1480) register the `.module/Collector queue stats` group — Queue overflow, Items count in package, Package process time, Package content size (priority sensors). C# calls `AddAllQueueDiagnosticSensors` on the host's collection; native calls `hsm_collector_add_all_queue_diagnostic_sensors`. Their bars post a partial every 15 s, so keep a case well inside that or assert after `stop` (which flushes them) |
 | `create_int_sensor_with_alerts\|path\|ttl_ms\|unit\|description` | int sensor consuming the staged alert builders (see Alert builder below) |
-| `set_sensor_description\|sensor_index\|description` | replace a created sensor's registration description — **native only**; the managed driver marks it `CONFORMANCE-UNSUPPORTED` (#1482), so no corpus scenario uses it yet |
+| `set_sensor_description\|sensor_index\|description` | (#1482) replace a created sensor's registration description; `sensor_index` is the flat creation order (like `dispose_sensor`), `token:null` passes a null text. Native `hsm_sensor_set_description`; C# `IDescribableSensor.SetDescription`. Before Start the text is what Start registers; while stopped nothing is sent until the next Start; while running the sensor is re-registered — native replaces the run's recorded registration in place, C# records the re-sent AddOrUpdate as a new entry, so after a change made while running address the latest registration with index `-1` and do not pin the count (`registration_contract:set_description_*`) |
 | `dispose_sensor\|sensor_index` | release without flushing |
 | `expect_create_int_sensor_rejected\|path`, `expect_create_last_*_sensor_rejected\|path\|default_value` | creation validation throws |
 | `expect_conflicting_mixed_creates_rejected_parallel\|worker_count\|path_count\|path_prefix` | type conflicts on one path rejected under parallel registration |
@@ -167,6 +168,8 @@ Build an alert incrementally, then `alert_stage` it; a following `create_*_with_
 |---|---|
 | `set_sender_fail_next\|count` | next `count` data sends fail before recording; queue must re-enqueue |
 | `set_sender_hang` | every data send blocks until the stop path cancels it (dead transport) |
+| `wait_sender_parked\|timeout_s` | (#1480) polls until a data send is parked in the hang — its package has already left the queue, so what is added next queues behind it; fails on timeout. C#: the recording sender counts parked sends; native: `hsm_collector_test_hung_send_count` |
+| `release_sender_hang` | (#1480) lifts the hang: a parked send continues (and consumes a charged `set_sender_fail_next` token), later sends are no longer blocked. C#: completes the recording sender's release task; native: `hsm_collector_set_send_hang(false)` |
 
 ### Tooling
 
@@ -193,6 +196,7 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_time_marker_comments\|prefix\|count` | exactly `count` payloads carry a lifecycle-marker comment `"<prefix>: dd/MM/yyyy HH:mm:ss"` (the managed `SensorBase.DefaultTimeFormat`). A comment opening with `"<prefix>: "` that loses the shape FAILS, so a broken format cannot hide by dropping out of the count; the instant itself is wall-clock and is never compared |
 | `expect_bar_field\|payload_index\|field\|expected` | `field ∈ type\|min\|max\|mean\|first\|last\|count\|status`; numeric compare rel. tolerance 1e-9 (type/count/status exact) |
 | `expect_bar_count_total\|expected` | Σ Count over all bar payloads — "no value lost", timing-immune |
+| `expect_bar_sum\|path_suffix\|expected` | (#1480) Σ of the values in the bars whose Path ends with `path_suffix`: Mean × Count of the LAST payload of each OpenTime (partial posts are snapshots of one bar). For sensors whose bar SHAPE legitimately differs between collectors (managed Queue overflow adds one value per lost value, native one per collect cycle) while the total must match. Exact only when each bar's mean is exact — an int bar's Mean is rounded — so design the fixture so it is |
 | `expect_bar_open_close_aligned\|payload_index\|period_ms` | close−open == period and open % period == 0 (unix ms) |
 | `expect_all_bars_aligned\|period_ms` / `expect_bar_open_times_increasing` | invariants over all bar payloads |
 | `expect_bar_open_times_nondecreasing` | like the above but partial posts may repeat an OpenTime; it must never go backwards |
@@ -200,7 +204,7 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_bar_posts_sharing_open_time_at_least\|min` / `expect_distinct_bar_open_times_at_least\|min` | the largest same-OpenTime group / the number of distinct OpenTimes reaches `min` |
 | `expect_eventually_payload_contains\|substring\|timeout_s` | polls any payload for the substring |
 | `expect_registration_count\|count[\|timeout_s]` | polls the recorded AddOrUpdate registrations (every sensor registers on every start; immediately when created while running) |
-| `expect_registration_contains\|index\|substring` | substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[...]\|null,"Alerts":[...]\|null,"TtlAlerts":[...]\|null}` — full path incl. identity prefix; TTL in .NET ticks; `Alerts`/`TtlAlerts` are real `AlertUpdateRequest` JSON (numeric enums, emoji escaped) |
+| `expect_registration_contains\|index\|substring` | a NEGATIVE index counts back from the end (−1 = last), as for payloads; substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[...]\|null,"Alerts":[...]\|null,"TtlAlerts":[...]\|null}` — full path incl. identity prefix; TTL in .NET ticks; `Alerts`/`TtlAlerts` are real `AlertUpdateRequest` JSON (numeric enums, emoji escaped) |
 | `expect_eventually_value_above\|threshold\|timeout_s` | polls numeric payload values; fails (not passes) on timeout |
 | `expect_no_new_payloads_for_ms\|ms` | baseline now; no new payloads during the window |
 
@@ -247,10 +251,9 @@ meta-suite) — never skip silently.
 
 **Unsupported marker.** A driver that cannot yet implement a verb registers
 it explicitly as unsupported so the run fails with a `TODO` count instead of
-a generic unknown-verb error; the failure list is the port backlog. One verb is
-in that state: `set_sensor_description`, which the managed collector cannot
-implement until it can change a description after creation (#1482); no corpus
-scenario uses it until then.
+a generic unknown-verb error; the failure list is the port backlog. No verb is
+in that state today (the last one, `set_sensor_description`, gained its managed
+counterpart in #1482).
 
 Mark such a verb in the driver source with the token `CONFORMANCE-UNSUPPORTED:
 <verb> (#<issue>)`. The reference to a cpp-port issue is mandatory and enforced

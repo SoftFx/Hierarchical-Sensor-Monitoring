@@ -1373,10 +1373,13 @@ namespace
         { HSM_DEFAULT_PRODUCT_VERSION, "", "Version", HSM_SENSOR_TYPE_VERSION, false, false, -1, false, false, kKeepHistory1826dMs, true, 0, false, 15000, "Connected application version and start time.", {} },
         { HSM_DEFAULT_SERVICE_STATUS, "", "Service status", HSM_SENSOR_TYPE_ENUM, false, false, -1, false, true, 0, true, 0, false, 15000, "Windows service status.", { DefaultAlertKind::ServiceStatus, HSM_ALERT_PROP_VALUE, HSM_ALERT_OP_NOT_EQUAL, "4", "[$product]$path $operation Running" } },
         // ---- Queue self-diagnostics (.module/Collector queue stats/..., priority) ----
-        { HSM_DEFAULT_QUEUE_OVERFLOW, "Collector queue stats", "Queue overflow", HSM_SENSOR_TYPE_INT_BAR, true, false, 1100 /*Count*/, false, false, 0, true, 0, true, 15000, "Values evicted on queue overflow.", {} },
-        { HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT, "Collector queue stats", "Items count in package", HSM_SENSOR_TYPE_INT_BAR, true, false, 1100, false, false, 0, true, 0, true, 15000, "Values per sent package.", {} },
-        { HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME, "Collector queue stats", "Package process time", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 1011 /*Seconds*/, false, false, 0, true, 0, true, 15000, "Package processing time.", {} },
-        { HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, "Collector queue stats", "Package content size", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 2 /*KB (#1459: MB at 2-decimal bar precision could only ever read 0)*/, false, false, 0, true, 0, true, 15000, "Package body size.", {} },
+        // The description here is only the LEADING sentence: ComposeDefaultDescription appends the
+        // bar and collector-option sentences exactly like the managed QueueDiagnosticCollection
+        // prototypes, so the four rows register byte-identical text in both collectors (#1480).
+        { HSM_DEFAULT_QUEUE_OVERFLOW, "Collector queue stats", "Queue overflow", HSM_SENSOR_TYPE_INT_BAR, true, false, 1100 /*Count*/, false, false, 0, true, 0, true, 15000, "The sensor sends the amount of data that was removed from the queue during the overflow process.", {} },
+        { HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT, "Collector queue stats", "Items count in package", HSM_SENSOR_TYPE_INT_BAR, true, false, 1100, false, false, 0, true, 0, true, 15000, "The sensor sends information about the number of values in each collected package.", {} },
+        { HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME, "Collector queue stats", "Package process time", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 1011 /*Seconds*/, false, false, 0, true, 0, true, 15000, "The sensor sends, for each sent package, the average time in seconds its values waited in the send queue before the package was collected.", {} },
+        { HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE, "Collector queue stats", "Package content size", HSM_SENSOR_TYPE_DOUBLE_BAR, true, false, 2 /*KB (#1459: MB at 2-decimal bar precision could only ever read 0)*/, false, false, 0, true, 0, true, 15000, "The sensor sends information about the package body size.", {} },
     };
 
     // The two TimeSpan-typed disk-prediction rows (Windows per-letter + the Unix letter-less one).
@@ -1391,6 +1394,58 @@ namespace
             if (def.id == id)
                 return &def;
         return nullptr;
+    }
+
+    // Managed TimeSpanExtensions.ToReadableView: the day/hour/minute/second COMPONENTS of the span
+    // (truncated, so 20 ms reads "0 seconds"), each "<n> <unit>" with a plural "s" above 1, joined by
+    // single spaces. Used where a default-sensor description interpolates a period.
+    std::string ReadableTimeSpan(int64_t ms)
+    {
+        const int64_t total_seconds = ms / 1000;
+        const int64_t parts[] = { total_seconds / 86400, (total_seconds / 3600) % 24, (total_seconds / 60) % 60, total_seconds % 60 };
+        const char* const units[] = { "day", "hour", "minute", "second" };
+
+        std::string text;
+        for (size_t index = 0; index < 4; ++index)
+        {
+            if (parts[index] == 0)
+                continue;
+            if (!text.empty())
+                text += ' ';
+            text += std::to_string(parts[index]) + " " + units[index];
+            if (parts[index] > 1)
+                text += 's';
+        }
+
+        return text.empty() ? "0 seconds" : text;
+    }
+
+    // The registered description of a default sensor. The ".module/Collector queue stats" rows are
+    // composed from the collector options exactly like the managed QueueDiagnosticCollection
+    // prototypes (ApplyOptions + BarSensorOptions.GetBarOptionsInfo, which reads BarPeriod and
+    // BarTickPeriod — kDefaultBarPeriodMs / kMetricBarSampleMs here), so both collectors register
+    // byte-identical text (#1480). Every other row keeps its catalog line.
+    std::string ComposeDefaultDescription(
+        const DefaultSensorDef& def, int32_t max_queue_size, int32_t max_values_in_package, int64_t collect_period_ms)
+    {
+        const std::string lead = def.description ? def.description : "";
+        const std::string bar = "Bar period is " + ReadableTimeSpan(kDefaultBarPeriodMs) + " with updates every " +
+                                ReadableTimeSpan(kMetricBarSampleMs) + ".";
+
+        switch (def.id)
+        {
+        case HSM_DEFAULT_QUEUE_OVERFLOW:
+            return lead + " " + bar + "  \nCollector max queue size = **" + std::to_string(max_queue_size) +
+                   "**, collect period = **" + ReadableTimeSpan(collect_period_ms) + "**.";
+        case HSM_DEFAULT_QUEUE_PACKAGE_VALUES_COUNT:
+            return lead + " " + bar + " Package max values count = **" + std::to_string(max_values_in_package) + "**.";
+        case HSM_DEFAULT_QUEUE_PACKAGE_PROCESS_TIME:
+            return lead + " " + bar + " Package collect period = **" + ReadableTimeSpan(collect_period_ms) + "**.";
+        case HSM_DEFAULT_QUEUE_PACKAGE_CONTENT_SIZE:
+            return lead + " " + bar;
+        default:
+            return lead;
+        }
     }
 
     // Substitute "{letter}" / "{iface}" in a per-disk / per-interface sensor name.
@@ -2495,10 +2550,17 @@ namespace
         // scheduler wait and the sensors' due-checks.
         void SetClock(std::shared_ptr<Clock> clock)
         {
-            std::lock_guard<std::mutex> guard(mutex_);
-            clock_ = std::move(clock);
-            for (const auto& sensor : sensors_)
-                sensor.second->SetClock(clock_);
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                clock_ = clock;
+                for (const auto& sensor : sensors_)
+                    sensor.second->SetClock(clock_);
+            }
+
+            // The send queue stamps on the same clock, so a manual clock also drives the
+            // "Package process time" waits. Taken after mutex_ is released: never nested.
+            std::lock_guard<std::mutex> guard(queue_mutex_);
+            queue_clock_ = std::move(clock);
         }
 
         void TestInstallManualClock(int64_t base_ms)
@@ -2946,6 +3008,18 @@ namespace
             StopServiceStatusSampler();
             StopSelfMonitor();
 
+            // The self-monitor loop folds overflow once per collect cycle; drops counted since its
+            // last pass would otherwise vanish with it. Fold them now, so the flush below carries
+            // them (managed adds each drop to the overflow bar at once, and flushes it on stop).
+            try
+            {
+                PostOverflowDelta(SelfMonitorSnapshot());
+            }
+            catch (...)
+            {
+                // A stats post must never break Stop.
+            }
+
             // Dispose bound metric sources now the scheduler has stopped reading them (managed
             // dispose-on-stop; #1164). A restart rebinds via the factory.
             for (const auto& sensor : sensors_snapshot)
@@ -2986,6 +3060,18 @@ namespace
                 std::lock_guard<std::mutex> guard(mutex_);
                 state_ = CollectorState::Stopped;
             }
+
+            // Values lost after the final Queue overflow fold above (an in-flight send failing into
+            // a full queue before the worker is joined, evictions by the stop flush's own enqueues,
+            // or by values posted while Stopping) can no longer reach this run's bar, which is
+            // already flushed. Log them instead (rule #8), and keep them out of the next run's first
+            // cycle, which must not report the previous run's drops (#1480 review). Taken after the
+            // flip to Stopped: the data gate is closed, so nothing is counted after this.
+            const std::int64_t unreported = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
+            if (unreported > 0)
+                LogMessage(HSM_LOG_LEVEL_INFO,
+                           "Collector stop: " + std::to_string(unreported) +
+                               " value(s) dropped from the full send queue after the final Queue overflow report.");
 
             NotifyLifecycle(CollectorState::Stopped);
             return HSM_RESULT_OK;
@@ -3385,7 +3471,8 @@ namespace
 
         // Register one built-in catalog sensor (#1099). Bar kinds route through a registration-aware
         // bar create; everything else reuses the instant CreateSensor path. The default-sensor
-        // Description is intentionally a short deterministic line (not the byte-pinned contract).
+        // Description is intentionally a short deterministic line (not the byte-pinned contract),
+        // except the queue-stat rows, which carry the managed text (ComposeDefaultDescription).
         hsm_result_t AddDefaultSensor(
             hsm_default_sensor_t id,
             const hsm_default_sensor_params_t* params,
@@ -3402,6 +3489,8 @@ namespace
             const std::string name = ResolveDefaultSensorName(*def, disk_letter, interface_name);
             const std::string category = ResolveDefaultCategory(*def, process_name);
             RegistrationOptions registration = BuildDefaultRegistration(*def, name);
+            registration.description =
+                ComposeDefaultDescription(*def, max_queue_size_, max_values_in_package_, collect_period_ms_);
             const std::string prototype_path = RevealDefaultPath(category, name, def->is_computer);
 
             const hsm_result_t rc = def->is_bar
@@ -3783,7 +3872,7 @@ namespace
                     return;
             }
 
-            Enqueue(std::move(json));
+            Enqueue(std::move(json), /*is_file=*/true);
 
             {
                 std::lock_guard<std::mutex> guard(queue_mutex_);
@@ -3806,6 +3895,16 @@ namespace
             if (count > 0)
                 fail_next_.fetch_add(count);
         }
+
+        // Test seams (#1480): how many sends are parked in the injected hang, and how many retries
+        // the queue has dropped at capacity since creation.
+        int TestHungSendCount()
+        {
+            std::lock_guard<std::mutex> guard(hang_mutex_);
+            return hung_sends_;
+        }
+
+        int64_t TestRequeueDroppedTotal() const { return requeue_dropped_total_.load(std::memory_order_relaxed); }
 
         void SetSendHang(bool hang)
         {
@@ -4373,14 +4472,49 @@ namespace
             }
         }
 
+        // When a payload entered the send queue (on queue_clock_) and whether it is a file. It
+        // travels with the payload through a failed-send retry — the managed QueueItem<T>.BuildDate.
+        struct QueueStamp
+        {
+            int64_t enqueued_ms;
+            bool is_file;
+        };
+
+        struct QueuedPayload
+        {
+            std::string json;
+            QueueStamp stamp;
+        };
+
+        // The queue wait of one package's counted values — managed DataPackage/PackageInfo: the sum
+        // of (package collect time - enqueue time) over the values, averaged in seconds (#1480).
+        struct PackageWait
+        {
+            int64_t total_ms = 0;
+            size_t values = 0;
+
+            void Add(int64_t wait_ms)
+            {
+                total_ms += wait_ms;
+                ++values;
+            }
+
+            double AverageSeconds() const
+            {
+                return values > 0 ? static_cast<double>(total_ms) / 1000.0 / static_cast<double>(values) : 0.0;
+            }
+        };
+
         // FIFO send queue. Lock discipline: `queue_mutex_` and `mutex_` are never held together —
         // the enqueue path locks mutex_ (state check) then queue_mutex_ sequentially, and the
         // dispatcher locks queue_mutex_ (pop) then mutex_ (record) sequentially.
-        void Enqueue(std::string json)
+        void Enqueue(std::string json, bool is_file = false)
         {
             std::lock_guard<std::mutex> guard(queue_mutex_);
 
-            queue_.push_back(std::move(json));
+            // Stamped under the queue lock the push needs anyway (no extra lock on this hot path):
+            // the managed QueueItem<T>.BuildDate, which "Package process time" measures from (#1480).
+            queue_.push_back(QueuedPayload{ std::move(json), QueueStamp{ queue_clock_->SteadyNowMs(), is_file } });
 
             // This is the ONLY place a value is dropped: the (large) buffer is full. Monitoring
             // history keeps every value until then; on overflow the oldest is evicted first
@@ -4401,12 +4535,21 @@ namespace
         // enqueued behind it while its send was in flight), so it is dropped rather than evicting a
         // queued value — never below capacity, matching normal overflow's newest-wins. No retry cap:
         // a retry rides the tail until delivered or, under sustained overflow, FIFO-evicted.
-        void ReEnqueueLocked(std::string json)
+        // The payload keeps its original enqueue stamp, as managed keeps QueueItem.BuildDate across a
+        // retry, so the wait a failed send cost still shows in "Package process time" (#1480).
+        // A dropped retry is counted in "Queue overflow", one per value, as managed ReEnqueueItem
+        // reports each at-capacity retry drop through ReportRequeueEviction (#1088); it used to
+        // vanish without a trace (rule #8, #1480).
+        void ReEnqueueLocked(QueuedPayload payload)
         {
             if (queue_.size() >= static_cast<size_t>(max_queue_size_))
+            {
+                queue_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+                requeue_dropped_total_.fetch_add(1, std::memory_order_relaxed);
                 return;
+            }
 
-            queue_.push_back(std::move(json));
+            queue_.push_back(std::move(payload));
         }
 
         void StartTopCpuSampler()
@@ -4533,10 +4676,7 @@ namespace
 
         // Per-package queue stats, posted from the dispatch send path's UNLOCKED window. Bars only
         // aggregate (AccumulateBar) — they never enqueue or touch queue_mutex_ — so this is safe there.
-        void PostPackageStats(
-            size_t value_count,
-            size_t content_bytes,
-            std::chrono::steady_clock::duration send_duration)
+        void PostPackageStats(size_t value_count, size_t content_bytes, const PackageWait& wait)
         {
             try
             {
@@ -4545,8 +4685,12 @@ namespace
 
                 if (handles.queue_items)
                     handles.queue_items->AddBarInt(static_cast<int32_t>(value_count));
-                if (handles.queue_time)
-                    handles.queue_time->AddBarDouble(std::chrono::duration<double>(send_duration).count());
+                // The average time the package's values waited in the send queue before it was
+                // collected, in seconds — managed PackageInfo.AvrTimeInQueue (#1480). Until 0.10.1 this
+                // posted the HTTP send duration: a different quantity under the same path and unit.
+                // Like managed AddPackageInfo, a package with no counted value posts nothing.
+                if (handles.queue_time && wait.values > 0)
+                    handles.queue_time->AddBarDouble(wait.AverageSeconds());
                 if (handles.queue_size)
                 {
                     // KILOBYTES (#1459): a real package is a couple of KB, and the bar's 2-decimal display
@@ -4600,6 +4744,21 @@ namespace
             self_monitor_cv_.notify_all();
             if (self_monitor_thread_.joinable())
                 self_monitor_thread_.join();
+        }
+
+        // Fold the values dropped since the last fold into ".module/Collector queue stats/Queue
+        // overflow" — posted only when non-zero so the bar isn't all-zeros. Called by the
+        // self-monitor loop once per collect cycle and once more by Stop, after that loop is joined
+        // and before the bars are flushed, so drops of the last partial cycle are not lost (#1480).
+        // Bars only aggregate here, so no queue lock is involved.
+        void PostOverflowDelta(const SelfMonitorHandles& handles)
+        {
+            if (!handles.queue_overflow)
+                return;
+
+            const std::int64_t overflowed = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
+            if (overflowed > 0)
+                handles.queue_overflow->AddBarInt(static_cast<int32_t>(std::min<std::int64_t>(overflowed, INT32_MAX)));
         }
 
         // The heartbeat's own post period: the ".module/Service alive" catalog row's PostDataPeriod
@@ -4662,14 +4821,8 @@ namespace
                         handles.service_alive->AddBool(alive, HSM_SENSOR_STATUS_OK, nullptr);
                     }
 
-                    // Overflow since the last collect cycle — post only when non-zero so the bar
-                    // isn't all-zeros.
-                    if (overflow_due && handles.queue_overflow)
-                    {
-                        const std::int64_t overflowed = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
-                        if (overflowed > 0)
-                            handles.queue_overflow->AddBarInt(static_cast<int32_t>(std::min<std::int64_t>(overflowed, INT32_MAX)));
-                    }
+                    if (overflow_due)
+                        PostOverflowDelta(handles);
                 }
                 catch (...)
                 {
@@ -5374,12 +5527,26 @@ namespace
             while (!queue_.empty())
             {
                 std::vector<std::string> batch;
+                // Each payload's stamp, index-aligned with `batch`: the sender only takes the JSON,
+                // but a failed send puts every value back with the stamp it first entered with.
+                std::vector<QueueStamp> stamps;
                 const auto batch_size = std::min(queue_.size(), static_cast<size_t>(max_values_in_package_));
                 batch.reserve(batch_size);
+                stamps.reserve(batch_size);
+
+                // The package's collect time, read BEFORE the values are popped — managed DataPackage
+                // captures its _now at construction — so a value's wait is package time - enqueue time.
+                // A file payload is not averaged: the managed file queue never feeds this sensor.
+                const int64_t package_ms = queue_clock_->SteadyNowMs();
+                PackageWait wait;
 
                 for (size_t index = 0; index < batch_size; ++index)
                 {
-                    batch.push_back(std::move(queue_.front()));
+                    QueuedPayload& front = queue_.front();
+                    if (!front.stamp.is_file)
+                        wait.Add(package_ms - front.stamp.enqueued_ms);
+                    stamps.push_back(front.stamp);
+                    batch.push_back(std::move(front.json));
                     queue_.pop_front();
                 }
 
@@ -5405,13 +5572,12 @@ namespace
                     batch_bytes += batch.size() + 1;
                 }
 
-                const auto send_start = std::chrono::steady_clock::now();
                 const auto sent = TrySendBatch(batch);
                 // Per-package queue stats — only on a real send (not the stop-flush drop path), posted
                 // here in the UNLOCKED window: bars only aggregate, so there's no re-entrancy on
                 // queue_mutex_ and no enqueue from within dispatch.
                 if (sent && measure_package && !clear_remainder_on_failure)
-                    PostPackageStats(batch_values, batch_bytes, std::chrono::steady_clock::now() - send_start);
+                    PostPackageStats(batch_values, batch_bytes, wait);
                 lock.lock();
 
                 if (!sent)
@@ -5423,8 +5589,8 @@ namespace
                         return dropped;
                     }
 
-                    for (auto& json : batch)
-                        ReEnqueueLocked(std::move(json));
+                    for (size_t index = 0; index < batch.size(); ++index)
+                        ReEnqueueLocked(QueuedPayload{ std::move(batch[index]), stamps[index] });
 
                     return 0;
                 }
@@ -5443,7 +5609,10 @@ namespace
 
                 if (send_hang_)
                 {
+                    // Counted while parked, so a test knows the batch has left the queue.
+                    ++hung_sends_;
                     hang_cv_.wait(lock, [this] { return !send_hang_ || send_cancelled_; });
+                    --hung_sends_;
 
                     if (send_hang_)
                         return false;
@@ -5610,7 +5779,10 @@ namespace
 
         std::mutex queue_mutex_;
         std::condition_variable queue_cv_;
-        std::deque<std::string> queue_;
+        std::deque<QueuedPayload> queue_;
+        // The clock the send queue stamps with (#1480): the collector's clock_, mirrored here under
+        // queue_mutex_ by SetClock so the enqueue path reads it without taking mutex_.
+        std::shared_ptr<Clock> queue_clock_ = std::make_shared<RealClock>();
         bool worker_stop_ = false;
         bool dispatch_kick_ = false;
         std::thread worker_;
@@ -5642,6 +5814,9 @@ namespace
         // thread, whose creation and join carry the happens-before against Start/Stop.
         bool service_alive_first_beat_ = true;
         std::atomic<std::int64_t> queue_overflow_count_{ 0 };
+        // Retries dropped at capacity since creation — never reset; read only by the test seam, so a
+        // test can wait for the drop without racing the self-monitor's fold of queue_overflow_count_.
+        std::atomic<std::int64_t> requeue_dropped_total_{ 0 };
         // Guards the self-monitor thread's arm/join pair. Deliberately NOT op_mutex_: a lifecycle
         // listener runs with op_mutex_ held and may register a sensor group, which arms the loop.
         std::mutex self_monitor_lifecycle_mutex_;
@@ -5657,6 +5832,7 @@ namespace
         std::condition_variable hang_cv_;
         bool send_hang_ = false;
         bool send_cancelled_ = false;
+        int hung_sends_ = 0; // sends parked in the injected hang (test seam), guarded by hang_mutex_
 
         // Extra HTTP request headers injected into every data POST (#1198 agent-directive channel).
         // Set before Start; read only by the worker thread after Start — no lock needed.
@@ -6735,6 +6911,18 @@ extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, 
 {
     if (collector != nullptr)
         collector->impl->TestAdvanceClock(delta_ms);
+}
+
+// Test-only (#1480): sends currently parked in the injected transport hang, and retries the queue has
+// dropped at capacity since creation. Not in the public header, like the clock seams above.
+extern "C" int32_t hsm_collector_test_hung_send_count(hsm_collector_t* collector)
+{
+    return collector != nullptr ? collector->impl->TestHungSendCount() : 0;
+}
+
+extern "C" int64_t hsm_collector_test_requeue_dropped_total(hsm_collector_t* collector)
+{
+    return collector != nullptr ? collector->impl->TestRequeueDroppedTotal() : 0;
 }
 
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message)

@@ -100,3 +100,60 @@ default_fields_rate_sensor|stop
 default_fields_rate_sensor|expect_registration_contains|0|"Statistics":0
 default_fields_rate_sensor|expect_registration_contains|0|"DisplayUnit":0
 default_fields_rate_sensor|expect_registration_contains|0|"OriginalUnit":3000
+
+# Changing a created sensor's description (#1482; native hsm_sensor_set_description 0.10.0, managed
+# IDescribableSensor.SetDescription):
+# set_sensor_description|sensor_index|description   (flat creation index, like dispose_sensor)
+# - before Start the new text is what Start registers (one registration, no extra one);
+# - while running the sensor is re-registered with the new text and its other options kept. How that
+#   is recorded differs by design: native replaces the run's recorded registration in place, managed
+#   records the re-sent AddOrUpdate as a new entry — so these cases address the latest registration
+#   with index -1 and never pin the count after a change made while running;
+# - while stopped nothing is sent; the next Start registers the new text;
+# - token:null sends "Description":null (the server keeps what it has).
+set_description_before_start_rides_start_registration|create_collector
+set_description_before_start_rides_start_registration|create_int_sensor_with_options|contract/registration/describe/before|60000|1|first
+set_description_before_start_rides_start_registration|set_sensor_description|0|second
+set_description_before_start_rides_start_registration|start
+set_description_before_start_rides_start_registration|stop
+set_description_before_start_rides_start_registration|expect_registration_count|1
+set_description_before_start_rides_start_registration|expect_registration_contains|0|"Description":"second"
+set_description_before_start_rides_start_registration|expect_registration_contains|0|"TTLTicks":[600000000]
+
+set_description_while_running_reregisters|create_collector
+set_description_while_running_reregisters|create_int_sensor_with_options|contract/registration/describe/running|60000|1|first
+set_description_while_running_reregisters|start
+set_description_while_running_reregisters|expect_registration_count|1
+set_description_while_running_reregisters|set_sensor_description|0|limit 2048 MB
+set_description_while_running_reregisters|stop
+set_description_while_running_reregisters|expect_registration_contains|-1|contract/registration/describe/running"
+set_description_while_running_reregisters|expect_registration_contains|-1|"Description":"limit 2048 MB"
+set_description_while_running_reregisters|expect_registration_contains|-1|"TTLTicks":[600000000]
+set_description_while_running_reregisters|expect_registration_contains|-1|"OriginalUnit":1,
+
+set_description_while_stopped_waits_for_next_start|create_collector
+set_description_while_stopped_waits_for_next_start|create_int_sensor_with_options|contract/registration/describe/stopped|0|-1|first
+set_description_while_stopped_waits_for_next_start|start
+set_description_while_stopped_waits_for_next_start|stop
+set_description_while_stopped_waits_for_next_start|set_sensor_description|0|second
+set_description_while_stopped_waits_for_next_start|expect_registration_count|1
+set_description_while_stopped_waits_for_next_start|expect_registration_contains|0|"Description":"first"
+set_description_while_stopped_waits_for_next_start|start
+set_description_while_stopped_waits_for_next_start|stop
+set_description_while_stopped_waits_for_next_start|expect_registration_count|2
+set_description_while_stopped_waits_for_next_start|expect_registration_contains|1|"Description":"second"
+
+set_description_null_is_sent_as_null|create_collector
+set_description_null_is_sent_as_null|create_int_sensor_with_options|contract/registration/describe/null|0|-1|first
+set_description_null_is_sent_as_null|set_sensor_description|0|token:null
+set_description_null_is_sent_as_null|start
+set_description_null_is_sent_as_null|stop
+set_description_null_is_sent_as_null|expect_registration_contains|0|"Description":null
+
+set_description_applies_to_a_bar_sensor|create_collector
+set_description_applies_to_a_bar_sensor|create_int_bar_sensor|contract/registration/describe/bar|1000|0
+set_description_applies_to_a_bar_sensor|set_sensor_description|0|bar text
+set_description_applies_to_a_bar_sensor|start
+set_description_applies_to_a_bar_sensor|stop
+set_description_applies_to_a_bar_sensor|expect_registration_count|1
+set_description_applies_to_a_bar_sensor|expect_registration_contains|0|"Description":"bar text"

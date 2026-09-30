@@ -156,16 +156,28 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.10.1** (#1480) — behavior fix, ABI unchanged. `.module/Collector queue stats/Package process
+  time` reports what the managed collector reports under that path: per sent package, the average
+  time in seconds its values waited in the send queue before the package was collected (managed
+  `PackageInfo.AvrTimeInQueue`). It used to post the package's HTTP send duration. Each queued value
+  is stamped when it enters the queue and keeps the stamp across a failed-send retry; file payloads are
+  not averaged. The four queue-stat rows register the managed descriptions, composed from the
+  collector options. Pinned by `default_sensors_contract` (queue rows) and
+  `native_package_process_time_is_the_average_queue_wait`. Also: a failed-send retry dropped because
+  the queue is full is now counted in `Queue overflow` (one per value, as managed #1088), and Stop
+  folds the drops of the last partial collect cycle into that bar before flushing it
+  (`queue_overflow_contract:requeue_drop_at_capacity_counts_as_overflow` in both drivers,
+  `native_requeue_drop_at_capacity_counts_as_overflow`).
 - **0.10.0** (#1416 follow-up) — one additive entry point.
   `hsm_sensor_set_description(sensor, description)` replaces a sensor's registration description
   with the same re-emission rules as `hsm_sensor_attach_alert` (below, 0.9.1): before Start it is
   what Start registers; while running the run's recorded registration is replaced in place and the
   sensor re-posted on the HTTP transport. NULL emits `"Description":null`, which the server reads as
   "unchanged" — pass `""` to clear a description it already has. For a host whose description
-  carries live facts (the Linux probe's Docker memory limit). Native-only: the managed collector
-  cannot change a description after creation, so there is no conformance verb (see the
-  `CONFORMANCE-UNSUPPORTED` note in `tests/conformance/collector/alert_registration_contract.hsmtest`).
-  Pinned by `native_set_description_rebuilds_the_registration` and
+  carries live facts (the Linux probe's Docker memory limit). Native-only when released; since
+  #1482 the managed collector has the counterpart (`IDescribableSensor.SetDescription`, the
+  `SetDescription` extension on every sensor handle) and both drivers run the
+  `set_sensor_description` verb in `registration_contract:set_description_*`. Pinned by `native_set_description_rebuilds_the_registration` and
   `native_http_alert_after_runtime_registration_reregisters`. Pointer lifetime: the 0.9.1
   contract is unchanged — a `hsm_collector_get_registration_json` pointer stays valid until the
   collector is destroyed, also across an alert attach while running. The new function carries its
