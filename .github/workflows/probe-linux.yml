@@ -6,7 +6,8 @@ name: Linux probe
 # toolchain, CMake and libcurl headers first; hsm-collector-sys/build.rs runs the CMake build
 # itself (HSM_COLLECTOR_HTTP=ON, the same switch src/agent uses) as part of `cargo build`.
 #
-# Linux is the probe's only supported target, so there is no matrix.
+# Linux is the probe's only supported target, so there is no matrix. The `deb` job builds and
+# install-smokes the Debian package the same way the probe-v* release lane does (#1418).
 
 on:
   push:
@@ -73,3 +74,48 @@ jobs:
       # `cargo check` (no link step) — the symbol itself does not exist until #1414 lands.
       - name: Check the #1414 feature gate compiles
         run: cargo check -p hsm-linux-probe --features linux-default-sensors --locked
+
+  # The package as it ships (#1418): packaging/build-deb.sh in a plain debian:13 container — the
+  # recipe probe-release.yml publishes with — then packaging/smoke-deb.sh installs and exercises it
+  # in a second, clean debian:13 container, where apt has to resolve the Depends from the archive.
+  deb:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # "~ci" sorts below the plain version, so a CI package can never shadow a release on a host.
+      - name: Build the .deb in debian:13
+        id: build
+        run: |
+          set -euo pipefail
+          version=$(awk -F'"' '/^\[workspace\.package\]/ { s = 1; next } /^\[/ { s = 0 }
+            s && $1 ~ /^version *= *$/ { print $2; exit }' Cargo.toml)
+          if [ -z "$version" ]; then
+            echo "::error::no [workspace.package] version in src/probe-linux/Cargo.toml"
+            exit 1
+          fi
+          echo "probe version: $version"
+          export SOURCE_DATE_EPOCH
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          docker run --rm -e SOURCE_DATE_EPOCH -v "$GITHUB_WORKSPACE:/src" -w /src/src/probe-linux \
+            debian:13 bash packaging/build-deb.sh "${version}~ci"
+          echo "deb=dist/hsm-linux-probe_${version}~ci_amd64.deb" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install smoke in a clean debian:13
+        env:
+          DEB: ${{ steps.build.outputs.deb }}
+          PROBE_VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src/src/probe-linux \
+            debian:13 bash packaging/smoke-deb.sh "$DEB" "$PROBE_VERSION"
+
+      # For hand trials on a real host; not a release (those come only from probe-v* tags).
+      - name: Upload the CI package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hsm-linux-probe-deb-ci
+          path: src/probe-linux/dist/*.deb
+          if-no-files-found: error
+          retention-days: 14
