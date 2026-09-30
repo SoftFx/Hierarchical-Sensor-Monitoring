@@ -13,12 +13,13 @@ namespace HSMServer.Model.ManagementApi.Alerts
     /// the server generates/keeps the id (route wins on PATCH).
     /// </summary>
     /// <remarks>
-    /// Round-trip notes: <c>templateId</c>/<c>templateAlertId</c> are output-only
-    /// (template linkage is managed by the alert-templates surface); a
-    /// template-owned policy accepts only the <c>isDisabled</c> toggle through this
-    /// API — anything else answers 409, and so does its deletion (edit the
-    /// template instead). A policy must carry at least one effect: a notification,
-    /// an icon, or a status change.
+    /// Round-trip notes: <c>templateId</c>/<c>templateAlertId</c> are server-owned,
+    /// output-only — values sent in request bodies are ignored (create always writes
+    /// null, update carries the stored linkage; template linkage is managed by the
+    /// alert-templates surface); a template-owned policy accepts only the
+    /// <c>isDisabled</c> toggle through this API — anything else answers 409, and so
+    /// does its deletion (edit the template instead). A policy must carry at least
+    /// one effect: a notification, an icon, or a status change.
     /// </remarks>
     public sealed record PolicyDto
     {
@@ -55,10 +56,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// <summary>Working-time schedule the policy respects; must reference an existing /api/v1/alertSchedules id; null = always.</summary>
         public Guid? ScheduleId { get; init; }
 
-        /// <summary>Output-only: the alert template this policy was minted by, when any.</summary>
+        /// <summary>Output-only, server-owned: the alert template this policy was minted by, when any. Values in request bodies are ignored.</summary>
         public Guid? TemplateId { get; init; }
 
-        /// <summary>Output-only: the template alert entry this policy was minted by, when any.</summary>
+        /// <summary>Output-only, server-owned: the template alert entry this policy was minted by, when any. Values in request bodies are ignored.</summary>
         public Guid? TemplateAlertId { get; init; }
     }
 
@@ -101,10 +102,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// <summary>Working-time schedule the policy respects (the TTL schedule gate, #1404); must reference an existing schedule id; null = always.</summary>
         public Guid? ScheduleId { get; init; }
 
-        /// <summary>Output-only: the alert template this policy was minted by, when any.</summary>
+        /// <summary>Output-only, server-owned: the alert template this policy was minted by, when any. Values in request bodies are ignored.</summary>
         public Guid? TemplateId { get; init; }
 
-        /// <summary>Output-only: the template alert entry this policy was minted by, when any.</summary>
+        /// <summary>Output-only, server-owned: the template alert entry this policy was minted by, when any. Values in request bodies are ignored.</summary>
         public Guid? TemplateAlertId { get; init; }
     }
 

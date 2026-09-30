@@ -172,8 +172,16 @@ namespace HSMServer.Model.ManagementApi.Alerts
         // availableChats is the node's chat map the validator already checked
         // every referenced chat against (names are the manager's current ones,
         // the same normalization the web editor performs).
+        //
+        // Template linkage is SERVER-OWNED (#1501 round-1): templateId/
+        // templateAlertId never come from the request body — create passes
+        // nothing (a fresh policy is never template-owned; the core's add gate
+        // would silently skip it, surfacing as a misleading 409), update passes
+        // the STORED policy's values (a PATCH cannot mint or un-mint template
+        // ownership).
         public static PolicyUpdate ToUpdate(PolicyDto dto, Guid policyId, InitiatorInfo initiator,
-            List<PolicyConditionUpdate> conditions, Dictionary<Guid, string> availableChats) => new()
+            List<PolicyConditionUpdate> conditions, Dictionary<Guid, string> availableChats,
+            Guid? templateId = null, Guid? templateAlertId = null) => new()
         {
             Id = policyId,
             Conditions = conditions,
@@ -185,13 +193,13 @@ namespace HSMServer.Model.ManagementApi.Alerts
             ConfirmationPeriod = ParseIntervalTicks(dto.ConfirmationPeriod),
             IsDisabled = dto.IsDisabled,
             ScheduleId = dto.ScheduleId,
-            TemplateId = dto.TemplateId,
-            TemplateAlertId = dto.TemplateAlertId,
+            TemplateId = templateId,
+            TemplateAlertId = templateAlertId,
             Initiator = initiator,
         };
 
         public static PolicyUpdate ToUpdate(TtlPolicyDto dto, Guid policyId, InitiatorInfo initiator, long? ttl,
-            Dictionary<Guid, string> availableChats) => new()
+            Dictionary<Guid, string> availableChats, Guid? templateId = null, Guid? templateAlertId = null) => new()
         {
             Id = policyId,
             Destination = ToUpdate(dto.Destination, dto.Notification is not null, availableChats),
@@ -201,8 +209,8 @@ namespace HSMServer.Model.ManagementApi.Alerts
             Status = dto.Status == "Error" ? SensorStatus.Error : SensorStatus.Ok,
             IsDisabled = dto.IsDisabled,
             ScheduleId = dto.ScheduleId,
-            TemplateId = dto.TemplateId,
-            TemplateAlertId = dto.TemplateAlertId,
+            TemplateId = templateId,
+            TemplateAlertId = templateAlertId,
             Initiator = initiator,
             // The server-owned translation of the inherit switch (#1500): null
             // is the core's EXPLICIT reset-to-parent in full-list semantics —

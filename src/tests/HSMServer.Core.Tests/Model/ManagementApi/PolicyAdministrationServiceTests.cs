@@ -198,7 +198,14 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             var toggle = await _service.UpdateSensorPolicyAsync(sensor.Id, target.Id, TemplateOwnedToggle(target), User);
 
             Assert.True(toggle.Success, toggle.Failure?.Message);
-            Assert.True(sensor.Policies.Single(p => p.Id == target.Id).IsDisabled);
+
+            var toggled = sensor.Policies.Single(p => p.Id == target.Id);
+            Assert.True(toggled.IsDisabled);
+
+            // The toggle rides the STORED content — template linkage included
+            // (server-owned fields, #1501 round-1).
+            Assert.Equal(target.TemplateId, toggled.TemplateId);
+            Assert.Equal("tpl-icon", toggled.Icon);
         }
 
         [Fact]
@@ -233,6 +240,138 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             // phantom 204.
             Assert.Equal(PolicyWriteOutcome.Conflict, deleted.Failure.Outcome);
             Assert.NotNull(sensor.Policies.SingleOrDefault(p => p.Id == target.Id));
+        }
+
+
+        // === Template fields are server-owned (#1501 round-1, F1) ===
+
+        [Fact]
+        public async Task CreateSensorPolicy_TemplateIdInBody_IsIgnored_CreateSucceeds()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcCreateTemplateField");
+
+            // A body claiming template ownership must NOT hit the core's add
+            // gate (which would surface as a misleading 409): the field is
+            // server-owned and forced to null on create.
+            var created = await _service.CreateSensorPolicyAsync(sensor.Id,
+                DataPolicy() with { TemplateId = Guid.NewGuid(), TemplateAlertId = Guid.NewGuid() }, User);
+
+            Assert.True(created.Success, created.Failure?.Message);
+            Assert.Null(created.Value.TemplateId);
+            Assert.Null(created.Value.TemplateAlertId);
+            Assert.Null(sensor.Policies.Single(p => p.Id == created.Value.Id).TemplateId);
+        }
+
+        [Fact]
+        public async Task CreateSensorTtlPolicy_TemplateIdInBody_IsIgnored_CreateSucceeds()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcCreateTtlTemplateField");
+
+            var created = await _service.CreateSensorTtlPolicyAsync(sensor.Id,
+                TtlPolicy("00:30:00") with { TemplateId = Guid.NewGuid(), TemplateAlertId = Guid.NewGuid() }, User);
+
+            Assert.True(created.Success, created.Failure?.Message);
+            Assert.Null(created.Value.TemplateId);
+            Assert.Null(sensor.Policies.TTLPolicies.Single(p => p.Id == created.Value.Id).TemplateId);
+        }
+
+        [Fact]
+        public async Task UpdateSensorPolicy_TemplateIdInBody_IsIgnored_PolicyStaysUserOwned()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcUpdateTemplateField");
+
+            var seed = await SeedPoliciesAsync(sensor, RegularUpdate("user-made"));
+            Assert.True(seed.IsOk, seed.Error);
+
+            var target = sensor.Policies.Single(p => p.Template == "user-made");
+
+            // A PATCH must not be able to mint template ownership either — the
+            // stored linkage (null for a user policy) is carried, not the body's.
+            var updated = await _service.UpdateSensorPolicyAsync(sensor.Id, target.Id,
+                DataPolicy() with { TemplateId = Guid.NewGuid(), TemplateAlertId = Guid.NewGuid() }, User);
+
+            Assert.True(updated.Success, updated.Failure?.Message);
+
+            var stored = sensor.Policies.Single(p => p.Id == target.Id);
+            Assert.Null(stored.TemplateId);
+            Assert.Null(stored.TemplateAlertId);
+        }
+
+        [Fact]
+        public async Task UpdateSensorPolicy_TemplateOwnedToggle_OutOfSurfaceContent_SkipsContentValidation()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcTemplateToggleOutOfSurface");
+
+            var templateId = Guid.NewGuid();
+
+            // A template-minted condition OUTSIDE the API's write surface: a
+            // non-Const (LastValue) target, which reads back as target: null —
+            // an echoed body can never pass TryBuildConditions ("GreaterThan
+            // requires a target").
+            var seed = await SeedPoliciesAsync(sensor,
+                new PolicyUpdate
+                {
+                    Id = Guid.NewGuid(),
+                    Template = "template-made",
+                    Destination = new PolicyDestinationUpdate(),
+                    Icon = "tpl-icon",
+                    TemplateId = templateId,
+                    Conditions =
+                    [
+                        new PolicyConditionUpdate(PolicyOperation.GreaterThan, PolicyProperty.Value,
+                            new TargetValue(TargetType.LastValue, sensor.Id.ToString())),
+                    ],
+                    Initiator = Force,
+                });
+            Assert.True(seed.IsOk, seed.Error);
+
+            var target = sensor.Policies.Single(p => p.TemplateId == templateId);
+
+            // The GET-echo toggle body: the stored content as it READS (target
+            // null), isDisabled flipped. The core only applies the toggle for
+            // user-initiated template-policy updates, so validation would check
+            // content that is never written — it is skipped.
+            var toggled = await _service.UpdateSensorPolicyAsync(sensor.Id, target.Id, new PolicyDto
+            {
+                IsDisabled = true,
+                Conditions =
+                [
+                    new AlertConditionDto { Property = "Value", Operation = "GreaterThan", Target = null },
+                ],
+                Notification = new AlertNotificationDto { Template = "template-made" },
+                Destination = new AlertDestinationDto { Mode = target.Destination.Mode.ToString() },
+                Icon = "tpl-icon",
+            }, User);
+
+            Assert.True(toggled.Success, toggled.Failure?.Message);
+            Assert.True(toggled.Value.IsDisabled);
+
+            var stored = sensor.Policies.Single(p => p.Id == target.Id);
+            Assert.True(stored.IsDisabled);
+
+            // The stored content rides through untouched — linkage included.
+            Assert.Equal(templateId, stored.TemplateId);
+            Assert.Equal("tpl-icon", stored.Icon);
+            Assert.Equal(TargetType.LastValue, stored.Conditions.Single().Target.Type);
+        }
+
+        [Fact]
+        public async Task CreateSensorPolicy_ConcurrentCreatesOnOneSensor_BothPoliciesSurvive()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcConcurrentCreate");
+
+            // Two concurrent full-list merges built from the same snapshot would
+            // acknowledge both while the second list drops the first policy —
+            // the per-node write gate serializes them (#1501 round-1, F2).
+            var results = await Task.WhenAll(
+                Task.Run(() => _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy(icon: "one"), User)),
+                Task.Run(() => _service.CreateSensorPolicyAsync(sensor.Id, DataPolicy(icon: "two"), User)));
+
+            Assert.All(results, result => Assert.True(result.Success, result.Failure?.Message));
+
+            Assert.Equal(2, sensor.Policies.Count());
+            Assert.NotNull(sensor.Policies.SingleOrDefault(p => p.Id == results[0].Value.Id));
+            Assert.NotNull(sensor.Policies.SingleOrDefault(p => p.Id == results[1].Value.Id));
         }
 
 
@@ -363,6 +502,48 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
 
             Assert.Equal(PolicyWriteOutcome.Invalid, created.Failure.Outcome);
             Assert.Empty(sensor.Policies.TTLPolicies);
+        }
+
+        [Fact]
+        public async Task UpdateSensorTtlPolicy_TemplateOwnedToggle_NoEffectEcho_SkipsContentValidation()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcTtlTemplateToggle");
+
+            var templateId = Guid.NewGuid();
+
+            // A template-minted TTL policy with NO effect at all (no
+            // notification, no icon) — inside the core's range, outside the
+            // API's write surface ("at least one effect" would 422 the echo).
+            var seed = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = Force,
+                TTLPolicies = [TtlUpdate(Force, TimeSpan.FromMinutes(30)) with { TemplateId = templateId }],
+            });
+            Assert.True(seed.IsOk, seed.Error);
+
+            var target = Assert.Single(sensor.Policies.TTLPolicies);
+
+            // The GET-echo toggle body: interval and destination as read, no
+            // effect, isDisabled flipped — applied without content validation
+            // (the core applies only the toggle for template-owned TTL).
+            var toggled = await _service.UpdateSensorTtlPolicyAsync(sensor.Id, target.Id, new TtlPolicyDto
+            {
+                IsDisabled = true,
+                Interval = "00:30:00",
+                Destination = new AlertDestinationDto { Mode = target.Destination.Mode.ToString() },
+            }, User);
+
+            Assert.True(toggled.Success, toggled.Failure?.Message);
+            Assert.True(toggled.Value.IsDisabled);
+
+            var stored = Assert.Single(sensor.Policies.TTLPolicies);
+            Assert.True(stored.IsDisabled);
+
+            // The stored interval and linkage ride through untouched.
+            Assert.False(stored.IsTTLFromParent);
+            Assert.Equal(TimeSpan.FromMinutes(30).Ticks, stored.TTLInterval.Ticks);
+            Assert.Equal(templateId, stored.TemplateId);
         }
 
 

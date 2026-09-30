@@ -43,7 +43,8 @@ This is exactly the machinery the web editor (`HomeController.UpdateSensorInfo`)
 
 - every surviving policy is re-asserted on each write (a partial list would DROP everything not re-asserted — full-list semantics);
 - re-asserted TTL policies carry their interval EXPLICITLY (`CopyTtlUpdate`: a null `TTL` is the core's explicit reset-to-parent, not "keep" — the #1409/#1451 lesson);
-- POST/PATCH bodies are FULL-REPLACE at item granularity: the body specifies the policy's complete desired content; fields left out fall back to defaults; the id is server-generated on create and taken from the route on PATCH.
+- POST/PATCH bodies are FULL-REPLACE at item granularity: the body specifies the policy's complete desired content; fields left out fall back to defaults; the id is server-generated on create and taken from the route on PATCH;
+- API-to-API writes to the SAME node are serialized by a per-node gate in `PolicyAdministrationService` (`ConcurrentDictionary<Guid, SemaphoreSlim>`): the gate spans resolve → merge → send → the post-write verification read. Keyed by the node whose list is replaced — the SENSOR id for sensor data policies, sensor TTL policies and product-routed data policies (the OWNING sensor's key, not the product's), the PRODUCT id for product TTL. Two concurrent API writes to one node therefore both land; last-write-wins remains only versus the web editor, which does not go through the service.
 
 Writes are not client-cancellable (no `RequestAborted` into the cache — the area rule).
 
@@ -85,7 +86,7 @@ Clean versioned DTOs (`Model/ManagementApi/Alerts/PolicyDto.cs`), NOT the UI vie
 - `destination`: `FromParent` | `Empty` | `AllChats` | `Custom` (chats only with `Custom`, 1..20); `NotInitialized` is accepted only as an echo of a read (unconfigured destination).
 - `icon`: any non-empty string; `status`: `"Error"` (the fired status action) or null; at least ONE effect (notification, icon, Error status) is required.
 - `confirmationPeriod`/TTL-interval strings are TimeSpan values (`TimeSpan.TryParse`, invariant).
-- `templateId`/`templateAlertId` are output-only.
+- `templateId`/`templateAlertId` are server-owned, output-only: values sent in request bodies are ignored — create always writes `null` (a body claiming template ownership would otherwise hit the core's add gate and answer a misleading 409), and PATCH carries the STORED policy's linkage (template ownership cannot be minted or un-minted through this API; it is managed by the alert-templates surface).
 
 ### TTL policy (`TtlPolicyDto`)
 
@@ -130,11 +131,11 @@ HsmApiToken bearer tokens only (`HsmApiTokenDefaults.ManagementPolicy`), served 
 ## Semantics cautions (all inherited from the core, deliberately unchanged)
 
 - A `SensorUpdate.Policies` list REPLACES the sensor's list (full-list semantics) — that is why every write re-asserts the siblings.
-- Template-owned policies (`templateId != null`): the core lets a user initiator change only `isDisabled` and preserves them on drops. The API surfaces this as 409 (edit the template instead) instead of a silent no-op; a request that differs from the stored content in ANYTHING but `isDisabled` is a 409. A pure-toggle PATCH is detected by rendering the stored policy through the same DTO mapper and comparing.
+- Template-owned policies (`templateId != null`): the core lets a user initiator change only `isDisabled` and preserves them on drops. The API surfaces this as 409 (edit the template instead) instead of a silent no-op; a request that differs from the stored content in ANYTHING but `isDisabled` is a 409. A pure-toggle PATCH is detected by rendering the stored policy through the same DTO mapper and comparing — and once detected it skips content validation entirely and sends the STORED content with only `isDisabled` from the body (template-minted content can legitimately sit outside the API's expression range — properties/operations the editor lacks, non-Const targets reading as `target: null`, no-effect bodies — and the core never writes that content on a user-initiated toggle anyway).
 - TTL schedule gates (#1404/#1447): `scheduleId` on a TTL policy gates expiry at evaluation time; references must resolve (422 otherwise).
 - Schedule-id detach on schedule delete (#1409) and folder chat removal (#1451) re-assert full lists themselves — orthogonal to this surface.
 - Change-ownership: a policy owned (change-table) by a higher-priority initiator can be silently skipped by the core; the API detects the missing delta after the update and answers 409 ("accepted but not applied") instead of echoing a ghost.
-- Writes are fire-and-confirm per request: two concurrent writes to the same node are last-write-wins (same as two browser tabs).
+- Concurrent writes: API-to-API writes to the same node are serialized by the service's per-node gate (see Design) — both acknowledged writes land. Last-write-wins remains versus the web editor (two browser tabs, or a tab racing an API call), which bypasses the gate.
 
 ## Key Files
 
@@ -154,7 +155,7 @@ HsmApiToken bearer tokens only (`HsmApiTokenDefaults.ManagementPolicy`), served 
 
 ## Tests
 
-- Service seam (real `TreeValuesCache`, `MonitoringCoreTestsBase` pattern): create/update/delete leaves sibling policies and TTL intervals untouched; the inherit switch resets to parent; template-owned content changes and deletions answer conflict while pure toggles pass; the product aggregate routes writes to the owning sensor; product TTL full CRUD.
+- Service seam (real `TreeValuesCache`, `MonitoringCoreTestsBase` pattern): create/update/delete leaves sibling policies and TTL intervals untouched; the inherit switch resets to parent; template-owned content changes and deletions answer conflict while pure toggles pass (including toggles whose echoed content sits outside the API's write surface); template fields in request bodies are ignored (create succeeds, PATCH cannot mint ownership); two concurrent creates on one sensor both survive (the per-node write gate); the product aggregate routes writes to the owning sensor; product TTL full CRUD.
 - Controller seam (mocked cache dispatching onto live sensor models): area-attribute conventions; the 403/404 authorization mapping (404-first, body validation never runs for an unauthorized caller); 422s for condition-vs-type, operation-vs-property, untyped targets, unavailable/available chats, unknown schedule references, missing effects, interval/inherit contradictions; 409 on cache failure; full create → get → patch → delete round-trips for all four resources.
 - Swagger conventions (`ManagementApiSwaggerTests`): every action of both controllers is in the response-annotations map; `POST /products/{id}/policies` is the area's single documented no-success action.
 

@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMServer.Authentication;
 using HSMCommon.Model;
@@ -30,10 +32,14 @@ namespace HSMServer.Model.ManagementApi.Alerts
     // policy collections directly. It reads the current list, applies the ONE
     // requested change, and sends a single atomic FULL-LIST SensorUpdate /
     // ProductUpdate — exactly the machinery the web editor drives, with the same
-    // last-write-wins semantics and no new core paths. A partial list would drop
-    // everything not re-asserted (full-list semantics), so every merge re-asserts
-    // every surviving policy, TTL intervals included (a null TTL is an explicit
-    // reset-to-parent, not "keep").
+    // last-write-wins semantics versus the web editor and no new core paths.
+    // API-to-API writes to one node are SERIALIZED by a per-node gate (see
+    // _writeGates, #1501 round-1) — two full-list merges built from the same
+    // snapshot would otherwise each acknowledge while the second silently drops
+    // the first's policy. A partial list would drop everything not re-asserted
+    // (full-list semantics), so every merge re-asserts every surviving policy,
+    // TTL intervals included (a null TTL is an explicit reset-to-parent, not
+    // "keep").
     //
     // Authorization precedes existence checks and validation, per the area's
     // anti-enumeration rule: the evaluator resolves the 404/403 split itself
@@ -67,6 +73,23 @@ namespace HSMServer.Model.ManagementApi.Alerts
         private readonly IFolderManager _folders;
         private readonly IAlertScheduleProvider _schedules;
 
+        // #1501 round-1 (F2): per-node write serialization. Every write reads a
+        // node's full policy list, merges ONE item and sends the whole list back
+        // (full-list semantics: ids missing from the list are removed) — two
+        // concurrent writes to the SAME node would each acknowledge while the
+        // second list silently drops the first write's policy. The gate spans
+        // resolve -> merge -> send -> the post-write verification read.
+        //
+        // KEYING: the id of the node whose list is being replaced — the SENSOR
+        // id for sensor data policies, sensor TTL policies and product-routed
+        // data policies (the OWNING sensor's key, never the product's: the
+        // product surface only addresses the aggregate; the write itself goes
+        // through the owning sensor's full list), and the PRODUCT id for
+        // product TTL policies (ProductUpdate.TTLPolicies replaces the
+        // product's own list). Different nodes never share a gate, so writes
+        // to distinct nodes still proceed in parallel.
+        private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _writeGates = new();
+
         public PolicyAdministrationService(ITreeValuesCache cache, IApiTokenAuthorizationService authorization,
             IUserManager users, IChatsManager chats, IFolderManager folders, IAlertScheduleProvider schedules)
         {
@@ -85,7 +108,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// Create one data policy on the sensor; the id is server-generated and
         /// every other policy of the sensor rides through untouched.
         /// </summary>
-        public async Task<PolicyWriteResult<PolicyDto>> CreateSensorPolicyAsync(Guid sensorId, PolicyDto dto,
+        public Task<PolicyWriteResult<PolicyDto>> CreateSensorPolicyAsync(Guid sensorId, PolicyDto dto,
+            ClaimsPrincipal user) =>
+            LockedWriteAsync(sensorId, () => CreateSensorPolicyCoreAsync(sensorId, dto, user));
+
+        private async Task<PolicyWriteResult<PolicyDto>> CreateSensorPolicyCoreAsync(Guid sensorId, PolicyDto dto,
             ClaimsPrincipal user)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
@@ -115,7 +142,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// template-owned policy accepts only the disable toggle — anything else
         /// answers 409).
         /// </summary>
-        public async Task<PolicyWriteResult<PolicyDto>> UpdateSensorPolicyAsync(Guid sensorId, Guid policyId,
+        public Task<PolicyWriteResult<PolicyDto>> UpdateSensorPolicyAsync(Guid sensorId, Guid policyId,
+            PolicyDto dto, ClaimsPrincipal user) =>
+            LockedWriteAsync(sensorId, () => UpdateSensorPolicyCoreAsync(sensorId, policyId, dto, user));
+
+        private async Task<PolicyWriteResult<PolicyDto>> UpdateSensorPolicyCoreAsync(Guid sensorId, Guid policyId,
             PolicyDto dto, ClaimsPrincipal user)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
@@ -131,8 +162,19 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (existing.TemplateId is not null && !IsPureDataToggle(dto, existing))
                 return PolicyWriteResult<PolicyDto>.Fail(PolicyWriteOutcome.Conflict, message: TemplateOwnedMessage);
 
-            if (!TryValidateDataDto(dto, sensor.Type, sensorId, AvailableChats(sensor),
-                    out var conditions, out var errors))
+            // A pure toggle on a template-owned policy skips content validation
+            // (#1501 round-1, F3): template-minted content can legitimately sit
+            // outside the API's expression range (properties/operations the
+            // editor lacks, non-Const targets reading back as target: null,
+            // no-effect bodies), and the core applies ONLY the disable toggle
+            // for user-initiated updates to template-owned policies — full
+            // validation would answer 422 to an echoed GET body whose content
+            // is never written anyway.
+            List<PolicyConditionUpdate> conditions = null;
+
+            if (existing.TemplateId is null &&
+                !TryValidateDataDto(dto, sensor.Type, sensorId, AvailableChats(sensor),
+                    out conditions, out var errors))
                 return PolicyWriteResult<PolicyDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
             var initiator = InitiatorOf(user);
@@ -142,13 +184,24 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 .Select(p => new PolicyUpdate(p, initiator))
                 .ToList();
 
-            merged.Add(AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, conditions, AvailableChats(sensor)));
+            // Template-owned toggle: the STORED content rides through unchanged
+            // (the copy constructor carries its TemplateId/TemplateAlertId —
+            // server-owned linkage, #1501 round-1, F1) with only IsDisabled
+            // taken from the body.
+            merged.Add(existing.TemplateId is not null
+                ? new PolicyUpdate(existing, initiator) { IsDisabled = dto.IsDisabled }
+                : AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, conditions, AvailableChats(sensor),
+                    existing.TemplateId, existing.TemplateAlertId));
 
             return await SendSensorUpdateAsync(sensor, policyId, merged, initiator);
         }
 
         /// <summary>Remove one data policy; every other policy of the sensor rides through untouched.</summary>
-        public async Task<PolicyWriteResult> DeleteSensorPolicyAsync(Guid sensorId, Guid policyId, ClaimsPrincipal user)
+        public Task<PolicyWriteResult> DeleteSensorPolicyAsync(Guid sensorId, Guid policyId, ClaimsPrincipal user) =>
+            LockedWriteAsync(sensorId, () => DeleteSensorPolicyCoreAsync(sensorId, policyId, user));
+
+        private async Task<PolicyWriteResult> DeleteSensorPolicyCoreAsync(Guid sensorId, Guid policyId,
+            ClaimsPrincipal user)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
 
@@ -187,7 +240,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// <c>interval</c> or <c>inherit</c>, never a null: the server owns the
         /// reset-to-parent translation.
         /// </summary>
-        public async Task<PolicyWriteResult<TtlPolicyDto>> CreateSensorTtlPolicyAsync(Guid sensorId,
+        public Task<PolicyWriteResult<TtlPolicyDto>> CreateSensorTtlPolicyAsync(Guid sensorId,
+            TtlPolicyDto dto, ClaimsPrincipal user) =>
+            LockedWriteAsync(sensorId, () => CreateSensorTtlPolicyCoreAsync(sensorId, dto, user));
+
+        private async Task<PolicyWriteResult<TtlPolicyDto>> CreateSensorTtlPolicyCoreAsync(Guid sensorId,
             TtlPolicyDto dto, ClaimsPrincipal user)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
@@ -211,7 +268,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
         }
 
         /// <summary>Replace one TTL policy of the sensor; the interval/inherit switch is part of the content.</summary>
-        public async Task<PolicyWriteResult<TtlPolicyDto>> UpdateSensorTtlPolicyAsync(Guid sensorId,
+        public Task<PolicyWriteResult<TtlPolicyDto>> UpdateSensorTtlPolicyAsync(Guid sensorId,
+            Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user) =>
+            LockedWriteAsync(sensorId, () => UpdateSensorTtlPolicyCoreAsync(sensorId, policyId, dto, user));
+
+        private async Task<PolicyWriteResult<TtlPolicyDto>> UpdateSensorTtlPolicyCoreAsync(Guid sensorId,
             Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
@@ -227,7 +288,15 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (existing.TemplateId is not null && !IsPureTtlToggle(dto, existing))
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Conflict, message: TemplateOwnedMessage);
 
-            if (!TryValidateTtlDto(dto, AvailableChats(sensor), out var ttlTicks, out var errors))
+            // The TTL twin of the data-policy toggle skip (#1501 round-1, F3):
+            // the core applies only the disable toggle for user-initiated
+            // updates to template-owned TTL policies, so content validation
+            // (which a template-minted body can fail — e.g. a no-effect echo)
+            // would reject a change that never writes the content anyway.
+            long? ttlTicks = null;
+
+            if (existing.TemplateId is null &&
+                !TryValidateTtlDto(dto, AvailableChats(sensor), out ttlTicks, out var errors))
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
             var initiator = InitiatorOf(user);
@@ -237,13 +306,23 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 .Select(p => CopyTtlUpdate(p, initiator))
                 .ToList();
 
-            merged.Add(AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, ttlTicks, AvailableChats(sensor)));
+            // Template-owned toggle: the stored content and its EXPLICIT
+            // interval ride through (CopyTtlUpdate) with only IsDisabled taken
+            // from the body.
+            merged.Add(existing.TemplateId is not null
+                ? CopyTtlUpdate(existing, initiator) with { IsDisabled = dto.IsDisabled }
+                : AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, ttlTicks, AvailableChats(sensor),
+                    existing.TemplateId, existing.TemplateAlertId));
 
             return await SendSensorTtlUpdateAsync(sensor, policyId, merged, initiator);
         }
 
         /// <summary>Remove one TTL policy; every other TTL policy of the sensor rides through untouched.</summary>
-        public async Task<PolicyWriteResult> DeleteSensorTtlPolicyAsync(Guid sensorId, Guid policyId,
+        public Task<PolicyWriteResult> DeleteSensorTtlPolicyAsync(Guid sensorId, Guid policyId,
+            ClaimsPrincipal user) =>
+            LockedWriteAsync(sensorId, () => DeleteSensorTtlPolicyCoreAsync(sensorId, policyId, user));
+
+        private async Task<PolicyWriteResult> DeleteSensorTtlPolicyCoreAsync(Guid sensorId, Guid policyId,
             ClaimsPrincipal user)
         {
             var (sensor, failure) = ResolveWritableSensor(sensorId, user);
@@ -299,6 +378,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
         /// Replace one data policy found anywhere in the product's subtree; the
         /// write is applied atomically on the OWNING sensor's full list.
         /// </summary>
+        // No product gate here (see _writeGates): the resolution below only
+        // READS the aggregate to find the owner, and the delegated sensor-level
+        // write takes the OWNING SENSOR's gate — the node whose list is actually
+        // replaced. A policy never moves between sensors, so resolving outside
+        // the gate cannot race the merge.
         public async Task<PolicyWriteResult<ProductPolicyDto>> UpdateProductPolicyAsync(Guid productId,
             Guid policyId, PolicyDto dto, ClaimsPrincipal user)
         {
@@ -333,7 +417,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
         // === TTL policies on a product (product-owned) ===
 
         /// <summary>Create one TTL policy on the product itself.</summary>
-        public async Task<PolicyWriteResult<TtlPolicyDto>> CreateProductTtlPolicyAsync(Guid productId,
+        public Task<PolicyWriteResult<TtlPolicyDto>> CreateProductTtlPolicyAsync(Guid productId,
+            TtlPolicyDto dto, ClaimsPrincipal user) =>
+            LockedWriteAsync(productId, () => CreateProductTtlPolicyCoreAsync(productId, dto, user));
+
+        private async Task<PolicyWriteResult<TtlPolicyDto>> CreateProductTtlPolicyCoreAsync(Guid productId,
             TtlPolicyDto dto, ClaimsPrincipal user)
         {
             var (product, failure) = ResolveWritableProduct(productId, user);
@@ -357,7 +445,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
         }
 
         /// <summary>Replace one TTL policy of the product; the interval/inherit switch is part of the content.</summary>
-        public async Task<PolicyWriteResult<TtlPolicyDto>> UpdateProductTtlPolicyAsync(Guid productId,
+        public Task<PolicyWriteResult<TtlPolicyDto>> UpdateProductTtlPolicyAsync(Guid productId,
+            Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user) =>
+            LockedWriteAsync(productId, () => UpdateProductTtlPolicyCoreAsync(productId, policyId, dto, user));
+
+        private async Task<PolicyWriteResult<TtlPolicyDto>> UpdateProductTtlPolicyCoreAsync(Guid productId,
             Guid policyId, TtlPolicyDto dto, ClaimsPrincipal user)
         {
             var (product, failure) = ResolveWritableProduct(productId, user);
@@ -373,7 +465,13 @@ namespace HSMServer.Model.ManagementApi.Alerts
             if (existing.TemplateId is not null && !IsPureTtlToggle(dto, existing))
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Conflict, message: TemplateOwnedMessage);
 
-            if (!TryValidateTtlDto(dto, AvailableChats(product), out var ttlTicks, out var errors))
+            // The TTL toggle skip of the sensor twin (#1501 round-1, F3): the
+            // core applies only the disable toggle for user-initiated updates
+            // to template-owned TTL policies.
+            long? ttlTicks = null;
+
+            if (existing.TemplateId is null &&
+                !TryValidateTtlDto(dto, AvailableChats(product), out ttlTicks, out var errors))
                 return PolicyWriteResult<TtlPolicyDto>.Fail(PolicyWriteOutcome.Invalid, errors);
 
             var initiator = InitiatorOf(user);
@@ -383,13 +481,20 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 .Select(p => CopyTtlUpdate(p, initiator))
                 .ToList();
 
-            merged.Add(AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, ttlTicks, AvailableChats(product)));
+            merged.Add(existing.TemplateId is not null
+                ? CopyTtlUpdate(existing, initiator) with { IsDisabled = dto.IsDisabled }
+                : AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, ttlTicks, AvailableChats(product),
+                    existing.TemplateId, existing.TemplateAlertId));
 
             return await SendProductTtlUpdateAsync(product.Id, policyId, merged, initiator);
         }
 
         /// <summary>Remove one TTL policy of the product; every other TTL policy rides through untouched.</summary>
-        public async Task<PolicyWriteResult> DeleteProductTtlPolicyAsync(Guid productId, Guid policyId,
+        public Task<PolicyWriteResult> DeleteProductTtlPolicyAsync(Guid productId, Guid policyId,
+            ClaimsPrincipal user) =>
+            LockedWriteAsync(productId, () => DeleteProductTtlPolicyCoreAsync(productId, policyId, user));
+
+        private async Task<PolicyWriteResult> DeleteProductTtlPolicyCoreAsync(Guid productId, Guid policyId,
             ClaimsPrincipal user)
         {
             var (product, failure) = ResolveWritableProduct(productId, user);
@@ -424,6 +529,44 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
 
         // === Resolution and dispatch ===
+
+        // The per-node write gate (#1501 round-1, F2 — see _writeGates): runs
+        // one whole write — resolve, validate, merge, send, verify — under the
+        // target node's semaphore, awaiting inside so callers keep their
+        // asynchronous flow. Gates are never nested (the product data-policy
+        // routing delegates BEFORE any gate is held).
+        private async Task<PolicyWriteResult<T>> LockedWriteAsync<T>(Guid nodeId,
+            Func<Task<PolicyWriteResult<T>>> write)
+        {
+            var gate = _writeGates.GetOrAdd(nodeId, static _ => new SemaphoreSlim(1, 1));
+
+            await gate.WaitAsync().ConfigureAwait(false);
+
+            try
+            {
+                return await write().ConfigureAwait(false);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        private async Task<PolicyWriteResult> LockedWriteAsync(Guid nodeId, Func<Task<PolicyWriteResult>> write)
+        {
+            var gate = _writeGates.GetOrAdd(nodeId, static _ => new SemaphoreSlim(1, 1));
+
+            await gate.WaitAsync().ConfigureAwait(false);
+
+            try
+            {
+                return await write().ConfigureAwait(false);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
 
         // Authorization FIRST (the evaluator owns the 404/403 split), then the
         // live model lookup — an unknown id never reaches validation.
