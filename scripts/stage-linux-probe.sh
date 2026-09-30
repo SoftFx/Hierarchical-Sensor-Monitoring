@@ -40,6 +40,16 @@ if [ "${#debs[@]}" -ne 1 ]; then
 fi
 
 deb="${debs[0]}"
+# The release lane names the asset after the tag (probe-release.yml: tag == workspace version ==
+# package version), so a mismatch means a hand-made or mislabelled release: the server would serve
+# a package other than the one the pin names.
+case "$(basename "$deb")" in
+  "hsm-linux-probe_${pin}_"*.deb) ;;
+  *)
+    echo "::error::probe-v$pin carries $(basename "$deb"), expected hsm-linux-probe_${pin}_<arch>.deb"
+    exit 1
+    ;;
+esac
 sha_file="$deb.sha256"
 if [ ! -f "$sha_file" ]; then
   echo "::error::probe-v$pin has no $(basename "$sha_file") next to $(basename "$deb")"

@@ -433,7 +433,8 @@ division, so Windows can sample bytes and both still produce the same TimeSpan. 
 EXACT letter-less name rule as the free-space row, so a letter-bearing prediction row stays
 registration-only. Still registration-only on Linux: `ThreadPool thread count` (a .NET runtime metric
 with no native equivalent). The Windows-only sensors (event logs, service status, network speed,
-top-CPU, OS info) are explicitly not ported.
+top-CPU, OS info) are explicitly not ported to the collector (the Linux probe reports top-CPU
+from its own probe-only source, #1479: `aicontext/features/integrations/linux-probe/feature.md`).
 
 The parsing and delta math live in `src/proc_metrics.{hpp,cpp}` — portable, OS-read-free, and
 unit-tested on every CI lane (`proc_stat_*`, `proc_meminfo_*`, `proc_self_stat_*`,

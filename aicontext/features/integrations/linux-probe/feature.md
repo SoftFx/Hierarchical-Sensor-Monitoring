@@ -1,6 +1,6 @@
 # Feature: Linux Probe (`hsm-linux-probe`)
 
-> Owner: integrations | Last reviewed: 2026-09-28 | Canonical: yes
+> Owner: integrations | Last reviewed: 2026-09-30 | Canonical: yes
 > Scope: The systemd-hosted Linux host probe in `src/probe-linux/` — a Rust process that hosts the native collector through its stable C ABI. Owns the host wiring (config, secrets, logging, lifecycle, packaging), the sensor set it registers, and the acquisition of its probe-only sensors; owns no wire semantics.
 
 ---
@@ -23,7 +23,8 @@ Three crates under `src/probe-linux/`:
 **No computer node; the module node is `.probe`** (owner decisions 2026-09-29, #1493 and #1496:
 one product = one host). The product root holds `.computer/…` (the host) and `.probe/` with
 `.module/…` and `Docker/…` — the .NET layout with an empty `ComputerName`. `hsm.computerName` is
-empty and `hsm.module` is `.probe` by default; the server bundle writes neither. Other values are
+empty and `hsm.module` is `.probe` by default; the server bundle writes both with these values, so
+its layout does not depend on the shipped probe's defaults (#1495). Other values are
 accepted, not recommended. Linux probe only — the Windows agent keeps
 `<MACHINE>/HSM Agent/.module`.
 
@@ -54,7 +55,9 @@ The probe registers **two separately pinned sets**:
    `/proc/diskstats` of the whole disk) and `Written per day on <name> disk` (#1485, once a day
    since #1498: decimal GB written to that whole disk during one local day, from the same counter,
    **posted once** in the day's last 30 s — TTL 26 h, a day that ended while the probe was down is
-   not posted; from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
+   not posted (logged once); a value whose post failed while others went out, and a measured disk
+   with no mounted filesystem in the window, are logged with the disk, the day and the total;
+   the mount-point identity counts only mounted filesystems; from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
    with the boot id and each disk's identity — WWID/serial, else its mount points — so a restart
    continues the day, a reboot keeps the day (only for the same physical disk) but not the
    counters, and a disk renamed by the kernel never inherits another disk's day). Block-backed types only, deduplicated by source device,
@@ -72,7 +75,9 @@ The probe registers **two separately pinned sets**:
    of 5-second samples; CPU as % of the whole host; the memory limit is stated in the `Memory used %`
    description and follows a changed limit), `Disk written per hour` (decimal MB the service's
    containers wrote to block devices in one UTC clock hour, from the cgroup write counters in the
-   same stats; sent just after the hour — the comment names the window; the running hour survives
+   same stats; sent just after the hour, once — the comment names the window; a clock stepped
+   back at most three sample periods into the hour just posted keeps the running hour, a larger
+   step resets it, and the posted hour is never posted twice (#1489); the running hour survives
    a probe restart through the state file; no alert, EMA statistics), `Service status` (the Windows
    `ServiceControllerStatus` enum and its alert), `Health` (only where a healthcheck exists),
    `Restart count` (posted on change) and `OOM killed` (latched 24 h). Source: the Docker Engine
@@ -81,6 +86,27 @@ The probe registers **two separately pinned sets**:
    container Exited (0), restart policy `no`) is not monitored until it runs. Pinned for
    garage-server's captures (12 Compose containers, 11 monitored services, 70 paths) by
    `DOCKER_GARAGE_SET`.
+4. **Top CPU processes** (#1479, part of the probe-only set; `probe_only/top_cpu/`) —
+   `.computer/Top CPU processes/<name>`, the Windows agents' sensor family, **wire-identical** to
+   `cpu_top.cpp`/`RunTopCpuLoop` and `WindowsTopCpuMonitor.cs` so alert templates carry over: Double,
+   `Percents`, TTL 5 min, `EnableGrafana`, no statistics/alert, description `Top **<count>** CPU
+   consumers by % of machine CPU` + a path line; % of the whole host summed per name; names at or above
+   `minPercent`, busiest `count`, ties by name, one post per `periodMs`; at most `max(count × 8, 64)`
+   names ever. Only `DisplayUnit` differs (`0` through the C ABI vs Windows `null`; the server reads it
+   for Rate sensors only). **Probe-only by the owner's rule for this epic** (new Linux sources live in
+   the probe; a later move into the shared catalog must mirror a managed Unix implementation over the
+   same `/proc` source per rule #10, with a conformance scenario per rule #9). Source:
+   `/proc/<pid>/stat` `utime+stime` deltas over `/proc/stat`'s total (Total CPU's total), stat split
+   at the last `)`, identity `(pid, starttime)`; name = field 2 (= `/proc/<pid>/comm`, ≤ 15 bytes),
+   normalized to the server's template-wildcard charset, kernel threads by the part before `/`
+   (`kworker/…` → `kworker`). The description's path line is the `exe` link, or — for another
+   user's process, whose link the unprivileged probe cannot read — argv[0] from `/proc/<pid>/cmdline`
+   when absolute (only argv[0], cut at NUL and whitespace; the arguments never), else a note.
+   **Off unless the top-level `topCpu` block enables it** (the agent's
+   block and defaults). Every sensor registers at runtime, so none is in the pinned sets. Needs the
+   `top-cpu.conf` drop-in (`ProtectProc=default`) to see other processes; without it, or under any
+   `hidepid`, it runs on what it sees and says so in one INFO line. Cost: ≈ 1 440 records/day per
+   name that stays ≥ 1 %. Details: README "Top CPU processes".
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,
 batching, retry and TLS stay the library's; only the acquisition (a sysfs read, a `statvfs`, an
@@ -106,6 +132,9 @@ default `true` (and the `exclude` lists empty), so a config without those sectio
 on. The host switches covered the disk sensor before 0.4.0, so while `probe.disks.enabled` is unset a
 `hostSensors.enabled: false` or the deprecated `hostSensors.disk: false` still disables the disks
 (an upgrade never switches them back on); an explicit `probe.disks.enabled` wins.
+`topCpu.{enabled, periodMs, minPercent, count}` sits at the **top level**, not under `probe` — HsmAgent's
+block, keys, defaults (`false`, 60000, 1.0, 10) and checks — so the server writes one block for both
+bundles (#1479).
 
 **Packaging.** `src/probe-linux/packaging/build-deb.sh <version>` builds the `.deb` in a plain
 `debian:13` container (layout `/usr/bin`, `/lib/systemd/system`, the skeleton at
@@ -118,7 +147,27 @@ restarts it if it was running (prerm leaves a `/run` marker, postinst starts it)
 access is a drop-in (`hsm-linux-probe.service.d/docker.conf`, `SupplementaryGroups=docker`) that
 postinst writes (fresh install / the upgrade from before 0.3.0 only, so an operator's removal sticks) through
 `/usr/lib/hsm-linux-probe/docker-access.sh` only where a `docker` group
-exists — never in the unit, which would then not start on a host without one.
+exists — never in the unit, which would then not start on a host without one. The package also
+ships `/usr/lib/tmpfiles.d/hsm-linux-probe.conf` (#1418): the probe rolls its log file daily and
+never deletes one, so `systemd-tmpfiles-clean.timer` deletes log files not written for 30 days.
+`packaging/smoke-deb.sh` install-smokes a package in a clean `debian:13` (apt-resolved Depends,
+`--version`, user + seeded config, run against an unreachable server and SIGTERM, reinstall over an
+edited config, purge); the `deb` job of `probe-linux.yml` runs build + smoke on every probe PR.
+
+**Release channel (#1418)** — the `agent-v*` model (`../../server/agent-download/feature.md` →
+*Packaging*). The probe version is `[workspace.package] version` in `src/probe-linux/Cargo.toml`
+(what `--version` and `.probe/.module/Version` report). Pushing `probe-v<X.Y.Z>` runs
+`.github/workflows/probe-release.yml`, which fails unless the tag equals that version, is a plain
+`X.Y.Z` (a semver pre-release would sort above the release in dpkg, and git refs cannot carry `~`)
+and sorts above every released `probe-v*` (apt refuses a lower version as an upgrade); it builds
+with `build-deb.sh` in `debian:13`, runs `smoke-deb.sh`, and publishes
+`hsm-linux-probe_<X.Y.Z>_amd64.deb` + `.deb.sha256` with `--latest=false` from a job that alone holds
+`contents: write`, then hands the "Latest" badge back to the newest `server-v*` release if GitHub
+moved it. `workflow_dispatch` is a dry run (build, smoke, artifact; no release). The server ships
+the release named in `src/server/HSMServer/probe-release.txt` (`../../server/linux-probe-download/feature.md`
+→ *Staging*). Trials are `~trialN` (local) or `~ci` (CI artifact) and sort below the release.
+Operating the package — install, upgrade, rollback, retention, the sleeping-disk acceptance check,
+measured cost — is `src/probe-linux/RUNBOOK.md`.
 
 Linux is the only supported target. The initiative is
 [`docs/initiatives/linux-docker-probe.md`](../../../../docs/initiatives/linux-docker-probe.md).
@@ -130,6 +179,9 @@ Linux is the only supported target. The initiative is
 - **No probe-local reimplementation of any sensor the collector has.** A second implementation next
   to the managed one is the divergence class rules #9/#10 forbid. A probe-only sensor must not
   shadow a parity path (the pinned test checks it) and exists only by explicit owner agreement.
+  Top CPU processes (#1479) is not such a reimplementation: the collector's top-CPU source is
+  Windows-only (its enable call refuses Linux), so the probe adds the Linux acquisition and matches
+  the Windows wire shape.
 - **Probe-only sources are isolated.** Each registers its sensors (with their alerts) before Start
   and then samples on a thread of its own, so a read blocked on a hung filesystem cannot stall
   another source; every sample runs under `catch_unwind`; a failed read is skipped and logged
@@ -139,6 +191,13 @@ Linux is the only supported target. The initiative is
   turns to Timeout. Every `statvfs` — at registration and when sampling — runs on a helper
   thread with a 5 s deadline, and a filesystem whose last `statvfs` is still blocked is not asked
   again, so a hung mount can neither hold up Start nor stall the other disks.
+- **The unit hides other processes (`ProtectProc=invisible`) unless top-CPU is on.** Only the
+  `top-cpu.conf` drop-in sets `ProtectProc=default`: the server bundle's `install.sh` writes it when
+  the config installed on the host enables `topCpu` and removes it otherwise (a kept config wins over
+  the bundle's switch; an enabling bundle over a kept config without the block warns instead);
+  `uninstall.sh` and `postrm` remove it. Top-CPU reads only `/proc/stat`,
+  `/proc/<pid>/stat`, the `/proc/<pid>/exe` link and — when that link is denied, once per new sensor —
+  argv[0] of `/proc/<pid>/cmdline` (never the arguments, never `environ`).
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at
   most 2 s; stuck ones are named in the log, the collector drains anyway, and the process then
   exits without joining a thread that is still blocked in a read.
@@ -164,6 +223,13 @@ Linux is the only supported target. The initiative is
   deliberately does not expose the ABI's `allow_untrusted_server_certificate`.
 - **Values dropped by the collector's bounded stop drain are logged at WARN** (the collector reports
   them at debug), per rule #8.
+- **A release is exactly the source it names.** The `probe-v*` tag, the workspace version, the
+  package version and the asset name are one string, released versions only ever sort upwards, and
+  the server stages only the asset of the pinned version whose SHA-256 matches, serving it
+  byte-identical.
+- **The probe does not wake sleeping disks.** On a mount it calls only `statvfs`; it never opens,
+  lists or reads under one, never reads a disk temperature input, and skips automounts. The
+  acceptance check (`smartctl -n standby` before and 15 min after start) is in the runbook.
 - **The Docker source only reads.** Its HTTP client has no method but `GET` and builds requests from
   a closed set of four Engine API endpoints (container ids validated as hex); the socket is
   root-equivalent, so this is enforced by construction and review. Each call is bounded (1.5 s,

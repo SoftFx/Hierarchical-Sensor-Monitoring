@@ -1,6 +1,6 @@
 # Feature: Per-product Linux probe download (server side)
 
-> Owner: server | Last reviewed: 2026-09-22 | Canonical: yes
+> Owner: server | Last reviewed: 2026-09-30 | Canonical: yes
 > Scope: the admin-only endpoint + UI that give an operator a ready-to-run, per-product HSM Linux probe
 > bundle (#1424, epic #1413, initiative `docs/initiatives/linux-docker-probe.md` §4.6). The Linux sibling of
 > `../agent-download/feature.md` (Windows agent); the probe itself lives in `src/probe-linux/`.
@@ -33,7 +33,7 @@ same form (`Prod (EU)` / `Prod EU`) get the same folder name; extract each bundl
 | Entry | Mode | Content |
 |---|---|---|
 | `hsm-linux-probe_<ver>_<arch>.deb` | 0644 | **Byte-identical** to the staged `probe-v*` release asset, under its release file name |
-| `config.json` | 0644 | Probe schema: `hsm.address` + `hsm.port` from `AgentConnectionResolver`, `hsm.accessKeyFile` = `/run/credentials/hsm-linux-probe.service/access-key` (the unit's `LoadCredential=` path). **No `computerName`, no `module`**: the probe's defaults apply — no computer node, module node `.probe` (#1493, #1496; one product = one host). **No key.** |
+| `config.json` | 0644 | Probe schema: `hsm.address` + `hsm.port` from `AgentConnectionResolver`, `hsm.accessKeyFile` = `/run/credentials/hsm-linux-probe.service/access-key` (the unit's `LoadCredential=` path), and the layout spelled out: **`computerName: ""`, `module: ".probe"`** — no computer node, module node `.probe` (#1493, #1496; one product = one host). Written explicitly, not left to the probe's defaults, which were `LinuxProbe` before 0.6.0 and empty in 0.6.0 (#1495). **No key.** With Configuration → Agent → *Report top processes by CPU* (`AgentConfig.EnableTopCpuProcesses`) also the agent's top-level `topCpu` block, the same object the agent bundle writes (`AgentInstallerBundle.TopCpuBlock`: `enabled:true, periodMs:60000, minPercent:1.0, count:10`; #1479) |
 | `access-key` | 0600 | The product key from `AgentKeySelector` (same selection as Windows), newline-terminated |
 | `server-ca.pem` | 0644 | Optional, the server's leaf certificate (public part only); see *TLS* |
 | `install.sh`, `uninstall.sh` | 0755 | LF line endings; shellcheck-clean |
@@ -126,6 +126,21 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
    every case, including behind a public-CA proxy where no `server-ca.pem` ships, and minimal hosts lack it.
 3. With `server-ca.pem`: copies it to `/usr/local/share/ca-certificates/hsm-server.crt`, runs
    `update-ca-certificates`, and prints the certificate's expiry date.
+   **Top CPU processes (#1479), every bundle:** the drop-in
+   `/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf` (`[Service] ProtectProc=default`)
+   **follows the config actually installed on the host** after step 1 — the bundle's, or the existing
+   one that was kept — not the bundle's switch. The unit's `ProtectProc=invisible` hides every process
+   but the probe's own from `/proc`, and the top-CPU sensors read `/proc/<pid>/stat` of every process.
+   The check is POSIX `tr`/`grep` over the config with its newlines removed (the `topCpu` block holds no
+   nested object; whitespace, key order and CRLF do not matter); no `python`/`jq`, no probe CLI.
+
+   | Installed config | Bundle switch | Result |
+   |---|---|---|
+   | `topCpu.enabled: true` (fresh install from an enabling bundle, or a kept config that enables it) | on or off | drop-in written; prints `Top CPU processes: on in …` — **the host config wins** over a bundle with the switch off |
+   | no enabled `topCpu` block, or unreadable / unrecognised (the safe side) | on | no drop-in; a WARNING: the existing config was kept and does not enable it, top CPU stays off until `install.sh --force-config` (or a hand edit of the `topCpu` block plus the drop-in, RUNBOOK "Top CPU processes") |
+   | no enabled `topCpu` block | off | no drop-in; an existing one is removed (and said so), restoring `ProtectProc=invisible` |
+
+   As for the agent, an existing config kept without `--force-config` does not gain `topCpu`.
 4. `systemctl enable --now hsm-linux-probe`, then `restart` (a reinstall picks up the new key/config/CA).
 5. Waits 3 s, prints `systemctl status --no-pager`, exits non-zero if the unit is not active. On success it
    reminds the operator that the downloaded `.tar.gz` still contains the key and should be deleted: the script
@@ -140,20 +155,22 @@ without making it system-wide; it is not on this PR's path.
 uninstall.sh: disables and stops the unit, `apt-get purge`s the package, shreds the installed key (as
 install.sh shreds the extracted one), removes the config (incl.
 `.dpkg-dist`/`.dpkg-old`) and CA file, refreshes the trust store (plain `update-ca-certificates`, not
-`--fresh`, so hand-made links in `/etc/ssl/certs` survive). It never contacts the HSM server —
-the sensor history stays.
+`--fresh`, so hand-made links in `/etc/ssl/certs` survive), and removes the `top-cpu.conf` drop-in (the
+package's `postrm` does too from probe 0.7.0). It never contacts the HSM server — the sensor history stays.
 
 ## Tree root: no computer node, module node `.probe` (#1493, #1496)
 
 Owner decisions 2026-09-29: one product = one host, so the probe has no computer node; its module node
 stays and is `.probe`. The product root holds `.computer/…` and `.probe/` (with `.module/…` and
 `Docker/…`). The probe's `hsm.computerName` defaults to empty and `hsm.module` to `.probe`; the bundle's
-`config.json` carries neither key, so those defaults apply. The
+`config.json` writes both keys with those values (`"computerName": ""`, `"module": ".probe"`), so the
+layout does not depend on the probe's defaults: a `probe-release.txt` pinned to an older probe (whose
+`module` defaulted to `LinuxProbe` before 0.6.0, and to empty in 0.6.0) still gets this layout (#1495). The
 former `computerName: "auto"` and its install-time host-name substitution are removed. A host installed
 from an older bundle keeps its `computerName`/`module` until its config is replaced or edited;
 re-installing with `install.sh --force-config` writes the new config and so moves that host's tree to the
-product root (the old nodes, alerts and TTL state stay behind). Setting the keys is accepted but not
-recommended.
+default layout, `.computer/…` and `.probe/…` (the old nodes, alerts and TTL state stay behind). Setting
+other values is accepted but not recommended.
 
 **One product per host.** With no host node, a second host installed from the same product's bundle writes
 into the same `.computer/…` and `.probe/…` sensors: values interleave and `Service alive`
@@ -168,7 +185,7 @@ Same model as `agent-release.txt` (see `../agent-download/feature.md` → *Packa
 | Pin state | Staging | Guards | Endpoint |
 |---|---|---|---|
 | Empty or missing (no `probe-v*` release yet) | skipped, build green | inactive | 503 |
-| `X.Y.Z` | `gh release download probe-vX.Y.Z` → SHA-256 check against `hsm-linux-probe_*.deb.sha256` → one `.deb` in `wwwroot/probe/` | Windows publish output and Docker image must hold exactly one non-empty `hsm-linux-probe_*.deb` | serves the bundle |
+| `X.Y.Z` | `gh release download probe-vX.Y.Z` → exactly one `.deb`, named `hsm-linux-probe_X.Y.Z_<arch>.deb` (#1418) → SHA-256 check against its `.deb.sha256` → staged in `wwwroot/probe/` | Windows publish output and Docker image must hold exactly one non-empty `hsm-linux-probe_*.deb` | serves the bundle |
 
 **Single architecture, deliberately.** Staging, both guards and the endpoint expect exactly one `.deb`, and
 every host gets that package. When #1418 publishes more than one architecture, this becomes an `?arch=`
@@ -180,8 +197,13 @@ provider, which does not map `.deb` (unlike `/agent/hsm-agent.exe`), so `/probe/
 drop-point's `README.md` is served, which is harmless. Everything per-product comes only from the admin endpoint.
 
 Paths: `scripts/stage-linux-probe.sh` (both `server-build.yml` legs) and `scripts/local-docker-build.ps1`.
-The staged `.deb` is gitignored (`wwwroot/probe/.gitignore`). Shipping a newer probe = push the
-`probe-v*` tag, then bump `probe-release.txt` in a one-line PR.
+The staged `.deb` is gitignored (`wwwroot/probe/.gitignore`). The release is published by
+`.github/workflows/probe-release.yml` (#1418: tag == `src/probe-linux/Cargo.toml` workspace version,
+plain `X.Y.Z` sorting above every earlier `probe-v*`, built and install-smoked in `debian:13`, asset
++ `sha256sum`-format `.sha256`, `--latest=false`; see `../../integrations/linux-probe/feature.md` →
+*Release channel*). Shipping a newer probe = merge the version bump, push the `probe-v*` tag, then
+bump `probe-release.txt` in a one-line PR. The pin stays empty until the owner publishes the first
+release.
 
 ## Key components
 
@@ -193,7 +215,7 @@ The staged `.deb` is gitignored (`wwwroot/probe/.gitignore`). Shipping a newer p
 | Whether the certificate Kestrel loaded is the bundled default | `ServerConfiguration/Sections/ServerCertificateConfig.cs` (`IsBundledDefault`) |
 | Button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
 | Drop-point | `HSMServer/wwwroot/probe/` (README + gitignore) |
-| Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |
+| Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, `topCpu` off/on and equal to the agent bundle's, the `top-cpu.conf` step deciding from the installed config (warning only from an enabling bundle) and removed by uninstall, tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |
 
 `install.sh`/`uninstall.sh` were also checked with shellcheck and smoke-run in a systemd `debian:13`
 container against a throwaway dummy `.deb` (fresh install from an empty apt index, non-root refusal, key
@@ -201,24 +223,28 @@ shredded after a failed install, re-run idempotency, `--force-config`, uninstall
 
 ## Contract with the probe package (#1415 / #1418)
 
-`src/probe-linux/` is not on master yet (PR #1420), so nothing in the build catches a rename on the probe
-side: the bundle would install cleanly and never send a value. These must move in lockstep with the probe, and
-be re-verified before the first non-empty `probe-release.txt`:
+Nothing in the build ties the two sides together: a rename on the probe side would still produce a bundle
+that installs cleanly and never sends a value. These must move in lockstep with the probe, and be
+re-verified before the first non-empty `probe-release.txt`:
 
 | Symbol | Here | Probe side |
 |---|---|---|
-| Package name `hsm-linux-probe`, asset `hsm-linux-probe_<ver>_<arch>.deb` + `.deb.sha256` | install/uninstall scripts, staging, guards | `.deb` build (#1418) |
+| Package name `hsm-linux-probe`, asset `hsm-linux-probe_<ver>_<arch>.deb` + `.deb.sha256` | install/uninstall scripts, staging, guards | `packaging/build-deb.sh`, `probe-release.yml` (#1418) |
 | Unit `hsm-linux-probe.service` | `install.sh` / `uninstall.sh` | `packaging/hsm-linux-probe.service` |
 | `LoadCredential=access-key:/etc/hsm-linux-probe/access-key` → `/run/credentials/hsm-linux-probe.service/access-key` | `AccessKeyCredentialPath`, `install.sh` | the unit |
-| Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile` (no `computerName`/`module`, #1493) | `BuildConfigJson` | `config.rs` (`computerName` empty, `module` `.probe` by default, #1496) |
+| Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile/computerName/module` (`computerName` `""`, `module` `.probe`, #1493, #1496, #1495) | `BuildConfigJson` | `config.rs` (the same values are its defaults; `probe.rs` `collector_options` leaves an empty segment out) |
 | https-only address | `ValidateServerAddress` | `config.rs` validation |
+| Top-level `topCpu { enabled, periodMs, minPercent, count }` (#1479) | `BuildConfigJson` (`AgentInstallerBundle.TopCpuBlock`) | `config.rs` `TopCpuConfig` |
+| Drop-in `hsm-linux-probe.service.d/top-cpu.conf` lifting `ProtectProc=invisible` | `install.sh` (decides from `"topCpu": { … "enabled": true }` in the installed config) / `uninstall.sh` (`TopCpuDropIn`) | the unit's `ProtectProc=invisible`, `deb/postrm`; the key names in `config.rs` `TopCpuConfig` |
 
-**Not yet verified on a real host.** The `debian:13` smoke test ran against a dummy `.deb`. In that Docker
-Desktop container, systemd applied no per-unit mount namespacing, so `LoadCredential=` never materialized
-and the test pointed the dummy at the installed key directly. The credential hand-off to the `hsm-probe`
-user must be checked on a real Debian host before the pin is set.
+**Verified on a real host since.** The `debian:13` smoke test of #1424 ran against a dummy `.deb` in a Docker
+Desktop container, where systemd applied no per-unit mount namespacing, so `LoadCredential=` never
+materialized. The trial packages were then installed on a real Debian 13 host through the server-generated
+bundle, exactly as an operator would, and the probe connected through the `LoadCredential=` hand-off to the
+`hsm-probe` user (initiative §9).
 
 ## Out of scope (follow-up)
 
 - A dedicated, separately-revocable per-download key (shared follow-up with the Windows agent).
-- A real `probe-v*` release (#1418); until it exists the button answers 503.
+- Publishing the first `probe-v*` release and pinning it: the channel exists (#1418), releases are on hold by
+  owner decision; until a pin is set the button answers 503.

@@ -2,9 +2,11 @@
 set -e
 # The Docker socket drop-in postinst wrote (docker-access.sh install). Removed here rather than by
 # the script, which is already gone by the time postrm runs. Kept across upgrades: the new
-# postinst rewrites it.
+# postinst rewrites it. Likewise the top-CPU drop-in (ProtectProc=default) the server bundle's
+# install.sh writes when "Report top processes by CPU" is on (#1479); upgrades keep it.
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     rm -f /etc/systemd/system/hsm-linux-probe.service.d/docker.conf
+    rm -f /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
     rmdir /etc/systemd/system/hsm-linux-probe.service.d 2>/dev/null || true
 fi
 if [ -d /run/systemd/system ]; then

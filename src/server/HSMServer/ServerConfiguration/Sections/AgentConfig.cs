@@ -19,7 +19,8 @@ public class AgentConfig
     /// <summary>
     /// When true, downloaded bundles carry a <c>topCpu</c> block (issue #1175) so the installed agent
     /// also reports the top processes by CPU once a minute. The admin opts in here (server-side); the
-    /// client agent has no UI and simply runs whatever config.json the bundle ships. Default false.
+    /// client agent has no UI and simply runs whatever config.json the bundle ships. The Linux probe
+    /// bundle honours it the same way (#1479). Default false.
     /// </summary>
     public bool EnableTopCpuProcesses { get; set; }
 

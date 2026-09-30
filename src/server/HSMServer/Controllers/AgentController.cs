@@ -164,7 +164,7 @@ namespace HSMServer.Controllers
 
             var bundle = LinuxProbeInstallerBundle.BuildTarGz(
                 LinuxProbeInstallerBundle.BundleFolderName(product.DisplayName), packageName, package,
-                new LinuxProbeBundleOptions(address, port, key.Id.ToString(), serverCa));
+                new LinuxProbeBundleOptions(address, port, key.Id.ToString(), serverCa, _config.Agent.EnableTopCpuProcesses));
 
             _logger.Info($"{CurrentUser?.Name} downloaded the HSM Linux probe bundle for product '{product.DisplayName}' ({productId}).");
 

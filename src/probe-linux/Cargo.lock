@@ -4,18 +4,18 @@ version = 3
 
 [[package]]
 name = "hsm-collector"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "hsm-collector-sys",
 ]
 
 [[package]]
 name = "hsm-collector-sys"
-version = "0.6.2"
+version = "0.7.0"
 
 [[package]]
 name = "hsm-linux-probe"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "hsm-collector",
  "libc",

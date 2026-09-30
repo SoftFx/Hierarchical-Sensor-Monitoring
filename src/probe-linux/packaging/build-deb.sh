@@ -21,6 +21,7 @@
 #                                                    when that file is absent, so no upgrade ever
 #                                                    stops at a conffile prompt or touches it)
 #   /usr/lib/hsm-linux-probe/docker-access.sh
+#   /usr/lib/tmpfiles.d/hsm-linux-probe.conf        (ages daily log files out after 30 days)
 #   /usr/share/doc/hsm-linux-probe/copyright
 # postinst creates the hsm-probe system user/group and reloads systemd; a fresh install does NOT
 # enable or start the unit, an upgrade restarts it if it was running (prerm leaves a /run marker);
@@ -99,13 +100,15 @@ echo "==> staging $PACKAGE"
 # upgrade from a conffile-era package does not try to delete it (dpkg warned "Directory not
 # empty"), and purge removes it once empty. The config inside is postinst's, not dpkg's.
 install -d -m 0755 "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/lib/systemd/system" "$ROOT/etc/hsm-linux-probe" \
-    "$ROOT/usr/share/hsm-linux-probe" "$ROOT/usr/share/doc/hsm-linux-probe" "$ROOT/usr/lib/hsm-linux-probe"
+    "$ROOT/usr/share/hsm-linux-probe" "$ROOT/usr/share/doc/hsm-linux-probe" "$ROOT/usr/lib/hsm-linux-probe" \
+    "$ROOT/usr/lib/tmpfiles.d"
 install -m 0755 "$BINARY" "$ROOT/usr/bin/hsm-linux-probe"
 strip --strip-unneeded "$ROOT/usr/bin/hsm-linux-probe"
 install -m 0644 "$PACKAGING_DIR/hsm-linux-probe.service" "$ROOT/lib/systemd/system/"
 install -m 0644 "$PACKAGING_DIR/config.example.json" "$ROOT/usr/share/hsm-linux-probe/config.example.json"
 install -m 0644 "$PACKAGING_DIR/deb/copyright" "$ROOT/usr/share/doc/hsm-linux-probe/copyright"
 install -m 0755 "$PACKAGING_DIR/docker-access.sh" "$ROOT/usr/lib/hsm-linux-probe/docker-access.sh"
+install -m 0644 "$PACKAGING_DIR/hsm-linux-probe.tmpfiles" "$ROOT/usr/lib/tmpfiles.d/hsm-linux-probe.conf"
 for script in postinst prerm postrm; do
     install -m 0755 "$PACKAGING_DIR/deb/$script" "$ROOT/DEBIAN/$script"
 done
