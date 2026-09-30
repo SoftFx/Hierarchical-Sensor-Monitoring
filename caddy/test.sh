@@ -4,7 +4,8 @@ set -eu
 image="${1:-hsm-caddy:test}"
 tmp="$(mktemp -d)"
 reload_container="hsm-caddy-reload-$$"
-trap 'if [ -n "$reload_container" ]; then docker rm -f "$reload_container" >/dev/null 2>&1 || true; fi; rm -rf "$tmp"' EXIT
+hash_verify_container="hsm-hash-verify-$$"
+trap 'docker rm -f "$reload_container" "$hash_verify_container" >/dev/null 2>&1 || true; rm -rf "$tmp"' EXIT
 
 modules="$(docker run --rm --entrypoint caddy "$image" list-modules)"
 printf '%s\n' "$modules" | grep -Fx 'dns.providers.cloudflare' >/dev/null
@@ -76,6 +77,61 @@ if grep -F '/insert' "$tmp/vl-on.json" >/dev/null; then
     echo 'VictoriaLogs ingest endpoint routed through Caddy' >&2
     exit 1
 fi
+
+# The adapted hash is only useful if it authenticates VL_UI_PASSWORD: hash-password read
+# the password from stdin (printf '%s\n'), so a stray trailing newline inside the hashed
+# input would yield a valid-looking hash that basic auth rejects. Serve one basic_auth
+# site with the exact adapted hash and authenticate against it from a second container
+# sharing the server's (network-less) namespace: the real password must pass, a wrong
+# one must be refused. busybox wget has no --user/--password, so the equivalent Basic
+# header is computed here and sent with --header.
+vl_hash="$(grep -o '"password":"[^"]*"' "$tmp/vl-on.json" | head -1 | cut -d '"' -f4)"
+[ -n "$vl_hash" ] || {
+    echo 'no bcrypt hash found in the adapted VictoriaLogs configuration' >&2
+    exit 1
+}
+cat >"$tmp/vl-hash.Caddyfile" <<EOF
+:8080 {
+	basic_auth {
+		hsm-logs $vl_hash
+	}
+	respond 200
+}
+EOF
+# Docker needs a Windows host path under Git Bash (MSYS_NO_PATHCONV keeps the container
+# side intact); the Linux CI has no cygpath and uses the POSIX path as-is.
+vl_caddyfile_host="$tmp/vl-hash.Caddyfile"
+if command -v cygpath >/dev/null 2>&1; then
+    vl_caddyfile_host="$(cygpath -w "$vl_caddyfile_host")"
+fi
+docker run -d --name "$hash_verify_container" --network none \
+    -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \
+    -v "$vl_caddyfile_host:/etc/caddy/Caddyfile:ro" \
+    "$image" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+vl_auth_header="Authorization: Basic $(printf '%s' "hsm-logs:$vl_password" | base64 | tr -d '\n')"
+vl_wrong_header="Authorization: Basic $(printf '%s' 'hsm-logs:wrong-password' | base64 | tr -d '\n')"
+hash_ok=false
+attempt=1
+while [ "$attempt" -le 15 ]; do
+    if docker run --rm --network "container:$hash_verify_container" --entrypoint wget "$image" \
+        -q -O /dev/null --header "$vl_auth_header" http://127.0.0.1:8080/ >/dev/null 2>&1; then
+        hash_ok=true
+        break
+    fi
+    sleep 1
+    attempt=$((attempt + 1))
+done
+if [ "$hash_ok" != true ]; then
+    echo 'the entrypoint-generated bcrypt hash did not authenticate the plaintext password' >&2
+    docker logs "$hash_verify_container" >&2 || true
+    exit 1
+fi
+if docker run --rm --network "container:$hash_verify_container" --entrypoint wget "$image" \
+    -q -O /dev/null --header "$vl_wrong_header" http://127.0.0.1:8080/ >/dev/null 2>&1; then
+    echo 'the basic_auth test site accepted a wrong password' >&2
+    exit 1
+fi
+docker rm -f "$hash_verify_container" >/dev/null
 
 # A 12-character password is the accepted minimum.
 adapt_ok vl-min-password -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed \

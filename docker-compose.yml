@@ -78,8 +78,8 @@ services:
       Kestrel__TrustedProxies__0: 'attached-networks'
       # Structured JSON log archive in nlog.config; vlagent ships it to VictoriaLogs.
       # Defaults to false: an .env from before log storage must not silently start writing a
-      # second JSON copy of every Info+ event plus its daily archive files (named .zip,
-      # stored uncompressed NDJSON since NLog 6) with no VictoriaLogs or vlagent to read it.
+      # second JSON copy of every Info+ event plus its daily archive files with no
+      # VictoriaLogs or vlagent to read it.
       # .env.example pairs HSM_STRUCTURED_LOGS=true with the 'logs' profile.
       HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-false}'
     volumes:

@@ -88,6 +88,22 @@ namespace HSMServer.Core.Tests
             var msg = layout.Attributes.Single(a => a.Name == "_msg").Layout.Render(logEvent);
             Assert.DoesNotContain("hsm_pat_", msg);
 
+            // _msg is a stored, indexed field, so its shape is a contract. The message
+            // and the exception must both survive, separated by exactly one space: the
+            // space lives inside ${onexception}'s inner layout (nlog.config), so it is
+            // emitted only when there is an exception to append.
+            Assert.Contains("auth failed for", msg);
+            Assert.Contains("(truncated)", msg);
+            Assert.Contains("boom", msg);
+            Assert.Contains("(truncated) System.InvalidOperationException", msg);
+
+            // Without an exception the same attribute must render the bare message:
+            // a plain '${message} ${exception}' layout leaves a trailing space there
+            // (the exception half renders empty), which every stored line would carry.
+            var msgWithoutException = layout.Attributes.Single(a => a.Name == "_msg").Layout.Render(
+                new LogEventInfo(LogLevel.Info, "NlogConfigTests", "plain message"));
+            Assert.EndsWith("plain message", msgWithoutException);
+
             var line = layout.Render(logEvent);
             Assert.DoesNotContain("\n", line);
             Assert.DoesNotContain("\r", line);

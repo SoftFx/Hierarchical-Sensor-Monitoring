@@ -129,7 +129,7 @@ Caddy is recreated and HSM data is untouched. There is no automatic fallback if 
 
 ### Advanced Caddyfile customization
 
-The image includes the supported Caddyfile. The old inline Caddyfile from earlier compose setups is no longer part of the compose file, so copy any settings you still need into your own mounted Caddyfile. To restore customizations such as an ACME contact email, download the bundled file and edit your copy. Keep the global options and HSM routes, including the import that uses the entrypoint-selected HSM_TLS_SNIPPET. To set the ACME account contact email, add this directive inside the leading global options block:
+The image includes the supported Caddyfile. The old inline Caddyfile from earlier compose setups is no longer part of the compose file, so copy any settings you still need into your own mounted Caddyfile. To restore customizations such as an ACME contact email, download the bundled file and edit your copy. Keep the global options and HSM routes, including the imports that use the entrypoint-selected HSM_TLS_SNIPPET and HSM_VL_SNIPPET. When a newer image changes the bundled Caddyfile (this release added the VictoriaLogs log routes), re-download it and re-apply your edits to the fresh copy: a Caddyfile copied from an older release keeps working but gets none of the new routes, so setting VL_UI_USER/VL_UI_PASSWORD would have no effect. To set the ACME account contact email, add this directive inside the leading global options block:
 
 ~~~bash
 curl -o Caddyfile https://raw.githubusercontent.com/SoftFx/Hierarchical-Sensor-Monitoring/master/caddy/Caddyfile
@@ -261,8 +261,8 @@ services:
       Kestrel__TrustedProxies__0: 'attached-networks'
       # Structured JSON log archive in nlog.config; vlagent ships it to VictoriaLogs.
       # Defaults to false: an .env from before log storage must not silently start writing a
-      # second JSON copy of every Info+ event plus its daily archive files (named .zip,
-      # stored uncompressed NDJSON since NLog 6) with no VictoriaLogs or vlagent to read it.
+      # second JSON copy of every Info+ event plus its daily archive files with no
+      # VictoriaLogs or vlagent to read it.
       # .env.example pairs HSM_STRUCTURED_LOGS=true with the 'logs' profile.
       HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-false}'
     volumes:
