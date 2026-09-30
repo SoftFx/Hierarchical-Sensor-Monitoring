@@ -173,10 +173,10 @@ Version history:
   what Start registers; while running the run's recorded registration is replaced in place and the
   sensor re-posted on the HTTP transport. NULL emits `"Description":null`, which the server reads as
   "unchanged" — pass `""` to clear a description it already has. For a host whose description
-  carries live facts (the Linux probe's Docker memory limit). Native-only: the managed collector
-  cannot change a description after creation, so there is no conformance verb (see the
-  `CONFORMANCE-UNSUPPORTED` note in `tests/conformance/collector/alert_registration_contract.hsmtest`).
-  Pinned by `native_set_description_rebuilds_the_registration` and
+  carries live facts (the Linux probe's Docker memory limit). Native-only when released; since
+  #1482 the managed collector has the counterpart (`IDescribableSensor.SetDescription`, the
+  `SetDescription` extension on every sensor handle) and both drivers run the
+  `set_sensor_description` verb in `registration_contract:set_description_*`. Pinned by `native_set_description_rebuilds_the_registration` and
   `native_http_alert_after_runtime_registration_reregisters`. Pointer lifetime: the 0.9.1
   contract is unchanged — a `hsm_collector_get_registration_json` pointer stays valid until the
   collector is destroyed, also across an alert attach while running. The new function carries its

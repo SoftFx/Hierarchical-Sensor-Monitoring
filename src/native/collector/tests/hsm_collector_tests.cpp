@@ -703,6 +703,18 @@ namespace
         return static_cast<size_t>(index);
     }
 
+    // The same rule for a registration index (expect_registration_contains).
+    size_t ResolveRegistrationIndex(ConformanceState& state, const std::string& token)
+    {
+        const auto count = static_cast<long long>(hsm_collector_registration_count(state.collector.value));
+        long long index = std::stoll(token);
+        if (index < 0)
+            index += count;
+
+        Require(index >= 0 && index < count, "registration index out of range");
+        return static_cast<size_t>(index);
+    }
+
     hsm_metric_read_t SampledBarCounterRead(void* user_data, hsm_metric_sample_t* sample)
     {
         sample->double_value = static_cast<double>(++*static_cast<std::atomic<int>*>(user_data));
@@ -1381,15 +1393,15 @@ namespace
             return;
         }
 
-        // Native-only (hsm_sensor_set_description, 0.10.0): the managed driver marks it unsupported
-        // until #1482 gives the managed collector a counterpart, so no corpus scenario uses it yet.
+        // hsm_sensor_set_description (0.10.0); managed counterpart IDescribableSensor.SetDescription (#1482).
         if (action == "set_sensor_description")
         {
             Require(step.size() >= 3, "set_sensor_description requires sensor index and description");
             const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
             Require(sensor_index < state.sensors.size(), "sensor index out of range");
             const auto description = ExpandTextToken(step[2]);
-            Require(hsm_sensor_set_description(state.sensors[sensor_index].value, description.c_str()) == HSM_RESULT_OK,
+            const char* description_ptr = step[2] == "token:null" ? nullptr : description.c_str();
+            Require(hsm_sensor_set_description(state.sensors[sensor_index].value, description_ptr) == HSM_RESULT_OK,
                     "set_sensor_description failed");
             return;
         }
@@ -2055,7 +2067,7 @@ namespace
         if (action == "expect_registration_contains")
         {
             Require(step.size() >= 3, "expect_registration_contains requires index and substring");
-            Contains(RegistrationJson(state.collector.value, static_cast<size_t>(ToInt(step[1]))), step[2]);
+            Contains(RegistrationJson(state.collector.value, ResolveRegistrationIndex(state, step[1])), step[2]);
             return;
         }
 

@@ -83,6 +83,34 @@ namespace HSMDataCollector.IntegrationTests.Tests
         }
 
         [Fact]
+        public async Task DescriptionChangedWhileRunning_ReRegistersSensorOnTheWire()
+        {
+            using var server = new FakeHsmServer();
+            using var collector = new DataCollector(OptionsFor(server));
+
+            var sensor = collector.CreateIntSensor("e2e/describe/int", new InstantSensorOptions { Description = "first" });
+            await collector.Start();
+
+            await WaitForAsync(
+                () => server.Requests.Count(r => r.Path.EndsWith("/commands", StringComparison.Ordinal) && r.Body.Contains("e2e/describe/int")),
+                count => count >= 1);
+
+            // The managed counterpart of hsm_sensor_set_description (#1482): while running the
+            // sensor is re-registered on /commands with the new text.
+            Assert.True(sensor.SetDescription("limit 2048 MB"));
+
+            var reRegistration = await WaitForAsync(
+                () => server.Requests.FirstOrDefault(r =>
+                    r.Path.EndsWith("/commands", StringComparison.Ordinal) && r.Body.Contains("e2e/describe/int") && r.Body.Contains("limit 2048 MB")),
+                r => r != null);
+
+            await collector.Stop();
+
+            Assert.True(reRegistration != null,
+                "No /commands request carried the new description. Bodies seen: " + string.Join(" | ", server.Requests.Select(r => r.Body)));
+        }
+
+        [Fact]
         public async Task TransientServerFailure_ValueEventuallyLands_ViaReEnqueue()
         {
             using var server = new FakeHsmServer();

@@ -1,6 +1,6 @@
 # Feature: Collector Public API
 
-> Owner: collector | Last reviewed: 2026-06-10 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-09-30 | Canonical: yes
 > Scope: Collector - construction, options, lifecycle methods, and the full sensor-creation surface integrators program against.
 
 ---
@@ -78,6 +78,17 @@ Sensor interfaces (`PublicAPI/SensorsAPI/*`):
 - `IBaseFuncSensor` (lives in the `Obsolete` folder but is NOT `[Obsolete]` — it is the current return type of `CreateFunctionSensor`/`CreateValuesFunctionSensor`): `GetInterval()`, `RestartTimer(TimeSpan)`, `GetFunc()`; params variant adds `AddValue(U)`.
 - `ILastValueSensor` creation gotcha: `CreateLastValueStringSensor(path)` / `CreateLastValueVersionSensor(path)` with the implicit `null` default **throw `ArgumentException` at creation** (`ThrowIfUnsupportedValue(customDefault)`); pass a non-null default.
 
+### Changing a sensor's description after creation (#1482)
+
+`bool sensor.SetDescription(string description)` — the managed counterpart of the native `hsm_sensor_set_description` (collector 0.10.0), for a host whose description carries live facts.
+
+- **Shape (additive only).** A separate capability interface `IDescribableSensor { bool SetDescription(string) }` (`PublicAPI/SensorsAPI/IDescribableSensor.cs`), implemented by `SensorBase<TDisplayUnit>` and therefore by every sensor the collector creates, plus `SetDescription` extension methods in `HSMDataCollector.Core.SensorDescriptionExtensions` on `IInstantValueSensor<T>` (covers last-value, rate, file), `IBarSensor<T>`, `IServiceCommandsSensor` and `IBaseFuncSensor`. No member was added to the sensor interfaces or to `ISensor`, so external implementations of them (test doubles, adapters) keep compiling on both TFMs — the same pattern as `ICollectorRegistrationState`/`ILifecycleObservableCollector`. The extensions live in `HSMDataCollector.Core` so a caller that constructs the collector already has them in scope. A `null` handle or a foreign implementation without the capability returns `false`.
+- **When the text reaches the server** (mirrors native `NativeCollector::OnRegistrationChanged`, gated like it on Starting/Running = `CanStartNewSensors`): before Start and while Stopped the options keep the new text and the next Start's `InitAsync` registers it (no extra AddOrUpdate); while Starting/Running an AddOrUpdate built from the options (all other fields unchanged) is queued on the command queue at once; while Stopping or after Dispose nothing is sent (the call still returns `true`). Every call re-registers while running, also when the text is unchanged — native bumps its registration version on every call, so its HTTP transport re-posts too.
+- **Text.** Passed through as given: `null` → `"Description":null`, which the server reads as "unchanged" (so it only clears a description the server has not received yet); `""` clears it on the server.
+- **Threading / isolation.** Callable from any thread. A per-sensor lock (`SensorBase._registrationLock`; under it only the lifecycle-state read and the command enqueue run, never the collector's lifecycle gate) covers the description write and the build+enqueue of the AddOrUpdate, and `InitAsync` builds its registration under the same lock, so concurrent calls enqueue in the order they changed the text and the last registration queued always carries the sensor's final text; a call racing Start is covered either by Start's registration or by its own re-registration. An exception is routed to `HandleException` (collector errors) and the call returns `false`; nothing escapes to the host.
+- **Recorded difference from native (by design).** Native's in-memory recorded registration list replaces the run's entry in place; managed simply sends one more AddOrUpdate. On the wire both re-post once per change. A sensor created while running and re-described before its own registration went out may register twice in managed (both carrying the new text); native coalesces those into one post.
+- Tests: `SensorDescriptionTests` (every lifecycle state, null/empty, every sensor kind, API shape, concurrency), `FakeServerE2ETests.DescriptionChangedWhileRunning_ReRegistersSensorOnTheWire` (real HTTP stack, net8 → the net6.0 build), corpus `registration_contract:set_description_*` (both drivers).
+
 Fluent builders (`Core/Builders/SensorBuilders.cs`, extension methods — `IDataCollector` unchanged):
 
 - `collector.InstantSensor<T>(path)` / `BarSensor<T>(path)` / `RateSensor(path)` with `.Description() .Ttl() .KeepHistory() .Priority() .BarPeriod() .PostPeriod() .TickPeriod() .Precision() .Configure(opts => ...)` → `.Build()` dispatches to the options-based factory.
@@ -94,7 +105,8 @@ Fluent builders (`Core/Builders/SensorBuilders.cs`, extension methods — `IData
 | `Core/IDataCollector.cs` | Public interface |
 | `Options/CollectorOptions.cs` | Options + `Validate()` |
 | `Core/Builders/SensorBuilders.cs` | Fluent builders |
-| `PublicAPI/SensorsAPI/*.cs` | Sensor interfaces |
+| `PublicAPI/SensorsAPI/*.cs` | Sensor interfaces, `IDescribableSensor` capability |
+| `Core/SensorDescriptionExtensions.cs` | `SetDescription` extensions on the sensor handles (#1482) |
 | `PublicAPI/IWindowsCollection.cs`, `IUnixCollection.cs` | Default-sensor registration surface (see `default-sensors/`) |
 | `Core/IDataSender.cs` | Transport seam |
 

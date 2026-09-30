@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
@@ -11,7 +12,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 namespace HSMDataCollector.DefaultSensors
 {
 
-    public abstract class SensorBase<TDisplayUnit> : ISensor, ISensorIdentity where TDisplayUnit : struct, Enum
+    public abstract class SensorBase<TDisplayUnit> : ISensor, ISensorIdentity, IDescribableSensor where TDisplayUnit : struct, Enum
     {
         // ALWAYS format with CultureInfo.InvariantCulture: '/' and ':' are the date/time
         // SEPARATOR placeholders in a custom format string, not literals, so a bare
@@ -20,6 +21,14 @@ namespace HSMDataCollector.DefaultSensors
         internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";
 
         private readonly SensorOptions<TDisplayUnit> _metainfo;
+
+        // Guards the registration inputs that can change after creation (the description) together
+        // with building and enqueueing the AddOrUpdate request, so a registration always carries the
+        // latest text and concurrent SetDescription calls enqueue in the order they changed it.
+        // Under it only the lifecycle-state reads (CollectorLifecycle._lock, itself a leaf) and the
+        // command-queue enqueue run (plus, when that evicts, the overflow sensor's value add) — never
+        // another sensor's registration lock or the collector's lifecycle gate, so no lock cycle.
+        private readonly object _registrationLock = new object();
 
         public string SensorPath => _metainfo.Path;
         SensorType ISensorIdentity.Type => _metainfo.Type;
@@ -78,7 +87,8 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                _dataProcessor.AddCommand(this, _metainfo.ApiRequest);
+                lock (_registrationLock)
+                    _dataProcessor.AddCommand(this, _metainfo.ApiRequest);
 
                 return new ValueTask<bool>(true);
             }
@@ -87,6 +97,34 @@ namespace HSMDataCollector.DefaultSensors
                 HandleException(ex);
 
                 return new ValueTask<bool>(false);
+            }
+        }
+
+        // Mirrors the native hsm_sensor_set_description (#1482): the options keep the new text, so the
+        // next Start's InitAsync registers it; while Starting/Running the AddOrUpdate is queued now.
+        /// <inheritdoc/>
+        public bool SetDescription(string description)
+        {
+            try
+            {
+                lock (_registrationLock)
+                {
+                    _metainfo.Description = description;
+
+                    // Same gate as a sensor created at runtime (SensorsStorage.Register): Starting or
+                    // Running re-registers now; Stopped leaves it to the next Start; Stopping and
+                    // Disposed send nothing.
+                    if (_dataProcessor.CanStartNewSensors)
+                        _dataProcessor.AddCommand(this, _metainfo.ApiRequest);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+
+                return false;
             }
         }
 

@@ -118,7 +118,7 @@ into the per-case creation order of that sensor kind (0-based).
 | `add_default_sensor\|id` | register a built-in catalog sensor by stable id name (`total_cpu`, `process_memory`, `free_disk_space`, `service_status`, `collector_alive`, `queue_overflow`, …). Native calls `hsm_collector_add_default_sensor`; C# records the real managed prototype's `AddOrUpdateSensorRequest`. Registration `Path` is asserted by SUFFIX (`.computer/…`/`.module/…`) — the native driver applies the collector prefix while C# records the prototype path. `Description` is not pinned (machine-specific in .NET); byte-exact alert parity is locked by `WireFormatGoldenLockTests` / `NativeDefaultSensorWireMatchesNet` |
 | `add_collector_monitoring_sensors` | register the `.module` collector-monitoring group — Service alive + Collector version + Collector errors. C# calls `AddCollectorMonitoringSensors` on the host's collection (Unix/Windows route to one implementation, but each refuses the other platform); native calls `hsm_collector_add_collector_monitoring_sensors`. The heartbeat then beats on the SENSOR's own `PostDataPeriod` (15 s) in both collectors (#1437 — the native beat used to follow the collector's package-collect period), so keep the case well inside that 15 s and rely only on the beat that fires immediately on Start |
 | `create_int_sensor_with_alerts\|path\|ttl_ms\|unit\|description` | int sensor consuming the staged alert builders (see Alert builder below) |
-| `set_sensor_description\|sensor_index\|description` | replace a created sensor's registration description — **native only**; the managed driver marks it `CONFORMANCE-UNSUPPORTED` (#1482), so no corpus scenario uses it yet |
+| `set_sensor_description\|sensor_index\|description` | (#1482) replace a created sensor's registration description; `sensor_index` is the flat creation order (like `dispose_sensor`), `token:null` passes a null text. Native `hsm_sensor_set_description`; C# `IDescribableSensor.SetDescription`. Before Start the text is what Start registers; while stopped nothing is sent until the next Start; while running the sensor is re-registered — native replaces the run's recorded registration in place, C# records the re-sent AddOrUpdate as a new entry, so after a change made while running address the latest registration with index `-1` and do not pin the count (`registration_contract:set_description_*`) |
 | `dispose_sensor\|sensor_index` | release without flushing |
 | `expect_create_int_sensor_rejected\|path`, `expect_create_last_*_sensor_rejected\|path\|default_value` | creation validation throws |
 | `expect_conflicting_mixed_creates_rejected_parallel\|worker_count\|path_count\|path_prefix` | type conflicts on one path rejected under parallel registration |
@@ -200,7 +200,7 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_bar_posts_sharing_open_time_at_least\|min` / `expect_distinct_bar_open_times_at_least\|min` | the largest same-OpenTime group / the number of distinct OpenTimes reaches `min` |
 | `expect_eventually_payload_contains\|substring\|timeout_s` | polls any payload for the substring |
 | `expect_registration_count\|count[\|timeout_s]` | polls the recorded AddOrUpdate registrations (every sensor registers on every start; immediately when created while running) |
-| `expect_registration_contains\|index\|substring` | substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[...]\|null,"Alerts":[...]\|null,"TtlAlerts":[...]\|null}` — full path incl. identity prefix; TTL in .NET ticks; `Alerts`/`TtlAlerts` are real `AlertUpdateRequest` JSON (numeric enums, emoji escaped) |
+| `expect_registration_contains\|index\|substring` | a NEGATIVE index counts back from the end (−1 = last), as for payloads; substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[...]\|null,"Alerts":[...]\|null,"TtlAlerts":[...]\|null}` — full path incl. identity prefix; TTL in .NET ticks; `Alerts`/`TtlAlerts` are real `AlertUpdateRequest` JSON (numeric enums, emoji escaped) |
 | `expect_eventually_value_above\|threshold\|timeout_s` | polls numeric payload values; fails (not passes) on timeout |
 | `expect_no_new_payloads_for_ms\|ms` | baseline now; no new payloads during the window |
 
@@ -247,10 +247,9 @@ meta-suite) — never skip silently.
 
 **Unsupported marker.** A driver that cannot yet implement a verb registers
 it explicitly as unsupported so the run fails with a `TODO` count instead of
-a generic unknown-verb error; the failure list is the port backlog. One verb is
-in that state: `set_sensor_description`, which the managed collector cannot
-implement until it can change a description after creation (#1482); no corpus
-scenario uses it until then.
+a generic unknown-verb error; the failure list is the port backlog. No verb is
+in that state today (the last one, `set_sensor_description`, gained its managed
+counterpart in #1482).
 
 Mark such a verb in the driver source with the token `CONFORMANCE-UNSUPPORTED:
 <verb> (#<issue>)`. The reference to a cpp-port issue is mandatory and enforced

@@ -372,10 +372,11 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "set_sensor_description":
-                    // CONFORMANCE-UNSUPPORTED: set_sensor_description (#1482) — the managed collector
-                    // cannot change a sensor's description after creation; the native collector can
-                    // (hsm_sensor_set_description, 0.10.0). No corpus scenario uses the verb until #1482.
-                    throw new NotSupportedException("CONFORMANCE-UNSUPPORTED: set_sensor_description (#1482)");
+                    // sensor_index is the flat creation order, like dispose_sensor and the native driver.
+                    Assert.True(
+                        ((IDescribableSensor)state.Sensors[int.Parse(step.Arg(0))]).SetDescription(ExpandTextToken(step.Arg(1))),
+                        "set_sensor_description failed");
+                    break;
 
                 case "create_last_int_sensor":
                     AddSensor(state, state.IntSensors, state.Collector.CreateLastValueIntSensor(step.Arg(0), int.Parse(step.Arg(1))));
@@ -581,7 +582,7 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "expect_registration_contains":
-                    Assert.Contains(step.Arg(1), RegistrationText(state.Sender.Registrations[int.Parse(step.Arg(0))]));
+                    Assert.Contains(step.Arg(1), RegistrationText(RegistrationAt(state, step.Arg(0))));
                     break;
 
                 case "expect_payload_not_contains":
@@ -1769,6 +1770,20 @@ namespace HSMDataCollector.Tests
             Assert.InRange(position, 0, Math.Max(values.Count - 1, 0));
 
             return values[position];
+        }
+
+        // A registration index; a NEGATIVE index counts back from the end (-1 = last), like PayloadAt.
+        private static AddOrUpdateSensorRequest RegistrationAt(ContractState state, string index)
+        {
+            var registrations = state.Sender.Registrations;
+            var position = int.Parse(index);
+
+            if (position < 0)
+                position += registrations.Count;
+
+            Assert.InRange(position, 0, Math.Max(registrations.Count - 1, 0));
+
+            return registrations[position];
         }
 
         private static string PayloadText(SensorValueBase value)
