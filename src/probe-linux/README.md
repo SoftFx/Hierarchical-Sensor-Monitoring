@@ -4,7 +4,9 @@ A systemd-hosted Linux host probe that reports into an existing HSM server by **
 native collector** (`src/native/collector`) through its stable C ABI.
 
 Architecture and rationale: [`docs/initiatives/linux-docker-probe.md`](../../docs/initiatives/linux-docker-probe.md)
-(epic #1413). This directory is workstream 2 (#1415) — the skeleton.
+(epic #1413). This directory is workstream 2 (#1415) — the skeleton. **Operating it** (install,
+upgrade, rollback, retention, the sleeping-disk acceptance check, measured cost):
+[`RUNBOOK.md`](RUNBOOK.md).
 
 ## The one rule that shapes everything here
 
@@ -19,7 +21,9 @@ module set — the [parity contract](#parity-contract)), **plus** a set of
 exist only here — never in the shared collector catalog, never on Windows — and go through the
 collector's public sensor API, so wire format, queuing, batching, retry and TLS stay the library's;
 only the acquisition (a sysfs read, a `statvfs`, a Docker Engine API call) and the schedule live in
-the probe. The archive/backup part of #1417 is the next probe-only source.
+the probe. Backup health (#1417) is deliberately **not** a probe source: by owner decision the
+host's own backup tooling posts it straight to the Sensor API, and the archive disks' capacity is
+the ordinary per-filesystem disk sensors.
 
 **The tree sits directly under the product, with no computer node** (owner decisions #1493 and
 #1496 — one product = one host). The product root holds the host's `.computer/…` and the probe's
@@ -505,7 +509,9 @@ src/probe-linux/
     src/probe_only/    probe-only sources (host.rs, disks/, docker/, top_cpu/) and their per-source threads
     fixtures/docker/   Engine API captures from garage-server
   packaging/           systemd unit, config skeleton, maintainer scripts, build-deb.sh,
-                       docker-access.sh (Docker socket drop-in)
+                       smoke-deb.sh (install smoke), docker-access.sh (Docker socket drop-in),
+                       hsm-linux-probe.tmpfiles (log ageing)
+  RUNBOOK.md           install / upgrade / rollback, retention, disk-standby acceptance, cost
 ```
 
 **Alerts in the wrapper.** `Collector::alert(AlertKind)` returns an `AlertBuilder` (conditions,
@@ -590,7 +596,8 @@ cargo build
 cargo test
 ```
 
-The CI lane `.github/workflows/probe-linux.yml` runs exactly that on `ubuntu-latest`.
+The CI lane `.github/workflows/probe-linux.yml` runs exactly that on `ubuntu-latest`; its `deb` job
+also builds the package and install-smokes it (below).
 
 ### Building the `.deb`
 
@@ -613,8 +620,12 @@ check with `dpkg --compare-versions 0.2.0~trial1 gt 0.1.0~trial3`.
 The package has the layout of the hand-built `0.1.0~trial*` packages: `/usr/bin/hsm-linux-probe`,
 `/lib/systemd/system/hsm-linux-probe.service` (kept under `/lib`, where the trials put it — moving a
 file between `/lib` and `/usr/lib` across versions is unsafe with dpkg on a merged `/usr`),
-`/usr/share/hsm-linux-probe/config.example.json` (the skeleton), `/usr/lib/hsm-linux-probe/docker-access.sh`
-and the copyright file; `Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1`. The maintainer scripts
+`/usr/share/hsm-linux-probe/config.example.json` (the skeleton), `/usr/lib/hsm-linux-probe/docker-access.sh`,
+`/usr/lib/tmpfiles.d/hsm-linux-probe.conf` (deletes daily log files not written for 30 days — the
+probe itself never deletes one) and the copyright file;
+`Depends: libcurl4t64, ca-certificates, libc6, libstdc++6, libgcc-s1` — libcurl and, through it,
+OpenSSL are the distribution's shared libraries, so their security fixes arrive with `apt upgrade`,
+not with a probe rebuild. The maintainer scripts
 are `packaging/deb/{postinst,prerm,postrm}`, reconstructed from the trial package: postinst creates
 the `hsm-probe` system user/group and reloads systemd, and on a fresh install does not enable or
 start the unit (`install.sh` does, once config and key are in place); prerm disables it on remove;
@@ -626,6 +637,49 @@ seeds `/etc/hsm-linux-probe/config.json` from the skeleton only when it is absen
 touches it or stops at a prompt (a conffile-era file becomes an obsolete conffile: kept, never
 prompted about; purge removes it). The upgrade command keeps `--force-confold` as belt and braces:
 `sudo apt-get install -y -o Dpkg::Options::=--force-confold ./hsm-linux-probe_….deb`.
+
+`packaging/smoke-deb.sh <deb> [<probe version>]` is the install smoke, run in a **clean**
+`debian:13` container (nothing of the build environment in it):
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/src" -w /src/src/probe-linux \
+    debian:13 bash packaging/smoke-deb.sh dist/hsm-linux-probe_<version>~trial1_amd64.deb
+```
+
+It checks the control fields and the layout (no conffile), installs with `apt-get` so the `Depends`
+resolve from the Debian archive, checks that `--version` reports the package version up to its
+`~` suffix (or the version given as the second argument), checks the `hsm-probe` user and the seeded
+config, runs the probe for 6 s against an unreachable server and stops it with SIGTERM (exit 0, a
+log file, no key in the log), reinstalls over an edited config (unchanged, no `.dpkg-*` files) and
+purges. What needs systemd as PID 1 — the unit's hardening, `LoadCredential=`, `StateDirectory=` —
+is checked on a real host ([RUNBOOK](RUNBOOK.md)). The `deb` job of `probe-linux.yml` runs both
+scripts on every probe PR with the version `<workspace version>~ci` and uploads the package as the
+artifact `hsm-linux-probe-deb-ci` for hand trials.
+
+### Release channel (`probe-v*`, #1418)
+
+The probe ships as a GitHub Release, and servers reference it by version — the model of the HSM
+Agent's `agent-v*` channel.
+
+- **Version.** `[workspace.package] version` in `Cargo.toml` is the probe version: what `--version`
+  prints, what `.probe/.module/Version` reports, and the package version. Released versions are
+  plain `X.Y.Z`, each above every earlier release (dpkg order); trials use `~trialN` (local) or
+  `~ci` (CI artifact), which sort below the release.
+- **Publish:** after the version-bump PR is merged, push the tag `probe-v<version>`.
+  `.github/workflows/probe-release.yml` fails unless the tag equals the workspace version, is a
+  plain `X.Y.Z` and sorts above every released `probe-v*`; builds with `build-deb.sh` in `debian:13`;
+  runs `smoke-deb.sh` in a clean `debian:13`; and publishes `hsm-linux-probe_<version>_amd64.deb` +
+  `hsm-linux-probe_<version>_amd64.deb.sha256` (`sha256sum` format) with `--latest=false` — the
+  repo's "Latest" badge belongs to the server releases, and the lane hands it back to the newest
+  `server-v*` release if GitHub moves it anyway. Only the publishing job holds `contents: write`.
+- **Dry run:** *Actions → HSM Linux probe release → Run workflow* on a branch builds, smokes and
+  uploads the two assets as an artifact without tagging or releasing (it warns when the version
+  would not sort above the released ones).
+- **Consume:** the server ships the release named in `src/server/HSMServer/probe-release.txt`; both
+  `server-build.yml` legs (`scripts/stage-linux-probe.sh`) and `scripts/local-docker-build.ps1`
+  download it, refuse an asset that is not that version or does not match its `.sha256`, and serve
+  the `.deb` byte-identical in the per-product bundle. An empty pin ships no probe (the download
+  answers 503). To ship a newer probe: tag, then bump the pin in a one-line PR.
 
 ## Configuration
 

@@ -146,7 +146,27 @@ restarts it if it was running (prerm leaves a `/run` marker, postinst starts it)
 access is a drop-in (`hsm-linux-probe.service.d/docker.conf`, `SupplementaryGroups=docker`) that
 postinst writes (fresh install / the upgrade from before 0.3.0 only, so an operator's removal sticks) through
 `/usr/lib/hsm-linux-probe/docker-access.sh` only where a `docker` group
-exists — never in the unit, which would then not start on a host without one.
+exists — never in the unit, which would then not start on a host without one. The package also
+ships `/usr/lib/tmpfiles.d/hsm-linux-probe.conf` (#1418): the probe rolls its log file daily and
+never deletes one, so `systemd-tmpfiles-clean.timer` deletes log files not written for 30 days.
+`packaging/smoke-deb.sh` install-smokes a package in a clean `debian:13` (apt-resolved Depends,
+`--version`, user + seeded config, run against an unreachable server and SIGTERM, reinstall over an
+edited config, purge); the `deb` job of `probe-linux.yml` runs build + smoke on every probe PR.
+
+**Release channel (#1418)** — the `agent-v*` model (`../../server/agent-download/feature.md` →
+*Packaging*). The probe version is `[workspace.package] version` in `src/probe-linux/Cargo.toml`
+(what `--version` and `.probe/.module/Version` report). Pushing `probe-v<X.Y.Z>` runs
+`.github/workflows/probe-release.yml`, which fails unless the tag equals that version, is a plain
+`X.Y.Z` (a semver pre-release would sort above the release in dpkg, and git refs cannot carry `~`)
+and sorts above every released `probe-v*` (apt refuses a lower version as an upgrade); it builds
+with `build-deb.sh` in `debian:13`, runs `smoke-deb.sh`, and publishes
+`hsm-linux-probe_<X.Y.Z>_amd64.deb` + `.deb.sha256` with `--latest=false` from a job that alone holds
+`contents: write`, then hands the "Latest" badge back to the newest `server-v*` release if GitHub
+moved it. `workflow_dispatch` is a dry run (build, smoke, artifact; no release). The server ships
+the release named in `src/server/HSMServer/probe-release.txt` (`../../server/linux-probe-download/feature.md`
+→ *Staging*). Trials are `~trialN` (local) or `~ci` (CI artifact) and sort below the release.
+Operating the package — install, upgrade, rollback, retention, the sleeping-disk acceptance check,
+measured cost — is `src/probe-linux/RUNBOOK.md`.
 
 Linux is the only supported target. The initiative is
 [`docs/initiatives/linux-docker-probe.md`](../../../../docs/initiatives/linux-docker-probe.md).
@@ -200,6 +220,13 @@ Linux is the only supported target. The initiative is
   deliberately does not expose the ABI's `allow_untrusted_server_certificate`.
 - **Values dropped by the collector's bounded stop drain are logged at WARN** (the collector reports
   them at debug), per rule #8.
+- **A release is exactly the source it names.** The `probe-v*` tag, the workspace version, the
+  package version and the asset name are one string, released versions only ever sort upwards, and
+  the server stages only the asset of the pinned version whose SHA-256 matches, serving it
+  byte-identical.
+- **The probe does not wake sleeping disks.** On a mount it calls only `statvfs`; it never opens,
+  lists or reads under one, never reads a disk temperature input, and skips automounts. The
+  acceptance check (`smartctl -n standby` before and 15 min after start) is in the runbook.
 - **The Docker source only reads.** Its HTTP client has no method but `GET` and builds requests from
   a closed set of four Engine API endpoints (container ids validated as hex); the socket is
   root-equivalent, so this is enforced by construction and review. Each call is bounded (1.5 s,

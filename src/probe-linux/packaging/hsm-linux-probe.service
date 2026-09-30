@@ -45,9 +45,10 @@ UMask=0027
 # socket is root-equivalent; the probe restricts itself to four read-only GETs by construction and
 # review (initiative §4.3). Installed manually: run that script yourself, then daemon-reload.
 
-# Writable state (restart counters, OOM latches, last-seen backup result) under
+# Writable state (disk names, the disk write day, Docker restart counters and OOM latches) under
 # /var/lib/hsm-linux-probe, created and owned by systemd. ProtectSystem=strict leaves the rest of
-# the filesystem read-only, so these two directories are the probe's entire write surface.
+# the filesystem read-only, so these two directories are the probe's entire write surface. What is
+# kept there and for how long: RUNBOOK.md, "retention".
 StateDirectory=hsm-linux-probe
 StateDirectoryMode=0700
 LogsDirectory=hsm-linux-probe
@@ -88,6 +89,7 @@ AmbientCapabilities=
 
 # --- Resource budget (§5) -----------------------------------------------------------------------
 # Steady-state RSS is expected at 5-20 MiB. Raise to 128M only if a soak run says otherwise.
+# Soak (RUNBOOK.md, "Cost"): 7.9 MB memory peak and 0.30 % of one core over 12 h with 113 sensors.
 MemoryMax=64M
 CPUQuota=5%
 TasksMax=32

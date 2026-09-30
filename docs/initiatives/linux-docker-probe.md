@@ -3,9 +3,10 @@
 > Status: **phase 1 delivered and verified on the real host** (2026-09-24). Epic: #1413.
 > The probe runs on garage-server reporting the managed Unix default set plus probe-only sensors
 > agreed with the owner one by one (§4.2a): host (#1476), every mounted disk including the
-> archives (#1481) and Docker Compose (#1416); the backup-contract sensors (#1417) are still to be
-> agreed. Releases are on hold by owner decision
-> (§4.5).
+> archives (#1481) and Docker Compose (#1416). The backup contract (#1417) is **not** a probe
+> source by owner decision (§4.4). The `.deb` is built and install-smoked in CI and the `probe-v*`
+> release channel exists (#1418), but releases are on hold by owner decision (§4.5); operating the
+> probe is `src/probe-linux/RUNBOOK.md`.
 > See §9 for what shipped, §10 for what the work uncovered, §11 for what remains.
 > Source task: garage_administration `hsm/TASK-linux-docker-monitoring.md`.
 > Scope: a Linux probe that reports Debian host metrics, Docker Compose service metrics,
@@ -28,6 +29,8 @@ Two-part decision:
    loadavg, archive-disk snapshots, backup contract — through the collector's public sensor
    API (instant/enum/`DoubleBar`/`IntBar`), so wire format, transport, queuing, types and
    options are always the library's. No parallel HTTP client to HSM, no hand-rolled wire.
+   *(As built: loadavg was rejected (§4.2a), the archive snapshots gave way to direct `statvfs`
+   (#1481) and the backup contract stayed out of the probe (§4.4).)*
 
 Guiding constraints (review feedback on earlier drafts):
 
@@ -117,10 +120,10 @@ Probe host language — Rust vs C++ (both native, both consume the same collecto
         │     ├── loadavg (60 s): /proc/loadavg — exists in no collector today
         │     ├── docker (stats 5 s, state 60 s): Docker Engine API over the unix socket
         │     │     (HTTP/1.1 GET over UnixStream, one-shot stats; no stream, no external CLI)
-        │     ├── disks (5 min / 5 s): statvfs of every real filesystem incl. the archives
-        │     │     (#1481 — measured not to wake them) + /proc/diskstats write speed
-        │     └── backup: timestamped JSON results on SSD (the §4.4 contract, still open)
-        └── probe state on SSD (restart counters, OOM latches, last-seen backup result)
+        │     └── disks (5 min / 5 s): statvfs of every real filesystem incl. the archives
+        │           (#1481 — measured not to wake them) + /proc/diskstats write speed
+        │     (backup: not a probe source — the host's backup tooling posts to HSM itself, §4.4)
+        └── probe state on SSD (disk names, disk write day, restart counters, OOM latches)
 ```
 
 Key properties: one process; scheduling/queuing/batching/retry are the collector's; each
@@ -304,8 +307,10 @@ registers at runtime — which needed a collector fix (0.9.1): public-API sensor
 collector runs were recorded locally but never POSTed to `/commands`, and an alert attached after
 their creation never reached the registration.
 
-**Backups (#1417)** — the original Stage-0 proposal below, still subject to the same per-sensor
-agreement (the Stage-0 Docker rows are superseded by the table above).
+**Backups (#1417) — not built, by owner decision.** The host's own backup tooling already posts
+backup health straight to the Sensor API; a probe-side reader of the same results would duplicate
+it, so the rows below stay the historical Stage-0 proposal (§4.4). The per-source status row was
+dropped with the owner rule of §4.2 (the Stage-0 Docker rows are superseded by the table above).
 
 | Path (under the product root) | Type | Period | TTL | Notes |
 |---|---|---|---|---|
@@ -327,8 +332,8 @@ service is also dropped from the state (no `Stopped`, no alert). No include list
 
 HSM-side templates (documented for the operator, thresholds configurable, nothing hardcoded
 in the probe or collector catalog): probe TTL 3 min; sustained CPU via HSM EMA; low SSD
-space; stopped/unhealthy/OOM/restarts; stale HDD snapshot; backup failure/runtime/missed
-deadline/stale success.
+space; stopped/unhealthy/OOM/restarts. *(As built, the alerts ride the sensor registrations
+(§4.2a); the stale-HDD-snapshot and backup templates fell away with §4.4.)*
 
 ### 4.3 Docker access & threat model
 
@@ -377,39 +382,37 @@ exception text or any sensor. Repo/docs carry only `${HSM_ACCESS_KEY}`-style pla
 Product key with `CanSendSensorData` only — no master key. `allowUntrustedCertificate`
 stays `false` everywhere including examples; tests use a local test CA, never production keys.
 
-### 4.4 Backup & archive integration contract (owned jointly with the backup task)
+### 4.4 Backup & archive integration contract — resolved without a probe reader (#1417)
 
-Interface: timestamped JSON files on SSD (e.g. `/var/lib/hsm-linux-probe/inbox/`), written
-atomically (`tmp` + `rename`) by the backup implementation, read-only for the probe:
+**What #1417 planned, and what happened to each part:**
 
-- `backup-<job>.json`: `{ job, started_at, finished_at, result: ok|failed, duration_s, detail }`
+| Planned | Outcome |
+|---|---|
+| `statvfs` of the filesystem holding the Docker data, 5 min, with inode detail | **Built** (#1476, generalised in #1481): free MB, free %, free inodes % for every mounted real filesystem |
+| Archive-disk capacity read from snapshot files the backup job writes on the SSD, never touching the archive mounts | **Dropped.** The archives are `statvfs`'d directly like any other mount (#1481). On a Debian 13 host with sleeping FUSE-NTFS and ext4 archive disks, `smartctl -n standby` reported STANDBY before and after the probe polled them (§4.2a, §9): `statvfs` is answered from the superblock and the probe never opens, lists or reads anything under a mount. A snapshot file would only add a stale copy of the same number and a second writer to keep alive |
+| A backup-contract reader in the probe: failure / runtime-exceeded / missed deadline / last-success heartbeat fired once per new result / never-succeeded | **Out of scope, by owner decision.** The host's backup tooling runs its own publisher that posts backup health straight to the HSM Sensor API; a probe-side reader of the same results would duplicate it. The probe stays a host/Docker/disk probe |
+| HDD standby-safe acceptance procedure in the runbook | **Built** (#1418): `src/probe-linux/RUNBOOK.md` → *Acceptance: sleeping disks stay asleep* — `smartctl -n standby -i /dev/<hdd>` must report STANDBY before installing and 15 minutes after (three disk samples and one mount re-scan). `smartctl -n standby` is used instead of the originally planned `hdparm -C`, which minimal hosts lack; both answer without spinning the disk up |
 
-Archive **capacity** is no longer part of this contract: since #1481 the probe `statvfs`es the
-archive mounts directly every 5 minutes, which was measured not to wake the sleeping disks
-(§4.2a). The backup-result contract above stays separate and is still to be agreed (#1417).
-
-Probe semantics (fixture-tested): distinguishes explicit failure / runtime-exceeded (running
-marker or `started_at` without `finished_at`) / missed deadline (schedule known from config)
-/ last confirmed success / never-succeeded. Result identity (`started_at` + job) is
-remembered in probe state; the success heartbeat fires once per new result. No parsing of
-backup logs, no touching backup scripts or Scheduled Tasks — only this contract is shared.
-
-HDD standby acceptance: before/after a test cycle, verify state with a standby-safe check
-(`hdparm -C /dev/sdX` — CHECK POWER MODE does not spin the disk up; command recorded in the
-runbook) over > 20 min. SMART/temperature of archive disks is optional and must be
-standby-gated (`smartctl -n standby`).
+The original contract (kept for reference, not implemented): timestamped JSON files on the SSD,
+written atomically by the backup implementation and read-only for the probe —
+`backup-<job>.json`: `{ job, started_at, finished_at, result: ok|failed, duration_s, detail }` —
+with result identity (`started_at` + job) remembered in probe state. Anyone who wants backup
+health in HSM without a publisher of their own should post it through the Sensor API (or the
+collector's public API) from the backup job, not through the probe. SMART/temperature of archive
+disks is not read either: the CPU-temperature source reads only `name`/`type`/`label` attributes
+of other devices, never a disk's temperature input (a `drivetemp` read would wake the disk).
 
 ### 4.5 Distribution & install channel
 
-> **Reality check (2026-09-24).** The `probe-v*` channel below is **not built yet** (#1418):
-> `src/server/HSMServer/probe-release.txt` is empty, so on an ordinary server the download
-> endpoint answers 503 by design. garage-server runs a hand-built trial package staged into a
-> locally built server image. The owner has put releases on hold, so no `probe-v*`, no
-> `agent-v*` and no NuGet push are made, even though master carries collector 0.8.1, HsmAgent
-> 0.5.35 and managed collector 3.5.3. One thing did publish: the `collector-v0.8.1` tag and its
-> vcpkg-registry entry. **Packaging lesson from the trial:** a version that sorts *below* the
-> installed one (`0.1.0~rc1` after `0.1.0~trial2`) makes `apt-get install` refuse the upgrade,
-> so the channel must guarantee forward-sorting versions.
+> **Status (#1418).** The channel below is **built but not used**: `.github/workflows/probe-release.yml`
+> publishes a `probe-v<X.Y.Z>` tag, and the `deb` job of `probe-linux.yml` builds and install-smokes
+> the package on every probe PR. No `probe-v*` release exists yet — the owner has put releases on
+> hold and publishes the first one himself — so `src/server/HSMServer/probe-release.txt` is empty
+> and on an ordinary server the download endpoint answers 503 by design; trial hosts run
+> hand-built `~trialN` packages. **Packaging lesson from the trial**, now enforced by the release
+> lane: a version that sorts *below* the installed one (`0.1.0~rc1` after `0.1.0~trial2`) makes
+> `apt-get install` refuse the upgrade, so released versions are plain `X.Y.Z`, each above every
+> earlier release, and trials carry a `~` suffix that sorts below the release.
 
 Ship as a **`.deb` package published through a GitHub Release**, mirroring the repo's
 existing release channels (`agent-v*`, `wrapper-v*`): tag `probe-v<version>` → CI workflow
@@ -419,17 +422,24 @@ produce both a too-new glibc requirement and `Depends:` on packages that do not 
 `cargo build --release`,
 package, tests) → Release with the `.deb` + its sha256, `--latest=false` as usual.
 
-The package carries the binary, the hardened systemd unit, a config skeleton in
-`/etc/hsm-linux-probe/` (dpkg conffile), and a postinst
-that creates the system user and `StateDirectory`. The access key is **not** packaged — it is
-placed once, manually, as the root-owned `LoadCredential=` source per the runbook.
-`libcurl`/`libssl` are linked dynamically against the distro packages (declared as `Depends:`)
+The package carries the binary, the hardened systemd unit, a config skeleton, and a postinst
+that creates the system user (the unit's `StateDirectory=`/`LogsDirectory=` are created by
+systemd). **Superseded:** the plan shipped the config as a dpkg conffile in `/etc/hsm-linux-probe/`;
+since #1484 (probe 0.3.1) it deliberately is not one — the skeleton lives in
+`/usr/share/hsm-linux-probe/config.example.json`, postinst seeds `/etc/hsm-linux-probe/config.json`
+only when it is absent, and no upgrade touches the operator's file or stops at a conffile prompt
+(which is what happened on the 0.3.0 trial upgrade, §4.6). The access key is **not** packaged — it
+is placed once as the root-owned `LoadCredential=` source (by the bundle's `install.sh`, or by hand
+per the runbook). `libcurl` — and through it `libssl` — is linked dynamically against the distro
+packages (`Depends: libcurl4t64, …`, checked against the binary's shared libraries at build time),
 so OpenSSL security fixes arrive via ordinary `apt upgrade`, not a probe rebuild.
 
-Install: download from the Release, `sha256sum -c`, `apt install ./hsm-linux-probe_*.deb`,
-place the key, `systemctl enable --now hsm-linux-probe`. Upgrade: install the newer `.deb` +
-restart. Rollback: install the previous `.deb` from Releases (dpkg downgrades cleanly) —
-matching the task's reversibility requirement.
+Install / upgrade / rollback / remove with exact commands, the retention table and the measured
+cost: `src/probe-linux/RUNBOOK.md`. In short: download from the Release, `sha256sum -c`,
+`apt-get install ./hsm-linux-probe_*.deb`, place the key, `systemctl enable --now hsm-linux-probe`
+(or the server's per-product bundle, §4.6); an upgrade is the same install of the newer `.deb`
+(a running probe is restarted by the package); a rollback installs the previous release with
+`--allow-downgrades` — matching the task's reversibility requirement.
 
 Rejected: probe-in-Docker (needs docker.sock, host `/proc` and host mounts — reintroduces
 the cgroup/host-metric trap the task warns about; the probe is a host service by nature);
@@ -517,8 +527,14 @@ Measured over 24 h on the real host (Debian 13, i5-2500), not estimated:
 | Sensors | ~100 planned with Docker | **15** in the parity-only phase |
 | History per bar sensor | — | 288 records/day (one 5-minute bar), against 5760/day before #1428 |
 
-The original projection below assumed the full Docker/disk set; it stays as the estimate to
-re-check when those sensors are agreed.
+**Soak with the full set (#1418).** Probe 0.5.0 on the same Debian 13 host with 113 sensors
+(12 Compose services, 4 filesystems): a 12 h 14 min run consumed **132.4 s of CPU (≈ 0.30 % of one
+core)** with a **7.9 MB memory peak** (systemd accounting) — against the 5 % `CPUQuota` and the
+64 MB `MemoryMax`, so the unit's budget stays as it is. What the probe keeps on the host and for how
+long (the retention table, including the 30-day log ageing added in #1418) is in
+`src/probe-linux/RUNBOOK.md`.
+
+The original projection below assumed the full Docker/disk set; the soak above replaces it.
 
 - Process: 1 (native Rust binary, no managed runtime); threads: collector scheduler/sender +
   probe timers (plain threads, no async runtime needed at this scale); no busy loops; all
@@ -541,7 +557,9 @@ Probe unit tests (pure functions over saved anonymized fixtures, run on both CI 
 `/proc/loadavg` parse; Docker DTO parsing, label normalization + collision rule, CPU delta
 math (1 core ⇒ 100%, 2 ⇒ 200%, reset ⇒ skip, recreate ⇒ new baseline, timeout ⇒ no value),
 memory-limit semantics (finite/unlimited/cache convention), state machine
-(running/health/OOM/restart-counter reset), backup-contract state machine.
+(running/health/OOM/restart-counter reset); the backup-contract state machine fell away with §4.4.
+Packaging (#1418): every probe PR builds the `.deb` in `debian:13` and install-smokes it in a clean
+`debian:13` (`packaging/smoke-deb.sh`); the release lane runs the same two scripts.
 Integration (ubuntu CI + local Docker): fake-server capture (types/paths/units; bar payloads
 produced by the collector, no probe-side 5-min aggregation), test-CA chain accepted / wrong
 cert rejected, `Key` header present without value leakage, send failure visible in
@@ -558,8 +576,8 @@ budget.
 | 1 | **Collector: Linux metric sources** | 0 | `hsm_linux_metric_sources.cpp` + `InstallLinuxMetricSources()` (C ABI + wrapper), platform-correct `add_all_computer_sensors`, conformance scenario + contract fixtures, docs, version bump, `collector-v<next>` tag + registry update. |
 | 2 | Probe skeleton | 1 (published version) | `src/probe-linux/`: cargo workspace — `hsm-collector-sys` binding crate + safe wrapper (collector built from the pinned registry version via CMake/vcpkg in `build.rs`; first real `x64-linux` registry consumer — closes that untested gap), config, logging, lifecycle, defaults enabled, loadavg/cores sensors, systemd unit sample, ubuntu CI workflow (cargo fmt/clippy/test), first fake-server test. |
 | 3 | Docker source | 2 | Engine-API client over unix socket, DTO/normalizer/identity/delta, SSD state persistence, fixtures. |
-| 4 | Disks + backup contract | 2 (3 for tree shape) | SSD statvfs detail, archive snapshots, backup contract reader, standby runbook section. |
-| 5 | Packaging + rollout kit | 2–4 | `.deb` build in `debian:13` CI container, `probe-v*` release workflow (§4.5), install/upgrade/rollback runbook, hardening finalized, soak + RSS/CPU measurements, retention table, `aicontext/` feature docs. |
+| 4 | Disks + backup contract | 2 (3 for tree shape) | SSD statvfs detail, archive snapshots, backup contract reader, standby runbook section. **Done as:** statvfs + inode detail for every filesystem, archives polled directly (#1476, #1481); snapshots and the reader dropped (§4.4); standby procedure in the runbook (#1418). |
+| 5 | Packaging + rollout kit | 2–4 | `.deb` build in `debian:13` CI container, `probe-v*` release workflow (§4.5), install/upgrade/rollback runbook, hardening finalized, soak + RSS/CPU measurements, retention table, `aicontext/` feature docs. **Done** (#1476, #1484, #1418); the config is not a conffile (#1484). |
 | 6 | Per-product download bundle (#1424) | 5 for a real .deb (builder + endpoint can land first, 503 until a release is pinned) | §4.6: server bundle builder, admin-only endpoint + button, `probe-release.txt` staging in both server build legs, install.sh/uninstall.sh, tests. |
 | — | Optional: `ca_file` transport knob | — | `CollectorOptions.ca_file` → `CURLOPT_CAINFO` + `native_http` test; not on the critical path (system trust store suffices). |
 
@@ -571,7 +589,8 @@ install, approve alert thresholds and Telegram destinations, run the controlled 
 
 Managed DataCollector changes; HsmAgent refactor; probe self-update (systemd + package
 upgrade instead); porting Windows-only sensors (event logs, service status, network speed,
-top-CPU, OS info) to Linux; block I/O sensors (optional follow-up); external independent
+top-CPU, OS info) to Linux; block I/O sensors (optional follow-up); a backup-result reader in
+the probe (owner decision, §4.4 — the host's backup tooling posts to HSM itself); external independent
 availability checker; changes to HSM server core, its container limits, compose file, backup
 scripts, Windows Scheduled Tasks, or `docs/initiatives/ai-manageable-control-plane.md`.
 
@@ -600,8 +619,9 @@ coverage in both drivers and an agent version bump:
 | #1493 PR | the tree sits directly under the product: `hsm.computerName` / `hsm.module` empty by default (accepted, not recommended), the install bundle writes neither (the `"auto"` host-name substitution removed), pinned sets at the root | probe 0.6.0 |
 | #1496 PR | the module node stays: `hsm.module` defaults to `.probe` (the product root holds `.computer/…` and `.probe/{.module,Docker}/…`); `computerName` stays empty by default | probe 0.6.1 |
 | #1498 PR | the per-disk write volume is posted once per day, as `Written per day on <name> disk` (TTL 26 h, 1 record/day instead of 288); the `Written today` nodes are stale history | probe 0.6.2 |
-| #1489 + #1495 PR | write-volume edges: a clock stepped back into the hour just posted does not re-post it; an unmounted filesystem no longer counts toward a disk's mount-point identity; a day missed while the probe was down is logged once; a partly failed daily post and a measured-but-unmounted disk are logged with disk, day and GB; the install bundle writes `computerName: ""` / `module: ".probe"` explicitly; config → collector-options test | probe 0.6.3 |
+| #1489 + #1495 PR | write-volume edges: a clock stepped back into the hour just posted does not re-post it; an unmounted filesystem no longer counts toward a disk's mount-point identity; a day missed while the probe was down is logged once; a partly failed daily post and a measured-but-unmounted disk are logged with disk, day and GB; the install bundle writes `computerName: ""` / `module: ".probe"` explicitly; config → collector-options test | probe 0.7.0 (one PR with #1479 and #1418; 0.6.3 was never released) |
 | #1479 PR | `.computer/Top CPU processes/<name>` on Linux, probe-only (the Windows agents' wire shape and ≥ 1 % / top-10 / 1-per-minute rule, from `/proc/<pid>/stat` against `/proc/stat`); top-level `topCpu` block (the agent's), off by default; the server bundle honours "Report top processes by CPU" and then lifts `ProtectProc=invisible` with a `top-cpu.conf` drop-in | probe 0.7.0 |
+| #1418 PR | packaging + release channel: the `.deb` built and install-smoked in `debian:13` on every probe PR, `probe-release.yml` (tag == workspace version, plain forward-sorting `X.Y.Z`, `--latest=false` + badge repair, least-privilege publish job), staging refuses an asset of another version, daily logs aged out after 30 days (tmpfiles.d), `RUNBOOK.md` (install/upgrade/rollback/remove, retention, sleeping-disk acceptance, soak); #1417 reconciled (§4.4). No release published | — |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
@@ -674,13 +694,15 @@ runs on an invariant locale with no `N:` drive and a quiet disk.
 ## 11. What remains
 
 **Needs an owner decision before any code:**
-- the backup-contract sensors (#1417, §4.4) — the archive-disk capacity part is done by direct
-  polling (#1481);
 - whether the probe-only host sensors (logical cores, CPU temperature) ever move into the shared
   catalog and onto Windows — for now they stay Linux-probe-only (load average was rejected);
-- when releases resume: `agent-v0.5.35` plus the `agent-release.txt` pin (without it none of the
-  Windows-affecting fixes above reach deployed agents), the managed NuGet push, and the
-  `probe-v*` channel (#1418).
+- when releases resume: `agent-v*` plus the `agent-release.txt` pin (without it none of the
+  Windows-affecting fixes above reach deployed agents), the managed NuGet push, and the first
+  `probe-v*` release plus the `probe-release.txt` pin — the channel is built (#1418), the owner
+  publishes the first release himself (`src/probe-linux/README.md` → *Release channel*).
+
+**Decided, no code:** the backup contract (#1417) stays out of the probe — the host's backup
+tooling posts to HSM itself; archive capacity is the ordinary disk sensors (§4.4).
 
 **Known and tracked, no decision needed:** the fixes batched in PR #1462, merged (#1453, #1444,
 #1437, #1459, #1460); the Windows `DiskRead` fractional-MB divergence; the managed

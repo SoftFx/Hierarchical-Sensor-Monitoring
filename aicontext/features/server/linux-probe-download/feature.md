@@ -176,7 +176,7 @@ Same model as `agent-release.txt` (see `../agent-download/feature.md` → *Packa
 | Pin state | Staging | Guards | Endpoint |
 |---|---|---|---|
 | Empty or missing (no `probe-v*` release yet) | skipped, build green | inactive | 503 |
-| `X.Y.Z` | `gh release download probe-vX.Y.Z` → SHA-256 check against `hsm-linux-probe_*.deb.sha256` → one `.deb` in `wwwroot/probe/` | Windows publish output and Docker image must hold exactly one non-empty `hsm-linux-probe_*.deb` | serves the bundle |
+| `X.Y.Z` | `gh release download probe-vX.Y.Z` → exactly one `.deb`, named `hsm-linux-probe_X.Y.Z_<arch>.deb` (#1418) → SHA-256 check against its `.deb.sha256` → staged in `wwwroot/probe/` | Windows publish output and Docker image must hold exactly one non-empty `hsm-linux-probe_*.deb` | serves the bundle |
 
 **Single architecture, deliberately.** Staging, both guards and the endpoint expect exactly one `.deb`, and
 every host gets that package. When #1418 publishes more than one architecture, this becomes an `?arch=`
@@ -188,8 +188,13 @@ provider, which does not map `.deb` (unlike `/agent/hsm-agent.exe`), so `/probe/
 drop-point's `README.md` is served, which is harmless. Everything per-product comes only from the admin endpoint.
 
 Paths: `scripts/stage-linux-probe.sh` (both `server-build.yml` legs) and `scripts/local-docker-build.ps1`.
-The staged `.deb` is gitignored (`wwwroot/probe/.gitignore`). Shipping a newer probe = push the
-`probe-v*` tag, then bump `probe-release.txt` in a one-line PR.
+The staged `.deb` is gitignored (`wwwroot/probe/.gitignore`). The release is published by
+`.github/workflows/probe-release.yml` (#1418: tag == `src/probe-linux/Cargo.toml` workspace version,
+plain `X.Y.Z` sorting above every earlier `probe-v*`, built and install-smoked in `debian:13`, asset
++ `sha256sum`-format `.sha256`, `--latest=false`; see `../../integrations/linux-probe/feature.md` →
+*Release channel*). Shipping a newer probe = merge the version bump, push the `probe-v*` tag, then
+bump `probe-release.txt` in a one-line PR. The pin stays empty until the owner publishes the first
+release.
 
 ## Key components
 
@@ -209,13 +214,13 @@ shredded after a failed install, re-run idempotency, `--force-config`, uninstall
 
 ## Contract with the probe package (#1415 / #1418)
 
-`src/probe-linux/` is not on master yet (PR #1420), so nothing in the build catches a rename on the probe
-side: the bundle would install cleanly and never send a value. These must move in lockstep with the probe, and
-be re-verified before the first non-empty `probe-release.txt`:
+Nothing in the build ties the two sides together: a rename on the probe side would still produce a bundle
+that installs cleanly and never sends a value. These must move in lockstep with the probe, and be
+re-verified before the first non-empty `probe-release.txt`:
 
 | Symbol | Here | Probe side |
 |---|---|---|
-| Package name `hsm-linux-probe`, asset `hsm-linux-probe_<ver>_<arch>.deb` + `.deb.sha256` | install/uninstall scripts, staging, guards | `.deb` build (#1418) |
+| Package name `hsm-linux-probe`, asset `hsm-linux-probe_<ver>_<arch>.deb` + `.deb.sha256` | install/uninstall scripts, staging, guards | `packaging/build-deb.sh`, `probe-release.yml` (#1418) |
 | Unit `hsm-linux-probe.service` | `install.sh` / `uninstall.sh` | `packaging/hsm-linux-probe.service` |
 | `LoadCredential=access-key:/etc/hsm-linux-probe/access-key` → `/run/credentials/hsm-linux-probe.service/access-key` | `AccessKeyCredentialPath`, `install.sh` | the unit |
 | Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile/computerName/module` (`computerName` `""`, `module` `.probe`, #1493, #1496, #1495) | `BuildConfigJson` | `config.rs` (the same values are its defaults; `probe.rs` `collector_options` leaves an empty segment out) |
@@ -223,12 +228,14 @@ be re-verified before the first non-empty `probe-release.txt`:
 | Top-level `topCpu { enabled, periodMs, minPercent, count }` (#1479) | `BuildConfigJson` (`AgentInstallerBundle.TopCpuBlock`) | `config.rs` `TopCpuConfig` |
 | Drop-in `hsm-linux-probe.service.d/top-cpu.conf` lifting `ProtectProc=invisible` | `install.sh` / `uninstall.sh` (`TopCpuDropIn`) | the unit's `ProtectProc=invisible`, `deb/postrm` |
 
-**Not yet verified on a real host.** The `debian:13` smoke test ran against a dummy `.deb`. In that Docker
-Desktop container, systemd applied no per-unit mount namespacing, so `LoadCredential=` never materialized
-and the test pointed the dummy at the installed key directly. The credential hand-off to the `hsm-probe`
-user must be checked on a real Debian host before the pin is set.
+**Verified on a real host since.** The `debian:13` smoke test of #1424 ran against a dummy `.deb` in a Docker
+Desktop container, where systemd applied no per-unit mount namespacing, so `LoadCredential=` never
+materialized. The trial packages were then installed on a real Debian 13 host through the server-generated
+bundle, exactly as an operator would, and the probe connected through the `LoadCredential=` hand-off to the
+`hsm-probe` user (initiative §9).
 
 ## Out of scope (follow-up)
 
 - A dedicated, separately-revocable per-download key (shared follow-up with the Windows agent).
-- A real `probe-v*` release (#1418); until it exists the button answers 503.
+- Publishing the first `probe-v*` release and pinning it: the channel exists (#1418), releases are on hold by
+  owner decision; until a pin is set the button answers 503.
