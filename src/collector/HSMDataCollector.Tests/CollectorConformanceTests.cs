@@ -276,6 +276,14 @@ namespace HSMDataCollector.Tests
                         state.Collector.Unix.AddCollectorMonitoringSensors();
                     break;
 
+                case "add_queue_diagnostic_sensors":
+                    // The ".module/Collector queue stats" group, as hsm_collector_add_all_queue_diagnostic_sensors.
+                    if (DataCollector.IsWindowsOS)
+                        state.Collector.Windows.AddAllQueueDiagnosticSensors();
+                    else
+                        state.Collector.Unix.AddAllQueueDiagnosticSensors();
+                    break;
+
                 case "service_send_custom":
                     state.ServiceCommandsSensors[int.Parse(step.Arg(0))].SendCustomCommand(ExpandTextToken(step.Arg(1)), ExpandTextToken(step.Arg(2)));
                     break;
@@ -809,6 +817,40 @@ namespace HSMDataCollector.Tests
                 case "set_sender_hang":
                     state.Sender.HangSends();
                     break;
+
+                // (#1480) Wait until a data send is parked in the hang: its package has left the queue.
+                case "wait_sender_parked":
+                {
+                    var parkedBy = DateTime.UtcNow + TimeSpan.FromSeconds(int.Parse(step.Arg(0)));
+                    while (state.Sender.ParkedSends == 0 && DateTime.UtcNow < parkedBy)
+                        await Task.Delay(5).ConfigureAwait(false);
+
+                    Assert.True(state.Sender.ParkedSends > 0, "No data send was parked in the hang.");
+                    break;
+                }
+
+                // (#1480) Lift the hang: a parked send continues (and consumes a charged fail token),
+                // later sends are no longer blocked.
+                case "release_sender_hang":
+                    state.Sender.ReleaseHangs();
+                    break;
+
+                // (#1480) Sum of the values in the bars of one sensor: Mean x Count of the LAST payload
+                // of each OpenTime, over the bars whose Path ends with the suffix.
+                case "expect_bar_sum":
+                {
+                    var sum = state.Sender.Values
+                        .OfType<BarSensorValueBase>()
+                        .Where(bar => bar.Path != null && bar.Path.EndsWith(step.Arg(0), StringComparison.Ordinal))
+                        .GroupBy(bar => bar.OpenTime)
+                        .Select(group => group.Last())
+                        .Sum(bar => GetBarNumericField(bar, "mean") * bar.Count);
+
+                    Assert.True(
+                        Math.Abs(sum - ParseDouble(step.Arg(1))) < 1e-9,
+                        $"Bar sum for '{step.Arg(0)}': expected {step.Arg(1)}, got {sum}.");
+                    break;
+                }
 
                 case "stop_expect_under_ms":
                     var stopTimer = Stopwatch.StartNew();
@@ -2262,12 +2304,42 @@ namespace HSMDataCollector.Tests
             // Nothing is recorded — the bounded stop must give up on these sends, not wait them out.
             public void HangSends() => Volatile.Write(ref _hangSends, 1);
 
+            // (#1480) Lift the hang: every parked send continues (to the fail-token check below) and
+            // later sends are not blocked. Mirrors the native hsm_collector_set_send_hang(false).
+            public void ReleaseHangs()
+            {
+                Volatile.Write(ref _hangSends, 0);
+                _hangRelease.TrySetResult(true);
+            }
+
+            // Data sends currently parked in the hang — their package has already left the queue.
+            public int ParkedSends => Volatile.Read(ref _parkedSends);
+
+            private readonly TaskCompletionSource<bool> _hangRelease =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            private int _parkedSends;
+
             public ValueTask<ConnectionResult> TestConnectionAsync() => new ValueTask<ConnectionResult>(ConnectionResult.Ok);
 
             public async ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
                 if (Volatile.Read(ref _hangSends) == 1)
-                    await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                {
+                    Interlocked.Increment(ref _parkedSends);
+                    try
+                    {
+                        // Parked until released or until the caller's cancellation fires (the stop
+                        // path giving up on a dead transport), which throws as before.
+                        var cancelled = Task.Delay(Timeout.Infinite, token);
+                        if (await Task.WhenAny(_hangRelease.Task, cancelled).ConfigureAwait(false) != _hangRelease.Task)
+                            await cancelled.ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        Interlocked.Decrement(ref _parkedSends);
+                    }
+                }
 
                 if (TryConsumeFailToken())
                     throw new InvalidOperationException("Conformance: injected send failure.");

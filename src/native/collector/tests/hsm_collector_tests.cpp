@@ -1199,6 +1199,14 @@ namespace
             return;
         }
 
+        if (action == "add_queue_diagnostic_sensors")
+        {
+            Require(
+                hsm_collector_add_all_queue_diagnostic_sensors(state.collector.value) == HSM_RESULT_OK,
+                "add_queue_diagnostic_sensors failed");
+            return;
+        }
+
         if (action == "service_send_custom" || action == "service_send_restart" || action == "service_send_start" ||
             action == "service_send_stop" || action == "service_send_update" || action == "service_send_update_version")
         {
@@ -2461,6 +2469,26 @@ namespace
             return;
         }
 
+        // (#1480) Wait until a data send is parked in the hang: its package has left the queue.
+        if (action == "wait_sender_parked")
+        {
+            Require(step.size() >= 2, "wait_sender_parked requires a timeout in seconds");
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(ToInt(step[1]));
+            while (hsm_collector_test_hung_send_count(state.collector.value) == 0 &&
+                   std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            Require(hsm_collector_test_hung_send_count(state.collector.value) > 0, "no data send was parked in the hang");
+            return;
+        }
+
+        // (#1480) Lift the hang: a parked send continues (and consumes a charged fail token), later
+        // sends are no longer blocked.
+        if (action == "release_sender_hang")
+        {
+            hsm_collector_set_send_hang(state.collector.value, false);
+            return;
+        }
+
         if (action == "stop_expect_under_ms")
         {
             Require(step.size() >= 2, "stop_expect_under_ms requires a bound in milliseconds");
@@ -2644,6 +2672,36 @@ namespace
             for (const auto& bar : BarPayloadsInDeliveryOrder(state.collector.value))
                 opens.insert(bar.open);
             Require(static_cast<int>(opens.size()) >= ToInt(step[1]), "too few distinct bar OpenTimes");
+            return;
+        }
+
+        // (#1480) Sum of the values in the bars of one sensor: Mean x Count of the LAST payload of each
+        // OpenTime (partial posts are snapshots of one bar), over the bars whose Path ends with the
+        // suffix. Exact only when each bar's mean is exact — design the fixture accordingly.
+        if (action == "expect_bar_sum")
+        {
+            Require(step.size() >= 3, "expect_bar_sum requires a path suffix and the expected sum");
+            const std::string path_end = step[1] + "\"";
+            std::map<long long, double> latest;
+            const auto sent_count = hsm_collector_sent_count(state.collector.value);
+            for (size_t index = 0; index < sent_count; ++index)
+            {
+                const auto payload = SentJson(state.collector.value, index);
+                if (!IsBarPayload(payload) || payload.find(path_end) == std::string::npos)
+                    continue;
+
+                latest[std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs"))] =
+                    std::stod(NumberFieldFromPayload(payload, "Mean")) *
+                    static_cast<double>(std::stoll(NumberFieldFromPayload(payload, "Count")));
+            }
+
+            double sum = 0.0;
+            for (const auto& bar : latest)
+                sum += bar.second;
+
+            Require(
+                std::abs(sum - std::stod(step[2])) < 1e-9,
+                ("bar sum mismatch for " + step[1] + ": expected " + step[2] + ", got " + std::to_string(sum)).c_str());
             return;
         }
 

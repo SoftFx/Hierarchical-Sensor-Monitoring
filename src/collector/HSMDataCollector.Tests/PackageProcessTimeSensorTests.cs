@@ -50,18 +50,18 @@ namespace HSMDataCollector.Tests
         [Fact]
         public void Package_wait_is_the_average_of_package_time_minus_enqueue_time()
         {
-            // The package reads its collect time at construction, after these stamps, so each wait is
-            // at least the offset below: 4 s and 1 s average to 2.5 s (plus the few ticks in between).
-            var now = DateTime.UtcNow;
+            // The package captures its collect time at construction; the stamps are derived from that
+            // captured instant, so the waits are exactly 4 s and 1 s whatever the wall clock does.
             var package = new DataPackage<int>(2);
+            var collectedAt = CollectTimeOf(package);
 
-            package.AddValue(new QueueItem<int>(1, now.AddSeconds(-4)));
-            package.AddValue(new QueueItem<int>(2, now.AddSeconds(-1)));
+            package.AddValue(new QueueItem<int>(1, collectedAt.AddSeconds(-4)));
+            package.AddValue(new QueueItem<int>(2, collectedAt.AddSeconds(-1)));
 
             var info = package.GetInfo();
 
             Assert.Equal(2, info.ValuesCount);
-            Assert.InRange(info.AvrTimeInQueue, 2.5, 3.0);
+            Assert.Equal(2.5, info.AvrTimeInQueue);
         }
 
 
@@ -100,6 +100,11 @@ namespace HSMDataCollector.Tests
             Assert.Contains("Priority data: 3", comment);
         }
 
+
+        private static DateTime CollectTimeOf<T>(DataPackage<T> package) =>
+            (DateTime)typeof(DataPackage<T>)
+                .GetField("_now", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(package);
 
         private static string CommentOf(PackageDataAvrProcessTimeSensor sensor) =>
             (string)typeof(PackageDataAvrProcessTimeSensor)

@@ -514,9 +514,11 @@ drops counted during the last partial cycle are no longer lost with the thread. 
 difference: managed adds one bar value per drop event (a retry drop is a `1`), native one value per
 collect cycle with the cycle's total, so the SUM matches while `Count`/`Mean` differ. Evictions caused by
 Stop's own flush of the bars into a full queue happen after the fold and are still not reported. Pinned
-by `native_requeue_drop_at_capacity_counts_as_overflow` (native unit test: the managed side covers #1088
-with C# unit tests in `CollectorQueueShutdownTests`, and there is no portable scenario — it would need a
-hang-lift verb and an overflow-bar assertion in both drivers).
+cross-language by `queue_overflow_contract:requeue_drop_at_capacity_counts_as_overflow` (both drivers:
+park a send with `wait_sender_parked`, fill the queue to capacity, `release_sender_hang` into an injected
+failure, `expect_bar_sum` on the overflow bar — the SUM only, because of the shape difference above),
+and natively by `native_requeue_drop_at_capacity_counts_as_overflow`, which also pins the Stop-time fold
+deterministically (1 h collect period, so only that fold can carry the count).
 
 The four queue-stat rows now also register **the same description** in both collectors: native composes
 the managed `QueueDiagnosticCollection` text from its own options (`ComposeDefaultDescription`, with a

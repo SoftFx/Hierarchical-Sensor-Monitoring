@@ -166,7 +166,8 @@ Version history:
   `native_package_process_time_is_the_average_queue_wait`. Also: a failed-send retry dropped because
   the queue is full is now counted in `Queue overflow` (one per value, as managed #1088), and Stop
   folds the drops of the last partial collect cycle into that bar before flushing it
-  (`native_requeue_drop_at_capacity_counts_as_overflow`).
+  (`queue_overflow_contract:requeue_drop_at_capacity_counts_as_overflow` in both drivers,
+  `native_requeue_drop_at_capacity_counts_as_overflow`).
 - **0.10.0** (#1416 follow-up) — one additive entry point.
   `hsm_sensor_set_description(sensor, description)` replaces a sensor's registration description
   with the same re-emission rules as `hsm_sensor_attach_alert` (below, 0.9.1): before Start it is
