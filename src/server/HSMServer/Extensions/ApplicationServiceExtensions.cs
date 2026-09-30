@@ -79,6 +79,18 @@ namespace HSMServer.ServiceExtensions
             // both the REST alert controllers and the MCP alert tools.
             services.AddScoped<AlertReadService>();
 
+            // The alert-administration write engine (#1500): item-level policy
+            // CRUD merged into atomic full-list node updates. SINGLETON, unlike
+            // its scoped readers: the service OWNS the per-node write gates
+            // (#1501 round-1), which serialize concurrent API writes only if
+            // every request shares ONE instance — a Scoped registration would
+            // hand two concurrent writes to one sensor two separate (empty)
+            // gate maps and the second full-list merge would silently drop the
+            // first write's policy (#1501 round-3, F1). Singleton-safe: every
+            // constructor dependency is itself a singleton and the gate
+            // registry is the only state (lock-protected).
+            services.AddSingleton<PolicyAdministrationService>();
+
             // The MCP read-only adapter over the management API (#1391): server
             // and tool wiring in one testable place (HsmMcpServiceCollectionExtensions);
             // the endpoint mapping and its SitePort/bearer guards live with the

@@ -30,6 +30,14 @@ namespace HSMServer.Model.ManagementApi
         // 409 — the write conflicts with server-side state.
         public const string ConflictCode = "conflict";
 
+        // 422 — the request is well-formed and bound, but its content contradicts
+        // server-side state (a condition property the target sensor's type does not
+        // support, a chat that is not available on the node, an unresolvable
+        // schedule reference). Introduced with the alert-administration surface
+        // (#1500); details carries field-keyed messages like a 400. Append-only:
+        // pre-#1500 endpoints keep answering 400 for their validation failures.
+        public const string UnprocessableEntityCode = "unprocessable_entity";
+
         // 500 — unhandled server error; details carries {traceId}.
         public const string InternalErrorCode = "internal_error";
 
@@ -73,6 +81,21 @@ namespace HSMServer.Model.ManagementApi
             new(new ManagementApiErrorDto { Error = ConflictCode, Message = message, Details = details })
             {
                 StatusCode = StatusCodes.Status409Conflict,
+            };
+
+        // 422 with field-keyed details; an empty error map is not a validation
+        // failure. The semantic-validation twin of Validation (400): same body
+        // shape, different status — binding/shape problems are 400, contradictions
+        // against server-side state are 422.
+        public static ObjectResult UnprocessableEntity(IDictionary<string, string[]> errors) =>
+            new(new ManagementApiErrorDto
+            {
+                Error = UnprocessableEntityCode,
+                Message = "The request contradicts the current state of the resource.",
+                Details = errors is { Count: > 0 } ? errors : null,
+            })
+            {
+                StatusCode = StatusCodes.Status422UnprocessableEntity,
             };
 
         public static ObjectResult Unavailable(string message) =>

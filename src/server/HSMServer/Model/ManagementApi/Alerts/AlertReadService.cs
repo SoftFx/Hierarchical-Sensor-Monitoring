@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Model;
 using HSMServer.Core.Schedule;
 using HSMServer.Model.ManagementApi.AlertSchedules;
 using HSMServer.Model.ManagementApi.AlertTemplates;
@@ -208,6 +209,221 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             return SensorTreeReadResult<AlertScheduleDto>.Ok(ToDto(schedule,
                 _cache.GetSensorsByAlertSchedule(id), _authorization.MemoizedProductVisibility(user)));
+        }
+
+
+        // === Policy reads (#1500) ===
+        // The alert-administration read surface lives here with the rest of the
+        // alert visibility rules (the single source #1393 established): every
+        // read authorizes at the target's own boundary through the evaluator's
+        // 404/403 split, and unknown/invisible ids stay indistinguishable.
+
+        /// <summary>
+        /// The sensor's data policies, ordered by policy id, paginated with the
+        /// area's shared clamps. The token's owner sees the sensor exactly when
+        /// the sensor-tree item endpoint would answer it.
+        /// </summary>
+        public SensorTreeReadResult<ApiPageDto<PolicyDto>> ListSensorPolicies(ClaimsPrincipal user, Guid sensorId,
+            int page, int pageSize)
+        {
+            var resolution = ResolveSensor(user, sensorId);
+
+            if (resolution.Failure is not null)
+                return SensorTreeReadResult<ApiPageDto<PolicyDto>>.FromFailure(resolution.Failure);
+
+            var policies = resolution.Sensor.Policies
+                .OrderBy(p => p.Id)
+                .Select(p => AlertPolicyDtoMapper.ToDto(p, resolution.Sensor.Type))
+                .ToList();
+
+            return SensorTreeReadResult<ApiPageDto<PolicyDto>>.Ok(Page(policies, page, pageSize));
+        }
+
+        /// <summary>One data policy of the sensor by id (unknown and invisible answer the SAME 404).</summary>
+        public SensorTreeReadResult<PolicyDto> GetSensorPolicy(ClaimsPrincipal user, Guid sensorId, Guid policyId)
+        {
+            var resolution = ResolveSensor(user, sensorId);
+
+            if (resolution.Failure is not null)
+                return SensorTreeReadResult<PolicyDto>.FromFailure(resolution.Failure);
+
+            return resolution.Sensor.Policies.FirstOrDefault(p => p.Id == policyId) is { } policy
+                ? SensorTreeReadResult<PolicyDto>.Ok(AlertPolicyDtoMapper.ToDto(policy, resolution.Sensor.Type))
+                : SensorTreeReadResult<PolicyDto>.Fail(SensorTreeReadOutcome.NotFound);
+        }
+
+        /// <summary>The sensor's TTL policies, ordered by policy id, paginated.</summary>
+        public SensorTreeReadResult<ApiPageDto<TtlPolicyDto>> ListSensorTtlPolicies(ClaimsPrincipal user,
+            Guid sensorId, int page, int pageSize)
+        {
+            var resolution = ResolveSensor(user, sensorId);
+
+            if (resolution.Failure is not null)
+                return SensorTreeReadResult<ApiPageDto<TtlPolicyDto>>.FromFailure(resolution.Failure);
+
+            var policies = resolution.Sensor.Policies.TTLPolicies
+                .OrderBy(p => p.Id)
+                .Select(AlertPolicyDtoMapper.ToDto)
+                .ToList();
+
+            return SensorTreeReadResult<ApiPageDto<TtlPolicyDto>>.Ok(Page(policies, page, pageSize));
+        }
+
+        /// <summary>One TTL policy of the sensor by id.</summary>
+        public SensorTreeReadResult<TtlPolicyDto> GetSensorTtlPolicy(ClaimsPrincipal user, Guid sensorId,
+            Guid policyId)
+        {
+            var resolution = ResolveSensor(user, sensorId);
+
+            if (resolution.Failure is not null)
+                return SensorTreeReadResult<TtlPolicyDto>.FromFailure(resolution.Failure);
+
+            return resolution.Sensor.Policies.TTLPolicies.FirstOrDefault(p => p.Id == policyId) is { } policy
+                ? SensorTreeReadResult<TtlPolicyDto>.Ok(AlertPolicyDtoMapper.ToDto(policy))
+                : SensorTreeReadResult<TtlPolicyDto>.Fail(SensorTreeReadOutcome.NotFound);
+        }
+
+        /// <summary>
+        /// The product's data-policy aggregate: every data policy of every
+        /// sensor in the product's subtree, each naming its owning sensor,
+        /// ordered by sensor path then policy id, paginated. A product owns no
+        /// data policies of its own — this is the read side of the aggregate
+        /// the write surface routes through.
+        /// </summary>
+        public SensorTreeReadResult<ApiPageDto<ProductPolicyDto>> ListProductPolicies(ClaimsPrincipal user,
+            Guid productId, int page, int pageSize)
+        {
+            var resolution = ResolveProduct(user, productId);
+
+            if (resolution.Failure is not null)
+                return SensorTreeReadResult<ApiPageDto<ProductPolicyDto>>.FromFailure(resolution.Failure);
+
+            var policies = resolution.Product.GetAllSensors()
+                .Where(sensor => sensor.Parent?.Root is not null)
+                .SelectMany(sensor => sensor.Policies.Select(p => (sensor, p)))
+                .OrderBy(entry => entry.sensor.FullPath, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(entry => entry.p.Id)
+                .Select(entry => AlertPolicyDtoMapper.ToProductDto(entry.p, entry.sensor))
+                .ToList();
+
+            return SensorTreeReadResult<ApiPageDto<ProductPolicyDto>>.Ok(Page(policies, page, pageSize));
+        }
+
+        /// <summary>One data policy of the product's subtree by id, with its owning sensor.</summary>
+        public SensorTreeReadResult<ProductPolicyDto> GetProductPolicy(ClaimsPrincipal user, Guid productId,
+            Guid policyId)
+        {
+            var resolution = ResolveProduct(user, productId);
+
+            if (resolution.Failure is not null)
+                return SensorTreeReadResult<ProductPolicyDto>.FromFailure(resolution.Failure);
+
+            foreach (var sensor in resolution.Product.GetAllSensors())
+                if (sensor.Policies.FirstOrDefault(p => p.Id == policyId) is { } policy)
+                    return SensorTreeReadResult<ProductPolicyDto>.Ok(
+                        AlertPolicyDtoMapper.ToProductDto(policy, sensor));
+
+            return SensorTreeReadResult<ProductPolicyDto>.Fail(SensorTreeReadOutcome.NotFound);
+        }
+
+        /// <summary>The product's own TTL policies, ordered by policy id, paginated.</summary>
+        public SensorTreeReadResult<ApiPageDto<TtlPolicyDto>> ListProductTtlPolicies(ClaimsPrincipal user,
+            Guid productId, int page, int pageSize)
+        {
+            var resolution = ResolveProduct(user, productId);
+
+            if (resolution.Failure is not null)
+                return SensorTreeReadResult<ApiPageDto<TtlPolicyDto>>.FromFailure(resolution.Failure);
+
+            var policies = resolution.Product.Policies.TTLPolicies
+                .OrderBy(p => p.Id)
+                .Select(AlertPolicyDtoMapper.ToDto)
+                .ToList();
+
+            return SensorTreeReadResult<ApiPageDto<TtlPolicyDto>>.Ok(Page(policies, page, pageSize));
+        }
+
+        /// <summary>One TTL policy of the product by id.</summary>
+        public SensorTreeReadResult<TtlPolicyDto> GetProductTtlPolicy(ClaimsPrincipal user, Guid productId,
+            Guid policyId)
+        {
+            var resolution = ResolveProduct(user, productId);
+
+            if (resolution.Failure is not null)
+                return SensorTreeReadResult<TtlPolicyDto>.FromFailure(resolution.Failure);
+
+            return resolution.Product.Policies.TTLPolicies.FirstOrDefault(p => p.Id == policyId) is { } policy
+                ? SensorTreeReadResult<TtlPolicyDto>.Ok(AlertPolicyDtoMapper.ToDto(policy))
+                : SensorTreeReadResult<TtlPolicyDto>.Fail(SensorTreeReadOutcome.NotFound);
+        }
+
+
+        // The read-side resolution shared by every policy read: authorize at the
+        // target's own boundary (the evaluator's 404/403 split), then the live
+        // model lookup — an unknown id is the same 404 as an invisible one.
+        private (BaseSensorModel Sensor, SensorTreeReadFailure Failure) ResolveSensor(
+            ClaimsPrincipal user, Guid sensorId)
+        {
+            var failure = AuthorizeSensorRead(user, sensorId);
+
+            if (failure is not null)
+                return (null, failure);
+
+            return _cache.GetSensor(sensorId) is { } sensor
+                ? (sensor, null)
+                : (null, new SensorTreeReadFailure { Outcome = SensorTreeReadOutcome.NotFound });
+        }
+
+        private (ProductModel Product, SensorTreeReadFailure Failure) ResolveProduct(
+            ClaimsPrincipal user, Guid productId)
+        {
+            var failure = AuthorizeProductRead(user, productId);
+
+            if (failure is not null)
+                return (null, failure);
+
+            return _cache.TryGetProduct(productId, out var product) && product is not null
+                ? (product, null)
+                : (null, new SensorTreeReadFailure { Outcome = SensorTreeReadOutcome.NotFound });
+        }
+
+        private SensorTreeReadFailure AuthorizeSensorRead(ClaimsPrincipal user, Guid sensorId) =>
+            ToReadFailure(_authorization.AuthorizeRead(user,
+                new ApiTokenResource(ApiTokenResourceKind.Sensor, sensorId)));
+
+        private SensorTreeReadFailure AuthorizeProductRead(ClaimsPrincipal user, Guid productId) =>
+            ToReadFailure(_authorization.AuthorizeRead(user,
+                new ApiTokenResource(ApiTokenResourceKind.Product, productId)));
+
+        // The read model's evaluator mapping: the Forbidden arm is defensive in
+        // the owner-mirror read model (an in-sight target never 403s a read) but
+        // kept so the evaluator's full decision surface maps to a response.
+        private static SensorTreeReadFailure ToReadFailure(ApiTokenAuthorization decision) => decision switch
+        {
+            ApiTokenAuthorization.Allowed => null,
+            ApiTokenAuthorization.Forbidden => new()
+            {
+                Outcome = SensorTreeReadOutcome.Forbidden,
+                Message = "The token's owner cannot see this resource.",
+            },
+            _ => new() { Outcome = SensorTreeReadOutcome.NotFound },
+        };
+
+        private static ApiPageDto<TItem> Page<TItem>(List<TItem> items, int page, int pageSize)
+        {
+            (page, pageSize) = ApiPagination.Normalize(page, pageSize);
+
+            var totalPages = ApiPagination.TotalPagesOf(items.Count, pageSize);
+            page = ApiPagination.ClampPage(page, totalPages);
+
+            return new ApiPageDto<TItem>
+            {
+                Items = [.. items.Skip((page - 1) * pageSize).Take(pageSize)],
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = items.Count,
+                TotalPages = totalPages,
+            };
         }
 
 
