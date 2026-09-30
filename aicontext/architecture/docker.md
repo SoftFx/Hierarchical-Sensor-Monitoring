@@ -148,7 +148,7 @@ docker run --rm --volumes-from hsm-victorialogs alpine du -sh /victoria-logs-dat
 
 **App-side archive files are outside that cap:** `VL_RETENTION_MAX_DISK` bounds only VictoriaLogs' named volume. The `jsonfile` target keeps up to 60 daily archive files (`maxArchiveFiles="60"`) of uncompressed NDJSON under `Logs/Archives/`, so budget roughly 60× the daily Info+ JSON volume on the `Logs/` disk.
 
-**Disabling the read routes:** comment out `VL_UI_USER`/`VL_UI_PASSWORD` in `.env` (their default state) and run `docker compose up -d`: Caddy stops exposing the log routes while the store keeps receiving events. **Disabling everything:** also remove `logs` from `COMPOSE_PROFILES` (the VictoriaLogs and vlagent containers stop; set `HSM_STRUCTURED_LOGS=false` to stop the app writing the JSON file). HSM itself is unaffected (`HSM_STRUCTURED_LOGS` only adds one JSON file next to the existing text logs).
+**Disabling the read routes:** comment out `VL_UI_USER`/`VL_UI_PASSWORD` in `.env` (their default state) and run `docker compose up -d`: Caddy stops exposing the log routes while the store keeps receiving events. **Disabling everything:** also remove `logs` from `COMPOSE_PROFILES` and comment out `VL_UI_USER`/`VL_UI_PASSWORD` (the VictoriaLogs and vlagent containers stop; set `HSM_STRUCTURED_LOGS=false` to stop the app writing the JSON file) — the credentials must go too: Caddy cannot see which profiles are active, so with `VL_UI_*` still set it would keep serving `/select/...` routes that 502 against a store that is not running, and every failed-auth attempt would still pay the bcrypt check. HSM itself is unaffected (`HSM_STRUCTURED_LOGS` only adds one JSON file next to the existing text logs).
 
 ## Ports
 
