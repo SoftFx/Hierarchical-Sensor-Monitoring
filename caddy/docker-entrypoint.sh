@@ -62,8 +62,11 @@ export HSM_TLS_SNIPPET
 if [ -n "${VL_UI_USER:-}" ] || [ -n "${VL_UI_PASSWORD:-}" ]; then
     require_nonblank "${VL_UI_USER:-}" 'VL_UI_USER is required for the VictoriaLogs UI when VL_UI_PASSWORD is set'
     require_nonblank "${VL_UI_PASSWORD:-}" 'VL_UI_PASSWORD is required for the VictoriaLogs UI when VL_UI_USER is set'
+    # Allow-list, not a block-list: the username lands verbatim in the Caddyfile's
+    # basic_auth line, where a leading '#', a quote, or a backslash breaks tokenization
+    # with a confusing Caddy error instead of this clear one.
     case "$VL_UI_USER" in
-        *[[:space:]]*|*'{'*|*'}'*) fail 'VL_UI_USER must not contain whitespace or braces' ;;
+        *[!A-Za-z0-9._@-]*) fail 'VL_UI_USER must contain only letters, digits, and . _ @ - characters' ;;
     esac
     # Refuse the published placeholder and short passwords outright: these routes sit on the
     # public listeners, so a guessable credential exposes every shipped log line. A fresh

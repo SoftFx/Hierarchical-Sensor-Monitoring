@@ -175,5 +175,6 @@ reject placeholder-vl-password 'VL_UI_PASSWORD must be changed from the example 
 reject placeholder-vl-password-case 'VL_UI_PASSWORD must be changed from the example placeholder' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_USER=hsm-logs -e VL_UI_PASSWORD=Change-Me
 reject short-vl-password 'VL_UI_PASSWORD must be at least 12 characters' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_USER=hsm-logs -e VL_UI_PASSWORD=short
 reject short-vl-password-boundary 'VL_UI_PASSWORD must be at least 12 characters' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e VL_UI_USER=hsm-logs -e VL_UI_PASSWORD=eleven-char
+reject invalid-vl-user 'VL_UI_USER must contain only letters' -e HSM_DOMAIN=hsm.example.com -e HSM_CERTIFICATE=self-signed -e 'VL_UI_USER=ad"min' -e VL_UI_PASSWORD=twelve-chars
 
 echo 'hsm-caddy runtime configuration tests passed'

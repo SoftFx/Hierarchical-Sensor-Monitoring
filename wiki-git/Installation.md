@@ -71,7 +71,11 @@ HSM_CERTIFICATE=letsencrypt-http
 | HSM_DNS_PROVIDER | cloudflare or dynv6; required only for letsencrypt-dns. |
 | CF_API_TOKEN | Cloudflare token with DNS edit and zone read access; required only for Cloudflare. |
 | DYNV6_API_TOKEN | dynv6 token; required only for dynv6. |
+| COMPOSE_PROFILES | Include logs to run the log stack (VictoriaLogs + vlagent). The template ships logs; remove it to disable the log containers. |
+| HSM_STRUCTURED_LOGS | true makes the app write the structured JSON log file the log pipeline ships. Default false. |
 | VL_UI_USER / VL_UI_PASSWORD | Basic-auth credentials for the log UI (/select/vmui) and query API. Commented out in the template; uncomment both (with a 12+ character password) only when enabling log access. |
+| VL_RETENTION_PERIOD | How long VictoriaLogs keeps log entries (e.g. 30d, 4w; minimum 1d). Default 30d. |
+| VL_RETENTION_MAX_DISK | Disk cap for VictoriaLogs storage (default 10GiB); the oldest days are dropped when it is exceeded. |
 
 Keep HSM_DOMAIN and HSM_CERTIFICATE in .env for Compose commands. DNS tokens are needed only for DNS-01.
 
@@ -257,8 +261,9 @@ services:
       Kestrel__TrustedProxies__0: 'attached-networks'
       # Structured JSON log archive in nlog.config; vlagent ships it to VictoriaLogs.
       # Defaults to false: an .env from before log storage must not silently start writing a
-      # second JSON copy of every Info+ event (plus its daily zip archives) with no VictoriaLogs
-      # or vlagent to read it. .env.example pairs HSM_STRUCTURED_LOGS=true with the 'logs' profile.
+      # second JSON copy of every Info+ event plus its daily archive files (named .zip,
+      # stored uncompressed NDJSON since NLog 6) with no VictoriaLogs or vlagent to read it.
+      # .env.example pairs HSM_STRUCTURED_LOGS=true with the 'logs' profile.
       HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-false}'
     volumes:
       - ./Logs:/app/Logs
