@@ -156,6 +156,14 @@ by `find_package(hsm_collector)` tracks this ABI semver.
 
 Version history:
 
+- **0.10.1** (#1480) — behavior fix, ABI unchanged. `.module/Collector queue stats/Package process
+  time` reports what the managed collector reports under that path: per sent package, the average
+  time in seconds its values waited in the send queue before the package was collected (managed
+  `PackageInfo.AvrTimeInQueue`). It used to post the package's HTTP send duration. Each queued value
+  is stamped when it enters the queue and keeps the stamp across a failed-send retry; file payloads are
+  not averaged. The four queue-stat rows register the managed descriptions, composed from the
+  collector options. Pinned by `default_sensors_contract` (queue rows) and
+  `native_package_process_time_is_the_average_queue_wait`.
 - **0.10.0** (#1416 follow-up) — one additive entry point.
   `hsm_sensor_set_description(sensor, description)` replaces a sensor's registration description
   with the same re-emission rules as `hsm_sensor_attach_alert` (below, 0.9.1): before Start it is

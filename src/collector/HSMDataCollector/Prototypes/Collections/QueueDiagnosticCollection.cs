@@ -87,7 +87,10 @@ namespace HSMDataCollector.Prototypes.Collections
 
         public PackageProcessTimePrototype ApplyOptions(CollectorOptions options)
         {
-            Description = $"The sensor sends information about the package processing time. {GetBarOptionsInfo()} Package collect period = **{options.PackageCollectPeriod.ToReadableView()}**.";
+            // Names the quantity and the unit (#1480): the value is PackageInfo.AvrTimeInQueue, the
+            // average wait of a package's values in the send queue, and the UI shows the unit only
+            // in the general-info panel. The native collector composes the same text.
+            Description = $"The sensor sends, for each sent package, the average time in seconds its values waited in the send queue before the package was collected. {GetBarOptionsInfo()} Package collect period = **{options.PackageCollectPeriod.ToReadableView()}**.";
 
             return this;
         }

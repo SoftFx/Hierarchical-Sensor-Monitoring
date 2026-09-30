@@ -17,6 +17,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -253,7 +254,12 @@ namespace HSMDataCollector.Tests
                     // arg(0)=id, arg(1)=disk_letter, arg(2)=interface_name — thread the interface
                     // through so a non-"Ethernet" fixture (or the fuzzer) registers the same path the
                     // native driver does, instead of always hardcoding "Ethernet".
-                    state.Sender.RecordRegistration(BuildDefaultSensorRequest(step.Arg(0), step.TryArg(2, out var ifaceArg) ? ifaceArg : null));
+                    // The collector's own options feed the queue-stat descriptions (#1480), as they do in
+                    // production (PrototypesCollection.ApplyOptions) and in the native catalog.
+                    state.Sender.RecordRegistration(BuildDefaultSensorRequest(
+                        step.Arg(0),
+                        OptionsOf(state.Collector),
+                        step.TryArg(2, out var ifaceArg) ? ifaceArg : null));
                     break;
 
                 case "add_collector_monitoring_sensors":
@@ -1606,8 +1612,9 @@ namespace HSMDataCollector.Tests
         // The default-sensor catalog (#1099): build a built-in sensor's REAL registration request from
         // its managed prototype (Prototypes/Collections/**), the same source the production AddX path
         // uses. The AddAll* path passes null to Get; service status needs a non-null host-service
-        // options object. Names mirror the native DefaultSensorIdFromName map.
-        private static AddOrUpdateSensorRequest BuildDefaultSensorRequest(string id, string interfaceName = null)
+        // options object. Names mirror the native DefaultSensorIdFromName map. The queue-stat rows
+        // compose their descriptions from the collector options (ApplyOptions), like production.
+        private static AddOrUpdateSensorRequest BuildDefaultSensorRequest(string id, CollectorOptions collectorOptions, string interfaceName = null)
         {
             switch (id)
             {
@@ -1646,13 +1653,18 @@ namespace HSMDataCollector.Tests
                 case "collector_errors": return new CollectorErrorsPrototype().Get(null).ApiRequest;
                 case "product_version": return new ProductVersionPrototype().Get(null).ApiRequest;
                 case "service_status": return new ServiceStatusPrototype().Get(new ServiceSensorOptions { IsHostService = true }).ApiRequest;
-                case "queue_overflow": return new QueueOverflowPrototype().Get(null).ApiRequest;
-                case "queue_values_count": return new PackageValuesCountPrototype().Get(null).ApiRequest;
-                case "queue_process_time": return new PackageProcessTimePrototype().Get(null).ApiRequest;
+                case "queue_overflow": return new QueueOverflowPrototype().ApplyOptions(collectorOptions).Get(null).ApiRequest;
+                case "queue_values_count": return new PackageValuesCountPrototype().ApplyOptions(collectorOptions).Get(null).ApiRequest;
+                case "queue_process_time": return new PackageProcessTimePrototype().ApplyOptions(collectorOptions).Get(null).ApiRequest;
                 case "queue_content_size": return new PackageContentSizePrototype().Get(null).ApiRequest;
                 default: throw new ArgumentException("Unknown default sensor id name: " + id);
             }
         }
+
+        private static CollectorOptions OptionsOf(DataCollector collector) =>
+            (CollectorOptions)typeof(DataCollector)
+                .GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(collector);
 
         // Build a registration request for the per-interface speed sensor catalog prototype (#1189).
         // The path mirrors the native RevealDefaultPath output (.computer/Network/<iface>/...) so the

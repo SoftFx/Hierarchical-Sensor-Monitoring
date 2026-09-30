@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # VERSION tracks the C ABI semver (HSM_COLLECTOR_VERSION_* in include/hsm_collector/hsm_collector.h);
 # keep the two in sync. It feeds the find_package(hsm_collector x.y) version check (#1100).
-project(HsmCollectorNative VERSION 0.10.0 LANGUAGES CXX)
+project(HsmCollectorNative VERSION 0.10.1 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
@@ -395,6 +395,11 @@ set(NATIVE_REGRESSION_TESTS
     native_service_alive_beats_on_its_own_period
     # #1459: a dispatched package must read as a non-zero size (KB, not MB).
     native_package_content_size_reports_kilobytes
+    # #1480: Package process time is the average queue wait (managed AvrTimeInQueue), a retry keeps
+    # the first enqueue stamp, and the four queue-stat rows carry the managed descriptions.
+    native_package_process_time_is_the_average_queue_wait
+    native_package_process_time_keeps_the_first_enqueue_across_a_retry
+    native_queue_stat_descriptions_match_managed
     # #1433: .module start/stop markers mirror managed (first heartbeat false, version Start:/Stop:).
     native_service_alive_marks_the_first_beat
     native_version_sensor_marks_start_and_stop

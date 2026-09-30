@@ -5192,6 +5192,135 @@ namespace
             ("a dispatched package must not read as zero: " + sizes.back()).c_str());
     }
 
+    // A collector whose worker never dispatches on its own (1 h collect period) and whose send queue
+    // stamps on a manual clock, with the queue-stat group registered and started. Only a file payload
+    // — push-driven, its enqueue kicks the worker — makes it build a package, so the test decides the
+    // package time exactly.
+    CollectorHandle StartQueueWaitCollector(SensorHandle& values, SensorHandle& files)
+    {
+        auto options = TestOptions();
+        options.package_collect_period_ms = 3600000;
+        auto collector = CreateCollector(options);
+        hsm_collector_test_install_manual_clock(collector.value, 1000000);
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        values = CreateIntSensor(collector.value, "contract/queue/wait");
+        Require(
+            hsm_collector_create_file_sensor(collector.value, "contract/queue/kick", "kick", "txt", &files.value) ==
+                HSM_RESULT_OK,
+            "file sensor create failed");
+
+        return collector;
+    }
+
+    void WaitForSentCount(hsm_collector_t* collector, size_t count)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (hsm_collector_sent_count(collector) < count && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        Require(hsm_collector_sent_count(collector) >= count, "the package was not dispatched");
+    }
+
+    // ".module/Collector queue stats/Package process time" is the average time, in seconds, the
+    // package's values waited in the send queue before the package was collected — managed
+    // PackageInfo.AvrTimeInQueue (#1480). It used to be the HTTP send duration (~0 here). Values
+    // enqueued at t=0 and t=3 s and packaged at t=4 s waited 4 s and 1 s: one bar sample of 2.5. The
+    // file enqueued at t=4 s rides in the same package but is not averaged (the managed file queue
+    // never feeds this sensor) — counting it would read (4 + 1 + 0) / 3.
+    void NativePackageProcessTimeIsTheAverageQueueWait()
+    {
+        CollectorHandle collector; // declared first so the sensor handles are released before it
+        SensorHandle values;
+        SensorHandle files;
+        collector = StartQueueWaitCollector(values, files);
+
+        Require(hsm_sensor_add_int(values.value, 1, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        hsm_collector_test_advance_clock_ms(collector.value, 3000);
+        Require(hsm_sensor_add_int(values.value, 2, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        hsm_collector_test_advance_clock_ms(collector.value, 1000);
+        Require(hsm_sensor_add_file(files.value, "kick", HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add file failed");
+
+        WaitForSentCount(collector.value, 3);
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto bars = PayloadsForPath(collector.value, "/Package process time\"");
+        Require(!bars.empty(), "the process-time bar must be flushed on stop");
+        Contains(bars.back(), "\"Min\":2.5,\"Max\":2.5,\"Mean\":2.5,");
+        Contains(bars.back(), "\"Count\":1,");
+    }
+
+    // A failed send puts the values back with the stamp they FIRST entered the queue with, as managed
+    // keeps QueueItem.BuildDate across a retry, so the wait the failure cost shows in the sensor. The
+    // value is enqueued at t=0, the failing package is built no earlier than t=2 s, the successful one
+    // at t=5 s: the one sample is 5.0 — a stamp reset on re-enqueue would read 3.0 (or 0).
+    void NativePackageProcessTimeKeepsTheFirstEnqueueAcrossARetry()
+    {
+        CollectorHandle collector; // declared first so the sensor handles are released before it
+        SensorHandle values;
+        SensorHandle files;
+        collector = StartQueueWaitCollector(values, files);
+        hsm_collector_set_send_fail_next(collector.value, 1);
+
+        Require(hsm_sensor_add_int(values.value, 1, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        hsm_collector_test_advance_clock_ms(collector.value, 2000);
+        Require(hsm_sensor_add_file(files.value, "kick", HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add file failed");
+        hsm_collector_test_advance_clock_ms(collector.value, 3000);
+
+        // The first dispatch consumes the injected failure whenever it runs; keep kicking (files are
+        // not averaged) until a package is delivered. The clock no longer moves, so that package is
+        // built at t=5 s whichever kick it came from.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (hsm_collector_sent_count(collector.value) == 0 && std::chrono::steady_clock::now() < deadline)
+        {
+            Require(hsm_sensor_add_file(files.value, "kick", HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add file failed");
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        Require(hsm_collector_sent_count(collector.value) > 0, "the retried package was not delivered");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto bars = PayloadsForPath(collector.value, "/Package process time\"");
+        Require(!bars.empty(), "the process-time bar must be flushed on stop");
+        Contains(bars.back(), "\"Min\":5,\"Max\":5,\"Mean\":5,");
+        Contains(bars.back(), "\"Count\":1,");
+    }
+
+    // The four queue-stat rows register the managed descriptions, composed from the collector options
+    // the same way (#1480) — here the production defaults, which the conformance harness does not use.
+    // The periods go through the managed ToReadableView rules (plural above 1, zero parts skipped).
+    void NativeQueueStatDescriptionsMatchManaged()
+    {
+        auto options = TestOptions();
+        options.max_queue_size = 20000;
+        options.max_values_in_package = 1000;
+        options.package_collect_period_ms = 3723000; // 1 h 2 min 3 s
+        auto collector = CreateCollector(options);
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        std::string all;
+        for (size_t index = 0; index < hsm_collector_registration_count(collector.value); ++index)
+            all += RegistrationJson(collector.value, index) + "\n";
+
+        const std::string bar = "Bar period is 5 minutes with updates every 5 seconds.";
+        Contains(all, "\"Description\":\"The sensor sends the amount of data that was removed from the queue during the overflow process. " +
+                          bar + "  \\nCollector max queue size = **20000**, collect period = **1 hour 2 minutes 3 seconds**.\"");
+        Contains(all, "\"Description\":\"The sensor sends information about the number of values in each collected package. " + bar +
+                          " Package max values count = **1000**.\"");
+        Contains(all, "\"Description\":\"The sensor sends, for each sent package, the average time in seconds its values waited in the "
+                      "send queue before the package was collected. " +
+                          bar + " Package collect period = **1 hour 2 minutes 3 seconds**.\"");
+        Contains(all, "\"Description\":\"The sensor sends information about the package body size. " + bar + "\"");
+    }
+
     // The heartbeat follows the SENSOR's post period (15 s), not the collector's package-collect
     // period (#1437) — managed drives CollectorAlive from PostDataPeriod. The collector below
     // collects every 20 ms: before the fix that produced a beat every 20 ms (and, the other way
@@ -7772,6 +7901,12 @@ namespace
               [](const std::string&) { NativeCollectorSelfMonitoringEmits(); } },
             { "native_package_content_size_reports_kilobytes",
               [](const std::string&) { NativePackageContentSizeReportsKilobytes(); } },
+            { "native_package_process_time_is_the_average_queue_wait",
+              [](const std::string&) { NativePackageProcessTimeIsTheAverageQueueWait(); } },
+            { "native_package_process_time_keeps_the_first_enqueue_across_a_retry",
+              [](const std::string&) { NativePackageProcessTimeKeepsTheFirstEnqueueAcrossARetry(); } },
+            { "native_queue_stat_descriptions_match_managed",
+              [](const std::string&) { NativeQueueStatDescriptionsMatchManaged(); } },
             { "native_service_alive_beats_on_its_own_period",
               [](const std::string&) { NativeServiceAliveBeatsOnItsOwnPeriod(); } },
             { "native_self_monitoring_group_from_listener_does_not_deadlock",

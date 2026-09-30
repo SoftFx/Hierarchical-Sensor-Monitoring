@@ -99,7 +99,7 @@ Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySens
 |---|---|---|
 | `AddQueueOverflow` | int bar of dropped/evicted counts per queue | `HandleEnqueueResult` + `ReportRequeueEviction` (never suppressed) |
 | `AddQueuePackageValuesCount` | int bar, values per package | `AddPackageInfo` after successful send |
-| `AddQueuePackageProcessTime` | double bar, avg time-in-queue | `AddPackageInfo` |
+| `AddQueuePackageProcessTime` | double bar, **seconds**: per sent package, the average time its values waited in the send queue before the package was collected (`PackageInfo.AvrTimeInQueue`) | `AddPackageInfo` (Data, Priority data and Command packages; never File) |
 | `AddQueuePackageContentSize` | double bar, package size (chars → **KB**, `Unit.KB`) | `AddPackageSendingInfo` |
 
 ## Group registration helpers
@@ -479,6 +479,40 @@ shows kilobyte numbers under an MB label until then. The native side additionall
 package BEFORE handing it to the sender, which is free to consume the batch. Pinned by
 `default_sensors_contract:queue_content_size_registers_in_kilobytes` +
 `native_package_content_size_reports_kilobytes`.
+
+**`Package process time` is the queue wait, in seconds, in both collectors (#1480, native 0.10.1).**
+Both registered `Unit.Seconds` under the same path, but measured different things: managed reports
+`PackageInfo.AvrTimeInQueue` — every value carries its enqueue time (`QueueItem<T>.BuildDate`), the
+package reads its collect time when it is built (`DataPackage._now`, before the dequeue), and the
+value posted after a successful send is Σ(collect time − enqueue time) / values — while native posted
+the HTTP send duration of the package (0.2–1.4 s through a reverse proxy, against the ≈ half a collect
+period a managed collector reads by construction). Native now mirrors managed (rule #10): each queued
+payload is stamped on the collector's clock when it enters the queue (under the queue lock the push
+takes anyway, no extra lock on the hot path), keeps that stamp across a failed-send retry (managed
+keeps `BuildDate`), and the package collect time is read before the pop. A file payload is not averaged
+— the managed file queue never feeds this sensor — and a package without a counted value posts nothing
+(managed `AddPackageInfo` skips `ValuesCount == 0`). Native stamps a monotonic clock where managed reads
+`DateTime.UtcNow`; the quantity is the same, native just cannot go negative on a wall-clock step. What
+stays different, and why:
+- The bar **comment**: managed keeps a per-queue running value `(old + new) / 2` (`PackageDataAvrProcessTimeSensor.Apply`)
+  and prints it as the bar comment (`Data: 6`); the BAR itself (min/mean/max/count) takes the raw
+  per-package averages, and that is what native mirrors. Native bars carry no comment (see the push-fed
+  bars paragraph below).
+- **Command packages**: managed also feeds the sensor from the command queue (registrations). Native
+  registrations do not go through the value queue — they are POSTed at Start and by the worker's
+  runtime-registration flush — so they feed none of the per-package rows (`Items count in package`,
+  `Package content size` included).
+
+The four queue-stat rows now also register **the same description** in both collectors: native composes
+the managed `QueueDiagnosticCollection` text from its own options (`ComposeDefaultDescription`, with a
+port of `ToReadableView`), and the process-time text names the quantity and the unit, because the
+server shows the unit only in the sensor's info panel. Pinned byte-exact by
+`default_sensors_contract:{queue_overflow_registers, queue_values_count_registers,
+queue_process_time_registers_in_seconds, queue_content_size_registers_in_kilobytes}` (both drivers; the
+managed driver applies the harness collector's options, as production does), the value by
+`native_package_process_time_is_the_average_queue_wait` +
+`native_package_process_time_keeps_the_first_enqueue_across_a_retry` + `PackageProcessTimeSensorTests`,
+the option-composed texts by `native_queue_stat_descriptions_match_managed`.
 
 **Push-fed built-in bars** follow the same schedule without the sampling step (managed
 `PublicBarMonitoringSensor`, whose collect tick only runs `CheckCurrentBar`): the queue diagnostics
