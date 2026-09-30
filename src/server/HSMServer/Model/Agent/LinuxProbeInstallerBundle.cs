@@ -41,6 +41,15 @@ namespace HSMServer.Model.Agent
         public const string DropInDirectory = "/etc/systemd/system/hsm-linux-probe.service.d";
         public const string TopCpuDropIn = DropInDirectory + "/top-cpu.conf";
 
+        /// <summary>
+        /// The POSIX extended regular expression install.sh applies to the installed config with its
+        /// newlines removed to decide whether top CPU is on (an enabled <c>topCpu</c> block; the block
+        /// holds no nested object). One source of truth: the tests apply it to what
+        /// <see cref="BuildConfigJson"/> emits. Contains no single quote (it is embedded in '...').
+        /// </summary>
+        public const string TopCpuEnabledPattern =
+            "\"topCpu\"[[:space:]]*:[[:space:]]*\\{[^}]*\"enabled\"[[:space:]]*:[[:space:]]*true";
+
         /// <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
         public const string AccessKeyCredentialPath = "/run/credentials/hsm-linux-probe.service/access-key";
 
@@ -384,8 +393,10 @@ namespace HSMServer.Model.Agent
                 "# ProtectProc=invisible.",
                 "TOP_CPU_DROPIN=\"" + TopCpuDropIn + "\"",
                 "top_cpu_on=0",
+                "# grep reads all of its input (no -q): under pipefail an early exit would SIGPIPE tr and turn a",
+                "# match into \"off\".",
                 "if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/" + ConfigName + "\" \\",
-                "  | grep -Eq '\"topCpu\"[[:space:]]*:[[:space:]]*\\{[^}]*\"enabled\"[[:space:]]*:[[:space:]]*true'; then",
+                "  | grep -E '" + TopCpuEnabledPattern + "' >/dev/null; then",
                 "  top_cpu_on=1",
                 "fi",
                 "if [ \"$top_cpu_on\" -eq 1 ]; then",

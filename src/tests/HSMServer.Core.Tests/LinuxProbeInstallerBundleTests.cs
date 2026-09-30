@@ -110,6 +110,28 @@ namespace HSMServer.Core.Tests
             Assert.EndsWith("}\n", LinuxProbeInstallerBundle.BuildConfigJson(_options with { EnableTopCpu = true }));
         }
 
+        /// <summary>
+        /// The shell pattern install.sh uses, applied (POSIX classes translated for .NET) to exactly
+        /// what the bundle writes, newlines removed as install.sh removes them: a serializer change that
+        /// broke the match would otherwise silently drop the drop-in on every install.
+        /// </summary>
+        [Fact]
+        public void TopCpu_InstallScriptPatternMatchesTheGeneratedConfig()
+        {
+            Assert.DoesNotContain("'", LinuxProbeInstallerBundle.TopCpuEnabledPattern); // embedded in '...'
+            var pattern = new System.Text.RegularExpressions.Regex(
+                LinuxProbeInstallerBundle.TopCpuEnabledPattern.Replace("[[:space:]]", @"\s"));
+            string Flatten(string json) => json.Replace("\r", "").Replace("\n", "");
+
+            Assert.Matches(pattern, Flatten(LinuxProbeInstallerBundle.BuildConfigJson(_options with { EnableTopCpu = true })));
+            Assert.DoesNotMatch(pattern, Flatten(LinuxProbeInstallerBundle.BuildConfigJson(_options)));
+
+            // Hand-written shapes the operator may keep: key order, spacing, a disabled block.
+            Assert.Matches(pattern, "{\"topCpu\":{\"count\":10, \"enabled\" :\ttrue}}");
+            Assert.DoesNotMatch(pattern, "{\"topCpu\": {\"enabled\": false, \"count\": 10}}");
+            Assert.DoesNotMatch(pattern, "{\"topCpu\": {\"enabled\": false}, \"x\": {\"enabled\": true}}");
+        }
+
         [Fact]
         public void TopCpu_InstallScriptLiftsProtectProcOnlyWhenEnabled()
         {
@@ -121,8 +143,10 @@ namespace HSMServer.Core.Tests
             foreach (var script in new[] { off, on })
             {
                 Assert.Contains("TOP_CPU_DROPIN=\"/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf\"", script);
+                // grep without -q reads all input, so pipefail never sees tr killed by SIGPIPE.
                 Assert.Contains("if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/config.json\" \\\n" +
-                                "  | grep -Eq '\"topCpu\"[[:space:]]*:[[:space:]]*\\{[^}]*\"enabled\"[[:space:]]*:[[:space:]]*true'; then", script);
+                                "  | grep -E '" + LinuxProbeInstallerBundle.TopCpuEnabledPattern + "' >/dev/null; then", script);
+                Assert.DoesNotContain("grep -Eq", script);
                 Assert.Contains("  cat > \"$TOP_CPU_DROPIN\" <<'EOF'", script);
                 Assert.Contains("\n[Service]\nProtectProc=default\nEOF\n", script);
                 // Anything else (off, missing, unrecognised) removes the drop-in: the safe side.

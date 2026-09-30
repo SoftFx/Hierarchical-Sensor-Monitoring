@@ -207,8 +207,8 @@ pub fn register<'c>(
         cap_logged: false,
         baseline_logged: false,
         failures: FailureLog::default(),
-        registration_failures: FailureLog::default(),
-        post_failures: FailureLog::default(),
+        registration_failures: Episode::default(),
+        post_failures: Episode::default(),
     }))
 }
 
@@ -224,8 +224,8 @@ struct TopCpu<'c> {
     cap_logged: bool,
     baseline_logged: bool,
     failures: FailureLog,
-    registration_failures: FailureLog,
-    post_failures: FailureLog,
+    registration_failures: Episode,
+    post_failures: Episode,
 }
 
 impl TopCpu<'_> {
@@ -233,7 +233,29 @@ impl TopCpu<'_> {
         self.sampler.proc_root().to_path_buf()
     }
 
-    fn post(&mut self, usage: &Usage, logger: &Logger) {
+    /// Post one sample's top names: register the new ones, add a value to each. Failures are
+    /// counted per kind and logged once per episode ([`Tally::report`]), not once per name.
+    fn post_all(&mut self, top: &[Usage], logger: &Logger) {
+        let (mut registrations, mut posts) = (Tally::default(), Tally::default());
+        for usage in top {
+            self.post(usage, logger, &mut registrations, &mut posts);
+        }
+        registrations.report(
+            &mut self.registration_failures,
+            logger,
+            "top CPU processes: registration",
+        );
+        posts.report(&mut self.post_failures, logger, "top CPU processes: post");
+    }
+
+    fn post(
+        &mut self,
+        usage: &Usage,
+        logger: &Logger,
+        registrations: &mut Tally,
+        posts: &mut Tally,
+    ) {
+        let path = sensor_path(&usage.name);
         if !self.sensors.contains_key(&usage.name) {
             if self.sensors.len() >= self.max_tracked {
                 if !self.cap_logged {
@@ -246,7 +268,6 @@ impl TopCpu<'_> {
                 }
                 return;
             }
-            let path = sensor_path(&usage.name);
             let options = SensorOptions::default()
                 .with_is_computer_sensor(true)
                 .with_ttl(TTL)
@@ -258,17 +279,12 @@ impl TopCpu<'_> {
                 ));
             match self.collector.double_sensor(&path, &options) {
                 Ok(sensor) => {
-                    self.registration_failures
-                        .succeeded(logger, "top CPU processes: registration");
+                    registrations.succeeded();
                     self.sensors.insert(usage.name.clone(), sensor);
                 }
                 Err(error) => {
                     // Not cached: the next interval tries again.
-                    self.registration_failures.failed(
-                        logger,
-                        "top CPU processes: registration",
-                        &format!("cannot register {path}: {error}"),
-                    );
+                    registrations.failed(&path, error.to_string());
                     return;
                 }
             }
@@ -277,16 +293,62 @@ impl TopCpu<'_> {
             return;
         };
         match sensor.add(usage.percent) {
-            Ok(()) => self
-                .post_failures
-                .succeeded(logger, "top CPU processes: post"),
-            Err(error) => self.post_failures.failed(
-                logger,
-                "top CPU processes: post",
-                &format!("cannot post {}: {error}", sensor_path(&usage.name)),
-            ),
+            Ok(()) => posts.succeeded(),
+            Err(error) => posts.failed(&path, error.to_string()),
         }
     }
+}
+
+/// One sample's outcomes of one kind (registrations or posts).
+#[derive(Debug, Default)]
+struct Tally {
+    attempts: usize,
+    failures: usize,
+    /// The first failure's path and error.
+    first: Option<(String, String)>,
+}
+
+impl Tally {
+    fn succeeded(&mut self) {
+        self.attempts += 1;
+    }
+
+    fn failed(&mut self, path: &str, error: String) {
+        self.attempts += 1;
+        self.failures += 1;
+        if self.first.is_none() {
+            self.first = Some((path.to_string(), error));
+        }
+    }
+
+    /// One line per failure episode (root rule #8 without flooding the log): the dedup key is the
+    /// first error's text, which carries no sensor name, so a failure that persists across names
+    /// and samples logs once; the counts and the first path ride in the logged line only. The
+    /// episode ends ("recovered") only with a sample in which every attempt of this kind worked;
+    /// a mixed sample keeps it open, and a sample with nothing to do decides nothing.
+    fn report(self, episode: &mut Episode, logger: &Logger, what: &str) {
+        let Some((path, error)) = self.first else {
+            if self.attempts > 0 && episode.current.take().is_some() {
+                logger.info(format!("{what}: recovered"));
+            }
+            return;
+        };
+        if episode.current.as_deref() == Some(error.as_str()) {
+            return;
+        }
+        logger.error(format!(
+            "{what}: {} of {} failed (first: {path}): {error}; repeats are not logged until a \
+             sample in which all of them work",
+            self.failures, self.attempts
+        ));
+        episode.current = Some(error);
+    }
+}
+
+/// The failure currently being reported for one kind (its error text), if any.
+#[derive(Debug, Default)]
+struct Episode {
+    current: Option<String>,
 }
 
 impl Source for TopCpu<'_> {
@@ -311,9 +373,8 @@ impl Source for TopCpu<'_> {
                     ));
                     self.baseline_logged = true;
                 }
-                for usage in procfs::select_top(&by_name, self.count, self.min_percent) {
-                    self.post(&usage, logger);
-                }
+                let top = procfs::select_top(&by_name, self.count, self.min_percent);
+                self.post_all(&top, logger);
             }
             Err(reason) => self.failures.failed(logger, WHAT, &reason),
         }
@@ -503,6 +564,125 @@ mod tests {
         );
     }
 
+    fn test_source<'c>(collector: &'c Collector, root: &Path, max_tracked: usize) -> TopCpu<'c> {
+        TopCpu {
+            collector,
+            sampler: Sampler::new(root),
+            count: 10,
+            min_percent: 1.0,
+            period: Duration::from_secs(60),
+            max_tracked,
+            sensors: HashMap::new(),
+            cap_logged: false,
+            baseline_logged: false,
+            failures: FailureLog::default(),
+            registration_failures: Episode::default(),
+            post_failures: Episode::default(),
+        }
+    }
+
+    fn busy(name: &str, percent: f64) -> Usage {
+        Usage {
+            name: name.into(),
+            percent,
+            pid: 1,
+            kernel_thread: false,
+        }
+    }
+
+    /// Log lines added since `seen`, which is moved past them.
+    fn new_lines(lines: &Arc<Mutex<Vec<String>>>, seen: &mut usize) -> Vec<String> {
+        let lines = lines.lock().unwrap();
+        let added = lines[*seen..].to_vec();
+        *seen = lines.len();
+        added
+    }
+
+    /// A post that keeps failing logs one ERROR per episode, not one per name and minute; only a
+    /// sample with no failure ends it, so a mixed sample does not flip-flop. A non-finite value is
+    /// what the collector really rejects (`hsm_sensor_add_double`: INVALID_ARGUMENT).
+    #[test]
+    fn a_persistent_post_failure_is_one_line_per_episode() {
+        let tree = FakeTree::new("topcpu-post-fail");
+        let collector = test_collector();
+        let (logger, lines) = capture();
+        let mut source = test_source(&collector, &tree.0, 64);
+        collector.start().expect("start");
+        let mut seen = 0;
+        let failing = [
+            busy("a", f64::NAN),
+            busy("b", f64::NAN),
+            busy("c", f64::NAN),
+        ];
+
+        source.post_all(&failing, &logger);
+        let first = new_lines(&lines, &mut seen);
+        assert_eq!(first.len(), 1, "{first:#?}");
+        assert!(first[0].contains("|ERROR|"), "{}", first[0]);
+        assert!(
+            first[0].contains(
+                "top CPU processes: post: 3 of 3 failed (first: .computer/Top CPU processes/a)"
+            ),
+            "{}",
+            first[0]
+        );
+        source.post_all(&failing, &logger);
+        assert!(
+            new_lines(&lines, &mut seen).is_empty(),
+            "the same failure again"
+        );
+
+        // Mixed: still failing, nothing logged, no "recovered".
+        let mixed = [busy("a", f64::NAN), busy("b", 5.0), busy("c", 7.0)];
+        source.post_all(&mixed, &logger);
+        source.post_all(&mixed, &logger);
+        assert!(
+            new_lines(&lines, &mut seen).is_empty(),
+            "mixed samples keep the episode open"
+        );
+
+        // A clean sample ends it once; an empty one decides nothing.
+        source.post_all(&[busy("a", 3.0), busy("b", 5.0)], &logger);
+        let recovered = new_lines(&lines, &mut seen);
+        assert_eq!(recovered.len(), 1, "{recovered:#?}");
+        assert!(recovered[0].contains("top CPU processes: post: recovered"));
+        source.post_all(&[], &logger);
+        source.post_all(&[busy("a", 3.0)], &logger);
+        assert!(new_lines(&lines, &mut seen).is_empty());
+
+        // A new episode logs again, once.
+        source.post_all(&[busy("b", f64::INFINITY)], &logger);
+        source.post_all(&[busy("c", f64::NAN)], &logger);
+        assert_eq!(new_lines(&lines, &mut seen).len(), 1);
+        collector.stop().expect("stop");
+    }
+
+    /// Registration failures (here: the collector is disposed) are one line too.
+    #[test]
+    fn a_persistent_registration_failure_is_one_line_per_episode() {
+        let tree = FakeTree::new("topcpu-reg-fail");
+        let collector = test_collector();
+        let (logger, lines) = capture();
+        let mut source = test_source(&collector, &tree.0, 64);
+        collector.dispose();
+        let mut seen = 0;
+        let top = [busy("a", 5.0), busy("b", 4.0), busy("c", 3.0)];
+        source.post_all(&top, &logger);
+        let first = new_lines(&lines, &mut seen);
+        assert_eq!(first.len(), 1, "{first:#?}");
+        assert!(
+            first[0].contains("top CPU processes: registration: 3 of 3 failed (first: .computer/Top CPU processes/a)"),
+            "{}",
+            first[0]
+        );
+        source.post_all(&top, &logger);
+        assert!(new_lines(&lines, &mut seen).is_empty());
+        assert!(
+            source.sensors.is_empty(),
+            "nothing is cached; the next sample tries again"
+        );
+    }
+
     #[test]
     fn new_names_stop_at_the_cap_and_the_tracked_ones_keep_reporting() {
         assert_eq!(max_tracked_names(10), 80);
@@ -512,29 +692,10 @@ mod tests {
         let tree = FakeTree::new("topcpu-cap");
         let collector = test_collector();
         let (logger, lines) = capture();
-        let mut source = TopCpu {
-            collector: &collector,
-            sampler: Sampler::new(&tree.0),
-            count: 70,
-            min_percent: 1.0,
-            period: Duration::from_secs(60),
-            max_tracked: 2,
-            sensors: HashMap::new(),
-            cap_logged: false,
-            baseline_logged: false,
-            failures: FailureLog::default(),
-            registration_failures: FailureLog::default(),
-            post_failures: FailureLog::default(),
-        };
+        let mut source = test_source(&collector, &tree.0, 2);
         collector.start().expect("start");
         for name in ["a", "b", "c", "d", "a"] {
-            let usage = Usage {
-                name: name.into(),
-                percent: 5.0,
-                pid: 1,
-                kernel_thread: false,
-            };
-            source.post(&usage, &logger);
+            source.post_all(&[busy(name, 5.0)], &logger);
         }
         collector.stop().expect("stop");
         assert_eq!(source.sensors.len(), 2);

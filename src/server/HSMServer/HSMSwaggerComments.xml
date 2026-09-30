@@ -623,6 +623,14 @@
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.DropInDirectory">
             <summary>The unit's drop-in directory, and the drop-in the top-CPU switch writes there (#1479).</summary>
         </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopCpuEnabledPattern">
+            <summary>
+            The POSIX extended regular expression install.sh applies to the installed config with its
+            newlines removed to decide whether top CPU is on (an enabled <c>topCpu</c> block; the block
+            holds no nested object). One source of truth: the tests apply it to what
+            <see cref="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildConfigJson(HSMServer.Model.Agent.LinuxProbeBundleOptions)"/> emits. Contains no single quote (it is embedded in '...').
+            </summary>
+        </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.AccessKeyCredentialPath">
             <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
         </member>
