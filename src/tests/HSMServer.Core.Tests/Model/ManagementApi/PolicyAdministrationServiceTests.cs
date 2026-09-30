@@ -602,6 +602,67 @@ namespace HSMServer.Core.Tests.Model.ManagementApi
             Assert.Equal(templateId, stored.TemplateId);
         }
 
+        // #1501 round-3 (F3): the template-owned TTL toggle is the user's
+        // CHANGE — the changed item takes NORMAL change ownership (no
+        // PreserveChangeOwnership), so the change table records the API user
+        // as the owner; the untouched siblings keep theirs (round-2, F2).
+        [Fact]
+        public async Task UpdateSensorTtlPolicy_TemplateOwnedToggle_StampsTheUserAsOwner_AndProtectsTheDisable()
+        {
+            var sensor = await CreateIntegerSensorAsync("svcTtlToggleOwnership");
+
+            var templateId = Guid.NewGuid();
+
+            // A template-applied TTL policy, seeded the way a template apply
+            // lands it (AlertTemplate initiator, non-empty id) — owner
+            // AlertTemplate.
+            var seed = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = InitiatorInfo.AlertTemplate,
+                TTLPolicies = [TtlUpdate(InitiatorInfo.AlertTemplate, TimeSpan.FromMinutes(30)) with { Id = Guid.NewGuid(), TemplateId = templateId }],
+            });
+            Assert.True(seed.IsOk, seed.Error);
+
+            var target = Assert.Single(sensor.Policies.TTLPolicies);
+            Assert.Equal(InitiatorType.AlertTemplate, sensor.ChangeTable.TtlPolicies[target.Id.ToString()].Initiator.Type);
+
+            var toggled = await _service.UpdateSensorTtlPolicyAsync(sensor.Id, target.Id, new TtlPolicyDto
+            {
+                IsDisabled = true,
+                Interval = "00:30:00",
+                Destination = new AlertDestinationDto { Mode = target.Destination.Mode.ToString() },
+            }, User);
+
+            Assert.True(toggled.Success, toggled.Failure?.Message);
+
+            var stored = Assert.Single(sensor.Policies.TTLPolicies);
+
+            Assert.True(stored.IsDisabled);
+
+            // The toggle TOOK the ownership: the API user (not the template)
+            // owns the policy's change-table entry now.
+            Assert.Equal(InitiatorType.User, sensor.ChangeTable.TtlPolicies[target.Id.ToString()].Initiator.Type);
+
+            // Consequence, pinned end-to-end: the next template apply
+            // (AlertTemplate, type 15) fails the node's CanChange pre-check
+            // (owner User 100 > 15) and the user's disable survives it —
+            // before the fix the un-stamped toggle let the template overwrite
+            // the disable without the pre-check noticing.
+            var reapply = await _valuesCache.UpdateSensorAsync(new SensorUpdate
+            {
+                Id = sensor.Id,
+                Initiator = InitiatorInfo.AlertTemplate,
+                TTLPolicies = [TtlUpdate(InitiatorInfo.AlertTemplate, TimeSpan.FromMinutes(99)) with { Id = target.Id, TemplateId = templateId, IsDisabled = false }],
+            });
+            Assert.True(reapply.IsOk, reapply.Error);
+
+            stored = Assert.Single(sensor.Policies.TTLPolicies);
+
+            Assert.True(stored.IsDisabled);
+            Assert.Equal(TimeSpan.FromMinutes(30).Ticks, stored.TTLInterval.Ticks);
+        }
+
 
         // === Slice D: products ===
 

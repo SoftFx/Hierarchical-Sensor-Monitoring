@@ -235,7 +235,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
 
             var chats = new Dictionary<Guid, string>();
 
-            foreach (var chatId in destination.Chats)
+            // An explicit wire null means "no chats", exactly like an empty
+            // array — System.Text.Json materializes "chats": null over the
+            // DTO's [] default, so the default does not protect this loop
+            // (#1501 round-3, F2).
+            foreach (var chatId in destination.Chats ?? [])
                 chats[chatId] = availableChats.TryGetValue(chatId, out var name) ? name : chatId.ToString();
 
             return new PolicyDestinationUpdate(chats, mode);

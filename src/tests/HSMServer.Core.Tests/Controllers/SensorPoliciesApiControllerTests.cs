@@ -23,9 +23,13 @@ using HSMServer.Model.ManagementApi.Alerts;
 using HSMServer.Model.ManagementApi.SensorTree;
 using HSMServer.Notifications.Chats;
 using HSMServer.Model.Folders;
+using HSMServer.ServerConfiguration;
+using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using Xunit;
 
@@ -560,6 +564,102 @@ namespace HSMServer.Core.Tests.Controllers
 
             Assert.Equal(409, StatusCodeOf(result));
             Assert.Equal(ManagementApiErrors.ConflictCode, ErrorBodyOf(result).Error);
+        }
+
+
+        // === Explicit "chats": null means no chats (#1501 round-3, F2) ===
+
+        // The premise of the two 201s below: an explicit wire null is
+        // materialized OVER the DTO's [] default, so the default cannot
+        // protect the write-side chats iteration.
+        [Fact]
+        public void AlertDestinationDto_ExplicitNullChats_BindAsNullNotTheDefault()
+        {
+            var dto = JsonSerializer.Deserialize<PolicyDto>("{\"Destination\":{\"Mode\":\"AllChats\",\"Chats\":null}}");
+
+            Assert.NotNull(dto.Destination);
+            Assert.Null(dto.Destination.Chats);
+        }
+
+        [Fact]
+        public async Task CreatePolicy_NonCustomDestinationWithNullChats_Is201()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            var dto = DataDto() with { Destination = new AlertDestinationDto { Mode = "AllChats", Chats = null } };
+
+            var created = await CreateController().CreatePolicy(sensor.Id, dto);
+
+            // 201, not a 500 from a NullReferenceException in the write-side
+            // mapper — explicit null behaves exactly like an empty array.
+            Assert.Equal(201, StatusCodeOf(created));
+        }
+
+        [Fact]
+        public async Task CreateTtlPolicy_NonCustomDestinationWithNullChats_Is201()
+        {
+            var sensor = AddSensor(SensorType.Integer, "cpu");
+
+            var dto = TtlDto() with { Destination = new AlertDestinationDto { Mode = "AllChats", Chats = null } };
+
+            var created = await CreateController().CreateTtlPolicy(sensor.Id, dto);
+
+            Assert.Equal(201, StatusCodeOf(created));
+        }
+
+
+        // === The write gates are process-wide (#1501 round-3, F1) ===
+
+        // The per-node write gates live in PolicyAdministrationService's own
+        // fields, so the PRODUCTION registration must resolve every scope to
+        // the SAME instance — a Scoped registration (the round-3 finding)
+        // would hand two concurrent writes to one sensor two different empty
+        // gate maps and the second full-list merge would silently drop the
+        // first policy. The provider below is the real AddApplicationServices
+        // registration with the six constructor dependencies replaced by this
+        // suite's mocks.
+        [Fact]
+        public async Task PolicyAdministrationService_TwoScopesResolveOneInstance_ConcurrentCreatesBothSurvive()
+        {
+            // AddApplicationServices registers config.ApiTokens as an instance
+            // at registration time — it must be non-null (everything else is
+            // only resolved lazily and is replaced below anyway).
+            var config = new Mock<IServerConfig>();
+            config.Setup(c => c.ApiTokens).Returns(new ApiTokensConfig());
+
+            var services = new ServiceCollection()
+                .AddApplicationServices(config.Object);
+
+            services.Replace(ServiceDescriptor.Singleton(_cache.Object));
+            services.Replace(ServiceDescriptor.Singleton(_authorization.Object));
+            services.Replace(ServiceDescriptor.Singleton(_users.Object));
+            services.Replace(ServiceDescriptor.Singleton(_chats.Object));
+            services.Replace(ServiceDescriptor.Singleton(_folders.Object));
+            services.Replace(ServiceDescriptor.Singleton(_schedules.Object));
+
+            using var provider = services.BuildServiceProvider();
+
+            using var scopeA = provider.CreateScope();
+            using var scopeB = provider.CreateScope();
+
+            var writerA = scopeA.ServiceProvider.GetRequiredService<PolicyAdministrationService>();
+            var writerB = scopeB.ServiceProvider.GetRequiredService<PolicyAdministrationService>();
+
+            // The invariant itself: not one instance per request.
+            Assert.Same(writerA, writerB);
+
+            var sensor = AddSensor(SensorType.Integer, "di-race");
+            var user = BuildPrincipal();
+
+            var results = await Task.WhenAll(
+                Task.Run(() => writerA.CreateSensorPolicyAsync(sensor.Id, DataDto(icon: "one"), user)),
+                Task.Run(() => writerB.CreateSensorPolicyAsync(sensor.Id, DataDto(icon: "two"), user)));
+
+            Assert.All(results, result => Assert.True(result.Success, result.Failure?.Message));
+
+            Assert.Equal(2, sensor.Policies.Count());
+            Assert.NotNull(sensor.Policies.SingleOrDefault(p => p.Icon == "one"));
+            Assert.NotNull(sensor.Policies.SingleOrDefault(p => p.Icon == "two"));
         }
 
 

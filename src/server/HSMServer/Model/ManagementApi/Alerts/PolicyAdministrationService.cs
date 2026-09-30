@@ -40,6 +40,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
     // TTL intervals included (a null TTL is an explicit reset-to-parent, not
     // "keep").
     //
+    // The gates live in THIS class's fields, so the registration must be a
+    // SINGLETON (#1501 round-3, F1): a per-request instance would quietly hand
+    // concurrent writes to one node different (empty) gate maps. All
+    // constructor dependencies are singletons in DI; the gate registry is the
+    // only state and is lock-protected.
+    //
     // Authorization precedes existence checks and validation, per the area's
     // anti-enumeration rule: the evaluator resolves the 404/403 split itself
     // (unknown and invisible ids answer the SAME 404), and no body-shape error
@@ -320,10 +326,12 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 .ToList();
 
             // Template-owned toggle: the stored content and its EXPLICIT
-            // interval ride through (CopyTtlUpdate) with only IsDisabled taken
-            // from the body.
+            // interval ride through the copy-ctor shape with only IsDisabled
+            // taken from the body — but as the CHANGED item it takes NORMAL
+            // change ownership (ToggledTtlUpdate), unlike the untouched
+            // siblings (CopyTtlUpdate).
             merged.Add(existing.TemplateId is not null
-                ? CopyTtlUpdate(existing, initiator) with { IsDisabled = dto.IsDisabled }
+                ? ToggledTtlUpdate(existing, initiator, dto.IsDisabled)
                 : AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, ttlTicks, AvailableChats(sensor),
                     existing.TemplateId, existing.TemplateAlertId));
 
@@ -494,8 +502,10 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 .Select(p => CopyTtlUpdate(p, initiator))
                 .ToList();
 
+            // The template-owned toggle takes NORMAL ownership here too (the
+            // sensor twin above, #1501 round-3, F3).
             merged.Add(existing.TemplateId is not null
-                ? CopyTtlUpdate(existing, initiator) with { IsDisabled = dto.IsDisabled }
+                ? ToggledTtlUpdate(existing, initiator, dto.IsDisabled)
                 : AlertPolicyDtoMapper.ToUpdate(dto, policyId, initiator, ttlTicks, AvailableChats(product),
                     existing.TemplateId, existing.TemplateAlertId));
 
@@ -929,6 +939,11 @@ namespace HSMServer.Model.ManagementApi.Alerts
                 AlertPolicyConditionValidator.Add(errors, "destination.chats",
                     "Chats are only accepted for the Custom destination mode.");
             }
+
+            // An explicit "chats": null is coherent everywhere with an empty
+            // array (#1501 round-3, F2): rejected for Custom above (the
+            // at-least-one-chat rule), accepted as no-chats for the other
+            // modes — and mapped to no chats by AlertPolicyDtoMapper.
         }
 
         // A template-owned policy accepts ONLY the disable toggle through a user
@@ -1003,9 +1018,16 @@ namespace HSMServer.Model.ManagementApi.Alerts
                    Nullable.Equals(requestedScheduleId, currentScheduleId);
         }
 
-        private static bool ChatSetEquals(List<Guid> left, List<Guid> right) =>
-            ReferenceEquals(left, right) ||
-            (left is not null && right is not null && new HashSet<Guid>(left).SetEquals(right));
+        // Null and empty are the SAME chat set (#1501 round-3, F2): an echoed
+        // body carrying "chats": null must read equal to the [] a GET
+        // rendered, or a pure disable toggle would 409 over the null.
+        private static bool ChatSetEquals(List<Guid> left, List<Guid> right)
+        {
+            left ??= [];
+            right ??= [];
+
+            return (left.Count == 0 && right.Count == 0) || new HashSet<Guid>(left).SetEquals(right);
+        }
 
         // Targets arrive as System.Text.Json elements on the request side and as
         // parsed CLR values on the read side; compare their canonical string
@@ -1071,24 +1093,42 @@ namespace HSMServer.Model.ManagementApi.Alerts
             return false;
         }
 
-        // A re-asserted TTL policy must carry its interval EXPLICITLY: a null TTL
-        // in full-list semantics is an explicit reset-to-parent (the #1409/#1451
-        // lesson — without this every merge would reset every other TTL policy).
-        // It must also PRESERVE the sibling's change-table ownership (#1501
-        // round-2, F2): the TTL stamp loop in BaseNodeModel.Update stamps
-        // unconditionally per id, so a plain copy re-asserted by an API user
-        // would re-stamp a template-applied sibling as the calling user — and
-        // the next template apply (AlertTemplate, type 15) would then fail the
-        // node's CanChange pre-check (100 <= 15 is false) for the WHOLE node.
-        // PreserveChangeOwnership opts the copy out of the stamp; only the
-        // CHANGED item (built from the DTO) takes normal ownership.
+        // The stored interval of a re-asserted TTL policy, EXPLICITLY: a null
+        // TTL in full-list semantics is an explicit reset-to-parent (the
+        // #1409/#1451 lesson — without this every merge would reset every
+        // other TTL policy).
+        private static long? StoredTtlTicks(TTLPolicy policy) =>
+            policy.IsTTLFromParent || policy.TTLInterval is not { IsNone: false } interval
+                ? null
+                : interval.Ticks;
+
+        // An UNTOUCHED sibling re-asserted by a full-list merge: it must
+        // PRESERVE its change-table ownership (#1501 round-2, F2) — the TTL
+        // stamp loop in BaseNodeModel.Update stamps unconditionally per id, so
+        // a plain copy re-asserted by an API user would re-stamp a
+        // template-applied sibling as the calling user — and the next template
+        // apply (AlertTemplate, type 15) would then fail the node's CanChange
+        // pre-check (100 <= 15 is false) for the WHOLE node.
+        // PreserveChangeOwnership opts the copy out of the stamp.
         private static PolicyUpdate CopyTtlUpdate(TTLPolicy policy, InitiatorInfo initiator) =>
             new(policy, initiator)
             {
-                TTL = policy.IsTTLFromParent || policy.TTLInterval is not { IsNone: false } interval
-                    ? null
-                    : interval.Ticks,
+                TTL = StoredTtlTicks(policy),
                 PreserveChangeOwnership = true,
+            };
+
+        // The CHANGED item of a template-owned TTL toggle (#1501 round-3, F3):
+        // the stored content and interval ride through like a sibling copy,
+        // but WITHOUT PreserveChangeOwnership — the toggle is the calling
+        // user's change, so the change table stamps the user as the owner (the
+        // data-policy twin stamps through the CallJournal IsDisabled arm).
+        // Ownership is the point: the CanChange pre-check then protects the
+        // user's disable from the next template apply re-enabling it.
+        private static PolicyUpdate ToggledTtlUpdate(TTLPolicy policy, InitiatorInfo initiator, bool isDisabled) =>
+            new(policy, initiator)
+            {
+                TTL = StoredTtlTicks(policy),
+                IsDisabled = isDisabled,
             };
 
         // The node's chat availability: every global chat plus the chats bound
