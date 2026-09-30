@@ -33,7 +33,7 @@ same form (`Prod (EU)` / `Prod EU`) get the same folder name; extract each bundl
 | Entry | Mode | Content |
 |---|---|---|
 | `hsm-linux-probe_<ver>_<arch>.deb` | 0644 | **Byte-identical** to the staged `probe-v*` release asset, under its release file name |
-| `config.json` | 0644 | Probe schema: `hsm.address` + `hsm.port` from `AgentConnectionResolver`, `hsm.accessKeyFile` = `/run/credentials/hsm-linux-probe.service/access-key` (the unit's `LoadCredential=` path). **No `computerName`, no `module`**: the probe's defaults apply — no computer node, module node `.probe` (#1493, #1496; one product = one host). **No key.** |
+| `config.json` | 0644 | Probe schema: `hsm.address` + `hsm.port` from `AgentConnectionResolver`, `hsm.accessKeyFile` = `/run/credentials/hsm-linux-probe.service/access-key` (the unit's `LoadCredential=` path), and the layout spelled out: **`computerName: ""`, `module: ".probe"`** — no computer node, module node `.probe` (#1493, #1496; one product = one host). Written explicitly, not left to the probe's defaults, which were `LinuxProbe` before 0.6.0 and empty in 0.6.0 (#1495). **No key.** |
 | `access-key` | 0600 | The product key from `AgentKeySelector` (same selection as Windows), newline-terminated |
 | `server-ca.pem` | 0644 | Optional, the server's leaf certificate (public part only); see *TLS* |
 | `install.sh`, `uninstall.sh` | 0755 | LF line endings; shellcheck-clean |
@@ -148,12 +148,14 @@ the sensor history stays.
 Owner decisions 2026-09-29: one product = one host, so the probe has no computer node; its module node
 stays and is `.probe`. The product root holds `.computer/…` and `.probe/` (with `.module/…` and
 `Docker/…`). The probe's `hsm.computerName` defaults to empty and `hsm.module` to `.probe`; the bundle's
-`config.json` carries neither key, so those defaults apply. The
+`config.json` writes both keys with those values (`"computerName": ""`, `"module": ".probe"`), so the
+layout does not depend on the probe's defaults: a `probe-release.txt` pinned to an older probe (whose
+`module` defaulted to `LinuxProbe` before 0.6.0, and to empty in 0.6.0) still gets this layout (#1495). The
 former `computerName: "auto"` and its install-time host-name substitution are removed. A host installed
 from an older bundle keeps its `computerName`/`module` until its config is replaced or edited;
 re-installing with `install.sh --force-config` writes the new config and so moves that host's tree to the
-product root (the old nodes, alerts and TTL state stay behind). Setting the keys is accepted but not
-recommended.
+default layout, `.computer/…` and `.probe/…` (the old nodes, alerts and TTL state stay behind). Setting
+other values is accepted but not recommended.
 
 **One product per host.** With no host node, a second host installed from the same product's bundle writes
 into the same `.computer/…` and `.probe/…` sensors: values interleave and `Service alive`
@@ -210,7 +212,7 @@ be re-verified before the first non-empty `probe-release.txt`:
 | Package name `hsm-linux-probe`, asset `hsm-linux-probe_<ver>_<arch>.deb` + `.deb.sha256` | install/uninstall scripts, staging, guards | `.deb` build (#1418) |
 | Unit `hsm-linux-probe.service` | `install.sh` / `uninstall.sh` | `packaging/hsm-linux-probe.service` |
 | `LoadCredential=access-key:/etc/hsm-linux-probe/access-key` → `/run/credentials/hsm-linux-probe.service/access-key` | `AccessKeyCredentialPath`, `install.sh` | the unit |
-| Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile` (no `computerName`/`module`, #1493) | `BuildConfigJson` | `config.rs` (`computerName` empty, `module` `.probe` by default, #1496) |
+| Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile/computerName/module` (`computerName` `""`, `module` `.probe`, #1493, #1496, #1495) | `BuildConfigJson` | `config.rs` (the same values are its defaults; `probe.rs` `collector_options` leaves an empty segment out) |
 | https-only address | `ValidateServerAddress` | `config.rs` validation |
 
 **Not yet verified on a real host.** The `debian:13` smoke test ran against a dummy `.deb`. In that Docker

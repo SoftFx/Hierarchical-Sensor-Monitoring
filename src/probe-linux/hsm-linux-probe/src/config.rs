@@ -185,8 +185,8 @@ pub struct HsmConfig {
     /// `LoadCredential=` drop), so the config does not hardcode the unit name; an absolute path is
     /// used as is. See `secret::resolve_key_path`.
     pub access_key_file: PathBuf,
-    /// Empty by default: one product = one host, so the probe's sensors sit directly under the
-    /// product (`.computer/…`, `.module/…`, `Docker/…`; owner decision, #1493). Accepted for
+    /// Empty by default: one product = one host, so there is no computer node (`.computer/…` at
+    /// the product root, `.probe/…` beside it; owner decisions, #1493, #1496). Accepted for
     /// compatibility, but a non-empty value re-introduces a `<computer>` node — not recommended.
     #[serde(default)]
     pub computer_name: String,

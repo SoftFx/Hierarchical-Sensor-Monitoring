@@ -193,7 +193,8 @@ test pins the exact path list):
 computer node, the module node stays.** The product root holds the host's `.computer/…` and the
 probe's module node `.probe/` (with `.module/…` and `Docker/…`) — the .NET layout with an empty
 `ComputerName`. `hsm.computerName` is empty and `hsm.module` is `.probe` by default; the server's
-install bundle writes neither key. Setting them differently is accepted for compatibility, not
+install bundle writes both keys with these values (#1495), so its layout does not depend on the
+shipped probe's defaults. Setting them differently is accepted for compatibility, not
 recommended. The Windows agent keeps its `<MACHINE>/HSM Agent/.module` layout; this decision is for
 the Linux probe only.
 
@@ -599,6 +600,7 @@ coverage in both drivers and an agent version bump:
 | #1493 PR | the tree sits directly under the product: `hsm.computerName` / `hsm.module` empty by default (accepted, not recommended), the install bundle writes neither (the `"auto"` host-name substitution removed), pinned sets at the root | probe 0.6.0 |
 | #1496 PR | the module node stays: `hsm.module` defaults to `.probe` (the product root holds `.computer/…` and `.probe/{.module,Docker}/…`); `computerName` stays empty by default | probe 0.6.1 |
 | #1498 PR | the per-disk write volume is posted once per day, as `Written per day on <name> disk` (TTL 26 h, 1 record/day instead of 288); the `Written today` nodes are stale history | probe 0.6.2 |
+| #1489 + #1495 PR | write-volume edges: a clock stepped back into the hour just posted does not re-post it; an unmounted filesystem no longer counts toward a disk's mount-point identity; a day missed while the probe was down is logged once; a partly failed daily post and a measured-but-unmounted disk are logged with disk, day and GB; the install bundle writes `computerName: ""` / `module: ".probe"` explicitly; config → collector-options test | probe 0.6.3 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against

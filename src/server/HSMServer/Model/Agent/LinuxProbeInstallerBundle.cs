@@ -118,8 +118,8 @@ namespace HSMServer.Model.Agent
 
         /// <summary>
         /// The generated config.json in the probe schema. It references the key by path only, and
-        /// carries no computerName and no module, so the probe's defaults apply: no computer node
-        /// (one product = one host) and the module node `.probe` (#1493, #1496).
+        /// spells out the layout — no computer node and the module node <c>.probe</c> (#1493, #1496)
+        /// — rather than relying on the probe's defaults, which differ before 0.6.1 (#1495).
         /// </summary>
         public static string BuildConfigJson(LinuxProbeBundleOptions options)
         {
@@ -130,6 +130,8 @@ namespace HSMServer.Model.Agent
                     address = options.ServerAddress,
                     port = options.Port,
                     accessKeyFile = AccessKeyCredentialPath,
+                    computerName = "",
+                    module = ".probe",
                 },
             };
 

@@ -72,10 +72,11 @@ namespace HSMServer.Core.Tests
             Assert.Equal("https://hsm.example.com", hsm.GetProperty("address").GetString());
             Assert.Equal(44330, hsm.GetProperty("port").GetInt32());
             Assert.Equal("/run/credentials/hsm-linux-probe.service/access-key", hsm.GetProperty("accessKeyFile").GetString());
-            // One product = one host (#1493): no computer node and no module node, so the config
-            // carries neither and the probe's sensors sit directly under the product.
-            Assert.False(hsm.TryGetProperty("module", out _));
-            Assert.False(hsm.TryGetProperty("computerName", out _));
+            // One product = one host: no computer node (#1493) and the module node `.probe` (#1496),
+            // written out so the layout does not depend on the probe's defaults, which were
+            // `LinuxProbe` before 0.6.0 and empty in 0.6.0 (#1495).
+            Assert.Equal("", hsm.GetProperty("computerName").GetString());
+            Assert.Equal(".probe", hsm.GetProperty("module").GetString());
 
             Assert.False(hsm.TryGetProperty("accessKey", out _));
             Assert.False(hsm.TryGetProperty("allowUntrustedCertificate", out _));

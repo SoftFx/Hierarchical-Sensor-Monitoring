@@ -23,7 +23,8 @@ Three crates under `src/probe-linux/`:
 **No computer node; the module node is `.probe`** (owner decisions 2026-09-29, #1493 and #1496:
 one product = one host). The product root holds `.computer/…` (the host) and `.probe/` with
 `.module/…` and `Docker/…` — the .NET layout with an empty `ComputerName`. `hsm.computerName` is
-empty and `hsm.module` is `.probe` by default; the server bundle writes neither. Other values are
+empty and `hsm.module` is `.probe` by default; the server bundle writes both with these values, so
+its layout does not depend on the shipped probe's defaults (#1495). Other values are
 accepted, not recommended. Linux probe only — the Windows agent keeps
 `<MACHINE>/HSM Agent/.module`.
 
@@ -54,7 +55,9 @@ The probe registers **two separately pinned sets**:
    `/proc/diskstats` of the whole disk) and `Written per day on <name> disk` (#1485, once a day
    since #1498: decimal GB written to that whole disk during one local day, from the same counter,
    **posted once** in the day's last 30 s — TTL 26 h, a day that ended while the probe was down is
-   not posted; from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
+   not posted (logged once); a value whose post failed while others went out, and a measured disk
+   with no mounted filesystem in the window, are logged with the disk, the day and the total;
+   the mount-point identity counts only mounted filesystems; from 0 at midnight; the day and the counters persist in `$STATE_DIRECTORY/disk-written.json`
    with the boot id and each disk's identity — WWID/serial, else its mount points — so a restart
    continues the day, a reboot keeps the day (only for the same physical disk) but not the
    counters, and a disk renamed by the kernel never inherits another disk's day). Block-backed types only, deduplicated by source device,
@@ -72,7 +75,8 @@ The probe registers **two separately pinned sets**:
    of 5-second samples; CPU as % of the whole host; the memory limit is stated in the `Memory used %`
    description and follows a changed limit), `Disk written per hour` (decimal MB the service's
    containers wrote to block devices in one UTC clock hour, from the cgroup write counters in the
-   same stats; sent just after the hour — the comment names the window; the running hour survives
+   same stats; sent just after the hour, once — the comment names the window, and a clock stepped
+   back into the hour just posted does not reopen it (#1489); the running hour survives
    a probe restart through the state file; no alert, EMA statistics), `Service status` (the Windows
    `ServiceControllerStatus` enum and its alert), `Health` (only where a healthcheck exists),
    `Restart count` (posted on change) and `OOM killed` (latched 24 h). Source: the Docker Engine

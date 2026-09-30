@@ -179,10 +179,14 @@ is posted once**, in its last 30 seconds (six samples, so one slow read or a lat
 in it): the day's total. What is still written between the post and midnight counts towards the
 next day — counted once, never lost. The ledger remembers the posted day, so a restart inside that
 window does not post it twice, and a day is marked posted only when a value went out (if every post
-failed, the next sample in the window tries again). A day whose window was missed — the probe not
-running at midnight, or running but not sampling (a suspend, unreadable `/proc/diskstats`) — is not
-posted; one INFO line names it with its measured total, and the 26-hour TTL shows the missing day as
-Timeout. The day only
+failed, the next sample in the window tries again). What a marked day leaves unposted is logged with
+the filesystem or disk, the day and its total: a value whose post failed while others went out
+(ERROR, not retried), and a measured disk no mounted filesystem posts (unmounted in the window,
+INFO). A day whose window was missed — the probe not
+running at midnight, or running but not sampling (a suspend, unreadable `/proc/diskstats`, every
+post in the window failed) — is not posted; one INFO line names it with its measured total (a day
+that ended while the probe was down: at its first sample after the start, once), and the 26-hour
+TTL shows the missing day as Timeout. The day only
 turns forward: a clock stepped back across midnight (or a DST fall-back at local midnight) keeps
 counting into the day it came from until the clock reaches the next one. A timezone change
 (`timedatectl set-timezone`) applies without a restart. The first sample, a counter
@@ -200,7 +204,9 @@ the first after it are not counted. Kernel names are not stable (a reboot can sw
 `sdb`), so each disk's day also records which physical disk it belongs to — its WWID or serial
 from sysfs, else the mount points on it: a different disk under a known name starts its day
 afresh (with the "measured since" comment), and after a reboot a day is kept only when that
-identity matches. Disks not seen for more than a day are dropped from the file. One case cannot
+identity matches. The mount-point fallback counts only filesystems mounted now: an unmounted one
+keeps its old disk name, and its mount point must not tie a new disk to the old one (#1489).
+Disks not seen for more than a day are dropped from the file. One case cannot
 be told apart: a removable disk without a WWID or serial swapped, within one boot, for another
 such disk at the same mount point — both identities are that mount point, so the second continues
 the first one's day. Two filesystems
@@ -310,8 +316,10 @@ and its counter survived and the hour did not change. A gap that crosses an hour
 be split between the two hours and is dropped. The hour that has just ended is posted on the first
 tick after it — also when that tick is the first after a restart, since its bytes were measured;
 an hour older than that (the probe was not running at the next boundary) is dropped, with an INFO
-line. A skip that discards measured bytes (a clock that went backwards, a gap across an hour) is
-logged once. A write through a stacked device (LVM, dm-crypt, md) is
+line. An hour is posted once: a clock stepped back into the hour just posted (an NTP step of a few
+seconds across the boundary) does not reopen it — the running hour keeps counting, the writes made
+meanwhile included (#1489). A skip that discards measured bytes (a clock that went backwards, a gap
+across an hour) is logged once. A write through a stacked device (LVM, dm-crypt, md) is
 accounted by the kernel on that device and again on the disk under it; the probe resolves the
 stack in `/sys/dev/block/*/slaves` and leaves the stacked device out whenever a disk under it is
 listed too. The sensor therefore reports **physical** writes: through LVM or dm-crypt a write
@@ -551,8 +559,10 @@ Placeholders only — **no secrets**:
   product root (0.6.0) — to `.probe/…` (the old nodes go stale; `.computer/…` does not move when
   `computerName` is unset). Configs from an older server bundle or the old skeleton set both keys
   explicitly and keep their layout until edited — or until the bundle is re-installed with
-  `install.sh --force-config`, which writes the new config without either key and so moves the
-  tree to the default layout (the old nodes, their alerts and TTL state stay behind).
+  `install.sh --force-config`, which writes the new config and so moves the tree to the default
+  layout (the old nodes, their alerts and TTL state stay behind). The server bundle writes that
+  layout explicitly (`"computerName": ""`, `"module": ".probe"`; #1495, alongside probe 0.6.3),
+  so it does not depend on the defaults of the probe version the server ships.
   **One product per host:** with no host node, two hosts reporting into one product write into the
   same sensors — give every host its own product. For the default layout remove both keys; to keep
   an older one, set `"module"` (and `"computerName"`) explicitly.

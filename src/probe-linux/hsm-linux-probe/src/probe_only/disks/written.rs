@@ -17,9 +17,10 @@
 //! counts towards the next day. A day with no measured delta is not posted — never an invented 0;
 //! a day whose measurement began after midnight (the probe was installed, or not running, at
 //! midnight) says from when in the comment. The ledger remembers the last day posted, so a restart
-//! inside the window does not post it twice. A day whose window was missed is never posted: the
-//! probe being down is logged at start ([`Ledger::unposted_days`]), a window missed while running
-//! when the day rolls over ([`Ledger::missed`]).
+//! inside the window does not post it twice. A day whose window was missed is never posted and is
+//! logged once: the probe being down at the first sample after start
+//! ([`Ledger::unposted_days`]), a window missed while running when the day rolls over
+//! ([`Ledger::missed`]).
 //!
 //! **Restarts.** The day's total and each disk's last counter live in
 //! `$STATE_DIRECTORY/disk-written.json`, so a restart continues the day, and the writes made while
@@ -392,16 +393,20 @@ impl Ledger {
     }
 
     /// Days that ended with a measured total but no final post: the probe was not running at
-    /// their midnight. `(disk, day, GB)` for the start-up log; those days are never posted.
-    pub fn unposted_days(&self, today: i64) -> Vec<(String, i64, f64)> {
+    /// their midnight. `(disk, day, GB)` for the start-up log; those days are never posted. Each
+    /// is reported here only: its record is marked unmeasured, so the day turn does not report it
+    /// again as [`Ledger::missed`] (#1489).
+    pub fn unposted_days(&mut self, today: i64) -> Vec<(String, i64, f64)> {
+        let posted_day = self.posted_day;
         self.disks
-            .iter()
+            .iter_mut()
             .filter(|(_, record)| {
                 record.measured
                     && record.day < today
-                    && self.posted_day.is_none_or(|posted| posted < record.day)
+                    && posted_day.is_none_or(|posted| posted < record.day)
             })
             .map(|(disk, record)| {
+                record.measured = false;
                 (
                     disk.clone(),
                     record.day,
@@ -828,13 +833,22 @@ pub mod tests {
             .sample("sdc", d, 2_000_000, t + 5_000, utc, PERIOD)
             .unwrap();
         let today = utc(t).0;
+        let mut posted = ledger.clone();
         assert!(ledger.unposted_days(today).is_empty(), "still today");
         assert_eq!(
             ledger.unposted_days(today + 1),
             vec![("sdc".to_string(), today, 1.024)]
         );
-        ledger.posted_day = Some(today);
-        assert!(ledger.unposted_days(today + 1).is_empty(), "posted");
+        assert!(ledger.unposted_days(today + 1).is_empty(), "reported once");
+        // …and not again as missed when the first sample of the next day turns it.
+        assert_eq!(
+            ledger.sample("sdc", d, 2_000_200, t + 24 * HOUR, utc, PERIOD),
+            Err(Skip::GapAcrossDays)
+        );
+        assert!(ledger.missed.is_empty(), "{:?}", ledger.missed);
+        assert_eq!(ledger.disks["sdc"].day, today + 1);
+        posted.posted_day = Some(today);
+        assert!(posted.unposted_days(today + 1).is_empty(), "posted");
         assert_eq!(day_label(today), "2026-09-29");
         assert_eq!(day_label(0), "1970-01-01");
     }

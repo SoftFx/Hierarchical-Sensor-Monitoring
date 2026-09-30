@@ -190,21 +190,7 @@ fn build_collector(
         ));
     }
 
-    let mut options =
-        CollectorOptions::new(key.expose(), config.hsm.address.trim(), config.hsm.port);
-    // Only non-empty segments are handed over; the collector leaves an absent one out. By default
-    // there is no computer name (#1493) and the module is `.probe` (#1496), so the tree is
-    // `.computer/…` and `.probe/…` at the product root.
-    if !config.hsm.module.is_empty() {
-        options.module = Some(config.hsm.module.clone());
-    }
-    if !config.hsm.computer_name.is_empty() {
-        options.computer_name = Some(config.hsm.computer_name.clone());
-    }
-    options.package_collect_period =
-        Some(Duration::from_secs(config.hsm.package_collect_period_sec));
-    options.request_timeout = Some(Duration::from_secs(config.hsm.request_timeout_sec));
-
+    let mut options = collector_options(config, key.expose());
     let collector = Collector::new(&options);
     // The collector copied the key into its own storage; wipe both of our copies now rather than
     // leaving them in the process image for the rest of the daemon's life.
@@ -219,6 +205,24 @@ fn build_collector(
 
     collector.use_http_transport()?;
     Ok(collector)
+}
+
+/// The collector options `config` asks for, with the access key handed in separately.
+fn collector_options(config: &Config, access_key: &str) -> CollectorOptions {
+    let mut options = CollectorOptions::new(access_key, config.hsm.address.trim(), config.hsm.port);
+    // Only non-empty segments are handed over; the collector leaves an absent one out. By default
+    // there is no computer name (#1493) and the module is `.probe` (#1496), so the tree is
+    // `.computer/…` and `.probe/…` at the product root.
+    if !config.hsm.module.is_empty() {
+        options.module = Some(config.hsm.module.clone());
+    }
+    if !config.hsm.computer_name.is_empty() {
+        options.computer_name = Some(config.hsm.computer_name.clone());
+    }
+    options.package_collect_period =
+        Some(Duration::from_secs(config.hsm.package_collect_period_sec));
+    options.request_timeout = Some(Duration::from_secs(config.hsm.request_timeout_sec));
+    options
 }
 
 /// Where the tree sits, for the start log: the module node under the product root by default, and
@@ -882,6 +886,72 @@ mod tests {
             panic!("nothing should be logged: {line}")
         });
         assert!(await_sources(&rx, vec!["disk"], &quiet));
+    }
+
+    /// A config with the given extra `hsm` keys (`, "module": …`).
+    fn config_with(hsm_keys: &str) -> Config {
+        Config::parse(&format!(
+            r#"{{ "hsm": {{ "address": " https://garage.lan ", "port": 44330,
+                "accessKeyFile": "access-key"{hsm_keys} }} }}"#
+        ))
+        .expect("parse")
+    }
+
+    /// Where the probe's `Service alive` lands with these options.
+    fn service_alive_path(options: &CollectorOptions) -> Option<String> {
+        let collector = Collector::new(options).expect("create");
+        register_sensors(&collector, &Logger::new(Level::Error, None));
+        collector.start().expect("start");
+        let registrations = collector.registrations();
+        collector.stop().expect("stop");
+        registrations
+            .iter()
+            .filter_map(|json| path_of(json))
+            .find(|path| path.ends_with(".module/Service alive"))
+    }
+
+    #[test]
+    fn the_config_reaches_the_collector_options() {
+        // A minimal config (what the install bundle wrote before 0.6.3): no computer node, the
+        // module node `.probe`.
+        let options = collector_options(&config_with(""), "unit-test-key");
+        assert_eq!(options.module.as_deref(), Some(".probe"));
+        assert_eq!(options.computer_name, None);
+        assert_eq!(options.server_address, "https://garage.lan");
+        assert_eq!(options.port, 44330);
+        assert_eq!(
+            options.package_collect_period,
+            Some(Duration::from_secs(15))
+        );
+        assert_eq!(options.request_timeout, Some(Duration::from_secs(30)));
+        assert_eq!(
+            service_alive_path(&options).as_deref(),
+            Some(".probe/.module/Service alive")
+        );
+        // What the bundle writes since 0.6.3: the same layout, spelled out.
+        let options = collector_options(
+            &config_with(r#", "computerName": "", "module": ".probe""#),
+            "unit-test-key",
+        );
+        assert_eq!(options.module.as_deref(), Some(".probe"));
+        assert_eq!(options.computer_name, None, "never an empty segment");
+        // Both keys emptied by hand: left out, never handed over as empty segments.
+        let options = collector_options(
+            &config_with(r#", "computerName": "", "module": """#),
+            "unit-test-key",
+        );
+        assert_eq!((options.module, options.computer_name), (None, None));
+        // A hand-written config that keeps both nodes: both survive.
+        let options = collector_options(
+            &config_with(r#", "computerName": "h", "module": "LinuxProbe""#),
+            "unit-test-key",
+        );
+        assert_eq!(options.module.as_deref(), Some("LinuxProbe"));
+        assert_eq!(options.computer_name.as_deref(), Some("h"));
+        assert_eq!(
+            service_alive_path(&options).as_deref(),
+            Some("h/LinuxProbe/.module/Service alive")
+        );
     }
 
     #[test]
