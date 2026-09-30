@@ -1,4 +1,6 @@
-//! `Written today on <name> disk`: the bytes written to a whole disk since local midnight.
+//! `Written per day on <name> disk`: the bytes written to a whole disk during one local day,
+//! posted once, just before local midnight (#1498; `Written today`, posted every 5 minutes, until
+//! 0.6.1).
 //!
 //! **Source.** The same `/proc/diskstats` "sectors written" counter the write-speed bar reads every
 //! 5 s (512-byte sectors, whatever the device's sector size), per whole disk.
@@ -10,9 +12,14 @@
 //! and a gap longer than three sample periods that crosses midnight (its bytes cannot be placed in
 //! either day).
 //!
-//! **Posting.** Every 5 minutes, the day so far, in decimal GB (10⁹ bytes). A day with no measured
-//! delta yet is not posted — never an invented 0; a day whose measurement began after midnight
-//! (the probe was installed, or not running, at midnight) says from when in the comment.
+//! **Posting.** Once per day: the day's total, in decimal GB (10⁹ bytes), in the day's last
+//! seconds (the caller's final-reading window). What is written after the post, before midnight,
+//! counts towards the next day. A day with no measured delta is not posted — never an invented 0;
+//! a day whose measurement began after midnight (the probe was installed, or not running, at
+//! midnight) says from when in the comment. The ledger remembers the last day posted, so a restart
+//! inside the window does not post it twice. A day whose window was missed is never posted: the
+//! probe being down is logged at start ([`Ledger::unposted_days`]), a window missed while running
+//! when the day rolls over ([`Ledger::missed`]).
 //!
 //! **Restarts.** The day's total and each disk's last counter live in
 //! `$STATE_DIRECTORY/disk-written.json`, so a restart continues the day, and the writes made while
@@ -147,6 +154,11 @@ pub enum Skip {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Ledger {
     pub disks: BTreeMap<String, DayRecord>,
+    /// The last local day whose final reading was posted.
+    pub posted_day: Option<i64>,
+    /// Days that ended measured but unposted while the probe ran (the post window was missed —
+    /// a suspend, unreadable `/proc/diskstats`): `(disk, day, GB)`, drained by the caller's log.
+    pub missed: Vec<(String, i64, f64)>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -156,6 +168,8 @@ struct LedgerFile {
     /// The boot the baselines belong to.
     boot_id: String,
     disks: BTreeMap<String, DayRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    posted_day: Option<i64>,
 }
 
 impl Ledger {
@@ -172,11 +186,19 @@ impl Ledger {
         period: Duration,
     ) -> Result<u64, Skip> {
         let (day, _) = local(now_ms);
+        // Once today is posted, what is still written before midnight counts towards tomorrow:
+        // counted once, never lost between the post and midnight.
+        let posted_day = self.posted_day;
+        let target = match posted_day {
+            Some(posted) if posted >= day => day + 1,
+            _ => day,
+        };
+        let missed = &mut self.missed;
         let record = self
             .disks
             .entry(disk.to_string())
             .or_insert_with(|| DayRecord {
-                day,
+                day: target,
                 ..DayRecord::default()
             });
         let known = record.identity.clone();
@@ -222,10 +244,18 @@ impl Ledger {
                 return Err(Skip::ClockBackwards);
             }
         }
-        if day > record.day {
-            // Local midnight passed: a new day starts from 0. (A clock behind the day keeps
-            // counting into it; nothing is posted until the clock reaches it again.)
-            record.day = day;
+        if target > record.day {
+            // Local midnight passed (or today was posted): a new day starts from 0. A day that
+            // ends here measured but unposted missed its post window while the probe ran — it is
+            // reported, never posted late. (A clock behind the day keeps counting into it.)
+            if record.measured && posted_day.is_none_or(|posted| posted < record.day) {
+                missed.push((
+                    disk.to_string(),
+                    record.day,
+                    (record.bytes as f64 / BYTES_PER_GB * 1000.0).round() / 1000.0,
+                ));
+            }
+            record.day = target;
             record.bytes = 0;
             record.measured = false;
             record.since_second = None;
@@ -251,8 +281,10 @@ impl Ledger {
         }
         if !record.measured {
             record.measured = true;
-            // A delta that began yesterday means the day was watched from midnight.
-            record.since_second = (previous.day == day).then(|| local(previous.at_ms).1);
+            // A delta that began yesterday — or one counted towards tomorrow after today's post —
+            // means the day was watched from its start.
+            record.since_second =
+                (previous.day == day && target == day).then(|| local(previous.at_ms).1);
         }
         let bytes = (sectors - previous.sectors).saturating_mul(SECTOR_BYTES);
         record.bytes = record.bytes.saturating_add(bytes);
@@ -342,7 +374,7 @@ impl Ledger {
             if !disks.is_empty() {
                 logger.info(format!(
                     "disks: the host rebooted (or its boot id is unreadable) since {} was saved; \
-                     today's Written today totals continue, but the writes between the last \
+                     today's written totals continue, but the writes between the last \
                      sample before the reboot and the first after it are not counted",
                     path.display()
                 ));
@@ -352,7 +384,31 @@ impl Ledger {
                 record.unverified = true;
             }
         }
-        Ledger { disks }
+        Ledger {
+            disks,
+            posted_day: file.posted_day,
+            missed: Vec::new(),
+        }
+    }
+
+    /// Days that ended with a measured total but no final post: the probe was not running at
+    /// their midnight. `(disk, day, GB)` for the start-up log; those days are never posted.
+    pub fn unposted_days(&self, today: i64) -> Vec<(String, i64, f64)> {
+        self.disks
+            .iter()
+            .filter(|(_, record)| {
+                record.measured
+                    && record.day < today
+                    && self.posted_day.is_none_or(|posted| posted < record.day)
+            })
+            .map(|(disk, record)| {
+                (
+                    disk.clone(),
+                    record.day,
+                    (record.bytes as f64 / BYTES_PER_GB * 1000.0).round() / 1000.0,
+                )
+            })
+            .collect()
     }
 
     /// Write atomically (temp file + fsync + rename).
@@ -361,6 +417,7 @@ impl Ledger {
             version: FILE_VERSION,
             boot_id: boot_id.to_string(),
             disks: self.disks.clone(),
+            posted_day: self.posted_day,
         };
         let temp = temp_path(path);
         {
@@ -384,6 +441,21 @@ fn temp_path(path: &Path) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".tmp");
     path.with_file_name(name)
+}
+
+/// `YYYY-MM-DD` of a local day number (days since 1970-01-01), for log lines.
+pub fn day_label(day: i64) -> String {
+    // Civil-from-days (Howard Hinnant's algorithm), proleptic Gregorian.
+    let z = day + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 /// This boot's id (`/proc/sys/kernel/random/boot_id`); empty when unreadable, which makes every
@@ -697,6 +769,74 @@ pub mod tests {
             .is_ok());
         assert_eq!(ledger.disks["sdc"].identity.as_deref(), Some("wwid:x"));
         assert_eq!(ledger.today("sdc", t + 10_000, utc).unwrap().0, 1.024);
+    }
+
+    #[test]
+    fn writes_after_the_days_post_count_towards_the_next_day() {
+        let mut ledger = Ledger::default();
+        let d = Some("wwid:sdc");
+        let evening = MIDNIGHT + 23 * HOUR + 59 * MIN + 25_000;
+        ledger
+            .sample("sdc", d, 0, evening - 5_000, utc, PERIOD)
+            .ok();
+        ledger
+            .sample("sdc", d, 1_000, evening, utc, PERIOD)
+            .unwrap();
+        let today = utc(evening).0;
+        // 23:59:30: the day is posted with its 1_000 sectors.
+        ledger.posted_day = Some(today);
+        // 23:59:35 and 23:59:55: still today by the clock, but counted towards tomorrow.
+        ledger
+            .sample("sdc", d, 1_500, evening + 10_000, utc, PERIOD)
+            .unwrap();
+        ledger
+            .sample("sdc", d, 2_000, evening + 30_000, utc, PERIOD)
+            .unwrap();
+        assert_eq!(ledger.disks["sdc"].day, today + 1);
+        // After midnight the new day carries them — watched from its start, no comment.
+        let next = evening + 35_000;
+        ledger.sample("sdc", d, 2_100, next, utc, PERIOD).unwrap();
+        assert_eq!(ledger.disks["sdc"].bytes, 1_100 * 512);
+        assert_eq!(ledger.today("sdc", next, utc).unwrap().1, None);
+        assert!(ledger.missed.is_empty(), "the posted day is not missed");
+    }
+
+    #[test]
+    fn a_day_whose_post_window_was_missed_while_running_is_reported() {
+        let mut ledger = Ledger::default();
+        let d = Some("wwid:sdc");
+        let t = MIDNIGHT + 23 * HOUR;
+        ledger.sample("sdc", d, 0, t, utc, PERIOD).ok();
+        ledger
+            .sample("sdc", d, 2_000_000, t + 5_000, utc, PERIOD)
+            .unwrap();
+        // The host slept through midnight: no post; the next sample is tomorrow.
+        assert_eq!(
+            ledger.sample("sdc", d, 2_000_100, t + 2 * HOUR, utc, PERIOD),
+            Err(Skip::GapAcrossDays)
+        );
+        assert_eq!(ledger.missed, vec![("sdc".to_string(), utc(t).0, 1.024)]);
+    }
+
+    #[test]
+    fn a_day_that_ended_without_its_post_is_reported_once_at_start() {
+        let mut ledger = Ledger::default();
+        let d = Some("wwid:sdc");
+        let t = MIDNIGHT + 9 * HOUR;
+        ledger.sample("sdc", d, 0, t, utc, PERIOD).ok();
+        ledger
+            .sample("sdc", d, 2_000_000, t + 5_000, utc, PERIOD)
+            .unwrap();
+        let today = utc(t).0;
+        assert!(ledger.unposted_days(today).is_empty(), "still today");
+        assert_eq!(
+            ledger.unposted_days(today + 1),
+            vec![("sdc".to_string(), today, 1.024)]
+        );
+        ledger.posted_day = Some(today);
+        assert!(ledger.unposted_days(today + 1).is_empty(), "posted");
+        assert_eq!(day_label(today), "2026-09-29");
+        assert_eq!(day_label(0), "1970-01-01");
     }
 
     #[cfg(unix)]

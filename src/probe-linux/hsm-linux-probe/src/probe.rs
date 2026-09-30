@@ -506,10 +506,10 @@ mod tests {
         ".computer/Disks monitoring/Free space on root disk %",
         ".computer/Disks monitoring/Free space on wd4tb disk",
         ".computer/Disks monitoring/Free space on wd4tb disk %",
-        ".computer/Disks monitoring/Written today on mediacentr disk",
-        ".computer/Disks monitoring/Written today on oldlinux disk",
-        ".computer/Disks monitoring/Written today on root disk",
-        ".computer/Disks monitoring/Written today on wd4tb disk",
+        ".computer/Disks monitoring/Written per day on mediacentr disk",
+        ".computer/Disks monitoring/Written per day on oldlinux disk",
+        ".computer/Disks monitoring/Written per day on root disk",
+        ".computer/Disks monitoring/Written per day on wd4tb disk",
     ];
 
     /// The module set: managed `AddAllModuleSensors` minus `Process ThreadPool thread count`

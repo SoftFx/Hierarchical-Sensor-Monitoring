@@ -202,7 +202,7 @@ the Linux probe only.
 ├── .computer/          Total CPU, Free RAM memory, CPU temperature, Logical cores,
 │   └── Disks monitoring/   Free space on disk (+ prediction), Free space on <name> disk (+ %),
 │                           Free inodes on <name> disk %, Average disk write speed on <name> disk,
-│                           Written today on <name> disk
+│                           Written per day on <name> disk
 └── .probe/             the probe's module node
     ├── .module/        Service alive, Collector version, Collector errors, Version,
     │   ├── Process process/    Process CPU, Process memory, Process thread count
@@ -269,12 +269,12 @@ Per filesystem, under `.computer/Disks monitoring/`, named like the Windows per-
 | `Free space on <name> disk %` | Double % · 5 min, TTL 15 min | < 10 warning, < 5 Error | `f_bavail / f_blocks` |
 | `Free inodes on <name> disk %` | Double % · 5 min, TTL 15 min | < 10 warning | `f_favail / f_files` |
 | `Average disk write speed on <name> disk` | DoubleBar MBytes_sec, EMA · 5 s samples, 5-min bar, TTL 15 min | — (as on Windows) | `/proc/diskstats` of the whole disk under the partition |
-| `Written today on <name> disk` | Double GB (decimal), no statistics · the same 5 s samples, posted every 5 min, TTL 15 min | — (owner decision) | Σ Δ `/proc/diskstats` sectors written × 512 since local midnight (host timezone), from 0 at midnight; first sample / counter reset only a baseline; a day without measurement not posted; a day measured from after midnight says since when; the day survives a restart (`disk-written.json`, with the boot id — a reboot keeps the day, not the counters). #1485, 288/day |
+| `Written per day on <name> disk` | Double GB (decimal), no statistics · the same 5 s samples, **posted once a day** (its last 30 s), TTL 26 h | — (owner decision) | Σ Δ `/proc/diskstats` sectors written × 512 during one local day (host timezone), from 0 at midnight; first sample / counter reset only a baseline; a day without measurement not posted; a day measured from after midnight says since when; the day survives a restart (`disk-written.json`, with the boot id — a reboot keeps the day, not the counters); a day that ended while the probe was down is not posted (logged). #1485 as `Written today` (every 5 min), once a day since #1498; 1/day |
 
 Real filesystems are the block-backed types in `/proc/self/mountinfo`, deduplicated by source
 device (garage-server's 11 real-type mounts are 4 filesystems: `root`, `wd4tb`, `mediacentr`,
-`oldlinux`), re-scanned every 10 min so new mounts register at runtime. ≈ 1 440 records/day per
-filesystem (1 150 before `Written today`), ≈ 5 760 on garage-server. The two #1476 root-only percent sensors moved to
+`oldlinux`), re-scanned every 10 min so new mounts register at runtime. ≈ 1 150 records/day per
+filesystem (`Written per day` adds 1), ≈ 4 600 on garage-server. The two #1476 root-only percent sensors moved to
 `Free space on root disk %` / `Free inodes on root disk %`; the managed-parity
 `Free space on disk` (+ prediction) is unchanged.
 
@@ -598,6 +598,7 @@ coverage in both drivers and an agent version bump:
 | #1485 PR | disk write volume: `Disk written per hour` per Compose service (decimal MB per UTC clock hour from the cgroup write counters) and `Written today on <name> disk` per filesystem (decimal GB since local midnight from `/proc/diskstats`); both persist their running total across a restart; new `Source::stop` hook | probe 0.5.0 |
 | #1493 PR | the tree sits directly under the product: `hsm.computerName` / `hsm.module` empty by default (accepted, not recommended), the install bundle writes neither (the `"auto"` host-name substitution removed), pinned sets at the root | probe 0.6.0 |
 | #1496 PR | the module node stays: `hsm.module` defaults to `.probe` (the product root holds `.computer/…` and `.probe/{.module,Docker}/…`); `computerName` stays empty by default | probe 0.6.1 |
+| #1498 PR | the per-disk write volume is posted once per day, as `Written per day on <name> disk` (TTL 26 h, 1 record/day instead of 288); the `Written today` nodes are stale history | probe 0.6.2 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
