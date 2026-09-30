@@ -168,7 +168,12 @@ jobs:
         run: |
           set -euo pipefail
           deb="hsm-linux-probe_${VERSION}_amd64.deb"
-          test -s "staging/$deb" && test -s "staging/$deb.sha256"
+          for asset in "$deb" "$deb.sha256"; do
+            if [ ! -s "staging/$asset" ]; then
+              echo "::error::the build artifact lacks a non-empty $asset"
+              exit 1
+            fi
+          done
           sha=$(cut -d' ' -f1 "staging/$deb.sha256")
           # Lane re-runs must not fail on "release already exists": a complete release is skipped, a
           # partial one (create succeeded, an asset upload didn't) is reported for manual deletion —
