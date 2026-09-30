@@ -363,30 +363,64 @@ namespace HSMServer.Model.Agent
         }
 
         /// <summary>
-        /// The install.sh step for "Report top processes by CPU" (#1479). The unit mounts /proc with
+        /// The install.sh step for top CPU processes (#1479). The unit mounts /proc with
         /// <c>ProtectProc=invisible</c>, which hides every process but the probe's own, and the top-CPU
-        /// sensors read <c>/proc/&lt;pid&gt;/stat</c> of all of them — so an enabling bundle lifts that one
-        /// setting for this unit with a drop-in. A bundle without the switch leaves any drop-in alone
-        /// (a hand-enabled <c>topCpu</c> keeps working); uninstall.sh and the package's postrm remove it.
+        /// sensors read <c>/proc/&lt;pid&gt;/stat</c> of all of them — so the step lifts that one setting for
+        /// this unit with a drop-in. <b>The drop-in follows the config actually installed on the host</b>
+        /// (the bundle's, or the existing one the script kept), not the bundle's switch: an enabled
+        /// <c>topCpu</c> block there writes it, anything else removes it — so a kept config also wins over
+        /// a bundle with the switch off. A bundle with the switch on whose config was not installed (kept,
+        /// no <c>--force-config</c>) and does not enable top-CPU prints a WARNING naming the way out.
+        /// The check is plain POSIX tools over the config with its newlines removed (the block holds no
+        /// nested object); a config it cannot read or recognise counts as "off" — the safe side.
+        /// uninstall.sh and the package's postrm remove the drop-in too.
         /// </summary>
         private static string TopCpuDropInScript(bool enableTopCpu)
         {
-            if (!enableTopCpu)
-                return "# \"Report top processes by CPU\" is off in this bundle: the unit keeps ProtectProc=invisible.";
-
-            return string.Join("\n",
-                "# \"Report top processes by CPU\" is on: let the probe see every process in /proc (see the drop-in).",
-                "install -d -m 0755 -o root -g root \"" + DropInDirectory + "\"",
-                "cat > \"" + TopCpuDropIn + "\" <<'EOF'",
-                "# Written by the HSM Linux probe bundle's install.sh: \"Report top processes by CPU\" is on.",
+            var lines = new List<string>
+            {
+                "# Top CPU processes (#1479): the drop-in follows the config installed above, not the bundle alone.",
+                "# An enabled topCpu block lets the probe see every process in /proc; anything else keeps the unit's",
+                "# ProtectProc=invisible.",
+                "TOP_CPU_DROPIN=\"" + TopCpuDropIn + "\"",
+                "top_cpu_on=0",
+                "if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/" + ConfigName + "\" \\",
+                "  | grep -Eq '\"topCpu\"[[:space:]]*:[[:space:]]*\\{[^}]*\"enabled\"[[:space:]]*:[[:space:]]*true'; then",
+                "  top_cpu_on=1",
+                "fi",
+                "if [ \"$top_cpu_on\" -eq 1 ]; then",
+                "  install -d -m 0755 -o root -g root \"$(dirname \"$TOP_CPU_DROPIN\")\"",
+                "  cat > \"$TOP_CPU_DROPIN\" <<'EOF'",
+                "# Written by the HSM Linux probe bundle's install.sh: /etc/hsm-linux-probe/config.json enables topCpu.",
                 "# The unit's ProtectProc=invisible hides every process but the probe's own from /proc, and the",
                 "# top-CPU sensors read /proc/<pid>/stat of every process. Delete this file, then",
                 "# systemctl daemon-reload && systemctl restart hsm-linux-probe, to hide them again.",
                 "[Service]",
                 "ProtectProc=default",
                 "EOF",
-                "chmod 0644 \"" + TopCpuDropIn + "\"",
-                "echo \"Top CPU processes: the probe may read every process's /proc entry (" + TopCpuDropIn + ").\"");
+                "  chmod 0644 \"$TOP_CPU_DROPIN\"",
+                "  echo \"Top CPU processes: on in $CONFIG_DIR/" + ConfigName + "; the probe may read every process's /proc entry ($TOP_CPU_DROPIN).\"",
+                "else",
+                "  if [ -f \"$TOP_CPU_DROPIN\" ]; then",
+                "    rm -f \"$TOP_CPU_DROPIN\"",
+                "    rmdir \"$(dirname \"$TOP_CPU_DROPIN\")\" 2>/dev/null || true",
+                "    echo \"Top CPU processes: off in $CONFIG_DIR/" + ConfigName + "; removed $TOP_CPU_DROPIN (ProtectProc=invisible again).\"",
+                "  fi",
+            };
+
+            if (enableTopCpu)
+            {
+                lines.AddRange(new[]
+                {
+                    "  # This bundle enables top CPU, so its config does; this is reached only when the existing one was kept.",
+                    "  echo \"WARNING: this bundle enables top CPU processes, but the existing $CONFIG_DIR/" + ConfigName + " was kept and does not.\" >&2",
+                    "  echo \"WARNING: top CPU processes stay off until you re-run: sudo ./install.sh --force-config\" >&2",
+                    "  echo \"WARNING: (or enable the topCpu block by hand and add the drop-in: RUNBOOK.md, 'Top CPU processes').\" >&2",
+                });
+            }
+
+            lines.Add("fi");
+            return string.Join("\n", lines);
         }
 
         // Shell scripts need LF line endings, whatever the server OS is.

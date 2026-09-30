@@ -687,11 +687,17 @@
         </member>
         <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopCpuDropInScript(System.Boolean)">
             <summary>
-            The install.sh step for "Report top processes by CPU" (#1479). The unit mounts /proc with
+            The install.sh step for top CPU processes (#1479). The unit mounts /proc with
             <c>ProtectProc=invisible</c>, which hides every process but the probe's own, and the top-CPU
-            sensors read <c>/proc/&lt;pid&gt;/stat</c> of all of them — so an enabling bundle lifts that one
-            setting for this unit with a drop-in. A bundle without the switch leaves any drop-in alone
-            (a hand-enabled <c>topCpu</c> keeps working); uninstall.sh and the package's postrm remove it.
+            sensors read <c>/proc/&lt;pid&gt;/stat</c> of all of them — so the step lifts that one setting for
+            this unit with a drop-in. <b>The drop-in follows the config actually installed on the host</b>
+            (the bundle's, or the existing one the script kept), not the bundle's switch: an enabled
+            <c>topCpu</c> block there writes it, anything else removes it — so a kept config also wins over
+            a bundle with the switch off. A bundle with the switch on whose config was not installed (kept,
+            no <c>--force-config</c>) and does not enable top-CPU prints a WARNING naming the way out.
+            The check is plain POSIX tools over the config with its newlines removed (the block holds no
+            nested object); a config it cannot read or recognise counts as "off" — the safe side.
+            uninstall.sh and the package's postrm remove the drop-in too.
             </summary>
         </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeCaDecision.Omit">

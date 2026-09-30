@@ -126,12 +126,21 @@ install.sh (`set -euo pipefail`, refuses non-root, one `hsm-linux-probe_*.deb` e
    every case, including behind a public-CA proxy where no `server-ca.pem` ships, and minimal hosts lack it.
 3. With `server-ca.pem`: copies it to `/usr/local/share/ca-certificates/hsm-server.crt`, runs
    `update-ca-certificates`, and prints the certificate's expiry date.
-   With *Report top processes by CPU* on (#1479): writes the drop-in
-   `/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf` (`[Service] ProtectProc=default`). The
-   unit's `ProtectProc=invisible` hides every process but the probe's own from `/proc`, and the top-CPU
-   sensors read `/proc/<pid>/stat` of every process. A bundle without the switch leaves an existing drop-in
-   alone (a hand-enabled `topCpu` keeps working). The drop-in follows the bundle, not the installed
-   config: an existing config kept without `--force-config` does not gain `topCpu` (as for the agent).
+   **Top CPU processes (#1479), every bundle:** the drop-in
+   `/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf` (`[Service] ProtectProc=default`)
+   **follows the config actually installed on the host** after step 1 — the bundle's, or the existing
+   one that was kept — not the bundle's switch. The unit's `ProtectProc=invisible` hides every process
+   but the probe's own from `/proc`, and the top-CPU sensors read `/proc/<pid>/stat` of every process.
+   The check is POSIX `tr`/`grep` over the config with its newlines removed (the `topCpu` block holds no
+   nested object; whitespace, key order and CRLF do not matter); no `python`/`jq`, no probe CLI.
+
+   | Installed config | Bundle switch | Result |
+   |---|---|---|
+   | `topCpu.enabled: true` (fresh install from an enabling bundle, or a kept config that enables it) | on or off | drop-in written; prints `Top CPU processes: on in …` — **the host config wins** over a bundle with the switch off |
+   | no enabled `topCpu` block, or unreadable / unrecognised (the safe side) | on | no drop-in; a WARNING: the existing config was kept and does not enable it, top CPU stays off until `install.sh --force-config` (or a hand edit of the `topCpu` block plus the drop-in, RUNBOOK "Top CPU processes") |
+   | no enabled `topCpu` block | off | no drop-in; an existing one is removed (and said so), restoring `ProtectProc=invisible` |
+
+   As for the agent, an existing config kept without `--force-config` does not gain `topCpu`.
 4. `systemctl enable --now hsm-linux-probe`, then `restart` (a reinstall picks up the new key/config/CA).
 5. Waits 3 s, prints `systemctl status --no-pager`, exits non-zero if the unit is not active. On success it
    reminds the operator that the downloaded `.tar.gz` still contains the key and should be deleted: the script
@@ -206,7 +215,7 @@ release.
 | Whether the certificate Kestrel loaded is the bundled default | `ServerConfiguration/Sections/ServerCertificateConfig.cs` (`IsBundledDefault`) |
 | Button | `Views/Product/EditProduct.cshtml` — "HSM Agent" section (admin-only) |
 | Drop-point | `HSMServer/wwwroot/probe/` (README + gitignore) |
-| Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, `topCpu` off/on and equal to the agent bundle's, the `top-cpu.conf` drop-in only when on and removed by uninstall, tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |
+| Tests | `tests/HSMServer.Core.Tests/LinuxProbeInstallerBundleTests.cs` (layout + top-level folder, byte-identical .deb, key only in `access-key`, config schema, `topCpu` off/on and equal to the agent bundle's, the `top-cpu.conf` step deciding from the installed config (warning only from an enabling bundle) and removed by uninstall, tar modes/ownership, script content incl. the key-cleanup trap) + `LinuxProbeDownloadLogicTests.cs` (staged-package pick, HTTPS check, CA decision matrix, leaf-only public export, bundled-default refusal, admin guard, 503 paths, full bundle via the controller with and without Kestrel TLS) |
 
 `install.sh`/`uninstall.sh` were also checked with shellcheck and smoke-run in a systemd `debian:13`
 container against a throwaway dummy `.deb` (fresh install from an empty apt index, non-root refusal, key
@@ -226,7 +235,7 @@ re-verified before the first non-empty `probe-release.txt`:
 | Config `/etc/hsm-linux-probe/config.json`, keys `hsm.address/port/accessKeyFile/computerName/module` (`computerName` `""`, `module` `.probe`, #1493, #1496, #1495) | `BuildConfigJson` | `config.rs` (the same values are its defaults; `probe.rs` `collector_options` leaves an empty segment out) |
 | https-only address | `ValidateServerAddress` | `config.rs` validation |
 | Top-level `topCpu { enabled, periodMs, minPercent, count }` (#1479) | `BuildConfigJson` (`AgentInstallerBundle.TopCpuBlock`) | `config.rs` `TopCpuConfig` |
-| Drop-in `hsm-linux-probe.service.d/top-cpu.conf` lifting `ProtectProc=invisible` | `install.sh` / `uninstall.sh` (`TopCpuDropIn`) | the unit's `ProtectProc=invisible`, `deb/postrm` |
+| Drop-in `hsm-linux-probe.service.d/top-cpu.conf` lifting `ProtectProc=invisible` | `install.sh` (decides from `"topCpu": { … "enabled": true }` in the installed config) / `uninstall.sh` (`TopCpuDropIn`) | the unit's `ProtectProc=invisible`, `deb/postrm`; the key names in `config.rs` `TopCpuConfig` |
 
 **Verified on a real host since.** The `debian:13` smoke test of #1424 ran against a dummy `.deb` in a Docker
 Desktop container, where systemd applied no per-unit mount namespacing, so `LoadCredential=` never

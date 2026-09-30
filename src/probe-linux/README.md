@@ -490,8 +490,10 @@ ProtectProc=default
 ```
 
 then `sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe`. The server bundle's
-`install.sh` writes exactly this file when the switch is on (a bundle without it leaves the file
-alone); `uninstall.sh` and the package's `postrm` (remove/purge) delete it. Without it — or on any
+`install.sh` writes exactly this file when the config it leaves on the host — its own, or an
+existing one it kept — enables `topCpu`, and removes it when that config does not; a bundle with
+the switch on over a kept config without the block writes nothing and prints a WARNING naming
+`install.sh --force-config`. `uninstall.sh` and the package's `postrm` (remove/purge) delete it. Without it — or on any
 host that mounts `/proc` with `hidepid` — the source still runs and says so in one INFO line at
 start (`/proc is mounted with hidepid=invisible …`); the start log also states how many processes
 the baseline saw.

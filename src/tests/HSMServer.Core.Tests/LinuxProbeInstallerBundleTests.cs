@@ -116,12 +116,30 @@ namespace HSMServer.Core.Tests
             var off = LinuxProbeInstallerBundle.BuildInstallScript();
             var on = LinuxProbeInstallerBundle.BuildInstallScript(enableTopCpu: true);
 
-            Assert.DoesNotContain("ProtectProc=default", off);
-            Assert.DoesNotContain("top-cpu.conf", off);
-            Assert.Contains("cat > \"/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf\" <<'EOF'", on);
-            Assert.Contains("\n[Service]\nProtectProc=default\nEOF\n", on);
-            // Written before systemd is reloaded and the unit (re)started, so the first start sees it.
-            Assert.True(on.IndexOf("ProtectProc=default", System.StringComparison.Ordinal) < on.IndexOf("\nsystemctl daemon-reload\n", System.StringComparison.Ordinal));
+            // Both scripts decide from the config installed on the host (the bundle's, or the kept one),
+            // not from the bundle's switch: a kept config that enables topCpu wins over a bundle without it.
+            foreach (var script in new[] { off, on })
+            {
+                Assert.Contains("TOP_CPU_DROPIN=\"/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf\"", script);
+                Assert.Contains("if tr -d '\\r\\n' 2>/dev/null < \"$CONFIG_DIR/config.json\" \\\n" +
+                                "  | grep -Eq '\"topCpu\"[[:space:]]*:[[:space:]]*\\{[^}]*\"enabled\"[[:space:]]*:[[:space:]]*true'; then", script);
+                Assert.Contains("  cat > \"$TOP_CPU_DROPIN\" <<'EOF'", script);
+                Assert.Contains("\n[Service]\nProtectProc=default\nEOF\n", script);
+                // Anything else (off, missing, unrecognised) removes the drop-in: the safe side.
+                Assert.Contains("    rm -f \"$TOP_CPU_DROPIN\"", script);
+                // Decided after the config is placed and before systemd is reloaded and the unit (re)started.
+                var check = script.IndexOf("top_cpu_on=0", System.StringComparison.Ordinal);
+                Assert.True(script.IndexOf("install -m 0644 -o root -g root config.json", System.StringComparison.Ordinal) < check);
+                Assert.True(check < script.IndexOf("\nsystemctl daemon-reload\n", System.StringComparison.Ordinal));
+                Assert.DoesNotContain("python", script);
+                Assert.DoesNotContain("jq ", script);
+            }
+
+            // Only a bundle that enables top CPU warns when the kept config does not.
+            Assert.Contains("WARNING: this bundle enables top CPU processes, but the existing $CONFIG_DIR/config.json was kept and does not.", on);
+            Assert.Contains("sudo ./install.sh --force-config", on);
+            Assert.Contains("RUNBOOK.md, 'Top CPU processes'", on);
+            Assert.DoesNotContain("WARNING: this bundle enables top CPU", off);
 
             // The bundle ships the script matching its config.
             var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options with { EnableTopCpu = true }));

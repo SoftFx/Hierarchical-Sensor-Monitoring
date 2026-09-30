@@ -191,8 +191,10 @@ Linux is the only supported target. The initiative is
   thread with a 5 s deadline, and a filesystem whose last `statvfs` is still blocked is not asked
   again, so a hung mount can neither hold up Start nor stall the other disks.
 - **The unit hides other processes (`ProtectProc=invisible`) unless top-CPU is on.** Only the
-  `top-cpu.conf` drop-in (written by the server bundle's `install.sh` when the switch is on, removed by
-  `uninstall.sh` and `postrm`) sets `ProtectProc=default`. Top-CPU reads only `/proc/stat`,
+  `top-cpu.conf` drop-in sets `ProtectProc=default`: the server bundle's `install.sh` writes it when
+  the config installed on the host enables `topCpu` and removes it otherwise (a kept config wins over
+  the bundle's switch; an enabling bundle over a kept config without the block warns instead);
+  `uninstall.sh` and `postrm` remove it. Top-CPU reads only `/proc/stat`,
   `/proc/<pid>/stat`, the `/proc/<pid>/exe` link and — when that link is denied, once per new sensor —
   argv[0] of `/proc/<pid>/cmdline` (never the arguments, never `environ`).
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at
