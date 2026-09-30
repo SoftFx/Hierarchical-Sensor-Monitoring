@@ -73,7 +73,7 @@ HSM_CERTIFICATE=letsencrypt-http
 | DYNV6_API_TOKEN | dynv6 token; required only for dynv6. |
 | COMPOSE_PROFILES | Include logs to run the log stack (VictoriaLogs + vlagent). The template ships logs; remove it to disable the log containers. |
 | HSM_STRUCTURED_LOGS | true makes the app write the structured JSON log file the log pipeline ships. Default false. |
-| VL_UI_USER / VL_UI_PASSWORD | Basic-auth credentials for the log UI (/select/vmui) and query API. Commented out in the template; uncomment both (with a 12+ character password) only when enabling log access. |
+| VL_UI_USER / VL_UI_PASSWORD | Basic-auth credentials for the log UI (/select/vmui) and query API. Commented out in the template; uncomment both (with a 12+ character password) only when enabling log access. If the password contains `$`, single-quote the whole value (VL_UI_PASSWORD='Xq$7mR...') or avoid `$` — Compose interpolates `$VAR` inside .env values. |
 | VL_RETENTION_PERIOD | How long VictoriaLogs keeps log entries (e.g. 30d, 4w; minimum 1d). Default 30d. |
 | VL_RETENTION_MAX_DISK | Disk cap for VictoriaLogs storage (default 10GiB); the oldest days are dropped when it is exceeded. |
 

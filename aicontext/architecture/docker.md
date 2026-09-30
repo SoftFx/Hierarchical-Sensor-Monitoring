@@ -119,7 +119,7 @@ The pipeline: `app` (env-gated NLog `jsonfile` target) writes `Logs/HSM-structur
 
 **Deployment dependency:** the nlog.config change ships inside the app image, so the JSON log file appears only with the first app image released after this change; until then vlagent simply sees no matching file (the compose, vlagent, and Caddy pieces deploy independently).
 
-**Read path** — through the existing Caddy on the web ports (same origin, same TLS), behind basic auth with `VL_UI_USER`/`VL_UI_PASSWORD` from `.env` (the caddy entrypoint bcrypt-hashes the password at cost 10 with a 12+ character minimum; the plaintext never reaches the Caddyfile):
+**Read path** — through the existing Caddy on the web ports (same origin, same TLS), behind basic auth with `VL_UI_USER`/`VL_UI_PASSWORD` from `.env` (the caddy entrypoint bcrypt-hashes the password at cost 10 with a 12+ character minimum; the plaintext never reaches the Caddyfile; a password containing `$` must be single-quoted in `.env` — `VL_UI_PASSWORD='Xq$7mR...'` — or avoid `$`, because Compose interpolates `$VAR` inside `.env` values):
 
 - Web UI: `https://<HSM_DOMAIN>/select/vmui` (VictoriaLogs' built-in UI; in the pinned version it is served under `/select/vmui`, older releases used `/vlui`)
 - Query API: `https://<HSM_DOMAIN>/select/logsql/*`
