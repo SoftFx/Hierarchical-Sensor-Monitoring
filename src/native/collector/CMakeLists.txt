@@ -399,6 +399,9 @@ set(NATIVE_REGRESSION_TESTS
     # the first enqueue stamp, and the four queue-stat rows carry the managed descriptions.
     native_package_process_time_is_the_average_queue_wait
     native_package_process_time_keeps_the_first_enqueue_across_a_retry
+    # ... and a retry dropped at capacity is counted in Queue overflow (managed #1088), with Stop
+    # folding the last partial cycle's drops instead of losing them.
+    native_requeue_drop_at_capacity_counts_as_overflow
     native_queue_stat_descriptions_match_managed
     # #1433: .module start/stop markers mirror managed (first heartbeat false, version Start:/Stop:).
     native_service_alive_marks_the_first_beat

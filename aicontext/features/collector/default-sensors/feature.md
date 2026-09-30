@@ -503,6 +503,21 @@ stays different, and why:
   runtime-registration flush — so they feed none of the per-package rows (`Items count in package`,
   `Package content size` included).
 
+**A retry dropped at capacity is counted in `Queue overflow` in both collectors (#1480, native
+0.10.1).** When a failed package is put back into a queue that is already full, the retried value is
+dropped (the #1088 backstop). Managed reports every such drop, one per value, through
+`ReportRequeueEviction` → `QueueOverflowSensor` (not suppressed during shutdown); native dropped it
+without a trace, a rule-#8 gap. Native now adds each dropped retry to the same overflow counter the
+enqueue path uses. That counter is folded into the bar by the self-monitor thread once per collect
+cycle, and now **once more by Stop** — after that thread is joined, before the bars are flushed — so
+drops counted during the last partial cycle are no longer lost with the thread. Remaining shape
+difference: managed adds one bar value per drop event (a retry drop is a `1`), native one value per
+collect cycle with the cycle's total, so the SUM matches while `Count`/`Mean` differ. Evictions caused by
+Stop's own flush of the bars into a full queue happen after the fold and are still not reported. Pinned
+by `native_requeue_drop_at_capacity_counts_as_overflow` (native unit test: the managed side covers #1088
+with C# unit tests in `CollectorQueueShutdownTests`, and there is no portable scenario — it would need a
+hang-lift verb and an overflow-bar assertion in both drivers).
+
 The four queue-stat rows now also register **the same description** in both collectors: native composes
 the managed `QueueDiagnosticCollection` text from its own options (`ComposeDefaultDescription`, with a
 port of `ToReadableView`), and the process-time text names the quantity and the unit, because the

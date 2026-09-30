@@ -38,6 +38,8 @@
 extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms);
 extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, int64_t delta_ms);
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
+extern "C" int32_t hsm_collector_test_hung_send_count(hsm_collector_t* collector);
+extern "C" int64_t hsm_collector_test_requeue_dropped_total(hsm_collector_t* collector);
 #if defined(HSM_COLLECTOR_HTTP)
 // Live-path seam (#1097): swap the recording sender for the libcurl transport before Start.
 extern "C" void hsm_collector_test_install_http_sender(hsm_collector_t* collector);
@@ -5289,6 +5291,67 @@ namespace
         Contains(bars.back(), "\"Count\":1,");
     }
 
+    // A failed batch put back into a FULL queue is dropped (the #1088 backstop), and every dropped
+    // value is counted in ".module/Collector queue stats/Queue overflow" — managed ReEnqueueItem reports
+    // each one through ReportRequeueEviction. Native used to drop them without a trace (#1480).
+    // Deterministic: the worker only dispatches on a file kick (1 h collect period); the test waits
+    // until that batch is parked in the injected transport hang (so it has left the queue), fills the
+    // queue to capacity, and lifts the hang into an injected failure, so all 3 retried values find the
+    // queue full. The self-monitor's cycle is also 1 h, so the count reaches the bar through Stop's
+    // final fold — which is part of the fix: without it, drops of the last partial cycle were lost.
+    void NativeRequeueDropAtCapacityCountsAsOverflow()
+    {
+        CollectorHandle collector; // declared first so the sensor handles are released before it
+        SensorHandle values;
+        SensorHandle files;
+
+        auto options = TestOptions();
+        options.max_queue_size = 5;
+        options.package_collect_period_ms = 3600000;
+        collector = CreateCollector(options);
+
+        Require(
+            hsm_collector_add_all_queue_diagnostic_sensors(collector.value) == HSM_RESULT_OK,
+            "add queue diagnostic sensors failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        values = CreateIntSensor(collector.value, "contract/queue/requeue");
+        Require(
+            hsm_collector_create_file_sensor(collector.value, "contract/queue/kick", "kick", "txt", &files.value) ==
+                HSM_RESULT_OK,
+            "file sensor create failed");
+
+        hsm_collector_set_send_hang(collector.value, true);
+        hsm_collector_set_send_fail_next(collector.value, 1);
+
+        Require(hsm_sensor_add_int(values.value, 1, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        Require(hsm_sensor_add_int(values.value, 2, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        Require(hsm_sensor_add_file(files.value, "kick", HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add file failed");
+
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (hsm_collector_test_hung_send_count(collector.value) == 0 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        Require(hsm_collector_test_hung_send_count(collector.value) == 1, "the batch never reached the transport");
+
+        // The queue is empty now; fill it exactly to capacity (no eviction on this path).
+        for (int value = 10; value < 15; ++value)
+            Require(hsm_sensor_add_int(values.value, value, HSM_SENSOR_STATUS_OK, nullptr) == HSM_RESULT_OK, "add failed");
+        Require(hsm_collector_test_requeue_dropped_total(collector.value) == 0, "nothing may be dropped before the send fails");
+
+        hsm_collector_set_send_hang(collector.value, false);
+
+        deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (hsm_collector_test_requeue_dropped_total(collector.value) < 3 && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        Require(hsm_collector_test_requeue_dropped_total(collector.value) == 3, "the 3 retried values must be dropped");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const auto overflow = PayloadsForPath(collector.value, "/Queue overflow\"");
+        Require(!overflow.empty(), "the dropped retries must reach the Queue overflow bar");
+        Contains(overflow.back(), "\"Min\":3,\"Max\":3,\"Mean\":3,");
+        Contains(overflow.back(), "\"Count\":1,");
+    }
+
     // The four queue-stat rows register the managed descriptions, composed from the collector options
     // the same way (#1480) — here the production defaults, which the conformance harness does not use.
     // The periods go through the managed ToReadableView rules (plural above 1, zero parts skipped).
@@ -7905,6 +7968,8 @@ namespace
               [](const std::string&) { NativePackageProcessTimeIsTheAverageQueueWait(); } },
             { "native_package_process_time_keeps_the_first_enqueue_across_a_retry",
               [](const std::string&) { NativePackageProcessTimeKeepsTheFirstEnqueueAcrossARetry(); } },
+            { "native_requeue_drop_at_capacity_counts_as_overflow",
+              [](const std::string&) { NativeRequeueDropAtCapacityCountsAsOverflow(); } },
             { "native_queue_stat_descriptions_match_managed",
               [](const std::string&) { NativeQueueStatDescriptionsMatchManaged(); } },
             { "native_service_alive_beats_on_its_own_period",

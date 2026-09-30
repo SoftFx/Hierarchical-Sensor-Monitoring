@@ -3008,6 +3008,18 @@ namespace
             StopServiceStatusSampler();
             StopSelfMonitor();
 
+            // The self-monitor loop folds overflow once per collect cycle; drops counted since its
+            // last pass would otherwise vanish with it. Fold them now, so the flush below carries
+            // them (managed adds each drop to the overflow bar at once, and flushes it on stop).
+            try
+            {
+                PostOverflowDelta(SelfMonitorSnapshot());
+            }
+            catch (...)
+            {
+                // A stats post must never break Stop.
+            }
+
             // Dispose bound metric sources now the scheduler has stopped reading them (managed
             // dispose-on-stop; #1164). A restart rebinds via the factory.
             for (const auto& sensor : sensors_snapshot)
@@ -3872,6 +3884,16 @@ namespace
                 fail_next_.fetch_add(count);
         }
 
+        // Test seams (#1480): how many sends are parked in the injected hang, and how many retries
+        // the queue has dropped at capacity since creation.
+        int TestHungSendCount()
+        {
+            std::lock_guard<std::mutex> guard(hang_mutex_);
+            return hung_sends_;
+        }
+
+        int64_t TestRequeueDroppedTotal() const { return requeue_dropped_total_.load(std::memory_order_relaxed); }
+
         void SetSendHang(bool hang)
         {
             {
@@ -4503,10 +4525,17 @@ namespace
         // a retry rides the tail until delivered or, under sustained overflow, FIFO-evicted.
         // The payload keeps its original enqueue stamp, as managed keeps QueueItem.BuildDate across a
         // retry, so the wait a failed send cost still shows in "Package process time" (#1480).
+        // A dropped retry is counted in "Queue overflow", one per value, as managed ReEnqueueItem
+        // reports each at-capacity retry drop through ReportRequeueEviction (#1088); it used to
+        // vanish without a trace (rule #8, #1480).
         void ReEnqueueLocked(QueuedPayload payload)
         {
             if (queue_.size() >= static_cast<size_t>(max_queue_size_))
+            {
+                queue_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+                requeue_dropped_total_.fetch_add(1, std::memory_order_relaxed);
                 return;
+            }
 
             queue_.push_back(std::move(payload));
         }
@@ -4705,6 +4734,21 @@ namespace
                 self_monitor_thread_.join();
         }
 
+        // Fold the values dropped since the last fold into ".module/Collector queue stats/Queue
+        // overflow" — posted only when non-zero so the bar isn't all-zeros. Called by the
+        // self-monitor loop once per collect cycle and once more by Stop, after that loop is joined
+        // and before the bars are flushed, so drops of the last partial cycle are not lost (#1480).
+        // Bars only aggregate here, so no queue lock is involved.
+        void PostOverflowDelta(const SelfMonitorHandles& handles)
+        {
+            if (!handles.queue_overflow)
+                return;
+
+            const std::int64_t overflowed = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
+            if (overflowed > 0)
+                handles.queue_overflow->AddBarInt(static_cast<int32_t>(std::min<std::int64_t>(overflowed, INT32_MAX)));
+        }
+
         // The heartbeat's own post period: the ".module/Service alive" catalog row's PostDataPeriod
         // (15 s), which is the knob managed drives CollectorAlive from (#1437).
         static int64_t ServiceAliveBeatPeriodMs()
@@ -4765,14 +4809,8 @@ namespace
                         handles.service_alive->AddBool(alive, HSM_SENSOR_STATUS_OK, nullptr);
                     }
 
-                    // Overflow since the last collect cycle — post only when non-zero so the bar
-                    // isn't all-zeros.
-                    if (overflow_due && handles.queue_overflow)
-                    {
-                        const std::int64_t overflowed = queue_overflow_count_.exchange(0, std::memory_order_relaxed);
-                        if (overflowed > 0)
-                            handles.queue_overflow->AddBarInt(static_cast<int32_t>(std::min<std::int64_t>(overflowed, INT32_MAX)));
-                    }
+                    if (overflow_due)
+                        PostOverflowDelta(handles);
                 }
                 catch (...)
                 {
@@ -5559,7 +5597,10 @@ namespace
 
                 if (send_hang_)
                 {
+                    // Counted while parked, so a test knows the batch has left the queue.
+                    ++hung_sends_;
                     hang_cv_.wait(lock, [this] { return !send_hang_ || send_cancelled_; });
+                    --hung_sends_;
 
                     if (send_hang_)
                         return false;
@@ -5761,6 +5802,9 @@ namespace
         // thread, whose creation and join carry the happens-before against Start/Stop.
         bool service_alive_first_beat_ = true;
         std::atomic<std::int64_t> queue_overflow_count_{ 0 };
+        // Retries dropped at capacity since creation — never reset; read only by the test seam, so a
+        // test can wait for the drop without racing the self-monitor's fold of queue_overflow_count_.
+        std::atomic<std::int64_t> requeue_dropped_total_{ 0 };
         // Guards the self-monitor thread's arm/join pair. Deliberately NOT op_mutex_: a lifecycle
         // listener runs with op_mutex_ held and may register a sensor group, which arms the loop.
         std::mutex self_monitor_lifecycle_mutex_;
@@ -5776,6 +5820,7 @@ namespace
         std::condition_variable hang_cv_;
         bool send_hang_ = false;
         bool send_cancelled_ = false;
+        int hung_sends_ = 0; // sends parked in the injected hang (test seam), guarded by hang_mutex_
 
         // Extra HTTP request headers injected into every data POST (#1198 agent-directive channel).
         // Set before Start; read only by the worker thread after Start — no lock needed.
@@ -6854,6 +6899,18 @@ extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, 
 {
     if (collector != nullptr)
         collector->impl->TestAdvanceClock(delta_ms);
+}
+
+// Test-only (#1480): sends currently parked in the injected transport hang, and retries the queue has
+// dropped at capacity since creation. Not in the public header, like the clock seams above.
+extern "C" int32_t hsm_collector_test_hung_send_count(hsm_collector_t* collector)
+{
+    return collector != nullptr ? collector->impl->TestHungSendCount() : 0;
+}
+
+extern "C" int64_t hsm_collector_test_requeue_dropped_total(hsm_collector_t* collector)
+{
+    return collector != nullptr ? collector->impl->TestRequeueDroppedTotal() : 0;
 }
 
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message)
