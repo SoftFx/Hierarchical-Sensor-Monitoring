@@ -103,6 +103,20 @@ namespace HSMServer.Core.Tests
                 var gateCondition = gate.Condition.ToString();
                 Assert.Contains("HSM_STRUCTURED_LOGS", gateCondition);
                 Assert.Contains("== 'true'", gateCondition);
+
+                // Placement contract: the jsonfile rule must sit BELOW the
+                // Microsoft.AspNetCore* rule. That rule is final for framework logs
+                // (IgnoreFinal in Release, LogFinal in Debug), which is what keeps
+                // per-request noise (5-8 Info lines per HTTP request, dominated by
+                // sensor ingestion) out of the text targets - the JSON file is a copy
+                // of what they keep, so it must get the same filtering. Moving the
+                // jsonfile rule above it would write every request to disk, vlagent,
+                // and VictoriaLogs.
+                var aspNetRule = config.LoggingRules.Single(r => r.LoggerNamePattern == "Microsoft.AspNetCore*");
+                Assert.True(
+                    config.LoggingRules.IndexOf(aspNetRule) < config.LoggingRules.IndexOf(rule),
+                    "the jsonfile rule must come after the Microsoft.AspNetCore* final rule");
+                Assert.Equal(FilterResult.IgnoreFinal, Assert.Single(aspNetRule.Filters.OfType<ConditionBasedFilter>()).Action);
             }
             finally
             {

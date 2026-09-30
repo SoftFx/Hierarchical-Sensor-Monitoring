@@ -83,7 +83,9 @@ if [ -n "${VL_UI_USER:-}" ] || [ -n "${VL_UI_PASSWORD:-}" ]; then
     # cached), so the default would let unauthenticated traffic burn CPU and degrade
     # ingestion. Cost 10 is tens of milliseconds; the compensating control is the required
     # 12+ character random password.
-    VL_UI_BCRYPT_HASH="$(caddy hash-password --algorithm bcrypt --bcrypt-cost 10 --plaintext "$VL_UI_PASSWORD")"
+    # The password goes in on stdin, not as a --plaintext argument: an argument is
+    # visible in /proc/<pid>/cmdline (docker top, ps) while the hash is computed.
+    VL_UI_BCRYPT_HASH="$(printf '%s\n' "$VL_UI_PASSWORD" | caddy hash-password --algorithm bcrypt --bcrypt-cost 10)"
     require_nonblank "${VL_UI_BCRYPT_HASH}" 'caddy hash-password produced no bcrypt hash'
     HSM_VL_SNIPPET=victorialogs-routes
 else
