@@ -44,6 +44,7 @@ docs, PR descriptions, review comments, and user-facing documentation.
 |---|---|---|
 | HSM Server | ASP.NET server application hosting API, site, background services, and storage access. | Use instead of just "backend" in public docs. |
 | HSM Server Core | Shared server domain/core project. | Code/project term. |
+| Self-monitoring | The server watching itself: a dedicated product ("HSM Server Monitoring") where the server reports its own health and traffic the same way collectors report customer products. | The operator's surface for server-side performance questions; home of the token usage sensors. Say "self-monitoring", not "telemetry" (too generic) or "internal metrics". |
 | LevelDB storage | On-disk database implementation used by HSM. | Mention LMDB/native dependencies only when relevant. |
 | Snapshot | Persisted or cached representation of current tree/state. | Be explicit: tree snapshot, sensor snapshot, or database snapshot. |
 | Journal | Historical sequence of sensor values or changes. | Confirm file/class-specific semantics before broad edits. |
@@ -67,7 +68,7 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Term | Meaning | Notes |
 |---|---|---|
 | DTO | Public data transfer object, often in `HSMSensorDataObjects`. | Serialization compatibility matters. |
-| Access key | Credential/key used by collectors or clients to connect/send data. | Treat as sensitive. |
+| Access key | Collector-side credential that authenticates a data source sending sensor values; managed on the Access keys page. | A different concept from an API token (management clients) — don't shorten either to "API key". Treat as sensitive. |
 | API token | Personal opaque bearer credential (`hsm_pat_v1_<token-id>.<secret>`) for non-interactive management clients; only a SHA-256 verifier is persisted. An eternal full mirror of its owner's rights, optionally read-only (#1384). | Distinct from collector access keys; creation/lifecycle is cookie-only. See `aicontext/features/server/api-tokens/`. |
 | Read-only token | API token whose only restriction is that every write operation of the management API is denied; reads follow the owner's sight exactly. | The flag is fixed at creation; changing a token's power means revoking and minting a new one. |
 | Profile | The per-user page reached from the header user menu item "Personal tokens" (route `/Profile`): a read-only card about the signed-in user plus the API tokens section where the user manages their own tokens. | Editing user data is not part of the Profile; it is a view + personal-token surface. |
@@ -103,3 +104,6 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Metric | Sensor or sensor value | HSM domain model is sensor-based. |
 | Backend | HSM Server | Public docs should name the product component. |
 | Timer task | Scheduled task | Matches collector scheduler terminology. |
+| Telemetry | Self-monitoring | "Telemetry" is too generic; HSM's term names the server-watching-itself product. |
+| Internal metrics | Self-monitoring | Same reason as "telemetry". |
+| API key | Access key (collector data) or API token (management) | Ambiguous blend of two distinct credentials; name the one meant. |
