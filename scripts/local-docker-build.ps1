@@ -154,6 +154,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "gh release download probe-v$probePin failed — does the release exist and is gh authenticated?" }
         $debs = @(Get-ChildItem -Path $probeDir -Filter "hsm-linux-probe_*.deb" -File)
         if ($debs.Count -ne 1) { throw "probe-v$probePin must carry exactly one hsm-linux-probe_*.deb, found $($debs.Count)" }
+        # Same check as scripts/stage-linux-probe.sh: the asset must be the version the pin names.
+        if (-not $debs[0].Name.StartsWith("hsm-linux-probe_${probePin}_")) { throw "probe-v$probePin carries $($debs[0].Name), expected hsm-linux-probe_${probePin}_<arch>.deb" }
         $probeShaFile = "$($debs[0].FullName).sha256"
         if (-not (Test-Path $probeShaFile)) { throw "probe-v$probePin has no $($debs[0].Name).sha256" }
         $expected = ((Get-Content $probeShaFile -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
