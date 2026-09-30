@@ -34,6 +34,17 @@
 #   docker build --build-arg BASE_IMAGE=hsmonitoring/hierarchical_sensor_monitoring:latest \
 #     -t hsmonitoring/hierarchical_sensor_monitoring:latest \
 #     -f docker_scripts/HSMserver/Dockerfile.healthcheck docker_scripts/HSMserver
+#
+# LOG STORAGE: the 'logs' profile adds VictoriaLogs (log database). The app writes its structured
+# JSON log to Logs/ only when HSM_STRUCTURED_LOGS=true (default false, so an older .env upgraded
+# to this file never starts writing it on its own); the vlagent service then tails that file and
+# ships it to VictoriaLogs with durable delivery (checkpoints + on-disk buffer; automatic replay
+# after an outage — no manual backfill). .env.example pairs COMPOSE_PROFILES=logs with
+# HSM_STRUCTURED_LOGS=true, so fresh installs get the full pipeline.
+# Caddy exposes VictoriaLogs' UI (/select/vmui) and query API (/select/logsql) with basic auth
+# only when VL_UI_USER/VL_UI_PASSWORD are set in .env; .env.example ships them commented out, so
+# a fresh install stores logs but serves no public log routes until real credentials are set.
+# Disable entirely by removing 'logs' from COMPOSE_PROFILES. See aicontext/architecture/docker.md.
 services:
   app:
     image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
@@ -69,14 +80,68 @@ services:
     environment:
       # Trust X-Forwarded-For only from the compose network, whose only other member is caddy.
       Kestrel__TrustedProxies__0: 'attached-networks'
+      # Structured JSON log archive in nlog.config; vlagent ships it to VictoriaLogs.
+      # Defaults to false: an .env from before log storage must not silently start writing a
+      # second JSON copy of every Info+ event plus its daily archive files with no
+      # VictoriaLogs or vlagent to read it.
+      # .env.example pairs HSM_STRUCTURED_LOGS=true with the 'logs' profile.
+      HSM_STRUCTURED_LOGS: '${HSM_STRUCTURED_LOGS:-false}'
     volumes:
       - ./Logs:/app/Logs
       - ./Config:/app/Config
       - ./Databases:/app/Databases
       - ./DatabasesBackups:/app/DatabasesBackups
 
+  victorialogs:
+    # Log database (upstream image, version-pinned). Reached only inside the compose network:
+    # vlagent ships the app's JSON log here, Caddy exposes the read-only paths.
+    image: 'victoriametrics/victoria-logs:v1.52.0'
+    container_name: hsm-victorialogs
+    restart: unless-stopped
+    profiles: ['logs']
+    command:
+      - '-httpListenAddr=:9428'
+      - '-storageDataPath=/victoria-logs-data'
+      - '-retentionPeriod=${VL_RETENTION_PERIOD:-30d}'
+      - '-retention.maxDiskSpaceUsageBytes=${VL_RETENTION_MAX_DISK:-10GiB}'
+    # Absolute disk cap for the log volume (default 10GiB; override VL_RETENTION_MAX_DISK in .env).
+    # When it is exceeded, VictoriaLogs drops the oldest whole per-day partitions automatically and
+    # always keeps the last two days (the cap can be exceeded if those two days alone are bigger);
+    # it operates independently of -retentionPeriod. The percent-based flag
+    # (-retention.maxDiskUsagePercent) is deliberately not used: a Docker named volume shares the
+    # host filesystem, so a percentage would count the whole host disk, not the volume (docker.md).
+    mem_limit: 512m
+    volumes:
+      - victorialogs-data:/victoria-logs-data
+    # No healthcheck: the image has no shell, so nothing can be probed in-container;
+    # /health exists on the HTTP port for external checks.
+
+  vlagent:
+    # VictoriaLogs' vendor-native agent: tails the app's JSON log file (read-only mount of
+    # ./Logs) and ships it to VictoriaLogs via the native insert endpoint. Reading-position
+    # checkpoints and the unsent-data buffer live in the vlagent-data volume, so delivery
+    # survives vlagent restarts and replays automatically after a VictoriaLogs outage.
+    # No published ports and no healthcheck: like victorialogs, the image has no shell
+    # (nothing to probe in-container); /health and metrics answer on :9429 inside the
+    # compose network only.
+    image: 'victoriametrics/vlagent:v1.52.0'
+    container_name: hsm-vlagent
+    restart: unless-stopped
+    profiles: ['logs']
+    command:
+      - '-fileCollector.glob=/logs/HSM-structured-log-*.json'
+      - '-fileCollector.msgField=_msg'
+      - '-fileCollector.timeField=_time'
+      - '-tmpDataPath=/vlagent-data'
+      - '-remoteWrite.url=http://victorialogs:9428/insert/native'
+      - '-remoteWrite.maxDiskUsagePerURL=1024MB'
+    mem_limit: 128m
+    volumes:
+      - './Logs:/logs:ro'
+      - 'vlagent-data:/vlagent-data'
+
   caddy:
-    image: 'hsmonitoring/hsm-caddy:2.11.4-1'
+    image: 'hsmonitoring/hsm-caddy:2.11.4-2'
     container_name: hsm-caddy
     restart: unless-stopped
     depends_on:
@@ -90,6 +155,9 @@ services:
       HSM_DNS_PROVIDER: '${HSM_DNS_PROVIDER:-}'
       CF_API_TOKEN: '${CF_API_TOKEN:-}'
       DYNV6_API_TOKEN: '${DYNV6_API_TOKEN:-}'
+      # Basic auth for the VictoriaLogs UI and query API; the entrypoint hashes the password.
+      VL_UI_USER: '${VL_UI_USER:-}'
+      VL_UI_PASSWORD: '${VL_UI_PASSWORD:-}'
     ports:
       - '80:80'
       - '443:443'
@@ -98,3 +166,7 @@ services:
     volumes:
       - ./CaddyData:/data
       - ./CaddyCertificates:/certs:ro
+
+volumes:
+  victorialogs-data:
+  vlagent-data:

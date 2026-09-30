@@ -16,6 +16,7 @@ on:
       - wiki-git/Installation.md
       - aicontext/architecture/docker.md
       - docs/decisions/0007-bundled-dns-caddy-image.md
+      - docs/decisions/0008-victorialogs-log-storage.md
       - .github/workflows/caddy-image.yml
       - scripts/check-caddy-image-release.py
       - scripts/local-docker-build.ps1
@@ -32,7 +33,7 @@ permissions:
 
 env:
   IMAGE: hsmonitoring/hsm-caddy
-  VERSION: 2.11.4-1
+  VERSION: 2.11.4-2
 
 jobs:
   build-test-publish:
