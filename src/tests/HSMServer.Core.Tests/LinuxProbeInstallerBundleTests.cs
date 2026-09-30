@@ -83,6 +83,55 @@ namespace HSMServer.Core.Tests
         }
 
         [Fact]
+        public void ConfigJson_OmitsTopCpu_WhenDisabled()
+        {
+            using var doc = JsonDocument.Parse(LinuxProbeInstallerBundle.BuildConfigJson(_options)); // EnableTopCpu defaults to false
+
+            Assert.False(doc.RootElement.TryGetProperty("topCpu", out _));
+        }
+
+        [Fact]
+        public void ConfigJson_CarriesTheAgentsTopCpuBlock_WhenEnabled()
+        {
+            using var doc = JsonDocument.Parse(LinuxProbeInstallerBundle.BuildConfigJson(_options with { EnableTopCpu = true }));
+            var topCpu = doc.RootElement.GetProperty("topCpu");
+
+            // The probe reads the agent's keys and defaults at the same top level (#1479).
+            Assert.True(topCpu.GetProperty("enabled").GetBoolean());
+            Assert.Equal(60000, topCpu.GetProperty("periodMs").GetInt32());
+            Assert.Equal(10, topCpu.GetProperty("count").GetInt32());
+            Assert.Equal(1.0, topCpu.GetProperty("minPercent").GetDouble());
+
+            using var agent = JsonDocument.Parse(AgentInstallerBundle.BuildConfigJson(new AgentBundleOptions("https://hsm.example.com", 44330, Key, false, EnableTopCpu: true)));
+            Assert.Equal(agent.RootElement.GetProperty("topCpu").GetRawText(), topCpu.GetRawText());
+
+            // The rest of the probe config is unchanged by the switch.
+            Assert.Equal("https://hsm.example.com", doc.RootElement.GetProperty("hsm").GetProperty("address").GetString());
+            Assert.EndsWith("}\n", LinuxProbeInstallerBundle.BuildConfigJson(_options with { EnableTopCpu = true }));
+        }
+
+        [Fact]
+        public void TopCpu_InstallScriptLiftsProtectProcOnlyWhenEnabled()
+        {
+            var off = LinuxProbeInstallerBundle.BuildInstallScript();
+            var on = LinuxProbeInstallerBundle.BuildInstallScript(enableTopCpu: true);
+
+            Assert.DoesNotContain("ProtectProc=default", off);
+            Assert.DoesNotContain("top-cpu.conf", off);
+            Assert.Contains("cat > \"/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf\" <<'EOF'", on);
+            Assert.Contains("\n[Service]\nProtectProc=default\nEOF\n", on);
+            // Written before systemd is reloaded and the unit (re)started, so the first start sees it.
+            Assert.True(on.IndexOf("ProtectProc=default", System.StringComparison.Ordinal) < on.IndexOf("\nsystemctl daemon-reload\n", System.StringComparison.Ordinal));
+
+            // The bundle ships the script matching its config.
+            var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options with { EnableTopCpu = true }));
+            Assert.Equal(on, Encoding.UTF8.GetString(entries["install.sh"].Content));
+            Assert.Contains("\"topCpu\"", Encoding.UTF8.GetString(entries["config.json"].Content));
+
+            Assert.Contains("rm -f \"/etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf\"", LinuxProbeInstallerBundle.BuildUninstallScript());
+        }
+
+        [Fact]
         public void TarEntries_HaveExpectedModesAndRootOwnership()
         {
             var entries = Read(LinuxProbeInstallerBundle.BuildTarGz(Folder, PackageName, _package, _options with { ServerCaPem = CaPem }));

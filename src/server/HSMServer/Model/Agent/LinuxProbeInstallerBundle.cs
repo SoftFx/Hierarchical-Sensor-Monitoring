@@ -12,9 +12,10 @@ namespace HSMServer.Model.Agent
     /// <summary>
     /// Parameters baked into one per-product Linux probe bundle. <see cref="AccessKey"/> goes into its
     /// own <c>access-key</c> file, never into config.json. <see cref="ServerCaPem"/> is the server's
-    /// public certificate, or null to leave <c>server-ca.pem</c> out of the bundle.
+    /// public certificate, or null to leave <c>server-ca.pem</c> out of the bundle. <see cref="EnableTopCpu"/>
+    /// adds the agent's <c>topCpu</c> block, as <see cref="AgentBundleOptions.EnableTopCpu"/> does (#1479).
     /// </summary>
-    public sealed record LinuxProbeBundleOptions(string ServerAddress, int Port, string AccessKey, string ServerCaPem = null);
+    public sealed record LinuxProbeBundleOptions(string ServerAddress, int Port, string AccessKey, string ServerCaPem = null, bool EnableTopCpu = false);
 
     /// <summary>
     /// Builds the downloadable HSM Linux probe bundle (#1424, initiative linux-docker-probe §4.6): a
@@ -35,6 +36,10 @@ namespace HSMServer.Model.Agent
 
         /// <summary>Directory under wwwroot the server build stages the pinned probe .deb into.</summary>
         public const string StagingFolder = "probe";
+
+        /// <summary>The unit's drop-in directory, and the drop-in the top-CPU switch writes there (#1479).</summary>
+        public const string DropInDirectory = "/etc/systemd/system/hsm-linux-probe.service.d";
+        public const string TopCpuDropIn = DropInDirectory + "/top-cpu.conf";
 
         /// <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
         public const string AccessKeyCredentialPath = "/run/credentials/hsm-linux-probe.service/access-key";
@@ -135,14 +140,22 @@ namespace HSMServer.Model.Agent
                 },
             };
 
-            return JsonSerializer.Serialize(config, _jsonOptions) + "\n";
+            var json = JsonSerializer.SerializeToNode(config).AsObject();
+
+            // "Report top processes by CPU" (Configuration → Agent): the same block the agent bundle
+            // writes, at the same top level of the probe's config (#1479).
+            if (options.EnableTopCpu)
+                json["topCpu"] = JsonSerializer.SerializeToNode(AgentInstallerBundle.TopCpuBlock);
+
+            return json.ToJsonString(_jsonOptions) + "\n";
         }
 
         /// <summary>
         /// The installer. Runs as root, installs the package, places config + key + CA, enables the unit.
-        /// The key is only ever handled as a file: never echoed, never an argument.
+        /// The key is only ever handled as a file: never echoed, never an argument. With
+        /// <paramref name="enableTopCpu"/> it also writes the <see cref="TopCpuDropIn"/> drop-in.
         /// </summary>
-        public static string BuildInstallScript()
+        public static string BuildInstallScript(bool enableTopCpu = false)
         {
             return Join(
                 "#!/usr/bin/env bash",
@@ -230,6 +243,8 @@ namespace HSMServer.Model.Agent
                 "  echo \"after the server certificate is renewed, download the bundle again and re-run install.sh.\"",
                 "fi",
                 "",
+                TopCpuDropInScript(enableTopCpu),
+                "",
                 "systemctl daemon-reload",
                 "# A failed start is judged by the status check below, which prints the diagnostics.",
                 "systemctl enable --now \"$UNIT\" || true",
@@ -283,6 +298,9 @@ namespace HSMServer.Model.Agent
                 "fi",
                 "rm -f \"$CONFIG_DIR/" + ConfigName + "\" \"$CONFIG_DIR/" + ConfigName + ".dpkg-dist\" \"$CONFIG_DIR/" + ConfigName + ".dpkg-old\"",
                 "rmdir \"$CONFIG_DIR\" 2>/dev/null || true",
+                "# The top-CPU drop-in install.sh may have written (a package older than 0.7.0 does not remove it).",
+                "rm -f \"" + TopCpuDropIn + "\"",
+                "rmdir \"" + DropInDirectory + "\" 2>/dev/null || true",
                 "",
                 "if [ -f \"$CA_TARGET\" ]; then",
                 "  rm -f \"$CA_TARGET\"",
@@ -316,7 +334,7 @@ namespace HSMServer.Model.Agent
                 if (!string.IsNullOrEmpty(options.ServerCaPem))
                     AddEntry(tar, TarEntryType.RegularFile, prefix + ServerCaName, Encoding.ASCII.GetBytes(options.ServerCaPem), DataMode, modified);
 
-                AddEntry(tar, TarEntryType.RegularFile, prefix + InstallScript, Encoding.UTF8.GetBytes(BuildInstallScript()), ScriptMode, modified);
+                AddEntry(tar, TarEntryType.RegularFile, prefix + InstallScript, Encoding.UTF8.GetBytes(BuildInstallScript(options.EnableTopCpu)), ScriptMode, modified);
                 AddEntry(tar, TarEntryType.RegularFile, prefix + UninstallScript, Encoding.UTF8.GetBytes(BuildUninstallScript()), ScriptMode, modified);
             }
 
@@ -342,6 +360,33 @@ namespace HSMServer.Model.Agent
                 entry.DataStream = data;
 
             tar.WriteEntry(entry);
+        }
+
+        /// <summary>
+        /// The install.sh step for "Report top processes by CPU" (#1479). The unit mounts /proc with
+        /// <c>ProtectProc=invisible</c>, which hides every process but the probe's own, and the top-CPU
+        /// sensors read <c>/proc/&lt;pid&gt;/stat</c> of all of them — so an enabling bundle lifts that one
+        /// setting for this unit with a drop-in. A bundle without the switch leaves any drop-in alone
+        /// (a hand-enabled <c>topCpu</c> keeps working); uninstall.sh and the package's postrm remove it.
+        /// </summary>
+        private static string TopCpuDropInScript(bool enableTopCpu)
+        {
+            if (!enableTopCpu)
+                return "# \"Report top processes by CPU\" is off in this bundle: the unit keeps ProtectProc=invisible.";
+
+            return string.Join("\n",
+                "# \"Report top processes by CPU\" is on: let the probe see every process in /proc (see the drop-in).",
+                "install -d -m 0755 -o root -g root \"" + DropInDirectory + "\"",
+                "cat > \"" + TopCpuDropIn + "\" <<'EOF'",
+                "# Written by the HSM Linux probe bundle's install.sh: \"Report top processes by CPU\" is on.",
+                "# The unit's ProtectProc=invisible hides every process but the probe's own from /proc, and the",
+                "# top-CPU sensors read /proc/<pid>/stat of every process. Delete this file, then",
+                "# systemctl daemon-reload && systemctl restart hsm-linux-probe, to hide them again.",
+                "[Service]",
+                "ProtectProc=default",
+                "EOF",
+                "chmod 0644 \"" + TopCpuDropIn + "\"",
+                "echo \"Top CPU processes: the probe may read every process's /proc entry (" + TopCpuDropIn + ").\"");
         }
 
         // Shell scripts need LF line endings, whatever the server OS is.

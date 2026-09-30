@@ -43,6 +43,12 @@ pub fn run(config: &Config, logger: Arc<Logger>) -> Result<(), Box<dyn std::erro
         &HostEnvironment::system(),
         &logger,
     );
+    probe_only_sources.extend(probe_only::top_cpu::register(
+        &collector,
+        &config.top_cpu,
+        std::path::Path::new(probe_only::top_cpu::PROC_ROOT),
+        &logger,
+    ));
 
     logger.info(format!(
         "starting: collector {} -> {}:{} (sensors under {})",

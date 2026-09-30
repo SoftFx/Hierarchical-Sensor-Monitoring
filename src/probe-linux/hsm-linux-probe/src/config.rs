@@ -31,6 +31,80 @@ pub struct Config {
     /// collector catalog). Everything defaults to on.
     #[serde(default)]
     pub probe: ProbeConfig,
+    /// The per-process CPU sensors (#1479): HsmAgent's `topCpu` block, same keys, defaults and
+    /// validation, at the same top level — so the server writes one block for both. Off unless
+    /// `enabled`.
+    #[serde(default)]
+    pub top_cpu: TopCpuConfig,
+}
+
+/// `topCpu { enabled, periodMs, minPercent, count }` — HsmAgent's `AgentConfig` fields
+/// (`src/agent/include/agent/config.hpp`: off, 60000 ms, 1.0 %, 10) and its rules (checked only
+/// when enabled: `periodMs > 0`, `count > 0`, `minPercent >= 0`).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TopCpuConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_top_cpu_period_ms")]
+    pub period_ms: i64,
+    #[serde(default = "default_top_cpu_min_percent")]
+    pub min_percent: f64,
+    #[serde(default = "default_top_cpu_count")]
+    pub count: i64,
+}
+
+impl Default for TopCpuConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            period_ms: default_top_cpu_period_ms(),
+            min_percent: default_top_cpu_min_percent(),
+            count: default_top_cpu_count(),
+        }
+    }
+}
+
+impl TopCpuConfig {
+    /// Valid only after validation (`period_ms > 0`).
+    pub fn period(&self) -> Duration {
+        Duration::from_millis(u64::try_from(self.period_ms).unwrap_or(1).max(1))
+    }
+
+    /// Valid only after validation (`count > 0`).
+    pub fn count(&self) -> usize {
+        usize::try_from(self.count).unwrap_or(1).max(1)
+    }
+
+    fn validate(&self) -> Result<(), ConfigError> {
+        if !self.enabled {
+            return Ok(());
+        }
+        if self.period_ms <= 0 {
+            return Err(ConfigError::invalid(
+                "topCpu.periodMs must be greater than 0",
+            ));
+        }
+        if self.count <= 0 {
+            return Err(ConfigError::invalid("topCpu.count must be greater than 0"));
+        }
+        if self.min_percent < 0.0 {
+            return Err(ConfigError::invalid(
+                "topCpu.minPercent must not be negative",
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn default_top_cpu_period_ms() -> i64 {
+    60_000
+}
+fn default_top_cpu_min_percent() -> f64 {
+    1.0
+}
+fn default_top_cpu_count() -> i64 {
+    10
 }
 
 /// `probe.docker { enabled, socket, composeOnly, samplePeriodSec, oomLatchHours }`: the Docker
@@ -310,6 +384,7 @@ impl Config {
         }
         self.probe.docker.validate()?;
         self.probe.disks.validate()?;
+        self.top_cpu.validate()?;
         Ok(())
     }
 
@@ -485,6 +560,15 @@ mod tests {
         assert_eq!(disks.enabled, Some(true));
         assert!(disks.write_speed && disks.exclude.is_empty());
         assert!(config.probe.disks_enabled());
+        // The topCpu block is spelled out with the agent's defaults, and off.
+        assert!(example.contains("\"topCpu\""));
+        let top = &config.top_cpu;
+        let defaults = TopCpuConfig::default();
+        assert!(!top.enabled);
+        assert_eq!(
+            (top.period_ms, top.min_percent, top.count),
+            (defaults.period_ms, defaults.min_percent, defaults.count)
+        );
     }
 
     #[test]
@@ -747,6 +831,45 @@ mod tests {
         // A disabled source is not validated: nothing reads its settings.
         let off = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
              "probe": { "docker": { "enabled": false, "samplePeriodSec": 0 } } }"#;
+        assert!(Config::parse(off).is_ok());
+    }
+
+    #[test]
+    fn top_cpu_is_the_agents_block_off_unless_enabled() {
+        let top = Config::parse(MINIMAL).expect("parse").top_cpu;
+        assert!(!top.enabled);
+        assert_eq!(
+            (top.period_ms, top.min_percent, top.count),
+            (60_000, 1.0, 10)
+        );
+
+        // What the server bundle writes when "Report top processes by CPU" is on.
+        let text = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "topCpu": { "enabled": true, "periodMs": 60000, "minPercent": 1.0, "count": 10 } }"#;
+        let top = Config::parse(text).expect("parse").top_cpu;
+        assert!(top.enabled);
+        assert_eq!(top.period(), Duration::from_secs(60));
+        assert_eq!(top.count(), 10);
+        assert_eq!(top.min_percent, 1.0);
+
+        for bad in [
+            r#"{ "enabled": true, "periodMs": 0 }"#,
+            r#"{ "enabled": true, "periodMs": -5 }"#,
+            r#"{ "enabled": true, "count": 0 }"#,
+            r#"{ "enabled": true, "minPercent": -0.5 }"#,
+        ] {
+            let text = format!(
+                r#"{{ "hsm": {{ "address": "https://g", "port": 1, "accessKeyFile": "/k" }},
+                     "topCpu": {bad} }}"#
+            );
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::Invalid(_))),
+                "{bad}"
+            );
+        }
+        // Like the agent, a disabled block is not validated.
+        let off = r#"{ "hsm": { "address": "https://g", "port": 1, "accessKeyFile": "/k" },
+             "topCpu": { "enabled": false, "periodMs": 0, "count": 0 } }"#;
         assert!(Config::parse(off).is_ok());
     }
 

@@ -68,7 +68,10 @@ ProtectControlGroups=yes
 ProtectClock=yes
 ProtectHostname=yes
 # Hides other processes' /proc entries. /proc/loadavg and /proc/cpuinfo stay readable — do NOT add
-# ProcSubset=pid, which would hide exactly the files this probe samples.
+# ProcSubset=pid, which would hide exactly the files this probe samples. The top-CPU sensors
+# (topCpu, #1479) need every process's /proc/<pid>/stat: where they are on, the drop-in
+# hsm-linux-probe.service.d/top-cpu.conf sets ProtectProc=default (the server bundle's install.sh
+# writes it; README "Top CPU processes").
 ProtectProc=invisible
 RestrictSUIDSGID=yes
 RestrictRealtime=yes

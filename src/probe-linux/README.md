@@ -406,6 +406,83 @@ projects) under `hsm-linux-probe/fixtures/docker/`: the listing, the inspects (t
 fields the probe reads — `Config.Env` and mounts dropped), two stats rounds 5.3 s apart, and three
 raw HTTP responses (chunked, `Content-Length`, 404) byte for byte.
 
+### Top CPU processes (#1479)
+
+The Windows agents' sensor family on Linux: `.computer/Top CPU processes/<name>`, one Double
+sensor per busy process name. **Off unless the top-level `topCpu` block enables it**, exactly like
+HsmAgent; the server's Configuration → Agent → "Report top processes by CPU" writes that block into
+the downloaded probe bundle as it does for the agent's.
+
+**Placement.** Probe-only by the owner's rule for this epic (new Linux sources live in the probe;
+moving one into the shared catalog is a later, separate step). That move would have to mirror a
+managed Unix implementation over the same `/proc` source (root `CLAUDE.md` rule #10) with a
+conformance scenario (rule #9). It does not break [the one rule](#the-one-rule-that-shapes-everything-here):
+the collector's top-CPU source is Windows-only (`hsm_collector_enable_top_cpu_sensors` refuses other
+platforms), so on Linux there is no collector sensor to host — only its wire shape to match.
+
+**Indistinguishable from Windows on the wire**, so alert templates written for the agents apply
+unchanged — every value is copied from `cpu_top.cpp`/`RunTopCpuLoop` (HsmAgent) and
+`WindowsTopCpuMonitor.cs`, which agree:
+
+| | |
+|---|---|
+| Path | `.computer/Top CPU processes/<name>` (computer sensor: `<ComputerName>/.computer/…` on Windows, the product root here) |
+| Type · unit | Double (instant) · `Percents` (100) |
+| TTL | 5 min — a name that stops being posted turns to Timeout |
+| Options | `EnableGrafana` true; no statistics, no alert, `KeepHistory` left to the server default |
+| Description | `Top **10** CPU consumers by % of machine CPU` + a path line (below) |
+| Value | % of the **whole host** (all cores = 100 %, like Total CPU), summed over every process of the name |
+| Rule | every `periodMs` (1 min): names at or above `minPercent` (1 %), the busiest `count` (10), ties by name; the first period only takes the baseline |
+| Name cap | at most `max(count × 8, 64)` distinct names ever get a sensor (the server has no sensor delete); then one WARN line, the tracked names keep reporting |
+
+One registration field differs: Windows sends `DisplayUnit: null`, and an instant sensor created
+through the C ABI always sends `0`. The server reads `DisplayUnit` only for Rate sensors.
+
+**Source.** `/proc/stat` (the aggregate `cpu` line without `guest`/`guest_nice`, the collector's
+Total CPU total) and, for every numeric entry of `/proc`, `/proc/<pid>/stat`: `utime + stime`
+(the whole thread group) over the interval, divided by the host's total over the same interval.
+Nothing outside `/proc` is read, and no root is needed. The stat line is split at the **last** `)`
+(a process may name itself `a) b (c`). A process is `(pid, starttime)`: a reused pid is never
+credited with its predecessor's time; a process that started or exited during the interval
+contributes nothing; a `/proc/<pid>` that vanishes while being read is skipped silently. An
+unreadable `/proc/stat` is logged once until it recovers and posts nothing.
+
+**Names.** Field 2 of the stat line, which the kernel renders with the same function as
+`/proc/<pid>/comm` (one read per process instead of two): `task->comm`, **at most 15 bytes** —
+longer executable names arrive truncated (`systemd-journald` → `systemd-journal`). Normalized to
+the characters the server's alert-template wildcard `*` matches (ASCII letters and digits, space,
+`. _ # , % $ - &`), anything else → `_` (`/`, the path separator, included), then trimmed; an empty
+result gets no sensor. **Kernel threads** (`PF_KTHREAD`) are named by the part before their first
+`/`, so the per-CPU/per-device instances are one sensor, summed like several `chrome.exe`:
+`kworker/3:1-events` → `kworker`, `ksoftirqd/0` → `ksoftirqd`, `irq/42-nvme0q1` → `irq`. Processes
+with the same name are summed (Windows rule), also when two names normalize to the same one.
+
+**Path line** of the description, set once when the name's sensor is created: the executable
+(`readlink /proc/<pid>/exe` of the name's busiest process), `_(system process - path
+unavailable)_` for a kernel thread (the Windows wording), `_(another user's process - path
+unavailable)_` when the unprivileged probe may not read that link (another user's process — most
+of them), nothing when the process exited first.
+
+**Visibility — the drop-in.** The unit mounts `/proc` with `ProtectProc=invisible`, which hides
+every process but the probe's own. With `topCpu` on, lift it for this unit only:
+
+```ini
+# /etc/systemd/system/hsm-linux-probe.service.d/top-cpu.conf
+[Service]
+ProtectProc=default
+```
+
+then `sudo systemctl daemon-reload && sudo systemctl restart hsm-linux-probe`. The server bundle's
+`install.sh` writes exactly this file when the switch is on (a bundle without it leaves the file
+alone); `uninstall.sh` and the package's `postrm` (remove/purge) delete it. Without it — or on any
+host that mounts `/proc` with `hidepid` — the source still runs and says so in one INFO line at
+start (`/proc is mounted with hidepid=invisible …`); the start log also states how many processes
+the baseline saw.
+
+**Cost:** one record per minute per posted name — ≈ 1 440 records/day for each process that stays
+at or above 1 % of the host, nothing for the others; at most ≈ 14 400/day with `count` 10. A scan
+is one read of `/proc/stat` plus one small read per process per minute.
+
 ## Crate layout
 
 ```
@@ -413,7 +490,7 @@ src/probe-linux/
   hsm-collector-sys/   raw FFI declarations for the ABI subset the probe uses + the CMake build
   hsm-collector/       safe RAII wrapper: Collector, typed sensor handles, alerts, log sink
   hsm-linux-probe/     the binary: config, logging, signals, lifecycle wiring, sensor registration
-    src/probe_only/    probe-only sources (host.rs, disks/, docker/) and their per-source threads
+    src/probe_only/    probe-only sources (host.rs, disks/, docker/, top_cpu/) and their per-source threads
     fixtures/docker/   Engine API captures from garage-server
   packaging/           systemd unit, config skeleton, maintainer scripts, build-deb.sh,
                        docker-access.sh (Docker socket drop-in)
@@ -582,6 +659,10 @@ Placeholders only — **no secrets**:
   5 minutes whatever it is), `oomLatchHours` (`24`) and `exclude` (`[]`: `project/service`
   patterns, `*` within a segment, e.g. `"portainer/*"`, `"lingua-ci/janitor"`). A host without Docker needs no change: the
   source logs one info line and waits for the socket; `enabled: false` turns it off entirely.
+* `topCpu` (optional, **top level** like HsmAgent's, not under `probe`): `enabled` (`false`),
+  `periodMs` (`60000`), `minPercent` (`1.0`), `count` (`10`) — the agent's keys, defaults and
+  checks (validated only when enabled: `periodMs > 0`, `count > 0`, `minPercent >= 0`). See
+  [Top CPU processes](#top-cpu-processes-1479); it also needs the `top-cpu.conf` drop-in.
 
 ## Running
 

@@ -1,6 +1,6 @@
 # Feature: Linux Probe (`hsm-linux-probe`)
 
-> Owner: integrations | Last reviewed: 2026-09-28 | Canonical: yes
+> Owner: integrations | Last reviewed: 2026-09-30 | Canonical: yes
 > Scope: The systemd-hosted Linux host probe in `src/probe-linux/` — a Rust process that hosts the native collector through its stable C ABI. Owns the host wiring (config, secrets, logging, lifecycle, packaging), the sensor set it registers, and the acquisition of its probe-only sensors; owns no wire semantics.
 
 ---
@@ -85,6 +85,24 @@ The probe registers **two separately pinned sets**:
    container Exited (0), restart policy `no`) is not monitored until it runs. Pinned for
    garage-server's captures (12 Compose containers, 11 monitored services, 70 paths) by
    `DOCKER_GARAGE_SET`.
+4. **Top CPU processes** (#1479, part of the probe-only set; `probe_only/top_cpu/`) —
+   `.computer/Top CPU processes/<name>`, the Windows agents' sensor family, **wire-identical** to
+   `cpu_top.cpp`/`RunTopCpuLoop` and `WindowsTopCpuMonitor.cs` so alert templates carry over: Double,
+   `Percents`, TTL 5 min, `EnableGrafana`, no statistics/alert, description `Top **<count>** CPU
+   consumers by % of machine CPU` + a path line; % of the whole host summed per name; names at or above
+   `minPercent`, busiest `count`, ties by name, one post per `periodMs`; at most `max(count × 8, 64)`
+   names ever. Only `DisplayUnit` differs (`0` through the C ABI vs Windows `null`; the server reads it
+   for Rate sensors only). **Probe-only by the owner's rule for this epic** (new Linux sources live in
+   the probe; a later move into the shared catalog must mirror a managed Unix implementation over the
+   same `/proc` source per rule #10, with a conformance scenario per rule #9). Source:
+   `/proc/<pid>/stat` `utime+stime` deltas over `/proc/stat`'s total (Total CPU's total), stat split
+   at the last `)`, identity `(pid, starttime)`; name = field 2 (= `/proc/<pid>/comm`, ≤ 15 bytes),
+   normalized to the server's template-wildcard charset, kernel threads by the part before `/`
+   (`kworker/…` → `kworker`). **Off unless the top-level `topCpu` block enables it** (the agent's
+   block and defaults). Every sensor registers at runtime, so none is in the pinned sets. Needs the
+   `top-cpu.conf` drop-in (`ProtectProc=default`) to see other processes; without it, or under any
+   `hidepid`, it runs on what it sees and says so in one INFO line. Cost: ≈ 1 440 records/day per
+   name that stays ≥ 1 %. Details: README "Top CPU processes".
 
 Probe-only sensors go through the collector's public sensor API, so wire format, queuing,
 batching, retry and TLS stay the library's; only the acquisition (a sysfs read, a `statvfs`, an
@@ -110,6 +128,9 @@ default `true` (and the `exclude` lists empty), so a config without those sectio
 on. The host switches covered the disk sensor before 0.4.0, so while `probe.disks.enabled` is unset a
 `hostSensors.enabled: false` or the deprecated `hostSensors.disk: false` still disables the disks
 (an upgrade never switches them back on); an explicit `probe.disks.enabled` wins.
+`topCpu.{enabled, periodMs, minPercent, count}` sits at the **top level**, not under `probe` — HsmAgent's
+block, keys, defaults (`false`, 60000, 1.0, 10) and checks — so the server writes one block for both
+bundles (#1479).
 
 **Packaging.** `src/probe-linux/packaging/build-deb.sh <version>` builds the `.deb` in a plain
 `debian:13` container (layout `/usr/bin`, `/lib/systemd/system`, the skeleton at
@@ -134,6 +155,9 @@ Linux is the only supported target. The initiative is
 - **No probe-local reimplementation of any sensor the collector has.** A second implementation next
   to the managed one is the divergence class rules #9/#10 forbid. A probe-only sensor must not
   shadow a parity path (the pinned test checks it) and exists only by explicit owner agreement.
+  Top CPU processes (#1479) is not such a reimplementation: the collector's top-CPU source is
+  Windows-only (its enable call refuses Linux), so the probe adds the Linux acquisition and matches
+  the Windows wire shape.
 - **Probe-only sources are isolated.** Each registers its sensors (with their alerts) before Start
   and then samples on a thread of its own, so a read blocked on a hung filesystem cannot stall
   another source; every sample runs under `catch_unwind`; a failed read is skipped and logged
@@ -143,6 +167,10 @@ Linux is the only supported target. The initiative is
   turns to Timeout. Every `statvfs` — at registration and when sampling — runs on a helper
   thread with a 5 s deadline, and a filesystem whose last `statvfs` is still blocked is not asked
   again, so a hung mount can neither hold up Start nor stall the other disks.
+- **The unit hides other processes (`ProtectProc=invisible`) unless top-CPU is on.** Only the
+  `top-cpu.conf` drop-in (written by the server bundle's `install.sh` when the switch is on, removed by
+  `uninstall.sh` and `postrm`) sets `ProtectProc=default`; the probe never reads `cmdline`, `environ` or
+  anything outside `/proc/stat`, `/proc/<pid>/stat` and the `/proc/<pid>/exe` link.
 - **Stop is bounded around the sources.** On SIGTERM the sources are signalled and waited for at
   most 2 s; stuck ones are named in the log, the collector drains anyway, and the process then
   exits without joining a thread that is still blocked in a read.

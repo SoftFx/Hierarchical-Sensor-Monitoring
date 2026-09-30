@@ -555,6 +555,13 @@
         <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildConfigJson(HSMServer.Model.Agent.AgentBundleOptions)">
             <summary>The generated config.json — matches the agent's config schema (only address + key required).</summary>
         </member>
+        <member name="P:HSMServer.Model.Agent.AgentInstallerBundle.TopCpuBlock">
+            <summary>
+            The <c>topCpu</c> block both bundles write when "Report top processes by CPU" is on: the
+            Windows agent's and the Linux probe's (#1479) read the same keys. NOTE: these defaults mirror
+            AgentConfig in the agent (src/agent/include/agent/config.hpp) — keep in sync.
+            </summary>
+        </member>
         <member name="M:HSMServer.Model.Agent.AgentInstallerBundle.BuildInstallScript">
             <summary>
             Installer script: stops any running service, copies the exe, copies config on first install
@@ -589,14 +596,16 @@
             <summary>
             Parameters baked into one per-product Linux probe bundle. <see cref="P:HSMServer.Model.Agent.LinuxProbeBundleOptions.AccessKey"/> goes into its
             own <c>access-key</c> file, never into config.json. <see cref="P:HSMServer.Model.Agent.LinuxProbeBundleOptions.ServerCaPem"/> is the server's
-            public certificate, or null to leave <c>server-ca.pem</c> out of the bundle.
+            public certificate, or null to leave <c>server-ca.pem</c> out of the bundle. <see cref="P:HSMServer.Model.Agent.LinuxProbeBundleOptions.EnableTopCpu"/>
+            adds the agent's <c>topCpu</c> block, as <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.EnableTopCpu"/> does (#1479).
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Agent.LinuxProbeBundleOptions.#ctor(System.String,System.Int32,System.String,System.String)">
+        <member name="M:HSMServer.Model.Agent.LinuxProbeBundleOptions.#ctor(System.String,System.Int32,System.String,System.String,System.Boolean)">
             <summary>
             Parameters baked into one per-product Linux probe bundle. <see cref="P:HSMServer.Model.Agent.LinuxProbeBundleOptions.AccessKey"/> goes into its
             own <c>access-key</c> file, never into config.json. <see cref="P:HSMServer.Model.Agent.LinuxProbeBundleOptions.ServerCaPem"/> is the server's
-            public certificate, or null to leave <c>server-ca.pem</c> out of the bundle.
+            public certificate, or null to leave <c>server-ca.pem</c> out of the bundle. <see cref="P:HSMServer.Model.Agent.LinuxProbeBundleOptions.EnableTopCpu"/>
+            adds the agent's <c>topCpu</c> block, as <see cref="P:HSMServer.Model.Agent.AgentBundleOptions.EnableTopCpu"/> does (#1479).
             </summary>
         </member>
         <member name="T:HSMServer.Model.Agent.LinuxProbeInstallerBundle">
@@ -610,6 +619,9 @@
         </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.StagingFolder">
             <summary>Directory under wwwroot the server build stages the pinned probe .deb into.</summary>
+        </member>
+        <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.DropInDirectory">
+            <summary>The unit's drop-in directory, and the drop-in the top-CPU switch writes there (#1479).</summary>
         </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.AccessKeyCredentialPath">
             <summary>Where the systemd unit's LoadCredential= exposes the key to the probe (§4.3).</summary>
@@ -652,10 +664,11 @@
             — rather than relying on the probe's defaults, which differ before 0.6.1 (#1495).
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildInstallScript">
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildInstallScript(System.Boolean)">
             <summary>
             The installer. Runs as root, installs the package, places config + key + CA, enables the unit.
-            The key is only ever handled as a file: never echoed, never an argument.
+            The key is only ever handled as a file: never echoed, never an argument. With
+            <paramref name="enableTopCpu"/> it also writes the <see cref="F:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopCpuDropIn"/> drop-in.
             </summary>
         </member>
         <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.BuildUninstallScript">
@@ -670,6 +683,15 @@
             unmodified .deb (under its release file name), the generated config, the key file, the
             optional CA certificate and both scripts (mode 0755). Fastest compression: the .deb, by far
             the largest entry, is already compressed.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.Agent.LinuxProbeInstallerBundle.TopCpuDropInScript(System.Boolean)">
+            <summary>
+            The install.sh step for "Report top processes by CPU" (#1479). The unit mounts /proc with
+            <c>ProtectProc=invisible</c>, which hides every process but the probe's own, and the top-CPU
+            sensors read <c>/proc/&lt;pid&gt;/stat</c> of all of them — so an enabling bundle lifts that one
+            setting for this unit with a drop-in. A bundle without the switch leaves any drop-in alone
+            (a hand-enabled <c>topCpu</c> keeps working); uninstall.sh and the package's postrm remove it.
             </summary>
         </member>
         <member name="F:HSMServer.Model.Agent.LinuxProbeCaDecision.Omit">
@@ -1482,7 +1504,8 @@
             <summary>
             When true, downloaded bundles carry a <c>topCpu</c> block (issue #1175) so the installed agent
             also reports the top processes by CPU once a minute. The admin opts in here (server-side); the
-            client agent has no UI and simply runs whatever config.json the bundle ships. Default false.
+            client agent has no UI and simply runs whatever config.json the bundle ships. The Linux probe
+            bundle honours it the same way (#1479). Default false.
             </summary>
         </member>
         <member name="P:HSMServer.ServerConfiguration.AgentConfig.AutoUpdateEnabled">

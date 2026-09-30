@@ -52,19 +52,25 @@ namespace HSMServer.Model.Agent
             if (options.EnableTopCpu)
             {
                 // Server-side opt-in (Configuration → Agent). Ship the agent's topCpu defaults so the
-                // installed service reports the top processes by CPU once a minute. NOTE: these defaults
-                // mirror AgentConfig in the agent (src/agent/include/agent/config.hpp) — keep in sync.
-                config["topCpu"] = new
-                {
-                    enabled = true,
-                    periodMs = 60000,
-                    minPercent = 1.0,
-                    count = 10,
-                };
+                // installed service reports the top processes by CPU once a minute.
+                config["topCpu"] = TopCpuBlock;
             }
 
             return JsonSerializer.Serialize(config, _jsonOptions);
         }
+
+        /// <summary>
+        /// The <c>topCpu</c> block both bundles write when "Report top processes by CPU" is on: the
+        /// Windows agent's and the Linux probe's (#1479) read the same keys. NOTE: these defaults mirror
+        /// AgentConfig in the agent (src/agent/include/agent/config.hpp) — keep in sync.
+        /// </summary>
+        internal static object TopCpuBlock { get; } = new
+        {
+            enabled = true,
+            periodMs = 60000,
+            minPercent = 1.0,
+            count = 10,
+        };
 
         /// <summary>
         /// Installer script: stops any running service, copies the exe, copies config on first install

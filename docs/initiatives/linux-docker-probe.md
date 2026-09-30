@@ -601,6 +601,7 @@ coverage in both drivers and an agent version bump:
 | #1496 PR | the module node stays: `hsm.module` defaults to `.probe` (the product root holds `.computer/…` and `.probe/{.module,Docker}/…`); `computerName` stays empty by default | probe 0.6.1 |
 | #1498 PR | the per-disk write volume is posted once per day, as `Written per day on <name> disk` (TTL 26 h, 1 record/day instead of 288); the `Written today` nodes are stale history | probe 0.6.2 |
 | #1489 + #1495 PR | write-volume edges: a clock stepped back into the hour just posted does not re-post it; an unmounted filesystem no longer counts toward a disk's mount-point identity; a day missed while the probe was down is logged once; a partly failed daily post and a measured-but-unmounted disk are logged with disk, day and GB; the install bundle writes `computerName: ""` / `module: ".probe"` explicitly; config → collector-options test | probe 0.6.3 |
+| #1479 PR | `.computer/Top CPU processes/<name>` on Linux, probe-only (the Windows agents' wire shape and ≥ 1 % / top-10 / 1-per-minute rule, from `/proc/<pid>/stat` against `/proc/stat`); top-level `topCpu` block (the agent's), off by default; the server bundle honours "Report top processes by CPU" and then lifts `ProtectProc=invisible` with a `top-cpu.conf` drop-in | probe 0.7.0 |
 
 **Verified live on garage-server**, not only in CI: installed through the server-generated
 bundle exactly as an operator would, 15 sensors registered, every value cross-checked against
