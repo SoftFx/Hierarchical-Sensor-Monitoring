@@ -16,8 +16,8 @@ namespace HSMServer.Core.Tests
     // (#1470), with ThrowConfigExceptions so nothing is swallowed: a malformed file, an
     // unresolvable extension assembly (NLog.Web.AspNetCore for ${aspnet-*}, HSMServer for
     // ${hsm-redacted}), an unknown layout renderer (a typo in ${hsm-redacted}), or a
-    // property NLog 6 removed (the strict load caught exactly that: enableArchiveFileCompression
-    // was gone from FileTarget and had been silently ignored at every server start) would
+    // target property NLog 6 removed (e.g. enableArchiveFileCompression, dropped from
+    // FileTarget and silently ignored at every server start before such a guard) would
     // otherwise surface only when the released app image boots, not here. CI has no
     // VictoriaLogs/vlagent; loading the configuration needs none.
     public class NlogConfigTests
@@ -122,7 +122,7 @@ namespace HSMServer.Core.Tests
                 config.LoggingRules.IndexOf(aspFileRule) < config.LoggingRules.IndexOf(appJsonRule),
                 "the '* Info' jsonfile rule must come after the Microsoft.AspNetCore* final rule");
 
-            // Framework Warn+ placement contract (#1471 round 5): a second jsonfile
+            // Framework Warn+ placement contract: a second jsonfile
             // rule scoped to Microsoft.AspNetCore* with minlevel Warn must sit ABOVE
             // the final aspfile rule. Without it, every framework Warn/Error event -
             // Kestrel connection errors, unhandled-exception middleware, DataProtection
@@ -148,7 +148,9 @@ namespace HSMServer.Core.Tests
 
         // The HSM_STRUCTURED_LOGS gate shared by both jsonfile rules: a when-filter
         // with the Log action and the Ignore default, comparing the variable to
-        // 'true'.
+        // 'true', with the lookup cached (cached=true ambient option on ${environment}):
+        // the env value cannot change without a restart, so the gate must not run
+        // getenv on every matching event.
         private static void AssertStructuredLogsGate(LoggingRule rule)
         {
             var gate = Assert.Single(rule.Filters.OfType<ConditionBasedFilter>());
@@ -156,7 +158,29 @@ namespace HSMServer.Core.Tests
             Assert.Equal(FilterResult.Ignore, rule.FilterDefaultAction);
             var gateCondition = gate.Condition.ToString();
             Assert.Contains("HSM_STRUCTURED_LOGS", gateCondition);
+            Assert.Contains("cached=true", gateCondition);
             Assert.Contains("== 'true'", gateCondition);
+
+            // Behavioral pin for the cache: the strict load does not validate option
+            // names inside a when-condition (an unknown option there is silently
+            // ignored, not a config exception), so the marker above is only text until
+            // caching is observed. Evaluate the gate twice across an env-var flip: a
+            // cached lookup keeps the first rendered value, a per-event getenv would
+            // pick up the new one and this second assertion fails.
+            var probeEvent = new LogEventInfo(LogLevel.Info, "NlogConfigTests", null);
+            var originalValue = Environment.GetEnvironmentVariable("HSM_STRUCTURED_LOGS");
+            try
+            {
+                Environment.SetEnvironmentVariable("HSM_STRUCTURED_LOGS", "true");
+                Assert.True((bool)gate.Condition.Evaluate(probeEvent));
+
+                Environment.SetEnvironmentVariable("HSM_STRUCTURED_LOGS", "false");
+                Assert.True((bool)gate.Condition.Evaluate(probeEvent), "the HSM_STRUCTURED_LOGS lookup must be cached, not re-read per event");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("HSM_STRUCTURED_LOGS", originalValue);
+            }
         }
 
         private static string RepoFile(string relative)
