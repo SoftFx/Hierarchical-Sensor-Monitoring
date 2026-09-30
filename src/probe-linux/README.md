@@ -176,9 +176,13 @@ garage-server has four (`root`, `wd4tb`, `mediacentr`, `oldlinux`) ≈ 4 600/day
 every 5 minutes — those nodes are stale history since). Each 5-s sample adds the disk's delta to
 the current local day; the first sample after local midnight starts the new day from 0. **The day
 is posted once**, in its last 30 seconds (six samples, so one slow read or a late tick still lands
-in it): the whole day's total. The ledger remembers the posted day, so a restart inside that window
-does not post it twice; a day that ended while the probe was not running is not posted (one INFO
-line at start names it), and the 26-hour TTL then shows the missing day as Timeout. The day only
+in it): the day's total. What is still written between the post and midnight counts towards the
+next day — counted once, never lost. The ledger remembers the posted day, so a restart inside that
+window does not post it twice, and a day is marked posted only when a value went out (if every post
+failed, the next sample in the window tries again). A day whose window was missed — the probe not
+running at midnight, or running but not sampling (a suspend, unreadable `/proc/diskstats`) — is not
+posted; one INFO line names it with its measured total, and the 26-hour TTL shows the missing day as
+Timeout. The day only
 turns forward: a clock stepped back across midnight (or a DST fall-back at local midnight) keeps
 counting into the day it came from until the clock reaches the next one. A timezone change
 (`timedatectl set-timezone`) applies without a restart. The first sample, a counter

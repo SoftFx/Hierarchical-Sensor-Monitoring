@@ -1056,8 +1056,9 @@ struct WriteSpeedSource<'c> {
 
 impl WriteSpeedSource<'_> {
     /// Post every filesystem's `Written per day` (its disk's day total) — the day's only post. The
-    /// caller saves the ledger after releasing the nodes lock.
-    fn post_written_per_day(&mut self, nodes: &[Node<'_>], logger: &Logger) {
+    /// caller saves the ledger after releasing the nodes lock. Returns `(attempted, sent)`.
+    fn post_written_per_day(&mut self, nodes: &[Node<'_>], logger: &Logger) -> (usize, usize) {
+        let (mut attempted, mut sent) = (0, 0);
         let now_ms = (self.clock)();
         for node in nodes.iter().filter(|node| node.mounted) {
             let (Some(sensor), Some(disk)) = (&node.written_per_day, node.disk.as_deref()) else {
@@ -1066,6 +1067,7 @@ impl WriteSpeedSource<'_> {
             let Some((gigabytes, comment)) = self.ledger.today(disk, now_ms, self.local) else {
                 continue;
             };
+            attempted += 1;
             let posted = match &comment {
                 Some(comment) => {
                     sensor.add_with(gigabytes, hsm_collector::SensorStatus::Ok, Some(comment))
@@ -1074,6 +1076,7 @@ impl WriteSpeedSource<'_> {
             };
             match posted {
                 Ok(()) => {
+                    sent += 1;
                     #[cfg(test)]
                     {
                         self.posts += 1;
@@ -1084,6 +1087,7 @@ impl WriteSpeedSource<'_> {
                 )),
             }
         }
+        (attempted, sent)
     }
 
     /// The physical disk behind `disk`: its WWID or serial from sysfs (cached while the name stays
@@ -1270,17 +1274,30 @@ impl Source for WriteSpeedSource<'_> {
                 &format!("{} not in {}", missing.join(", "), self.diskstats.display()),
             );
         }
+        // A day that missed its post window while the probe ran (a suspend over midnight,
+        // unreadable /proc/diskstats) is lost: say so, with its total.
+        for (disk, missed_day, gigabytes) in std::mem::take(&mut self.ledger.missed) {
+            logger.info(format!(
+                "disks: {disk}: the day {} ended without its Written per day post (the probe did \
+                 not sample in its last 30 s); its measured {gigabytes} GB are not posted",
+                written::day_label(missed_day)
+            ));
+        }
         // The day's only post, in its last six sample periods (30 s): one slow read or a late tick
-        // still lands in it. Only a suspend (or a stopped probe) over the whole window misses it —
-        // then the day is not posted, and its last seconds go into the next day's first delta.
+        // still lands in it. What is written after the post counts towards the next day. A window
+        // missed altogether (a suspend, a stopped probe) leaves the day unposted — logged.
         let (day, second) = (self.local)(now_ms);
         let period = i64::try_from(WRITE_SAMPLE_PERIOD.as_secs()).unwrap_or(5);
         let day_ends = second + FINAL_READING_PERIODS * period >= 86_400
             && self.ledger.posted_day.is_none_or(|posted| posted < day);
         if day_ends {
-            self.post_written_per_day(&nodes, logger);
-            self.ledger.posted_day = Some(day);
-            self.ledger_dirty = true;
+            let (attempted, sent) = self.post_written_per_day(&nodes, logger);
+            // Marked posted only when something went out (or there was nothing to send): if every
+            // post failed, the next sample in the window tries again.
+            if attempted == 0 || sent > 0 {
+                self.ledger.posted_day = Some(day);
+                self.ledger_dirty = true;
+            }
         }
         // The ledger is saved every 5 minutes (half a sample period of slack) and right after the
         // post, so a restart continues the day and never posts it twice. The fsync'd save runs
